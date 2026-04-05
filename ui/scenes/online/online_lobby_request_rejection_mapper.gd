@@ -57,6 +57,9 @@ static func get_dialog_text(code: String, message: String) -> Dictionary:
 		"start_game_failed":
 			title = "开始游戏失败"
 			body = m
+		"assign_seat_failed":
+			title = "分配座位失败"
+			body = m
 		"update_config_failed":
 			title = "配置同步失败"
 			body = m

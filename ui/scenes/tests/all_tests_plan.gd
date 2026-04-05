@@ -203,6 +203,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.PlatformConnectTokenAutoJoinTestClass.run(),
 		},
 		{
+			"name": "OnlineResumeRoomLobbyTest",
+			"fn": func() -> Result: return TestRefs.OnlineResumeRoomLobbyTestClass.run(),
+		},
+		{
 			"name": "OnlineClientDisconnectPreserveContextTest",
 			"fn": func() -> Result: return TestRefs.OnlineClientDisconnectPreserveContextTestClass.run(),
 		},
@@ -886,14 +890,18 @@ static func build_tests(host) -> Array[Dictionary]:
 				"name": "GamePanelControllerAutoOpenOverLogTest",
 				"fn": func() -> Result: return TestRefs.GamePanelControllerAutoOpenOverLogTestClass.run(),
 			},
-				{
-					"name": "LogRestoreAfterLoadTest",
-					"fn": func() -> Result: return TestRefs.LogRestoreAfterLoadTestClass.run(),
-				},
-				{
-					"name": "GameOverPanelReadOnlyTest",
-					"fn": func() -> Result: return TestRefs.GameOverPanelReadOnlyTestClass.run(),
-				},
+			{
+				"name": "LogRestoreAfterLoadTest",
+				"fn": func() -> Result: return TestRefs.LogRestoreAfterLoadTestClass.run(),
+			},
+			{
+				"name": "CreateRoomResumeLogHistoryBuilderTest",
+				"fn": func() -> Result: return TestRefs.CreateRoomResumeLogHistoryBuilderTestClass.run(),
+			},
+			{
+				"name": "GameOverPanelReadOnlyTest",
+				"fn": func() -> Result: return TestRefs.GameOverPanelReadOnlyTestClass.run(),
+			},
 				{
 					"name": "GameOverFreezeFullGameTest",
 					"fn": func() -> Result: return await TestRefs.GameOverFreezeFullGameTestClass.run(),

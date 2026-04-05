@@ -179,9 +179,17 @@ func sync_online_resume_progress_from_engine(engine, checkpoint_id: String = "")
 	if state == null or not state.has_method("compute_hash"):
 		return
 	var sequence := 0
-	var history_val = engine.get("command_history") if engine is Object else null
-	if history_val is Array:
-		sequence = Array(history_val).size()
+	if engine is Object:
+		var current_index_val = engine.get("current_command_index")
+		if current_index_val is int or current_index_val is float:
+			sequence = maxi(0, int(current_index_val) + 1)
+		var history_val = engine.get("command_history")
+		if history_val is Array:
+			var history_size := Array(history_val).size()
+			if not (current_index_val is int or current_index_val is float):
+				sequence = history_size
+			else:
+				sequence = mini(sequence, history_size)
 	set_online_resume_progress(sequence, str(state.compute_hash()), checkpoint_id)
 
 func build_online_resume_cursor(force_snapshot: bool = false) -> Dictionary:

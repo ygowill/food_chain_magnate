@@ -75,6 +75,10 @@ func send_client_hello() -> void:
 		var resume_cursor: Dictionary = NetContext.build_online_resume_cursor(force_snapshot)
 		if not resume_cursor.is_empty():
 			payload["resume_cursor"] = resume_cursor
+	if _net != null and is_instance_valid(_net):
+		var resume_room_bootstrap: Dictionary = _net.take_pending_resume_room_bootstrap() if _net.has_method("take_pending_resume_room_bootstrap") else {}
+		if not resume_room_bootstrap.is_empty():
+			payload["resume_room_bootstrap"] = resume_room_bootstrap
 	_net.rpc_id(1, "rpc_client_hello", payload)
 	GameLog.debug(
 		"NetClient",

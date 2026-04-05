@@ -869,7 +869,7 @@ func _platform_refresh_rooms(show_error_dialog: bool = true) -> void:
 	_set_browse_status("")
 	_refresh_ui()
 
-func _platform_create_room(desired_player_count: int, room_password: String, config_patch: Dictionary) -> void:
+func _platform_create_room(room_password: String, config_patch: Dictionary, resume_room_bootstrap: Dictionary = {}) -> void:
 	if _platform_busy:
 		return
 	_platform_busy = true
@@ -885,7 +885,8 @@ func _platform_create_room(desired_player_count: int, room_password: String, con
 	_platform_entered = true
 
 	var config: Dictionary = config_patch.duplicate(true)
-	config["desired_player_count"] = int(desired_player_count)
+	var desired_player_count := int(config.get("desired_player_count", Globals.MIN_PLAYERS))
+	config["desired_player_count"] = desired_player_count
 	var config_json := JSON.stringify(config)
 
 	var cr: Dictionary = await PlatformApi.create_room(PlatformSession.session_id, config_json, room_password)
@@ -912,6 +913,8 @@ func _platform_create_room(desired_player_count: int, room_password: String, con
 
 	_set_browse_status("创建成功，正在连接...")
 	_remember_online_resume_context(str(ok.get("room_code", "")).strip_edges().to_upper(), "host")
+	if NetClient != null and NetClient.has_method("set_pending_resume_room_bootstrap"):
+		NetClient.set_pending_resume_room_bootstrap(resume_room_bootstrap)
 	_platform_connect_to_ws(ws_url, connect_token)
 
 func _platform_join_room(room_code: String, room_password: String, spectate: bool) -> void:
@@ -1605,8 +1608,8 @@ func _on_open_create_pressed() -> void:
 func _on_refresh_rooms_pressed() -> void:
 	await _platform_refresh_rooms()
 
-func _on_create_room_dialog_confirmed(desired_player_count: int, room_password: String, config_patch: Dictionary) -> void:
-	await _platform_create_room(desired_player_count, room_password, config_patch)
+func _on_create_room_dialog_confirmed(room_password: String, config_patch: Dictionary, resume_room_bootstrap: Dictionary) -> void:
+	await _platform_create_room(room_password, config_patch, resume_room_bootstrap)
 
 func _on_quick_join_pressed() -> void:
 	var room_code := str(quick_join_code_edit.text).strip_edges().to_upper()

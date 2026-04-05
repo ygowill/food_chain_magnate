@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -26,6 +27,25 @@ async def _heartbeat_room(client: AsyncClient, game_server_id: str, room_code: s
         payload["ws_url"] = ws_url
     resp = await client.post("/internal/game_servers/heartbeat", headers=INTERNAL_HEADERS, json=payload)
     assert resp.status_code == 200
+
+
+def _resume_room_config_json(desired_player_count: int = 2) -> str:
+    return json.dumps({
+        "room_mode": "resume_archive",
+        "desired_player_count": desired_player_count,
+        "seed_mode": "fixed",
+        "seed": 12345,
+        "allow_spectators": True,
+        "enabled_modules_v2": [],
+        "modules_v2_base_dir": "res://modules",
+        "resume_summary": {
+            "source_name": "backend_resume_test.json",
+            "player_count": desired_player_count,
+            "round_number": 0,
+            "phase": "Setup",
+            "current_index": 0,
+        },
+    })
 
 
 @pytest.mark.asyncio
@@ -233,6 +253,98 @@ async def test_resume_room_existing_member(client: AsyncClient):
     assert payload is not None
     assert payload.get("role") == "player"
     assert int(payload.get("seat_index", -1)) == 1
+
+
+@pytest.mark.asyncio
+async def test_create_resume_room_uses_seatless_host(client: AsyncClient, db_session: AsyncSession):
+    host = await _create_user(client)
+    create = await client.post("/v1/rooms", json={
+        "session_id": host["session_id"],
+        "config_json": _resume_room_config_json(),
+    })
+    assert create.status_code == 200
+
+    payload = verify_token(str(create.json()["connect_token"]))
+    assert payload is not None
+    assert payload.get("role") == "host"
+    assert payload.get("seat_index") is None
+
+    room = (await db_session.execute(
+        select(Room).where(Room.room_code == create.json()["room_code"])
+    )).scalar_one()
+    host_member = (await db_session.execute(
+        select(RoomMember).where(
+            RoomMember.room_id == room.room_id,
+            RoomMember.user_id == room.owner_user_id,
+            RoomMember.left_at.is_(None),
+        )
+    )).scalar_one()
+    assert host_member.role == "host"
+    assert host_member.seat_index is None
+
+
+@pytest.mark.asyncio
+async def test_join_resume_room_uses_seatless_player(client: AsyncClient, db_session: AsyncSession):
+    host = await _create_user(client)
+    create = await client.post("/v1/rooms", json={
+        "session_id": host["session_id"],
+        "config_json": _resume_room_config_json(),
+    })
+    assert create.status_code == 200
+    code = create.json()["room_code"]
+    await _heartbeat_room(client, "gs-resume-seatless-join", code)
+
+    player = await _create_user(client)
+    joined = await client.post(f"/v1/rooms/{code}/join", json={"session_id": player["session_id"]})
+    assert joined.status_code == 200
+
+    payload = verify_token(str(joined.json()["connect_token"]))
+    assert payload is not None
+    assert payload.get("role") == "player"
+    assert payload.get("seat_index") is None
+
+    room = (await db_session.execute(
+        select(Room).where(Room.room_code == code)
+    )).scalar_one()
+    player_member = (await db_session.execute(
+        select(RoomMember).where(
+            RoomMember.room_id == room.room_id,
+            RoomMember.user_id == player["user_id"],
+            RoomMember.left_at.is_(None),
+        )
+    )).scalar_one()
+    assert player_member.role == "player"
+    assert player_member.seat_index is None
+
+
+@pytest.mark.asyncio
+async def test_resume_resume_room_allows_seatless_members(client: AsyncClient):
+    host = await _create_user(client)
+    create = await client.post("/v1/rooms", json={
+        "session_id": host["session_id"],
+        "config_json": _resume_room_config_json(),
+    })
+    assert create.status_code == 200
+    code = create.json()["room_code"]
+    await _heartbeat_room(client, "gs-resume-seatless-resume", code)
+
+    player = await _create_user(client)
+    joined = await client.post(f"/v1/rooms/{code}/join", json={"session_id": player["session_id"]})
+    assert joined.status_code == 200
+
+    resumed_host = await client.post(f"/v1/rooms/{code}/resume", json={"session_id": host["session_id"]})
+    assert resumed_host.status_code == 200
+    resumed_host_payload = verify_token(str(resumed_host.json()["connect_token"]))
+    assert resumed_host_payload is not None
+    assert resumed_host_payload.get("role") == "host"
+    assert resumed_host_payload.get("seat_index") is None
+
+    resumed_player = await client.post(f"/v1/rooms/{code}/resume", json={"session_id": player["session_id"]})
+    assert resumed_player.status_code == 200
+    resumed_player_payload = verify_token(str(resumed_player.json()["connect_token"]))
+    assert resumed_player_payload is not None
+    assert resumed_player_payload.get("role") == "player"
+    assert resumed_player_payload.get("seat_index") is None
 
 
 @pytest.mark.asyncio

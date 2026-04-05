@@ -1,11 +1,9 @@
 # 编译/预加载检查（Headless）
 # 用途：快速发现“脚本语法错误导致 preload/load 失败”的问题。
-# 运行示例（推荐与 tests 一致的 HOME/log-file，避免沙箱下 user:// 写入崩溃）：
-#   PROJECT_PATH="/path/to/project"
-#   mkdir -p "$PROJECT_PATH/.tmp_home" "$PROJECT_PATH/.godot"
-#   HOME="$PROJECT_PATH/.tmp_home" godot --headless --log-file "$PROJECT_PATH/.godot/CheckCompile.log" --path "$PROJECT_PATH" --script res://tools/check_compile.gd
+# 运行示例（推荐使用包装脚本，先做 import/class cache 预热）：
+#   tools/run_headless_script.sh res://tools/check_compile.gd
 # 可选：传入扫描根目录（默认扫描常用脚本目录）
-#   godot --headless --path . --script res://tools/check_compile.gd -- res://core res://gameplay
+#   tools/run_headless_script.sh res://tools/check_compile.gd res://core res://gameplay
 
 extends SceneTree
 

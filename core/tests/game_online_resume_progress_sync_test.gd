@@ -6,6 +6,7 @@ const ControllerClass = preload("res://ui/scenes/game/controllers/online_resync_
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
 
 static func run() -> Result:
 	if NetContext == null:
@@ -271,6 +272,42 @@ static func run() -> Result:
 			"server archive 创建失败: %s" % archive_r.error
 		)
 	var archive: Dictionary = Dictionary(archive_r.value).duplicate(true)
+	var archive_probe = GameEngineClass.new()
+	var archive_load_r: Result = archive_probe.load_from_archive(archive)
+	if not archive_load_r.ok:
+		host.queue_free()
+		await tree.process_frame
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			"快照恢复 probe 加载失败: %s" % archive_load_r.error
+		)
+	_apply_online_dinnertime_confirm_to_engine(archive_probe)
+	var archive_hash := str(archive_probe.get_state().compute_hash()) if archive_probe.get_state() != null else ""
+	if archive_hash.is_empty():
+		host.queue_free()
+		await tree.process_frame
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			"快照恢复 probe 缺少可比较的 state hash"
+		)
 	if NetClient != null:
 		NetClient._pending_resync_archive = archive.duplicate(true)
 	controller._on_online_resync_archive_received(archive)
@@ -291,7 +328,7 @@ static func run() -> Result:
 			"快照恢复后未刷新 resume sequence: %d" % NetContext.get_online_resume_last_applied_sequence(),
 			prev_pending_archive
 		)
-	if NetContext.get_online_resume_last_state_hash() != str(hashes_by_sequence.get(history.size(), "")):
+	if NetContext.get_online_resume_last_state_hash() != archive_hash:
 		host.queue_free()
 		await tree.process_frame
 		return _restore_and_fail(
@@ -326,6 +363,103 @@ static func run() -> Result:
 			prev_pending_archive
 		)
 
+	var rewind_target := maxi(0, history.size() - 2)
+	var rewind_archive: Dictionary = archive.duplicate(true)
+	rewind_archive["current_index"] = rewind_target
+	var rewind_probe = GameEngineClass.new()
+	var rewind_load_r: Result = rewind_probe.load_from_archive(rewind_archive)
+	if not rewind_load_r.ok:
+		host.queue_free()
+		await tree.process_frame
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			"历史点 archive 加载失败: %s" % rewind_load_r.error,
+			prev_pending_archive
+		)
+	_apply_online_dinnertime_confirm_to_engine(rewind_probe)
+	var rewind_hash := str(rewind_probe.get_state().compute_hash()) if rewind_probe.get_state() != null else ""
+	if rewind_hash.is_empty():
+		host.queue_free()
+		await tree.process_frame
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			"历史点 archive 缺少可比较的 state hash",
+			prev_pending_archive
+		)
+	rewind_archive["final_hash"] = rewind_hash
+	if NetClient != null:
+		NetClient._pending_resync_archive = rewind_archive.duplicate(true)
+	controller._on_online_resync_archive_received(rewind_archive)
+	if NetContext.get_online_resume_last_applied_sequence() != rewind_target + 1:
+		host.queue_free()
+		await tree.process_frame
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			"历史点快照恢复后未按 current_index 刷新 resume sequence: %d" % NetContext.get_online_resume_last_applied_sequence(),
+			prev_pending_archive
+		)
+	if NetContext.get_online_resume_last_state_hash() != rewind_hash:
+		host.queue_free()
+		await tree.process_frame
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			"历史点快照恢复后未刷新 resume hash: %s" % NetContext.get_online_resume_last_state_hash(),
+			prev_pending_archive
+		)
+	if NetClient != null and not Dictionary(NetClient._pending_resync_archive).is_empty():
+		host.queue_free()
+		await tree.process_frame
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			"历史点快照恢复后未清理 pending archive",
+			prev_pending_archive
+		)
+
 	host.queue_free()
 	await tree.process_frame
 	_restore(
@@ -342,6 +476,16 @@ static func run() -> Result:
 		prev_pending_archive
 	)
 	return Result.success()
+
+static func _apply_online_dinnertime_confirm_to_engine(engine) -> void:
+	if engine == null or not engine.has_method("get_state"):
+		return
+	var state = engine.get_state()
+	if state == null:
+		return
+	if not (state.rules is Dictionary):
+		state.rules = {}
+	state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
 
 static func _restore(
 	prev_mode,

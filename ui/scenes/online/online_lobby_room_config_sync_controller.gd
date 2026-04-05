@@ -62,6 +62,8 @@ func on_room_config_editor_changed(room_state: Dictionary, is_host: bool, room_c
 		return
 	if str(room_state.get("status", "")).strip_edges() != "Lobby":
 		return
+	if str(room_state.get("room_mode", "")).strip_edges() == "resume_archive":
+		return
 	if room_config_editor == null or not is_instance_valid(room_config_editor):
 		return
 	if not room_config_editor.has_method("validate") or not room_config_editor.has_method("get_config_patch"):
@@ -83,6 +85,8 @@ func on_debounce_timeout(room_state: Dictionary, is_host: bool, net_client: Obje
 		return
 	if str(room_state.get("status", "")).strip_edges() != "Lobby":
 		return
+	if str(room_state.get("room_mode", "")).strip_edges() == "resume_archive":
+		return
 	if _pending_patch.is_empty():
 		return
 	if net_client == null or not is_instance_valid(net_client):
@@ -101,7 +105,7 @@ func sync_editor_from_room_state(room_state: Dictionary, is_host: bool, room_con
 	if room_config_editor == null or not is_instance_valid(room_config_editor):
 		return
 	var cfg: Dictionary = Dictionary(room_state.get("config", {}))
-	var editable: bool = bool(is_host) and str(room_state.get("status", "")).strip_edges() == "Lobby"
+	var editable: bool = bool(is_host) and str(room_state.get("status", "")).strip_edges() == "Lobby" and str(room_state.get("room_mode", "")).strip_edges() != "resume_archive"
 	if not bool(is_host) or _state == "synced" or _state == "syncing":
 		if room_config_editor.has_method("set_from_room_config"):
 			room_config_editor.call("set_from_room_config", cfg)
@@ -112,6 +116,10 @@ func sync_editor_from_room_state(room_state: Dictionary, is_host: bool, room_con
 			room_config_editor.call("set_editable", editable)
 
 func pre_sync_for_start_game(room_state: Dictionary, net_client: Object, room_config_editor: Object, timeout_sec: float = 5.0) -> bool:
+	if str(room_state.get("room_mode", "")).strip_edges() == "resume_archive":
+		_pending_patch = {}
+		set_state("synced", "")
+		return true
 	if _debounce_timer != null and is_instance_valid(_debounce_timer):
 		_debounce_timer.stop()
 	if room_config_editor == null or not is_instance_valid(room_config_editor):

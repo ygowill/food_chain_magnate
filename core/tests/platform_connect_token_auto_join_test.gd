@@ -5,7 +5,10 @@ extends RefCounted
 const ConnectTokenClass = preload("res://core/utils/connect_token.gd")
 const ServerLogicClass = preload("res://autoload/net_client/server.gd")
 const RoomManagerClass = preload("res://server/room_manager.gd")
+const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
+const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
 
 static func run() -> Result:
 	_reset_net_context()
@@ -259,8 +262,228 @@ static func run() -> Result:
 		_reset_net_context()
 		return Result.failure("InGame 自动恢复快照构建失败时不应提前发送 GameStarted")
 
+	var resume_auto_join_r: Result = _run_resume_archive_auto_join_scenario()
+	if not resume_auto_join_r.ok:
+		_reset_net_context()
+		return resume_auto_join_r
+
 	_reset_net_context()
 	return Result.success()
+
+static func _run_resume_archive_auto_join_scenario() -> Result:
+	_reset_net_context()
+	if NetContext == null:
+		return Result.failure("NetContext autoload missing")
+	NetContext.mode = NetContext.Mode.ONLINE_SERVER
+
+	var archive_r: Result = _build_test_archive()
+	if not archive_r.ok:
+		return archive_r
+	var base_archive: Dictionary = Dictionary(archive_r.value).duplicate(true)
+	var resume_archive_r: Result = _build_midpoint_resume_archive(base_archive)
+	if not resume_archive_r.ok:
+		return resume_archive_r
+	var resume_info: Dictionary = Dictionary(resume_archive_r.value).duplicate(true)
+	var archive: Dictionary = Dictionary(resume_info.get("archive", {})).duplicate(true)
+	var expected_hash := str(resume_info.get("expected_hash", "")).strip_edges()
+	if expected_hash.is_empty():
+		return Result.failure("resume archive 缺少 final_hash")
+	var selected_index := int(resume_info.get("selected_index", -1))
+	var selected_round_number := int(resume_info.get("round_number", 0))
+	var selected_phase := str(resume_info.get("phase", "")).strip_edges()
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4242
+	var rm = RoomManagerClass.new(rng)
+
+	var mock_net := _MockNetClient.new(rm)
+	var server = ServerLogicClass.new()
+	server.setup(mock_net)
+	server.connect_token_secret_override = "test-secret"
+
+	var room_code := "RSM123"
+	var cfg := {
+		"room_mode": "resume_archive",
+		"desired_player_count": 2,
+		"seed_mode": "fixed",
+		"seed": 12345,
+		"allow_spectators": true,
+		"enabled_modules_v2": [],
+		"modules_v2_base_dir": GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR,
+		"resume_summary": {
+			"source_name": "platform_resume_test.json",
+			"player_count": 2,
+			"round_number": selected_round_number,
+			"phase": selected_phase,
+			"current_index": selected_index,
+		},
+	}
+	var host_payload := {
+		"user_id": "u_resume_host",
+		"room_code": room_code,
+		"role": "host",
+		"display_name": "ResumeHost",
+		"seat_index": null,
+		"config_json": JSON.stringify(cfg),
+		"join_policy": "public",
+		"exp": int(Time.get_unix_time_from_system()) + 3600,
+	}
+	var host_token_r: Result = ConnectTokenClass.create_token(host_payload, server.connect_token_secret_override)
+	if not host_token_r.ok:
+		return Result.failure("create_token(resume host) 失败: %s" % host_token_r.error)
+
+	mock_net.multiplayer.remote_sender_id = 30
+	server.handle_rpc_client_hello({
+		"request_id": "r_resume_host",
+		"protocol_version": NetContext.PROTOCOL_VERSION,
+		"game_version": "0.0.0",
+		"schema_version": 0,
+		"player_profile": {"name": "ResumeHostLocal", "color_index": 1, "restaurant_logo_id": -1},
+		"connect_token": str(host_token_r.value),
+		"resume_room_bootstrap": {"archive": archive},
+	})
+
+	if str(rm.peer_to_room.get(30, "")) != room_code:
+		return Result.failure("恢复房平台建房失败：host peer_to_room 未绑定到 %s" % room_code)
+	var room = rm.rooms.get(room_code, null)
+	if room == null:
+		return Result.failure("恢复房平台建房失败：room 为空")
+	if not room.has_method("is_resume_archive_room") or not room.is_resume_archive_room():
+		return Result.failure("恢复房平台建房失败：room_mode 不是 resume_archive")
+	if int(room.host_peer_id) != 30:
+		return Result.failure("恢复房平台建房失败：host_peer_id 错误: %d" % int(room.host_peer_id))
+	if room.get_player_count() != 0:
+		return Result.failure("恢复房建房后不应已有已分座玩家: %d" % room.get_player_count())
+	if not room.has_method("get_waiting_member_count") or int(room.get_waiting_member_count()) != 1:
+		return Result.failure("恢复房建房后待分配成员数错误: %s" % str(room.get_waiting_member_count() if room.has_method("get_waiting_member_count") else -1))
+
+	var player_payload := {
+		"user_id": "u_resume_player",
+		"room_code": room_code,
+		"role": "player",
+		"display_name": "ResumeP2",
+		"seat_index": null,
+		"exp": int(Time.get_unix_time_from_system()) + 3600,
+	}
+	var player_token_r: Result = ConnectTokenClass.create_token(player_payload, server.connect_token_secret_override)
+	if not player_token_r.ok:
+		return Result.failure("create_token(resume player) 失败: %s" % player_token_r.error)
+
+	mock_net.multiplayer.remote_sender_id = 31
+	server.handle_rpc_client_hello({
+		"request_id": "r_resume_player",
+		"protocol_version": NetContext.PROTOCOL_VERSION,
+		"game_version": "0.0.0",
+		"schema_version": 0,
+		"player_profile": {"name": "ResumeP2Local", "color_index": 2, "restaurant_logo_id": -1},
+		"connect_token": str(player_token_r.value),
+	})
+
+	if str(rm.peer_to_room.get(31, "")) != room_code:
+		return Result.failure("恢复房平台入房失败：player peer_to_room 未绑定到 %s" % room_code)
+	if int(room.get_waiting_member_count()) != 2:
+		return Result.failure("恢复房玩家加入后待分配成员数错误: %d" % int(room.get_waiting_member_count()))
+	var waiting_peers: Array[int] = room.get_peer_ids()
+	if waiting_peers.size() != 2 or not waiting_peers.has(30) or not waiting_peers.has(31):
+		return Result.failure("恢复房待分配 peer 集合错误: %s" % str(waiting_peers))
+
+	mock_net.multiplayer.remote_sender_id = 30
+	server.handle_rpc_assign_room_seat({
+		"request_id": "r_resume_assign_host",
+		"user_id": "u_resume_host",
+		"seat_index": 0,
+	})
+	server.handle_rpc_assign_room_seat({
+		"request_id": "r_resume_assign_player",
+		"user_id": "u_resume_player",
+		"seat_index": 1,
+	})
+
+	if _find_request_rejected(mock_net.sent, 30, "r_resume_assign_host", "assign_seat_failed") >= 0:
+		return Result.failure("恢复房 host 分座不应被拒绝")
+	if _find_request_rejected(mock_net.sent, 30, "r_resume_assign_player", "assign_seat_failed") >= 0:
+		return Result.failure("恢复房 player 分座不应被拒绝")
+	if int(room.get_waiting_member_count()) != 0:
+		return Result.failure("恢复房分座后不应仍有待分配成员: %d" % int(room.get_waiting_member_count()))
+	if room.get_player_count() != 2:
+		return Result.failure("恢复房分座后 player_count 错误: %d" % room.get_player_count())
+	if room.get_connected_player_count() != 2:
+		return Result.failure("恢复房分座后 connected_player_count 错误: %d" % room.get_connected_player_count())
+
+	var ready_r: Result = room.can_start_game()
+	if not ready_r.ok:
+		return Result.failure("恢复房分座后应允许开始游戏: %s" % ready_r.error)
+
+	mock_net.multiplayer.remote_sender_id = 30
+	server.handle_rpc_start_game({
+		"request_id": "r_resume_start",
+	})
+	if _find_request_rejected(mock_net.sent, 30, "r_resume_start", "start_game_failed") >= 0:
+		return Result.failure("恢复房平台自动入房场景开局不应失败")
+	if room.game_engine == null or room.game_engine.get_state() == null:
+		return Result.failure("恢复房开局后缺少 game_engine/state")
+	var actual_hash := str(room.game_engine.get_state().compute_hash())
+	if actual_hash != expected_hash:
+		return Result.failure("恢复房开局 hash 不一致: %s vs %s" % [expected_hash, actual_hash])
+	if int(room.game_engine.current_command_index) != selected_index:
+		return Result.failure("恢复房开局 current_command_index 错误: %d vs %d" % [int(room.game_engine.current_command_index), selected_index])
+	if _find_sent_method(mock_net.sent, 30, "rpc_game_started") < 0 or _find_sent_method(mock_net.sent, 31, "rpc_game_started") < 0:
+		return Result.failure("恢复房开局后双方都应收到 rpc_game_started")
+	if _find_sent_method(mock_net.sent, 30, "rpc_resync_snapshot_manifest") < 0 or _find_sent_method(mock_net.sent, 31, "rpc_resync_snapshot_manifest") < 0:
+		return Result.failure("恢复房开局后双方都应收到 snapshot manifest")
+	if _find_sent_method(mock_net.sent, 30, "rpc_resync_snapshot_chunk") < 0 or _find_sent_method(mock_net.sent, 31, "rpc_resync_snapshot_chunk") < 0:
+		return Result.failure("恢复房开局后双方都应收到 snapshot chunk")
+	if _find_sent_method(mock_net.sent, 30, "rpc_resync_archive") >= 0 or _find_sent_method(mock_net.sent, 31, "rpc_resync_archive") >= 0:
+		return Result.failure("恢复房开局主链路不应回退到旧 rpc_resync_archive")
+
+	return Result.success()
+
+static func _build_test_archive() -> Result:
+	var engine = GameEngineClass.new()
+	var init_r: Result = engine.initialize(2, 12345, [], GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR)
+	if not init_r.ok:
+		return Result.failure("初始化恢复测试存档失败: %s" % init_r.error)
+	var setup_r: Result = TestPhaseUtilsClass.complete_setup(engine)
+	if not setup_r.ok:
+		return Result.failure("构造恢复测试历史失败: %s" % setup_r.error)
+	var archive_r: Result = engine.create_archive()
+	if not archive_r.ok:
+		return Result.failure("创建恢复测试存档失败: %s" % archive_r.error)
+	return Result.success(Dictionary(archive_r.value).duplicate(true))
+
+static func _build_midpoint_resume_archive(base_archive: Dictionary) -> Result:
+	var commands_val = base_archive.get("commands", null)
+	if not (commands_val is Array) or Array(commands_val).size() < 2:
+		return Result.failure("恢复测试需要至少 2 条命令历史")
+	var selected_index := maxi(0, int(floor(float(Array(commands_val).size()) / 2.0)) - 1)
+	var preview_engine = GameEngineClass.new()
+	var load_r: Result = preview_engine.load_from_archive(base_archive)
+	if not load_r.ok:
+		return Result.failure("预览恢复测试存档失败: %s" % load_r.error)
+	var rewind_r: Result = preview_engine.rewind_to_command(selected_index)
+	if not rewind_r.ok:
+		return Result.failure("预览切换恢复点失败: %s" % rewind_r.error)
+	var preview_state = preview_engine.get_state()
+	if preview_state == null:
+		return Result.failure("预览恢复点状态为空")
+	if not (preview_state.rules is Dictionary):
+		preview_state.rules = {}
+	preview_state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
+	var archive: Dictionary = base_archive.duplicate(true)
+	archive["current_index"] = selected_index
+	var expected_hash := str(preview_state.compute_hash())
+	archive["final_hash"] = expected_hash
+	var phase_text := str(preview_state.phase)
+	var sub_phase_text := str(preview_state.sub_phase).strip_edges()
+	if not sub_phase_text.is_empty():
+		phase_text += " / %s" % sub_phase_text
+	return Result.success({
+		"archive": archive,
+		"selected_index": selected_index,
+		"round_number": int(preview_state.round_number),
+		"phase": phase_text,
+		"expected_hash": expected_hash,
+	})
 
 static func _reset_net_context() -> void:
 	if NetContext != null and NetContext.has_method("reset"):

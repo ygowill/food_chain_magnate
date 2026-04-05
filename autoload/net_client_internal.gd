@@ -168,6 +168,11 @@ func handle_rpc_update_room_config(request: Dictionary) -> void:
 	if _server != null and is_instance_valid(_server):
 		_server.handle_rpc_update_room_config(request)
 
+func handle_rpc_assign_room_seat(request: Dictionary) -> void:
+	_ensure_modules()
+	if _server != null and is_instance_valid(_server):
+		_server.handle_rpc_assign_room_seat(request)
+
 func handle_rpc_leave_room(request: Dictionary) -> void:
 	_ensure_modules()
 	if _server != null and is_instance_valid(_server):

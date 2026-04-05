@@ -143,6 +143,40 @@ func _build_full_resync_snapshot_transfer(room) -> Result:
 		"state_hash": state_hash,
 	})
 
+func _build_archive_resync_snapshot_transfer(
+	room_code: String,
+	archive: Dictionary,
+	history_size: int = -1,
+	state_hash: String = ""
+) -> Result:
+	if archive.is_empty():
+		return Result.failure("Archive missing")
+	var transfer_id := "%s_resume_%d" % [
+		_safe_text(str(room_code).to_upper()),
+		int(Time.get_ticks_msec()),
+	]
+	var chunk_r: Result = ResyncSnapshotTransferClass.build_snapshot_transfer(
+		Dictionary(archive).duplicate(true),
+		transfer_id,
+		_get_resync_snapshot_chunk_size_bytes(),
+		_get_resync_snapshot_max_chunks()
+	)
+	if not chunk_r.ok:
+		return Result.failure("Resync archive too large (%s)" % str(chunk_r.error))
+
+	var chunk_payload: Dictionary = Dictionary(chunk_r.value)
+	var manifest: Dictionary = Dictionary(chunk_payload.get("manifest", {})).duplicate(true)
+	manifest["room_code"] = str(room_code).strip_edges().to_upper()
+	return Result.success({
+		"manifest": manifest,
+		"chunks": Array(chunk_payload.get("chunks", [])).duplicate(true),
+		"payload_bytes": int(chunk_payload.get("total_bytes", 0)),
+		"chunk_count": int(chunk_payload.get("chunk_count", 0)),
+		"archive_hash": str(chunk_payload.get("archive_hash", "")),
+		"history_size": int(history_size),
+		"state_hash": str(state_hash).strip_edges(),
+	})
+
 func _build_delta_resync_transfer(room, resume_cursor: Dictionary) -> Result:
 	if room == null:
 		return Result.failure("Room missing")
@@ -994,9 +1028,11 @@ func broadcast_room_state(room) -> void:
 func empty_room_state() -> Dictionary:
 	return {
 		"room_code": "",
+		"room_mode": "normal",
 		"host_peer_id": 0,
 		"host_seat_index": -1,
 		"players": [],
+		"waiting_members": [],
 		"spectators": [],
 		"password_required": false,
 		"allow_spectators": true,
@@ -1067,6 +1103,7 @@ func handle_rpc_client_hello(request: Dictionary) -> void:
 	var connect_token := str(request.get("connect_token", "")).strip_edges()
 	var token_payload: Dictionary = {}
 	var resume_cursor: Dictionary = {}
+	var resume_room_bootstrap: Dictionary = {}
 	if secret.is_empty():
 		send_request_rejected(peer_id, request_id, "server_misconfigured", "HMAC_SECRET is not configured")
 		return
@@ -1084,6 +1121,9 @@ func handle_rpc_client_hello(request: Dictionary) -> void:
 	var resume_cursor_val = request.get("resume_cursor", null)
 	if resume_cursor_val is Dictionary:
 		resume_cursor = Dictionary(resume_cursor_val).duplicate(true)
+	var resume_room_bootstrap_val = request.get("resume_room_bootstrap", null)
+	if resume_room_bootstrap_val is Dictionary:
+		resume_room_bootstrap = Dictionary(resume_room_bootstrap_val).duplicate(true)
 
 	var profile: Dictionary = profile_preview
 	var token_user_id := ""
@@ -1103,7 +1143,7 @@ func handle_rpc_client_hello(request: Dictionary) -> void:
 	_net._profile_by_peer_id[peer_id] = normalized_profile
 
 	if not token_payload.is_empty():
-		var jr: Result = _platform_auto_join(peer_id, request_id, normalized_profile, token_payload, resume_cursor)
+		var jr: Result = _platform_auto_join(peer_id, request_id, normalized_profile, token_payload, resume_cursor, resume_room_bootstrap)
 		if not jr.ok:
 			_net._profile_by_peer_id.erase(peer_id)
 			send_request_rejected(peer_id, request_id, "platform_join_failed", jr.error)
@@ -1135,7 +1175,8 @@ func _platform_auto_join(
 	request_id: String,
 	profile: Dictionary,
 	token_payload: Dictionary,
-	resume_cursor: Dictionary = {}
+	resume_cursor: Dictionary = {},
+	resume_room_bootstrap: Dictionary = {}
 ) -> Result:
 	if _net == null or not is_instance_valid(_net):
 		return ResultClass.failure("NetClient missing")
@@ -1151,6 +1192,17 @@ func _platform_auto_join(
 
 	var rm = _net._room_manager
 	var existing_room = rm.rooms.get(room_code, null) if (rm.rooms is Dictionary) else null
+	var token_config: Dictionary = {}
+	var cfg_json := str(token_payload.get("config_json", "")).strip_edges()
+	if not cfg_json.is_empty():
+		var parsed: Variant = JSON.parse_string(cfg_json)
+		if not (parsed is Dictionary):
+			return ResultClass.failure("connect_token config_json 类型错误（期望 JSON Dictionary）")
+		token_config = Dictionary(parsed)
+	var token_room_mode := str(token_config.get("room_mode", "")).strip_edges()
+	var is_resume_room := token_room_mode == "resume_archive"
+	if existing_room != null and existing_room.has_method("is_resume_archive_room"):
+		is_resume_room = bool(existing_room.is_resume_archive_room())
 	var prepared_resume_transfer: Dictionary = {}
 	if existing_room != null and str(existing_room.status) == "InGame":
 		var prepared_r: Result = _build_best_effort_resume_transfer(existing_room, resume_cursor)
@@ -1167,23 +1219,25 @@ func _platform_auto_join(
 			var f: float = float(seat_index_val)
 			if f == floor(f):
 				seat_index = int(f)
-		if seat_index < 0:
+		if seat_index < 0 and not is_resume_room:
 			return ResultClass.failure("connect_token missing seat_index")
 
-		var config: Dictionary = {}
-		var cfg_json := str(token_payload.get("config_json", "")).strip_edges()
-		if not cfg_json.is_empty():
-			var parsed: Variant = JSON.parse_string(cfg_json)
-			if not (parsed is Dictionary):
-				return ResultClass.failure("connect_token config_json 类型错误（期望 JSON Dictionary）")
-			config = Dictionary(parsed)
+		var config: Dictionary = token_config.duplicate(true)
 		var join_policy := str(token_payload.get("join_policy", "public")).strip_edges()
 		var password_hash := str(token_payload.get("password_hash", "")).strip_edges()
 
 		if existing_room == null:
-			if not rm.has_method("create_room_with_code"):
-				return ResultClass.failure("RoomManager.create_room_with_code missing")
-			r = rm.create_room_with_code(peer_id, profile, room_code, config, join_policy, password_hash)
+			if is_resume_room:
+				if not rm.has_method("create_resume_room_with_code"):
+					return ResultClass.failure("RoomManager.create_resume_room_with_code missing")
+				var archive_val = resume_room_bootstrap.get("archive", null)
+				if not (archive_val is Dictionary):
+					return ResultClass.failure("resume room bootstrap archive missing")
+				r = rm.create_resume_room_with_code(peer_id, profile, room_code, config, Dictionary(archive_val), join_policy, password_hash)
+			else:
+				if not rm.has_method("create_room_with_code"):
+					return ResultClass.failure("RoomManager.create_room_with_code missing")
+				r = rm.create_room_with_code(peer_id, profile, room_code, config, join_policy, password_hash)
 		elif str(existing_room.status) == "InGame":
 			if not rm.has_method("reconnect_player"):
 				return ResultClass.failure("RoomManager.reconnect_player missing")
@@ -1191,15 +1245,20 @@ func _platform_auto_join(
 			r = rm.reconnect_player(peer_id, profile, room_code, seat_index, user_id, "host")
 		else:
 			var host_uid := str(token_payload.get("user_id", "")).strip_edges()
-			var host_seat_taken: bool = existing_room != null and existing_room._seat_profile_by_seat_index is Dictionary and existing_room._seat_profile_by_seat_index.has(seat_index)
-			if host_seat_taken:
-				if not rm.has_method("reclaim_room_seat"):
-					return ResultClass.failure("RoomManager.reclaim_room_seat missing")
-				r = rm.reclaim_room_seat(peer_id, profile, room_code, seat_index, host_uid, "host")
+			if seat_index < 0 and is_resume_room:
+				if not rm.has_method("join_room_as_waiting_member"):
+					return ResultClass.failure("RoomManager.join_room_as_waiting_member missing")
+				r = rm.join_room_as_waiting_member(peer_id, profile, room_code, "host")
 			else:
-				if not rm.has_method("join_room_with_seat"):
-					return ResultClass.failure("RoomManager.join_room_with_seat missing")
-				r = rm.join_room_with_seat(peer_id, profile, room_code, seat_index, "host")
+				var host_seat_taken: bool = existing_room != null and existing_room._seat_profile_by_seat_index is Dictionary and existing_room._seat_profile_by_seat_index.has(seat_index)
+				if host_seat_taken:
+					if not rm.has_method("reclaim_room_seat"):
+						return ResultClass.failure("RoomManager.reclaim_room_seat missing")
+					r = rm.reclaim_room_seat(peer_id, profile, room_code, seat_index, host_uid, "host")
+				else:
+					if not rm.has_method("join_room_with_seat"):
+						return ResultClass.failure("RoomManager.join_room_with_seat missing")
+					r = rm.join_room_with_seat(peer_id, profile, room_code, seat_index, "host")
 	elif role == "player":
 		var seat_index_val2 = token_payload.get("seat_index", null)
 		var seat_index2 := -1
@@ -1209,7 +1268,7 @@ func _platform_auto_join(
 			var f2: float = float(seat_index_val2)
 			if f2 == floor(f2):
 				seat_index2 = int(f2)
-		if seat_index2 < 0:
+		if seat_index2 < 0 and not is_resume_room:
 			return ResultClass.failure("connect_token missing seat_index")
 
 		if existing_room != null and str(existing_room.status) == "InGame":
@@ -1219,15 +1278,20 @@ func _platform_auto_join(
 			r = rm.reconnect_player(peer_id, profile, room_code, seat_index2, user_id2)
 		else:
 			var player_uid := str(token_payload.get("user_id", "")).strip_edges()
-			var player_seat_taken: bool = existing_room != null and existing_room._seat_profile_by_seat_index is Dictionary and existing_room._seat_profile_by_seat_index.has(seat_index2)
-			if player_seat_taken:
-				if not rm.has_method("reclaim_room_seat"):
-					return ResultClass.failure("RoomManager.reclaim_room_seat missing")
-				r = rm.reclaim_room_seat(peer_id, profile, room_code, seat_index2, player_uid)
+			if seat_index2 < 0 and is_resume_room:
+				if not rm.has_method("join_room_as_waiting_member"):
+					return ResultClass.failure("RoomManager.join_room_as_waiting_member missing")
+				r = rm.join_room_as_waiting_member(peer_id, profile, room_code, "player")
 			else:
-				if not rm.has_method("join_room_with_seat"):
-					return ResultClass.failure("RoomManager.join_room_with_seat missing")
-				r = rm.join_room_with_seat(peer_id, profile, room_code, seat_index2)
+				var player_seat_taken: bool = existing_room != null and existing_room._seat_profile_by_seat_index is Dictionary and existing_room._seat_profile_by_seat_index.has(seat_index2)
+				if player_seat_taken:
+					if not rm.has_method("reclaim_room_seat"):
+						return ResultClass.failure("RoomManager.reclaim_room_seat missing")
+					r = rm.reclaim_room_seat(peer_id, profile, room_code, seat_index2, player_uid)
+				else:
+					if not rm.has_method("join_room_with_seat"):
+						return ResultClass.failure("RoomManager.join_room_with_seat missing")
+					r = rm.join_room_with_seat(peer_id, profile, room_code, seat_index2)
 	else:
 		if not rm.has_method("spectate_room"):
 			return ResultClass.failure("RoomManager.spectate_room missing")
@@ -1524,6 +1588,9 @@ func handle_rpc_update_room_config(request: Dictionary) -> void:
 		send_request_rejected(peer_id, request_id, "invalid_params", "config_patch must be Dictionary")
 		return
 	var patch: Dictionary = Dictionary(patch_raw)
+	if room.has_method("is_resume_archive_room") and room.is_resume_archive_room():
+		send_request_rejected(peer_id, request_id, "update_config_failed", "Resume 房间暂不支持修改配置")
+		return
 
 	if patch.has("desired_player_count"):
 		var v = patch.get("desired_player_count", null)
@@ -1654,6 +1721,59 @@ func handle_rpc_update_room_config(request: Dictionary) -> void:
 			% [_request_tag(peer_id, request_id), _room_brief(room), str(Array(patch.keys()))]
 	)
 
+func handle_rpc_assign_room_seat(request: Dictionary) -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
+		return
+
+	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
+	var request_id := str(request.get("request_id", ""))
+	var room = _net._room_manager.get_room_by_peer(peer_id)
+	if room == null:
+		send_request_rejected(peer_id, request_id, "not_in_room", "Not in room")
+		return
+	if int(room.host_peer_id) != int(peer_id):
+		send_request_rejected(peer_id, request_id, "not_host", "Only host can assign seats")
+		return
+	if str(room.status) != "Lobby":
+		send_request_rejected(peer_id, request_id, "assign_seat_failed", "Room is not in Lobby")
+		return
+	if not room.has_method("is_resume_archive_room") or not room.is_resume_archive_room():
+		send_request_rejected(peer_id, request_id, "assign_seat_failed", "Room does not support manual seat assignment")
+		return
+
+	var seat_index_val = request.get("seat_index", null)
+	if not (seat_index_val is int or seat_index_val is float):
+		send_request_rejected(peer_id, request_id, "invalid_params", "seat_index must be int")
+		return
+	var seat_index := int(seat_index_val)
+	var user_id := str(request.get("user_id", "")).strip_edges()
+
+	var sr: Result
+	if user_id.is_empty():
+		if not _net._room_manager.has_method("unassign_room_seat"):
+			send_request_rejected(peer_id, request_id, "assign_seat_failed", "RoomManager.unassign_room_seat missing")
+			return
+		sr = _net._room_manager.unassign_room_seat(str(room.room_code), seat_index)
+	else:
+		if not _net._room_manager.has_method("assign_waiting_member_to_seat"):
+			send_request_rejected(peer_id, request_id, "assign_seat_failed", "RoomManager.assign_waiting_member_to_seat missing")
+			return
+		sr = _net._room_manager.assign_waiting_member_to_seat(str(room.room_code), user_id, seat_index)
+	if not sr.ok:
+		send_request_rejected(peer_id, request_id, "assign_seat_failed", sr.error)
+		return
+
+	_mark_room_directory_dirty()
+	broadcast_room_state(room)
+	broadcast_room_list("")
+	GameLog.info(
+		"NetClient",
+		"AssignRoomSeat success %s room=%s user_id=%s seat=%d"
+			% [_request_tag(peer_id, request_id), _safe_text(str(room.room_code)), _safe_text(user_id), seat_index]
+	)
+
 func handle_rpc_leave_room(request: Dictionary) -> void:
 	if _net == null or not is_instance_valid(_net):
 		return
@@ -1780,6 +1900,25 @@ func handle_rpc_start_game(request: Dictionary) -> void:
 		send_request_rejected(peer_id, request_id, "not_host", "Only host can start game")
 		return
 
+	var resume_start_snapshot_transfer: Dictionary = {}
+	if room.has_method("is_resume_archive_room") and room.is_resume_archive_room():
+		var resume_archive: Dictionary = room.get_resume_lobby_archive()
+		var resume_hash := str(resume_archive.get("final_hash", "")).strip_edges()
+		var history_size := -1
+		var commands_val = resume_archive.get("commands", null)
+		if commands_val is Array:
+			history_size = Array(commands_val).size()
+		var transfer_r: Result = _build_archive_resync_snapshot_transfer(
+			str(room.room_code),
+			resume_archive,
+			history_size,
+			resume_hash
+		)
+		if not transfer_r.ok:
+			send_request_rejected(peer_id, request_id, "start_game_failed", transfer_r.error)
+			return
+		resume_start_snapshot_transfer = Dictionary(transfer_r.value).duplicate(true)
+
 	var sr = room.start_game()
 	if not sr.ok:
 		send_request_rejected(peer_id, request_id, "start_game_failed", sr.error)
@@ -1799,6 +1938,8 @@ func handle_rpc_start_game(request: Dictionary) -> void:
 		var per_peer_payload := payload.duplicate(true)
 		per_peer_payload["local_player_id"] = room.get_seat_index_for_peer(int(pid)) if room.has_method("get_seat_index_for_peer") else -1
 		_net.rpc_id(int(pid), "rpc_game_started", per_peer_payload)
+		if not resume_start_snapshot_transfer.is_empty():
+			_send_prebuilt_resync_snapshot(int(pid), request_id, room, resume_start_snapshot_transfer, "start_game_resume_archive")
 	GameLog.warn(
 		"NetClient",
 		"StartGame success %s %s mapped_players=%d"

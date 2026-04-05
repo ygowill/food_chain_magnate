@@ -16,10 +16,18 @@ static func run() -> Result:
 	var prev_room_list := Array(NetContext.room_list).duplicate(true)
 	var prev_player_profile := Dictionary(NetContext.player_profile).duplicate(true)
 	var prev_resume_state := Dictionary(NetContext.online_resume_state).duplicate(true)
+	var prev_pending_resume_room_bootstrap := NetClient.take_pending_resume_room_bootstrap()
 
 	NetClient.shutdown()
 	NetContext.set_online_resume_context("ROOM77", "player", "https://platform.example.test")
 	NetContext.mark_online_resume_in_game(true)
+	var resume_room_bootstrap := {
+		"archive": {
+			"meta": {"source": "net_client_connect_preserve_context_test"},
+			"seed": 42,
+		}
+	}
+	NetClient.set_pending_resume_room_bootstrap(resume_room_bootstrap)
 
 	var preserve_r = NetClient.connect_to_server("http://127.0.0.1:7000/ws?connect_token=test-token", true)
 	if preserve_r.ok:
@@ -33,6 +41,7 @@ static func run() -> Result:
 			prev_room_list,
 			prev_player_profile,
 			prev_resume_state,
+			prev_pending_resume_room_bootstrap,
 			"非法 ws_url 应立即失败，避免测试依赖真实网络环境"
 		)
 	if not NetContext.has_online_resume_context():
@@ -46,6 +55,7 @@ static func run() -> Result:
 			prev_room_list,
 			prev_player_profile,
 			prev_resume_state,
+			prev_pending_resume_room_bootstrap,
 			"preserve_context=true 时不应清理 resume 上下文"
 		)
 	if NetContext.get_online_resume_room_code() != "ROOM77":
@@ -59,11 +69,28 @@ static func run() -> Result:
 			prev_room_list,
 			prev_player_profile,
 			prev_resume_state,
+			prev_pending_resume_room_bootstrap,
 			"preserve_context=true 后 room_code 丢失: %s" % NetContext.get_online_resume_room_code()
+		)
+	var preserved_bootstrap := NetClient.take_pending_resume_room_bootstrap()
+	if int(Dictionary(preserved_bootstrap.get("archive", {})).get("seed", -1)) != 42:
+		NetClient.shutdown(false)
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_pending_resume_room_bootstrap,
+			"preserve_context=true 时不应清理待发送的 resume bootstrap"
 		)
 
 	NetClient.shutdown(false)
 	NetContext.set_online_resume_context("ROOM88", "player", "https://platform.example.test")
+	NetClient.set_pending_resume_room_bootstrap(resume_room_bootstrap)
 	var clear_r = NetClient.connect_to_server("http://127.0.0.1:7000/ws?connect_token=test-token", false)
 	if clear_r.ok:
 		NetClient.shutdown(false)
@@ -76,6 +103,7 @@ static func run() -> Result:
 			prev_room_list,
 			prev_player_profile,
 			prev_resume_state,
+			prev_pending_resume_room_bootstrap,
 			"非法 ws_url 应立即失败，避免测试依赖真实网络环境"
 		)
 	if NetContext.has_online_resume_context():
@@ -89,9 +117,26 @@ static func run() -> Result:
 			prev_room_list,
 			prev_player_profile,
 			prev_resume_state,
+			prev_pending_resume_room_bootstrap,
 			"preserve_context=false 时应清理 resume 上下文"
 		)
+	var cleared_bootstrap := NetClient.take_pending_resume_room_bootstrap()
+	if not cleared_bootstrap.is_empty():
+		NetClient.shutdown(false)
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_pending_resume_room_bootstrap,
+			"preserve_context=false 时应清理待发送的 resume bootstrap"
+		)
 
+	NetClient.shutdown(false)
 	_restore(
 		prev_mode,
 		prev_local_player_id,
@@ -100,9 +145,9 @@ static func run() -> Result:
 		prev_room_state,
 		prev_room_list,
 		prev_player_profile,
-		prev_resume_state
+		prev_resume_state,
+		prev_pending_resume_room_bootstrap
 	)
-	NetClient.shutdown(false)
 	return Result.success()
 
 static func _restore(
@@ -113,7 +158,8 @@ static func _restore(
 	prev_room_state: Dictionary,
 	prev_room_list: Array,
 	prev_player_profile: Dictionary,
-	prev_resume_state: Dictionary
+	prev_resume_state: Dictionary,
+	prev_pending_resume_room_bootstrap: Dictionary
 ) -> void:
 	NetContext.mode = prev_mode
 	NetContext.local_player_id = prev_local_player_id
@@ -125,6 +171,9 @@ static func _restore(
 	NetContext.online_resume_state = prev_resume_state.duplicate(true)
 	if NetContext.has_method("save_online_resume_state_to_disk"):
 		NetContext.save_online_resume_state_to_disk()
+	NetClient.clear_pending_resume_room_bootstrap()
+	if not prev_pending_resume_room_bootstrap.is_empty():
+		NetClient.set_pending_resume_room_bootstrap(prev_pending_resume_room_bootstrap)
 
 static func _restore_and_fail(
 	prev_mode,
@@ -135,6 +184,7 @@ static func _restore_and_fail(
 	prev_room_list: Array,
 	prev_player_profile: Dictionary,
 	prev_resume_state: Dictionary,
+	prev_pending_resume_room_bootstrap: Dictionary,
 	message: String
 ) -> Result:
 	_restore(
@@ -145,6 +195,7 @@ static func _restore_and_fail(
 		prev_room_state,
 		prev_room_list,
 		prev_player_profile,
-		prev_resume_state
+		prev_resume_state,
+		prev_pending_resume_room_bootstrap
 	)
 	return Result.failure(message)

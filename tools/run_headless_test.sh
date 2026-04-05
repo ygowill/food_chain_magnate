@@ -45,7 +45,7 @@ mkdir -p "$HOME_DIR" "$LOG_DIR"
 # - 无法解析 type hints（例如 Result）
 # 进而让 headless 测试全部失败。
 #
-# 这里做一次轻量自检：若缓存缺失或包含不存在的脚本路径，则用 headless editor 预热刷新缓存。
+# 这里做一次轻量自检：若缓存缺失或包含不存在的脚本路径，则用 import 预热刷新缓存。
 CACHE_FILE="$LOG_DIR/global_script_class_cache.cfg"
 PREFLIGHT_LOG="$LOG_DIR/_preflight.log"
 needs_cache_refresh=0
@@ -106,13 +106,13 @@ can_treat_nonzero_as_success() {
 
 if [[ $needs_cache_refresh -eq 1 ]]; then
 	: > "$PREFLIGHT_LOG"
-	echo "[$NAME] INFO refreshing Godot global script class cache"
-	HOME="$HOME_DIR" "$GODOT_BIN" --headless --editor --quit \
+	echo "[$NAME] INFO importing project and refreshing Godot caches"
+	HOME="$HOME_DIR" "$GODOT_BIN" --headless --import --quit \
 		--path "$PROJECT_PATH" --log-file "$PREFLIGHT_LOG" >/dev/null 2>&1 || {
 			if can_treat_nonzero_as_success "$PREFLIGHT_LOG"; then
-				echo "[$NAME] WARN cache refresh exited nonzero with benign shutdown leak warnings; continuing"
+				echo "[$NAME] WARN preflight import exited nonzero with benign shutdown leak warnings; continuing"
 			else
-				echo "[$NAME] FAIL cache refresh failed"
+				echo "[$NAME] FAIL preflight import failed"
 				echo "[$NAME] LOG TAIL (last 120 lines)"
 				tail -n 120 "$PREFLIGHT_LOG" 2>/dev/null || true
 				exit 1
@@ -201,7 +201,8 @@ detect_log_outcome() {
 		return 1
 	fi
 
-	if grep -qE "^\\[$NAME\\] PASS" "$log_file"; then
+	# `AllTests` 会输出 `[AllTests] PASS <SubTest>`，这里只能依赖最终 SUMMARY。
+	if [[ "$NAME" != "AllTests" ]] && grep -qE "^\\[$NAME\\] PASS($| )" "$log_file"; then
 		return 0
 	fi
 

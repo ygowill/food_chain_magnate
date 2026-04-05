@@ -112,22 +112,19 @@ tools/run_headless_test.sh res://ui/scenes/tests/replay_test.tscn ReplayTest 20
 用于快速发现“脚本语法错误导致 preload/load 失败”的问题（尤其是某脚本未被测试场景覆盖时）。
 
 ```bash
-PROJECT_PATH="/path/to/project"
-mkdir -p "$PROJECT_PATH/.tmp_home" "$PROJECT_PATH/.godot"
-
-HOME="$PROJECT_PATH/.tmp_home" godot --headless \
-  --log-file "$PROJECT_PATH/.godot/CheckCompile.log" \
-  --path "$PROJECT_PATH" \
-  --script res://tools/check_compile.gd
+tools/run_headless_script.sh res://tools/check_compile.gd
 ```
+
+说明：
+
+- 该脚本会先执行一次 `--import --quit`，确保 `.godot/global_script_class_cache.cfg` 和导入资源在干净工作区里也可用。
+- 日志默认写到 `.godot/check_compile.log`。
 
 可选：限制扫描根目录（默认扫描常用脚本目录）：
 
 ```bash
-HOME="$PROJECT_PATH/.tmp_home" godot --headless \
-  --log-file "$PROJECT_PATH/.godot/CheckCompile.log" \
-  --path "$PROJECT_PATH" \
-  --script res://tools/check_compile.gd -- res://core res://gameplay res://modules
+tools/run_headless_script.sh res://tools/check_compile.gd \
+  res://core res://gameplay res://modules
 ```
 
 **批量运行所有测试**：

@@ -11,6 +11,11 @@ static func get_room_status(room_state: Dictionary) -> String:
 		return ""
 	return str(room_state.get("status", "")).strip_edges()
 
+static func get_room_mode(room_state: Dictionary) -> String:
+	if room_state == null:
+		return ""
+	return str(room_state.get("room_mode", "")).strip_edges()
+
 static func get_room_config(room_state: Dictionary) -> Dictionary:
 	if room_state == null:
 		return {}
@@ -31,6 +36,11 @@ static func get_players(room_state: Dictionary) -> Array:
 		return []
 	return Array(room_state.get("players", []))
 
+static func get_waiting_members(room_state: Dictionary) -> Array:
+	if room_state == null:
+		return []
+	return Array(room_state.get("waiting_members", []))
+
 static func get_spectators(room_state: Dictionary) -> Array:
 	if room_state == null:
 		return []
@@ -45,6 +55,9 @@ static func is_host(room_state: Dictionary, local_peer_id: int) -> bool:
 		return false
 	return int(local_peer_id) == host_peer_id
 
+static func is_resume_archive_room(room_state: Dictionary) -> bool:
+	return get_room_mode(room_state) == "resume_archive"
+
 static func can_start_game(room_state: Dictionary, local_peer_id: int) -> bool:
 	if not is_host(room_state, local_peer_id):
 		return false
@@ -53,6 +66,9 @@ static func can_start_game(room_state: Dictionary, local_peer_id: int) -> bool:
 	var cfg: Dictionary = get_room_config(room_state)
 	var desired := int(cfg.get("desired_player_count", 0))
 	if desired <= 0:
+		return false
+	var waiting_members: Array = get_waiting_members(room_state)
+	if is_resume_archive_room(room_state) and not waiting_members.is_empty():
 		return false
 	var players: Array = get_players(room_state)
 	if players.size() != desired:

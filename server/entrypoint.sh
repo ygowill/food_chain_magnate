@@ -6,8 +6,8 @@ PROJECT_PATH="/app"
 PORT="${PORT:-7000}"
 BIND="${BIND:-0.0.0.0}"
 
-# Ensure `user://` is writable/deterministic and pre-warm global script class cache
-# so type hints for `class_name` scripts work on first boot.
+# Ensure `user://` is writable/deterministic and import the project once so
+# `class_name` type hints work on first headless boot.
 HOME_DIR="${PROJECT_PATH}/.tmp_home"
 LOG_DIR="${PROJECT_PATH}/.godot"
 CACHE_FILE="${LOG_DIR}/global_script_class_cache.cfg"
@@ -17,9 +17,9 @@ mkdir -p "${HOME_DIR}" "${LOG_DIR}"
 
 if [ ! -f "${CACHE_FILE}" ]; then
 	: > "${PREFLIGHT_LOG}"
-	HOME="${HOME_DIR}" godot --headless --editor --quit \
+	HOME="${HOME_DIR}" godot --headless --import --quit \
 		--path "${PROJECT_PATH}" --log-file "${PREFLIGHT_LOG}" >/dev/null 2>&1 || {
-			echo "[entrypoint] cache refresh failed; log tail:" >&2
+			echo "[entrypoint] preflight import failed; log tail:" >&2
 			tail -n 200 "${PREFLIGHT_LOG}" 2>/dev/null || true
 			exit 1
 		}

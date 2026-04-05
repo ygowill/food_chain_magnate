@@ -39,6 +39,7 @@ var _pending_resync_snapshot_manifest: Dictionary = {}
 var _pending_resync_snapshot_chunks: Dictionary = {}
 var _pending_resync_delta: Dictionary = {}
 var _resume_force_snapshot_once: bool = false
+var _pending_resume_room_bootstrap: Dictionary = {}
 var _internal = null
 
 func _ready() -> void:
@@ -73,7 +74,12 @@ func start_server(port: int, bind_address: String = "0.0.0.0"):
 	return ResultClass.success()
 
 func connect_to_server(url: String, preserve_context: bool = false):
+	var preserved_resume_room_bootstrap: Dictionary = {}
+	if preserve_context and not _pending_resume_room_bootstrap.is_empty():
+		preserved_resume_room_bootstrap = _pending_resume_room_bootstrap.duplicate(true)
 	shutdown(not preserve_context)
+	if preserve_context and not preserved_resume_room_bootstrap.is_empty():
+		_pending_resume_room_bootstrap = preserved_resume_room_bootstrap
 	var parsed := _parse_connect_token_from_url(str(url))
 	var connect_url: String = str(parsed.get("url", str(url)))
 	var connect_token: String = str(parsed.get("connect_token", ""))
@@ -160,6 +166,7 @@ func shutdown(reset_context: bool = true) -> void:
 	_pending_resync_snapshot_chunks = {}
 	_pending_resync_delta = {}
 	_resume_force_snapshot_once = false
+	_pending_resume_room_bootstrap = {}
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	if reset_context:
 		NetContext.reset()
@@ -271,6 +278,47 @@ func request_update_room_config(config_patch: Dictionary) -> String:
 			% [request_id, _safe_room_code(NetContext.room_state), str(Array(config_patch.keys()))]
 	)
 	return request_id
+
+func request_assign_room_seat(user_id: String, seat_index: int) -> String:
+	var request_id := _next_request_id()
+	var payload := {
+		"request_id": request_id,
+		"user_id": str(user_id).strip_edges(),
+		"seat_index": int(seat_index),
+	}
+	rpc_id(1, "rpc_assign_room_seat", payload)
+	GameLog.info(
+		"NetClient",
+		"TX AssignRoomSeat request_id=%s room=%s user_id=%s seat=%d"
+			% [request_id, _safe_room_code(NetContext.room_state), _safe_text(str(user_id)), int(seat_index)]
+	)
+	return request_id
+
+func request_unassign_room_seat(seat_index: int) -> String:
+	var request_id := _next_request_id()
+	var payload := {
+		"request_id": request_id,
+		"user_id": "",
+		"seat_index": int(seat_index),
+	}
+	rpc_id(1, "rpc_assign_room_seat", payload)
+	GameLog.info(
+		"NetClient",
+		"TX UnassignRoomSeat request_id=%s room=%s seat=%d"
+			% [request_id, _safe_room_code(NetContext.room_state), int(seat_index)]
+	)
+	return request_id
+
+func set_pending_resume_room_bootstrap(bootstrap: Dictionary) -> void:
+	_pending_resume_room_bootstrap = Dictionary(bootstrap).duplicate(true)
+
+func take_pending_resume_room_bootstrap() -> Dictionary:
+	var out: Dictionary = _pending_resume_room_bootstrap.duplicate(true)
+	_pending_resume_room_bootstrap = {}
+	return out
+
+func clear_pending_resume_room_bootstrap() -> void:
+	_pending_resume_room_bootstrap = {}
 
 func request_update_player_profile(profile: Dictionary) -> void:
 	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
@@ -420,6 +468,11 @@ func rpc_join_room(request: Dictionary) -> void:
 func rpc_update_room_config(request: Dictionary) -> void:
 	_ensure_internal()
 	_internal.handle_rpc_update_room_config(request)
+
+@rpc("any_peer", "reliable")
+func rpc_assign_room_seat(request: Dictionary) -> void:
+	_ensure_internal()
+	_internal.handle_rpc_assign_room_seat(request)
 
 @rpc("any_peer", "reliable")
 func rpc_leave_room(request: Dictionary) -> void:

@@ -99,6 +99,25 @@ async def _get_active_room_member(db: AsyncSession, room_id: str, user_id: str) 
     )).scalar_one_or_none()
 
 
+def _parse_room_config_json(config_json: Optional[str]) -> dict:
+    import json
+
+    raw = str(config_json or "").strip()
+    if raw == "":
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return dict(parsed)
+
+
+def _is_resume_room_config(config: dict) -> bool:
+    return str(config.get("room_mode", "")).strip() == "resume_archive"
+
+
 class CreateRoomRequest(BaseModel):
     session_id: str
     config_json: str = "{}"
@@ -173,7 +192,9 @@ async def list_rooms(
             .where(
                 RoomMember.room_id.in_(room_ids),
                 RoomMember.left_at.is_(None),
-                RoomMember.seat_index.is_not(None),
+                RoomMember.role.in_(("host", "player")),
+                RoomMember.member_status != "left",
+                RoomMember.member_status != "ended",
             )
             .group_by(RoomMember.room_id)
         )).all()
@@ -192,12 +213,7 @@ async def list_rooms(
     import json
     out: list[RoomSummary] = []
     for r in rooms:
-        cfg = {}
-        if r.config_json:
-            try:
-                cfg = json.loads(r.config_json)
-            except Exception:
-                cfg = {}
+        cfg = _parse_room_config_json(r.config_json)
 
         desired = int(cfg.get("desired_player_count", 0) or 0)
         allow_spectators = bool(cfg.get("allow_spectators", True))
@@ -232,6 +248,9 @@ async def create_room(req: CreateRoomRequest, db: AsyncSession = Depends(get_db)
     if not preferred_ws_url:
         preferred_ws_url = _resolve_default_ws_url()
 
+    room_cfg = _parse_room_config_json(req.config_json)
+    is_resume_room = _is_resume_room_config(room_cfg)
+
     from app.auth import _hash_password
     room = Room(
         owner_user_id=sess.user_id,
@@ -245,11 +264,12 @@ async def create_room(req: CreateRoomRequest, db: AsyncSession = Depends(get_db)
     db.add(room)
     await db.flush()
 
+    host_seat_index = None if is_resume_room else 0
     db.add(RoomMember(
         room_id=room.room_id,
         user_id=sess.user_id,
         role="host",
-        seat_index=0,
+        seat_index=host_seat_index,
         member_status="active",
     ))
     await db.commit()
@@ -259,7 +279,7 @@ async def create_room(req: CreateRoomRequest, db: AsyncSession = Depends(get_db)
         room.room_code,
         "host",
         display_name=display_name,
-        seat_index=0,
+        seat_index=host_seat_index,
         config_json=req.config_json,
         join_policy=str(room.join_policy),
         password_hash=str(room.password_hash) if room.password_hash else None,
@@ -297,6 +317,9 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
             raise HTTPException(403, "wrong password")
     _, room_ws_url = await _resolve_room_connection_target(db, room)
 
+    room_cfg = _parse_room_config_json(room.config_json)
+    is_resume_room = _is_resume_room_config(room_cfg)
+
     # Check already joined
     existing = await _get_active_room_member(db, room.room_id, sess.user_id)
     if existing:
@@ -315,28 +338,31 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
     if str(room.status) != "Lobby":
         raise HTTPException(409, "room already in game")
 
-    desired_player_count = 0
-    if room.config_json:
-        import json
-        try:
-            cfg = json.loads(room.config_json)
-            desired_player_count = int((cfg or {}).get("desired_player_count", 0) or 0)
-        except Exception:
-            desired_player_count = 0
+    desired_player_count = int(room_cfg.get("desired_player_count", 0) or 0)
 
     last_integrity_error = False
     for _attempt in range(2):
         members = (await db.execute(
             select(RoomMember).where(RoomMember.room_id == room.room_id, RoomMember.left_at.is_(None))
         )).scalars().all()
-        taken = {m.seat_index for m in members if m.seat_index is not None}
-        if desired_player_count > 0 and len(taken) >= desired_player_count:
-            raise HTTPException(409, "room is full")
-        seat = 0
-        while seat in taken:
-            seat += 1
-        if desired_player_count > 0 and seat >= desired_player_count:
-            raise HTTPException(409, "room is full")
+        if is_resume_room:
+            active_participants = [
+                m for m in members
+                if str(m.role or "").strip() in {"host", "player"}
+                and str(m.member_status or "").strip() not in {"left", "ended"}
+            ]
+            if desired_player_count > 0 and len(active_participants) >= desired_player_count:
+                raise HTTPException(409, "room is full")
+            seat = None
+        else:
+            taken = {m.seat_index for m in members if m.seat_index is not None}
+            if desired_player_count > 0 and len(taken) >= desired_player_count:
+                raise HTTPException(409, "room is full")
+            seat = 0
+            while seat in taken:
+                seat += 1
+            if desired_player_count > 0 and seat >= desired_player_count:
+                raise HTTPException(409, "room is full")
 
         db.add(RoomMember(
             room_id=room.room_id,
@@ -386,6 +412,9 @@ async def resume_room(room_code: str, req: ResumeRequest, db: AsyncSession = Dep
         raise HTTPException(409, "room already ended")
     _, room_ws_url = await _resolve_room_connection_target(db, room)
 
+    room_cfg = _parse_room_config_json(room.config_json)
+    is_resume_room = _is_resume_room_config(room_cfg)
+
     existing = await _get_active_room_member(db, room.room_id, sess.user_id)
     if existing is None:
         raise HTTPException(403, "room membership not found")
@@ -394,7 +423,7 @@ async def resume_room(room_code: str, req: ResumeRequest, db: AsyncSession = Dep
 
     role = str(existing.role)
     seat_index = existing.seat_index
-    if role in {"host", "player"} and seat_index is None:
+    if role in {"host", "player"} and seat_index is None and not is_resume_room:
         raise HTTPException(409, "seat missing for resumable role")
 
     if name_changed:

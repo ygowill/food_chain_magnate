@@ -45,11 +45,13 @@ func render_room_state(room_state: Dictionary) -> void:
 	var in_room: bool = not code.is_empty()
 	var is_host_room: bool = in_room and LobbyViewModelClass.is_host(room_state, local_peer_id)
 	var is_lobby_status: bool = LobbyViewModelClass.get_room_status(room_state) == "Lobby"
+	var is_resume_room: bool = LobbyViewModelClass.is_resume_archive_room(room_state)
 
 	var host_peer_id := LobbyViewModelClass.get_host_peer_id(room_state)
 	var host_seat_index := LobbyViewModelClass.get_host_seat_index(room_state)
 	var player_by_seat: Dictionary = {}
 	var players: Array = LobbyViewModelClass.get_players(room_state)
+	var waiting_members: Array = LobbyViewModelClass.get_waiting_members(room_state)
 	for p_val in players:
 		if not (p_val is Dictionary):
 			continue
@@ -73,6 +75,11 @@ func render_room_state(room_state: Dictionary) -> void:
 	UiStylesClass.apply_label_dark(players_header)
 	players_vbox.add_child(players_header)
 
+	if is_resume_room and is_lobby_status:
+		var waiting_panel := _build_waiting_members_panel(waiting_members, desired_player_count, player_by_seat, is_host_room)
+		if waiting_panel != null:
+			players_vbox.add_child(waiting_panel)
+
 	var seat_count := maxi(players.size(), desired_player_count)
 	for seat_index in range(seat_count):
 		if player_by_seat.has(seat_index):
@@ -95,7 +102,8 @@ func render_room_state(room_state: Dictionary) -> void:
 
 			var player_color := PLAYER_COLORS[palette_index] if palette_index < PLAYER_COLORS.size() else PLAYER_COLORS[0]
 			var restaurant_logo_id := int(p.get("restaurant_logo_id", -1))
-			var can_edit_logo := is_host_room and is_lobby_status
+			var can_edit_logo := is_host_room and is_lobby_status and not is_resume_room
+			var show_unassign_button := is_resume_room and is_lobby_status and is_host_room
 			var card := _build_player_card(
 				seat_index,
 				name,
@@ -105,7 +113,9 @@ func render_room_state(room_state: Dictionary) -> void:
 				restaurant_logo_id,
 				can_edit_logo,
 				players,
-				desired_player_count
+				desired_player_count,
+				show_unassign_button,
+				Callable(self, "_request_unassign_seat").bind(seat_index)
 			)
 			players_vbox.add_child(card)
 		else:
@@ -208,7 +218,9 @@ func _build_player_card(
 	restaurant_logo_id: int,
 	can_edit_logo: bool,
 	players: Array = [],
-	desired_player_count: int = 0
+	desired_player_count: int = 0,
+	show_unassign_button: bool = false,
+	unassign_callback: Callable = Callable()
 ) -> Control:
 	var card_panel := PanelContainer.new()
 	card_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -306,7 +318,98 @@ func _build_player_card(
 		UiStylesClass.apply_label_hint_dark(tag_label)
 		content_row.add_child(tag_label)
 
+	if not is_empty_seat and show_unassign_button and unassign_callback.is_valid():
+		var unassign_button := Button.new()
+		unassign_button.text = "移回待分配"
+		UiStylesClass.apply_button_secondary(unassign_button)
+		unassign_button.pressed.connect(func() -> void:
+			unassign_callback.call()
+		)
+		content_row.add_child(unassign_button)
+
 	return card_panel
+
+func _build_waiting_members_panel(waiting_members: Array, desired_player_count: int, player_by_seat: Dictionary, is_host_room: bool) -> Control:
+	var panel := _build_section_panel(Color(0.93, 0.89, 0.80, 0.45))
+	var root := VBoxContainer.new()
+	root.add_theme_constant_override("separation", 6)
+	panel.add_child(root)
+
+	var header := Label.new()
+	header.text = "待分配成员"
+	header.add_theme_font_size_override("font_size", 15)
+	UiStylesClass.apply_label_dark(header)
+	root.add_child(header)
+
+	var available_seats: Array[int] = []
+	for seat_index in range(desired_player_count):
+		if not player_by_seat.has(seat_index):
+			available_seats.append(seat_index)
+
+	if waiting_members.is_empty():
+		var none := Label.new()
+		none.text = "当前没有待分配成员"
+		UiStylesClass.apply_label_hint_dark(none)
+		root.add_child(none)
+		return panel
+
+	for member_val in waiting_members:
+		if not (member_val is Dictionary):
+			continue
+		var member: Dictionary = Dictionary(member_val)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		root.add_child(row)
+
+		var role_label := ""
+		if str(member.get("role", "")).strip_edges() == "host":
+			role_label = "房主"
+		elif not bool(member.get("connected", false)):
+			role_label = "未连接"
+
+		var name_label := Label.new()
+		var display_name := str(member.get("name", "")).strip_edges()
+		if display_name.is_empty():
+			display_name = "待分配玩家"
+		if not role_label.is_empty():
+			display_name += "（%s）" % role_label
+		name_label.text = display_name
+		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		UiStylesClass.apply_label_dark(name_label)
+		row.add_child(name_label)
+
+		if not is_host_room:
+			continue
+		if available_seats.is_empty():
+			var full_label := Label.new()
+			full_label.text = "座位已满"
+			UiStylesClass.apply_label_hint_dark(full_label)
+			row.add_child(full_label)
+			continue
+		for seat_index2 in available_seats:
+			var btn := Button.new()
+			btn.text = "P%d" % (seat_index2 + 1)
+			UiStylesClass.apply_button_secondary(btn)
+			var user_id := str(member.get("user_id", "")).strip_edges()
+			btn.disabled = user_id.is_empty()
+			btn.pressed.connect(Callable(self, "_request_assign_waiting_member").bind(user_id, seat_index2))
+			row.add_child(btn)
+
+	return panel
+
+func _request_assign_waiting_member(user_id: String, seat_index: int) -> void:
+	if NetClient == null or not NetClient.is_online_client_connected():
+		return
+	if not NetClient.has_method("request_assign_room_seat"):
+		return
+	NetClient.request_assign_room_seat(user_id, seat_index)
+
+func _request_unassign_seat(seat_index: int) -> void:
+	if NetClient == null or not NetClient.is_online_client_connected():
+		return
+	if not NetClient.has_method("request_unassign_room_seat"):
+		return
+	NetClient.request_unassign_room_seat(seat_index)
 
 func _build_logo_choices_patch(players: Array, desired_player_count: int, seat_index: int, logo_id: int) -> Array[int]:
 	var total := maxi(0, desired_player_count)
