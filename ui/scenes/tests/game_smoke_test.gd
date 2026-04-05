@@ -28,6 +28,9 @@ func _ready() -> void:
 
 	if _should_autorun():
 		_exit_code = await _run_test()
+		if SceneManager != null and SceneManager.has_method("shutdown_current_scene_after_cleanup"):
+			SceneManager.shutdown_current_scene_after_cleanup(self, Callable(self, "_prepare_runtime_cleanup_before_quit"), _exit_code)
+			return
 		await _prepare_runtime_cleanup_before_quit()
 		get_tree().quit(_exit_code)
 

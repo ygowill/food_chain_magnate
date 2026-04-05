@@ -22,6 +22,9 @@ func _ready() -> void:
 	_append_output("提示：CLI 可用 `-- --autorun` 自动执行并退出。\n")
 	if _should_autorun():
 		_exit_code = await _run_all()
+		if SceneManager != null and SceneManager.has_method("shutdown_current_scene_after_cleanup"):
+			SceneManager.shutdown_current_scene_after_cleanup(self, Callable(self, "_prepare_runtime_cleanup_before_quit"), _exit_code)
+			return
 		await _prepare_runtime_cleanup_before_quit()
 		get_tree().quit(_exit_code)
 
@@ -186,4 +189,3 @@ func _clear_output() -> void:
 		return
 	if is_instance_valid(output):
 		output.clear()
-

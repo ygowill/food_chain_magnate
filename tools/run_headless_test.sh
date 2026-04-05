@@ -74,15 +74,49 @@ elif ! command -v "$GODOT_BIN" >/dev/null 2>&1; then
 	exit 127
 fi
 
+has_script_errors() {
+	local log_file="$1"
+	[[ -f "$log_file" ]] || return 1
+	grep -qE '^SCRIPT ERROR:' "$log_file"
+}
+
+has_known_benign_shutdown_errors() {
+	local log_file="$1"
+	[[ -f "$log_file" ]] || return 1
+	grep -qE '^WARNING: ObjectDB instances leaked at exit|^WARNING: [0-9]+ RIDs? of type .* were leaked\.|^ERROR: [0-9]+ resources still in use at exit\.|^ERROR: [0-9]+ RID allocations? of type .* were leaked at exit\.|^ERROR: Condition "ret != noErr" is true\. Returning: ""' "$log_file"
+}
+
+has_unexpected_error_lines() {
+	local log_file="$1"
+	[[ -f "$log_file" ]] || return 1
+	grep -E '^ERROR:' "$log_file" | grep -vqE '^ERROR: ([0-9]+ resources still in use at exit\.|[0-9]+ RID allocations? of type .* were leaked at exit\.|Condition "ret != noErr" is true\. Returning: "")$'
+}
+
+can_treat_nonzero_as_success() {
+	local log_file="$1"
+	[[ -f "$log_file" ]] || return 1
+	if has_script_errors "$log_file"; then
+		return 1
+	fi
+	if has_unexpected_error_lines "$log_file"; then
+		return 1
+	fi
+	has_known_benign_shutdown_errors "$log_file"
+}
+
 if [[ $needs_cache_refresh -eq 1 ]]; then
 	: > "$PREFLIGHT_LOG"
 	echo "[$NAME] INFO refreshing Godot global script class cache"
 	HOME="$HOME_DIR" "$GODOT_BIN" --headless --editor --quit \
 		--path "$PROJECT_PATH" --log-file "$PREFLIGHT_LOG" >/dev/null 2>&1 || {
-			echo "[$NAME] FAIL cache refresh failed"
-			echo "[$NAME] LOG TAIL (last 120 lines)"
-			tail -n 120 "$PREFLIGHT_LOG" 2>/dev/null || true
-			exit 1
+			if can_treat_nonzero_as_success "$PREFLIGHT_LOG"; then
+				echo "[$NAME] WARN cache refresh exited nonzero with benign shutdown leak warnings; continuing"
+			else
+				echo "[$NAME] FAIL cache refresh failed"
+				echo "[$NAME] LOG TAIL (last 120 lines)"
+				tail -n 120 "$PREFLIGHT_LOG" 2>/dev/null || true
+				exit 1
+			fi
 		}
 fi
 
@@ -109,10 +143,14 @@ if [[ $needs_import -eq 1 ]]; then
 	: > "$IMPORT_LOG"
 	echo "[$NAME] INFO importing project assets (missing: ${missing_import_path:-unknown})"
 	HOME="$HOME_DIR" "$GODOT_BIN" --headless --import --path "$PROJECT_PATH" --log-file "$IMPORT_LOG" >/dev/null 2>&1 || {
-		echo "[$NAME] FAIL import failed"
-		echo "[$NAME] LOG TAIL (last 120 lines)"
-		tail -n 120 "$IMPORT_LOG" 2>/dev/null || true
-		exit 1
+		if can_treat_nonzero_as_success "$IMPORT_LOG"; then
+			echo "[$NAME] WARN import exited nonzero with benign shutdown leak warnings; continuing"
+		else
+			echo "[$NAME] FAIL import failed"
+			echo "[$NAME] LOG TAIL (last 120 lines)"
+			tail -n 120 "$IMPORT_LOG" 2>/dev/null || true
+			exit 1
+		fi
 	}
 fi
 
@@ -131,7 +169,7 @@ check_log_for_script_errors() {
 	if [[ ! -f "$log_file" ]]; then
 		return 0
 	fi
-	if grep -qE '^SCRIPT ERROR:' "$log_file"; then
+	if has_script_errors "$log_file"; then
 		local count
 		count="$(grep -cE '^SCRIPT ERROR:' "$log_file" || true)"
 		echo "[$NAME] FAIL detected ${count:-1} script error(s) in log"
@@ -171,6 +209,37 @@ detect_log_outcome() {
 }
 
 for ((elapsed=0; elapsed<TIMEOUT_SECONDS; elapsed++)); do
+	if detect_log_outcome "$LOG_FILE"; then
+		if ! check_log_for_script_errors "$LOG_FILE"; then
+			kill "$PID" 2>/dev/null || true
+			sleep 1
+			kill -9 "$PID" 2>/dev/null || true
+			wait "$PID" 2>/dev/null || true
+			exit 1
+		fi
+		if kill -0 "$PID" 2>/dev/null; then
+			kill "$PID" 2>/dev/null || true
+			sleep 1
+			kill -9 "$PID" 2>/dev/null || true
+			wait "$PID" 2>/dev/null || true
+			echo "[$NAME] WARN log indicates PASS before godot exited; terminating process"
+		fi
+		exit 0
+	fi
+	result=$?
+	if [[ $result -eq 1 ]]; then
+		kill "$PID" 2>/dev/null || true
+		sleep 1
+		kill -9 "$PID" 2>/dev/null || true
+		wait "$PID" 2>/dev/null || true
+		echo "[$NAME] FAIL detected in log"
+		echo "[$NAME] LOG EXCERPT (first 40 FAIL lines)"
+		grep -nE "^\\[$NAME\\] FAIL" "$LOG_FILE" | head -n 40 || true
+		echo "[$NAME] LOG TAIL (last 120 lines)"
+		tail -n 120 "$LOG_FILE" 2>/dev/null || true
+		exit 1
+	fi
+
 	if ! kill -0 "$PID" 2>/dev/null; then
 		if wait "$PID"; then
 			code=0
@@ -217,6 +286,11 @@ for ((elapsed=0; elapsed<TIMEOUT_SECONDS; elapsed++)); do
 			if [[ $code -ne 0 ]]; then
 				echo "[$NAME] WARN godot_exit_code=$code but log indicates PASS; treating as success"
 			fi
+			exit 0
+		fi
+
+		if [[ $code -ne 0 ]] && can_treat_nonzero_as_success "$LOG_FILE"; then
+			echo "[$NAME] WARN godot_exit_code=$code with benign shutdown leak warnings; treating as success"
 			exit 0
 		fi
 

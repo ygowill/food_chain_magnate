@@ -160,3 +160,34 @@ func hide_loading() -> void:
 
 func is_loading_visible() -> bool:
 	return _loading_overlay != null and is_instance_valid(_loading_overlay) and _loading_overlay.visible
+
+func shutdown_current_scene_after_cleanup(scene_to_release: Node, cleanup: Callable, exit_code: int) -> void:
+	call_deferred("_deferred_shutdown_current_scene_after_cleanup", scene_to_release, cleanup, exit_code)
+
+func _deferred_shutdown_current_scene_after_cleanup(scene_to_release: Node, cleanup: Callable, exit_code: int) -> void:
+	if cleanup.is_valid():
+		await cleanup.call()
+
+	var tree := get_tree()
+	if tree == null or tree.root == null:
+		return
+
+	var placeholder := Node.new()
+	tree.root.add_child(placeholder)
+	tree.current_scene = placeholder
+	current_scene = placeholder
+	current_scene_path = ""
+
+	if scene_to_release != null and is_instance_valid(scene_to_release):
+		scene_to_release.queue_free()
+
+	await tree.process_frame
+	await tree.process_frame
+
+	if is_instance_valid(placeholder):
+		placeholder.queue_free()
+	current_scene = null
+	tree.current_scene = null
+
+	await tree.process_frame
+	tree.quit(exit_code)
