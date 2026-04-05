@@ -623,6 +623,8 @@ func _bind_net_signals() -> void:
 		NetClient.request_rejected.connect(_on_request_rejected)
 	if not NetClient.game_started.is_connected(_on_game_started):
 		NetClient.game_started.connect(_on_game_started)
+	if not NetClient.resync_archive_received.is_connected(_on_online_resync_archive_received):
+		NetClient.resync_archive_received.connect(_on_online_resync_archive_received)
 
 func _bind_platform_signals() -> void:
 	if PlatformSession == null:
@@ -1294,6 +1296,18 @@ func _on_game_started(_payload: Dictionary) -> void:
 	_start_game_flow_in_progress = false
 	_enter_online_game_scene()
 
+func _on_online_resync_archive_received(_archive: Dictionary) -> void:
+	if OS.has_feature("headless"):
+		return
+	var room_state: Dictionary = NetContext.room_state if NetContext != null else {}
+	if _should_enter_online_game_scene_from_room_state(room_state):
+		GameLog.info(
+			"OnlineLobby",
+			"已收到联机快照，进入对局 room=%s"
+				% str(room_state.get("room_code", "")).strip_edges().to_upper()
+		)
+		_enter_online_game_scene()
+
 func _enter_online_game_scene() -> void:
 	if _enter_game_transition_requested:
 		return
@@ -1313,7 +1327,26 @@ func _should_enter_online_game_scene_from_room_state(room_state: Dictionary) -> 
 	var engine = Globals.current_game_engine
 	if engine == null or not (engine is Object) or not engine.has_method("get_state"):
 		return false
-	return engine.get_state() != null
+	if engine.get_state() == null:
+		return false
+	return _has_pending_online_resync_data_for_room(room_state)
+
+func _has_pending_online_resync_data_for_room(room_state: Dictionary) -> bool:
+	if NetClient == null:
+		return false
+	var room_code := str(room_state.get("room_code", "")).strip_edges().to_upper()
+	if room_code.is_empty():
+		return false
+	var pending_archive: Dictionary = Dictionary(NetClient.get("_pending_resync_archive")) if NetClient.get("_pending_resync_archive") is Dictionary else {}
+	if not pending_archive.is_empty():
+		return true
+	var pending_manifest: Dictionary = Dictionary(NetClient.get("_pending_resync_snapshot_manifest")) if NetClient.get("_pending_resync_snapshot_manifest") is Dictionary else {}
+	if str(pending_manifest.get("room_code", "")).strip_edges().to_upper() == room_code:
+		return true
+	var pending_delta: Dictionary = Dictionary(NetClient.get("_pending_resync_delta")) if NetClient.get("_pending_resync_delta") is Dictionary else {}
+	if str(pending_delta.get("room_code", "")).strip_edges().to_upper() == room_code:
+		return true
+	return false
 
 # ── 配置同步 ──
 
