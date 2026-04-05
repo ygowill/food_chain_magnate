@@ -3,6 +3,7 @@ extends RefCounted
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
+const MarketingRulesClass = preload("res://core/rules/marketing_rules.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 
 const MODULE_ID := "base_marketing"
@@ -49,24 +50,60 @@ func _get_billboard_house_ids(state: GameState, marketing_instance: Dictionary) 
 	var cells_read := MapStateAccessClass.require_cells(state, "%s: billboard range" % MODULE_ID)
 	if not cells_read.ok:
 		return cells_read
+	var footprint_cells_read := _resolve_marketing_footprint_cells(marketing_instance, world_pos, "billboard")
+	if not footprint_cells_read.ok:
+		return footprint_cells_read
+	var footprint_cells: Array[Vector2i] = footprint_cells_read.value
 
+	var footprint_set := {}
+	for cell_pos in footprint_cells:
+		footprint_set[cell_pos] = true
 	var set := {}
-	for dir in MapUtils.DIRECTIONS:
-		var n := MapUtils.get_neighbor_pos(world_pos, dir)
-		if not CoordsClass.is_world_pos_in_grid(state, n):
-			continue
-		var cell := CellsClass.get_cell(state, n)
-		if not cell.has("structure") or not (cell["structure"] is Dictionary):
-			return Result.failure("%s: billboard range: cell.structure 缺失或类型错误: %s" % [MODULE_ID, str(n)])
-		var structure: Dictionary = cell["structure"]
-		if not structure.has("house_id"):
-			continue
-		if not (structure["house_id"] is String):
-			return Result.failure("%s: billboard range: structure.house_id 类型错误（期望 String）: %s" % [MODULE_ID, str(n)])
-		var house_id: String = structure["house_id"]
-		if not house_id.is_empty():
-			set[house_id] = true
+	for cell_pos in footprint_cells:
+		for dir in MapUtils.DIRECTIONS:
+			var n := MapUtils.get_neighbor_pos(cell_pos, dir)
+			if footprint_set.has(n):
+				continue
+			if not CoordsClass.is_world_pos_in_grid(state, n):
+				continue
+			var cell := CellsClass.get_cell(state, n)
+			if not cell.has("structure") or not (cell["structure"] is Dictionary):
+				return Result.failure("%s: billboard range: cell.structure 缺失或类型错误: %s" % [MODULE_ID, str(n)])
+			var structure: Dictionary = cell["structure"]
+			if not structure.has("house_id"):
+				continue
+			if not (structure["house_id"] is String):
+				return Result.failure("%s: billboard range: structure.house_id 类型错误（期望 String）: %s" % [MODULE_ID, str(n)])
+			var house_id: String = structure["house_id"]
+			if not house_id.is_empty():
+				set[house_id] = true
 	return Result.success(_dict_keys_to_string_array(set))
+
+func _resolve_marketing_footprint_cells(marketing_instance: Dictionary, world_pos: Vector2i, label: String) -> Result:
+	var footprint_size := Vector2i.ONE
+	var footprint_val = marketing_instance.get("footprint_size", null)
+	if footprint_val is Vector2i:
+		footprint_size = Vector2i(footprint_val)
+	elif footprint_val is Array:
+		var arr: Array = footprint_val
+		if arr.size() == 2:
+			footprint_size = Vector2i(int(arr[0]), int(arr[1]))
+	if footprint_size.x <= 0 or footprint_size.y <= 0:
+		return Result.failure("%s: %s range: marketing_instance.footprint_size 非法: %s" % [MODULE_ID, label, str(footprint_val)])
+
+	var rotation := 0
+	var rotation_val = marketing_instance.get("rotation", 0)
+	if rotation_val is int:
+		rotation = int(rotation_val)
+	elif rotation_val is float:
+		var f: float = float(rotation_val)
+		if f == floor(f):
+			rotation = int(f)
+	var size_read := MarketingRulesClass.get_rotated_footprint_size(footprint_size, rotation)
+	if not size_read.ok:
+		return Result.failure("%s: %s range: 无法解析 marketing_instance.rotation=%s: %s" % [MODULE_ID, label, str(rotation_val), size_read.error])
+	var size: Vector2i = size_read.value
+	return Result.success(MarketingRulesClass.build_footprint_cells(world_pos, size))
 
 func _get_mailbox_house_ids(state: GameState, marketing_instance: Dictionary) -> Result:
 	var map_read := _require_state_map(state, "mailbox range")

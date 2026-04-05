@@ -878,6 +878,14 @@ static func build_tests(host) -> Array[Dictionary]:
 				"name": "GameLogDockControllerTimelineSyncTest",
 				"fn": func() -> Result: return await TestRefs.GameLogDockControllerTimelineSyncTestClass.run(),
 			},
+			{
+				"name": "RightPanelDockControllerReplaceVisiblePanelTest",
+				"fn": func() -> Result: return TestRefs.RightPanelDockControllerReplaceVisiblePanelTestClass.run(),
+			},
+			{
+				"name": "GamePanelControllerAutoOpenOverLogTest",
+				"fn": func() -> Result: return TestRefs.GamePanelControllerAutoOpenOverLogTestClass.run(),
+			},
 				{
 					"name": "LogRestoreAfterLoadTest",
 					"fn": func() -> Result: return TestRefs.LogRestoreAfterLoadTestClass.run(),

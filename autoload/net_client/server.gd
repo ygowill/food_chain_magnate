@@ -330,16 +330,44 @@ func _build_match_summary_payload(state) -> Dictionary:
 		"marketing_instances": marketing_instances,
 	}
 
+func _get_finalize_ordered_seat_indices(room) -> Array[int]:
+	var ordered_seat_indices: Array[int] = []
+	if room != null and (room._seat_profile_by_seat_index is Dictionary):
+		for seat_key in room._seat_profile_by_seat_index.keys():
+			ordered_seat_indices.append(int(seat_key))
+	elif room != null and (room._user_id_by_seat_index is Dictionary):
+		for seat_key in room._user_id_by_seat_index.keys():
+			ordered_seat_indices.append(int(seat_key))
+	ordered_seat_indices.sort()
+	return ordered_seat_indices
+
+func _resolve_finalize_player_ordinal(room, state, seat_index: int) -> int:
+	if state == null or not (state.players is Array):
+		return -1
+	var ordered_seat_indices := _get_finalize_ordered_seat_indices(room)
+	if ordered_seat_indices.size() == state.players.size():
+		return ordered_seat_indices.find(seat_index)
+	if seat_index >= 0 and seat_index < state.players.size():
+		return seat_index
+	return -1
+
+func _resolve_finalize_player_dict(room, state, seat_index: int) -> Dictionary:
+	if state == null or not (state.players is Array):
+		return {}
+	var ordinal := _resolve_finalize_player_ordinal(room, state, seat_index)
+	if ordinal < 0 or ordinal >= state.players.size():
+		return {}
+	var fallback_val = state.players[ordinal]
+	if fallback_val is Dictionary:
+		return Dictionary(fallback_val)
+	return {}
+
 func _build_participant_score_payload(room, state, seat_index: int) -> Dictionary:
 	var seat_profile: Dictionary = {}
 	if room != null and (room._seat_profile_by_seat_index is Dictionary):
 		seat_profile = Dictionary(room._seat_profile_by_seat_index.get(seat_index, {}))
 
-	var player: Dictionary = {}
-	if state != null and (state.players is Array) and seat_index >= 0 and seat_index < state.players.size():
-		var player_val = state.players[seat_index]
-		if player_val is Dictionary:
-			player = Dictionary(player_val)
+	var player: Dictionary = _resolve_finalize_player_dict(room, state, seat_index)
 
 	var employees: Array = []
 	var employees_val = player.get("employees", null)
@@ -420,13 +448,14 @@ func _build_finalize_participants(room, state, winner_player_id: int) -> Array:
 			continue
 
 		var score_payload := _build_participant_score_payload(room, state, seat_index)
+		var player_ordinal := _resolve_finalize_player_ordinal(room, state, seat_index)
 		var forfeited := bool(score_payload.get("forfeited", false))
 		var result := "lose"
 		if forfeited:
 			result = "forfeit"
 		elif winner_player_id < 0:
 			result = "draw"
-		elif seat_index == winner_player_id:
+		elif player_ordinal == winner_player_id:
 			result = "win"
 
 		participants.append({
