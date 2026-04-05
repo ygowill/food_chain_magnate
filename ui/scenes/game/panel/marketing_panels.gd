@@ -16,6 +16,7 @@ var _hide_all: Callable
 var _center_popup: Callable
 
 var marketing_panel = null
+var _last_refresh_token: String = ""
 
 func _init(scene, map_controller, overlay_controller, execute_command: Callable, hide_all: Callable, center_popup: Callable) -> void:
 	_scene = scene
@@ -28,6 +29,7 @@ func _init(scene, map_controller, overlay_controller, execute_command: Callable,
 func hide() -> void:
 	if is_instance_valid(marketing_panel):
 		marketing_panel.visible = false
+	_reset_refresh_token()
 
 func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	if state == null:
@@ -38,27 +40,20 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 		marketing_panel.visible = false
 		if _map_controller != null:
 			_map_controller.clear_selection()
+		_reset_refresh_token()
 		return
 
-	# 时间线变化：保持面板打开，但强制从 state 全量刷新，避免残留旧 UI/选点缓存。
-	if force_full_refresh:
-		var current_player: Dictionary = state.get_current_player()
-
-		if marketing_panel.has_method("set_visual_modules") and (state.modules is Array):
-			marketing_panel.set_visual_modules(Array(state.modules, TYPE_STRING, "", null))
-
+	var refresh_ctx := _build_refresh_context(state)
+	if not bool(refresh_ctx.get("has_marketer", false)) or not bool(refresh_ctx.get("has_board", false)):
+		marketing_panel.visible = false
 		if _map_controller != null:
 			_map_controller.clear_selection()
-		if marketing_panel.has_method("clear_selection"):
-			marketing_panel.clear_selection()
-		if marketing_panel.has_method("set_map_selection_callback") and _map_controller != null:
-			marketing_panel.set_map_selection_callback(Callable(_map_controller, "on_marketing_map_selection_requested"))
+		_reset_refresh_token()
+		return
 
-		if marketing_panel.has_method("set_available_marketers"):
-			marketing_panel.set_available_marketers(_build_marketing_marketer_entries(state, state.get_current_player_id(), current_player))
-
-		if marketing_panel.has_method("set_available_boards"):
-			marketing_panel.set_available_boards(_build_available_marketing_boards_by_type(state))
+	var token := str(refresh_ctx.get("token", ""))
+	if force_full_refresh or token != _last_refresh_token:
+		_apply_refresh_context(state, refresh_ctx)
 
 func show_marketing_panel() -> void:
 	if _scene == null or _scene.game_engine == null:
@@ -80,29 +75,110 @@ func show_marketing_panel() -> void:
 			_map_controller.set_marketing_panel(marketing_panel)
 
 	var state = _scene.game_engine.get_state()
+	var refresh_ctx := _build_refresh_context(state)
+	if not bool(refresh_ctx.get("has_marketer", false)) or not bool(refresh_ctx.get("has_board", false)):
+		_reset_refresh_token()
+		return
+	_apply_refresh_context(state, refresh_ctx)
+
+	if _center_popup.is_valid():
+		_center_popup.call(marketing_panel)
+	marketing_panel.visible = true
+
+func _reset_refresh_token() -> void:
+	_last_refresh_token = ""
+
+func _build_refresh_context(state: GameState) -> Dictionary:
+	var marketer_entries: Array[Dictionary] = []
+	var boards_by_type: Dictionary = {}
+	if state == null:
+		return {
+			"marketer_entries": marketer_entries,
+			"boards_by_type": boards_by_type,
+			"has_marketer": false,
+			"has_board": false,
+			"token": "",
+		}
+
 	var current_player: Dictionary = state.get_current_player()
+	marketer_entries = _build_marketing_marketer_entries(state, state.get_current_player_id(), current_player)
+	boards_by_type = _build_available_marketing_boards_by_type(state)
+
+	var has_marketer := not marketer_entries.is_empty()
+	var has_board := false
+	var marketer_tokens: Array[String] = []
+	for entry_val in marketer_entries:
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
+		marketer_tokens.append("%s|%s|%d" % [
+			str(entry.get("id", "")).strip_edges(),
+			str(entry.get("type", "")).strip_edges(),
+			int(entry.get("max_duration", 0)),
+		])
+	marketer_tokens.sort()
+
+	var board_tokens: Array[String] = []
+	for tid_val in boards_by_type.keys():
+		var tid := str(tid_val).strip_edges()
+		if tid.is_empty():
+			continue
+		var nums: Array[String] = []
+		var arr_val = boards_by_type.get(tid, null)
+		if arr_val is Array:
+			for bn_val in arr_val:
+				var bn := -1
+				if bn_val is int:
+					bn = int(bn_val)
+				elif bn_val is float:
+					var f: float = float(bn_val)
+					if f == floor(f):
+						bn = int(f)
+				if bn <= 0:
+					continue
+				nums.append(str(bn))
+			nums.sort()
+			if not nums.is_empty():
+				has_board = true
+		board_tokens.append("%s:%s" % [tid, ",".join(nums)])
+	board_tokens.sort()
+
+	return {
+		"marketer_entries": marketer_entries,
+		"boards_by_type": boards_by_type,
+		"has_marketer": has_marketer,
+		"has_board": has_board,
+		"token": "%d|%d|%s|%s|%s|%s" % [
+			int(state.get_current_player_id()),
+			int(state.round_number),
+			str(state.phase),
+			str(state.sub_phase),
+			";".join(marketer_tokens),
+			";".join(board_tokens),
+		],
+	}
+
+func _apply_refresh_context(state: GameState, refresh_ctx: Dictionary) -> void:
+	if not is_instance_valid(marketing_panel) or state == null:
+		return
 
 	if marketing_panel.has_method("set_visual_modules") and (state.modules is Array):
 		marketing_panel.set_visual_modules(Array(state.modules, TYPE_STRING, "", null))
 
 	if _map_controller != null:
 		_map_controller.clear_selection()
-
 	if marketing_panel.has_method("clear_selection"):
 		marketing_panel.clear_selection()
-
 	if marketing_panel.has_method("set_map_selection_callback") and _map_controller != null:
 		marketing_panel.set_map_selection_callback(Callable(_map_controller, "on_marketing_map_selection_requested"))
-
-	if marketing_panel.has_method("set_available_marketers"):
-		marketing_panel.set_available_marketers(_build_marketing_marketer_entries(state, state.get_current_player_id(), current_player))
-
 	if marketing_panel.has_method("set_available_boards"):
-		marketing_panel.set_available_boards(_build_available_marketing_boards_by_type(state))
+		marketing_panel.set_available_boards(refresh_ctx.get("boards_by_type", {}))
+	if marketing_panel.has_method("set_available_marketers"):
+		marketing_panel.set_available_marketers(refresh_ctx.get("marketer_entries", []))
+	if marketing_panel.has_method("set_error"):
+		marketing_panel.set_error("")
 
-	if _center_popup.is_valid():
-		_center_popup.call(marketing_panel)
-	marketing_panel.visible = true
+	_last_refresh_token = str(refresh_ctx.get("token", ""))
 
 func _build_marketing_marketer_entries(state: GameState, current_player_id: int, current_player: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -302,39 +378,8 @@ func _on_marketing_requested(employee_type: String, board_number: int, position:
 				_hide_all.call()
 			return
 
-		# 营销成功后优先保持面板打开并刷新（若仍可继续发起），避免出现“动作面板瞬时空白”。
 		if is_instance_valid(marketing_panel) and marketing_panel.visible:
-			if state_after.phase != DefsClass.PHASE_WORKING or state_after.sub_phase != DefsClass.SUB_PHASE_MARKETING:
-				if _hide_all.is_valid():
-					_hide_all.call()
-				return
-
-			var current_player_after: Dictionary = state_after.get_current_player()
-			var marketer_entries := _build_marketing_marketer_entries(state_after, state_after.get_current_player_id(), current_player_after)
-			var boards_by_type := _build_available_marketing_boards_by_type(state_after)
-			var has_marketer := not marketer_entries.is_empty()
-			var has_board := false
-			for tid in boards_by_type.keys():
-				var arr_val = boards_by_type.get(tid, null)
-				if arr_val is Array and not (arr_val as Array).is_empty():
-					has_board = true
-					break
-
-			if not (has_marketer and has_board):
-				if _hide_all.is_valid():
-					_hide_all.call()
-				return
-
-			if marketing_panel.has_method("clear_selection"):
-				marketing_panel.clear_selection()
-			if marketing_panel.has_method("set_available_marketers"):
-				marketing_panel.set_available_marketers(marketer_entries)
-			if marketing_panel.has_method("set_available_boards"):
-				marketing_panel.set_available_boards(boards_by_type)
-			if marketing_panel.has_method("set_map_selection_callback") and _map_controller != null:
-				marketing_panel.set_map_selection_callback(Callable(_map_controller, "on_marketing_map_selection_requested"))
-			if marketing_panel.has_method("set_error"):
-				marketing_panel.set_error("")
+			sync(state_after, false)
 		else:
 			if _hide_all.is_valid():
 				_hide_all.call()
