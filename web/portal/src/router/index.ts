@@ -54,7 +54,7 @@ const router = createRouter({
     },
     {
       path: '/',
-      redirect: '/matches',
+      redirect: '/game',
     },
   ],
 })
@@ -68,10 +68,10 @@ router.beforeEach(async (to) => {
     await auth.fetchUser()
   }
   if (to.name === 'admin' && !auth.isAdmin) {
-    return { name: 'matches' }
+    return { name: 'game' }
   }
   if (to.meta.guest && auth.isLoggedIn) {
-    return { name: 'matches' }
+    return { name: 'game' }
   }
 })
 

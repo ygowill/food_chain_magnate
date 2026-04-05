@@ -35,12 +35,13 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import AuthCard from '../components/AuthCard.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 
 const email = ref('')
 const password = ref('')
@@ -81,7 +82,8 @@ async function handleRegister() {
   loading.value = true
   try {
     await auth.register(email.value, password.value, displayName.value)
-    router.push('/matches')
+    const redirect = (route.query.redirect as string) || '/game'
+    router.push(redirect)
   } catch (e: any) {
     error.value = e.response?.data?.detail || '注册失败'
     refreshCaptcha()

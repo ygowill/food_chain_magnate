@@ -45,7 +45,7 @@ async function handleGuestLogin() {
   guestLoading.value = true
   try {
     await auth.guestLogin()
-    const redirect = (route.query.redirect as string) || '/matches'
+    const redirect = (route.query.redirect as string) || '/game'
     router.push(redirect)
   } catch (e: any) {
     error.value = e.response?.data?.detail || '游客登录失败'
@@ -59,7 +59,7 @@ async function handleLogin() {
   loading.value = true
   try {
     await auth.login(email.value, password.value)
-    const redirect = (route.query.redirect as string) || '/matches'
+    const redirect = (route.query.redirect as string) || '/game'
     router.push(redirect)
   } catch (e: any) {
     error.value = e.response?.data?.detail || '登录失败'
