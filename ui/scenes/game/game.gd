@@ -13,6 +13,7 @@ extends Control
 @onready var toggle_left_panel_button: Button = $UIRoot/TopBar/ToggleLeftPanelButton
 @onready var toggle_right_panel_button: Button = $UIRoot/TopBar/ToggleRightPanelButton
 @onready var mute_icon: TextureRect = $UIRoot/TopBar/MuteIcon
+@onready var match_details_button: Button = $UIRoot/TopBar/MatchDetailsButton
 @onready var toggle_bottom_panel_button: Button = $MenuDialog/VBoxContainer/ToggleBottomPanelButton
 @onready var menu_dialog: Control = $MenuDialog
 @onready var menu_dialog_overlay: ColorRect = $MenuDialog/Overlay
@@ -53,6 +54,7 @@ extends Control
 @onready var hand_area: Control = $UIRoot/BottomPanel/HandArea
 @onready var company_structure: Control = $UIRoot/BottomPanel/CompanyStructure
 @onready var bottom_panel: Control = $UIRoot/BottomPanel
+@onready var online_game_details_dialog: Control = $OnlineGameDetailsDialog
 
 const GameControllersBuilderClass = preload("res://ui/scenes/game/controllers/builder.gd")
 const GameOnlineResyncControllerClass = preload("res://ui/scenes/game/controllers/online_resync_controller.gd")
@@ -104,6 +106,8 @@ var _startup_intro_running: bool = false
 var _online_waiting_log_auto_opened: bool = false
 var _online_waiting_action_ui_hidden: bool = false
 var _startup_online_resume_ui_hidden: bool = false
+var _match_details_request_id: String = ""
+var _match_details_requested_allow_spectators: Variant = null
 func _ready() -> void:
 	var span_ready := PerfTraceClass.begin_span("game:_ready")
 	GameLog.info("Game", "游戏场景已加载")
@@ -272,6 +276,8 @@ func _ready() -> void:
 	_init_bottom_panel_toggle()
 	_init_left_area_resize()
 	_apply_responsive_layout()
+	_bind_online_match_details_signals()
+	_refresh_online_match_details_ui()
 	UiSignalHelpersClass.safe_connect(self, "resized", _on_root_resized)
 	if startup_replay_from_main_menu and not startup_replay_path.is_empty():
 		# 回放入口：保持加载遮罩，避免先渲染“新开局”的 UI 再切换到回放造成闪烁。
@@ -820,6 +826,8 @@ func _can_open_menu() -> bool:
 	if _panel_controller != null and _panel_controller.has_method("has_blocking_modal_ui"):
 		if bool(_panel_controller.call("has_blocking_modal_ui")):
 			return false
+	if online_game_details_dialog != null and is_instance_valid(online_game_details_dialog) and bool(online_game_details_dialog.visible):
+		return false
 	return true
 
 func _ensure_game_menu_closed_for_blocking_modal() -> void:
@@ -836,6 +844,14 @@ func _ensure_game_menu_closed_for_blocking_modal() -> void:
 func _on_menu_pressed() -> void:
 	if _menu_controller != null and _menu_controller.has_method("on_menu_pressed"):
 		_menu_controller.call("on_menu_pressed")
+
+func _on_match_details_pressed() -> void:
+	if online_game_details_dialog == null or not is_instance_valid(online_game_details_dialog):
+		return
+	_ensure_game_menu_closed_for_blocking_modal()
+	_refresh_online_match_details_ui()
+	if online_game_details_dialog.has_method("open_dialog"):
+		online_game_details_dialog.call("open_dialog")
 
 func _on_mute_icon_gui_input(event: InputEvent) -> void:
 	if event == null:
@@ -926,6 +942,79 @@ func _on_replay_pressed() -> void:
 func _on_quit_to_menu_pressed() -> void:
 	if _menu_controller != null and _menu_controller.has_method("on_quit_to_menu_pressed"):
 		_menu_controller.call("on_quit_to_menu_pressed")
+
+func _bind_online_match_details_signals() -> void:
+	if online_game_details_dialog != null and is_instance_valid(online_game_details_dialog):
+		var dialog_cb := Callable(self, "_on_match_details_allow_spectators_change_requested")
+		if online_game_details_dialog.has_signal("allow_spectators_change_requested"):
+			var dialog_signal := Signal(online_game_details_dialog, &"allow_spectators_change_requested")
+			if not dialog_signal.is_connected(dialog_cb):
+				dialog_signal.connect(dialog_cb)
+	if NetClient == null:
+		return
+	var room_state_cb := Callable(self, "_on_online_match_room_state_updated")
+	if not NetClient.room_state_updated.is_connected(room_state_cb):
+		NetClient.room_state_updated.connect(room_state_cb)
+	var rejected_cb := Callable(self, "_on_online_match_request_rejected")
+	if not NetClient.request_rejected.is_connected(rejected_cb):
+		NetClient.request_rejected.connect(rejected_cb)
+
+func _refresh_online_match_details_ui() -> void:
+	var room_state: Dictionary = Dictionary(NetContext.room_state) if NetContext != null else {}
+	var room_code := str(room_state.get("room_code", "")).strip_edges().to_upper()
+	var should_show := NetContext != null \
+		and int(NetContext.mode) == int(NetContext.Mode.ONLINE_CLIENT) \
+		and not room_code.is_empty()
+	if match_details_button != null and is_instance_valid(match_details_button):
+		match_details_button.visible = should_show
+		match_details_button.disabled = not should_show
+	if online_game_details_dialog == null or not is_instance_valid(online_game_details_dialog):
+		return
+	if online_game_details_dialog.has_method("set_room_state"):
+		online_game_details_dialog.call("set_room_state", room_state, int(multiplayer.get_unique_id()))
+	if not should_show and bool(online_game_details_dialog.visible):
+		if online_game_details_dialog.has_method("close"):
+			online_game_details_dialog.call("close")
+	if _match_details_request_id.is_empty():
+		return
+	if _match_details_requested_allow_spectators == null:
+		return
+	if bool(room_state.get("allow_spectators", true)) != bool(_match_details_requested_allow_spectators):
+		return
+	_match_details_request_id = ""
+	_match_details_requested_allow_spectators = null
+	if online_game_details_dialog.has_method("set_allow_spectators_request_pending"):
+		online_game_details_dialog.call("set_allow_spectators_request_pending", false)
+	if online_game_details_dialog.has_method("clear_status_message"):
+		online_game_details_dialog.call("clear_status_message")
+
+func _on_match_details_allow_spectators_change_requested(allowed: bool) -> void:
+	if NetClient == null or not NetClient.has_method("request_update_room_config"):
+		return
+	if NetContext == null or int(NetContext.mode) != int(NetContext.Mode.ONLINE_CLIENT):
+		return
+	_match_details_requested_allow_spectators = bool(allowed)
+	_match_details_request_id = str(NetClient.request_update_room_config({
+		"allow_spectators": bool(allowed),
+	}))
+	if online_game_details_dialog != null and is_instance_valid(online_game_details_dialog) and online_game_details_dialog.has_method("set_allow_spectators_request_pending"):
+		online_game_details_dialog.call("set_allow_spectators_request_pending", true)
+
+func _on_online_match_room_state_updated(_room_state: Dictionary) -> void:
+	_refresh_online_match_details_ui()
+
+func _on_online_match_request_rejected(request_id: String, code: String, message: String) -> void:
+	if _match_details_request_id.is_empty():
+		return
+	if str(request_id) != _match_details_request_id:
+		return
+	_match_details_request_id = ""
+	_match_details_requested_allow_spectators = null
+	if online_game_details_dialog != null and is_instance_valid(online_game_details_dialog) and online_game_details_dialog.has_method("show_allow_spectators_error"):
+		var error_text := str(message).strip_edges()
+		if error_text.is_empty():
+			error_text = str(code).strip_edges()
+		online_game_details_dialog.call("show_allow_spectators_error", error_text)
 
 func _show_confirm(title: String, message: String, on_confirm: Callable, on_cancel: Callable = Callable(), confirm_text: String = "确认", cancel_text: String = "取消") -> void:
 	if _menu_controller != null and _menu_controller.has_method("show_confirm"):

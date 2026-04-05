@@ -144,6 +144,91 @@ static func run() -> Result:
 		_reset_net_context()
 		return Result.failure("平台自动入房测试开局失败: %s" % start_r.error)
 
+	var spectator_payload := {
+		"user_id": "u_spec_1",
+		"room_code": room_code,
+		"role": "spectator",
+		"display_name": "Spec1",
+		"exp": int(Time.get_unix_time_from_system()) + 3600,
+	}
+	var spectator_token_r: Result = ConnectTokenClass.create_token(spectator_payload, server.connect_token_secret_override)
+	if not spectator_token_r.ok:
+		_reset_net_context()
+		return Result.failure("create_token(spectator1) 失败: %s" % spectator_token_r.error)
+
+	mock_net.multiplayer.remote_sender_id = 20
+	server.handle_rpc_client_hello({
+		"request_id": "r_spec_1",
+		"protocol_version": NetContext.PROTOCOL_VERSION,
+		"game_version": "0.0.0",
+		"schema_version": 0,
+		"player_profile": {"name": "Spec1Local", "color_index": 3, "restaurant_logo_id": -1},
+		"connect_token": str(spectator_token_r.value),
+	})
+
+	if str(rm.peer_to_room.get(20, "")) != room_code:
+		_reset_net_context()
+		return Result.failure("观战自动入房失败：spectator1 peer_to_room 未绑定到 %s" % room_code)
+
+	var spectator_payload2 := {
+		"user_id": "u_spec_2",
+		"room_code": room_code,
+		"role": "spectator",
+		"display_name": "Spec2",
+		"exp": int(Time.get_unix_time_from_system()) + 3600,
+	}
+	var spectator_token_r2: Result = ConnectTokenClass.create_token(spectator_payload2, server.connect_token_secret_override)
+	if not spectator_token_r2.ok:
+		_reset_net_context()
+		return Result.failure("create_token(spectator2) 失败: %s" % spectator_token_r2.error)
+
+	mock_net.multiplayer.remote_sender_id = 21
+	server.handle_rpc_client_hello({
+		"request_id": "r_spec_2",
+		"protocol_version": NetContext.PROTOCOL_VERSION,
+		"game_version": "0.0.0",
+		"schema_version": 0,
+		"player_profile": {"name": "Spec2Local", "color_index": 4, "restaurant_logo_id": -1},
+		"connect_token": str(spectator_token_r2.value),
+	})
+
+	if str(rm.peer_to_room.get(21, "")) != room_code:
+		_reset_net_context()
+		return Result.failure("观战自动入房失败：spectator2 peer_to_room 未绑定到 %s" % room_code)
+	var in_game_peers: Array[int] = room.get_peer_ids()
+	if in_game_peers.size() != 4 or not in_game_peers.has(10) or not in_game_peers.has(12) or not in_game_peers.has(20) or not in_game_peers.has(21):
+		_reset_net_context()
+		return Result.failure("多观战者未同时存在：get_peer_ids=%s" % str(in_game_peers))
+
+	mock_net.multiplayer.remote_sender_id = 22
+	server.handle_rpc_client_hello({
+		"request_id": "r_spec_1_takeover",
+		"protocol_version": NetContext.PROTOCOL_VERSION,
+		"game_version": "0.0.0",
+		"schema_version": 0,
+		"player_profile": {"name": "Spec1Takeover", "color_index": 3, "restaurant_logo_id": -1},
+		"connect_token": str(spectator_token_r.value),
+	})
+
+	if str(rm.peer_to_room.get(22, "")) != room_code:
+		_reset_net_context()
+		return Result.failure("观战接管失败：new spectator peer_to_room 未绑定到 %s" % room_code)
+	if rm.peer_to_room.has(20):
+		_reset_net_context()
+		return Result.failure("观战接管失败：old spectator peer_to_room 未清理")
+	var peers_after_spectator_takeover: Array[int] = room.get_peer_ids()
+	if peers_after_spectator_takeover.size() != 4 \
+		or not peers_after_spectator_takeover.has(10) \
+		or not peers_after_spectator_takeover.has(12) \
+		or not peers_after_spectator_takeover.has(21) \
+		or not peers_after_spectator_takeover.has(22) \
+		or peers_after_spectator_takeover.has(20):
+		_reset_net_context()
+		return Result.failure("观战接管失败：get_peer_ids=%s" % str(peers_after_spectator_takeover))
+	if not _has_empty_room_state_push(mock_net.sent, 20):
+		_reset_net_context()
+		return Result.failure("观战接管失败：old spectator 未收到 empty room_state")
+
 	mock_net._peer = _MockPeer.new(128)
 	mock_net.multiplayer.remote_sender_id = 13
 	server.handle_rpc_client_hello({

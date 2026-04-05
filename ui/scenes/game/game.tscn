@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3 uid="uid://dph5rwtgn6tq8"]
+[gd_scene load_steps=20 format=3 uid="uid://dph5rwtgn6tq8"]
 
 [ext_resource type="Script" uid="uid://ckmoescpu6tet" path="res://ui/scenes/game/game.gd" id="1_game"]
 [ext_resource type="Script" uid="uid://c7bjun5j7en8b" path="res://ui/scenes/game/map/view.gd" id="2_map_view"]
@@ -18,6 +18,7 @@
 [ext_resource type="PackedScene" path="res://ui/components/action_flow_controls/action_flow_controls.tscn" id="16_action_flow_controls"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/kenney/game/arrow_left.png" id="17_arrow_left"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/kenney/game/close_cross.png" id="18_close_cross"]
+[ext_resource type="Script" path="res://ui/scenes/game/dialogs/online_game_details_dialog.gd" id="19_online_game_details_dialog"]
 
 [node name="Game" type="Control"]
 layout_mode = 3
@@ -145,6 +146,11 @@ text = "隐藏信息"
 visible = false
 layout_mode = 2
 text = "隐藏操作"
+
+[node name="MatchDetailsButton" type="Button" parent="UIRoot/TopBar"]
+visible = false
+layout_mode = 2
+text = "对局详情"
 
 [node name="MenuButton" type="Button" parent="UIRoot/TopBar"]
 layout_mode = 2
@@ -423,6 +429,15 @@ text = "显示/隐藏底部面板"
 layout_mode = 2
 text = "返回主菜单"
 
+[node name="OnlineGameDetailsDialog" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("19_online_game_details_dialog")
+
 [connection signal="pressed" from="UIRoot/TopBar/AdvancePhaseButton" to="." method="_on_advance_phase_pressed"]
 [connection signal="pressed" from="UIRoot/TopBar/AdvanceSubPhaseButton" to="." method="_on_advance_sub_phase_pressed"]
 [connection signal="pressed" from="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/EmployeeTreeButton" to="." method="_on_employee_tree_button_pressed"]
@@ -434,6 +449,7 @@ text = "返回主菜单"
 [connection signal="pressed" from="UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/SettingsButton" to="." method="_on_settings_button_pressed"]
 [connection signal="pressed" from="UIRoot/TopBar/ToggleLeftPanelButton" to="." method="_on_toggle_left_panel_pressed"]
 [connection signal="pressed" from="UIRoot/TopBar/ToggleRightPanelButton" to="." method="_on_toggle_right_panel_pressed"]
+[connection signal="pressed" from="UIRoot/TopBar/MatchDetailsButton" to="." method="_on_match_details_pressed"]
 [connection signal="pressed" from="UIRoot/TopBar/MenuButton" to="." method="_on_menu_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/ResumeButton" to="." method="_on_resume_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/SaveButton" to="." method="_on_save_pressed"]

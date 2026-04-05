@@ -6,6 +6,7 @@ const GameOverPanelScene = preload("res://ui/components/game_over/game_over_pane
 const BankBreakPanelScene = preload("res://ui/components/bank_break/bank_break_panel.tscn")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const GameMenuDebugControllerClass = preload("res://ui/scenes/game/menu/debug_controller.gd")
 const UiZClass = preload("res://ui/utils/ui_z.gd")
 const KIND_CONFIRM_DINNERTIME := "confirm_dinnertime"
 
@@ -385,6 +386,7 @@ func _on_pay_confirmed() -> void:
 		show_payday_panel()
 
 func _on_game_over_return() -> void:
+	GameMenuDebugControllerClass.cleanup_online_state_before_quit()
 	Globals.reset_game_config()
 	SceneManager.goto_main_menu()
 

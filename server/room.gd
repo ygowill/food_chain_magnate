@@ -662,9 +662,28 @@ func add_spectator(peer_id: int, profile: Dictionary) -> Result:
 	if not get_allow_spectators():
 		return Result.failure("Spectators not allowed")
 
-	_spectator_profile_by_peer_id[peer_id] = Dictionary(profile).duplicate(true)
+	var spectator_profile: Dictionary = Dictionary(profile).duplicate(true)
+	var user_id := str(spectator_profile.get("user_id", "")).strip_edges()
+	var replaced_peer_id := 0
+	if not user_id.is_empty():
+		var spectator_peer_ids: Array[int] = []
+		for peer_key in _spectator_profile_by_peer_id.keys():
+			spectator_peer_ids.append(int(peer_key))
+		spectator_peer_ids.sort()
+		for existing_peer_id in spectator_peer_ids:
+			if existing_peer_id == peer_id:
+				continue
+			var existing_profile: Dictionary = Dictionary(_spectator_profile_by_peer_id.get(existing_peer_id, {}))
+			if str(existing_profile.get("user_id", "")).strip_edges() != user_id:
+				continue
+			replaced_peer_id = existing_peer_id
+			_spectator_profile_by_peer_id.erase(existing_peer_id)
+			break
+	_spectator_profile_by_peer_id[peer_id] = spectator_profile
 	_touch()
-	return Result.success()
+	return Result.success({
+		"replaced_peer_id": replaced_peer_id,
+	})
 
 func remove_peer(peer_id: int) -> Result:
 	if _spectator_profile_by_peer_id.has(peer_id):
@@ -777,6 +796,9 @@ func update_peer_profile(peer_id: int, profile: Dictionary) -> Result:
 		"color_index": int(profile.get("color_index", 0)),
 		"restaurant_logo_id": int(profile.get("restaurant_logo_id", -1)),
 	}
+	var user_id := str(profile.get("user_id", "")).strip_edges()
+	if not user_id.is_empty():
+		normalized["user_id"] = user_id
 	if str(normalized.get("name", "")).is_empty():
 		normalized["name"] = "玩家"
 

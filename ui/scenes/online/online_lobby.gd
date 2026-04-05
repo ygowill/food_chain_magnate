@@ -26,6 +26,7 @@ const _CUSTOM_SERVER_DESC := "手动填写地址"
 const _GUEST_NAME_PREFIX := "游客#"
 const _ACCOUNT_NAME_PREFIX := "账号#"
 const _DEFAULT_NAME_SUFFIX := "0000"
+const _ROOM_AUTO_REFRESH_INTERVAL_SEC := 5.0
 # 后续新增分服时，在这里追加 { "name": "...", "url": "...", "desc": "..." }。
 const _EXTRA_PLATFORM_SERVERS: Array = []
 
@@ -78,6 +79,7 @@ const _EXTRA_PLATFORM_SERVERS: Array = []
 @onready var room_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomStatus
 
 @onready var config_debounce_timer: Timer = $ConfigDebounceTimer
+@onready var room_auto_refresh_timer: Timer = $RoomAutoRefreshTimer
 
 enum LobbyPage { CONNECT, BROWSE, ROOM }
 var _current_page: int = LobbyPage.CONNECT
@@ -141,11 +143,14 @@ func _ready() -> void:
 	_ensure_create_room_dialog()
 	_ensure_room_renderers()
 	_setup_account_ui()
+	if room_auto_refresh_timer != null and is_instance_valid(room_auto_refresh_timer):
+		room_auto_refresh_timer.wait_time = _ROOM_AUTO_REFRESH_INTERVAL_SEC
 	if my_logo_row != null and is_instance_valid(my_logo_row):
 		my_logo_row.visible = false
 	_apply_defaults()
 	_refresh_ui()
 	_ensure_resume_controller()
+	_sync_room_auto_refresh_timer()
 	call_deferred("_attempt_auto_resume_if_needed")
 
 func _apply_visual_styles() -> void:
@@ -819,7 +824,7 @@ func _platform_resume_room(room_code: String) -> Dictionary:
 			PlatformApi.base_url = base_url
 	return await PlatformApi.resume_room(str(room_code).strip_edges().to_upper(), PlatformSession.session_id)
 
-func _platform_refresh_rooms() -> void:
+func _platform_refresh_rooms(show_error_dialog: bool = true) -> void:
 	if _platform_busy:
 		return
 	_platform_busy = true
@@ -828,8 +833,11 @@ func _platform_refresh_rooms() -> void:
 	var lr: Result = await _platform_ensure_session()
 	if not lr.ok:
 		_platform_busy = false
-		_set_browse_status("")
-		_show_error_dialog("平台登录失败", lr.error)
+		if show_error_dialog:
+			_set_browse_status("")
+			_show_error_dialog("平台登录失败", lr.error)
+		else:
+			_set_browse_status("自动刷新失败：%s" % lr.error)
 		_refresh_ui()
 		return
 	_platform_entered = true
@@ -837,16 +845,21 @@ func _platform_refresh_rooms() -> void:
 	var rr: Dictionary = await PlatformApi.list_rooms(PlatformSession.session_id)
 	_platform_busy = false
 	if rr.has("error"):
-		_platform_rooms = []
-		_set_browse_status("")
-		_show_error_dialog("获取房间列表失败", str(rr.get("error", "")))
+		var rr_error := str(rr.get("error", "")).strip_edges()
+		if show_error_dialog:
+			_set_browse_status("")
+			_show_error_dialog("获取房间列表失败", rr_error)
+		else:
+			_set_browse_status("自动刷新失败：%s" % rr_error)
 		_refresh_ui()
 		return
 	var ok_val = rr.get("ok", null)
 	if not (ok_val is Array):
-		_platform_rooms = []
-		_set_browse_status("")
-		_show_error_dialog("获取房间列表失败", "后端返回格式错误")
+		if show_error_dialog:
+			_set_browse_status("")
+			_show_error_dialog("获取房间列表失败", "后端返回格式错误")
+		else:
+			_set_browse_status("自动刷新失败：后端返回格式错误")
 		_refresh_ui()
 		return
 	_platform_rooms = Array(ok_val).duplicate(true)
@@ -1000,6 +1013,7 @@ func _build_platform_connect_url(ws_url: String, connect_token: String) -> Strin
 # ── 页面导航 ──
 
 func _show_page(page: int, _request_rooms_on_entry: bool = true) -> void:
+	var previous_page := _current_page
 	_current_page = page
 
 	if is_instance_valid(page_connect):
@@ -1016,6 +1030,9 @@ func _show_page(page: int, _request_rooms_on_entry: bool = true) -> void:
 		panel.custom_minimum_size = Vector2(980, 720)
 
 	_update_top_title()
+	_sync_room_auto_refresh_timer()
+	if page == LobbyPage.BROWSE and _request_rooms_on_entry and previous_page != LobbyPage.BROWSE:
+		call_deferred("_refresh_rooms_after_browse_entry")
 
 func _sync_page_from_state() -> void:
 	var ws_connected := NetClient != null and NetClient.is_online_client_connected()
@@ -1029,7 +1046,7 @@ func _sync_page_from_state() -> void:
 		_show_page(LobbyPage.ROOM, false)
 		return
 
-	_show_page(LobbyPage.BROWSE, false)
+	_show_page(LobbyPage.BROWSE, true)
 
 func _update_top_title() -> void:
 	if top_title_label == null or not is_instance_valid(top_title_label):
@@ -1076,6 +1093,7 @@ func _refresh_ui() -> void:
 	if _room_state_renderer != null and is_instance_valid(_room_state_renderer):
 		_room_state_renderer.render_room_state(NetContext.room_state if NetContext != null else {})
 	_sync_page_from_state()
+	_sync_room_auto_refresh_timer()
 
 func _join_room_from_list(room_code: String, password_required: bool, spectate: bool) -> void:
 	var code := str(room_code).strip_edges().to_upper()
@@ -1215,6 +1233,9 @@ func _on_room_state_updated(_room_state: Dictionary) -> void:
 		SceneManager.show_loading("正在进入联机对局...")
 
 func _on_request_rejected(request_id: String, code: String, message: String) -> void:
+	if SceneManager != null and SceneManager.has_method("hide_loading"):
+		SceneManager.hide_loading()
+
 	if str(code).begins_with("update_config"):
 		_ensure_config_sync_controller()
 		if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
@@ -1248,6 +1269,8 @@ func _on_request_rejected(request_id: String, code: String, message: String) -> 
 	_show_error_dialog(title, body)
 	if c == "protocol_version_mismatch" or c == "missing_connect_token" or c == "invalid_connect_token" or c == "platform_join_failed" or c == "server_misconfigured":
 		_clear_online_resume_context()
+		_set_browse_status("")
+		_set_room_status("")
 		if NetClient != null:
 			NetClient.shutdown()
 		_refresh_ui()
@@ -1278,6 +1301,36 @@ func _on_config_debounce_timeout() -> void:
 	if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
 		_room_config_sync_controller.on_debounce_timeout(room_state, is_host, NetClient)
 	_set_room_status("")
+
+func _should_auto_refresh_rooms() -> bool:
+	if _current_page != LobbyPage.BROWSE:
+		return false
+	if _platform_busy or _ws_connect_in_progress:
+		return false
+	if not _platform_entered or PlatformSession == null or not PlatformSession.is_logged_in:
+		return false
+	if not _get_current_room_code().is_empty():
+		return false
+	return true
+
+func _sync_room_auto_refresh_timer() -> void:
+	if room_auto_refresh_timer == null or not is_instance_valid(room_auto_refresh_timer):
+		return
+	if _should_auto_refresh_rooms():
+		if room_auto_refresh_timer.is_stopped():
+			room_auto_refresh_timer.start()
+		return
+	room_auto_refresh_timer.stop()
+
+func _refresh_rooms_after_browse_entry() -> void:
+	if not _should_auto_refresh_rooms():
+		return
+	await _platform_refresh_rooms()
+
+func _on_room_auto_refresh_timeout() -> void:
+	if not _should_auto_refresh_rooms():
+		return
+	await _platform_refresh_rooms(false)
 
 # ── 餐厅 Logo 选择 ──
 

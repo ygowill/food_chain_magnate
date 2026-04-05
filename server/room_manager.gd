@@ -115,6 +115,10 @@ func join_room(peer_id: int, profile: Dictionary, room_code: String, room_passwo
 	if not ar.ok:
 		return ar
 
+	var ar_value: Dictionary = Dictionary(ar.value) if ar.value is Dictionary else {}
+	var replaced_peer_id := int(ar_value.get("replaced_peer_id", 0))
+	if replaced_peer_id > 0:
+		peer_to_room.erase(replaced_peer_id)
 	peer_to_room[peer_id] = room_code
 
 	return Result.success({
@@ -122,6 +126,7 @@ func join_room(peer_id: int, profile: Dictionary, room_code: String, room_passwo
 		"room": room,
 		"room_state": room.to_room_state_dict(),
 		"role": role,
+		"replaced_peer_id": replaced_peer_id,
 	})
 
 func join_room_with_seat(peer_id: int, profile: Dictionary, room_code: String, seat_index: int, role_label: String = "player") -> Result:
@@ -234,6 +239,10 @@ func spectate_room(peer_id: int, profile: Dictionary, room_code: String) -> Resu
 	if not ar.ok:
 		return ar
 
+	var ar_value: Dictionary = Dictionary(ar.value) if ar.value is Dictionary else {}
+	var replaced_peer_id := int(ar_value.get("replaced_peer_id", 0))
+	if replaced_peer_id > 0:
+		peer_to_room.erase(replaced_peer_id)
 	peer_to_room[peer_id] = code
 
 	return Result.success({
@@ -241,6 +250,7 @@ func spectate_room(peer_id: int, profile: Dictionary, room_code: String) -> Resu
 		"room": room,
 		"room_state": room.to_room_state_dict(),
 		"role": "spectator",
+		"replaced_peer_id": replaced_peer_id,
 	})
 
 func list_room_summaries() -> Array[Dictionary]:

@@ -33,6 +33,7 @@ static func _apply_topbar_button_styles(game) -> void:
 		"UIRoot/TopBar/AdvanceSubPhaseButton",
 		"UIRoot/TopBar/ToggleLeftPanelButton",
 		"UIRoot/TopBar/ToggleRightPanelButton",
+		"UIRoot/TopBar/MatchDetailsButton",
 		"UIRoot/TopBar/MenuButton",
 		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/EmployeeTreeButton",
 		"UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/LogButton",

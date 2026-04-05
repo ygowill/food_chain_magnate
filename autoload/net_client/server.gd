@@ -1433,12 +1433,14 @@ func handle_rpc_join_room(request: Dictionary) -> void:
 		send_request_rejected(peer_id, request_id, "join_room_failed", jr.error)
 		return
 
-	var room = Dictionary(jr.value).get("room", null)
+	var join_payload: Dictionary = Dictionary(jr.value) if jr.value is Dictionary else {}
+	_handle_replaced_peer(join_payload)
+	var room = join_payload.get("room", null)
 	if room == null:
 		send_request_rejected(peer_id, request_id, "join_room_failed", "Missing room in result")
 		return
 
-	var role := str(Dictionary(jr.value).get("role", "player"))
+	var role := str(join_payload.get("role", "player"))
 	_mark_room_directory_dirty()
 	broadcast_room_state(room)
 	broadcast_room_list("")

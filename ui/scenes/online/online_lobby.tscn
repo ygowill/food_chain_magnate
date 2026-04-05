@@ -319,6 +319,9 @@ text = "开始游戏"
 one_shot = true
 wait_time = 0.5
 
+[node name="RoomAutoRefreshTimer" type="Timer" parent="."]
+wait_time = 5.0
+
 [connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/TopBar/BackButton" to="." method="_on_back_pressed"]
 [connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ButtonsRow/ConnectButton" to="." method="_on_connect_pressed"]
 [connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/ConnectPage/ButtonsRow/DisconnectButton" to="." method="_on_disconnect_pressed"]
@@ -329,3 +332,4 @@ wait_time = 0.5
 [connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomActionsRow/LeaveRoomButton" to="." method="_on_leave_room_pressed"]
 [connection signal="pressed" from="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomActionsRow/StartGameButton" to="." method="_on_start_game_pressed"]
 [connection signal="timeout" from="ConfigDebounceTimer" to="." method="_on_config_debounce_timeout"]
+[connection signal="timeout" from="RoomAutoRefreshTimer" to="." method="_on_room_auto_refresh_timeout"]

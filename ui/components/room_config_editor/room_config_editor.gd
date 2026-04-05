@@ -49,6 +49,17 @@ func set_editable(editable: bool) -> void:
 	if _preset_option != null and is_instance_valid(_preset_option):
 		_preset_option.disabled = not editable
 
+func set_allow_spectators_editable(editable: bool) -> void:
+	_ensure_ui()
+	if _allow_spectators_check != null and is_instance_valid(_allow_spectators_check):
+		_allow_spectators_check.disabled = not editable
+
+func get_allow_spectators_value() -> bool:
+	_ensure_ui()
+	if _allow_spectators_check == null or not is_instance_valid(_allow_spectators_check):
+		return true
+	return bool(_allow_spectators_check.button_pressed)
+
 func set_from_room_config(cfg: Dictionary) -> void:
 	_ensure_ui()
 	_suppress_signals = true
