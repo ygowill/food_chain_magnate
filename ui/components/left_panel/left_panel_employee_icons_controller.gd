@@ -11,6 +11,7 @@ var _panel = null
 var _company_employee_count: int = 0
 var _hand_employee_count: int = 0
 var _busy_employee_count: int = 0
+var _snapshot: Dictionary = {}
 
 func setup(panel) -> void:
 	_panel = panel
@@ -24,19 +25,37 @@ func _refresh_employee_tags() -> void:
 	_company_employee_count = 0
 	_hand_employee_count = 0
 	_busy_employee_count = 0
-	_clear_tag_containers()
 
 	if _panel._game_state == null or not (_panel._game_state.players is Array) or _panel._game_state.players.is_empty():
+		if _snapshot == {"empty": true}:
+			return
+		_snapshot = {"empty": true}
+		_clear_tag_containers()
 		_update_section_visibility()
 		return
 
 	var view_id: int = _panel._resolve_view_player_id()
 	if view_id < 0 or view_id >= _panel._game_state.players.size():
+		if _snapshot == {"empty": true}:
+			return
+		_snapshot = {"empty": true}
+		_clear_tag_containers()
 		_update_section_visibility()
 		return
 
 	var player_val = _panel._game_state.players[view_id]
 	var player: Dictionary = player_val if player_val is Dictionary else {}
+	var snapshot := {
+		"view_player_id": view_id,
+		"employees": Array(player.get("employees", [])).duplicate(true),
+		"reserve": Array(player.get("reserve_employees", [])).duplicate(true),
+		"busy": Array(player.get("busy_marketers", [])).duplicate(true),
+		"salary_cost": _resolve_salary_cost(player),
+	}
+	if snapshot == _snapshot:
+		return
+	_snapshot = snapshot
+	_clear_tag_containers()
 
 	_build_company_employee_tags(player)
 	_build_hand_employee_tags(player)

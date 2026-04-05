@@ -39,6 +39,7 @@ var _drag_source_modulate: Color = Color(1, 1, 1, 1)
 var _drag_preview_offset: Vector2 = Vector2.ZERO
 var _hover_drop_target: Control = null
 var _pending_rebuild: bool = false
+var _structure_snapshot: Dictionary = {}
 
 func _ready() -> void:
 	set_process(false)
@@ -62,6 +63,10 @@ func set_player_data(player: Dictionary) -> void:
 	# 提取 CEO 卡槽数
 	var company_struct: Dictionary = player.get("company_structure", {})
 	_ceo_slots = int(company_struct.get("ceo_slots", 3))
+	var snapshot := _build_structure_snapshot(player)
+	if snapshot == _structure_snapshot:
+		return
+	_structure_snapshot = snapshot
 
 	# 重建结构：若尚未 ready（onready 引用未就绪），延后到 _ready() 再构建。
 	if ceo_slot == null or manager_container == null:
@@ -82,7 +87,16 @@ func get_current_structure() -> Dictionary:
 
 func reset() -> void:
 	_current_structure.clear()
+	_structure_snapshot.clear()
 	_rebuild_structure()
+
+func _build_structure_snapshot(player: Dictionary) -> Dictionary:
+	var snapshot := {
+		"ceo_slots": int(Dictionary(player.get("company_structure", {})).get("ceo_slots", 3)),
+		"company_structure": Dictionary(player.get("company_structure", {})).duplicate(true),
+		"employees": Array(player.get("employees", [])).duplicate(true),
+	}
+	return snapshot
 
 func validate() -> Result:
 	# 验证当前结构是否合法

@@ -41,6 +41,8 @@ var _slot_nodes: Array[OrderBadge] = []
 var _selectable: bool = false
 var _intro_roll_active: bool = false
 var _intro_roll_token: int = 0
+var _logo_snapshot: Dictionary = {}
+var _display_snapshot: Dictionary = {}
 
 func _ready() -> void:
 	_apply_layout_style()
@@ -56,25 +58,36 @@ func set_player_count(count: int) -> void:
 func set_game_state(state: GameState) -> void:
 	_game_state = state
 	_ensure_skin()
-	_rebuild_player_logo_ids()
+	var next_logo_snapshot := _build_logo_snapshot()
+	if next_logo_snapshot != _logo_snapshot:
+		_logo_snapshot = next_logo_snapshot
+		_rebuild_player_logo_ids()
 	if _intro_roll_active:
 		return
 	_update_display()
 
 func set_current_selections(selections: Dictionary) -> void:
-	_current_selections = selections.duplicate()
+	var next_selections := selections.duplicate()
+	if next_selections == _current_selections:
+		return
+	_current_selections = next_selections
 	if _intro_roll_active:
 		return
 	_update_display()
 
 func set_current_player(player_id: int) -> void:
+	if _current_player_id == player_id:
+		return
 	_current_player_id = player_id
 	if _intro_roll_active:
 		return
 	_update_display()
 
 func set_selectable(can_select: bool) -> void:
-	_selectable = true if can_select else false
+	var next_selectable := true if can_select else false
+	if _selectable == next_selectable:
+		return
+	_selectable = next_selectable
 	if _intro_roll_active:
 		return
 	_update_display()
@@ -136,6 +149,7 @@ func _rebuild() -> void:
 		if is_instance_valid(slot):
 			slot.queue_free()
 	_slot_nodes.clear()
+	_display_snapshot.clear()
 
 	if not is_instance_valid(slots_container):
 		return
@@ -154,6 +168,16 @@ func _rebuild() -> void:
 	_update_display()
 
 func _update_display() -> void:
+	var snapshot := {
+		"player_count": _player_count,
+		"current_selections": _current_selections.duplicate(true),
+		"current_player_id": _current_player_id,
+		"selectable": _selectable,
+		"logo_ids": _player_restaurant_logo_ids.duplicate(true),
+	}
+	if snapshot == _display_snapshot:
+		return
+	_display_snapshot = snapshot
 	for slot in _slot_nodes:
 		if not is_instance_valid(slot):
 			continue
@@ -190,6 +214,22 @@ func _ensure_skin() -> void:
 		return
 	_skin_modules_key = key
 	_skin = UiSkinCacheClass.get_skin_for_modules(Globals.modules_v2_base_dir, mods, 40)
+
+func _build_logo_snapshot() -> Dictionary:
+	if _game_state == null or not (_game_state.players is Array):
+		return {}
+	var players: Array = []
+	for p_val in _game_state.players:
+		if not (p_val is Dictionary):
+			players.append(null)
+			continue
+		var p: Dictionary = p_val
+		players.append(p.get("restaurant_logo_id", null))
+	return {
+		"seed": int(_game_state.seed),
+		"modules": Array(_game_state.modules, TYPE_STRING, "", null),
+		"players": players,
+	}
 
 func _read_logo_id(value, logo_count: int) -> int:
 	if logo_count <= 0:

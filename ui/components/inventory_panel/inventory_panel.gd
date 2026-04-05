@@ -28,17 +28,25 @@ func _build_ui() -> void:
 		items_container.columns = 3
 
 func set_visual_modules(modules: Array[String]) -> void:
-	_visual_modules = Array(modules, TYPE_STRING, "", null)
+	var next_modules := Array(modules, TYPE_STRING, "", null)
+	if next_modules == _visual_modules:
+		return
+	_visual_modules = next_modules
 	_skin = null
 	_ensure_skin()
 	_rebuild_items()
 
 func set_inventory(inventory: Dictionary) -> void:
+	var next_inventory := inventory.duplicate(true)
+	if next_inventory == _inventory:
+		return
 	_prev_inventory = _inventory.duplicate(true)
-	_inventory = inventory.duplicate(true)
+	_inventory = next_inventory
 	_rebuild_items()
 
 func set_fridge_capacity(capacity: int) -> void:
+	if _fridge_capacity == capacity:
+		return
 	_fridge_capacity = capacity
 	_update_capacity_display()
 

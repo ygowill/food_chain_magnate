@@ -87,6 +87,8 @@ var _employee_icons_controller = null
 var _turn_log_controller = null
 var _summary_controller = null
 var _milestones_controller = null
+var _logo_snapshot: Dictionary = {}
+var _restaurant_overview_snapshot: Dictionary = {}
 
 func _ready() -> void:
 	_ensure_controllers()
@@ -238,7 +240,10 @@ func apply_font_settings() -> void:
 func set_game_state(state: GameState) -> void:
 	_game_state = state
 	_ensure_skin()
-	_rebuild_player_logo_ids()
+	var next_logo_snapshot := _build_logo_snapshot()
+	if next_logo_snapshot != _logo_snapshot:
+		_logo_snapshot = next_logo_snapshot
+		_rebuild_player_logo_ids()
 	var count := 0
 	if state != null and state.players is Array:
 		count = state.players.size()
@@ -250,12 +255,16 @@ func set_game_state(state: GameState) -> void:
 	_refresh()
 
 func set_current_player(player_id: int) -> void:
+	if _current_player_id == player_id:
+		return
 	_current_player_id = player_id
 	_update_tab_styles()
 	_refresh_restaurant_overview_cards()
 
 func set_view_player(player_id: int) -> void:
 	_ensure_controllers()
+	if _view_player_id == player_id:
+		return
 	_view_player_id = player_id
 	_update_tab_styles()
 	_refresh_restaurant_overview_cards()
@@ -331,6 +340,22 @@ func _ensure_skin() -> void:
 		return
 	_skin_modules_key = key
 	_skin = UiSkinCacheClass.get_skin_for_modules(Globals.modules_v2_base_dir, mods, 40)
+
+func _build_logo_snapshot() -> Dictionary:
+	if _game_state == null or not (_game_state.players is Array):
+		return {}
+	var players: Array = []
+	for p_val in _game_state.players:
+		if not (p_val is Dictionary):
+			players.append(null)
+			continue
+		var p: Dictionary = p_val
+		players.append(p.get("restaurant_logo_id", null))
+	return {
+		"seed": int(_game_state.seed),
+		"modules": Array(_game_state.modules, TYPE_STRING, "", null),
+		"players": players,
+	}
 
 func _read_logo_id(value, logo_count: int) -> int:
 	if logo_count <= 0:
@@ -565,6 +590,10 @@ func _get_player_salary_cost(player: Dictionary) -> int:
 func _refresh_restaurant_overview_cards() -> void:
 	if not is_instance_valid(overview_grid):
 		return
+	var snapshot := _build_restaurant_overview_snapshot()
+	if snapshot == _restaurant_overview_snapshot:
+		return
+	_restaurant_overview_snapshot = snapshot
 
 	for c in overview_grid.get_children():
 		if is_instance_valid(c):
@@ -587,6 +616,28 @@ func _refresh_restaurant_overview_cards() -> void:
 		var player: Dictionary = player_val if player_val is Dictionary else {}
 		var card := _create_restaurant_overview_card(i, player, i == view_id)
 		overview_grid.add_child(card)
+
+func _build_restaurant_overview_snapshot() -> Dictionary:
+	if _game_state == null or not (_game_state.players is Array) or _game_state.players.is_empty():
+		return {"empty": true}
+	var players: Array[Dictionary] = []
+	for i in range(_game_state.players.size()):
+		var player_val = _game_state.players[i]
+		var player: Dictionary = player_val if player_val is Dictionary else {}
+		players.append({
+			"cash": int(cash_overrides.get(i, player.get("cash", 0))),
+			"employees": _count_total_employees(player),
+			"restaurants": _count_restaurants(player),
+			"milestones": _count_milestones(player),
+			"salary": _get_player_salary_cost(player),
+			"status": _get_player_status_kind(i, player),
+			"logo_id": int(_player_restaurant_logo_ids.get(i, -1)),
+		})
+	return {
+		"view_player_id": _resolve_view_player_id(),
+		"current_player_id": _current_player_id,
+		"players": players,
+	}
 
 func _create_restaurant_overview_card(player_id: int, player: Dictionary, is_selected: bool) -> Control:
 	var card := PanelContainer.new()

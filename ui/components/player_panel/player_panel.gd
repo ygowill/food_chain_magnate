@@ -30,6 +30,9 @@ var _skin_modules_key: String = ""
 var _state_seed: int = 0
 var _player_restaurant_logo_ids: Dictionary = {} # player_id -> logo_id
 var _fallback_logo_ids: Array[int] = []
+var _logo_snapshot: Dictionary = {}
+var _selected_player_snapshot: Dictionary = {}
+var _tab_style_snapshot: Dictionary = {}
 
 func _ready() -> void:
 	if is_instance_valid(items_container):
@@ -41,7 +44,10 @@ func _ready() -> void:
 func set_game_state(state: GameState) -> void:
 	_game_state = state
 	_ensure_skin()
-	_rebuild_player_logo_ids()
+	var next_logo_snapshot := _build_logo_snapshot()
+	if next_logo_snapshot != _logo_snapshot:
+		_logo_snapshot = next_logo_snapshot
+		_rebuild_player_logo_ids()
 
 	var count := 0
 	if state != null and (state.players is Array):
@@ -55,11 +61,15 @@ func set_game_state(state: GameState) -> void:
 	_refresh()
 
 func set_current_player(player_id: int) -> void:
+	if _current_player_id == player_id:
+		return
 	_current_player_id = player_id
 	_update_tab_styles()
 	_refresh_selected_player()
 
 func set_view_player(player_id: int) -> void:
+	if _view_player_id == player_id:
+		return
 	_view_player_id = player_id
 	_update_tab_styles()
 	_refresh_selected_player()
@@ -120,6 +130,14 @@ func _resolve_view_player_id() -> int:
 
 func _update_tab_styles() -> void:
 	var view_id := _resolve_view_player_id()
+	var snapshot := {
+		"view_player_id": view_id,
+		"current_player_id": _current_player_id,
+		"tab_count": _tab_buttons.size(),
+	}
+	if snapshot == _tab_style_snapshot:
+		return
+	_tab_style_snapshot = snapshot
 	for i in range(_tab_buttons.size()):
 		var btn := _tab_buttons[i]
 		if not is_instance_valid(btn):
@@ -170,6 +188,9 @@ func _refresh_selected_player() -> void:
 
 	var view_id := _resolve_view_player_id()
 	if _game_state == null or not (_game_state.players is Array) or view_id < 0 or view_id >= _game_state.players.size():
+		if _selected_player_snapshot == {"empty": true}:
+			return
+		_selected_player_snapshot = {"empty": true}
 		name_label.text = "查看: -"
 		stats_label.text = ""
 		if is_instance_valid(icon):
@@ -181,7 +202,6 @@ func _refresh_selected_player() -> void:
 	var player: Dictionary = player_val if (player_val is Dictionary) else {}
 
 	var pname := Globals.get_player_name(view_id) if Globals != null else ("玩家%d" % (view_id + 1))
-	name_label.text = "查看: %s" % pname
 
 	var cash := int(player.get("cash", 0))
 	var emp_count := 0
@@ -189,7 +209,20 @@ func _refresh_selected_player() -> void:
 	emp_count += Array(player.get("reserve_employees", [])).size()
 	emp_count += Array(player.get("busy_marketers", [])).size()
 	var rest_count := Array(player.get("restaurants", [])).size()
+	var snapshot := {
+		"view_player_id": view_id,
+		"current_player_id": _current_player_id,
+		"cash": cash,
+		"employee_count": emp_count,
+		"restaurant_count": rest_count,
+		"name": pname,
+		"logo_id": int(_player_restaurant_logo_ids.get(view_id, -1)),
+	}
+	if snapshot == _selected_player_snapshot:
+		return
+	_selected_player_snapshot = snapshot
 
+	name_label.text = "查看: %s" % pname
 	stats_label.text = "$%d | %d人 | %d店" % [cash, emp_count, rest_count]
 
 	if is_instance_valid(icon):
@@ -225,6 +258,22 @@ func _ensure_skin() -> void:
 		return
 	_skin_modules_key = key
 	_skin = UiSkinCacheClass.get_skin_for_modules(Globals.modules_v2_base_dir, mods, 40)
+
+func _build_logo_snapshot() -> Dictionary:
+	if _game_state == null or not (_game_state.players is Array):
+		return {}
+	var players: Array = []
+	for p_val in _game_state.players:
+		if not (p_val is Dictionary):
+			players.append(null)
+			continue
+		var p: Dictionary = p_val
+		players.append(p.get("restaurant_logo_id", null))
+	return {
+		"seed": int(_game_state.seed),
+		"modules": Array(_game_state.modules, TYPE_STRING, "", null),
+		"players": players,
+	}
 
 func _read_logo_id(value, logo_count: int) -> int:
 	if logo_count <= 0:

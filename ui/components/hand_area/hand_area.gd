@@ -59,9 +59,14 @@ func set_multi_select(enabled: bool) -> void:
 	_multi_select = enabled
 
 func set_employees(employees: Array[String], reserve: Array[String], busy_marketers: Array[String]) -> void:
-	_active_employees = employees.duplicate()
-	_reserve_employees = reserve.duplicate()
-	_busy_marketers = busy_marketers.duplicate()
+	var next_active := employees.duplicate()
+	var next_reserve := reserve.duplicate()
+	var next_busy := busy_marketers.duplicate()
+	if next_active == _active_employees and next_reserve == _reserve_employees and next_busy == _busy_marketers:
+		return
+	_active_employees = next_active
+	_reserve_employees = next_reserve
+	_busy_marketers = next_busy
 	_rebuild_cards()
 
 func get_display_mode() -> String:

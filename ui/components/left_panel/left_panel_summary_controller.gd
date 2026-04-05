@@ -6,6 +6,7 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 
 var _panel = null
+var _summary_snapshot: Dictionary = {}
 
 func setup(panel) -> void:
 	_panel = panel
@@ -76,11 +77,17 @@ func get_player_salary_cost(player: Dictionary) -> int:
 
 func _refresh_summary() -> void:
 	if _panel._game_state == null:
+		if _summary_snapshot == {"empty": true}:
+			return
+		_summary_snapshot = {"empty": true}
 		_set_summary_empty()
 		return
 
 	var view_id: int = int(_panel._resolve_view_player_id())
 	if view_id < 0 or view_id >= _panel._game_state.players.size():
+		if _summary_snapshot == {"empty": true}:
+			return
+		_summary_snapshot = {"empty": true}
 		_set_summary_empty()
 		return
 
@@ -95,33 +102,50 @@ func _refresh_summary() -> void:
 		_panel._update_summary_status_badge(view_id, player)
 
 	# 玩家名称
+	var player_name := Globals.get_player_name(view_id)
 	if is_instance_valid(_panel.player_name_label):
-		_panel.player_name_label.text = Globals.get_player_name(view_id)
+		_panel.player_name_label.text = player_name
 
 	# 现金
 	var cash := int(_panel.cash_overrides.get(view_id, player.get("cash", 0)))
+	var emp_count := count_total_employees(player)
+	var rest_count := count_restaurants(player)
+	var total_salary := _calculate_total_salary(player)
+	var inv_val = player.get("inventory", {})
+	var inv: Dictionary = inv_val if inv_val is Dictionary else {}
+	var fridge_capacity := _get_fridge_capacity_for_player(player)
+	var summary_snapshot := {
+		"view_player_id": view_id,
+		"name": player_name,
+		"cash": cash,
+		"employee_count": emp_count,
+		"restaurant_count": rest_count,
+		"salary": total_salary,
+		"inventory": inv.duplicate(true),
+		"fridge_capacity": fridge_capacity,
+		"logo_id": int(_panel._player_restaurant_logo_ids.get(view_id, -1)),
+		"status": _panel._get_player_status_kind(view_id, player),
+	}
+	if summary_snapshot == _summary_snapshot:
+		return
+	_summary_snapshot = summary_snapshot
 	if is_instance_valid(_panel.cash_label):
 		_panel.cash_label.text = "$%d" % cash
 
 	# 员工总数
-	var emp_count := count_total_employees(player)
 	if is_instance_valid(_panel.employee_count_label):
 		_panel.employee_count_label.text = "%d人" % emp_count
 
 	# 餐厅数
-	var rest_count := count_restaurants(player)
 	if is_instance_valid(_panel.restaurant_count_label):
 		_panel.restaurant_count_label.text = "%d店" % rest_count
 
 	# 每回合薪资
-	var total_salary := _calculate_total_salary(player)
 	if is_instance_valid(_panel.salary_label):
 		_panel.salary_label.text = "$%d/回合" % total_salary
 
 	# 库存
-	var inv_val = player.get("inventory", {})
-	var inv: Dictionary = inv_val if inv_val is Dictionary else {}
-	_refresh_inventory_ui(inv, _get_fridge_capacity_for_player(player))
+	_refresh_inventory_ui(inv, fridge_capacity)
 
 func _set_summary_empty() -> void:
 	if is_instance_valid(_panel.restaurant_icon):

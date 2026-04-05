@@ -2,6 +2,7 @@
 extends RefCounted
 
 var _panel = null
+var _snapshot: Dictionary = {}
 
 func setup(panel) -> void:
 	_panel = panel
@@ -56,15 +57,31 @@ func _refresh_activity_feed() -> void:
 	_panel.activity_line2.visible = false
 
 	if _panel._attached_log_panel == null or not is_instance_valid(_panel._attached_log_panel):
+		_snapshot = {"empty": true}
 		return
 	if not _panel._attached_log_panel.has_method("get_entries"):
+		_snapshot = {"empty": true}
 		return
 
 	var view_id: int = _panel._resolve_view_player_id()
 	var entries_val = _panel._attached_log_panel.call("get_entries")
 	if not (entries_val is Array):
+		_snapshot = {"empty": true}
 		return
 	var entries: Array = entries_val
+	var entry_count := entries.size()
+	var last_entry_id := -1
+	if entry_count > 0 and entries[entry_count - 1] is Dictionary:
+		last_entry_id = int(Dictionary(entries[entry_count - 1]).get("id", -1))
+	var snapshot := {
+		"view_player_id": view_id,
+		"round_number": int(_panel._game_state.round_number) if _panel._game_state != null else -1,
+		"entry_count": entry_count,
+		"last_entry_id": last_entry_id,
+	}
+	if snapshot == _snapshot:
+		return
+	_snapshot = snapshot
 
 	# 找到当前回合起始位置
 	var start_idx := 0

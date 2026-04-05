@@ -98,6 +98,7 @@ const MILESTONE_EFFECT_CATEGORY: Dictionary = {
 }
 
 var _panel = null
+var _snapshot: Dictionary = {}
 
 func setup(panel) -> void:
 	_panel = panel
@@ -116,22 +117,35 @@ func _refresh_milestones_compact() -> void:
 		row_sep = maxi(2, int(Globals.get_scaled_font_size(4)))
 	_panel.milestones_list.add_theme_constant_override("separation", row_sep)
 
-	for c in _panel.milestones_list.get_children():
-		if is_instance_valid(c):
-			c.queue_free()
-
 	if _panel._game_state == null:
+		if _snapshot == {"empty": true}:
+			return
+		_snapshot = {"empty": true}
+		_clear_rows()
 		_add_milestone_empty_label()
 		return
 
 	var view_id: int = int(_panel._resolve_view_player_id())
 	if view_id < 0 or view_id >= _panel._game_state.players.size():
+		if _snapshot == {"empty": true}:
+			return
+		_snapshot = {"empty": true}
+		_clear_rows()
 		_add_milestone_empty_label()
 		return
 
 	var player_val = _panel._game_state.players[view_id]
 	var player: Dictionary = player_val if player_val is Dictionary else {}
 	var player_milestones: Array = Array(player.get("milestones", []))
+	var snapshot := {
+		"view_player_id": view_id,
+		"player_milestones": player_milestones.duplicate(true),
+		"pool": Array(_panel._game_state.milestone_pool).duplicate(true),
+	}
+	if snapshot == _snapshot:
+		return
+	_snapshot = snapshot
+	_clear_rows()
 	var claimed_set := {}
 	for pm in player_milestones:
 		var pm_id := str(pm).strip_edges()
@@ -178,6 +192,11 @@ func _refresh_milestones_compact() -> void:
 			bool(entry.get("in_pool", false))
 		)
 		_panel.milestones_list.add_child(row)
+
+func _clear_rows() -> void:
+	for c in _panel.milestones_list.get_children():
+		if is_instance_valid(c):
+			c.queue_free()
 
 func _add_milestone_empty_label() -> void:
 	var empty := Label.new()
