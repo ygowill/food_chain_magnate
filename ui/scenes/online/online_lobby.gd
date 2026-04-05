@@ -92,6 +92,7 @@ var _resume_controller = null
 var _room_config_sync_controller = null
 var _start_game_request_id: String = ""
 var _start_game_flow_in_progress: bool = false
+var _enter_game_transition_requested: bool = false
 
 var _password_dialog = null
 var _password_dialog_room_code: String = ""
@@ -620,8 +621,8 @@ func _bind_net_signals() -> void:
 		NetClient.room_list_updated.connect(_on_room_list_updated)
 	if not NetClient.request_rejected.is_connected(_on_request_rejected):
 		NetClient.request_rejected.connect(_on_request_rejected)
-		if not NetClient.game_started.is_connected(_on_game_started):
-			NetClient.game_started.connect(_on_game_started)
+	if not NetClient.game_started.is_connected(_on_game_started):
+		NetClient.game_started.connect(_on_game_started)
 
 func _bind_platform_signals() -> void:
 	if PlatformSession == null:
@@ -1153,6 +1154,7 @@ func _clear_online_resume_context() -> void:
 
 func _on_net_connected() -> void:
 	_ws_connect_in_progress = false
+	_enter_game_transition_requested = false
 	_set_connect_status("已连接")
 	_set_browse_status("")
 	_set_room_status("")
@@ -1161,6 +1163,7 @@ func _on_net_connected() -> void:
 
 func _on_net_disconnected(reason: String) -> void:
 	_ws_connect_in_progress = false
+	_enter_game_transition_requested = false
 	var has_resume_context := NetContext != null and NetContext.has_method("has_online_resume_context") and NetContext.has_online_resume_context()
 	var auto_resuming := NetContext != null and NetContext.has_method("is_online_reconnecting") and NetContext.is_online_reconnecting()
 	var recoverable_disconnect := has_resume_context
@@ -1226,6 +1229,15 @@ func _on_room_state_updated(_room_state: Dictionary) -> void:
 	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("sync_room_state"):
 		OnlineSessionCoordinator.sync_room_state(room_state)
 	if str(room_state.get("status", "")).strip_edges() != "InGame":
+		_enter_game_transition_requested = false
+		return
+	if _should_enter_online_game_scene_from_room_state(room_state):
+		GameLog.info(
+			"OnlineLobby",
+			"房间已进入 InGame 且本地 engine 已就绪，使用房间状态兜底进入对局 room=%s"
+				% str(room_state.get("room_code", "")).strip_edges().to_upper()
+		)
+		_enter_online_game_scene()
 		return
 	if SceneManager != null and SceneManager.has_method("is_loading_visible") and SceneManager.is_loading_visible():
 		return
@@ -1280,10 +1292,28 @@ func _on_game_started(_payload: Dictionary) -> void:
 		OnlineSessionCoordinator.mark_game_started()
 	_start_game_request_id = ""
 	_start_game_flow_in_progress = false
+	_enter_online_game_scene()
+
+func _enter_online_game_scene() -> void:
+	if _enter_game_transition_requested:
+		return
+	_enter_game_transition_requested = true
 	if SceneManager != null and SceneManager.has_method("show_loading"):
 		SceneManager.show_loading("正在进入联机对局...")
 		await get_tree().process_frame
 	SceneManager.goto_game()
+
+func _should_enter_online_game_scene_from_room_state(room_state: Dictionary) -> bool:
+	if _enter_game_transition_requested:
+		return false
+	if str(room_state.get("status", "")).strip_edges() != "InGame":
+		return false
+	if Globals == null:
+		return false
+	var engine = Globals.current_game_engine
+	if engine == null or not (engine is Object) or not engine.has_method("get_state"):
+		return false
+	return engine.get_state() != null
 
 # ── 配置同步 ──
 
