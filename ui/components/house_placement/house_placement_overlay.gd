@@ -48,6 +48,9 @@ func get_hint_text() -> String:
 func get_selected_rotation() -> int:
 	return _selected_rotation
 
+func can_rotate() -> bool:
+	return _mode == "place_house"
+
 func get_selected_direction() -> String:
 	return _selected_direction
 

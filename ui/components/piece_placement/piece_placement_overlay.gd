@@ -46,6 +46,9 @@ func get_selected_position() -> Vector2i:
 func get_selected_rotation() -> int:
 	return _selected_rotation
 
+func can_rotate() -> bool:
+	return true
+
 func get_available_pieces() -> Array[String]:
 	return _available_pieces.duplicate()
 

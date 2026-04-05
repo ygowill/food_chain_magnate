@@ -256,6 +256,7 @@ const MarketingBoardDataTestClass = preload("res://core/tests/marketing_board_da
 const MarketingRulesDomainTestClass = preload("res://core/tests/marketing_rules_domain_test.gd")
 const MarketingPanelModuleTypesUiTestClass = preload("res://ui/scenes/tests/marketing_panel_module_types_ui_test.gd")
 const MarketingPanelPostPlaceRefreshTestClass = preload("res://ui/scenes/tests/marketing_panel_post_place_refresh_test.gd")
+const MarketingRotationPreviewUiTestClass = preload("res://ui/scenes/tests/marketing_rotation_preview_ui_test.gd")
 const KimchiStorageModalUiTestClass = preload("res://ui/scenes/tests/kimchi_storage_modal_ui_test.gd")
 const FridgeKeepModalUiTestClass = preload("res://ui/scenes/tests/fridge_keep_modal_ui_test.gd")
 const MarketingCampaignsTestClass = preload("res://core/tests/marketing_campaigns_test.gd")

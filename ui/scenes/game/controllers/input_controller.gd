@@ -174,19 +174,38 @@ func _try_rotate_placement() -> bool:
 		if is_instance_valid(dlg) and dlg.visible:
 			return false
 
-	if not is_instance_valid(_map_controller) or not _map_controller.has_method("get_mode"):
+	if is_instance_valid(_map_controller):
+		var marketing_panel = _map_controller.get("marketing_panel")
+		if _try_rotate_target(marketing_panel):
+			return true
+
+	if is_instance_valid(_panel_controller) and _panel_controller.has_method("get_active_context_overlay"):
+		var overlay = _panel_controller.call("get_active_context_overlay")
+		if _try_rotate_target(overlay):
+			return true
+
+	if is_instance_valid(_map_controller):
+		if _try_rotate_target(_map_controller.get("restaurant_placement_overlay")):
+			return true
+		if _try_rotate_target(_map_controller.get("house_placement_overlay")):
+			return true
+		if _try_rotate_target(_map_controller.get("piece_placement_overlay")):
+			return true
+
+	return false
+
+func _try_rotate_target(target) -> bool:
+	if target == null or not is_instance_valid(target):
 		return false
-	var mode := str(_map_controller.call("get_mode"))
-
-	if mode == "restaurant_placement":
-		var ov = _map_controller.restaurant_placement_overlay
-		if is_instance_valid(ov) and ov.visible and ov.has_method("rotate_cw"):
-			ov.rotate_cw()
-			return true
-	if mode == "house_placement":
-		var ov2 = _map_controller.house_placement_overlay
-		if is_instance_valid(ov2) and ov2.visible and ov2.has_method("rotate_cw"):
-			ov2.rotate_cw()
-			return true
-
+	if target is CanvasItem and not (target as CanvasItem).visible:
+		return false
+	if target.has_method("can_rotate") and not bool(target.call("can_rotate")):
+		return false
+	if target.has_method("rotate_cw"):
+		target.call("rotate_cw")
+		return true
+	if target.has_method("set_selected_rotation") and target.has_method("get_selected_rotation"):
+		var rot := int(target.call("get_selected_rotation"))
+		target.call("set_selected_rotation", rot + 90)
+		return true
 	return false

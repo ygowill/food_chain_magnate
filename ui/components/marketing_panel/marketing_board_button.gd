@@ -1,6 +1,9 @@
 # MarketingPanel：板件选择按钮（带占地预览）
 extends Button
 
+const PREVIEW_AREA_FILL_MIN := 0.42
+const PREVIEW_AREA_FILL_MAX := 0.88
+
 var board_number: int = 0
 var base_size: Vector2i = Vector2i.ONE # unrotated footprint (w,h)
 var board_rotation: int = 0 # 0/90/180/270
@@ -30,6 +33,7 @@ func _on_toggled(_pressed: bool) -> void:
 
 func set_board_rotation(rot: int) -> void:
 	board_rotation = rot
+	_update_tooltip()
 	queue_redraw()
 
 func get_rotated_size() -> Vector2i:
@@ -47,30 +51,63 @@ func set_preview(rot: int, product_tex: Texture2D, is_selected: bool) -> void:
 	board_rotation = rot
 	product_texture = product_tex
 	show_product = is_selected
+	_update_tooltip()
 	queue_redraw()
 
-func _draw() -> void:
-	var r := Rect2(Vector2.ZERO, size)
+func get_preview_layout(draw_size: Vector2 = size) -> Dictionary:
+	var r := Rect2(Vector2.ZERO, draw_size)
 	if r.size.x <= 1.0 or r.size.y <= 1.0:
-		return
+		return {}
 
 	var pad := maxf(6.0, minf(r.size.x, r.size.y) * 0.08)
 	var label_h := maxf(18.0, minf(r.size.x, r.size.y) * 0.26)
 	var preview_rect := Rect2(Vector2(pad, pad), Vector2(r.size.x - pad * 2.0, r.size.y - pad * 2.0 - label_h))
 	if preview_rect.size.x <= 1.0 or preview_rect.size.y <= 1.0:
-		return
+		return {}
 
 	var s := get_rotated_size()
 	var w := maxi(1, int(s.x))
 	var h := maxi(1, int(s.y))
+	var cell_count := maxi(1, w * h)
 
-	var cell_px := minf(preview_rect.size.x / float(w), preview_rect.size.y / float(h))
-	# Prefer whole pixels so grid lines stay crisp.
-	cell_px = maxf(2.0, floor(cell_px))
+	var fit_cell_px := minf(preview_rect.size.x / float(w), preview_rect.size.y / float(h))
+	var preview_area := preview_rect.size.x * preview_rect.size.y
+	var target_area := preview_area * _get_preview_area_fill(cell_count)
+	var target_cell_px := sqrt(maxf(0.0, target_area / float(cell_count)))
+	var cell_px := maxf(2.0, floor(minf(fit_cell_px, target_cell_px)))
 
 	var board_px := Vector2(float(w) * cell_px, float(h) * cell_px)
 	var board_pos := preview_rect.position + (preview_rect.size - board_px) * 0.5
 	var board_rect := Rect2(board_pos, board_px)
+	var badge_layout := _compute_badge_layout(board_rect, cell_px, str(board_number))
+
+	return {
+		"outer_rect": r,
+		"preview_rect": preview_rect,
+		"board_rect": board_rect,
+		"label_height": label_h,
+		"padding": pad,
+		"cell_px": cell_px,
+		"width_cells": w,
+		"height_cells": h,
+		"badge_layout": badge_layout,
+	}
+
+func _draw() -> void:
+	var layout := get_preview_layout(size)
+	if layout.is_empty():
+		return
+
+	var r: Rect2 = layout.get("outer_rect", Rect2())
+	var preview_rect: Rect2 = layout.get("preview_rect", Rect2())
+	var board_rect: Rect2 = layout.get("board_rect", Rect2())
+	var label_h := float(layout.get("label_height", 0.0))
+	var pad := float(layout.get("padding", 0.0))
+	var cell_px := float(layout.get("cell_px", 0.0))
+	var w := int(layout.get("width_cells", 1))
+	var h := int(layout.get("height_cells", 1))
+	var board_pos := board_rect.position
+	var board_px := board_rect.size
 
 	var base := Color("#98a295")
 	var fill := base
@@ -108,7 +145,7 @@ func _draw() -> void:
 
 	# Board number badge (top-right): white circle + black number (issue_tracker #37).
 	if board_number > 0:
-		_draw_board_number_badge(board_rect, board_number, cell_px)
+		_draw_board_number_badge(layout.get("badge_layout", {}), board_number)
 
 	# Label line: "#11  3x2"
 	var font: Font = ThemeDB.fallback_font
@@ -118,6 +155,10 @@ func _draw() -> void:
 	var text_line := "#%d  %dx%d" % [board_number, w, h]
 	draw_string(font, Vector2(label_rect.position.x + 1.0, text_y + 1.0), text_line, HORIZONTAL_ALIGNMENT_CENTER, label_rect.size.x, font_size, Color(0, 0, 0, 0.8))
 	draw_string(font, Vector2(label_rect.position.x, text_y), text_line, HORIZONTAL_ALIGNMENT_CENTER, label_rect.size.x, font_size, Color(0.85, 0.85, 0.85, 1))
+
+func _get_preview_area_fill(cell_count: int) -> float:
+	var t := clampf(float(maxi(1, cell_count) - 1) / 5.0, 0.0, 1.0)
+	return lerpf(PREVIEW_AREA_FILL_MIN, PREVIEW_AREA_FILL_MAX, t)
 
 func _draw_texture_aspect_fit(tex: Texture2D, rect: Rect2, color: Color) -> void:
 	if tex == null:
@@ -135,19 +176,50 @@ func _draw_texture_aspect_fit(tex: Texture2D, rect: Rect2, color: Color) -> void
 	var dst_pos := rect.position + (rect.size - dst_size) * 0.5
 	draw_texture_rect(tex, Rect2(dst_pos, dst_size), false, color)
 
-func _draw_board_number_badge(board_rect: Rect2, number: int, cell_px: float) -> void:
+func _compute_badge_layout(board_rect: Rect2, cell_px: float, text: String) -> Dictionary:
+	if text.is_empty():
+		return {}
+
+	var board_min := minf(board_rect.size.x, board_rect.size.y)
+	var max_diameter := maxf(14.0, board_min * 0.42)
+	var diameter := minf(maxf(14.0, cell_px * 0.84), max_diameter)
+	var radius := diameter * 0.5
+	var pad := clampf(cell_px * 0.18, 2.0, maxf(2.0, board_min * 0.12))
+	var center := board_rect.position + Vector2(board_rect.size.x - pad - radius, pad + radius)
+	var box := Rect2(center - Vector2(radius, radius), Vector2(radius * 2.0, radius * 2.0))
+	var font_scale := 0.44 if text.length() >= 2 else 0.56
+	var font_size := maxi(8, int(round(diameter * font_scale)))
+
+	return {
+		"text": text,
+		"center": center,
+		"radius": radius,
+		"box": box,
+		"font_size": font_size,
+	}
+
+func _draw_board_number_badge(layout: Dictionary, number: int) -> void:
+	if layout.is_empty():
+		return
 	var text := str(number).strip_edges()
 	if text.is_empty():
 		return
+	var center: Vector2 = layout.get("center", Vector2.ZERO)
+	var radius := float(layout.get("radius", 0.0))
+	var box: Rect2 = layout.get("box", Rect2())
+	var font_size := int(layout.get("font_size", 10))
+	if radius <= 0.0:
+		return
 
-	var r := maxf(8.0, float(cell_px) * 0.55)
-	var pad := maxf(2.0, float(cell_px) * 0.20)
-	var center := board_rect.position + Vector2(board_rect.size.x - pad - r, pad + r)
-
-	draw_circle(center, r, Color(1, 1, 1, 1))
+	draw_circle(center, radius, Color(1, 1, 1, 1))
 
 	var font: Font = ThemeDB.fallback_font
-	var font_size := maxi(10, int(round(r * 0.95)))
-	var box := Rect2(center - Vector2(r, r), Vector2(r * 2.0, r * 2.0))
-	var baseline := Vector2(box.position.x, box.position.y + box.size.y * 0.5 + float(font_size) * 0.35)
+	var baseline := Vector2(box.position.x, box.position.y + box.size.y * 0.5 + float(font_size) * 0.32)
 	draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_CENTER, box.size.x, font_size, Color(0, 0, 0, 1))
+
+func _update_tooltip() -> void:
+	if board_number <= 0:
+		tooltip_text = ""
+		return
+	var s := get_rotated_size()
+	tooltip_text = "#%d  %dx%d" % [board_number, s.x, s.y]

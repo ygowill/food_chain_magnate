@@ -197,6 +197,19 @@ func hide_all() -> void:
 func hide_all_keep_selection() -> void:
 	_hide_all_phase_panels(true)
 
+func get_active_context_overlay():
+	if _placement_overlays == null:
+		return null
+	if _placement_overlays.has_method("get_active_context_overlay"):
+		return _placement_overlays.call("get_active_context_overlay")
+	if is_instance_valid(_placement_overlays.restaurant_placement_overlay) and _placement_overlays.restaurant_placement_overlay.visible:
+		return _placement_overlays.restaurant_placement_overlay
+	if is_instance_valid(_placement_overlays.house_placement_overlay) and _placement_overlays.house_placement_overlay.visible:
+		return _placement_overlays.house_placement_overlay
+	if is_instance_valid(_placement_overlays.piece_placement_overlay) and _placement_overlays.piece_placement_overlay.visible:
+		return _placement_overlays.piece_placement_overlay
+	return null
+
 func hide_non_modal_action_ui_for_waiting() -> void:
 	# 联机等待他人操作：仅清理“本地动作相关 UI/选点高亮”，不关闭等待类模态。
 	if _working_panels != null:

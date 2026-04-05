@@ -1046,6 +1046,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"name": "MarketingPanelPostPlaceRefreshTest",
 				"fn": func() -> Result: return TestRefs.MarketingPanelPostPlaceRefreshTestClass.run(),
 			},
+			{
+				"name": "MarketingRotationPreviewUiTest",
+				"fn": func() -> Result: return TestRefs.MarketingRotationPreviewUiTestClass.run(),
+			},
 						{
 							"name": "MarketingCampaignsTest",
 							"fn": func() -> Result: return TestRefs.MarketingCampaignsTestClass.run(2, 12345),

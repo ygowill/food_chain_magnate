@@ -420,11 +420,13 @@ func _sync_rotation_controls(selected_rotation: int) -> void:
 		_rotation_value_label.text = "%d度" % int(selected_rotation)
 
 	var can_rotate := _context_overlay != null and is_instance_valid(_context_overlay) and _context_overlay.has_method("set_selected_rotation")
-	if not can_rotate:
-		if is_instance_valid(_rotate_left_button):
-			_rotate_left_button.disabled = true
-		if is_instance_valid(_rotate_right_button):
-			_rotate_right_button.disabled = true
+	var globally_disabled := false
+	if _panel != null and is_instance_valid(_panel) and _panel.has_method("is_globally_disabled"):
+		globally_disabled = bool(_panel.call("is_globally_disabled"))
+	if is_instance_valid(_rotate_left_button):
+		_rotate_left_button.disabled = globally_disabled or not can_rotate
+	if is_instance_valid(_rotate_right_button):
+		_rotate_right_button.disabled = globally_disabled or not can_rotate
 
 func _rebuild_house_number_option(available_numbers: Array[int], selected_house_number: int) -> void:
 	if not is_instance_valid(_house_number_option):

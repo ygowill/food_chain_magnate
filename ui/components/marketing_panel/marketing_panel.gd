@@ -13,10 +13,9 @@ signal cancelled()
 @onready var product_flow: Container = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ProductSection/ProductFlow
 @onready var duration_flow: Container = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/DurationSection/DurationFlow
 @onready var rotation_section: Control = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection
-@onready var rot0_btn: Button = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection/RotationRow/Rot0Button
-@onready var rot90_btn: Button = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection/RotationRow/Rot90Button
-@onready var rot180_btn: Button = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection/RotationRow/Rot180Button
-@onready var rot270_btn: Button = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection/RotationRow/Rot270Button
+@onready var rotate_left_btn: Button = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection/RotationRow/RotationControls/RotateLeftButton
+@onready var rotation_value_label: Label = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection/RotationRow/RotationControls/RotationValueLabel
+@onready var rotate_right_btn: Button = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/RotationSection/RotationRow/RotationControls/RotateRightButton
 @onready var target_label: Label = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TargetSection/TargetLabel
 @onready var range_info_label: Label = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TargetSection/RangeInfoLabel
 @onready var error_label: Label = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TargetSection/ErrorLabel
@@ -75,7 +74,6 @@ var _icon_cache = MarketingPanelIconCacheClass.new()
 var _board_button_group: ButtonGroup = ButtonGroup.new()
 var _product_button_group: ButtonGroup = ButtonGroup.new()
 var _duration_button_group: ButtonGroup = ButtonGroup.new()
-var _rotation_button_group: ButtonGroup = ButtonGroup.new()
 
 var _board_button_by_number: Dictionary = {} # int -> MarketingBoardButton
 var _product_button_by_id: Dictionary = {} # String -> Button
@@ -103,7 +101,7 @@ func _on_panel_ready() -> void:
 	_board_button_group.allow_unpress = false
 	_product_button_group.allow_unpress = false
 
-	_setup_rotation_buttons()
+	_setup_rotation_controls()
 	_update_rotation_section()
 	_rebuild_product_buttons()
 	_rebuild_type_buttons()
@@ -155,7 +153,7 @@ func clear_selection() -> void:
 
 	_clear_board_buttons()
 	_clear_duration_buttons()
-	_sync_rotation_buttons()
+	_sync_rotation_controls()
 
 	_update_target_display()
 	_update_confirm_state()
@@ -293,45 +291,31 @@ func _apply_selected_marketer(employee_type: String) -> void:
 	_selected_duration = max_duration
 	_rebuild_duration_buttons(max_duration)
 
-func _setup_rotation_buttons() -> void:
-	_rotation_button_group.allow_unpress = false
+func _setup_rotation_controls() -> void:
+	if rotate_left_btn != null:
+		rotate_left_btn.focus_mode = Control.FOCUS_NONE
+		rotate_left_btn.tooltip_text = "向左旋转 90度"
+		UiStylesClass.apply_button_secondary(rotate_left_btn)
+		if not rotate_left_btn.pressed.is_connected(_on_rotate_left_pressed):
+			rotate_left_btn.pressed.connect(_on_rotate_left_pressed)
+	if rotate_right_btn != null:
+		rotate_right_btn.focus_mode = Control.FOCUS_NONE
+		rotate_right_btn.tooltip_text = "向右旋转 90度"
+		UiStylesClass.apply_button_secondary(rotate_right_btn)
+		if not rotate_right_btn.pressed.is_connected(_on_rotate_right_pressed):
+			rotate_right_btn.pressed.connect(_on_rotate_right_pressed)
+	if rotation_value_label != null:
+		UiStylesClass.apply_label_dark(rotation_value_label)
+	_sync_rotation_controls()
 
-	var pairs := [
-		{"btn": rot0_btn, "rot": 0},
-		{"btn": rot90_btn, "rot": 90},
-		{"btn": rot180_btn, "rot": 180},
-		{"btn": rot270_btn, "rot": 270},
-	]
-
-	for item in pairs:
-		var btn = item.get("btn", null)
-		if not (btn is Button):
-			continue
-		var b: Button = btn
-		b.toggle_mode = true
-		b.button_group = _rotation_button_group
-		b.focus_mode = Control.FOCUS_NONE
-		var rot := int(item.get("rot", 0))
-		b.pressed.connect(func():
-			_on_rotation_selected(rot)
-		)
-
-	_sync_rotation_buttons()
-
-func _sync_rotation_buttons() -> void:
-	# Rotation buttons are optional in tests/older scenes; guard everything.
-	var rot := _selected_rotation
-	if rot == 0 and rot0_btn != null:
-		rot0_btn.button_pressed = true
-	elif rot == 90 and rot90_btn != null:
-		rot90_btn.button_pressed = true
-	elif rot == 180 and rot180_btn != null:
-		rot180_btn.button_pressed = true
-	elif rot == 270 and rot270_btn != null:
-		rot270_btn.button_pressed = true
-	elif rot0_btn != null:
-		_selected_rotation = 0
-		rot0_btn.button_pressed = true
+func _sync_rotation_controls() -> void:
+	var can_rotate := not _selected_type.is_empty() and _selected_type != "airplane"
+	if rotation_value_label != null:
+		rotation_value_label.text = "%d度" % _selected_rotation
+	if rotate_left_btn != null:
+		rotate_left_btn.disabled = not can_rotate
+	if rotate_right_btn != null:
+		rotate_right_btn.disabled = not can_rotate
 
 func _update_rotation_section() -> void:
 	# airplane rotation has no meaning; orientation is determined by the attached edge (issue_tracker #40).
@@ -340,15 +324,22 @@ func _update_rotation_section() -> void:
 		rotation_section.visible = not is_airplane
 	if is_airplane and _selected_rotation != 0:
 		_selected_rotation = 0
-		_sync_rotation_buttons()
+	_sync_rotation_controls()
 
-func _on_rotation_selected(rotation: int) -> void:
-	if _selected_type == "airplane":
-		return
+func get_selected_rotation() -> int:
+	return _selected_rotation
+
+func can_rotate() -> bool:
+	return not _selected_type.is_empty() and _selected_type != "airplane"
+
+func set_selected_rotation(rotation: int) -> void:
 	var rot := int(rotation)
 	if not rot in [0, 90, 180, 270]:
 		rot = 0
+	if _selected_type == "airplane":
+		rot = 0
 	if _selected_rotation == rot:
+		_sync_rotation_controls()
 		return
 
 	_selected_rotation = rot
@@ -356,6 +347,7 @@ func _on_rotation_selected(rotation: int) -> void:
 	_selected_axis = ""
 	_update_target_display()
 	clear_error()
+	_sync_rotation_controls()
 
 	for bn in _board_button_by_number.keys():
 		var b = _board_button_by_number.get(bn, null)
@@ -367,6 +359,18 @@ func _on_rotation_selected(rotation: int) -> void:
 	_sync_board_button_previews()
 	_update_confirm_state()
 	_request_map_selection_refresh()
+
+func rotate_ccw() -> void:
+	set_selected_rotation(_selected_rotation - 90)
+
+func rotate_cw() -> void:
+	set_selected_rotation(_selected_rotation + 90)
+
+func _on_rotate_left_pressed() -> void:
+	rotate_ccw()
+
+func _on_rotate_right_pressed() -> void:
+	rotate_cw()
 
 func _request_map_selection_refresh() -> void:
 	if not _map_callback.is_valid():
@@ -412,6 +416,7 @@ func _set_selected_board_number(board_number: int) -> void:
 			(btn as Button).button_pressed = true
 
 	_sync_board_button_previews()
+	_sync_rotation_controls()
 	_update_confirm_state()
 	_request_map_selection_refresh()
 
