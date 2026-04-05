@@ -37,6 +37,7 @@ var _player_a: AudioStreamPlayer
 var _player_b: AudioStreamPlayer
 var _active_player: AudioStreamPlayer
 var _inactive_player: AudioStreamPlayer
+var _stream_cache: Dictionary = {} # path -> AudioStream
 
 # 状态
 var _current_state: MusicState = MusicState.STOPPED
@@ -72,6 +73,7 @@ func _exit_tree() -> void:
 func _ready() -> void:
 	_create_players()
 	_load_settings()
+	preload_all_tracks()
 	call_deferred("_start_boot_autoplay")
 
 func _start_boot_autoplay() -> void:
@@ -173,7 +175,7 @@ func play(track: MusicTrack, crossfade: bool = true) -> void:
 		push_warning("MusicManager: 音乐文件不存在: %s" % path)
 		return
 
-	var stream: AudioStream = load(path)
+	var stream := _get_or_load_stream(path)
 	if stream == null:
 		return
 
@@ -221,6 +223,14 @@ func get_playback_position_sec() -> float:
 
 func get_current_track() -> MusicTrack:
 	return _current_track
+
+func preload_all_tracks() -> void:
+	for config_val in _track_config.values():
+		var config: Dictionary = config_val if config_val is Dictionary else {}
+		var path := String(config.get("path", ""))
+		if path.is_empty():
+			continue
+		_get_or_load_stream(path)
 
 # === 音量控制 ===
 
@@ -342,6 +352,17 @@ func _on_crossfade_finished() -> void:
 func _on_fade_out_finished() -> void:
 	_stop_immediate()
 	_fade_tween = null
+
+func _get_or_load_stream(path: String) -> AudioStream:
+	if _stream_cache.has(path):
+		var cached = _stream_cache[path]
+		return cached if cached is AudioStream else null
+	if not ResourceLoader.exists(path):
+		return null
+	var stream: AudioStream = load(path)
+	if stream != null:
+		_stream_cache[path] = stream
+	return stream
 
 # === 设置持久化 ===
 

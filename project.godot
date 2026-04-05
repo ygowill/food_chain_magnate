@@ -31,6 +31,10 @@ OnlineSessionCoordinator="*res://autoload/online_session_coordinator.gd"
 PlatformApi="*res://autoload/platform_api.gd"
 PlatformSession="*res://autoload/platform_session.gd"
 
+[audio]
+
+driver/output_latency=30
+
 [display]
 
 window/size/viewport_width=1920

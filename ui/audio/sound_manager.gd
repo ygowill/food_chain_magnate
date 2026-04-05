@@ -135,6 +135,7 @@ func _exit_tree() -> void:
 func _ready() -> void:
 	_create_player_pool()
 	_load_settings()
+	preload_all_ui_sounds()
 	_setup_eventbus_auto_sounds()
 	_setup_ui_button_auto_sounds()
 	set_process_input(true)
