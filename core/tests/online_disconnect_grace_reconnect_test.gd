@@ -73,6 +73,7 @@ static func run() -> Result:
 		"role": "player",
 		"display_name": "P2B",
 		"seat_index": 1,
+		"generation": 2,
 		"exp": int(Time.get_unix_time_from_system()) + 3600,
 	}, server.connect_token_secret_override)
 	if not reconnect_token_r.ok:
@@ -115,6 +116,7 @@ static func run() -> Result:
 		"role": "host",
 		"display_name": "HostC",
 		"seat_index": 0,
+		"generation": 2,
 		"config_json": JSON.stringify(cfg),
 		"exp": int(Time.get_unix_time_from_system()) + 3600,
 	}, server.connect_token_secret_override)
@@ -164,6 +166,7 @@ static func _platform_create_and_start_game(
 		"role": "host",
 		"display_name": "Host",
 		"seat_index": 0,
+		"generation": 1,
 		"config_json": JSON.stringify(cfg),
 		"exp": int(Time.get_unix_time_from_system()) + 3600,
 	}, server.connect_token_secret_override)
@@ -186,6 +189,7 @@ static func _platform_create_and_start_game(
 		"role": "player",
 		"display_name": "P2",
 		"seat_index": 1,
+		"generation": 1,
 		"exp": int(Time.get_unix_time_from_system()) + 3600,
 	}, server.connect_token_secret_override)
 	if not player_token_r.ok:

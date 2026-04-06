@@ -51,7 +51,8 @@ func create_room_with_code(
 	room_code: String,
 	config: Dictionary,
 	join_policy: String = "public",
-	password_hash: String = ""
+	password_hash: String = "",
+	token_generation: int = -1
 ) -> Result:
 	if peer_to_room.has(host_peer_id):
 		return Result.failure("Peer already in a room")
@@ -73,7 +74,7 @@ func create_room_with_code(
 	var room = OnlineRoomClass.new(code, host_peer_id, normalized_join_policy, normalized_password_hash, config)
 	room.owner_user_id = str(profile.get("user_id", "")).strip_edges()
 
-	var ar: Result = room.add_peer(host_peer_id, profile)
+	var ar: Result = room.add_peer(host_peer_id, profile, token_generation)
 	if not ar.ok:
 		return ar
 
@@ -94,7 +95,8 @@ func create_resume_room_with_code(
 	config: Dictionary,
 	archive: Dictionary,
 	join_policy: String = "public",
-	password_hash: String = ""
+	password_hash: String = "",
+	token_generation: int = -1
 ) -> Result:
 	if peer_to_room.has(host_peer_id):
 		return Result.failure("Peer already in a room")
@@ -122,7 +124,7 @@ func create_resume_room_with_code(
 	var cfg_r: Result = room.configure_resume_lobby(Dictionary(archive).duplicate(true))
 	if not cfg_r.ok:
 		return cfg_r
-	var ar: Result = room.add_waiting_member(host_peer_id, profile, "host")
+	var ar: Result = room.add_waiting_member(host_peer_id, profile, "host", token_generation)
 	if not ar.ok:
 		return ar
 
@@ -178,7 +180,14 @@ func join_room(peer_id: int, profile: Dictionary, room_code: String, room_passwo
 		"replaced_peer_id": replaced_peer_id,
 	})
 
-func join_room_with_seat(peer_id: int, profile: Dictionary, room_code: String, seat_index: int, role_label: String = "player") -> Result:
+func join_room_with_seat(
+	peer_id: int,
+	profile: Dictionary,
+	room_code: String,
+	seat_index: int,
+	role_label: String = "player",
+	token_generation: int = -1
+) -> Result:
 	if peer_to_room.has(peer_id):
 		return Result.failure("Peer already in a room")
 
@@ -197,7 +206,7 @@ func join_room_with_seat(peer_id: int, profile: Dictionary, room_code: String, s
 	if not room.has_method("add_peer_at_seat"):
 		return Result.failure("Room.add_peer_at_seat missing")
 
-	var ar: Result = room.add_peer_at_seat(peer_id, profile, seat_index)
+	var ar: Result = room.add_peer_at_seat(peer_id, profile, seat_index, token_generation)
 	if not ar.ok:
 		return ar
 
@@ -209,7 +218,13 @@ func join_room_with_seat(peer_id: int, profile: Dictionary, room_code: String, s
 		"role": str(role_label).strip_edges(),
 	})
 
-func join_room_as_waiting_member(peer_id: int, profile: Dictionary, room_code: String, role_label: String = "player") -> Result:
+func join_room_as_waiting_member(
+	peer_id: int,
+	profile: Dictionary,
+	room_code: String,
+	role_label: String = "player",
+	token_generation: int = -1
+) -> Result:
 	if peer_to_room.has(peer_id):
 		return Result.failure("Peer already in a room")
 
@@ -225,7 +240,7 @@ func join_room_as_waiting_member(peer_id: int, profile: Dictionary, room_code: S
 	if not room.has_method("add_waiting_member"):
 		return Result.failure("Room.add_waiting_member missing")
 
-	var ar: Result = room.add_waiting_member(peer_id, profile, role_label)
+	var ar: Result = room.add_waiting_member(peer_id, profile, role_label, token_generation)
 	if not ar.ok:
 		return ar
 
@@ -280,7 +295,15 @@ func unassign_room_seat(room_code: String, seat_index: int) -> Result:
 		"room_state": room.to_room_state_dict(),
 	})
 
-func reconnect_player(peer_id: int, profile: Dictionary, room_code: String, seat_index: int, user_id: String, role_label: String = "player") -> Result:
+func reconnect_player(
+	peer_id: int,
+	profile: Dictionary,
+	room_code: String,
+	seat_index: int,
+	user_id: String,
+	role_label: String = "player",
+	token_generation: int = -1
+) -> Result:
 	if peer_to_room.has(peer_id):
 		return Result.failure("Peer already in a room")
 
@@ -295,7 +318,7 @@ func reconnect_player(peer_id: int, profile: Dictionary, room_code: String, seat
 	if not room.has_method("reconnect_player"):
 		return Result.failure("Room.reconnect_player missing")
 	var restore_host: bool = str(role_label).strip_edges() == "host"
-	var rr: Result = room.reconnect_player(peer_id, profile, seat_index, user_id, restore_host)
+	var rr: Result = room.reconnect_player(peer_id, profile, seat_index, user_id, restore_host, token_generation)
 	if not rr.ok:
 		return rr
 	var rr_value: Dictionary = Dictionary(rr.value) if rr.value is Dictionary else {}
@@ -312,7 +335,15 @@ func reconnect_player(peer_id: int, profile: Dictionary, room_code: String, seat
 		"replaced_peer_id": replaced_peer_id,
 	})
 
-func reclaim_room_seat(peer_id: int, profile: Dictionary, room_code: String, seat_index: int, user_id: String, role_label: String = "player") -> Result:
+func reclaim_room_seat(
+	peer_id: int,
+	profile: Dictionary,
+	room_code: String,
+	seat_index: int,
+	user_id: String,
+	role_label: String = "player",
+	token_generation: int = -1
+) -> Result:
 	if peer_to_room.has(peer_id):
 		return Result.failure("Peer already in a room")
 
@@ -326,7 +357,7 @@ func reclaim_room_seat(peer_id: int, profile: Dictionary, room_code: String, sea
 
 	if not room.has_method("reclaim_peer_at_seat"):
 		return Result.failure("Room.reclaim_peer_at_seat missing")
-	var rr: Result = room.reclaim_peer_at_seat(peer_id, profile, seat_index, user_id)
+	var rr: Result = room.reclaim_peer_at_seat(peer_id, profile, seat_index, user_id, token_generation)
 	if not rr.ok:
 		return rr
 	var rr_value: Dictionary = Dictionary(rr.value) if rr.value is Dictionary else {}
@@ -584,6 +615,49 @@ func release_reconnecting_seat(room_code: String, seat_index: int) -> Result:
 	if not room.has_method("release_reconnecting_seat"):
 		return Result.failure("Room.release_reconnecting_seat missing")
 	var rr: Result = room.release_reconnecting_seat(seat_index)
+	if not rr.ok:
+		return rr
+
+	var rr_value: Dictionary = Dictionary(rr.value) if rr.value is Dictionary else {}
+	var released := bool(rr_value.get("released", false))
+	if room.is_empty():
+		rooms.erase(code)
+		return Result.success({
+			"room_code": code,
+			"room": null,
+			"removed": true,
+			"released": released,
+			"room_state": null,
+		})
+
+	return Result.success({
+		"room_code": code,
+		"room": room,
+		"removed": false,
+		"released": released,
+		"room_state": room.to_room_state_dict(),
+		"host_changed": bool(rr_value.get("host_changed", false)),
+		"host_peer_id": int(rr_value.get("host_peer_id", 0)),
+	})
+
+func release_reconnecting_waiting_member(room_code: String, user_id: String) -> Result:
+	var code := str(room_code).strip_edges().to_upper()
+	if code.is_empty():
+		return Result.failure("Missing room_code", Result.ErrorCode.MISSING_PARAMS)
+
+	var room = rooms.get(code, null)
+	if room == null:
+		return Result.success({
+			"room_code": code,
+			"room": null,
+			"removed": true,
+			"released": false,
+			"room_state": null,
+		})
+
+	if not room.has_method("release_reconnecting_waiting_member"):
+		return Result.failure("Room.release_reconnecting_waiting_member missing")
+	var rr: Result = room.release_reconnecting_waiting_member(user_id)
 	if not rr.ok:
 		return rr
 

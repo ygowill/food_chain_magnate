@@ -135,6 +135,7 @@ class RoomMemberSyncIn(BaseModel):
     role: str
     seat_index: Optional[int] = None
     member_status: str = "active"
+    generation: int = 1
 
 
 class RoomDirectorySyncIn(BaseModel):
@@ -245,12 +246,14 @@ async def sync_room_directory(game_server_id: str, req: RoomDirectorySyncRequest
                     role=str(member_in.role),
                     seat_index=member_in.seat_index,
                     member_status=str(member_in.member_status or "active"),
+                    generation=max(1, int(member_in.generation or 1)),
                     left_at=None,
                 ))
                 continue
             member.role = str(member_in.role)
             member.seat_index = member_in.seat_index
             member.member_status = str(member_in.member_status or "active")
+            member.generation = max(int(member.generation or 1), max(1, int(member_in.generation or 1)))
             member.left_at = None
 
         for member in existing_members:

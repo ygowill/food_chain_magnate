@@ -122,6 +122,76 @@ async def test_sync_room_directory_creates_room_and_members(client: AsyncClient,
 
 
 @pytest.mark.asyncio
+async def test_sync_room_directory_preserves_max_generation(client: AsyncClient, db_session: AsyncSession):
+    initial = await client.post("/internal/game_servers/gs-sync-gen-1/rooms/sync", json={
+        "rooms": [
+            {
+                "room_code": "SYNCG1",
+                "owner_user_id": "u_host_sync_gen",
+                "status": "Lobby",
+                "join_policy": "public",
+                "config_json": "{\"desired_player_count\":2}",
+                "members": [
+                    {"user_id": "u_host_sync_gen", "role": "host", "seat_index": 0, "generation": 5},
+                ],
+            }
+        ],
+    }, headers=INTERNAL_HEADERS)
+    assert initial.status_code == 200
+
+    lower = await client.post("/internal/game_servers/gs-sync-gen-1/rooms/sync", json={
+        "rooms": [
+            {
+                "room_code": "SYNCG1",
+                "owner_user_id": "u_host_sync_gen",
+                "status": "Lobby",
+                "join_policy": "public",
+                "config_json": "{\"desired_player_count\":2}",
+                "members": [
+                    {"user_id": "u_host_sync_gen", "role": "host", "seat_index": 0, "generation": 3},
+                ],
+            }
+        ],
+    }, headers=INTERNAL_HEADERS)
+    assert lower.status_code == 200
+
+    room = (await db_session.execute(select(Room).where(Room.room_code == "SYNCG1"))).scalar_one()
+    member_after_lower = (await db_session.execute(
+        select(RoomMember).where(
+            RoomMember.room_id == room.room_id,
+            RoomMember.user_id == "u_host_sync_gen",
+            RoomMember.left_at.is_(None),
+        )
+    )).scalar_one()
+    assert int(member_after_lower.generation) == 5
+
+    higher = await client.post("/internal/game_servers/gs-sync-gen-1/rooms/sync", json={
+        "rooms": [
+            {
+                "room_code": "SYNCG1",
+                "owner_user_id": "u_host_sync_gen",
+                "status": "Lobby",
+                "join_policy": "public",
+                "config_json": "{\"desired_player_count\":2}",
+                "members": [
+                    {"user_id": "u_host_sync_gen", "role": "host", "seat_index": 0, "generation": 7},
+                ],
+            }
+        ],
+    }, headers=INTERNAL_HEADERS)
+    assert higher.status_code == 200
+
+    member_after_higher = (await db_session.execute(
+        select(RoomMember).where(
+            RoomMember.room_id == room.room_id,
+            RoomMember.user_id == "u_host_sync_gen",
+            RoomMember.left_at.is_(None),
+        )
+    )).scalar_one()
+    assert int(member_after_higher.generation) == 7
+
+
+@pytest.mark.asyncio
 async def test_sync_room_directory_marks_missing_members_left(client: AsyncClient, db_session: AsyncSession):
     first = await client.post("/internal/game_servers/gs-sync-members-1/rooms/sync", json={
         "rooms": [

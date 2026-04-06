@@ -35,6 +35,7 @@ def issue_connect_token(
     user_id: str, room_code: str, role: str,
     display_name: str = "", ttl: int = 60,
     seat_index: int | None = None,
+    generation: int | None = None,
     config_json: str | None = None,
     join_policy: str | None = None,
     password_hash: str | None = None,
@@ -48,6 +49,8 @@ def issue_connect_token(
     }
     if seat_index is not None:
         payload["seat_index"] = int(seat_index)
+    if generation is not None:
+        payload["generation"] = int(generation)
     if config_json is not None:
         payload["config_json"] = config_json
     if join_policy is not None:

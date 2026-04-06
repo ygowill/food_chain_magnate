@@ -102,6 +102,7 @@ class RoomMember(Base):
     role: Mapped[str] = mapped_column(String, nullable=False)
     seat_index: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     member_status: Mapped[str] = mapped_column(String, nullable=False, default="active")
+    generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     left_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 

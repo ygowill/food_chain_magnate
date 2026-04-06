@@ -26,7 +26,7 @@ const DEFAULT_RESYNC_DELTA_MAX_COMMANDS := 32
 var _net = null
 var connect_token_secret_override: String = ""
 var disconnect_grace_period_sec_override: float = -1.0
-var _disconnect_forfeit_ticket_by_key: Dictionary = {} # "ROOM:actor_id" -> ticket (int)
+var _disconnect_forfeit_ticket_by_key: Dictionary = {} # "ROOM:kind:value" -> ticket (int)
 var _last_resync_request_msec_by_peer: Dictionary = {} # peer_id -> last accepted resync request msec
 var _last_resync_transfer_mode_by_peer: Dictionary = {} # peer_id -> "delta" | "snapshot"
 
@@ -724,8 +724,47 @@ func _post_finalize_match(room) -> void:
 			]
 	)
 
+func _disconnect_grace_key(room_code: String, target_kind: String, target_value: String) -> String:
+	return "%s:%s:%s" % [
+		str(room_code).strip_edges().to_upper(),
+		str(target_kind).strip_edges(),
+		str(target_value).strip_edges(),
+	]
+
 func _disconnect_forfeit_key(room_code: String, actor_id: int) -> String:
-	return "%s:%d" % [str(room_code).strip_edges().to_upper(), int(actor_id)]
+	return _disconnect_grace_key(room_code, "actor", str(int(actor_id)))
+
+func _disconnect_lobby_seat_key(room_code: String, seat_index: int) -> String:
+	return _disconnect_grace_key(room_code, "seat", str(int(seat_index)))
+
+func _resolve_disconnect_grace_target(room, peer_id: int) -> Dictionary:
+	if room == null:
+		return {}
+	var room_status := str(room.status).strip_edges()
+	if room_status == "Lobby":
+		if room.has_method("get_waiting_user_id_for_peer"):
+			var waiting_user_id := str(room.get_waiting_user_id_for_peer(peer_id)).strip_edges()
+			if not waiting_user_id.is_empty():
+				return {
+					"kind": "waiting",
+					"value": waiting_user_id,
+				}
+		var seat_index := _resolve_actor_id_for_peer(room, peer_id)
+		if seat_index >= 0:
+			return {
+				"kind": "seat",
+				"value": str(seat_index),
+			}
+		return {}
+	if room_status != "InGame":
+		return {}
+	var actor_id := _resolve_actor_id_for_peer(room, peer_id)
+	if actor_id < 0:
+		return {}
+	return {
+		"kind": "actor",
+		"value": str(actor_id),
+	}
 
 func _is_actor_connected(room, actor_id: int) -> bool:
 	if room == null or not (room.player_id_by_peer_id is Dictionary):
@@ -742,12 +781,24 @@ func _is_actor_connected(room, actor_id: int) -> bool:
 			return true
 	return false
 
-func _schedule_disconnect_forfeit(room, actor_id: int) -> void:
+func _is_disconnect_target_connected(room, target_kind: String, target_value: String) -> bool:
+	var normalized_kind := str(target_kind).strip_edges()
+	if normalized_kind == "waiting":
+		if room == null or not room.has_method("get_waiting_member_peer_id"):
+			return false
+		return int(room.get_waiting_member_peer_id(str(target_value).strip_edges())) > 0
+	if not str(target_value).is_valid_int():
+		return false
+	return _is_actor_connected(room, int(target_value))
+
+func _schedule_disconnect_forfeit(room, target: Dictionary) -> void:
 	if _net == null or not is_instance_valid(_net):
 		return
 	if room == null:
 		return
-	if actor_id < 0:
+	var target_kind := str(target.get("kind", "")).strip_edges()
+	var target_value := str(target.get("value", "")).strip_edges()
+	if target_kind.is_empty() or target_value.is_empty():
 		return
 	var room_status := str(room.status).strip_edges()
 	if room_status != "InGame" and room_status != "Lobby":
@@ -756,23 +807,23 @@ func _schedule_disconnect_forfeit(room, actor_id: int) -> void:
 		return
 	var grace_sec := _get_disconnect_grace_period_sec()
 	var room_code := str(room.room_code).strip_edges().to_upper()
-	var key := _disconnect_forfeit_key(room_code, actor_id)
+	var key := _disconnect_grace_key(room_code, target_kind, target_value)
 	var ticket := int(_disconnect_forfeit_ticket_by_key.get(key, 0)) + 1
 	_disconnect_forfeit_ticket_by_key[key] = ticket
 
 	if grace_sec <= 0.0:
-		_on_disconnect_grace_timeout(room_code, actor_id, ticket)
+		_on_disconnect_grace_timeout(room_code, target_kind, target_value, ticket)
 		return
 
 	var tree = _net.get_tree()
 	if tree == null or not (tree is SceneTree):
 		return
 	var timer = (tree as SceneTree).create_timer(grace_sec)
-	timer.timeout.connect(Callable(self, "_on_disconnect_grace_timeout").bind(room_code, actor_id, ticket))
+	timer.timeout.connect(Callable(self, "_on_disconnect_grace_timeout").bind(room_code, target_kind, target_value, ticket))
 	GameLog.warn(
 		"NetClient",
-		"Disconnect grace scheduled room=%s actor=%d grace_sec=%.1f"
-			% [_safe_text(room_code), actor_id, grace_sec]
+		"Disconnect grace scheduled room=%s kind=%s target=%s grace_sec=%.1f"
+			% [_safe_text(room_code), _safe_text(target_kind), _safe_text(target_value), grace_sec]
 	)
 
 func _clear_disconnect_forfeit(room_code: String, actor_id: int) -> void:
@@ -780,12 +831,22 @@ func _clear_disconnect_forfeit(room_code: String, actor_id: int) -> void:
 	if _disconnect_forfeit_ticket_by_key.has(key):
 		_disconnect_forfeit_ticket_by_key.erase(key)
 
-func _on_disconnect_grace_timeout(room_code: String, actor_id: int, ticket: int) -> void:
+func _clear_disconnect_grace_seat(room_code: String, seat_index: int) -> void:
+	var key := _disconnect_lobby_seat_key(room_code, seat_index)
+	if _disconnect_forfeit_ticket_by_key.has(key):
+		_disconnect_forfeit_ticket_by_key.erase(key)
+
+func _clear_disconnect_waiting_member(room_code: String, user_id: String) -> void:
+	var key := _disconnect_grace_key(room_code, "waiting", str(user_id).strip_edges())
+	if _disconnect_forfeit_ticket_by_key.has(key):
+		_disconnect_forfeit_ticket_by_key.erase(key)
+
+func _on_disconnect_grace_timeout(room_code: String, target_kind: String, target_value: String, ticket: int) -> void:
 	if _net == null or not is_instance_valid(_net):
 		return
 	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
 		return
-	var key := _disconnect_forfeit_key(room_code, actor_id)
+	var key := _disconnect_grace_key(room_code, target_kind, target_value)
 	if int(_disconnect_forfeit_ticket_by_key.get(key, 0)) != int(ticket):
 		return
 	_disconnect_forfeit_ticket_by_key.erase(key)
@@ -798,17 +859,45 @@ func _on_disconnect_grace_timeout(room_code: String, actor_id: int, ticket: int)
 	var room = rm.rooms.get(str(room_code).strip_edges().to_upper(), null)
 	if room == null:
 		return
-	if _is_actor_connected(room, actor_id):
+	if _is_disconnect_target_connected(room, target_kind, target_value):
 		return
 	if str(room.status) == "Lobby":
+		if str(target_kind).strip_edges() == "waiting":
+			if not rm.has_method("release_reconnecting_waiting_member"):
+				return
+			var waiting_release_r: Result = rm.release_reconnecting_waiting_member(room_code, str(target_value))
+			if not waiting_release_r.ok:
+				GameLog.error(
+					"NetClient",
+					"release_reconnecting_waiting_member failed after disconnect grace room=%s user=%s err=%s"
+						% [_safe_text(room_code), _safe_text(str(target_value)), waiting_release_r.error]
+				)
+				return
+			var waiting_release_payload: Dictionary = Dictionary(waiting_release_r.value) if waiting_release_r.value is Dictionary else {}
+			if not bool(waiting_release_payload.get("released", false)):
+				return
+			var waiting_removed := bool(waiting_release_payload.get("removed", false))
+			var waiting_room_after = waiting_release_payload.get("room", null)
+			_mark_room_directory_dirty()
+			if not waiting_removed and waiting_room_after != null:
+				broadcast_room_state(waiting_room_after)
+			broadcast_room_list("")
+			GameLog.warn(
+				"NetClient",
+				"Released lobby reconnecting waiting member after disconnect grace room=%s user=%s removed=%s"
+					% [_safe_text(room_code), _safe_text(str(target_value)), str(waiting_removed)]
+			)
+			return
+		if str(target_kind).strip_edges() != "seat" or not str(target_value).is_valid_int():
+			return
 		if not rm.has_method("release_reconnecting_seat"):
 			return
-		var release_r: Result = rm.release_reconnecting_seat(room_code, actor_id)
+		var release_r: Result = rm.release_reconnecting_seat(room_code, int(target_value))
 		if not release_r.ok:
 			GameLog.error(
 				"NetClient",
-				"release_reconnecting_seat failed after disconnect grace room=%s seat=%d err=%s"
-					% [_safe_text(room_code), actor_id, release_r.error]
+				"release_reconnecting_seat failed after disconnect grace room=%s seat=%s err=%s"
+					% [_safe_text(room_code), _safe_text(str(target_value)), release_r.error]
 			)
 			return
 		var release_payload: Dictionary = Dictionary(release_r.value) if release_r.value is Dictionary else {}
@@ -822,12 +911,15 @@ func _on_disconnect_grace_timeout(room_code: String, actor_id: int, ticket: int)
 		broadcast_room_list("")
 		GameLog.warn(
 			"NetClient",
-			"Released lobby reconnecting seat after disconnect grace room=%s seat=%d removed=%s"
-				% [_safe_text(room_code), actor_id, str(removed)]
+			"Released lobby reconnecting seat after disconnect grace room=%s seat=%s removed=%s"
+				% [_safe_text(room_code), _safe_text(str(target_value)), str(removed)]
 		)
 		return
 	if room.game_engine == null or str(room.status) != "InGame":
 		return
+	if str(target_kind).strip_edges() != "actor" or not str(target_value).is_valid_int():
+		return
+	var actor_id := int(target_value)
 
 	var state = room.game_engine.get_state()
 	if server_is_player_forfeited(state, actor_id):
@@ -960,6 +1052,7 @@ func on_peer_disconnected(peer_id: int) -> void:
 	var room_status := str(room.status) if room != null else ""
 	var in_game := room != null and room_status == "InGame"
 	var preserve_room_on_disconnect := room != null and (room_status == "InGame" or room_status == "Lobby")
+	var disconnect_target: Dictionary = _resolve_disconnect_grace_target(room, peer_id)
 	var actor_id := -1
 	if room != null and (room.player_id_by_peer_id is Dictionary):
 		if room.player_id_by_peer_id.has(peer_id):
@@ -987,8 +1080,8 @@ func on_peer_disconnected(peer_id: int) -> void:
 			room.game_engine.dispose()
 		room.game_engine = null
 
-	if not removed and actor_id >= 0 and room != null and (room_status == "InGame" or room_status == "Lobby"):
-		_schedule_disconnect_forfeit(room, actor_id)
+	if not removed and room != null and not disconnect_target.is_empty():
+		_schedule_disconnect_forfeit(room, disconnect_target)
 
 	if rr.ok and room != null and not removed:
 		_mark_room_directory_dirty()
@@ -1146,7 +1239,10 @@ func handle_rpc_client_hello(request: Dictionary) -> void:
 		var jr: Result = _platform_auto_join(peer_id, request_id, normalized_profile, token_payload, resume_cursor, resume_room_bootstrap)
 		if not jr.ok:
 			_net._profile_by_peer_id.erase(peer_id)
-			send_request_rejected(peer_id, request_id, "platform_join_failed", jr.error)
+			var join_error_code := "platform_join_failed"
+			if str(jr.error).strip_edges() == "generation_conflict":
+				join_error_code = "generation_conflict"
+			send_request_rejected(peer_id, request_id, join_error_code, jr.error)
 			return
 
 	# 允许已在房间中的客户端更新自己的 profile（昵称/颜色/logo）。
@@ -1193,6 +1289,7 @@ func _platform_auto_join(
 	var rm = _net._room_manager
 	var existing_room = rm.rooms.get(room_code, null) if (rm.rooms is Dictionary) else null
 	var token_config: Dictionary = {}
+	var token_generation := -1
 	var cfg_json := str(token_payload.get("config_json", "")).strip_edges()
 	if not cfg_json.is_empty():
 		var parsed: Variant = JSON.parse_string(cfg_json)
@@ -1201,6 +1298,13 @@ func _platform_auto_join(
 		token_config = Dictionary(parsed)
 	var token_room_mode := str(token_config.get("room_mode", "")).strip_edges()
 	var is_resume_room := token_room_mode == "resume_archive"
+	var token_generation_val = token_payload.get("generation", null)
+	if token_generation_val is int:
+		token_generation = int(token_generation_val)
+	elif token_generation_val is float:
+		var generation_f: float = float(token_generation_val)
+		if generation_f == floor(generation_f):
+			token_generation = int(generation_f)
 	if existing_room != null and existing_room.has_method("is_resume_archive_room"):
 		is_resume_room = bool(existing_room.is_resume_archive_room())
 	var prepared_resume_transfer: Dictionary = {}
@@ -1233,32 +1337,32 @@ func _platform_auto_join(
 				var archive_val = resume_room_bootstrap.get("archive", null)
 				if not (archive_val is Dictionary):
 					return ResultClass.failure("resume room bootstrap archive missing")
-				r = rm.create_resume_room_with_code(peer_id, profile, room_code, config, Dictionary(archive_val), join_policy, password_hash)
+				r = rm.create_resume_room_with_code(peer_id, profile, room_code, config, Dictionary(archive_val), join_policy, password_hash, token_generation)
 			else:
 				if not rm.has_method("create_room_with_code"):
 					return ResultClass.failure("RoomManager.create_room_with_code missing")
-				r = rm.create_room_with_code(peer_id, profile, room_code, config, join_policy, password_hash)
+				r = rm.create_room_with_code(peer_id, profile, room_code, config, join_policy, password_hash, token_generation)
 		elif str(existing_room.status) == "InGame":
 			if not rm.has_method("reconnect_player"):
 				return ResultClass.failure("RoomManager.reconnect_player missing")
 			var user_id := str(token_payload.get("user_id", "")).strip_edges()
-			r = rm.reconnect_player(peer_id, profile, room_code, seat_index, user_id, "host")
+			r = rm.reconnect_player(peer_id, profile, room_code, seat_index, user_id, "host", token_generation)
 		else:
 			var host_uid := str(token_payload.get("user_id", "")).strip_edges()
 			if seat_index < 0 and is_resume_room:
 				if not rm.has_method("join_room_as_waiting_member"):
 					return ResultClass.failure("RoomManager.join_room_as_waiting_member missing")
-				r = rm.join_room_as_waiting_member(peer_id, profile, room_code, "host")
+				r = rm.join_room_as_waiting_member(peer_id, profile, room_code, "host", token_generation)
 			else:
 				var host_seat_taken: bool = existing_room != null and existing_room._seat_profile_by_seat_index is Dictionary and existing_room._seat_profile_by_seat_index.has(seat_index)
 				if host_seat_taken:
 					if not rm.has_method("reclaim_room_seat"):
 						return ResultClass.failure("RoomManager.reclaim_room_seat missing")
-					r = rm.reclaim_room_seat(peer_id, profile, room_code, seat_index, host_uid, "host")
+					r = rm.reclaim_room_seat(peer_id, profile, room_code, seat_index, host_uid, "host", token_generation)
 				else:
 					if not rm.has_method("join_room_with_seat"):
 						return ResultClass.failure("RoomManager.join_room_with_seat missing")
-					r = rm.join_room_with_seat(peer_id, profile, room_code, seat_index, "host")
+					r = rm.join_room_with_seat(peer_id, profile, room_code, seat_index, "host", token_generation)
 	elif role == "player":
 		var seat_index_val2 = token_payload.get("seat_index", null)
 		var seat_index2 := -1
@@ -1275,23 +1379,23 @@ func _platform_auto_join(
 			if not rm.has_method("reconnect_player"):
 				return ResultClass.failure("RoomManager.reconnect_player missing")
 			var user_id2 := str(token_payload.get("user_id", "")).strip_edges()
-			r = rm.reconnect_player(peer_id, profile, room_code, seat_index2, user_id2)
+			r = rm.reconnect_player(peer_id, profile, room_code, seat_index2, user_id2, "player", token_generation)
 		else:
 			var player_uid := str(token_payload.get("user_id", "")).strip_edges()
 			if seat_index2 < 0 and is_resume_room:
 				if not rm.has_method("join_room_as_waiting_member"):
 					return ResultClass.failure("RoomManager.join_room_as_waiting_member missing")
-				r = rm.join_room_as_waiting_member(peer_id, profile, room_code, "player")
+				r = rm.join_room_as_waiting_member(peer_id, profile, room_code, "player", token_generation)
 			else:
 				var player_seat_taken: bool = existing_room != null and existing_room._seat_profile_by_seat_index is Dictionary and existing_room._seat_profile_by_seat_index.has(seat_index2)
 				if player_seat_taken:
 					if not rm.has_method("reclaim_room_seat"):
 						return ResultClass.failure("RoomManager.reclaim_room_seat missing")
-					r = rm.reclaim_room_seat(peer_id, profile, room_code, seat_index2, player_uid)
+					r = rm.reclaim_room_seat(peer_id, profile, room_code, seat_index2, player_uid, "player", token_generation)
 				else:
 					if not rm.has_method("join_room_with_seat"):
 						return ResultClass.failure("RoomManager.join_room_with_seat missing")
-					r = rm.join_room_with_seat(peer_id, profile, room_code, seat_index2)
+					r = rm.join_room_with_seat(peer_id, profile, room_code, seat_index2, "player", token_generation)
 	else:
 		if not rm.has_method("spectate_room"):
 			return ResultClass.failure("RoomManager.spectate_room missing")
@@ -1320,7 +1424,14 @@ func _platform_auto_join(
 			if f3 == floor(f3):
 				seat_index3 = int(f3)
 		if seat_index3 >= 0:
-			_clear_disconnect_forfeit(room_code, seat_index3)
+			if str(room.status).strip_edges() == "Lobby":
+				_clear_disconnect_grace_seat(room_code, seat_index3)
+			else:
+				_clear_disconnect_forfeit(room_code, seat_index3)
+		elif is_resume_room and str(room.status).strip_edges() == "Lobby":
+			var waiting_user_id := str(token_payload.get("user_id", "")).strip_edges()
+			if not waiting_user_id.is_empty():
+				_clear_disconnect_waiting_member(room_code, waiting_user_id)
 
 	# InGame：自动下发 GameStarted + chunked snapshot（与 JoinRoom in-game 行为对齐）
 	if str(room.status) == "InGame" and room.game_engine != null:

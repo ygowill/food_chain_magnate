@@ -457,6 +457,20 @@ func _make_waiting_member(
 		"generation": maxi(1, int(generation)),
 	}
 
+func _initial_generation(token_generation: int = -1) -> int:
+	if int(token_generation) > 0:
+		return int(token_generation) + 1
+	return 1
+
+func _consume_generation(current_generation: int, token_generation: int = -1) -> Result:
+	var normalized_current := maxi(1, int(current_generation))
+	var normalized_token := int(token_generation)
+	if normalized_token > 0:
+		if normalized_token < normalized_current:
+			return Result.failure("generation_conflict")
+		return Result.success(normalized_token + 1)
+	return Result.success(normalized_current + 1)
+
 func _serialize_waiting_members() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var user_ids: Array[String] = []
@@ -597,6 +611,15 @@ func _find_waiting_user_id_by_peer(peer_id: int) -> String:
 			return user_id
 	return ""
 
+func get_waiting_user_id_for_peer(peer_id: int) -> String:
+	return _find_waiting_user_id_by_peer(peer_id)
+
+func get_waiting_member_peer_id(user_id: String) -> int:
+	var uid := str(user_id).strip_edges()
+	if uid.is_empty() or not _waiting_member_by_user_id.has(uid):
+		return 0
+	return int(Dictionary(_waiting_member_by_user_id.get(uid, {})).get("peer_id", 0))
+
 func get_waiting_member_count() -> int:
 	return _waiting_member_by_user_id.size()
 
@@ -681,7 +704,7 @@ func is_full() -> bool:
 func is_empty() -> bool:
 	return _seat_slot_by_index.is_empty() and _waiting_member_by_user_id.is_empty() and _spectator_profile_by_peer_id.is_empty()
 
-func add_peer(peer_id: int, profile: Dictionary) -> Result:
+func add_peer(peer_id: int, profile: Dictionary, token_generation: int = -1) -> Result:
 	if has_peer(peer_id):
 		return Result.failure("Peer already in room")
 	if status != STATUS_LOBBY:
@@ -692,7 +715,15 @@ func add_peer(peer_id: int, profile: Dictionary) -> Result:
 	var seat_index := _pick_seat_index()
 	var role := "host" if _host_seat_index < 0 else "player"
 	var user_id := str(profile.get("user_id", "")).strip_edges()
-	var slot := _make_seat_slot(seat_index, role, user_id, profile, SEAT_CONNECTED, peer_id, 1)
+	var slot := _make_seat_slot(
+		seat_index,
+		role,
+		user_id,
+		profile,
+		SEAT_CONNECTED,
+		peer_id,
+		_initial_generation(token_generation)
+	)
 	_set_slot(seat_index, slot)
 	if role == "host":
 		_host_seat_index = seat_index
@@ -700,7 +731,7 @@ func add_peer(peer_id: int, profile: Dictionary) -> Result:
 	_touch()
 	return Result.success()
 
-func add_peer_at_seat(peer_id: int, profile: Dictionary, seat_index: int) -> Result:
+func add_peer_at_seat(peer_id: int, profile: Dictionary, seat_index: int, token_generation: int = -1) -> Result:
 	if has_peer(peer_id):
 		return Result.failure("Peer already in room")
 	if status != STATUS_LOBBY:
@@ -718,7 +749,15 @@ func add_peer_at_seat(peer_id: int, profile: Dictionary, seat_index: int) -> Res
 
 	var role := "host" if idx == _host_seat_index or _host_seat_index < 0 else "player"
 	var user_id := str(profile.get("user_id", "")).strip_edges()
-	var slot := _make_seat_slot(idx, role, user_id, profile, SEAT_CONNECTED, peer_id, 1)
+	var slot := _make_seat_slot(
+		idx,
+		role,
+		user_id,
+		profile,
+		SEAT_CONNECTED,
+		peer_id,
+		_initial_generation(token_generation)
+	)
 	_set_slot(idx, slot)
 	if role == "host":
 		_host_seat_index = idx
@@ -770,7 +809,7 @@ func build_effective_resume_start_archive() -> Result:
 		"final_hash": str(archive.get("final_hash", "")).strip_edges(),
 	})
 
-func add_waiting_member(peer_id: int, profile: Dictionary, role: String = "player") -> Result:
+func add_waiting_member(peer_id: int, profile: Dictionary, role: String = "player", token_generation: int = -1) -> Result:
 	if has_peer(peer_id):
 		return Result.failure("Peer already in room")
 	if status != STATUS_LOBBY:
@@ -790,7 +829,12 @@ func add_waiting_member(peer_id: int, profile: Dictionary, role: String = "playe
 		return Result.failure("Room is full")
 
 	var replaced_peer_id := int(existing_waiting.get("peer_id", 0))
-	var generation := int(existing_waiting.get("generation", 0)) + 1
+	var generation := _initial_generation(token_generation)
+	if not existing_waiting.is_empty():
+		var generation_r: Result = _consume_generation(int(existing_waiting.get("generation", 1)), token_generation)
+		if not generation_r.ok:
+			return generation_r
+		generation = int(generation_r.value)
 	_waiting_member_by_user_id[user_id] = _make_waiting_member(
 		user_id,
 		normalized_role if existing_waiting.is_empty() else str(existing_waiting.get("role", normalized_role)).strip_edges(),
@@ -874,7 +918,13 @@ func unassign_seat_to_waiting(seat_index: int) -> Result:
 	_touch()
 	return Result.success()
 
-func reclaim_peer_at_seat(peer_id: int, profile: Dictionary, seat_index: int, user_id: String = "") -> Result:
+func reclaim_peer_at_seat(
+	peer_id: int,
+	profile: Dictionary,
+	seat_index: int,
+	user_id: String = "",
+	token_generation: int = -1
+) -> Result:
 	if has_peer(peer_id):
 		return Result.failure("Peer already in room")
 	if status != STATUS_LOBBY:
@@ -897,14 +947,16 @@ func reclaim_peer_at_seat(peer_id: int, profile: Dictionary, seat_index: int, us
 	if existing_uid.is_empty():
 		return Result.failure("user_id required for reclaim")
 
+	var generation_r: Result = _consume_generation(int(slot.get("generation", 1)), token_generation)
+	if not generation_r.ok:
+		return generation_r
 	var replaced_peer_id := int(slot.get("peer_id", 0))
 	if replaced_peer_id > 0 and replaced_peer_id != peer_id:
 		_evict_connected_player_peer(replaced_peer_id)
-
 	slot["profile"] = Dictionary(profile).duplicate(true)
 	slot["peer_id"] = peer_id
 	slot["seat_state"] = SEAT_CONNECTED
-	slot["generation"] = int(slot.get("generation", 0)) + 1
+	slot["generation"] = int(generation_r.value)
 	_set_slot(idx, slot)
 	_rebuild_runtime_views()
 	_touch()
@@ -912,7 +964,14 @@ func reclaim_peer_at_seat(peer_id: int, profile: Dictionary, seat_index: int, us
 		"replaced_peer_id": replaced_peer_id,
 	})
 
-func reconnect_player(peer_id: int, profile: Dictionary, seat_index: int, user_id: String = "", restore_host: bool = false) -> Result:
+func reconnect_player(
+	peer_id: int,
+	profile: Dictionary,
+	seat_index: int,
+	user_id: String = "",
+	restore_host: bool = false,
+	token_generation: int = -1
+) -> Result:
 	if has_peer(peer_id):
 		return Result.failure("Peer already in room")
 	if status != STATUS_IN_GAME:
@@ -939,14 +998,16 @@ func reconnect_player(peer_id: int, profile: Dictionary, seat_index: int, user_i
 	if existing_uid.is_empty():
 		return Result.failure("user_id required for reconnect")
 
+	var generation_r: Result = _consume_generation(int(slot.get("generation", 1)), token_generation)
+	if not generation_r.ok:
+		return generation_r
 	var replaced_peer_id := int(slot.get("peer_id", 0))
 	if replaced_peer_id > 0 and replaced_peer_id != peer_id:
 		_evict_connected_player_peer(replaced_peer_id)
-
 	slot["profile"] = Dictionary(profile).duplicate(true)
 	slot["peer_id"] = peer_id
 	slot["seat_state"] = SEAT_CONNECTED
-	slot["generation"] = int(slot.get("generation", 0)) + 1
+	slot["generation"] = int(generation_r.value)
 	if restore_host:
 		slot["role"] = "host"
 		_host_seat_index = idx
@@ -967,7 +1028,6 @@ func _evict_connected_player_peer(peer_id: int) -> void:
 		slot["peer_id"] = 0
 		if str(slot.get("seat_state", "")).strip_edges() == SEAT_CONNECTED:
 			slot["seat_state"] = SEAT_RECONNECTING
-		slot["generation"] = int(slot.get("generation", 0)) + 1
 		_set_slot(seat_index, slot)
 		break
 	_rebuild_runtime_views()
@@ -1043,7 +1103,6 @@ func remove_peer(peer_id: int) -> Result:
 	else:
 		_sync_seat_states_from_engine()
 		slot["peer_id"] = 0
-		slot["generation"] = int(slot.get("generation", 0)) + 1
 		if _is_seat_forfeited_from_engine(seat_index):
 			slot["seat_state"] = SEAT_FORFEITED
 		else:
@@ -1069,13 +1128,9 @@ func disconnect_peer(peer_id: int) -> Result:
 	var waiting_user_id := _find_waiting_user_id_by_peer(peer_id)
 	if not waiting_user_id.is_empty():
 		var waiting_member: Dictionary = Dictionary(_waiting_member_by_user_id.get(waiting_user_id, {}))
-		if str(waiting_member.get("role", "")).strip_edges() == "host":
-			waiting_member["peer_id"] = 0
-			waiting_member["member_status"] = "reconnecting"
-			waiting_member["generation"] = int(waiting_member.get("generation", 0)) + 1
-			_waiting_member_by_user_id[waiting_user_id] = waiting_member
-		else:
-			_waiting_member_by_user_id.erase(waiting_user_id)
+		waiting_member["peer_id"] = 0
+		waiting_member["member_status"] = "reconnecting"
+		_waiting_member_by_user_id[waiting_user_id] = waiting_member
 		_rebuild_runtime_views()
 		_touch()
 		return Result.success({
@@ -1093,7 +1148,6 @@ func disconnect_peer(peer_id: int) -> Result:
 	_sync_seat_states_from_engine()
 	var slot := _get_slot(seat_index)
 	slot["peer_id"] = 0
-	slot["generation"] = int(slot.get("generation", 0)) + 1
 	if _is_seat_forfeited_from_engine(seat_index):
 		slot["seat_state"] = SEAT_FORFEITED
 	else:
@@ -1126,6 +1180,39 @@ func release_reconnecting_seat(seat_index: int) -> Result:
 
 	var host_changed := idx == _host_seat_index
 	_erase_slot(idx)
+	if host_changed:
+		_promote_new_host_after_lobby_leave()
+
+	_rebuild_runtime_views()
+	_touch()
+	return Result.success({
+		"released": true,
+		"host_changed": host_changed,
+		"host_peer_id": host_peer_id,
+	})
+
+func release_reconnecting_waiting_member(user_id: String) -> Result:
+	if status != STATUS_LOBBY:
+		return Result.failure("Room is not in Lobby")
+
+	var uid := str(user_id).strip_edges()
+	if uid.is_empty() or not _waiting_member_by_user_id.has(uid):
+		return Result.success({
+			"released": false,
+			"host_changed": false,
+			"host_peer_id": host_peer_id,
+		})
+
+	var member: Dictionary = Dictionary(_waiting_member_by_user_id.get(uid, {}))
+	if int(member.get("peer_id", 0)) > 0 or str(member.get("member_status", "active")).strip_edges() != "reconnecting":
+		return Result.success({
+			"released": false,
+			"host_changed": false,
+			"host_peer_id": host_peer_id,
+		})
+
+	var host_changed := str(member.get("role", "")).strip_edges() == "host"
+	_waiting_member_by_user_id.erase(uid)
 	if host_changed:
 		_promote_new_host_after_lobby_leave()
 
@@ -1698,6 +1785,7 @@ func build_member_directory_entries() -> Array[Dictionary]:
 			"role": str(slot.get("role", "player")).strip_edges(),
 			"seat_index": seat_index,
 			"member_status": member_status,
+			"generation": int(slot.get("generation", 1)),
 		})
 	for member in _waiting_member_by_user_id.values():
 		if not (member is Dictionary):
@@ -1711,6 +1799,7 @@ func build_member_directory_entries() -> Array[Dictionary]:
 			"role": str(waiting_member.get("role", "player")).strip_edges(),
 			"seat_index": null,
 			"member_status": str(waiting_member.get("member_status", "active")).strip_edges(),
+			"generation": int(waiting_member.get("generation", 1)),
 		})
 	out.append_array(_build_directory_spectators_array())
 	return out

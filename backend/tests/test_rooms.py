@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -49,7 +51,7 @@ def _resume_room_config_json(desired_player_count: int = 2) -> str:
 
 
 @pytest.mark.asyncio
-async def test_create_room(client: AsyncClient):
+async def test_create_room(client: AsyncClient, db_session: AsyncSession):
     user = await _create_user(client)
     resp = await client.post("/v1/rooms", json={"session_id": user["session_id"]})
     assert resp.status_code == 200
@@ -60,8 +62,20 @@ async def test_create_room(client: AsyncClient):
     payload = verify_token(str(data["connect_token"]))
     assert payload is not None
     assert str(payload.get("display_name", "")).startswith("游客#")
+    assert int(payload.get("generation", -1)) == 1
     assert str(payload.get("join_policy", "")) == "public"
     assert not payload.get("password_hash")
+    room = (await db_session.execute(
+        select(Room).where(Room.room_code == data["room_code"])
+    )).scalar_one()
+    host_member = (await db_session.execute(
+        select(RoomMember).where(
+            RoomMember.room_id == room.room_id,
+            RoomMember.user_id == user["user_id"],
+            RoomMember.left_at.is_(None),
+        )
+    )).scalar_one()
+    assert int(host_member.generation) == 2
 
 
 @pytest.mark.asyncio
@@ -223,7 +237,7 @@ async def test_join_room(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_join_room_idempotent(client: AsyncClient):
+async def test_join_room_idempotent(client: AsyncClient, db_session: AsyncSession):
     host = await _create_user(client)
     create = await client.post("/v1/rooms", json={"session_id": host["session_id"]})
     code = create.json()["room_code"]
@@ -234,6 +248,23 @@ async def test_join_room_idempotent(client: AsyncClient):
     r2 = await client.post(f"/v1/rooms/{code}/join", json={"session_id": player["session_id"]})
     assert r1.status_code == 200
     assert r2.status_code == 200
+    payload1 = verify_token(str(r1.json()["connect_token"]))
+    payload2 = verify_token(str(r2.json()["connect_token"]))
+    assert payload1 is not None
+    assert payload2 is not None
+    assert int(payload1.get("generation", -1)) == 1
+    assert int(payload2.get("generation", -1)) == 2
+    room = (await db_session.execute(
+        select(Room).where(Room.room_code == code)
+    )).scalar_one()
+    player_member = (await db_session.execute(
+        select(RoomMember).where(
+            RoomMember.room_id == room.room_id,
+            RoomMember.user_id == player["user_id"],
+            RoomMember.left_at.is_(None),
+        )
+    )).scalar_one()
+    assert int(player_member.generation) == 3
 
 
 @pytest.mark.asyncio
@@ -246,6 +277,9 @@ async def test_resume_room_existing_member(client: AsyncClient):
     player = await _create_user(client)
     joined = await client.post(f"/v1/rooms/{code}/join", json={"session_id": player["session_id"]})
     assert joined.status_code == 200
+    joined_payload = verify_token(str(joined.json()["connect_token"]))
+    assert joined_payload is not None
+    assert int(joined_payload.get("generation", -1)) == 1
 
     resumed = await client.post(f"/v1/rooms/{code}/resume", json={"session_id": player["session_id"]})
     assert resumed.status_code == 200
@@ -253,6 +287,7 @@ async def test_resume_room_existing_member(client: AsyncClient):
     assert payload is not None
     assert payload.get("role") == "player"
     assert int(payload.get("seat_index", -1)) == 1
+    assert int(payload.get("generation", -1)) == 2
 
 
 @pytest.mark.asyncio
@@ -268,6 +303,7 @@ async def test_create_resume_room_uses_seatless_host(client: AsyncClient, db_ses
     assert payload is not None
     assert payload.get("role") == "host"
     assert payload.get("seat_index") is None
+    assert int(payload.get("generation", -1)) == 1
 
     room = (await db_session.execute(
         select(Room).where(Room.room_code == create.json()["room_code"])
@@ -281,6 +317,7 @@ async def test_create_resume_room_uses_seatless_host(client: AsyncClient, db_ses
     )).scalar_one()
     assert host_member.role == "host"
     assert host_member.seat_index is None
+    assert int(host_member.generation) == 2
 
 
 @pytest.mark.asyncio
@@ -302,6 +339,7 @@ async def test_join_resume_room_uses_seatless_player(client: AsyncClient, db_ses
     assert payload is not None
     assert payload.get("role") == "player"
     assert payload.get("seat_index") is None
+    assert int(payload.get("generation", -1)) == 1
 
     room = (await db_session.execute(
         select(Room).where(Room.room_code == code)
@@ -315,6 +353,7 @@ async def test_join_resume_room_uses_seatless_player(client: AsyncClient, db_ses
     )).scalar_one()
     assert player_member.role == "player"
     assert player_member.seat_index is None
+    assert int(player_member.generation) == 2
 
 
 @pytest.mark.asyncio
@@ -338,6 +377,7 @@ async def test_resume_resume_room_allows_seatless_members(client: AsyncClient):
     assert resumed_host_payload is not None
     assert resumed_host_payload.get("role") == "host"
     assert resumed_host_payload.get("seat_index") is None
+    assert int(resumed_host_payload.get("generation", -1)) == 2
 
     resumed_player = await client.post(f"/v1/rooms/{code}/resume", json={"session_id": player["session_id"]})
     assert resumed_player.status_code == 200
@@ -345,6 +385,7 @@ async def test_resume_resume_room_allows_seatless_members(client: AsyncClient):
     assert resumed_player_payload is not None
     assert resumed_player_payload.get("role") == "player"
     assert resumed_player_payload.get("seat_index") is None
+    assert int(resumed_player_payload.get("generation", -1)) == 2
 
 
 @pytest.mark.asyncio

@@ -79,6 +79,7 @@ static func run() -> Result:
 		"role": "player",
 		"display_name": "P2B",
 		"seat_index": 1,
+		"generation": 2,
 		"exp": int(Time.get_unix_time_from_system()) + 3600,
 	}, server.connect_token_secret_override)
 	if not reconnect_token_r.ok:
@@ -105,6 +106,72 @@ static func run() -> Result:
 	if not room_b_after.is_full():
 		return _finish(Result.failure("Lobby grace 内 reclaim 后房间应恢复为满员"))
 
+	var room_code_c := "RWAIT1"
+	var setup_c: Result = _create_resume_waiting_lobby(rm, room_code_c, 30, 31)
+	if not setup_c.ok:
+		return _finish(setup_c)
+	var room_c = rm.rooms.get(room_code_c, null)
+	if room_c == null:
+		return _finish(Result.failure("room_c missing"))
+
+	server.on_peer_disconnected(31)
+	if int(room_c.get_waiting_member_count()) != 2:
+		return _finish(Result.failure("Resume waiting 掉线后应先保留成员"))
+	await tree.create_timer(0.12).timeout
+	var room_c_after = rm.rooms.get(room_code_c, null)
+	if room_c_after == null:
+		return _finish(Result.failure("Resume waiting host 仍在线时不应删房"))
+	if int(room_c_after.get_waiting_member_count()) != 1:
+		return _finish(Result.failure("Resume waiting grace 后应释放断线成员: %d" % int(room_c_after.get_waiting_member_count())))
+	var peers_c: Array[int] = room_c_after.get_peer_ids()
+	if peers_c.size() != 1 or not peers_c.has(30) or peers_c.has(31):
+		return _finish(Result.failure("Resume waiting grace 后 peer 集合错误: %s" % str(peers_c)))
+
+	var room_code_d := "RWAIT2"
+	var setup_d: Result = _create_resume_waiting_lobby(rm, room_code_d, 40, 41)
+	if not setup_d.ok:
+		return _finish(setup_d)
+	var room_d = rm.rooms.get(room_code_d, null)
+	if room_d == null:
+		return _finish(Result.failure("room_d missing"))
+
+	server.on_peer_disconnected(41)
+	await tree.process_frame
+
+	var waiting_reconnect_token_r: Result = _issue_token({
+		"user_id": "u_resume_player_%s" % room_code_d,
+		"room_code": room_code_d,
+		"role": "player",
+		"display_name": "ResumeP2",
+		"seat_index": null,
+		"generation": 2,
+		"exp": int(Time.get_unix_time_from_system()) + 3600,
+	}, server.connect_token_secret_override)
+	if not waiting_reconnect_token_r.ok:
+		return _finish(Result.failure("create_token(waiting reconnect) 失败: %s" % waiting_reconnect_token_r.error))
+
+	mock_net.multiplayer.remote_sender_id = 42
+	server.handle_rpc_client_hello({
+		"request_id": "r_resume_waiting_reconnect",
+		"protocol_version": NetContext.PROTOCOL_VERSION,
+		"game_version": "0.0.0",
+		"schema_version": 0,
+		"player_profile": {"name": "ResumeP2Local", "color_index": 2, "restaurant_logo_id": -1},
+		"connect_token": str(waiting_reconnect_token_r.value),
+	})
+
+	if str(rm.peer_to_room.get(42, "")) != room_code_d:
+		return _finish(Result.failure("Resume waiting grace 内重连失败：peer_to_room 未恢复"))
+	await tree.create_timer(0.12).timeout
+	var room_d_after = rm.rooms.get(room_code_d, null)
+	if room_d_after == null:
+		return _finish(Result.failure("Resume waiting grace 内重连后房间不应消失"))
+	if int(room_d_after.get_waiting_member_count()) != 2:
+		return _finish(Result.failure("Resume waiting grace 内重连后 waiting_member_count 错误: %d" % int(room_d_after.get_waiting_member_count())))
+	var peers_d: Array[int] = room_d_after.get_peer_ids()
+	if peers_d.size() != 2 or not peers_d.has(40) or not peers_d.has(42) or peers_d.has(41):
+		return _finish(Result.failure("Resume waiting grace 内重连后 peer 集合错误: %s" % str(peers_d)))
+
 	server.on_peer_disconnected(10)
 	await tree.create_timer(0.12).timeout
 	if rm.rooms.has(room_code_a):
@@ -127,6 +194,7 @@ static func _platform_create_lobby(
 		"role": "host",
 		"display_name": "Host",
 		"seat_index": 0,
+		"generation": 1,
 		"config_json": JSON.stringify(cfg),
 		"exp": int(Time.get_unix_time_from_system()) + 3600,
 	}, server.connect_token_secret_override)
@@ -149,6 +217,7 @@ static func _platform_create_lobby(
 		"role": "player",
 		"display_name": "P2",
 		"seat_index": 1,
+		"generation": 1,
 		"exp": int(Time.get_unix_time_from_system()) + 3600,
 	}, server.connect_token_secret_override)
 	if not player_token_r.ok:
@@ -169,6 +238,48 @@ static func _platform_create_lobby(
 		return Result.failure("room missing after lobby setup: %s" % room_code)
 	if room.get_player_count() != 2 or room.get_connected_player_count() != 2:
 		return Result.failure("lobby setup 人数错误")
+	return Result.success()
+
+static func _create_resume_waiting_lobby(rm, room_code: String, host_peer_id: int, player_peer_id: int) -> Result:
+	var resume_cfg := {
+		"room_mode": "resume_archive",
+		"desired_player_count": 2,
+		"seed_mode": "fixed",
+		"seed": 12345,
+		"allow_spectators": true,
+		"enabled_modules_v2": [],
+		"modules_v2_base_dir": GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR,
+		"resume_summary": {
+			"source_name": "resume_waiting_test.json",
+			"player_count": 2,
+			"round_number": 0,
+			"phase": "Setup",
+			"current_index": 0,
+		},
+	}
+	var archive := {
+		"initial_state": {
+			"players": [{}, {}],
+		},
+	}
+	var host_profile := {
+		"name": "ResumeHost",
+		"color_index": 0,
+		"restaurant_logo_id": -1,
+		"user_id": "u_resume_host_%s" % room_code,
+	}
+	var player_profile := {
+		"name": "ResumeP2",
+		"color_index": 1,
+		"restaurant_logo_id": -1,
+		"user_id": "u_resume_player_%s" % room_code,
+	}
+	var create_r: Result = rm.create_resume_room_with_code(host_peer_id, host_profile, room_code, resume_cfg, archive, "public", "", 1)
+	if not create_r.ok:
+		return Result.failure("create_resume_room_with_code 失败: %s" % create_r.error)
+	var join_r: Result = rm.join_room_as_waiting_member(player_peer_id, player_profile, room_code, "player", 1)
+	if not join_r.ok:
+		return Result.failure("join_room_as_waiting_member 失败: %s" % join_r.error)
 	return Result.success()
 
 static func _issue_token(payload: Dictionary, secret: String) -> Result:

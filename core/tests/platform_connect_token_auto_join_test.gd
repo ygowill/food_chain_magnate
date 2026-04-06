@@ -43,6 +43,7 @@ static func run() -> Result:
 		"role": "host",
 		"display_name": "HostUser",
 		"seat_index": 0,
+		"generation": 1,
 		"config_json": JSON.stringify(cfg),
 		"join_policy": "password",
 		"password_hash": "platform-password-hash",
@@ -93,6 +94,7 @@ static func run() -> Result:
 		"role": "player",
 		"display_name": "P2",
 		"seat_index": 1,
+		"generation": 1,
 		"exp": int(Time.get_unix_time_from_system()) + 3600,
 	}
 	var player_token_r: Result = ConnectTokenClass.create_token(player_payload, server.connect_token_secret_override)
@@ -118,7 +120,41 @@ static func run() -> Result:
 		_reset_net_context()
 		return Result.failure("平台入房失败：get_peer_ids=%s" % str(peers))
 
-	# Same user reopens the lobby before old transport closes: new peer should take over the seat.
+	# Same user reuses stale token: server should reject it instead of allowing arbitrary takeover.
+	mock_net.multiplayer.remote_sender_id = 12
+	server.handle_rpc_client_hello({
+		"request_id": "r_p2_takeover_stale",
+		"protocol_version": NetContext.PROTOCOL_VERSION,
+		"game_version": "0.0.0",
+		"schema_version": 0,
+		"player_profile": {"name": "P2Takeover", "color_index": 2, "restaurant_logo_id": -1},
+		"connect_token": str(player_token_r.value),
+	})
+
+	if _find_request_rejected(mock_net.sent, 12, "r_p2_takeover_stale", "generation_conflict") < 0:
+		_reset_net_context()
+		return Result.failure("平台 stale token 应返回 generation_conflict")
+	if rm.peer_to_room.has(12):
+		_reset_net_context()
+		return Result.failure("平台 stale token 不应绑定新 peer")
+	if str(rm.peer_to_room.get(11, "")) != room_code:
+		_reset_net_context()
+		return Result.failure("平台 stale token 不应破坏旧 peer 绑定")
+
+	var player_takeover_payload := {
+		"user_id": "u_p2",
+		"room_code": room_code,
+		"role": "player",
+		"display_name": "P2Takeover",
+		"seat_index": 1,
+		"generation": 2,
+		"exp": int(Time.get_unix_time_from_system()) + 3600,
+	}
+	var player_takeover_token_r: Result = ConnectTokenClass.create_token(player_takeover_payload, server.connect_token_secret_override)
+	if not player_takeover_token_r.ok:
+		_reset_net_context()
+		return Result.failure("create_token(player_takeover) 失败: %s" % player_takeover_token_r.error)
+
 	mock_net.multiplayer.remote_sender_id = 12
 	server.handle_rpc_client_hello({
 		"request_id": "r_p2_takeover",
@@ -126,7 +162,7 @@ static func run() -> Result:
 		"game_version": "0.0.0",
 		"schema_version": 0,
 		"player_profile": {"name": "P2Takeover", "color_index": 2, "restaurant_logo_id": -1},
-		"connect_token": str(player_token_r.value),
+		"connect_token": str(player_takeover_token_r.value),
 	})
 
 	if str(rm.peer_to_room.get(12, "")) != room_code:
@@ -234,6 +270,19 @@ static func run() -> Result:
 		return Result.failure("观战接管失败：old spectator 未收到 empty room_state")
 
 	mock_net._peer = _MockPeer.new(128)
+	var player_ingame_fail_payload := {
+		"user_id": "u_p2",
+		"room_code": room_code,
+		"role": "player",
+		"display_name": "P2ReconnectFail",
+		"seat_index": 1,
+		"generation": 3,
+		"exp": int(Time.get_unix_time_from_system()) + 3600,
+	}
+	var player_ingame_fail_token_r: Result = ConnectTokenClass.create_token(player_ingame_fail_payload, server.connect_token_secret_override)
+	if not player_ingame_fail_token_r.ok:
+		_reset_net_context()
+		return Result.failure("create_token(player_ingame_fail) 失败: %s" % player_ingame_fail_token_r.error)
 	mock_net.multiplayer.remote_sender_id = 13
 	server.handle_rpc_client_hello({
 		"request_id": "r_p2_ingame_fail",
@@ -241,7 +290,7 @@ static func run() -> Result:
 		"game_version": "0.0.0",
 		"schema_version": 0,
 		"player_profile": {"name": "P2ReconnectFail", "color_index": 2, "restaurant_logo_id": -1},
-		"connect_token": str(player_token_r.value),
+		"connect_token": str(player_ingame_fail_token_r.value),
 	})
 
 	if rm.peer_to_room.has(13):
@@ -325,6 +374,7 @@ static func _run_resume_archive_auto_join_scenario() -> Result:
 		"role": "host",
 		"display_name": "ResumeHost",
 		"seat_index": null,
+		"generation": 1,
 		"config_json": JSON.stringify(cfg),
 		"join_policy": "public",
 		"exp": int(Time.get_unix_time_from_system()) + 3600,
@@ -364,6 +414,7 @@ static func _run_resume_archive_auto_join_scenario() -> Result:
 		"role": "player",
 		"display_name": "ResumeP2",
 		"seat_index": null,
+		"generation": 1,
 		"exp": int(Time.get_unix_time_from_system()) + 3600,
 	}
 	var player_token_r: Result = ConnectTokenClass.create_token(player_payload, server.connect_token_secret_override)

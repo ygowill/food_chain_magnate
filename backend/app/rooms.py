@@ -118,6 +118,32 @@ def _is_resume_room_config(config: dict) -> bool:
     return str(config.get("room_mode", "")).strip() == "resume_archive"
 
 
+def _issue_member_connect_token(
+    member: RoomMember,
+    room: Room,
+    display_name: str,
+    include_host_access: bool = False,
+    config_json: str | None = None,
+) -> str:
+    current_generation = max(1, int(member.generation or 1))
+    member.generation = current_generation + 1
+    room_cfg = _parse_room_config_json(room.config_json)
+    effective_config_json = config_json
+    if effective_config_json is None and _is_resume_room_config(room_cfg):
+        effective_config_json = str(room.config_json or "{}")
+    return issue_connect_token(
+        str(member.user_id),
+        str(room.room_code),
+        str(member.role),
+        display_name=display_name,
+        seat_index=member.seat_index,
+        generation=current_generation,
+        config_json=effective_config_json,
+        join_policy=str(room.join_policy) if include_host_access else None,
+        password_hash=str(room.password_hash) if include_host_access and room.password_hash else None,
+    )
+
+
 class CreateRoomRequest(BaseModel):
     session_id: str
     config_json: str = "{}"
@@ -265,25 +291,16 @@ async def create_room(req: CreateRoomRequest, db: AsyncSession = Depends(get_db)
     await db.flush()
 
     host_seat_index = None if is_resume_room else 0
-    db.add(RoomMember(
+    host_member = RoomMember(
         room_id=room.room_id,
         user_id=sess.user_id,
         role="host",
         seat_index=host_seat_index,
         member_status="active",
-    ))
-    await db.commit()
-
-    token = issue_connect_token(
-        sess.user_id,
-        room.room_code,
-        "host",
-        display_name=display_name,
-        seat_index=host_seat_index,
-        config_json=req.config_json,
-        join_policy=str(room.join_policy),
-        password_hash=str(room.password_hash) if room.password_hash else None,
     )
+    db.add(host_member)
+    token = _issue_member_connect_token(host_member, room, display_name, True, str(req.config_json))
+    await db.commit()
     return RoomResponse(room_code=room.room_code, ws_url=str(room.ws_url), connect_token=token)
 
 
@@ -325,13 +342,7 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
     if existing:
         if str(existing.member_status or "").strip() == "forfeited":
             raise HTTPException(409, "room membership forfeited; use spectate")
-        if name_changed:
-            await db.commit()
-        token = issue_connect_token(
-            sess.user_id, room.room_code, existing.role,
-            display_name=display_name,
-            seat_index=existing.seat_index,
-        )
+        token = _issue_member_connect_token(existing, room, display_name, str(existing.role) == "host")
         await db.commit()
         return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)
 
@@ -364,16 +375,17 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
             if desired_player_count > 0 and seat >= desired_player_count:
                 raise HTTPException(409, "room is full")
 
-        db.add(RoomMember(
+        member = RoomMember(
             room_id=room.room_id,
             user_id=sess.user_id,
             role="player",
             seat_index=seat,
             member_status="active",
-        ))
+        )
+        db.add(member)
         try:
+            token = _issue_member_connect_token(member, room, display_name)
             await db.commit()
-            token = issue_connect_token(sess.user_id, room.room_code, "player", display_name=display_name, seat_index=seat)
             return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)
         except IntegrityError:
             await db.rollback()
@@ -383,11 +395,7 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
                 raise HTTPException(404, "room not found")
             existing = await _get_active_room_member(db, room.room_id, sess.user_id)
             if existing is not None:
-                token = issue_connect_token(
-                    sess.user_id, room.room_code, existing.role,
-                    display_name=display_name,
-                    seat_index=existing.seat_index,
-                )
+                token = _issue_member_connect_token(existing, room, display_name, str(existing.role) == "host")
                 await db.commit()
                 return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)
 
@@ -426,18 +434,7 @@ async def resume_room(room_code: str, req: ResumeRequest, db: AsyncSession = Dep
     if role in {"host", "player"} and seat_index is None and not is_resume_room:
         raise HTTPException(409, "seat missing for resumable role")
 
-    if name_changed:
-        await db.commit()
-
-    token = issue_connect_token(
-        sess.user_id,
-        room.room_code,
-        role,
-        display_name=display_name,
-        seat_index=seat_index,
-        join_policy=str(room.join_policy) if role == "host" else None,
-        password_hash=str(room.password_hash) if role == "host" and room.password_hash else None,
-    )
+    token = _issue_member_connect_token(existing, room, display_name, role == "host")
     await db.commit()
     return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)
 

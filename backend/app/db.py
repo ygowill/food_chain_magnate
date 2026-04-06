@@ -22,6 +22,9 @@ def _ensure_schema_migrations(sync_conn) -> None:
     if "member_status" not in room_member_columns:
         sync_conn.execute(text("ALTER TABLE room_members ADD COLUMN member_status VARCHAR DEFAULT 'active'"))
         sync_conn.execute(text("UPDATE room_members SET member_status = 'active' WHERE member_status IS NULL"))
+    if "generation" not in room_member_columns:
+        sync_conn.execute(text("ALTER TABLE room_members ADD COLUMN generation INTEGER DEFAULT 1"))
+        sync_conn.execute(text("UPDATE room_members SET generation = 1 WHERE generation IS NULL"))
 
     room_member_indexes = {str(idx.get("name", "")).strip() for idx in inspector.get_indexes("room_members")}
     if "ix_room_members_active_user_unique" not in room_member_indexes:

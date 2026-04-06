@@ -177,6 +177,7 @@ func _sync_room_directory_snapshot(snapshot: Dictionary) -> Result:
 						"role": str(slot.get("role", "player")).strip_edges(),
 						"seat_index": seat_index,
 						"member_status": member_status,
+						"generation": int(slot.get("generation", 1)),
 					})
 			else:
 				var user_ids_by_seat_val = room.get("user_ids_by_seat", null)
@@ -194,6 +195,23 @@ func _sync_room_directory_snapshot(snapshot: Dictionary) -> Result:
 						"role": "host" if seat_index == host_seat_index else "player",
 						"seat_index": seat_index,
 						"member_status": "active",
+						"generation": 1,
+					})
+			var waiting_members_val = room.get("waiting_members", null)
+			if waiting_members_val is Array:
+				for waiting_member_val in Array(waiting_members_val):
+					if not (waiting_member_val is Dictionary):
+						continue
+					var waiting_member: Dictionary = Dictionary(waiting_member_val)
+					var waiting_user_id := str(waiting_member.get("user_id", "")).strip_edges()
+					if waiting_user_id.is_empty():
+						continue
+					members.append({
+						"user_id": waiting_user_id,
+						"role": str(waiting_member.get("role", "player")).strip_edges(),
+						"seat_index": null,
+						"member_status": str(waiting_member.get("member_status", "active")).strip_edges(),
+						"generation": int(waiting_member.get("generation", 1)),
 					})
 			var spectators_val = room.get("spectators", null)
 			if spectators_val is Array:
@@ -209,8 +227,14 @@ func _sync_room_directory_snapshot(snapshot: Dictionary) -> Result:
 						"role": "spectator",
 						"seat_index": null,
 						"member_status": str(spectator.get("member_status", "active")).strip_edges(),
+						"generation": 1,
 					})
 			var owner_user_id := str(room.get("owner_user_id", "")).strip_edges()
+			if owner_user_id.is_empty():
+				for member in members:
+					if str(member.get("role", "")).strip_edges() == "host":
+						owner_user_id = str(member.get("user_id", "")).strip_edges()
+						break
 			if owner_user_id.is_empty():
 				for member in members:
 					if int(member.get("seat_index", -1)) == host_seat_index:
