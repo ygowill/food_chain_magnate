@@ -117,8 +117,19 @@ static func run() -> Result:
 	var actual_hash := str(room.game_engine.get_state().compute_hash())
 	if actual_hash != expected_hash:
 		return Result.failure("恢复房开局 hash 不一致: %s vs %s" % [expected_hash, actual_hash])
+	var expected_history_size := selected_index + 1
+	if int(room.game_engine.command_history.size()) != expected_history_size:
+		return Result.failure(
+			"恢复房开局后不应保留未来历史: %d vs %d"
+				% [int(room.game_engine.command_history.size()), expected_history_size]
+		)
 	if int(room.game_engine.current_command_index) != selected_index:
 		return Result.failure("恢复房开局 current_command_index 错误: %d vs %d" % [int(room.game_engine.current_command_index), selected_index])
+	if int(room.game_engine.current_command_index) != int(room.game_engine.command_history.size()) - 1:
+		return Result.failure(
+			"恢复房开局后 current_command_index 应位于最新位置: %d vs %d"
+				% [int(room.game_engine.current_command_index), int(room.game_engine.command_history.size()) - 1]
+		)
 
 	return Result.success({
 		"room_code": room_code,

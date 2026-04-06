@@ -8,6 +8,7 @@ const RoomManagerClass = preload("res://server/room_manager.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const ResyncSnapshotTransferClass = preload("res://core/utils/resync_snapshot_transfer.gd")
 const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
 
 static func run() -> Result:
@@ -425,6 +426,12 @@ static func _run_resume_archive_auto_join_scenario() -> Result:
 	var actual_hash := str(room.game_engine.get_state().compute_hash())
 	if actual_hash != expected_hash:
 		return Result.failure("恢复房开局 hash 不一致: %s vs %s" % [expected_hash, actual_hash])
+	var expected_history_size := selected_index + 1
+	if int(room.game_engine.command_history.size()) != expected_history_size:
+		return Result.failure(
+			"恢复房开局后不应保留未来历史: %d vs %d"
+				% [int(room.game_engine.command_history.size()), expected_history_size]
+		)
 	if int(room.game_engine.current_command_index) != selected_index:
 		return Result.failure("恢复房开局 current_command_index 错误: %d vs %d" % [int(room.game_engine.current_command_index), selected_index])
 	if _find_sent_method(mock_net.sent, 30, "rpc_game_started") < 0 or _find_sent_method(mock_net.sent, 31, "rpc_game_started") < 0:
@@ -435,6 +442,24 @@ static func _run_resume_archive_auto_join_scenario() -> Result:
 		return Result.failure("恢复房开局后双方都应收到 snapshot chunk")
 	if _find_sent_method(mock_net.sent, 30, "rpc_resync_archive") >= 0 or _find_sent_method(mock_net.sent, 31, "rpc_resync_archive") >= 0:
 		return Result.failure("恢复房开局主链路不应回退到旧 rpc_resync_archive")
+	var host_snapshot_r: Result = _extract_snapshot_archive(mock_net.sent, 30)
+	if not host_snapshot_r.ok:
+		return Result.failure("恢复房 host snapshot 组装失败: %s" % host_snapshot_r.error)
+	var host_snapshot: Dictionary = Dictionary(host_snapshot_r.value).duplicate(true)
+	var host_commands_val = host_snapshot.get("commands", null)
+	if not (host_commands_val is Array) or Array(host_commands_val).size() != expected_history_size:
+		return Result.failure("恢复房 host snapshot 历史长度错误: %s" % str(host_commands_val))
+	if int(host_snapshot.get("current_index", -999999)) != selected_index:
+		return Result.failure("恢复房 host snapshot current_index 错误: %d vs %d" % [int(host_snapshot.get("current_index", -999999)), selected_index])
+	var player_snapshot_r: Result = _extract_snapshot_archive(mock_net.sent, 31)
+	if not player_snapshot_r.ok:
+		return Result.failure("恢复房 player snapshot 组装失败: %s" % player_snapshot_r.error)
+	var player_snapshot: Dictionary = Dictionary(player_snapshot_r.value).duplicate(true)
+	var player_commands_val = player_snapshot.get("commands", null)
+	if not (player_commands_val is Array) or Array(player_commands_val).size() != expected_history_size:
+		return Result.failure("恢复房 player snapshot 历史长度错误: %s" % str(player_commands_val))
+	if int(player_snapshot.get("current_index", -999999)) != selected_index:
+		return Result.failure("恢复房 player snapshot current_index 错误: %d vs %d" % [int(player_snapshot.get("current_index", -999999)), selected_index])
 
 	return Result.success()
 
@@ -484,6 +509,41 @@ static func _build_midpoint_resume_archive(base_archive: Dictionary) -> Result:
 		"phase": phase_text,
 		"expected_hash": expected_hash,
 	})
+
+static func _extract_snapshot_archive(sent: Array[Dictionary], peer_id: int) -> Result:
+	var manifest: Dictionary = {}
+	var chunks: Dictionary = {}
+	for item_val in sent:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = Dictionary(item_val)
+		if int(item.get("peer_id", -1)) != int(peer_id):
+			continue
+		var method := str(item.get("method", "")).strip_edges()
+		var payload_val = item.get("payload", null)
+		if not (payload_val is Dictionary):
+			continue
+		var payload: Dictionary = Dictionary(payload_val).duplicate(true)
+		if method == "rpc_resync_snapshot_manifest":
+			manifest = payload
+			chunks.clear()
+			continue
+		if method != "rpc_resync_snapshot_chunk":
+			continue
+		if manifest.is_empty():
+			continue
+		if str(payload.get("transfer_id", "")).strip_edges() != str(manifest.get("transfer_id", "")).strip_edges():
+			continue
+		var bytes_val = payload.get("bytes", null)
+		if not (bytes_val is PackedByteArray):
+			return Result.failure("snapshot chunk bytes invalid")
+		chunks[int(payload.get("chunk_index", -1))] = bytes_val
+	if manifest.is_empty():
+		return Result.failure("snapshot manifest missing")
+	var assemble_r: Result = ResyncSnapshotTransferClass.assemble_snapshot(manifest, chunks)
+	if not assemble_r.ok:
+		return assemble_r
+	return Result.success(Dictionary(assemble_r.value).duplicate(true))
 
 static func _reset_net_context() -> void:
 	if NetContext != null and NetContext.has_method("reset"):
