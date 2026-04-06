@@ -102,12 +102,15 @@ func handle_rpc_room_state(payload: Dictionary) -> void:
 	if not previous_room_code.is_empty() and previous_room_code != next_room_code and _net != null and is_instance_valid(_net):
 		if _net.has_method("clear_pending_online_resync_state"):
 			_net.clear_pending_online_resync_state()
+		_set_online_client_engine_room_code("")
 	NetContext.room_state = payload.duplicate(true)
 	var self_seat_val = NetContext.room_state.get("self_seat_index", null)
 	if self_seat_val is int or self_seat_val is float:
 		NetContext.local_player_id = int(self_seat_val)
 	var self_role := str(NetContext.room_state.get("self_role", "")).strip_edges()
 	NetContext.local_role = self_role
+	if str(NetContext.room_state.get("status", "")).strip_edges() != "InGame":
+		_set_online_client_engine_room_code("")
 	_sync_online_resume_state_from_room_state(NetContext.room_state)
 	if Globals != null and Globals.has_method("apply_online_room_state"):
 		Globals.apply_online_room_state(NetContext.room_state)
@@ -166,83 +169,16 @@ func handle_rpc_game_started(payload: Dictionary) -> void:
 			]
 	)
 
-	var reusing_existing_engine := false
-	var existing_engine: GameEngine = null
-	if NetContext != null and NetContext.has_method("is_online_reconnecting"):
-		if NetContext.is_online_reconnecting():
-			if Globals != null and Globals.current_game_engine != null and Globals.current_game_engine is GameEngine:
-				existing_engine = Globals.current_game_engine
-				if existing_engine.get_state() != null:
-					reusing_existing_engine = true
-
-	if reusing_existing_engine:
-		if NetContext != null and NetContext.has_method("sync_online_resume_progress_from_engine"):
-			NetContext.sync_online_resume_progress_from_engine(existing_engine)
-		if Globals != null and Globals.has_method("apply_online_room_state"):
-			Globals.apply_online_room_state(NetContext.room_state if NetContext != null else {})
-		GameLog.info("NetClient", "Online client reconnect ready: reusing existing engine")
+	var room_code := _get_expected_online_room_code()
+	var existing_engine: GameEngine = _try_reuse_existing_online_client_engine(room_code, local_pid)
+	if existing_engine != null:
 		_net.game_started.emit(payload.duplicate(true))
 		_try_apply_pending_resync_delta()
 		return
 
-	if EventBus != null:
-		if EventBus.has_method("clear_history_and_reset_sequence"):
-			EventBus.clear_history_and_reset_sequence()
-		elif EventBus.has_method("clear_history"):
-			EventBus.clear_history()
-
-	var player_count := int(config.get("desired_player_count", 0))
-	var seed := int(config.get("seed", 0))
-	var base_dir := str(config.get("modules_v2_base_dir", "")).strip_edges()
-	var base_dirs_read = ModuleDirSpecClass.parse_base_dirs(base_dir)
-	if not base_dirs_read.ok:
-		GameLog.warn("NetClient", "Online room modules_v2_base_dir 非 res://，已回退默认: %s" % base_dir)
-		base_dir = GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR
-	var enabled_modules: Array[String] = []
-	var mods_val = config.get("enabled_modules_v2", null)
-	if mods_val is Array:
-		for it in Array(mods_val):
-			var s := str(it).strip_edges()
-			if s.is_empty():
-				continue
-			enabled_modules.append(s)
-
-	var logo_choices: Array[int] = []
-	var lc_val = config.get("restaurant_logo_choices_by_player", null)
-	if lc_val is Array:
-		for it2 in Array(lc_val):
-			if it2 is int or it2 is float:
-				logo_choices.append(int(it2))
-	while logo_choices.size() < player_count:
-		logo_choices.append(-1)
-
-	var engine = GameEngineClass.new()
-	var init_r = engine.initialize(player_count, seed, enabled_modules, base_dir, [], logo_choices)
+	var init_r: Result = _initialize_online_client_engine_from_config(config, room_code, local_pid)
 	if not init_r.ok:
-		GameLog.error(
-			"NetClient",
-			"Online client engine initialize failed players=%d seed=%d modules=%d base_dir=%s err=%s"
-				% [player_count, seed, enabled_modules.size(), base_dir, init_r.error]
-		)
 		return
-	var state = engine.get_state()
-	if state != null:
-		if not (state.rules is Dictionary):
-			state.rules = {}
-		# 写入持久规则区：round_state 会在每回合开始被重建。
-		state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
-
-	Globals.set_current_game_engine(engine)
-	Globals.sync_runtime_config_from_engine(engine)
-	if NetContext != null and NetContext.has_method("sync_online_resume_progress_from_engine"):
-		NetContext.sync_online_resume_progress_from_engine(engine)
-	if Globals != null and Globals.has_method("apply_online_room_state"):
-		Globals.apply_online_room_state(NetContext.room_state if NetContext != null else {})
-	GameLog.info(
-		"NetClient",
-		"Online client engine ready players=%d seed=%d modules=%d base_dir=%s"
-			% [player_count, seed, enabled_modules.size(), base_dir]
-	)
 
 	_net.game_started.emit(payload.duplicate(true))
 	_try_apply_pending_resync_delta()
@@ -277,6 +213,7 @@ func handle_rpc_resync_archive(payload: Dictionary) -> void:
 		return
 	_set_pending_resync_archive(Dictionary(archive_val))
 	var pending_archive := _get_pending_resync_archive()
+	_try_bootstrap_online_client_engine_from_archive(pending_archive)
 	GameLog.warn(
 		"NetClient",
 		"RX ResyncArchive snapshot keys=%s" % str(Array(pending_archive.keys()))
@@ -367,6 +304,7 @@ func handle_rpc_resync_snapshot_chunk(payload: Dictionary) -> void:
 		return
 	var archive: Dictionary = Dictionary(assemble_r.value).duplicate(true)
 	_set_pending_resync_archive(archive)
+	_try_bootstrap_online_client_engine_from_archive(archive)
 	GameLog.warn(
 		"NetClient",
 		"RX ResyncSnapshot assembled transfer_id=%s chunks=%d total_bytes=%d"
@@ -517,6 +455,136 @@ func _set_pending_resync_delta(payload: Dictionary) -> void:
 	if _net == null or not is_instance_valid(_net) or not (_net is Object):
 		return
 	(_net as Object).set("_pending_resync_delta", Dictionary(payload).duplicate(true))
+
+func _try_reuse_existing_online_client_engine(room_code: String, local_pid: int) -> GameEngine:
+	var existing_engine = _get_active_resume_engine()
+	if existing_engine == null or existing_engine.get_state() == null:
+		return null
+	var normalized_room_code := str(room_code).strip_edges().to_upper()
+	var reusing_for_reconnect := NetContext != null and NetContext.has_method("is_online_reconnecting") and NetContext.is_online_reconnecting()
+	var reusing_for_room := not normalized_room_code.is_empty() and _get_online_client_engine_room_code() == normalized_room_code
+	if not reusing_for_reconnect and not reusing_for_room:
+		return null
+	_mark_online_client_engine_ready(existing_engine, normalized_room_code, local_pid)
+	if reusing_for_reconnect:
+		GameLog.info("NetClient", "Online client reconnect ready: reusing existing engine")
+	else:
+		GameLog.info("NetClient", "Online client engine already ready room=%s" % _safe_text(normalized_room_code))
+	return existing_engine
+
+func _initialize_online_client_engine_from_config(config: Dictionary, room_code: String, local_pid: int) -> Result:
+	if EventBus != null:
+		if EventBus.has_method("clear_history_and_reset_sequence"):
+			EventBus.clear_history_and_reset_sequence()
+		elif EventBus.has_method("clear_history"):
+			EventBus.clear_history()
+
+	var player_count := int(config.get("desired_player_count", 0))
+	var seed := int(config.get("seed", 0))
+	var base_dir := str(config.get("modules_v2_base_dir", "")).strip_edges()
+	var base_dirs_read = ModuleDirSpecClass.parse_base_dirs(base_dir)
+	if not base_dirs_read.ok:
+		GameLog.warn("NetClient", "Online room modules_v2_base_dir 非 res://，已回退默认: %s" % base_dir)
+		base_dir = GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR
+	var enabled_modules: Array[String] = []
+	var mods_val = config.get("enabled_modules_v2", null)
+	if mods_val is Array:
+		for it in Array(mods_val):
+			var s := str(it).strip_edges()
+			if s.is_empty():
+				continue
+			enabled_modules.append(s)
+
+	var logo_choices: Array[int] = []
+	var lc_val = config.get("restaurant_logo_choices_by_player", null)
+	if lc_val is Array:
+		for it2 in Array(lc_val):
+			if it2 is int or it2 is float:
+				logo_choices.append(int(it2))
+	while logo_choices.size() < player_count:
+		logo_choices.append(-1)
+
+	var engine = GameEngineClass.new()
+	var init_r = engine.initialize(player_count, seed, enabled_modules, base_dir, [], logo_choices)
+	if not init_r.ok:
+		GameLog.error(
+			"NetClient",
+			"Online client engine initialize failed players=%d seed=%d modules=%d base_dir=%s err=%s"
+				% [player_count, seed, enabled_modules.size(), base_dir, init_r.error]
+		)
+		return Result.failure(str(init_r.error))
+
+	_mark_online_client_engine_ready(engine, room_code, local_pid)
+	GameLog.info(
+		"NetClient",
+		"Online client engine ready players=%d seed=%d modules=%d base_dir=%s"
+			% [player_count, seed, enabled_modules.size(), base_dir]
+	)
+	return Result.success(engine)
+
+func _try_bootstrap_online_client_engine_from_archive(archive: Dictionary) -> void:
+	if archive.is_empty():
+		return
+	var room_code := _get_expected_online_room_code()
+	var local_pid := -1
+	var self_seat_val = NetContext.room_state.get("self_seat_index", null)
+	if self_seat_val is int or self_seat_val is float:
+		local_pid = int(self_seat_val)
+	var existing_engine = _try_reuse_existing_online_client_engine(room_code, local_pid)
+	if existing_engine != null:
+		return
+	var engine = GameEngineClass.new()
+	var load_r: Result = engine.load_from_archive(archive)
+	if not load_r.ok:
+		GameLog.error("NetClient", "Online client archive bootstrap failed: %s" % load_r.error)
+		return
+	_mark_online_client_engine_ready(engine, room_code, local_pid)
+	GameLog.info(
+		"NetClient",
+		"Online client engine bootstrapped from archive room=%s commands=%d"
+			% [_safe_text(room_code), int(engine.command_history.size())]
+	)
+
+func _mark_online_client_engine_ready(engine: GameEngine, room_code: String, local_pid: int) -> void:
+	if engine == null or engine.get_state() == null:
+		return
+	var state = engine.get_state()
+	if not (state.rules is Dictionary):
+		state.rules = {}
+	state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
+	if local_pid >= -1:
+		NetContext.local_player_id = int(local_pid)
+	Globals.set_current_game_engine(engine)
+	Globals.sync_runtime_config_from_engine(engine)
+	if NetContext != null and NetContext.has_method("sync_online_resume_progress_from_engine"):
+		NetContext.sync_online_resume_progress_from_engine(engine)
+	if Globals != null and Globals.has_method("apply_online_room_state"):
+		Globals.apply_online_room_state(NetContext.room_state if NetContext != null else {})
+	_set_online_client_engine_room_code(room_code)
+
+func _get_online_client_engine_room_code() -> String:
+	if _net == null or not is_instance_valid(_net) or not (_net is Object):
+		return ""
+	if not _net_has_property("_online_client_engine_room_code"):
+		return ""
+	return str((_net as Object).get("_online_client_engine_room_code")).strip_edges().to_upper()
+
+func _set_online_client_engine_room_code(room_code: String) -> void:
+	if _net == null or not is_instance_valid(_net) or not (_net is Object):
+		return
+	if not _net_has_property("_online_client_engine_room_code"):
+		return
+	(_net as Object).set("_online_client_engine_room_code", str(room_code).strip_edges().to_upper())
+
+func _net_has_property(property_name: String) -> bool:
+	if _net == null or not is_instance_valid(_net) or not (_net is Object):
+		return false
+	for item in (_net as Object).get_property_list():
+		if not (item is Dictionary):
+			continue
+		if str(Dictionary(item).get("name", "")) == property_name:
+			return true
+	return false
 
 func _get_pending_resync_archive() -> Dictionary:
 	if _net == null or not is_instance_valid(_net) or not (_net is Object):

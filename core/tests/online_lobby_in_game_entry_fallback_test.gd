@@ -3,6 +3,7 @@ class_name OnlineLobbyInGameEntryFallbackTest
 extends RefCounted
 
 const LobbyScript = preload("res://ui/scenes/online/online_lobby.gd")
+const ClientLogicClass = preload("res://autoload/net_client/client.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 
@@ -14,9 +15,14 @@ static func run() -> Result:
 
 	var prev_engine = Globals.current_game_engine
 	var prev_is_game_active := bool(Globals.is_game_active)
+	var prev_mode = NetContext.mode
+	var prev_room_state := Dictionary(NetContext.room_state).duplicate(true)
+	var prev_local_player_id := int(NetContext.local_player_id)
+	var prev_local_role := str(NetContext.local_role)
 	var prev_pending_archive := Dictionary(NetClient._pending_resync_archive).duplicate(true)
 	var prev_pending_manifest := Dictionary(NetClient._pending_resync_snapshot_manifest).duplicate(true)
 	var prev_pending_delta := Dictionary(NetClient._pending_resync_delta).duplicate(true)
+	var prev_online_client_engine_room_code := str(NetClient._online_client_engine_room_code)
 	var lobby = LobbyScript.new()
 	var cb_rejected := Callable(lobby, "_on_request_rejected")
 	var cb_game_started := Callable(lobby, "_on_game_started")
@@ -35,9 +41,14 @@ static func run() -> Result:
 		_restore(
 			prev_engine,
 			prev_is_game_active,
+			prev_mode,
+			prev_room_state,
+			prev_local_player_id,
+			prev_local_role,
 			prev_pending_archive,
 			prev_pending_manifest,
-			prev_pending_delta
+			prev_pending_delta,
+			prev_online_client_engine_room_code
 		)
 		return Result.failure("request_rejected 已绑定时，_bind_net_signals 仍应补绑 game_started")
 	if not NetClient.resync_archive_received.is_connected(cb_resync_archive):
@@ -45,25 +56,40 @@ static func run() -> Result:
 		_restore(
 			prev_engine,
 			prev_is_game_active,
+			prev_mode,
+			prev_room_state,
+			prev_local_player_id,
+			prev_local_role,
 			prev_pending_archive,
 			prev_pending_manifest,
-			prev_pending_delta
+			prev_pending_delta,
+			prev_online_client_engine_room_code
 		)
 		return Result.failure("request_rejected 已绑定时，_bind_net_signals 仍应补绑 resync_archive_received")
 
+	NetContext.mode = NetContext.Mode.ONLINE_CLIENT
+	NetContext.room_state = {}
+	NetContext.local_player_id = -1
+	NetContext.local_role = ""
 	Globals.current_game_engine = null
 	Globals.is_game_active = false
 	NetClient._pending_resync_archive = {}
 	NetClient._pending_resync_snapshot_manifest = {}
 	NetClient._pending_resync_delta = {}
+	NetClient._online_client_engine_room_code = ""
 	if bool(lobby.call("_should_enter_online_game_scene_from_room_state", {"status": "InGame", "room_code": "ROOM01"})):
 		_cleanup_lobby_connections(lobby)
 		_restore(
 			prev_engine,
 			prev_is_game_active,
+			prev_mode,
+			prev_room_state,
+			prev_local_player_id,
+			prev_local_role,
 			prev_pending_archive,
 			prev_pending_manifest,
-			prev_pending_delta
+			prev_pending_delta,
+			prev_online_client_engine_room_code
 		)
 		return Result.failure("没有 engine 时不应触发大厅补进 Game")
 
@@ -74,9 +100,14 @@ static func run() -> Result:
 		_restore(
 			prev_engine,
 			prev_is_game_active,
+			prev_mode,
+			prev_room_state,
+			prev_local_player_id,
+			prev_local_role,
 			prev_pending_archive,
 			prev_pending_manifest,
-			prev_pending_delta
+			prev_pending_delta,
+			prev_online_client_engine_room_code
 		)
 		return Result.failure("初始化测试 engine 失败: %s" % init_r.error)
 	Globals.set_current_game_engine(engine)
@@ -86,9 +117,14 @@ static func run() -> Result:
 		_restore(
 			prev_engine,
 			prev_is_game_active,
+			prev_mode,
+			prev_room_state,
+			prev_local_player_id,
+			prev_local_role,
 			prev_pending_archive,
 			prev_pending_manifest,
-			prev_pending_delta
+			prev_pending_delta,
+			prev_online_client_engine_room_code
 		)
 		return Result.failure("只有 engine、没有待同步数据时不应触发大厅补进 Game")
 
@@ -98,9 +134,14 @@ static func run() -> Result:
 		_restore(
 			prev_engine,
 			prev_is_game_active,
+			prev_mode,
+			prev_room_state,
+			prev_local_player_id,
+			prev_local_role,
 			prev_pending_archive,
 			prev_pending_manifest,
-			prev_pending_delta
+			prev_pending_delta,
+			prev_online_client_engine_room_code
 		)
 		return Result.failure("其他房间的待同步数据不应触发大厅补进 Game")
 
@@ -110,11 +151,98 @@ static func run() -> Result:
 		_restore(
 			prev_engine,
 			prev_is_game_active,
+			prev_mode,
+			prev_room_state,
+			prev_local_player_id,
+			prev_local_role,
 			prev_pending_archive,
 			prev_pending_manifest,
-			prev_pending_delta
+			prev_pending_delta,
+			prev_online_client_engine_room_code
 		)
 		return Result.failure("InGame 且 engine 已就绪并存在当前房间待同步数据时应允许大厅补进 Game")
+
+	var archive_r: Result = engine.create_archive()
+	if not archive_r.ok:
+		_cleanup_lobby_connections(lobby)
+		_restore(
+			prev_engine,
+			prev_is_game_active,
+			prev_mode,
+			prev_room_state,
+			prev_local_player_id,
+			prev_local_role,
+			prev_pending_archive,
+			prev_pending_manifest,
+			prev_pending_delta,
+			prev_online_client_engine_room_code
+		)
+		return Result.failure("创建测试 archive 失败: %s" % archive_r.error)
+
+	Globals.current_game_engine = null
+	Globals.is_game_active = false
+	NetClient._pending_resync_archive = {}
+	NetClient._pending_resync_snapshot_manifest = {}
+	NetClient._pending_resync_delta = {}
+	NetClient._online_client_engine_room_code = ""
+	NetContext.room_state = {
+		"room_code": "ROOM01",
+		"status": "InGame",
+		"self_seat_index": 1,
+		"self_role": "player",
+	}
+	if NetClient.resync_archive_received.is_connected(cb_resync_archive):
+		NetClient.resync_archive_received.disconnect(cb_resync_archive)
+	var client = ClientLogicClass.new()
+	client.setup(NetClient)
+	client.handle_rpc_resync_archive({
+		"archive": Dictionary(archive_r.value).duplicate(true),
+	})
+	if Globals.current_game_engine == null or Globals.current_game_engine.get_state() == null:
+		_cleanup_lobby_connections(lobby)
+		_restore(
+			prev_engine,
+			prev_is_game_active,
+			prev_mode,
+			prev_room_state,
+			prev_local_player_id,
+			prev_local_role,
+			prev_pending_archive,
+			prev_pending_manifest,
+			prev_pending_delta,
+			prev_online_client_engine_room_code
+		)
+		return Result.failure("收到 archive 后应先补建本地 engine，避免大厅卡住")
+	if int(NetContext.local_player_id) != 1:
+		_cleanup_lobby_connections(lobby)
+		_restore(
+			prev_engine,
+			prev_is_game_active,
+			prev_mode,
+			prev_room_state,
+			prev_local_player_id,
+			prev_local_role,
+			prev_pending_archive,
+			prev_pending_manifest,
+			prev_pending_delta,
+			prev_online_client_engine_room_code
+		)
+		return Result.failure("archive 补建 engine 后 local_player_id 错误: %d" % int(NetContext.local_player_id))
+	if not bool(lobby.call("_should_enter_online_game_scene_from_room_state", {"status": "InGame", "room_code": "ROOM01"})):
+		_cleanup_lobby_connections(lobby)
+		_restore(
+			prev_engine,
+			prev_is_game_active,
+			prev_mode,
+			prev_room_state,
+			prev_local_player_id,
+			prev_local_role,
+			prev_pending_archive,
+			prev_pending_manifest,
+			prev_pending_delta,
+			prev_online_client_engine_room_code
+		)
+		return Result.failure("收到 archive 后应允许大厅补进 Game")
 
 	lobby.set("_enter_game_transition_requested", true)
 	if bool(lobby.call("_should_enter_online_game_scene_from_room_state", {"status": "InGame", "room_code": "ROOM01"})):
@@ -122,9 +250,14 @@ static func run() -> Result:
 		_restore(
 			prev_engine,
 			prev_is_game_active,
+			prev_mode,
+			prev_room_state,
+			prev_local_player_id,
+			prev_local_role,
 			prev_pending_archive,
 			prev_pending_manifest,
-			prev_pending_delta
+			prev_pending_delta,
+			prev_online_client_engine_room_code
 		)
 		return Result.failure("进入 Game 已请求后不应重复触发大厅补进")
 	lobby.set("_enter_game_transition_requested", false)
@@ -134,9 +267,14 @@ static func run() -> Result:
 		_restore(
 			prev_engine,
 			prev_is_game_active,
+			prev_mode,
+			prev_room_state,
+			prev_local_player_id,
+			prev_local_role,
 			prev_pending_archive,
 			prev_pending_manifest,
-			prev_pending_delta
+			prev_pending_delta,
+			prev_online_client_engine_room_code
 		)
 		return Result.failure("非 InGame 状态不应触发大厅补进 Game")
 
@@ -144,9 +282,14 @@ static func run() -> Result:
 	_restore(
 		prev_engine,
 		prev_is_game_active,
+		prev_mode,
+		prev_room_state,
+		prev_local_player_id,
+		prev_local_role,
 		prev_pending_archive,
 		prev_pending_manifest,
-		prev_pending_delta
+		prev_pending_delta,
+		prev_online_client_engine_room_code
 	)
 	return Result.success()
 
@@ -180,12 +323,22 @@ static func _cleanup_lobby_connections(lobby) -> void:
 static func _restore(
 	prev_engine,
 	prev_is_game_active: bool,
+	prev_mode,
+	prev_room_state: Dictionary,
+	prev_local_player_id: int,
+	prev_local_role: String,
 	prev_pending_archive: Dictionary,
 	prev_pending_manifest: Dictionary,
-	prev_pending_delta: Dictionary
+	prev_pending_delta: Dictionary,
+	prev_online_client_engine_room_code: String
 ) -> void:
 	Globals.current_game_engine = prev_engine
 	Globals.is_game_active = prev_is_game_active
+	NetContext.mode = prev_mode
+	NetContext.room_state = prev_room_state.duplicate(true)
+	NetContext.local_player_id = prev_local_player_id
+	NetContext.local_role = prev_local_role
 	NetClient._pending_resync_archive = prev_pending_archive.duplicate(true)
 	NetClient._pending_resync_snapshot_manifest = prev_pending_manifest.duplicate(true)
 	NetClient._pending_resync_delta = prev_pending_delta.duplicate(true)
+	NetClient._online_client_engine_room_code = prev_online_client_engine_room_code
