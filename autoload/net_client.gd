@@ -40,6 +40,7 @@ var _pending_resync_snapshot_chunks: Dictionary = {}
 var _pending_resync_delta: Dictionary = {}
 var _resume_force_snapshot_once: bool = false
 var _pending_resume_room_bootstrap: Dictionary = {}
+var _online_client_engine_room_code: String = ""
 var _internal = null
 
 func _ready() -> void:
@@ -167,6 +168,7 @@ func shutdown(reset_context: bool = true) -> void:
 	_pending_resync_delta = {}
 	_resume_force_snapshot_once = false
 	_pending_resume_room_bootstrap = {}
+	_online_client_engine_room_code = ""
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	if reset_context:
 		NetContext.reset()
@@ -243,6 +245,7 @@ func request_leave_room() -> String:
 	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("mark_resume_terminal"):
 		OnlineSessionCoordinator.mark_resume_terminal("leave_room")
 	clear_pending_online_resync_state()
+	_online_client_engine_room_code = ""
 	rpc_id(1, "rpc_leave_room", payload)
 	GameLog.info("NetClient", "TX LeaveRoom request_id=%s room=%s" % [request_id, _safe_room_code(NetContext.room_state)])
 	if NetContext != null and NetContext.has_method("clear_online_resume_context"):
@@ -257,6 +260,7 @@ func request_forfeit_and_leave_room() -> String:
 	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("mark_resume_terminal"):
 		OnlineSessionCoordinator.mark_resume_terminal("forfeit_and_leave_room")
 	clear_pending_online_resync_state()
+	_online_client_engine_room_code = ""
 	rpc_id(1, "rpc_forfeit_and_leave_room", payload)
 	GameLog.info(
 		"NetClient",
