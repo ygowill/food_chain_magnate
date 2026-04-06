@@ -745,6 +745,31 @@ func configure_resume_lobby(archive: Dictionary) -> Result:
 func get_resume_lobby_archive() -> Dictionary:
 	return _resume_lobby_archive.duplicate(true)
 
+func build_effective_resume_start_archive() -> Result:
+	if not is_resume_archive_room():
+		return Result.failure("Room is not a resume lobby")
+	if _resume_lobby_archive.is_empty():
+		return Result.failure("resume archive missing")
+
+	var preview_engine = GameEngineClass.new()
+	var load_r: Result = preview_engine.load_from_archive(_resume_lobby_archive.duplicate(true))
+	if not load_r.ok:
+		return Result.failure("GameEngine.load_from_archive failed: %s" % load_r.error)
+	if int(preview_engine.current_command_index) < int(preview_engine.command_history.size()) - 1:
+		preview_engine.truncate_future_history()
+	_enable_online_dinnertime_confirm_on_engine(preview_engine)
+
+	var archive_r: Result = preview_engine.create_archive()
+	if not archive_r.ok:
+		return Result.failure("create_archive failed: %s" % archive_r.error)
+	var archive: Dictionary = Dictionary(archive_r.value).duplicate(true)
+	return Result.success({
+		"archive": archive,
+		"history_size": int(preview_engine.command_history.size()),
+		"current_index": int(preview_engine.current_command_index),
+		"final_hash": str(archive.get("final_hash", "")).strip_edges(),
+	})
+
 func add_waiting_member(peer_id: int, profile: Dictionary, role: String = "player") -> Result:
 	if has_peer(peer_id):
 		return Result.failure("Peer already in room")
@@ -1315,7 +1340,17 @@ func start_game() -> Result:
 
 	var engine = GameEngineClass.new()
 	if is_resume_archive_room():
-		var load_r: Result = engine.load_from_archive(_resume_lobby_archive.duplicate(true))
+		var effective_resume_r: Result = build_effective_resume_start_archive()
+		if not effective_resume_r.ok:
+			return Result.failure("构造恢复房起局存档失败: %s" % effective_resume_r.error)
+		var effective_resume_val = effective_resume_r.value
+		if not (effective_resume_val is Dictionary):
+			return Result.failure("构造恢复房起局存档失败：返回值类型错误")
+		var effective_resume_info: Dictionary = effective_resume_val
+		var effective_archive: Dictionary = Dictionary(effective_resume_info.get("archive", {})).duplicate(true)
+		if effective_archive.is_empty():
+			return Result.failure("构造恢复房起局存档失败：archive 为空")
+		var load_r: Result = engine.load_from_archive(effective_archive)
 		if not load_r.ok:
 			return Result.failure("GameEngine.load_from_archive failed: %s" % load_r.error)
 	else:

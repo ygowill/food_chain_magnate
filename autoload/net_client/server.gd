@@ -1902,12 +1902,24 @@ func handle_rpc_start_game(request: Dictionary) -> void:
 
 	var resume_start_snapshot_transfer: Dictionary = {}
 	if room.has_method("is_resume_archive_room") and room.is_resume_archive_room():
-		var resume_archive: Dictionary = room.get_resume_lobby_archive()
-		var resume_hash := str(resume_archive.get("final_hash", "")).strip_edges()
-		var history_size := -1
-		var commands_val = resume_archive.get("commands", null)
-		if commands_val is Array:
-			history_size = Array(commands_val).size()
+		if not room.has_method("build_effective_resume_start_archive"):
+			send_request_rejected(peer_id, request_id, "start_game_failed", "Room.build_effective_resume_start_archive missing")
+			return
+		var effective_resume_r: Result = room.build_effective_resume_start_archive()
+		if not effective_resume_r.ok:
+			send_request_rejected(peer_id, request_id, "start_game_failed", effective_resume_r.error)
+			return
+		var effective_resume_val = effective_resume_r.value
+		if not (effective_resume_val is Dictionary):
+			send_request_rejected(peer_id, request_id, "start_game_failed", "resume start archive type invalid")
+			return
+		var effective_resume_info: Dictionary = effective_resume_val
+		var resume_archive: Dictionary = Dictionary(effective_resume_info.get("archive", {})).duplicate(true)
+		if resume_archive.is_empty():
+			send_request_rejected(peer_id, request_id, "start_game_failed", "resume start archive missing")
+			return
+		var resume_hash := str(effective_resume_info.get("final_hash", resume_archive.get("final_hash", ""))).strip_edges()
+		var history_size := int(effective_resume_info.get("history_size", -1))
 		var transfer_r: Result = _build_archive_resync_snapshot_transfer(
 			str(room.room_code),
 			resume_archive,
