@@ -11,6 +11,8 @@ const ResumeLogHistoryBuilderClass = preload("res://ui/dialogs/create_room_resum
 const RoomConfigEditorClass = preload("res://ui/components/room_config_editor/room_config_editor.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
+const WEB_UPLOAD_DIR := "user://web_uploads"
+
 class _SilentEventSink:
 	extends RefCounted
 
@@ -43,6 +45,7 @@ var _room_config_editor = null
 var _error_label: Label = null
 var _create_button: Button = null
 var _cancel_button: Button = null
+var _web_upload_callback = null
 
 var _resume_room_bootstrap: Dictionary = {}
 var _resume_config_patch: Dictionary = {}
@@ -65,6 +68,7 @@ func open_dialog() -> void:
 	if _password_edit != null and is_instance_valid(_password_edit):
 		_password_edit.text = ""
 	_clear_error()
+	_update_dialog_panel_size()
 	_apply_resume_mode_ui()
 	open()
 
@@ -83,10 +87,10 @@ func _build_ui() -> void:
 	add_child(center)
 
 	_dialog_panel = PanelContainer.new()
-	_dialog_panel.custom_minimum_size = Vector2(1200, 700)
 	UiStylesClass.apply_dialog_surface(_dialog_panel)
 	_dialog_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	center.add_child(_dialog_panel)
+	_update_dialog_panel_size()
 
 	var outer_margin := MarginContainer.new()
 	outer_margin.add_theme_constant_override("margin_left", 6)
@@ -123,9 +127,23 @@ func _build_ui() -> void:
 	line.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	root.add_child(line)
 
+	var content_scroll := ScrollContainer.new()
+	content_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	root.add_child(content_scroll)
+
+	var content_margin := MarginContainer.new()
+	content_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_scroll.add_child(content_margin)
+
+	var content_root := VBoxContainer.new()
+	content_root.add_theme_constant_override("separation", 12)
+	content_root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_margin.add_child(content_root)
+
 	var pw_row := HBoxContainer.new()
 	pw_row.add_theme_constant_override("separation", 8)
-	root.add_child(pw_row)
+	content_root.add_child(pw_row)
 
 	var pw_label := Label.new()
 	pw_label.text = "房间密码（可空）"
@@ -145,11 +163,11 @@ func _build_ui() -> void:
 	_resume_checkbox.text = "从存档恢复"
 	UiStylesClass.apply_check_box_field(_resume_checkbox)
 	_resume_checkbox.toggled.connect(_on_resume_checkbox_toggled)
-	root.add_child(_resume_checkbox)
+	content_root.add_child(_resume_checkbox)
 
 	_archive_controls = VBoxContainer.new()
 	_archive_controls.add_theme_constant_override("separation", 8)
-	root.add_child(_archive_controls)
+	content_root.add_child(_archive_controls)
 
 	var archive_row := HBoxContainer.new()
 	archive_row.add_theme_constant_override("separation", 8)
@@ -162,13 +180,13 @@ func _build_ui() -> void:
 
 	_archive_path_edit = LineEdit.new()
 	_archive_path_edit.editable = false
-	_archive_path_edit.placeholder_text = "选择一个存档 JSON 文件"
+	_archive_path_edit.placeholder_text = "上传一个本机存档 JSON 文件" if _is_web() else "选择一个存档 JSON 文件"
 	_archive_path_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	UiStylesClass.apply_line_edit_field(_archive_path_edit)
 	archive_row.add_child(_archive_path_edit)
 
 	_browse_archive_button = Button.new()
-	_browse_archive_button.text = "选择文件"
+	_browse_archive_button.text = "上传文件" if _is_web() else "选择文件"
 	UiStylesClass.apply_button_secondary(_browse_archive_button)
 	_browse_archive_button.pressed.connect(_on_browse_archive_pressed)
 	archive_row.add_child(_browse_archive_button)
@@ -207,11 +225,10 @@ func _build_ui() -> void:
 	line2.custom_minimum_size = Vector2(320, 2)
 	line2.color = Color(0.73, 0.23, 0.18, 0.5)
 	line2.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	root.add_child(line2)
+	content_root.add_child(line2)
 
 	_room_config_editor = RoomConfigEditorClass.new()
-	_room_config_editor.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root.add_child(_room_config_editor)
+	content_root.add_child(_room_config_editor)
 
 	_error_label = Label.new()
 	_error_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -244,11 +261,149 @@ func _build_ui() -> void:
 	_archive_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	_archive_file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	_archive_file_dialog.filters = PackedStringArray(["*.json;存档文件;application/json"])
+	if _is_web():
+		_archive_file_dialog.use_native_dialog = true
 	_archive_file_dialog.file_selected.connect(_on_archive_file_selected)
 	add_child(_archive_file_dialog)
 
 	_reset_resume_selection_controls()
 	_apply_resume_mode_ui()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED:
+		_update_dialog_panel_size()
+
+func _is_web() -> bool:
+	return OS.has_feature("web")
+
+func _update_dialog_panel_size() -> void:
+	if _dialog_panel == null or not is_instance_valid(_dialog_panel):
+		return
+	var viewport_size := get_viewport_rect().size
+	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
+		_dialog_panel.custom_minimum_size = Vector2(1200, 860)
+		return
+	var panel_width := maxf(260.0, minf(1200.0, viewport_size.x - 32.0))
+	var panel_height := maxf(420.0, minf(860.0, viewport_size.y - 32.0))
+	_dialog_panel.custom_minimum_size = Vector2(panel_width, panel_height)
+
+func _open_archive_file_dialog_popup() -> void:
+	if _archive_file_dialog == null or not is_instance_valid(_archive_file_dialog):
+		return
+	_archive_file_dialog.current_path = ""
+	if _archive_file_dialog.has_method("popup_file_dialog"):
+		_archive_file_dialog.call("popup_file_dialog")
+		return
+	_archive_file_dialog.popup_centered_clamped(Vector2i(960, 720))
+
+func _try_open_web_file_picker() -> bool:
+	if not _is_web():
+		return false
+	_web_upload_callback = JavaScriptBridge.create_callback(_on_web_file_picked)
+	var window = JavaScriptBridge.get_interface("window")
+	if window == null:
+		return false
+	window.__godot_create_room_archive_upload_cb = _web_upload_callback
+	var ok_val = JavaScriptBridge.eval("""
+	(() => {
+		const cb = window.__godot_create_room_archive_upload_cb;
+		if (!cb) return false;
+		try {
+			const input = document.createElement("input");
+			input.type = "file";
+			input.accept = ".json,application/json";
+			input.style.display = "none";
+			const cleanup = () => {
+				if (input.parentNode) input.parentNode.removeChild(input);
+				try { delete window.__godot_create_room_archive_upload_cb; } catch (_e) {}
+			};
+			input.addEventListener("change", () => {
+				const file = (input.files && input.files.length > 0) ? input.files[0] : null;
+				if (!file) {
+					cb("", "");
+					cleanup();
+					return;
+				}
+				const reader = new FileReader();
+				reader.onload = () => {
+					cb(String(reader.result || ""), String(file.name || ""));
+					cleanup();
+				};
+				reader.onerror = () => {
+					cb("", String(file.name || ""));
+					cleanup();
+				};
+				reader.readAsText(file);
+			}, { once: true });
+			document.body.appendChild(input);
+			input.click();
+			return true;
+		} catch (_e) {
+			try { cb("", ""); } catch (__e) {}
+			try { delete window.__godot_create_room_archive_upload_cb; } catch (__e) {}
+			return false;
+		}
+	})()
+	""", true)
+	if ok_val is bool:
+		return bool(ok_val)
+	if ok_val is int:
+		return int(ok_val) != 0
+	if ok_val is float:
+		return absf(float(ok_val)) > 0.0001
+	var ok_text := str(ok_val).to_lower()
+	return ok_text == "true" or ok_text == "1"
+
+func _on_web_file_picked(args: Array) -> void:
+	var json_text := ""
+	var source_name := ""
+	if args.size() > 0:
+		json_text = str(args[0])
+	if args.size() > 1:
+		source_name = str(args[1]).strip_edges()
+	if json_text.is_empty():
+		if not source_name.is_empty():
+			_set_error("读取存档失败：%s" % source_name)
+		return
+	var parsed = JSON.parse_string(json_text)
+	if not (parsed is Dictionary):
+		_set_error("文件内容无效：不是存档 JSON")
+		return
+	var base_name := _sanitize_upload_file_name(source_name)
+	if base_name.is_empty():
+		base_name = "resume_archive.json"
+	base_name = _ensure_json_extension(base_name)
+	_ensure_dir(WEB_UPLOAD_DIR)
+	var path := "%s/%s" % [WEB_UPLOAD_DIR, base_name]
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		_set_error("上传失败：无法写入临时文件")
+		return
+	file.store_string(json_text)
+	file.close()
+	_load_archive_from_path(path)
+
+func _ensure_dir(dir_path: String) -> void:
+	var abs_dir := ProjectSettings.globalize_path(dir_path)
+	if DirAccess.dir_exists_absolute(abs_dir):
+		return
+	DirAccess.make_dir_recursive_absolute(abs_dir)
+
+func _ensure_json_extension(path_or_name: String) -> String:
+	var out := str(path_or_name).strip_edges()
+	if out.is_empty():
+		return ""
+	if out.to_lower().ends_with(".json"):
+		return out
+	return "%s.json" % out
+
+func _sanitize_upload_file_name(name: String) -> String:
+	var out := str(name).strip_edges()
+	out = out.replace("/", "_")
+	out = out.replace("\\", "_")
+	out = out.replace(":", "_")
+	out = out.replace("..", "_")
+	return out
 
 func _grab_default_focus() -> void:
 	if _password_edit != null and is_instance_valid(_password_edit):
@@ -474,6 +629,7 @@ func _clear_loaded_archive() -> void:
 	_resume_config_patch = {}
 	if _archive_path_edit != null and is_instance_valid(_archive_path_edit):
 		_archive_path_edit.text = ""
+		_archive_path_edit.tooltip_text = ""
 	if _archive_preview_label != null and is_instance_valid(_archive_preview_label):
 		_archive_preview_label.text = ""
 		_archive_preview_label.visible = false
@@ -510,7 +666,8 @@ func _apply_loaded_archive(path: String, archive: Dictionary, engine) -> void:
 	_resume_original_current_index = int(archive.get("current_index", -1))
 	_resume_selected_current_index = _resume_original_current_index
 	if _archive_path_edit != null and is_instance_valid(_archive_path_edit):
-		_archive_path_edit.text = path
+		_archive_path_edit.text = path.get_file()
+		_archive_path_edit.tooltip_text = path
 	_populate_resume_log_history()
 	_apply_resume_target_index(_resume_original_current_index, _resume_original_log_item_index)
 	if _room_config_editor != null and is_instance_valid(_room_config_editor):
@@ -543,9 +700,13 @@ func _on_resume_checkbox_toggled(_pressed: bool) -> void:
 	_apply_resume_mode_ui()
 
 func _on_browse_archive_pressed() -> void:
+	if _is_web():
+		if not _try_open_web_file_picker():
+			_set_error("浏览器文件选择器打开失败")
+		return
 	if _archive_file_dialog == null or not is_instance_valid(_archive_file_dialog):
 		return
-	_archive_file_dialog.popup_centered_ratio(0.7)
+	_open_archive_file_dialog_popup()
 
 func _on_archive_file_selected(path: String) -> void:
 	_load_archive_from_path(str(path))
