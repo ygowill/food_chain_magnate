@@ -90,7 +90,6 @@ func show_employee_tree() -> void:
 		p.offset_right = 0.0
 		p.offset_bottom = 0.0
 		p.position = Vector2.ZERO
-		p.size = _scene.get_viewport_rect().size
 	_employee_tree_panel.visible = true
 
 func hide_employee_tree() -> void:
@@ -174,7 +173,6 @@ func _apply_full_rect(ctrl: Control) -> void:
 	ctrl.offset_right = 0.0
 	ctrl.offset_bottom = 0.0
 	ctrl.position = Vector2.ZERO
-	ctrl.size = _scene.get_viewport_rect().size
 
 func hide_reserve_area_full_screen_view() -> void:
 	if is_instance_valid(_reserve_area_full_screen_view):

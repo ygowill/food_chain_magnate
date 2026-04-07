@@ -68,9 +68,13 @@ static func run() -> Result:
 
 	controller._auto_open_guided_action_ui(GameStateClass.new())
 	if end_panels.show_payday_panel_count != 1:
+		if controller != null and controller.has_method("dispose"):
+			controller.dispose()
 		_cleanup([scene])
 		return Result.failure("日志面板不应阻塞 Payday 自动打开，实际 show_count=%d" % end_panels.show_payday_panel_count)
 
+	if controller != null and controller.has_method("dispose"):
+		controller.dispose()
 	_cleanup([scene])
 	return Result.success()
 

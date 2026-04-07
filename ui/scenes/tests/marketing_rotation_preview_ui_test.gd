@@ -60,16 +60,20 @@ static func _case_panel_rotation_logic() -> Result:
 
 	panel.rotate_ccw()
 	if panel.get_selected_rotation() != 0:
+		_cleanup_panel_controls(panel)
 		return Result.failure("营销左旋后应回到 0 度，实际: %d" % panel.get_selected_rotation())
 
 	panel._selected_type = "airplane"
 	panel._selected_rotation = 180
 	panel._update_rotation_section()
 	if panel.get_selected_rotation() != 0:
+		_cleanup_panel_controls(panel)
 		return Result.failure("飞机广告不应保留旋转，实际: %d" % panel.get_selected_rotation())
 	if panel.rotation_section != null and panel.rotation_section.visible:
+		_cleanup_panel_controls(panel)
 		return Result.failure("飞机广告应隐藏旋转区")
 
+	_cleanup_panel_controls(panel)
 	_safe_free(panel)
 	_safe_free(board_btn)
 	return Result.success({})
@@ -121,6 +125,29 @@ static func _safe_free(node) -> void:
 		return
 	if node is Node:
 		(node as Node).free()
+
+static func _cleanup_panel_controls(panel) -> void:
+	if panel == null:
+		return
+	for n in [
+		panel.rotation_section,
+		panel.rotate_left_btn,
+		panel.rotation_value_label,
+		panel.rotate_right_btn,
+		panel.target_label,
+		panel.range_info_label,
+		panel.error_label,
+		panel.confirm_btn,
+	]:
+		_safe_free(n)
+	panel.rotation_section = null
+	panel.rotate_left_btn = null
+	panel.rotation_value_label = null
+	panel.rotate_right_btn = null
+	panel.target_label = null
+	panel.range_info_label = null
+	panel.error_label = null
+	panel.confirm_btn = null
 
 class _MapRefreshSpy:
 	extends RefCounted

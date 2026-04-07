@@ -20,6 +20,12 @@ class FakePanelController:
 	func get_reserve_cards_full_screen_view():
 		return reserve_view
 
+	func dispose() -> void:
+		if reserve_view != null and is_instance_valid(reserve_view):
+			reserve_view.free()
+		reserve_view = null
+		shown_focus_ids.clear()
+
 class FakeTimelineController:
 	extends RefCounted
 
@@ -102,6 +108,10 @@ static func run(seed_val: int = 12345) -> Result:
 	return _finish(Result.success({}), ctrl, engine, prev_mode, prev_local_player_id)
 
 static func _finish(result: Result, ctrl, engine, prev_mode, prev_local_player_id: int) -> Result:
+	if ctrl != null and ctrl.has_method("get"):
+		var panel = ctrl.get("_panel_controller")
+		if panel != null and panel.has_method("dispose"):
+			panel.dispose()
 	if ctrl != null and ctrl.has_method("dispose"):
 		ctrl.dispose()
 	if engine != null and engine.has_method("dispose"):

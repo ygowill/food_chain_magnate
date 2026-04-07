@@ -209,6 +209,18 @@ detect_log_outcome() {
 	return 2
 }
 
+wait_for_process_exit() {
+	local pid="$1"
+	local attempts="${2:-20}"
+	for ((i=0; i<attempts; i++)); do
+		if ! kill -0 "$pid" 2>/dev/null; then
+			return 0
+		fi
+		sleep 0.2
+	done
+	return 1
+}
+
 for ((elapsed=0; elapsed<TIMEOUT_SECONDS; elapsed++)); do
 	if detect_log_outcome "$LOG_FILE"; then
 		if ! check_log_for_script_errors "$LOG_FILE"; then
@@ -219,11 +231,23 @@ for ((elapsed=0; elapsed<TIMEOUT_SECONDS; elapsed++)); do
 			exit 1
 		fi
 		if kill -0 "$PID" 2>/dev/null; then
-			kill "$PID" 2>/dev/null || true
-			sleep 1
-			kill -9 "$PID" 2>/dev/null || true
-			wait "$PID" 2>/dev/null || true
-			echo "[$NAME] WARN log indicates PASS before godot exited; terminating process"
+			if wait_for_process_exit "$PID" 20; then
+				if ! wait "$PID"; then
+					code=$?
+					if [[ $code -ne 0 ]] && ! can_treat_nonzero_as_success "$LOG_FILE"; then
+						exit "$code"
+					fi
+				fi
+				if ! check_log_for_script_errors "$LOG_FILE"; then
+					exit 1
+				fi
+			else
+				kill "$PID" 2>/dev/null || true
+				sleep 1
+				kill -9 "$PID" 2>/dev/null || true
+				wait "$PID" 2>/dev/null || true
+				echo "[$NAME] WARN log indicates PASS before godot exited; terminating process"
+			fi
 		fi
 		exit 0
 	fi

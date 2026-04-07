@@ -34,6 +34,17 @@ func setup(
 	_hide_loading = hide_loading
 	_refresh_ui = refresh_ui
 
+func dispose() -> void:
+	_ensure_session = Callable()
+	_resume_room = Callable()
+	_connect_to_ws = Callable()
+	_mark_platform_ready = Callable()
+	_set_connect_status = Callable()
+	_set_browse_status = Callable()
+	_show_error = Callable()
+	_hide_loading = Callable()
+	_refresh_ui = Callable()
+
 func has_attempted() -> bool:
 	return _attempted
 

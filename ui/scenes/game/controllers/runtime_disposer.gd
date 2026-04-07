@@ -62,6 +62,10 @@ static func dispose_runtime(game) -> void:
 		game._online_resync_controller.dispose()
 	game._online_resync_controller = null
 
+	if game._startup_online_resume_controller != null and game._startup_online_resume_controller.has_method("dispose"):
+		game._startup_online_resume_controller.dispose()
+	game._startup_online_resume_controller = null
+
 	if game._timeline_controller != null and game._timeline_controller.has_method("dispose"):
 		game._timeline_controller.dispose()
 	game._timeline_controller = null
@@ -88,4 +92,3 @@ static func dispose_runtime(game) -> void:
 		Globals.is_game_active = false
 
 	game.game_engine = null
-

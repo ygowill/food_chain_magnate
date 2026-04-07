@@ -9,14 +9,20 @@ const EmployeeCardClass = preload("res://ui/components/employee_card/employee_ca
 const StructuresPassClass = preload("res://ui/scenes/game/map/drawer/passes/structures_pass.gd")
 const TilePreviewFactoryClass = preload("res://ui/components/reserve_area/tile_preview_factory.gd")
 
+@onready var root_ui: Control = $Root
 @onready var output: RichTextLabel = $Root/Output
 @onready var run_button: Button = $Root/TopBar/RunButton
 
 var _exit_code: int = 0
 var _write_ui_log: bool = true
 
+func _is_headless_runtime() -> bool:
+	return DisplayServer.get_name() == "headless"
+
 func _ready() -> void:
-	_write_ui_log = not OS.has_feature("headless")
+	_write_ui_log = not _is_headless_runtime()
+	if not _write_ui_log and is_instance_valid(root_ui):
+		root_ui.queue_free()
 	_clear_output()
 	_append_output("全部测试聚合：按既定顺序依次运行所有 headless 测试。\n")
 	_append_output("提示：CLI 可用 `-- --autorun` 自动执行并退出。\n")
@@ -135,7 +141,7 @@ func _prepare_runtime_cleanup_before_quit() -> void:
 	if SceneManager != null and SceneManager.has_method("clear_stack"):
 		SceneManager.clear_stack()
 	Globals.reset_game_config()
-	await _drain_frames(6)
+	await _drain_frames(2)
 
 func _cleanup_runtime_between_tests() -> void:
 	UiSkinCacheClass.clear_cache()
@@ -154,7 +160,7 @@ func _cleanup_runtime_between_tests() -> void:
 	if SceneManager != null and SceneManager.has_method("clear_stack"):
 		SceneManager.clear_stack()
 	Globals.reset_game_config()
-	await _drain_frames(2)
+	await _drain_frames(6)
 
 func _run_check_compile_test() -> Result:
 	var scan_result: Result = CheckCompileScript.run_scan()
@@ -171,7 +177,7 @@ func _should_autorun() -> bool:
 	var args := OS.get_cmdline_user_args()
 	if args.has("autorun") or args.has("--autorun"):
 		return true
-	return OS.has_feature("headless")
+	return _is_headless_runtime()
 
 func _drain_frames(count: int) -> void:
 	var n := maxi(1, int(count))

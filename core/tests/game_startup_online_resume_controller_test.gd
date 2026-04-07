@@ -39,6 +39,7 @@ static func run() -> Result:
 	)
 	var idle_started = await idle_controller.attempt_startup_resume_if_needed()
 	if idle_started:
+		_dispose_controllers([idle_controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "无恢复上下文时不应启动 Game 冷启动恢复")
 
@@ -57,15 +58,19 @@ static func run() -> Result:
 
 	var started = await controller.attempt_startup_resume_if_needed()
 	if not started:
+		_dispose_controllers([idle_controller, controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "有恢复上下文时应启动成功: %s" % harness.failure_message)
 	if harness.ensure_calls != 1 or harness.resume_calls != 1 or harness.connect_calls != 1:
+		_dispose_controllers([idle_controller, controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "冷启动恢复调用次数错误")
 	if harness.game_started_calls != 1:
+		_dispose_controllers([idle_controller, controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "on_game_started 应被调用一次")
 	if harness.statuses.is_empty():
+		_dispose_controllers([idle_controller, controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "恢复过程中应产生状态文案")
 
@@ -84,9 +89,11 @@ static func run() -> Result:
 	)
 	var delta_started = await delta_controller.attempt_startup_resume_if_needed()
 	if not delta_started:
+		_dispose_controllers([idle_controller, controller, delta_controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "delta 恢复路径应判定为启动成功")
 	if delta_harness.game_started_calls != 1:
+		_dispose_controllers([idle_controller, controller, delta_controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "delta 恢复路径应触发 on_game_started")
 
@@ -105,9 +112,11 @@ static func run() -> Result:
 	)
 	var retry_started = await retry_controller.attempt_startup_resume_if_needed()
 	if not retry_started:
+		_dispose_controllers([idle_controller, controller, delta_controller, retry_controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "可重试失败后应最终恢复成功")
 	if retry_harness.resume_calls != 2:
+		_dispose_controllers([idle_controller, controller, delta_controller, retry_controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "冷启动可重试失败后应再次调用 resume_room")
 
@@ -127,12 +136,15 @@ static func run() -> Result:
 	)
 	var mismatch_started = await mismatch_controller.attempt_startup_resume_if_needed()
 	if mismatch_started:
+		_dispose_controllers([idle_controller, controller, delta_controller, retry_controller, mismatch_controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "账号不匹配时不应继续启动恢复")
 	if NetContext.has_online_resume_context():
+		_dispose_controllers([idle_controller, controller, delta_controller, retry_controller, mismatch_controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "账号不匹配时应清理 resume 上下文")
 
+	_dispose_controllers([idle_controller, controller, delta_controller, retry_controller, mismatch_controller])
 	host.queue_free()
 	_restore(prev_resume_state, prev_pending_replay, prev_user_id)
 	return Result.success()
@@ -145,6 +157,11 @@ static func _restore(prev_resume_state: Dictionary, prev_pending_replay: String,
 static func _restore_and_fail(prev_resume_state: Dictionary, prev_pending_replay: String, prev_user_id: String, message: String) -> Result:
 	_restore(prev_resume_state, prev_pending_replay, prev_user_id)
 	return Result.failure(message)
+
+static func _dispose_controllers(controllers: Array) -> void:
+	for c in controllers:
+		if c != null and is_instance_valid(c) and c.has_method("dispose"):
+			c.dispose()
 
 class _Harness:
 	extends RefCounted

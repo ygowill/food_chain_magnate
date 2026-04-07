@@ -24,7 +24,7 @@ static func set_current_bundle(bundle) -> void:
 	_current_bundle = bundle if bundle != null else RulesRegistryBundleClass.new()
 
 static func reset_current_bundle() -> void:
-	_current_bundle = RulesRegistryBundleClass.new()
+	_current_bundle = null
 
 static func reset() -> void:
 	var target = _get_bundle()
@@ -139,4 +139,3 @@ static func apply_to_state(state: GameState) -> Result:
 		state.employee_pool[emp_id] = after
 
 	return Result.success()
-

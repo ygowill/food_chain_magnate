@@ -123,6 +123,7 @@ static func run() -> Result:
 	await tree.process_frame
 
 	if harness.resume_calls != 1:
+		controller.dispose()
 		host.queue_free()
 		return _restore_and_fail(
 			prev_mode,
@@ -142,6 +143,7 @@ static func run() -> Result:
 			"resume_room_request 调用次数错误: %d" % harness.resume_calls
 		)
 	if harness.connect_urls.size() != 1:
+		controller.dispose()
 		host.queue_free()
 		return _restore_and_fail(
 			prev_mode,
@@ -161,6 +163,7 @@ static func run() -> Result:
 			"connect_to_server 调用次数错误: %s" % str(harness.connect_urls)
 		)
 	if harness.goto_lobby_calls != 0:
+		controller.dispose()
 		host.queue_free()
 		return _restore_and_fail(
 			prev_mode,
@@ -180,6 +183,7 @@ static func run() -> Result:
 			"重连成功后不应返回大厅"
 		)
 	if harness.hide_loading_calls <= 0:
+		controller.dispose()
 		host.queue_free()
 		return _restore_and_fail(
 			prev_mode,
@@ -199,6 +203,7 @@ static func run() -> Result:
 			"重连成功后应隐藏 loading"
 		)
 	if NetContext.is_online_reconnecting():
+		controller.dispose()
 		host.queue_free()
 		return _restore_and_fail(
 			prev_mode,
@@ -218,6 +223,7 @@ static func run() -> Result:
 			"重连成功后应清理 reconnecting 状态"
 		)
 
+	controller.dispose()
 	host.queue_free()
 	_restore(
 		prev_mode,

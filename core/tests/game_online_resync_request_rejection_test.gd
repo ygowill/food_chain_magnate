@@ -50,14 +50,17 @@ static func run() -> Result:
 	controller._request_online_resync("forced_mismatch")
 	var first_request_id := str(controller._resync_request_id).strip_edges()
 	if first_request_id.is_empty():
+		controller.dispose()
 		host.queue_free()
 		_restore(prev_mode, prev_room_state, prev_connected)
 		return Result.failure("完整 resync 应记录 request_id")
 	if not controller.is_resync_in_progress():
+		controller.dispose()
 		host.queue_free()
 		_restore(prev_mode, prev_room_state, prev_connected)
 		return Result.failure("发送 resync 后应进入同步中状态")
 	if harness.request_resync_force_flags.size() != 1 or bool(harness.request_resync_force_flags[0]):
+		controller.dispose()
 		host.queue_free()
 		_restore(prev_mode, prev_room_state, prev_connected)
 		return Result.failure("普通 resync 不应携带 force_snapshot")
@@ -74,6 +77,7 @@ static func run() -> Result:
 	controller._request_online_resync("forced_rate_limit")
 	var second_request_id := str(controller._resync_request_id).strip_edges()
 	if second_request_id.is_empty():
+		controller.dispose()
 		host.queue_free()
 		_restore(prev_mode, prev_room_state, prev_connected)
 		return Result.failure("第二次 resync 也应记录 request_id")
@@ -83,10 +87,12 @@ static func run() -> Result:
 		_restore(prev_mode, prev_room_state, prev_connected)
 		return Result.failure("resync_rate_limited 后不应继续卡在同步中")
 	if harness.request_resync_calls != 2:
+		controller.dispose()
 		host.queue_free()
 		_restore(prev_mode, prev_room_state, prev_connected)
 		return Result.failure("request_resync 调用次数错误: %d" % harness.request_resync_calls)
 	if harness.update_ui_calls < 2:
+		controller.dispose()
 		host.queue_free()
 		_restore(prev_mode, prev_room_state, prev_connected)
 		return Result.failure("拒绝 resync 后应刷新 UI: %d" % harness.update_ui_calls)
@@ -94,18 +100,22 @@ static func run() -> Result:
 	controller._resync_in_progress = true
 	controller._on_online_resync_delta_failed("delta mismatch")
 	if harness.request_resync_calls != 3:
+		controller.dispose()
 		host.queue_free()
 		_restore(prev_mode, prev_room_state, prev_connected)
 		return Result.failure("delta 失败后应立刻发起 snapshot fallback: %d" % harness.request_resync_calls)
 	if harness.request_resync_force_flags.size() != 3 or not bool(harness.request_resync_force_flags[2]):
+		controller.dispose()
 		host.queue_free()
 		_restore(prev_mode, prev_room_state, prev_connected)
 		return Result.failure("delta 失败后的 fallback 应携带 force_snapshot")
 	if not controller.is_resync_in_progress():
+		controller.dispose()
 		host.queue_free()
 		_restore(prev_mode, prev_room_state, prev_connected)
 		return Result.failure("delta 失败后重新发起 snapshot fallback 时应保持同步中状态")
 
+	controller.dispose()
 	host.queue_free()
 	_restore(prev_mode, prev_room_state, prev_connected)
 	return Result.success()

@@ -24,7 +24,7 @@ static func set_current_bundle(bundle) -> void:
 	_current_bundle = bundle if bundle != null else RulesRegistryBundleClass.new()
 
 static func reset_current_bundle() -> void:
-	_current_bundle = RulesRegistryBundleClass.new()
+	_current_bundle = null
 
 static func reset() -> void:
 	var target = _get_bundle()

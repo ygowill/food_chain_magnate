@@ -21,6 +21,8 @@ static func run() -> Result:
 	var harness_idle := _Harness.new()
 	var controller_idle: RefCounted = _build_controller(harness_idle)
 	await controller_idle.attempt_auto_resume_if_needed()
+	if controller_idle != null and controller_idle.has_method("dispose"):
+		controller_idle.dispose()
 	if harness_idle.ensure_calls != 0 or harness_idle.resume_calls != 0 or harness_idle.connect_calls != 0:
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "无 resume 上下文时不应发起自动恢复")
 
@@ -30,18 +32,25 @@ static func run() -> Result:
 	await controller.attempt_auto_resume_if_needed()
 
 	if harness.ensure_calls != 1:
+		_dispose_controllers([controller])
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "ensure_session 调用次数错误: %d" % harness.ensure_calls)
 	if harness.resume_calls != 1:
+		_dispose_controllers([controller])
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "resume_room 调用次数错误: %d" % harness.resume_calls)
 	if harness.connect_calls != 1:
+		_dispose_controllers([controller])
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "connect_to_ws 调用次数错误: %d" % harness.connect_calls)
 	if harness.last_room_code != "ROOM88":
+		_dispose_controllers([controller])
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "resume_room room_code 错误: %s" % harness.last_room_code)
 	if harness.last_ws_url != "ws://resume.example.test" or harness.last_connect_token != "resume-token":
+		_dispose_controllers([controller])
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "connect_to_ws 参数错误")
 	if not harness.platform_marked_ready:
+		_dispose_controllers([controller])
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "成功恢复前应标记 platform ready")
 	if harness.hide_loading_calls != 1:
+		_dispose_controllers([controller])
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "成功恢复后应关闭 loading: %d" % harness.hide_loading_calls)
 
 	NetContext.set_online_resume_context("ROOM90", "player", "https://platform.example.test")
@@ -50,8 +59,10 @@ static func run() -> Result:
 	var retry_controller: RefCounted = _build_controller(retry_harness)
 	await retry_controller.attempt_auto_resume_if_needed()
 	if retry_harness.resume_calls != 2:
+		_dispose_controllers([controller, retry_controller])
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "可重试失败后应再次调用 resume_room")
 	if retry_harness.connect_calls != 1:
+		_dispose_controllers([controller, retry_controller])
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "重试成功后应连接一次")
 
 	NetContext.set_online_resume_context("ROOM91", "player", "https://platform.example.test")
@@ -60,8 +71,10 @@ static func run() -> Result:
 	var connect_retry_controller: RefCounted = _build_controller(connect_retry_harness)
 	await connect_retry_controller.attempt_auto_resume_if_needed()
 	if connect_retry_harness.resume_calls != 2:
+		_dispose_controllers([controller, retry_controller, connect_retry_controller])
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "同步建连失败后应重新走完整恢复流程")
 	if connect_retry_harness.connect_calls != 2:
+		_dispose_controllers([controller, retry_controller, connect_retry_controller])
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "同步建连失败后应再次尝试连接")
 
 	NetContext.set_online_resume_context("ROOM92", "player", "https://platform.example.test")
@@ -70,10 +83,13 @@ static func run() -> Result:
 	var async_retry_controller: RefCounted = _build_controller(async_retry_harness)
 	await async_retry_controller.attempt_auto_resume_if_needed()
 	if async_retry_harness.resume_calls != 2:
+		_dispose_controllers([controller, retry_controller, connect_retry_controller, async_retry_controller])
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "异步 connection_failed 后应重新走完整恢复流程")
 	if async_retry_harness.connect_calls != 2:
+		_dispose_controllers([controller, retry_controller, connect_retry_controller, async_retry_controller])
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "异步 connection_failed 后应再次尝试连接")
 	if not NetContext.has_online_resume_context():
+		_dispose_controllers([controller, retry_controller, connect_retry_controller, async_retry_controller])
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "异步 connection_failed 不应清理 resume 上下文")
 
 	NetContext.set_online_resume_context("ROOM89", "player", "https://platform.example.test")
@@ -83,8 +99,10 @@ static func run() -> Result:
 	var mismatch_controller: RefCounted = _build_controller(mismatch_harness)
 	await mismatch_controller.attempt_auto_resume_if_needed()
 	if NetContext.has_online_resume_context():
+		_dispose_controllers([controller, retry_controller, connect_retry_controller, async_retry_controller, mismatch_controller])
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "账号不匹配时应清理 resume 上下文")
 
+	_dispose_controllers([controller, retry_controller, connect_retry_controller, async_retry_controller, mismatch_controller])
 	_restore(prev_resume_state, prev_pending_replay, prev_user_id)
 	return Result.success()
 
@@ -111,6 +129,11 @@ static func _restore(prev_resume_state: Dictionary, prev_pending_replay: String,
 static func _restore_and_fail(prev_resume_state: Dictionary, prev_pending_replay: String, prev_user_id: String, message: String) -> Result:
 	_restore(prev_resume_state, prev_pending_replay, prev_user_id)
 	return Result.failure(message)
+
+static func _dispose_controllers(controllers: Array) -> void:
+	for c in controllers:
+		if c != null and is_instance_valid(c) and c.has_method("dispose"):
+			c.dispose()
 
 class _Harness:
 	extends RefCounted

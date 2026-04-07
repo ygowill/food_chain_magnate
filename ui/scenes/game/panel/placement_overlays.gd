@@ -26,6 +26,43 @@ func _init(scene, map_controller, overlay_controller, execute_command: Callable,
 	_execute_command = execute_command
 	_hide_all = hide_all
 
+func dispose() -> void:
+	hide()
+
+	if _map_controller != null:
+		if _map_controller.has_method("set_restaurant_placement_overlay"):
+			_map_controller.set_restaurant_placement_overlay(null)
+		if _map_controller.has_method("set_house_placement_overlay"):
+			_map_controller.set_house_placement_overlay(null)
+		if _map_controller.has_method("set_piece_placement_overlay"):
+			_map_controller.set_piece_placement_overlay(null)
+
+	if is_instance_valid(restaurant_placement_overlay):
+		restaurant_placement_overlay.queue_free()
+	restaurant_placement_overlay = null
+
+	if is_instance_valid(house_placement_overlay):
+		house_placement_overlay.queue_free()
+	house_placement_overlay = null
+
+	if is_instance_valid(piece_placement_overlay):
+		piece_placement_overlay.queue_free()
+	piece_placement_overlay = null
+
+	for c in _module_overlay_controllers:
+		if c == null or not is_instance_valid(c):
+			continue
+		if c.has_method("dispose"):
+			c.call("dispose")
+	_module_overlay_controllers.clear()
+	_module_overlay_controllers_loaded = false
+
+	_scene = null
+	_map_controller = null
+	_overlay_controller = null
+	_execute_command = Callable()
+	_hide_all = Callable()
+
 func get_active_context_overlay():
 	_ensure_module_overlay_controllers_loaded()
 	if is_instance_valid(restaurant_placement_overlay) and restaurant_placement_overlay.visible:

@@ -222,6 +222,7 @@ static func run() -> Result:
 	var next_cmd = history[partial_count]
 	controller._on_online_command_applied(next_cmd.to_dict(), str(hashes_by_sequence.get(partial_count + 1, "")))
 	if NetContext.get_online_resume_last_applied_sequence() != partial_count + 1:
+		controller.dispose()
 		host.queue_free()
 		await tree.process_frame
 		return _restore_and_fail(
@@ -238,6 +239,7 @@ static func run() -> Result:
 			"正常联机推进后未刷新 resume sequence: %d" % NetContext.get_online_resume_last_applied_sequence()
 		)
 	if NetContext.get_online_resume_last_state_hash() != str(hashes_by_sequence.get(partial_count + 1, "")):
+		controller.dispose()
 		host.queue_free()
 		await tree.process_frame
 		return _restore_and_fail(
@@ -256,6 +258,7 @@ static func run() -> Result:
 
 	var archive_r = server_engine.create_archive()
 	if not archive_r.ok:
+		controller.dispose()
 		host.queue_free()
 		await tree.process_frame
 		return _restore_and_fail(
@@ -275,6 +278,7 @@ static func run() -> Result:
 	var archive_probe = GameEngineClass.new()
 	var archive_load_r: Result = archive_probe.load_from_archive(archive)
 	if not archive_load_r.ok:
+		controller.dispose()
 		host.queue_free()
 		await tree.process_frame
 		return _restore_and_fail(
@@ -293,6 +297,7 @@ static func run() -> Result:
 	_apply_online_dinnertime_confirm_to_engine(archive_probe)
 	var archive_hash := str(archive_probe.get_state().compute_hash()) if archive_probe.get_state() != null else ""
 	if archive_hash.is_empty():
+		controller.dispose()
 		host.queue_free()
 		await tree.process_frame
 		return _restore_and_fail(
@@ -312,6 +317,7 @@ static func run() -> Result:
 		NetClient._pending_resync_archive = archive.duplicate(true)
 	controller._on_online_resync_archive_received(archive)
 	if NetContext.get_online_resume_last_applied_sequence() != history.size():
+		controller.dispose()
 		host.queue_free()
 		await tree.process_frame
 		return _restore_and_fail(
@@ -329,6 +335,7 @@ static func run() -> Result:
 			prev_pending_archive
 		)
 	if NetContext.get_online_resume_last_state_hash() != archive_hash:
+		controller.dispose()
 		host.queue_free()
 		await tree.process_frame
 		return _restore_and_fail(
@@ -346,6 +353,7 @@ static func run() -> Result:
 			prev_pending_archive
 		)
 	if NetClient != null and not Dictionary(NetClient._pending_resync_archive).is_empty():
+		controller.dispose()
 		host.queue_free()
 		await tree.process_frame
 		return _restore_and_fail(
@@ -369,6 +377,7 @@ static func run() -> Result:
 	var rewind_probe = GameEngineClass.new()
 	var rewind_load_r: Result = rewind_probe.load_from_archive(rewind_archive)
 	if not rewind_load_r.ok:
+		controller.dispose()
 		host.queue_free()
 		await tree.process_frame
 		return _restore_and_fail(
@@ -388,6 +397,7 @@ static func run() -> Result:
 	_apply_online_dinnertime_confirm_to_engine(rewind_probe)
 	var rewind_hash := str(rewind_probe.get_state().compute_hash()) if rewind_probe.get_state() != null else ""
 	if rewind_hash.is_empty():
+		controller.dispose()
 		host.queue_free()
 		await tree.process_frame
 		return _restore_and_fail(
@@ -409,6 +419,7 @@ static func run() -> Result:
 		NetClient._pending_resync_archive = rewind_archive.duplicate(true)
 	controller._on_online_resync_archive_received(rewind_archive)
 	if NetContext.get_online_resume_last_applied_sequence() != rewind_target + 1:
+		controller.dispose()
 		host.queue_free()
 		await tree.process_frame
 		return _restore_and_fail(
@@ -426,6 +437,7 @@ static func run() -> Result:
 			prev_pending_archive
 		)
 	if NetContext.get_online_resume_last_state_hash() != rewind_hash:
+		controller.dispose()
 		host.queue_free()
 		await tree.process_frame
 		return _restore_and_fail(
@@ -443,6 +455,7 @@ static func run() -> Result:
 			prev_pending_archive
 		)
 	if NetClient != null and not Dictionary(NetClient._pending_resync_archive).is_empty():
+		controller.dispose()
 		host.queue_free()
 		await tree.process_frame
 		return _restore_and_fail(
@@ -460,6 +473,7 @@ static func run() -> Result:
 			prev_pending_archive
 		)
 
+	controller.dispose()
 	host.queue_free()
 	await tree.process_frame
 	_restore(

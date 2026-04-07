@@ -237,6 +237,8 @@ func dispose() -> void:
 
 	_working_panels = null
 	_marketing_panels = null
+	if _placement_overlays != null and _placement_overlays.has_method("dispose"):
+		_placement_overlays.dispose()
 	_placement_overlays = null
 	_end_panels = null
 

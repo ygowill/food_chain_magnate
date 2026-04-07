@@ -56,18 +56,26 @@ static func run() -> Result:
 
 	controller.show_game_log_panel_in_right_panel()
 	if timeline.apply_count != 1:
+		if controller != null and controller.has_method("dispose"):
+			controller.dispose()
 		await _cleanup_nodes([game_log_panel, right_dock_host], st)
 		return Result.failure("首次 show 应触发 1 次时间线刷新，实际=%d" % timeline.apply_count)
 	if game_log_panel.get_parent() != right_dock_host or not game_log_panel.visible:
+		if controller != null and controller.has_method("dispose"):
+			controller.dispose()
 		await _cleanup_nodes([game_log_panel, right_dock_host], st)
 		return Result.failure("show 后日志面板未正确 dock 到右侧")
 
 	# 已经显示在右侧时重复调用，不应重复触发刷新。
 	controller.show_game_log_panel_in_right_panel()
 	if timeline.apply_count != 1:
+		if controller != null and controller.has_method("dispose"):
+			controller.dispose()
 		await _cleanup_nodes([game_log_panel, right_dock_host], st)
 		return Result.failure("重复 show 不应重复刷新，实际=%d" % timeline.apply_count)
 
+	if controller != null and controller.has_method("dispose"):
+		controller.dispose()
 	await _cleanup_nodes([game_log_panel, right_dock_host], st)
 	return Result.success({})
 

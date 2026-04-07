@@ -42,7 +42,7 @@ func _apply_full_rect_layout() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, 0)
 	position = Vector2.ZERO
 	var p := get_parent()
-	if p is Control:
+	if visible and p is Control:
 		size = (p as Control).size
 
 func _bring_to_front() -> void:

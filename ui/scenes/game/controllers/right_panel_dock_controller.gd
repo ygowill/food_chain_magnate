@@ -67,6 +67,27 @@ func _init(
 	_right_panel_footer_secondary_button = right_panel_footer_secondary_button
 	_right_panel_footer_primary_button = right_panel_footer_primary_button
 
+func dispose() -> void:
+	_bind_right_panel_footer_source(null)
+	_ensure_right_panel_visible = Callable()
+	_cancel_docked_panel = Callable()
+	_toggle_game_log = Callable()
+	_request_action = Callable()
+	_get_flow_controls_config = Callable()
+	_game_log_panel = null
+	_right_panel_default_stack = null
+	_right_panel_dock_host = null
+	_right_panel_header_row = null
+	_right_panel_back_button = null
+	_right_panel_title_label = null
+	_right_panel_footer_row = null
+	_right_panel_footer_cancel_button = null
+	_right_panel_footer_secondary_button = null
+	_right_panel_footer_primary_button = null
+	_right_panel_footer_source = null
+	_footer_secondary_action_id = ""
+	_footer_secondary_disabled_reason = ""
+
 func dock_popup(panel: Control) -> bool:
 	if panel == null or not is_instance_valid(panel):
 		return false

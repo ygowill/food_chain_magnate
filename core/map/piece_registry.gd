@@ -25,7 +25,7 @@ static func set_current_bundle(bundle) -> void:
 	_current_bundle = bundle if bundle != null else CatalogRegistryBundleClass.new()
 
 static func reset_current_bundle() -> void:
-	_current_bundle = CatalogRegistryBundleClass.new()
+	_current_bundle = null
 
 static func is_loaded() -> bool:
 	return bool(_get_bundle().piece_loaded)

@@ -60,15 +60,23 @@ static func run() -> Result:
 
 	var ok := controller.dock_popup(payday_panel)
 	if not ok:
+		if controller != null and controller.has_method("dispose"):
+			controller.dispose()
 		_cleanup([payday_panel, log_panel, primary_button, secondary_button, cancel_button, footer_row, title_label, back_button, header_row, default_stack, dock_host])
 		return Result.failure("dock_popup 应成功")
 	if log_panel.visible:
+		if controller != null and controller.has_method("dispose"):
+			controller.dispose()
 		_cleanup([payday_panel, log_panel, primary_button, secondary_button, cancel_button, footer_row, title_label, back_button, header_row, default_stack, dock_host])
 		return Result.failure("新的 dock panel 打开后应隐藏旧日志面板")
 	if payday_panel.get_parent() != dock_host or not payday_panel.visible:
+		if controller != null and controller.has_method("dispose"):
+			controller.dispose()
 		_cleanup([payday_panel, log_panel, primary_button, secondary_button, cancel_button, footer_row, title_label, back_button, header_row, default_stack, dock_host])
 		return Result.failure("新的 dock panel 未正确显示在 DockHost 中")
 
+	if controller != null and controller.has_method("dispose"):
+		controller.dispose()
 	_cleanup([payday_panel, log_panel, primary_button, secondary_button, cancel_button, footer_row, title_label, back_button, header_row, default_stack, dock_host])
 	return Result.success()
 

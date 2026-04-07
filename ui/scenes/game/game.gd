@@ -108,6 +108,10 @@ var _online_waiting_action_ui_hidden: bool = false
 var _startup_online_resume_ui_hidden: bool = false
 var _match_details_request_id: String = ""
 var _match_details_requested_allow_spectators: Variant = null
+
+func _is_headless_runtime() -> bool:
+	return DisplayServer.get_name() == "headless"
+
 func _ready() -> void:
 	var span_ready := PerfTraceClass.begin_span("game:_ready")
 	GameLog.info("Game", "游戏场景已加载")
@@ -302,10 +306,11 @@ func _ready() -> void:
 		_set_startup_online_resume_ui_hidden(false)
 
 		# 非关键面板后台预热（issue_tracker #71）：不阻塞首帧交互；未完成时打开面板显示“加载中...”。
-		call_deferred("_start_background_ui_warmup")
+		if not _is_headless_runtime():
+			call_deferred("_start_background_ui_warmup")
 
 	PerfTraceClass.end_span(span_ready)
-	if PerfTraceClass.enabled() and not _startup_profile_reported:
+	if PerfTraceClass.enabled() and not _startup_profile_reported and not _is_headless_runtime():
 		_startup_profile_reported = true
 		call_deferred("_report_startup_profile")
 
@@ -323,7 +328,23 @@ func _exit_tree() -> void:
 	_dispose_runtime()
 
 func _dispose_runtime() -> void:
+	_disconnect_runtime_signals()
 	GameRuntimeDisposerClass.dispose_runtime(self)
+
+func _disconnect_runtime_signals() -> void:
+	if Globals != null and Globals.audio_muted_changed.is_connected(_on_audio_muted_changed):
+		Globals.audio_muted_changed.disconnect(_on_audio_muted_changed)
+
+	if DebugFlags != null and _debug_panel_controller != null:
+		var debug_panel_toggled_cb := Callable(_debug_panel_controller, "on_debug_panel_toggled")
+		if DebugFlags.has_signal("debug_panel_toggled") and DebugFlags.is_connected("debug_panel_toggled", debug_panel_toggled_cb):
+			DebugFlags.disconnect("debug_panel_toggled", debug_panel_toggled_cb)
+
+	if NetClient != null:
+		if NetClient.room_state_updated.is_connected(_on_online_match_room_state_updated):
+			NetClient.room_state_updated.disconnect(_on_online_match_room_state_updated)
+		if NetClient.request_rejected.is_connected(_on_online_match_request_rejected):
+			NetClient.request_rejected.disconnect(_on_online_match_request_rejected)
 
 func _on_root_resized() -> void:
 	_apply_responsive_layout()
@@ -514,6 +535,8 @@ func _should_defer_local_game_init(startup_direct_resume: bool) -> bool:
 func _ensure_online_resync_controller() -> void:
 	if game_engine == null:
 		return
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return
 	if _online_resync_controller != null:
 		return
 	_online_resync_controller = GameOnlineResyncControllerClass.new(
@@ -599,7 +622,7 @@ func _prepare_startup_intro_before_ui_sync() -> bool:
 	# 在 UI 同步前把地图/顺位条“隐藏到动画起点”，避免先闪现完整结果再播放动画。
 	if _startup_intro_played or _startup_intro_running:
 		return false
-	if OS.has_feature("headless"):
+	if _is_headless_runtime():
 		_startup_intro_played = true
 		return false
 	# 回放/时间线回退：不播放开局动画，避免干扰复盘/测试。

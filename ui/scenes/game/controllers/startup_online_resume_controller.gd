@@ -27,6 +27,15 @@ func _init(
 	_on_failure = on_failure
 	_on_status_changed = on_status_changed
 
+func dispose() -> void:
+	_host = null
+	_ensure_session = Callable()
+	_resume_room = Callable()
+	_connect_to_server = Callable()
+	_on_game_started = Callable()
+	_on_failure = Callable()
+	_on_status_changed = Callable()
+
 func should_attempt_startup_resume() -> bool:
 	if OnlineSessionCoordinator == null or not OnlineSessionCoordinator.has_method("should_attempt_startup_game_resume"):
 		return false

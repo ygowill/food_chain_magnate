@@ -27,6 +27,28 @@ func _init(scene, map_controller, overlay_controller, execute_command: Callable,
 	_execute_command = execute_command
 	_hide_all = hide_all
 
+func dispose() -> void:
+	_hide_choice_dialog()
+	if is_instance_valid(_choice_dialog):
+		_choice_dialog.queue_free()
+	_choice_dialog = null
+
+	if is_instance_valid(_overlay):
+		_overlay.queue_free()
+	_overlay = null
+
+	_clear_action_panel_context()
+	_set_map_mode_overlay(null)
+
+	_pending_active = false
+	_pending_player_id = -1
+	_choice = ""
+	_scene = null
+	_map_controller = null
+	_overlay_controller = null
+	_execute_command = Callable()
+	_hide_all = Callable()
+
 func hide() -> void:
 	_hide_choice_dialog()
 	if is_instance_valid(_overlay):

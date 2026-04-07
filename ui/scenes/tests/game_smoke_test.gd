@@ -11,20 +11,27 @@ const EmployeeCardClass = preload("res://ui/components/employee_card/employee_ca
 const StructuresPassClass = preload("res://ui/scenes/game/map/drawer/passes/structures_pass.gd")
 const TilePreviewFactoryClass = preload("res://ui/components/reserve_area/tile_preview_factory.gd")
 
+@onready var root_ui: Control = $Root
 @onready var output: RichTextLabel = $Root/Output
 @onready var run_button: Button = $Root/TopBar/RunButton
 
 var _exit_code: int = 0
+var _write_ui_log: bool = true
 var _main_menu_instance: Node = null
 var _game_setup_instance: Node = null
 var _game_instance: Node = null
 var _online_lobby_instance: Node = null
 
+func _is_headless_runtime() -> bool:
+	return DisplayServer.get_name() == "headless"
+
 func _ready() -> void:
-	if is_instance_valid(output):
-		output.clear()
-		output.append_text("Game.tscn Smoke Test：加载 → 初始化 → 释放。\n")
-		output.append_text("提示：CLI 可用 `-- --autorun` 自动执行并退出。\n")
+	_write_ui_log = not _is_headless_runtime()
+	if not _write_ui_log and is_instance_valid(root_ui):
+		root_ui.queue_free()
+	_clear_output()
+	_append_output("Game.tscn Smoke Test：加载 → 初始化 → 释放。\n")
+	_append_output("提示：CLI 可用 `-- --autorun` 自动执行并退出。\n")
 
 	if _should_autorun():
 		_exit_code = await _run_test()
@@ -45,16 +52,14 @@ func _on_run_pressed() -> void:
 		run_button.disabled = false
 
 func _run_test() -> int:
-	if is_instance_valid(output):
-		output.append_text("\n--- 开始测试 ---\n")
+	_append_output("\n--- 开始测试 ---\n")
 	print("[GameSmokeTest] START args=%s" % str(OS.get_cmdline_user_args()))
 
 	if GameScene == null:
 		return await _fail("预加载 game.tscn 失败（PackedScene 为空）")
 
 	# MainMenu 场景基础加载（主入口）
-	if is_instance_valid(output):
-		output.append_text("检查主菜单场景可加载...\n")
+	_append_output("检查主菜单场景可加载...\n")
 	print("[GameSmokeTest] STEP main_menu")
 
 	if MainMenuScene == null:
@@ -88,8 +93,7 @@ func _run_test() -> int:
 		return await _fail("main_menu.tscn 缺少 VersionLabel 节点（节点路径漂移）")
 
 	# GameSetup 场景基础加载（新局入口）
-	if is_instance_valid(output):
-		output.append_text("检查新局设置场景可加载...\n")
+	_append_output("检查新局设置场景可加载...\n")
 	print("[GameSmokeTest] STEP game_setup")
 
 	if GameSetupScene == null:
@@ -173,8 +177,7 @@ func _run_test() -> int:
 		return await _fail("Globals.is_game_active 为 false（game 初始化失败或未完成）")
 
 	# OnlineLobby 场景基础加载（防止联机入口脚本/节点路径漂移导致“联机模式无法启动”）
-	if is_instance_valid(output):
-		output.append_text("检查联机大厅场景可加载...\n")
+	_append_output("检查联机大厅场景可加载...\n")
 	print("[GameSmokeTest] STEP online_lobby")
 
 	if OnlineLobbyScene == null:
@@ -210,8 +213,7 @@ func _run_test() -> int:
 
 	await _cleanup()
 
-	if is_instance_valid(output):
-		output.append_text("PASS\n")
+	_append_output("PASS\n")
 	print("[GameSmokeTest] PASS")
 	return 0
 
@@ -250,8 +252,7 @@ func _prepare_runtime_cleanup_before_quit() -> void:
 	await _drain_frames(6)
 
 func _fail(msg: String) -> int:
-	if is_instance_valid(output):
-		output.append_text("FAIL: %s\n" % msg)
+	_append_output("FAIL: %s\n" % msg)
 	push_error("[GameSmokeTest] FAIL: %s" % msg)
 	print("[GameSmokeTest] FAIL: %s" % msg)
 	await _cleanup()
@@ -264,7 +265,19 @@ func _should_autorun() -> bool:
 	var args := OS.get_cmdline_user_args()
 	if args.has("autorun") or args.has("--autorun"):
 		return true
-	return OS.has_feature("headless")
+	return _is_headless_runtime()
+
+func _append_output(text: String) -> void:
+	if not _write_ui_log:
+		return
+	if is_instance_valid(output):
+		output.append_text(text)
+
+func _clear_output() -> void:
+	if not _write_ui_log:
+		return
+	if is_instance_valid(output):
+		output.clear()
 
 func _drain_frames(count: int) -> void:
 	var n := maxi(1, int(count))
