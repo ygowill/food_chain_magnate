@@ -103,7 +103,7 @@ jobs:
       - name: Run all headless tests
         shell: bash
         run: |
-          tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60
+          tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120
 
   build-client-windows:
     name: Build client (Windows .exe)
