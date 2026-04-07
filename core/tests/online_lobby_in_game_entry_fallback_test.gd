@@ -37,6 +37,7 @@ static func run() -> Result:
 
 	lobby.call("_bind_net_signals")
 	if not NetClient.game_started.is_connected(cb_game_started):
+		_safe_free(lobby)
 		_cleanup_lobby_connections(lobby)
 		_restore(
 			prev_engine,
@@ -52,6 +53,7 @@ static func run() -> Result:
 		)
 		return Result.failure("request_rejected 已绑定时，_bind_net_signals 仍应补绑 game_started")
 	if not NetClient.resync_archive_received.is_connected(cb_resync_archive):
+		_safe_free(lobby)
 		_cleanup_lobby_connections(lobby)
 		_restore(
 			prev_engine,
@@ -78,6 +80,7 @@ static func run() -> Result:
 	NetClient._pending_resync_delta = {}
 	NetClient._online_client_engine_room_code = ""
 	if bool(lobby.call("_should_enter_online_game_scene_from_room_state", {"status": "InGame", "room_code": "ROOM01"})):
+		_safe_free(lobby)
 		_cleanup_lobby_connections(lobby)
 		_restore(
 			prev_engine,
@@ -96,6 +99,7 @@ static func run() -> Result:
 	var engine = GameEngineClass.new()
 	var init_r: Result = engine.initialize(2, 12345, [], GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR, [], [-1, -1])
 	if not init_r.ok:
+		_safe_free(lobby)
 		_cleanup_lobby_connections(lobby)
 		_restore(
 			prev_engine,
@@ -113,6 +117,8 @@ static func run() -> Result:
 	Globals.set_current_game_engine(engine)
 
 	if bool(lobby.call("_should_enter_online_game_scene_from_room_state", {"status": "InGame", "room_code": "ROOM01"})):
+		_safe_free(lobby)
+		engine.dispose()
 		_cleanup_lobby_connections(lobby)
 		_restore(
 			prev_engine,
@@ -130,6 +136,8 @@ static func run() -> Result:
 
 	NetClient._pending_resync_snapshot_manifest = {"room_code": "ROOM99"}
 	if bool(lobby.call("_should_enter_online_game_scene_from_room_state", {"status": "InGame", "room_code": "ROOM01"})):
+		_safe_free(lobby)
+		engine.dispose()
 		_cleanup_lobby_connections(lobby)
 		_restore(
 			prev_engine,
@@ -147,6 +155,8 @@ static func run() -> Result:
 
 	NetClient._pending_resync_snapshot_manifest = {"room_code": "ROOM01"}
 	if not bool(lobby.call("_should_enter_online_game_scene_from_room_state", {"status": "InGame", "room_code": "ROOM01"})):
+		_safe_free(lobby)
+		engine.dispose()
 		_cleanup_lobby_connections(lobby)
 		_restore(
 			prev_engine,
@@ -164,6 +174,8 @@ static func run() -> Result:
 
 	var archive_r: Result = engine.create_archive()
 	if not archive_r.ok:
+		_safe_free(lobby)
+		engine.dispose()
 		_cleanup_lobby_connections(lobby)
 		_restore(
 			prev_engine,
@@ -199,6 +211,8 @@ static func run() -> Result:
 		"archive": Dictionary(archive_r.value).duplicate(true),
 	})
 	if Globals.current_game_engine == null or Globals.current_game_engine.get_state() == null:
+		_safe_free(lobby)
+		engine.dispose()
 		_cleanup_lobby_connections(lobby)
 		_restore(
 			prev_engine,
@@ -214,6 +228,8 @@ static func run() -> Result:
 		)
 		return Result.failure("收到 archive 后应先补建本地 engine，避免大厅卡住")
 	if int(NetContext.local_player_id) != 1:
+		_safe_free(lobby)
+		engine.dispose()
 		_cleanup_lobby_connections(lobby)
 		_restore(
 			prev_engine,
@@ -229,6 +245,8 @@ static func run() -> Result:
 		)
 		return Result.failure("archive 补建 engine 后 local_player_id 错误: %d" % int(NetContext.local_player_id))
 	if not bool(lobby.call("_should_enter_online_game_scene_from_room_state", {"status": "InGame", "room_code": "ROOM01"})):
+		_safe_free(lobby)
+		engine.dispose()
 		_cleanup_lobby_connections(lobby)
 		_restore(
 			prev_engine,
@@ -246,6 +264,8 @@ static func run() -> Result:
 
 	lobby.set("_enter_game_transition_requested", true)
 	if bool(lobby.call("_should_enter_online_game_scene_from_room_state", {"status": "InGame", "room_code": "ROOM01"})):
+		_safe_free(lobby)
+		engine.dispose()
 		_cleanup_lobby_connections(lobby)
 		_restore(
 			prev_engine,
@@ -263,6 +283,8 @@ static func run() -> Result:
 	lobby.set("_enter_game_transition_requested", false)
 
 	if bool(lobby.call("_should_enter_online_game_scene_from_room_state", {"status": "Lobby", "room_code": "ROOM01"})):
+		_safe_free(lobby)
+		engine.dispose()
 		_cleanup_lobby_connections(lobby)
 		_restore(
 			prev_engine,
@@ -278,6 +300,8 @@ static func run() -> Result:
 		)
 		return Result.failure("非 InGame 状态不应触发大厅补进 Game")
 
+	_safe_free(lobby)
+	engine.dispose()
 	_cleanup_lobby_connections(lobby)
 	_restore(
 		prev_engine,
@@ -342,3 +366,9 @@ static func _restore(
 	NetClient._pending_resync_snapshot_manifest = prev_pending_manifest.duplicate(true)
 	NetClient._pending_resync_delta = prev_pending_delta.duplicate(true)
 	NetClient._online_client_engine_room_code = prev_online_client_engine_room_code
+
+static func _safe_free(node) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if node is Node:
+		(node as Node).free()
