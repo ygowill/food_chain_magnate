@@ -3,10 +3,10 @@
 本文件用于追踪“多人联机（Dedicated Server + WebSocket）”的开发进度、验收结果与问题记录。
 
 关联文档：
-- 计划与改造点：`docs/refactors/multiplayer_websocket_plan.md`
+- 计划与改造点：`docs/refactors/archive/multiplayer_websocket_plan.md`
 - 公网部署（Nginx + `wss://`）：`docs/refactors/multiplayer_public_deployment.md`
 - 实现指南（文件/RPC 清单）：`docs/refactors/multiplayer_implementation_guide.md`
-- 联机大厅 UI 改版（配置/模块选择）：`docs/refactors/multiplayer_lobby_ui_redesign.md`
+- 联机大厅 UI 改版（配置/模块选择）：`docs/refactors/archive/multiplayer_lobby_ui_redesign.md`
 
 ---
 

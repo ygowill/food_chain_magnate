@@ -38,7 +38,7 @@
 
 ### 1.3 文档进度结论不准确
 
-- `docs/ui_development_plan.md` 的 “8.* 开发进度追踪/集成状态” 把 P0/P1/P2 及集成标为 100% 完成，但与当前代码现状不符（上面多项接口/功能尚未闭环）。
+- `docs/plans/ui_development_plan.md` 的 “8.* 开发进度追踪/集成状态” 把 P0/P1/P2 及集成标为 100% 完成，但与当前代码现状不符（上面多项接口/功能尚未闭环）。
 
 ---
 
@@ -49,7 +49,7 @@
 - 修复所有“接口不一致导致不可用”的问题。
 - 让 UI → Command 参数满足 `gameplay/actions/*` 校验（不再靠猜）。
 - 最小可用闭环：能在主游戏场景中完成关键交互（P0 + P1 核心动作），且不产生 SCRIPT ERROR。
-- 同步更新 `docs/ui_development_plan.md`：把“进度/已知问题/集成状态/接口设计”改为真实可验证的描述。
+- 同步更新 `docs/plans/ui_development_plan.md`：把“进度/已知问题/集成状态/接口设计”改为真实可验证的描述。
 
 ### 2.2 非目标（除非后续单独立项）
 
@@ -74,7 +74,7 @@
 
 ### 3.2 Command 参数：以 gameplay 为准
 
-- 以 `docs/ui_development_plan.md:1025` 的 UI→Command 表为**入口**，但若与 `gameplay/actions/*` 冲突，必须以 `gameplay/actions/*` 为准并回写文档。
+- 以 `docs/plans/ui_development_plan.md:1025` 的 UI→Command 表为**入口**，但若与 `gameplay/actions/*` 冲突，必须以 `gameplay/actions/*` 为准并回写文档。
 
 ### 3.3 Registry：UI 直接使用静态 Registry
 
@@ -117,7 +117,7 @@
 | ID | 优先级 | 任务 | 验收标准 | 影响文件 | 状态 |
 |---|---|---|---|---|---|
 | R-030 | P1 | PriceSettingPanel 改为“强制动作确认面板”（不做逐产品改价） | 执行 `set_price/set_discount/set_luxury_price` 成功后关闭；文案解释效果 | `ui/components/price_panel/price_setting_panel.gd`, `.tscn`, `ui/scenes/game/game.gd` | DONE |
-| R-031 | P1 | 文档 UI→Command 表对齐（确认这些动作 params 为空） | `docs/ui_development_plan.md` 同步说明面板行为 | `docs/ui_development_plan.md` | DONE |
+| R-031 | P1 | 文档 UI→Command 表对齐（确认这些动作 params 为空） | `docs/plans/ui_development_plan.md` 同步说明面板行为 | `docs/plans/ui_development_plan.md` | DONE |
 
 ### 4.5 P1：生产/采购（与玩法参数一致）
 
@@ -146,8 +146,8 @@
 
 | ID | 优先级 | 任务 | 验收标准 | 影响文件 | 状态 |
 |---|---|---|---|---|---|
-| R-070 | P0 | 修订 `docs/ui_development_plan.md` 的 8.* 进度与集成状态 | 与实际代码一致；每项附“验证方法/入口” | `docs/ui_development_plan.md` | DONE |
-| R-071 | P0 | 增加“组件接口契约表”（signals/set_* 由谁调用） | 后续不再出现同名不同参的漂移 | `docs/ui_development_plan.md` 或新章节 | DONE |
+| R-070 | P0 | 修订 `docs/plans/ui_development_plan.md` 的 8.* 进度与集成状态 | 与实际代码一致；每项附“验证方法/入口” | `docs/plans/ui_development_plan.md` | DONE |
+| R-071 | P0 | 增加“组件接口契约表”（signals/set_* 由谁调用） | 后续不再出现同名不同参的漂移 | `docs/plans/ui_development_plan.md` 或新章节 | DONE |
 
 ### 4.9 验证与回归
 
@@ -206,8 +206,8 @@
 | 2026-01-06 | R-061 | DONE | `Dinnertime` 阶段自动弹出 DinnerTimeOverlay（从 `round_state["dinnertime"]` 生成只读订单列表）；银行破产弹窗关闭后会恢复显示 |
 | 2026-01-06 | R-062 | DONE | 接入 DemandIndicator：在 `Dinnertime` 阶段标记已成交房屋需求（绿色 satisfied），并对齐 MapCanvas world_origin 偏移 |
 | 2026-01-06 | R-080 | DONE | 回归：AllTests `71/71 PASS`（见 `.godot/AllTests.log`） |
-| 2026-01-06 | R-070 | DONE | 修订 `docs/ui_development_plan.md` 8.*：进度/集成状态与实际代码对齐，并补充每项“验证入口” |
-| 2026-01-06 | R-071 | DONE | 为 `docs/ui_development_plan.md` 增补 4.7“组件接口契约表”（signals/set_* 调用关系） |
+| 2026-01-06 | R-070 | DONE | 修订 `docs/plans/ui_development_plan.md` 8.*：进度/集成状态与实际代码对齐，并补充每项“验证入口” |
+| 2026-01-06 | R-071 | DONE | 为 `docs/plans/ui_development_plan.md` 增补 4.7“组件接口契约表”（signals/set_* 调用关系） |
 | 2026-01-06 | R-081 | DONE | 新增 `game.tscn` headless smoke test：`ui/scenes/tests/game_smoke_test.tscn`（并修复加载 game 场景暴露的脚本解析/节点路径错误） |
 | 2026-01-06 | R-080 | DONE | 回归：GameSmokeTest PASS（见 `.godot/GameSmokeTest.log`）+ AllTests `71/71 PASS`（见 `.godot/AllTests.log`） |
 | 2026-01-09 | R-041 | DONE | 采购路线可视化：`Working/GetDrinks` 选择采购员后预览自动路线（新增 ProcurementRouteOverlay）；AllTests + GameSmokeTest PASS |

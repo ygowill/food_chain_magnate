@@ -1120,7 +1120,7 @@
   - 回归与文档要求：
     - 每完成一个子项（E1/E2/E3/E4）必须：
       - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`
-      - 更新 `docs/development_status.md` 与本文件进度
+      - 更新 `docs/progress/archive/development_status.md` 与本文件进度
       - 对当次改动涉及的 `*.gd` 进行“tab 缩进检查”（禁止混用空格）
 
 - ✅ M8：地图图片化（视觉资源模块化 + UI 渲染预留）
@@ -1198,7 +1198,7 @@
 
 ## 5. 变更摘要（流水账）
 
-- 2025-12-30：落盘整改计划到 `docs/refactor_plan.md`
+- 2025-12-30：落盘整改计划到 `docs/plans/archive/refactor_plan.md`
 - 2025-12-30：实现配置/状态/地图定义的严格解析（Fail Fast），清除容错/兼容路径：`GameConfig`、`GameState`、`TileDef/PieceDef/MapDef`
 - 2025-12-30：存档加载改为严格 schema（拒绝旧版本），并强制 `rng` 与命令 `timestamp`
 - 2025-12-30：移除地图选择/空地图占位 fallback；存档创建改为 fail-fast；移除 `get_rule_int(..., fallback)`；`all_tests` headless 通过

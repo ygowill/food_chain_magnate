@@ -7,7 +7,7 @@
 补充文档：
 - 实现指南（按文件与 RPC 列表）：`docs/refactors/multiplayer_implementation_guide.md`
 - 公网部署（`wss://` / TLS / 反向代理示例）：`docs/refactors/multiplayer_public_deployment.md`
-- 联机大厅 UI 改版（配置/模块选择复用）：`docs/refactors/multiplayer_lobby_ui_redesign.md`
+- 联机大厅 UI 改版（配置/模块选择复用）：`docs/refactors/archive/multiplayer_lobby_ui_redesign.md`
 
 ---
 
@@ -167,7 +167,7 @@
 - 服务器不得在日志/RoomState 广播中泄露 `join_token`/`room_password`。
 
 补充（公开房间列表）：
-- RoomSummary 建议字段与 UI 方案见 `docs/refactors/multiplayer_lobby_ui_redesign.md`（第 7 节）。
+- RoomSummary 建议字段与 UI 方案见 `docs/refactors/archive/multiplayer_lobby_ui_redesign.md`（第 7 节）。
 - 观战策略（已确认）：InGame 房间允许观战，但满足：
   - `allow_spectators == true`（房主可关闭）
   - 若 `room_password` 非空：观战与加入一致，都需要提供正确 `room_password` 鉴权

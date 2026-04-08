@@ -1,34 +1,29 @@
-# 调试与性能分析（DebugFlags / Debug commands / PerfTrace）
+# 调试与性能分析（`DebugFlags` / Debug Commands / `PerfTrace`）
 
-本项目的调试与性能诊断分散在 `autoload/`、`ui/`、`core/debug/` 与 `tools/`，其中：
+本项目的调试与诊断主要分散在三层：
 
-- “开关与 UI 显示”以 autoload 单例 `DebugFlags`（`autoload/debug_flags.gd`）为中心；
-- “调试命令行”以 `ui/debug/debug_command_registry.gd` 为中心；
-- “启动/开局性能打点”以 `PerfTrace` 为中心（core/debug 为 shim，真实实现位于 tools）。
+- `autoload/debug_flags.gd`：全局调试开关
+- `ui/debug/*` + `ui/scenes/game/controllers/debug_panel_controller.gd`：调试命令与调试面板
+- `core/debug/perf_trace.gd` → `tools/perf_trace.gd`：启动/初始化/首帧性能打点
 
-## 模块关系图（开关/命令/打点流向）
+## 模块关系图（开关 / 命令 / 打点流向）
 
 ```mermaid
 flowchart TB
-  DebugFlags["DebugFlags\n(autoload)"]
-  GameLog["GameLog\n(autoload)"]
-  DebugPanel["GameDebugPanelController\n(ui)"]
-  CmdReg["DebugCommandRegistry\n(ui/debug)"]
-  GameEngine["GameEngine\n(core)"]
-  PerfTrace["PerfTrace\n(core shim → tools/perf_trace.gd)"]
-  Init["Initializer/ModulesV2/MapBake\n(core/engine)"]
-  Logs["stdout / .godot logs"]
+  DF["DebugFlags"]
+  GL["GameLog"]
+  Panel["GameDebugPanelController"]
+  Reg["ui/debug/debug_command_registry.gd"]
+  Cmds["ui/debug/debug_commands/*"]
+  GE["GameEngine"]
+  PT["core/debug/perf_trace.gd"]
+  Tools["tools/perf_trace.gd"]
 
-  DebugFlags -->|"verbose_logging → 调整级别"| GameLog
-  DebugFlags -->|"validate_invariants → 引擎检查"| GameEngine
-  DebugFlags -->|"force_execute_commands"| DebugPanel
-
-  DebugPanel --> CmdReg
-  CmdReg -->|"handler 调用"| GameEngine
-
-  Init -->|"begin_span/end_span"| PerfTrace
-  PerfTrace --> Logs
-  GameLog --> Logs
+  DF --> GL
+  DF --> GE
+  DF --> Panel
+  Panel --> Reg --> Cmds --> GE
+  PT --> Tools
 ```
 
 ## DebugFlags（全局调试开关）
@@ -37,40 +32,46 @@ flowchart TB
 
 关键字段：
 
-- `debug_mode`：调试模式（release 构建会强制关闭）
-- `verbose_logging`：更详细日志（会调整 `GameLog` 等级）
-- `validate_invariants`：每条命令后校验不变量（现金/员工总量等）
-- `force_execute_commands`：强制执行命令（跳过大部分校验，仅 DebugPanel 使用）
-- `show_console`：控制台/调试面板显隐（由 game 场景响应信号）
-
-## Debug commands（调试命令注册表）
-
-真实实现：
-
-- `ui/debug/debug_command_registry.gd`
-
-core 侧兼容 shim（避免旧路径与 class cache 漂移）：
-
-- `core/debug/debug_command_registry.gd`
-
-该注册表用于：
-
-- 注册 `name -> handler` 的命令；
-- 在 UI 调试面板中解析并执行命令行；
-- 允许“选中目标玩家”（调试用），并在无效时回退到当前玩家。
-
-## PerfTrace（启动/开局性能打点）
-
-core shim：
-
-- `core/debug/perf_trace.gd`
-
-真实实现：
-
-- `tools/perf_trace.gd`
+- `debug_mode`
+- `verbose_logging`
+- `validate_invariants`
+- `force_execute_commands`
+- `show_console`
+- `profile_commands`
 
 说明：
 
-- `PerfTrace.begin_span/end_span` 被大量用于“启动/开局/模块装配/地图生成/首帧 UI”耗时定位；
-- 默认关闭，按 `tools/perf_trace.gd` 的实现约定可通过命令行 user args 启用（例如 `-- --profile_startup`）；
-- 输出以固定前缀（例如 `[StartupProfile]`）便于 grep 与机器解析。
+- release 构建会强制关闭 `debug_mode`
+- `verbose_logging` 会同步调整 `GameLog` 最小级别
+- `force_execute_commands` 主要供 DebugPanel 命令走 `compute_new_state_force`
+
+## Debug commands（调试命令注册表）
+
+当前实现全部位于 `ui/debug/`：
+
+- 注册表：`ui/debug/debug_command_registry.gd`
+- 命令集合：
+  - `ui/debug/debug_commands/action_commands.gd`
+  - `ui/debug/debug_commands/game_commands.gd`
+  - `ui/debug/debug_commands/state_commands.gd`
+  - `ui/debug/debug_commands/util_commands.gd`
+
+调试面板由 `ui/scenes/game/controllers/debug_panel_controller.gd` 动态实例化 `ui/scenes/debug/debug_panel.tscn`，并把命令执行结果回灌到当前 `GameEngine` 与 UI。
+
+## PerfTrace（启动 / 开局性能打点）
+
+代码：
+
+- shim：`core/debug/perf_trace.gd`
+- 实现：`tools/perf_trace.gd`
+
+当前典型打点位置：
+
+- `GameEngine.initialize_new_game`
+- `ModulesV2.apply`
+- `GameData.from_catalog`
+- `setup_action_registry`
+- `MapBake.bake`
+- `game.gd` 的 `_ready()` / `_initialize_game()`
+
+启用方式遵循 `tools/perf_trace.gd` 的命令行约定（如 `-- --profile_startup`），输出以固定前缀便于 grep 与 CI 日志解析。

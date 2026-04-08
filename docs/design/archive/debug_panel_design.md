@@ -1,7 +1,7 @@
 # 调试面板设计文档
 
 > 更新（2026-01-08）：调试面板（控制台）已实现：`ui/scenes/debug/debug_panel.tscn`。  
-> 本文保留早期设计背景；现状以代码与 `docs/development_progress_audit.md` 为准。
+> 本文保留早期设计背景；现状以代码与 `docs/reports/general/development_progress_audit.md` 为准。
 
 ## 1. 现状分析
 

@@ -6,10 +6,10 @@
 
 ## 1. 信息源与可信度（建议阅读顺序）
 
-1. `docs/development_progress_audit.md`：进度审计（偏“现在能验证什么/还缺什么”）
-2. `docs/ui_remediation_plan.md`：UI 接线整改记录（以 code/测试可验证为准）
-3. `docs/ui_development_plan.md`：UI 分阶段计划与组件清单（**个别段落存在历史结论，需以 1/2 为准**）
-4. `docs/development_status.md`：里程碑/变更日志（最后更新较早，需注意时效）
+1. `docs/reports/general/development_progress_audit.md`：进度审计（偏“现在能验证什么/还缺什么”）
+2. `docs/plans/ui_remediation_plan.md`：UI 接线整改记录（以 code/测试可验证为准）
+3. `docs/plans/ui_development_plan.md`：UI 分阶段计划与组件清单（**个别段落存在历史结论，需以 1/2 为准**）
+4. `docs/progress/archive/development_status.md`：里程碑/变更日志（最后更新较早，需注意时效）
 5. `.godot/AllTests.log` / `.godot/GameSmokeTest.log`：本地 headless 验证日志
 
 ---
@@ -94,7 +94,7 @@
 
 - 动作：`set_price` / `set_discount` / `set_luxury_price`
 - UI 策略：`ActionPanel` 不再 auto-hide（提升发现性），并在灰显时 tooltip 提示不可用原因；强制动作加【强制】并优先展示
-- 详细报告与整改记录：`docs/ui_action_panel_pricing_actions_report.md`
+- 详细报告与整改记录：`docs/reports/ui/ui_action_panel_pricing_actions_report.md`
 
 ### 3.5 Dinnertime（晚餐结算）
 
@@ -116,7 +116,7 @@
 
 ---
 
-## 4. UI 开发进度（对照 `docs/ui_development_plan.md` 的 8.*）
+## 4. UI 开发进度（对照 `docs/plans/ui_development_plan.md` 的 8.*）
 
 > 结论：P0/P1 的“可玩闭环”已完成；P2 多数为“已实现但缺入口/缺数据源/未被调用”的增强项。
 
@@ -186,11 +186,11 @@
 
 ### 6.2 文档一致性（避免误读）
 
-- `docs/ui_development_plan.md` 的早期“实现状态审计”段落里仍有“❌ 未实现/完全缺失”的历史结论，但其 8.* 章节与实际代码已大幅更新；建议以：
-  - `docs/ui_remediation_plan.md`（整改记录）
-  - `docs/development_progress_audit.md`（可验证现状）
+- `docs/plans/ui_development_plan.md` 的早期“实现状态审计”段落里仍有“❌ 未实现/完全缺失”的历史结论，但其 8.* 章节与实际代码已大幅更新；建议以：
+  - `docs/plans/ui_remediation_plan.md`（整改记录）
+  - `docs/reports/general/development_progress_audit.md`（可验证现状）
   作为“当前事实来源”。
-- `docs/development_status.md` 最后更新较早（2026-01-04），与近期 UI 整改与测试基线可能存在时效差异。
+- `docs/progress/archive/development_status.md` 最后更新较早（2026-01-04），与近期 UI 整改与测试基线可能存在时效差异。
 
 ---
 

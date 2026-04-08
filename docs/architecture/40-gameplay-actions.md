@@ -1,57 +1,55 @@
-# 模块：gameplay/actions（内建动作实现）
+# 模块：`gameplay/actions`（内建动作实现）
 
-`gameplay/actions` 提供内建 `ActionExecutor` 实现（玩法层），并由 action setup provider 统一注册到 `ActionRegistry`。
+`gameplay/actions` 提供当前项目的内建 `ActionExecutor` 实现，并由默认 action setup provider 统一注册到 `ActionRegistry`。
 
-默认 provider：`res://gameplay/action_setup.gd`（由 `ProjectSettings["fcm/action_setup_provider_path"]` 指定）
+默认 provider：`res://gameplay/action_setup.gd`
 
 ## 模块关系图（actions 如何进入引擎执行链）
 
 ```mermaid
 flowchart TB
-  Provider["ActionSetup provider\n(gameplay/action_setup.gd)"]
-  Actions["gameplay/actions/*\n(ActionExecutor)"]
-  AR["ActionRegistry\n(core/actions/action_registry.gd)"]
-
-  UI["UI → Command"]
-  GE["GameEngine.execute_command"]
+  Provider["gameplay/action_setup.gd"]
+  Actions["gameplay/actions/*"]
+  AR["ActionRegistry"]
   Runner["CommandRunner"]
-  GS["GameState"]
-  Regs["Registries\n(Employee/Product/Tile/Piece + core/rules)"]
+  State["GameState"]
 
-  Actions --> Provider
-  Provider -->|"register executors"| AR
-
-  UI --> GE --> Runner --> AR
-  AR -->|"dispatch"| Actions
-  Actions -->|"validate/compute_new_state"| GS
-  Actions -->|"query"| Regs
+  Actions --> Provider --> AR
+  Runner --> AR --> Actions --> State
 ```
 
-## 当前内建动作（以 provider 注册列表为准）
+## 当前内建动作（以 `gameplay/action_setup.gd` 为准）
 
-参见：`gameplay/action_setup.gd`
-
-包含但不限于：
+当前默认注册的动作包括：
 
 - 阶段推进/跳过：`advance_phase`、`skip`、`skip_sub_phase`、`end_turn`
-- Setup：`select_reserve_card`
-- 重组/顺序：`choose_turn_order`、`submit_restructuring`、`restructure_employee`、`set_company_structure_*`
+- Setup / 顺序：`select_reserve_card`、`choose_turn_order`
+- 重组：`restructure_employee`、`set_company_structure_direct`、`set_company_structure_report`、`submit_restructuring`
 - 招聘/培训/解雇：`recruit`、`train`、`fire`
-- 地图相关：`place_restaurant`、`move_restaurant`、`place_house`、`add_garden`
-- 经营：`set_price`、`set_discount`、`set_luxury_price`
+- 地图放置：`place_restaurant`、`move_restaurant`、`place_house`、`add_garden`
+- 经营：`initiate_marketing`、`set_price`、`set_discount`、`set_luxury_price`
 - 生产/进货：`produce_food`、`procure_drinks`
-- 调试：`debug_give_money`、`debug_add_inventory`、`debug_add_house_demand`
+- 结算/特殊选择：`confirm_dinnertime`、`choose_fridge_keep`、`choose_kimchi_storage`
+- 联机/局面：`forfeit_player`
+- 调试：`debug_give_money`、`debug_add_house_demand`、`debug_add_inventory`
 
-> 以 `ActionIds` 常量为准：`core/actions/action_ids.gd`
+> action id 常量统一见：`core/actions/action_ids.gd`
 
 ## 结构约定（通用）
 
-动作应满足：
+动作实现应满足：
 
-- `validate` 纯函数（禁止写 state/触发随机/发事件）
-- `compute_new_state` 默认 copy-on-write（写入局部结构，必要时 invalidate 缓存）
-- `generate_events` 只基于 old/new state 与 command 推导事件（避免在 `_apply_changes` 里拼装不一致数据）
+- `validate` 纯函数：不写 state、不触发随机、不发事件
+- `compute_new_state` 默认 copy-on-write
+- 地图相关动作在写入后必须失效相应运行时缓存（如 `RoadGraph`）
+- `generate_events` 只根据 `old_state / new_state / command` 推导事件
 
 ## 与模块系统 V2 的关系
 
-模块可以通过 `RulesetV2.register_action_executor(...)` 注册额外动作，或通过 validator/availability override 对内建动作做门禁与校验增强。
+模块可通过 `RulesetV2` 扩展动作层：
+
+- 注册新的 `ActionExecutor`
+- 为内建/模块动作注册 validator
+- 覆盖动作可用点位（availability override）
+
+对应装配点：`core/engine/game_engine/action_wiring.gd`

@@ -21,7 +21,7 @@
 
 ## 1. 概述
 
-本报告基于对 FCM_new 项目 UI 组件的深入代码审查，结合 `docs/issue_tracker.md` 中已记录的问题，分析潜在的 UI 问题和风险点。
+本报告基于对 FCM_new 项目 UI 组件的深入代码审查，结合 `docs/progress/issue_tracker.md` 中已记录的问题，分析潜在的 UI 问题和风险点。
 
 ### 1.1 已分析的核心组件
 

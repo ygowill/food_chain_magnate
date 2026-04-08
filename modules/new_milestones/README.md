@@ -1,6 +1,6 @@
 # 模块：全新里程碑
 
-来源：`docs/FCM_ketchup_Regels_English_web_2.pdf_by_PaddleOCR-VL.md` 的 “New Milestones” 章节。
+来源：`docs/reference/FCM_ketchup_Regels_English_web_2.pdf_by_PaddleOCR-VL.md` 的 “New Milestones” 章节。
 
 ## 内容
 

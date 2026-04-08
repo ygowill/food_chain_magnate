@@ -148,7 +148,7 @@
 
 ---
 
-## 对照 `docs/development_plan.md`（M0–M2）差异总结
+## 对照 `docs/plans/archive/development_plan.md`（M0–M2）差异总结
 
 ### M1（核心引擎）未完成/未接入项
 
@@ -342,8 +342,8 @@
 
 ### 2026-01-01 - M7：补充“剩余硬编码迁移”清单与计划（待确认）
 
-- 整理剩余硬编码点并落盘到 `docs/refactor_plan.md`（M7 / D0.4–D0.7 / E1–E4）
-- `docs/development_status.md` 的“已知问题/下一步计划”已同步该 backlog
+- 整理剩余硬编码点并落盘到 `docs/plans/archive/refactor_plan.md`（M7 / D0.4–D0.7 / E1–E4）
+- `docs/progress/archive/development_status.md` 的“已知问题/下一步计划”已同步该 backlog
 
 ### 2026-01-01 - M5：模块系统 V2 最终方案落盘（严格模式 + 结算全模块化 + 路线B）
 
@@ -617,7 +617,7 @@
 
 ### 2025-12-27 - 修正文档：M0–M2 状态与实现对齐
 
-- 修正里程碑定义与 `docs/development_plan.md` 对齐
+- 修正里程碑定义与 `docs/plans/archive/development_plan.md` 对齐
 - 将 M1/M2 从“✅ 完成”改为“🟡 进行中”，补充未接入/缺失交付物说明
 
 ### 2024-12-27 - M2 代码主体落地（未接入）

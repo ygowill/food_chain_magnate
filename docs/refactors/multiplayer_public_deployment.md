@@ -1,6 +1,6 @@
 # 联机公网部署（wss://）建议（Dedicated Server + WebSocket）
 
-本文补充 `docs/refactors/multiplayer_websocket_plan.md` 中的公网部署细节，目标是让联机服务能在公网安全可用（TLS + 最小鉴权）。
+本文补充 `docs/refactors/archive/multiplayer_websocket_plan.md` 中的公网部署细节，目标是让联机服务能在公网安全可用（TLS + 最小鉴权）。
 
 ---
 

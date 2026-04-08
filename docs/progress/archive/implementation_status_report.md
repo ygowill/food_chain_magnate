@@ -1,7 +1,7 @@
 # 实现状态报告
 
 > 生成日期：2026-01-14
-> 对比文档：docs/design.md、docs/development_status.md
+> 对比文档：docs/design.md、docs/progress/archive/development_status.md
 
 ---
 

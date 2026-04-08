@@ -1,5 +1,7 @@
 # 测试与验证规范（Godot CLI / Headless）
 
+> 导航：如果你想先看测试在整体架构中的位置，请先读 `docs/architecture/52-testing.md` 与 `docs/README.md`。
+
 本文档约定**后续测试文件的编写与执行方式**，以保证：
 
 - 能在 Godot CLI（含 `--headless`）下自动运行并退出（用于 CI/脚本）

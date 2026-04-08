@@ -4,7 +4,7 @@ extends RefCounted
 #
 # 约定：
 # - 每个员工/里程碑至少 1 个 case；每个 case 会生成同名 JSON+MD。
-# - steps/expected 允许偏“操作指引”，详细测试点请对照 `docs/manual_test_saves_plan.md`。
+# - steps/expected 允许偏“操作指引”，详细测试点请对照 `docs/plans/manual_test_saves_plan.md`。
 #
 # 说明：原先单文件过长，现将清单按主题拆分到 tools/manual_test_saves/*.gd 中；
 # 该文件仅做聚合，保持对外接口 `get_cases()` 不变。

@@ -4,7 +4,7 @@
 # - 在“命令（Command）”之外，引入可停留的阶段切分点（phase step），避免 auto-advance 把多个大阶段合并成一个位置。
 # - Working 内的小阶段（sub_phase）尽可能打包：sub_phase 变化不额外生成 step，仅更新当前 step 的状态快照与事件归属。
 #
-# 约定（与 docs/replay_log_timeline_refactor_plan.md#M4.2 对齐）：
+# 约定（与 docs/design/archive/replay_log_timeline_refactor_plan.md#M4.2 对齐）：
 # - step=-1 表示初始状态（checkpoint[0]），不计入 steps 数组。
 # - “阶段 step”的状态快照以“进入该阶段后的状态（含 enter settlement/enter hooks）”为准；
 #   但若该阶段内部发生 sub_phase 自动推进（不跨 phase），会被打包到同一个 step，并更新该 step 的快照。

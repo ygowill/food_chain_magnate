@@ -1,152 +1,149 @@
-# Game 场景：controller 拆分与职责边界（ui/scenes/game/*）
+# Game 场景：controller 拆分与职责边界（`ui/scenes/game/*`）
 
-`ui/scenes/game/game.gd` 是“编排器”：负责节点绑定、引擎生命周期管理，以及初始化/连接各个 controller。
+`ui/scenes/game/game.gd` 当前是一个轻量编排器：负责绑定节点、创建控制器、管理 `GameEngine` 生命周期，并处理本地/回放/联机恢复等入口差异。
 
-本文件按“改 UI/交互/联机/回放时应该找哪层”来索引当前实现。
-
-## 模块关系图（game.gd 与 controller/引擎）
+## 模块关系图（`game.gd` 与 controller / 引擎）
 
 ```mermaid
 flowchart TB
-  GameGD["game.gd\n(Orchestrator)"]
+  GameGD["game.gd\nOrchestrator"]
+  Builder["controllers/builder.gd"]
   Engine["GameEngine"]
 
-  Cmd["GameCommandController"]
-  UiSync["GameUiSyncController"]
-  Panels["GamePanelController"]
-  MapCtrl["GameMapInteractionController"]
-  Overlays["GameOverlayController"]
-  TimelineCtrl["GameTimelineController"]
-  InputCtrl["GameInputController"]
-  MenuCtrl["GameMenuController"]
-  OnlineCtrl["GameOnlineResyncController"]
+  Cmd["controllers/command_controller.gd"]
+  UiSync["controllers/ui_sync_controller.gd"]
+  Timeline["timeline/controller.gd"]
+  Panel["panel/controller.gd"]
+  MapInt["map_interaction/controller.gd"]
+  Overlay["overlay/controller.gd"]
+  Layout["controllers/layout_controller.gd"]
+  Menu["menu/controller.gd"]
+  Online["controllers/online_resync_controller.gd"]
+  StartupResume["controllers/startup_online_resume_controller.gd"]
 
-  StepTimeline["StepTimelineBuild\n(gameplay/replay)"]
+  GameGD --> Builder
+  Builder --> Cmd
+  Builder --> UiSync
+  Builder --> Timeline
+  Builder --> Panel
+  Builder --> MapInt
+  Builder --> Overlay
+  Builder --> Layout
+  Builder --> Menu
 
   GameGD --> Engine
-  GameGD --> Cmd
-  GameGD --> UiSync
-  GameGD --> Panels
-  GameGD --> MapCtrl
-  GameGD --> Overlays
-  GameGD --> TimelineCtrl
-  GameGD --> InputCtrl
-  GameGD --> MenuCtrl
-  GameGD --> OnlineCtrl
+  GameGD --> Online
+  GameGD --> StartupResume
 
-  Panels -->|"构造 Command/参数"| Cmd
-  MapCtrl -->|"确认/提交 Command"| Cmd
-  InputCtrl -->|"快捷键触发"| Cmd
-  MenuCtrl -->|"保存/回放/退出"| Cmd
-  OnlineCtrl -->|"回放 CommandApplied/Resync"| Cmd
-
-  Cmd -->|"execute_command"| Engine
-  Engine -->|"get_state"| UiSync
-  UiSync --> Panels
-  UiSync --> MapCtrl
-  UiSync --> Overlays
-  UiSync --> TimelineCtrl
-
-  Engine -->|"命令历史 + 快照"| StepTimeline
-  StepTimeline -->|"steps/events"| TimelineCtrl
+  Panel --> Cmd
+  MapInt --> Panel
+  Cmd --> Engine
+  Engine --> UiSync
+  UiSync --> Timeline
+  UiSync --> Panel
+  UiSync --> Overlay
 ```
 
-## 顶层编排：game.gd
+## 顶层编排：`game.gd`
 
 代码：`ui/scenes/game/game.gd`
 
-职责（以当前实现为准）：
+职责：
 
-- 入口分流：新局 / 读档复用 `Globals.current_game_engine` / 主菜单回放（`Globals.pending_replay_file_path`）/ 联机 InGame
-- 创建/切换 `GameEngine`，并把引擎提供给各 controller
-- 统一 UI 刷新：从 `game_engine.get_state()` 拉取并触发同步
-- 初始化并编排 controller（layout/command/timeline/panels/map/overlays/menu/online/debug）
-- 处理加载遮罩（`SceneManager.show_loading/hide_loading`）与首帧性能打点（`PerfTrace`）
+- 入口分流：
+  - 本地新局
+  - 复用 `Globals.current_game_engine`（读档/某些场景切回）
+  - 主菜单回放（`Globals.pending_replay_file_path`）
+  - 在线恢复直达游戏场景
+- 在 `_ready()` 中通过 `controllers/builder.gd` 创建并接线各控制器
+- 处理加载遮罩、UI 样式、首帧性能打点
+- 在 `_exit_tree()` / disposer 中统一清理运行时对象与信号绑定
 
 ## Controllers 一览（按职责）
 
-> 这些 controller 都由 `game.gd` 创建并注入回调；大部分 UI 行为应优先落在对应 controller，而不是继续膨胀 `game.gd`。
+- 命令执行：`ui/scenes/game/controllers/command_controller.gd`
+  - 本地执行、联机发包、回退到回合开始、SKIP 前强制动作自动补完
+- UI 同步：`ui/scenes/game/controllers/ui_sync_controller.gd`
+  - 顶栏状态、地图/面板/覆盖层刷新、日志/时间线联动
+- 时间线/回放：`ui/scenes/game/timeline/controller.gd`
+  - 构建 `StepTimeline`，控制 replay bar、seek、timeline edit mode
+- 联机 Resync：`ui/scenes/game/controllers/online_resync_controller.gd`
+  - 处理 `command_applied` / `resync_archive_received` / rewind / delta snapshot
+- 启动恢复：`ui/scenes/game/controllers/startup_online_resume_controller.gd`
+  - 游戏场景直接进入在线恢复时的 UI 与超时编排
+- 布局：`ui/scenes/game/controllers/layout_controller.gd`
+- 右侧 Dock：`ui/scenes/game/controllers/right_panel_dock_controller.gd`
+- 日志 Dock：`ui/scenes/game/controllers/log_dock_controller.gd`
+- 输入：`ui/scenes/game/controllers/input_controller.gd`
+- 存档/回放对话框：`ui/scenes/game/controllers/save_load_controller.gd`
+- DebugPanel：`ui/scenes/game/controllers/debug_panel_controller.gd`
+- 后台预热：`ui/scenes/game/controllers/background_warmup_controller.gd`
 
-- 命令执行：`ui/scenes/game/game_command_controller.gd`（本地/联机命令、回退到回合开始、SKIP 前强制动作自动补完、发薪日提示拦截）
-- 时间线/回放：`ui/scenes/game/game_timeline_controller.gd`（StepTimeline 构建、ReplayBar、回放引擎切换）
-- 联机 Resync/Rewind：`ui/scenes/game/game_online_resync_controller.gd`（CommandApplied 回放、ResyncArchive 应用、回退回合开始的回灌与超时兜底）
-- UI 同步：`ui/scenes/game/game_ui_sync_controller.gd`（顶栏信息、地图/面板/覆盖层同步、联机轮到你/阶段切换 toast、调试命令后的 UI 重建触发）
-- 输入/快捷键：`ui/scenes/game/game_input_controller.gd`（ESC/Enter/R/D 等快捷键分发，优先关闭顶层 UI）
-- 布局/响应式：`ui/scenes/game/game_layout_controller.gd`（左/右/底部面板显隐与响应式参数）
-- 右侧 Dock/抽屉：`ui/scenes/game/game_right_panel_dock_controller.gd`（DockHost 的标题/按钮/抽屉内容切换）
-- 日志 Dock：`ui/scenes/game/game_log_dock_controller.gd`（打开/关闭日志，并嵌入右侧 DockHost）
-- 菜单/确认弹窗：`ui/scenes/game/game_menu_controller.gd`（菜单按钮、保存/回放入口、返回主菜单确认）
-- 存档/回放选择：`ui/scenes/game/game_save_load_controller.gd`（SaveLoadDialog 生命周期与回调分发）
-- DebugPanel：`ui/scenes/game/game_debug_panel_controller.gd`（调试面板创建/显示/命令执行信号绑定）
-- 后台预热：`ui/scenes/game/game_background_warmup_controller.gd`（后台构建重面板，减少首帧卡顿）
+## 面板：`panel/controller.gd`（以及 views / modals / working 子控制器）
 
-## 面板：GamePanelController（以及 views/modals 子控制器）
+面板主入口：`ui/scenes/game/panel/controller.gd`
 
-面板编排入口：`ui/scenes/game/game_panel_controller.gd`
+核心拆分：
 
-常见子文件（节选）：
+- Working 子阶段：`ui/scenes/game/panel/working/*.gd`
+- 营销/结算：`ui/scenes/game/panel/marketing_panels.gd`、`end_panels.gd`
+- 顶层浏览视图：`views_controller.gd`
+- 顶层模态：`modals_controller.gd`
+- 放置叠层编排：`placement_overlays.gd`
+- 采购日志预览：`procurement/log_preview_controller.gd`
 
-- Working 子阶段：`ui/scenes/game/game_panel_working_panels.gd` + 同目录的 `game_panel_working_<feature>_controller.gd` 系列
-- 营销/结算：`ui/scenes/game/game_panel_marketing_panels.gd`、`ui/scenes/game/game_panel_end_panels.gd`
-- 放置叠层与地图协作：`ui/scenes/game/game_panel_placement_overlays.gd`
-- 顶层浏览视图：`ui/scenes/game/game_panel_views_controller.gd`（EmployeeTree/Milestone/ReserveArea 全屏）
-- 顶层模态：`ui/scenes/game/game_panel_modals_controller.gd`（ReserveCards/TurnOrder/FridgeKeep 等）
+边界约束：
 
-交互边界：
+- 面板只负责收集 UI 参数、驱动模式切换、发出动作请求
+- 真正执行仍统一走 `command_controller` / `game._execute_command`
 
-- panels 负责“把 UI 选择转成 Command/参数”
-- 真正执行应通过注入的 `Callable(_execute_command)`（或 `GameCommandController`）完成，避免 UI 直接写 state
+## 地图与交互：MapView / Canvas + InteractionController
 
-## 地图与交互：MapView/Canvas + InteractionController
+地图绘制：
 
-地图绘制与索引：
+- `ui/scenes/game/map/view.gd`
+- `ui/scenes/game/map/canvas.gd`
+- `ui/scenes/game/map/indexer.gd`
+- `ui/scenes/game/map/tooltip.gd`
+- `ui/scenes/game/map/drawer/drawer.gd` 及其 helpers
 
-- `ui/scenes/game/map_view.gd`：地图视图容器/滚动缩放层
-- `ui/scenes/game/map_canvas.gd`：地图绘制主节点
-- `ui/scenes/game/map_canvas_indexer.gd`：坐标/命中检测与索引（world/grid/tile 映射）
-- `ui/scenes/game/map_canvas_tooltip.gd`：悬浮提示
+地图交互：
 
-绘制实现：
+- `ui/scenes/game/map_interaction/controller.gd`
+- `ui/scenes/game/map_interaction/placement_mode.gd`
+- `ui/scenes/game/map_interaction/marketing_mode.gd`
+- `ui/scenes/game/map_interaction/distance_tool_controller.gd`
+- `ui/scenes/game/map_interaction/mode_bar_controller.gd`
 
-- `ui/scenes/game/map_canvas_drawer.gd`：绘制编排（将绘制拆成多个 pass）
-- 主要 pass（节选）：`map_canvas_drawer_ground_pass.gd`、`map_canvas_drawer_tiles_pass.gd`、`map_canvas_drawer_roads_pass.gd`、`map_canvas_drawer_structures_pass.gd`、`map_canvas_drawer_marketing_pass.gd`
-
-交互控制：
-
-- `ui/scenes/game/game_map_interaction_controller.gd`：鼠标/手势交互（点击/拖拽/模式切换/预览与确认流程）
-- 模式实现（节选）：`game_map_interaction_placement_mode.gd`、`game_map_interaction_marketing_mode.gd`
-- 顶部模式条：`ui/scenes/game/game_map_mode_bar_controller.gd`
-
-交互边界：
-
-- InteractionController 管理“选点/预览/确认”的 UI 流程与 overlay
-- 确认后仍通过面板/命令控制器提交命令，保持“唯一写入口”的约束
+当前实现还支持模块扩展的地图交互模式：`map_interaction/controller.gd` 会按 module manifest 的 `provides.ui.map_interaction_modes` 动态加载 handler。
 
 ## Overlays：统一管理与具体叠层
 
-入口：`ui/scenes/game/game_overlay_controller.gd`
+入口：`ui/scenes/game/overlay/controller.gd`
 
-常见 overlays（节选）：
+常见 overlay：
 
-- `ui/scenes/game/game_overlay_distance.gd`
-- `ui/scenes/game/game_overlay_marketing_range.gd`
-- `ui/scenes/game/game_overlay_procurement_route.gd`
-- `ui/scenes/game/game_overlay_demand_indicator.gd`
-- `ui/scenes/game/game_overlay_dinnertime.gd`
+- `overlay/distance.gd`
+- `overlay/marketing_range.gd`
+- `overlay/procurement_route.gd`
+- `overlay/demand_indicator.gd`
+- `overlay/zoom.gd`
 
-Overlay 的约束：
+此外，晚餐阶段的独立表现逻辑在：`ui/scenes/game/dinnertime/controller.gd`。
 
-- 尽量只读 `GameState`（渲染/提示）
-- 需要规则计算时调用 core 侧公共 helpers（例如 `core/map/map_utils.gd`、`core/map/road_graph.gd`、`core/rules/marketing_range_calculator.gd`），避免在 UI 复制规则
+## 日志：StepTimeline 为主，EventLog 为辅
 
-## 日志：StepTimeline（派生时间线）为主
+当前主视图：
 
-当前主流程使用 **StepTimeline**（从引擎状态/命令历史重建），而不是“订阅 EventBus 实时追加日志”：
+- `ui/scenes/game/timeline/controller.gd`
+- `gameplay/replay/step_timeline_build.gd`
 
-- 构建：`gameplay/replay/step_timeline_build.gd`
-- 总览：`docs/architecture/42-gameplay-replay-timelines.md`
+旧式/补充日志格式化仍保留在：
 
-仓库中仍保留基于 EventBus 的日志控制器（用于调试或旧路径兼容）：
+- `ui/scenes/game/event_log/controller.gd`
+- `ui/scenes/game/event_log/formatter*.gd`
 
-- `ui/scenes/game/game_event_log_controller.gd`
-- `ui/scenes/game/game_event_log_formatter.gd`
+因此当前 Game 场景实际上同时存在两条日志链路：
+
+1. **派生时间线链路**：给 replay、seek、历史浏览使用
+2. **事件格式化链路**：给细粒度事件文本输出与兼容路径使用

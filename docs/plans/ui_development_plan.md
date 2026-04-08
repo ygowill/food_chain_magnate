@@ -1,4 +1,4 @@
-# 快餐连锁大亨 UI开发计划
+# 快餐连锁大亨 UI 开发计划
 
 本文档基于游戏规则 (`docs/rules.md`) 和现有代码库分析，详细列出当前UI的实现状态、缺失组件及开发计划。
 
@@ -1311,7 +1311,7 @@ Week 13+: P2增强
 
 ### 8.6 下一步计划
 
-1. 完成文档对齐：更新进度/集成状态 + 增补接口契约表（见本文件 8.* 与 `docs/ui_remediation_plan.md`）
+1. 完成文档对齐：更新进度/集成状态 + 增补接口契约表（见本文件 8.* 与 `docs/plans/ui_remediation_plan.md`）
 2. P2 收尾：完善 `replay_player`（时间线按阶段分段/搜索；文件系统保存）；为音效系统提供最小入口或接线（游戏菜单/快捷键）
 3. 增加 `procure_drinks` 的路线交互与可视化（可复用 `distance_overlay`）
 4. ✅ 餐厅/房屋放置：有效位置扫描/高亮（PlacementValidator 扫描；可继续增强：`add_garden` 方向高亮/提示）

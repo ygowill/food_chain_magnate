@@ -5,7 +5,7 @@
 
 ## 背景
 
-`docs/core_architecture_audit_and_refactor_roadmap_2026-03-06.md` 明确指出，当前 `core/` 已经具备较好的确定性、回放和模块化主干，但仍存在三类需要尽快收口的边界泄漏：
+`docs/reports/core/core_architecture_audit_and_refactor_roadmap_2026-03-06.md` 明确指出，当前 `core/` 已经具备较好的确定性、回放和模块化主干，但仍存在三类需要尽快收口的边界泄漏：
 
 - UI 元数据仍通过 `RulesetV2`、`ActionExecutor` 等 core 协议承载。
 - 运行时环境读取仍通过 `AutoloadAccess`、`ProjectSettings` provider path 等方式进入 core。
@@ -60,5 +60,5 @@
 
 ## 参考
 
-- `docs/core_architecture_audit_and_refactor_roadmap_2026-03-06.md`
+- `docs/reports/core/core_architecture_audit_and_refactor_roadmap_2026-03-06.md`
 - `core/tests/module_boundary_contract_test.gd`

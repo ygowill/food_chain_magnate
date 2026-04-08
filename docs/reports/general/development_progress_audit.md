@@ -8,8 +8,8 @@
 
 ## 0. 信息源（建议优先级）
 
-1. `docs/development_status.md`：里程碑状态 + 变更日志（核心事实来源）
-2. `docs/ui_remediation_plan.md`：UI 接线整改的完成记录（以 code 可验证为准）
+1. `docs/progress/archive/development_status.md`：里程碑状态 + 变更日志（核心事实来源）
+2. `docs/plans/ui_remediation_plan.md`：UI 接线整改的完成记录（以 code 可验证为准）
 3. `docs/architecture/*`：架构拆解与关键模块说明（新同学上手入口）
 4. `docs/testing.md`：headless 测试规范与运行脚本
 5. `docs/rules.md`：规则摘要（用于对齐“应该怎么做”）
@@ -42,7 +42,7 @@
 ### 1.3 测试与工具
 
 - `tools/run_headless_test.sh`：统一 headless 运行、超时与日志判定（详见 `docs/testing.md`）。
-- `ui/scenes/tests/all_tests.tscn`：聚合 core 逻辑测试（以 `docs/development_status.md` 中记录的 AllTests 统计为准）。
+- `ui/scenes/tests/all_tests.tscn`：聚合 core 逻辑测试（以 `docs/progress/archive/development_status.md` 中记录的 AllTests 统计为准）。
 
 ---
 
@@ -86,10 +86,10 @@
 
 1. ✅ **采购路线可视化（自动路线预览）**（不含手绘规划）  
    - 入口：`Working/GetDrinks` 打开生产面板并选择采购员后，地图显示自动规划路线  
-   - 参考：`docs/ui_remediation_plan.md` 的 R-041（DONE；手绘规划仍为可选增强）
+   - 参考：`docs/plans/ui_remediation_plan.md` 的 R-041（DONE；手绘规划仍为可选增强）
 
 2. ✅ **更通用的“有效位置扫描/高亮”**（不仅限餐厅放置）  
-   - 参考：`docs/ui_remediation_plan.md` 的 R-052（DONE；餐厅/房屋放置均已支持高亮）
+   - 参考：`docs/plans/ui_remediation_plan.md` 的 R-052（DONE；餐厅/房屋放置均已支持高亮）
 
 3. **更完整的存档/回放 UX**  
    - 例如：多个存档槽、存档列表、回放时间线 UI（目前更偏开发调试入口：菜单保存/DebugPanel 命令）。
@@ -130,4 +130,4 @@
 
 ## 6. 文档一致性问题（需要标注/更新）
 
-- `docs/ui_development_plan.md` 中部分“未实现/完全缺失”的结论与代码现状不一致（例如里程碑面板/游戏日志/营销范围预览/缩放等）；建议以 `docs/ui_remediation_plan.md` 与实际场景/脚本为准，并逐步修正文档为单一事实来源（SSOT）。
+- `docs/plans/ui_development_plan.md` 中部分“未实现/完全缺失”的结论与代码现状不一致（例如里程碑面板/游戏日志/营销范围预览/缩放等）；建议以 `docs/plans/ui_remediation_plan.md` 与实际场景/脚本为准，并逐步修正文档为单一事实来源（SSOT）。

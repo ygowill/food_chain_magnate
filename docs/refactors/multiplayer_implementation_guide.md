@@ -1,13 +1,13 @@
 # 联机实现指南（按文件与 RPC 列表）
 
-本文是 `docs/refactors/multiplayer_websocket_plan.md` 的落地补充：把“要做什么”进一步拆成“每个文件要提供什么接口/信号/消息”，降低实现时的来回对齐成本。
+本文是 `docs/refactors/archive/multiplayer_websocket_plan.md` 的落地补充：把“要做什么”进一步拆成“每个文件要提供什么接口/信号/消息”，降低实现时的来回对齐成本。
 
 范围：阶段 1（Hotseat 保留 + Dedicated server + WebSocket + 公网 `wss://` + 房间鉴权 + 储备卡 UI/日志保密；不做断线重连）。
 
 关联文档：
-- `docs/refactors/multiplayer_websocket_plan.md`（整体方案与里程碑）
+- `docs/refactors/archive/multiplayer_websocket_plan.md`（整体方案与里程碑）
 - `docs/refactors/multiplayer_public_deployment.md`（公网部署）
-- `docs/refactors/multiplayer_lobby_ui_redesign.md`（联机大厅 UI 改版：拆分页面/模块选择复用/房主配置广播）
+- `docs/refactors/archive/multiplayer_lobby_ui_redesign.md`（联机大厅 UI 改版：拆分页面/模块选择复用/房主配置广播）
 
 ---
 
@@ -113,7 +113,7 @@
 ### 2.2 Server → Client（RPC）
 
 - `rpc_room_list(payload: Dictionary)`
-  - `{ request_id, rooms: Array }`（每个元素为 `RoomSummary`；字段见 `docs/refactors/multiplayer_lobby_ui_redesign.md` 第 7 节，含 `password_required/allow_spectators/updated_at_ms`）
+  - `{ request_id, rooms: Array }`（每个元素为 `RoomSummary`；字段见 `docs/refactors/archive/multiplayer_lobby_ui_redesign.md` 第 7 节，含 `password_required/allow_spectators/updated_at_ms`）
 - `rpc_room_state(payload: Dictionary)`
   - `RoomState { room_code, host_peer_id, players, config, status, password_required, allow_spectators }`
 - `rpc_game_started(payload: Dictionary)`
