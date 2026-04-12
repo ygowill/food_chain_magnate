@@ -51,6 +51,7 @@ const GameTutorialTargetsContractTestClass = preload("res://ui/scenes/tests/game
 const TutorialSceneBoundaryContractTestClass = preload("res://ui/scenes/tests/tutorial_scene_boundary_contract_test.gd")
 const TutorialMatchRuntimeTestClass = preload("res://ui/scenes/tests/tutorial_match_runtime_test.gd")
 const TutorialSpotlightOverlayStartTestClass = preload("res://ui/scenes/tests/tutorial_spotlight_overlay_start_test.gd")
+const TutorialSpotlightOverlayLayoutTestClass = preload("res://ui/scenes/tests/tutorial_spotlight_overlay_layout_test.gd")
 const EmployeeTreeTutorialTargetsTestClass = preload("res://ui/scenes/tests/employee_tree_tutorial_targets_test.gd")
 const NetClientParseConnectTokenUrlTestClass = preload("res://core/tests/net_client_parse_connect_token_url_test.gd")
 const OnlineClientHelloConnectTokenTestClass = preload("res://core/tests/online_client_hello_connect_token_test.gd")

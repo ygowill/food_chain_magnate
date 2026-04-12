@@ -136,7 +136,7 @@ func _on_setup_tour_skipped() -> void:
 	Globals.tutorial_setup_tour_seen = true
 	Globals.save_settings()
 
-func get_tutorial_targets() -> Dictionary:
+func get_tutorial_targets(target_key: String = "") -> Dictionary:
 	if _targets_resolver == null or not _targets_resolver.has_method("get_targets"):
 		return {}
-	return _targets_resolver.get_targets()
+	return _targets_resolver.get_targets(target_key)

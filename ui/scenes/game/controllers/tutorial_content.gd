@@ -264,63 +264,90 @@ static func build_employee_tree_tour_steps(targets: Dictionary) -> Array:
 		targets,
 		"employee_tree_viewport",
 		"这里是员工升级路线总览",
-		"员工树用于查看员工如何取得、如何继续培训，以及整条能力链是否还走得通。教学开始前，这个视图会先自动按宽度调整，方便你看清卡片和连线。"
+		"员工树用于查看员工如何取得、如何继续培训，以及整条能力链是否还走得通。下面会先按一张员工卡从上到下说明，再补充特殊标记与连线。",
+		"",
+		"below"
 	)
 	_append_step_if_target_available(
 		steps,
 		targets,
 		"employee_tree_sample_card_header",
 		"先读卡片顶部",
-		"卡片顶部色条和名称用于区分岗位类别与员工身份。不同颜色通常对应不同职能，便于你快速判断这条路线偏向招聘、培训、营销、生产还是扩张。"
+		"卡片顶部色条和名称用于区分岗位类别与员工身份。不同颜色通常对应不同职能，便于你快速判断这条路线偏向招聘、培训、营销、生产还是扩张。",
+		"employee_tree_sample_card",
+		"right"
 	)
 	_append_step_if_target_available(
 		steps,
 		targets,
 		"employee_tree_sample_card_remaining_badge",
 		"右上角数字表示剩余数量",
-		"右上角数字表示该岗位当前还能拿到多少张。规划招聘和培训时，这个数字能帮助你判断一条路线是否还值得继续投入。"
-	)
-	_append_step_if_target_available(
-		steps,
-		targets,
-		"employee_tree_sample_card_entry_marker",
-		"左下角图标说明取得方式",
-		"左下角的 1 表示入门级员工，可以直接招聘；1x 表示该职位对每位玩家通常只能拥有 1 张。读路线时，要先分清它是招聘入口，还是唯一高位岗位。"
-	)
-	_append_step_if_target_available(
-		steps,
-		targets,
-		"employee_tree_viewport",
-		"黑底卡通常是经理岗位",
-		"黑底表示经理。重组时，经理只能向 CEO 汇报，而经理下方只能放普通员工，所以看路线时也要考虑未来的结构容量。"
-	)
-	_append_step_if_target_available(
-		steps,
-		targets,
-		"employee_tree_sample_card_range_marker",
-		"底部中间是距离图标",
-		"底部中间的图标表示该岗位使用的是公路距离还是飞艇距离，以及对应范围。规则中的距离通常按跨过的地图板块边界数计算；若是飞艇图标，则按卡牌能力处理。"
-	)
-	_append_step_if_target_available(
-		steps,
-		targets,
-		"employee_tree_sample_card_salary_marker",
-		"右下角是薪水标志",
-		"右下角的 $ 标志表示正式对局发薪时通常要为这张员工支付薪水。它不是行动次数，而是经营成本的一部分。"
+		"右上角数字表示该岗位当前还能拿到多少张。规划招聘和培训时，这个数字能帮助你判断一条路线是否还值得继续投入。",
+		"employee_tree_sample_card",
+		"right"
 	)
 	_append_step_if_target_available(
 		steps,
 		targets,
 		"employee_tree_sample_card_description",
 		"卡片正文说明岗位能力",
-		"正文会概括员工作用。规划路线时，不只要看能否升级过去，还要看关键岗位剩余数量和这条路线是否值得投入。"
+		"正文会概括员工作用。规划路线时，不只要看能否升级过去，还要看这张卡在当前局面里究竟能帮你做什么。",
+		"employee_tree_sample_card",
+		"right"
+	)
+	_append_step_if_target_available(
+		steps,
+		targets,
+		"employee_tree_sample_card_entry_marker",
+		"左下角图标说明取得方式",
+		"左下角像播放键一样的三角形图标表示入门级员工，这类员工可以直接通过招聘取得。读升级路线时，先确认你拿到的是不是一条能力链的入口。",
+		"employee_tree_entry_card",
+		"right"
+	)
+	_append_step_if_target_available(
+		steps,
+		targets,
+		"employee_tree_sample_card_one_x_marker",
+		"1x 表示每位玩家通常只能拥有 1 张",
+		"如果左下角显示 1x，则表示这种职位对每位玩家通常只能拥有 1 张。它不是入门级标记，而是数量限制，规划高位岗位时要特别留意。",
+		"employee_tree_one_x_card",
+		"right"
+	)
+	_append_step_if_target_available(
+		steps,
+		targets,
+		"employee_tree_sample_card_range_marker",
+		"底部中间是距离图标",
+		"底部中间的图标表示该岗位使用的是公路距离还是飞艇距离，以及对应范围。规则中的距离通常按跨过的地图板块边界数计算；若是飞艇图标，则按卡牌能力处理。",
+		"employee_tree_range_card",
+		"right"
+	)
+	_append_step_if_target_available(
+		steps,
+		targets,
+		"employee_tree_sample_card_salary_marker",
+		"右下角是薪水标志",
+		"右下角的 $ 标志表示正式对局发薪时通常要为这张员工支付薪水。它不是行动次数，而是经营成本的一部分。",
+		"employee_tree_salary_card",
+		"right"
+	)
+	_append_step_if_target_available(
+		steps,
+		targets,
+		"employee_tree_manager_header",
+		"最后看经理卡的黑色标题条",
+		"经理卡顶部是黑色标题条。经理在公司结构里只能向 CEO 汇报，并提供管理名额；如果没有足够的管理名额，就无法安置更多下属。",
+		"employee_tree_manager_card",
+		"right"
 	)
 	_append_step_if_target_available(
 		steps,
 		targets,
 		"employee_tree_viewport",
 		"连线表示培训方向",
-		"从左往右的连线表示该员工可以培训到哪些后续岗位。规划时要同时看起点、终点和中间节点，避免只盯着终点，却忽略前置员工已经被拿空。"
+		"从左往右的连线表示该员工可以培训到哪些后续岗位。规划时要同时看起点、终点和中间节点，避免只盯着终点，却忽略前置员工已经被拿空。",
+		"",
+		"below"
 	)
 	return steps
 
@@ -449,15 +476,22 @@ static func _append_step_if_target_available(
 	targets: Dictionary,
 	target_key: String,
 	title: String,
-	body: String
+	body: String,
+	layout_target_key: String = "",
+	preferred_card_side: String = ""
 ) -> void:
 	if not _is_tutorial_target_available(targets.get(target_key, null)):
 		return
-	steps.append({
+	var step := {
 		"target_key": target_key,
 		"title": title,
 		"body": body,
-	})
+	}
+	if not layout_target_key.is_empty():
+		step["layout_target_key"] = layout_target_key
+	if not preferred_card_side.is_empty():
+		step["preferred_card_side"] = preferred_card_side
+	steps.append(step)
 
 static func _duplicate_string_array(values: Array) -> Array[String]:
 	var out: Array[String] = []

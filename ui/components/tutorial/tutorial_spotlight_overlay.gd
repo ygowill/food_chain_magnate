@@ -5,7 +5,6 @@ signal tour_finished(completed: bool)
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
-@onready var highlight_frame: PanelContainer = $HighlightFrame
 @onready var card_panel: PanelContainer = $CardPanel
 @onready var title_label: Label = $CardPanel/MarginContainer/VBoxContainer/TitleLabel
 @onready var body_label: RichTextLabel = $CardPanel/MarginContainer/VBoxContainer/BodyLabel
@@ -20,8 +19,10 @@ var _on_completed: Callable = Callable()
 var _on_skipped: Callable = Callable()
 var _step_index: int = 0
 var _target_rect: Rect2 = Rect2()
+var _layout_rect: Rect2 = Rect2()
 var _dim_color: Color = Color(0.05, 0.04, 0.03, 0.75)
 var _pending_start_requested: bool = false
+var _last_card_side: String = ""
 
 const _HIGHLIGHT_MARGIN := 10.0
 const _CARD_GAP := 18.0
@@ -32,8 +33,8 @@ func _ready() -> void:
 	super._ready()
 	_apply_visual_styles()
 	_connect_signals()
-	highlight_frame.visible = false
 	card_panel.visible = false
+	set_process(false)
 	if is_instance_valid(overlay):
 		overlay.visible = false
 	if _pending_start_requested and not _steps.is_empty():
@@ -56,6 +57,7 @@ func start_tour(
 	_on_completed = on_completed
 	_on_skipped = on_skipped
 	_step_index = 0
+	_last_card_side = ""
 	_pending_start_requested = true
 	if not _is_ui_ready():
 		if is_instance_valid(overlay):
@@ -66,7 +68,6 @@ func start_tour(
 func _is_ui_ready() -> bool:
 	return (
 		is_node_ready()
-		and highlight_frame != null
 		and card_panel != null
 		and title_label != null
 		and body_label != null
@@ -83,6 +84,7 @@ func _start_current_tour() -> void:
 		_pending_start_requested = false
 		return
 	_pending_start_requested = false
+	set_process(true)
 	if is_instance_valid(overlay):
 		overlay.visible = false
 	open()
@@ -106,16 +108,6 @@ func _apply_visual_styles() -> void:
 	UiStylesClass.apply_button_secondary(prev_button)
 	UiStylesClass.apply_button_secondary(skip_button)
 	UiStylesClass.apply_button_primary(next_button)
-
-	var highlight_style := StyleBoxFlat.new()
-	highlight_style.bg_color = Color(1, 1, 1, 0.02)
-	highlight_style.border_color = Color(0.93, 0.73, 0.24, 0.95)
-	highlight_style.set_border_width_all(3)
-	highlight_style.corner_radius_top_left = 10
-	highlight_style.corner_radius_top_right = 10
-	highlight_style.corner_radius_bottom_left = 10
-	highlight_style.corner_radius_bottom_right = 10
-	highlight_frame.add_theme_stylebox_override("panel", highlight_style)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_dim_color = UiStylesClass.get_overlay_dim_color()
 
@@ -140,37 +132,56 @@ func _apply_step() -> void:
 	_refresh_target_rect()
 	call_deferred("_refresh_layout")
 
-func _refresh_target_rect() -> void:
-	_target_rect = Rect2()
-	highlight_frame.visible = false
+func _refresh_target_rect() -> bool:
+	var next_target_rect := Rect2()
+	var next_layout_rect := Rect2()
 
 	var step: Dictionary = _steps[_step_index]
 	var target_key := str(step.get("target_key", "")).strip_edges()
 	if target_key.is_empty():
-		queue_redraw()
-		return
+		return _assign_target_rects(next_target_rect, next_layout_rect)
 
 	var target := _resolve_target(target_key)
 	if target == null:
-		queue_redraw()
-		return
+		return _assign_target_rects(next_target_rect, next_layout_rect)
 
 	var target_control := target as Control
 	if not is_instance_valid(target_control) or not target_control.visible:
-		queue_redraw()
-		return
+		return _assign_target_rects(next_target_rect, next_layout_rect)
 
 	var global_rect := _get_target_visible_global_rect(target_control)
 	if global_rect.size.x <= 0.0 or global_rect.size.y <= 0.0:
-		queue_redraw()
-		return
+		return _assign_target_rects(next_target_rect, next_layout_rect)
 
 	var self_rect := get_global_rect()
-	_target_rect = Rect2(global_rect.position - self_rect.position, global_rect.size)
-	highlight_frame.position = _target_rect.position - Vector2(_HIGHLIGHT_MARGIN, _HIGHLIGHT_MARGIN)
-	highlight_frame.size = _target_rect.size + Vector2(_HIGHLIGHT_MARGIN * 2.0, _HIGHLIGHT_MARGIN * 2.0)
-	highlight_frame.visible = true
-	queue_redraw()
+	next_target_rect = Rect2(global_rect.position - self_rect.position, global_rect.size)
+	next_layout_rect = next_target_rect
+
+	var layout_target_key := str(step.get("layout_target_key", "")).strip_edges()
+	if not layout_target_key.is_empty():
+		var layout_target := _resolve_target(layout_target_key)
+		if layout_target is Control and is_instance_valid(layout_target):
+			var layout_control := layout_target as Control
+			var layout_global_rect := _get_target_visible_global_rect(layout_control)
+			if layout_global_rect.size.x > 0.0 and layout_global_rect.size.y > 0.0:
+				next_layout_rect = Rect2(layout_global_rect.position - self_rect.position, layout_global_rect.size)
+
+	return _assign_target_rects(next_target_rect, next_layout_rect)
+
+func _assign_target_rects(next_target_rect: Rect2, next_layout_rect: Rect2) -> bool:
+	var target_changed := not _rect_almost_equal(_target_rect, next_target_rect)
+	var layout_changed := not _rect_almost_equal(_layout_rect, next_layout_rect)
+	_target_rect = next_target_rect
+	_layout_rect = next_layout_rect
+	if target_changed:
+		queue_redraw()
+	return target_changed or layout_changed
+
+func _rect_almost_equal(a: Rect2, b: Rect2) -> bool:
+	return (
+		a.position.distance_to(b.position) <= 0.5
+		and a.size.distance_to(b.size) <= 0.5
+	)
 
 func _get_target_visible_global_rect(target_control: Control) -> Rect2:
 	if not is_instance_valid(target_control):
@@ -200,7 +211,11 @@ func _get_target_visible_global_rect(target_control: Control) -> Rect2:
 func _resolve_target(target_key: String) -> Control:
 	if not _targets_provider.is_valid():
 		return null
-	var raw_targets = _targets_provider.call()
+	var raw_targets = _targets_provider.call(target_key)
+	if raw_targets is Control:
+		var direct_target: Control = raw_targets
+		if is_instance_valid(direct_target):
+			return direct_target
 	if not (raw_targets is Dictionary):
 		return null
 	var targets: Dictionary = raw_targets
@@ -217,32 +232,56 @@ func _refresh_layout() -> void:
 	var viewport_size := get_viewport_rect().size
 	var card_size := card_panel.get_combined_minimum_size()
 	card_panel.size = card_size
+	var anchor_rect := _layout_rect if _layout_rect.size != Vector2.ZERO else _target_rect
 
-	if _target_rect.size == Vector2.ZERO:
+	if anchor_rect.size == Vector2.ZERO:
 		card_panel.position = (viewport_size - card_size) * 0.5
 		return
 
-	var right_pos := Vector2(_target_rect.end.x + _CARD_GAP, _target_rect.position.y)
-	if _fits_card(right_pos, card_size, viewport_size):
-		card_panel.position = _clamp_card_position(right_pos, card_size, viewport_size)
-		return
-
-	var left_pos := Vector2(_target_rect.position.x - card_size.x - _CARD_GAP, _target_rect.position.y)
-	if _fits_card(left_pos, card_size, viewport_size):
-		card_panel.position = _clamp_card_position(left_pos, card_size, viewport_size)
-		return
-
-	var below_pos := Vector2(_target_rect.position.x, _target_rect.end.y + _CARD_GAP)
-	if _fits_card(below_pos, card_size, viewport_size):
-		card_panel.position = _clamp_card_position(below_pos, card_size, viewport_size)
-		return
-
-	var above_pos := Vector2(_target_rect.position.x, _target_rect.position.y - card_size.y - _CARD_GAP)
-	if _fits_card(above_pos, card_size, viewport_size):
-		card_panel.position = _clamp_card_position(above_pos, card_size, viewport_size)
-		return
+	for side in _get_card_side_order():
+		var candidate := _get_card_position_for_side(side, anchor_rect, card_size)
+		if _fits_card(candidate, card_size, viewport_size):
+			card_panel.position = _clamp_card_position(candidate, card_size, viewport_size)
+			_last_card_side = side
+			return
 
 	card_panel.position = _clamp_card_position((viewport_size - card_size) * 0.5, card_size, viewport_size)
+	_last_card_side = ""
+
+func _get_card_side_order() -> Array[String]:
+	var step: Dictionary = _steps[_step_index] if _step_index >= 0 and _step_index < _steps.size() else {}
+	var preferred_side := str(step.get("preferred_card_side", "")).strip_edges().to_lower()
+	var order: Array[String] = []
+	_append_card_side_if_valid(order, preferred_side)
+	if preferred_side.is_empty():
+		_append_card_side_if_valid(order, _last_card_side)
+	_append_card_side_if_valid(order, "right")
+	_append_card_side_if_valid(order, "left")
+	_append_card_side_if_valid(order, "below")
+	_append_card_side_if_valid(order, "above")
+	return order
+
+func _append_card_side_if_valid(order: Array[String], side: String) -> void:
+	var normalized := str(side).strip_edges().to_lower()
+	if normalized.is_empty():
+		return
+	if normalized != "right" and normalized != "left" and normalized != "below" and normalized != "above":
+		return
+	if order.has(normalized):
+		return
+	order.append(normalized)
+
+func _get_card_position_for_side(side: String, anchor_rect: Rect2, card_size: Vector2) -> Vector2:
+	match str(side):
+		"right":
+			return Vector2(anchor_rect.end.x + _CARD_GAP, anchor_rect.get_center().y - card_size.y * 0.5)
+		"left":
+			return Vector2(anchor_rect.position.x - card_size.x - _CARD_GAP, anchor_rect.get_center().y - card_size.y * 0.5)
+		"below":
+			return Vector2(anchor_rect.get_center().x - card_size.x * 0.5, anchor_rect.end.y + _CARD_GAP)
+		"above":
+			return Vector2(anchor_rect.get_center().x - card_size.x * 0.5, anchor_rect.position.y - card_size.y - _CARD_GAP)
+	return (get_viewport_rect().size - card_size) * 0.5
 
 func _draw() -> void:
 	if not visible:
@@ -305,16 +344,18 @@ func _on_next_pressed() -> void:
 func _finish_tour(completed: bool) -> void:
 	var callback := _on_completed if completed else _on_skipped
 	_pending_start_requested = false
+	set_process(false)
 	_steps.clear()
 	_targets_provider = Callable()
 	_on_completed = Callable()
 	_on_skipped = Callable()
 	close()
-	highlight_frame.visible = false
 	card_panel.visible = false
 	if is_instance_valid(overlay):
 		overlay.visible = false
 	_target_rect = Rect2()
+	_layout_rect = Rect2()
+	_last_card_side = ""
 	queue_redraw()
 	tour_finished.emit(completed)
 	if callback.is_valid():
@@ -323,6 +364,12 @@ func _finish_tour(completed: bool) -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED and visible and not _steps.is_empty():
 		call_deferred("_refresh_layout")
+
+func _process(_delta: float) -> void:
+	if not visible or _steps.is_empty():
+		return
+	if _refresh_target_rect():
+		_refresh_layout()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:

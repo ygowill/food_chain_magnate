@@ -93,24 +93,214 @@ func get_tutorial_viewport() -> Control:
 	return null
 
 func get_tutorial_sample_card() -> Control:
-	if not is_instance_valid(graph):
-		return null
-	if not graph.has_method("get_tutorial_sample_card"):
-		return null
-	var sample = graph.get_tutorial_sample_card()
-	if sample is Control and is_instance_valid(sample):
-		return sample as Control
-	return null
+	return _get_best_tutorial_target("card")
 
 func get_tutorial_sample_card_target(target_kind: String) -> Control:
+	return _get_best_tutorial_target(target_kind)
+
+func prepare_tutorial_focus(target_kind: String) -> void:
+	var focus_control := _get_semantic_tutorial_focus_control(target_kind)
+	if focus_control == null or not is_instance_valid(focus_control):
+		return
+	_focus_tutorial_control(focus_control)
+
+func _get_best_tutorial_target(target_kind: String) -> Control:
 	if not is_instance_valid(graph):
 		return null
-	if not graph.has_method("get_tutorial_sample_card_target"):
-		return null
-	var target = graph.call("get_tutorial_sample_card_target", target_kind)
-	if target is Control and is_instance_valid(target):
-		return target as Control
+	if graph.has_method("get_tutorial_candidate_employee_ids") and graph.has_method("get_tutorial_target_for_employee"):
+		var candidate_ids_val = graph.call("get_tutorial_candidate_employee_ids", target_kind)
+		if candidate_ids_val is Array:
+			var best_partial: Control = null
+			var best_partial_score := -1.0
+			for employee_id_val in candidate_ids_val:
+				var employee_id := str(employee_id_val)
+				if employee_id.is_empty():
+					continue
+				var raw_target = graph.call("get_tutorial_target_for_employee", employee_id, target_kind)
+				if not (raw_target is Control):
+					continue
+				var control_target: Control = raw_target
+				if not is_instance_valid(control_target) or not control_target.is_visible_in_tree():
+					continue
+				if _is_control_fully_visible_in_tutorial_viewport(control_target):
+					return control_target
+				var visible_score := _get_tutorial_target_visible_score(control_target)
+				if visible_score > best_partial_score:
+					best_partial_score = visible_score
+					best_partial = control_target
+			if best_partial != null and is_instance_valid(best_partial):
+				return best_partial
+	if graph.has_method("get_tutorial_sample_card_target"):
+		var fallback_target = graph.call("get_tutorial_sample_card_target", target_kind)
+		if fallback_target is Control and is_instance_valid(fallback_target):
+			return fallback_target as Control
+	if target_kind != "card" and graph.has_method("get_tutorial_sample_card"):
+		var fallback_card = graph.call("get_tutorial_sample_card")
+		if fallback_card is Control and is_instance_valid(fallback_card):
+			return fallback_card as Control
 	return null
+
+func _get_semantic_tutorial_target(target_kind: String) -> Control:
+	if not is_instance_valid(graph):
+		return null
+	if graph.has_method("get_tutorial_candidate_employee_ids") and graph.has_method("get_tutorial_target_for_employee"):
+		var candidate_ids_val = graph.call("get_tutorial_candidate_employee_ids", target_kind)
+		if candidate_ids_val is Array:
+			for employee_id_val in candidate_ids_val:
+				var employee_id := str(employee_id_val)
+				if employee_id.is_empty():
+					continue
+				var raw_target = graph.call("get_tutorial_target_for_employee", employee_id, target_kind)
+				if raw_target is Control and is_instance_valid(raw_target):
+					return raw_target as Control
+	if graph.has_method("get_tutorial_sample_card_target"):
+		var fallback_target = graph.call("get_tutorial_sample_card_target", target_kind)
+		if fallback_target is Control and is_instance_valid(fallback_target):
+			return fallback_target as Control
+	return null
+
+func _get_semantic_tutorial_focus_control(target_kind: String) -> Control:
+	if not is_instance_valid(graph):
+		return null
+	if graph.has_method("get_tutorial_candidate_employee_ids") and graph.has_method("get_tutorial_target_for_employee"):
+		var candidate_ids_val = graph.call("get_tutorial_candidate_employee_ids", target_kind)
+		if candidate_ids_val is Array:
+			for employee_id_val in candidate_ids_val:
+				var employee_id := str(employee_id_val)
+				if employee_id.is_empty():
+					continue
+				var raw_target = graph.call("get_tutorial_target_for_employee", employee_id, target_kind)
+				if not (raw_target is Control) or not is_instance_valid(raw_target):
+					continue
+				var focus_kind := "host" if _should_center_employee_tree_card(target_kind) else target_kind
+				var raw_focus = graph.call("get_tutorial_target_for_employee", employee_id, focus_kind)
+				if raw_focus is Control and is_instance_valid(raw_focus):
+					return raw_focus as Control
+				return raw_target as Control
+	var fallback_target := _get_semantic_tutorial_target(target_kind)
+	if fallback_target == null or not is_instance_valid(fallback_target):
+		return null
+	if _should_center_employee_tree_card(target_kind):
+		var host := _find_employee_tree_host_for_control(fallback_target)
+		if host != null and is_instance_valid(host):
+			return host
+	return fallback_target
+
+func _should_center_employee_tree_card(target_kind: String) -> bool:
+	match str(target_kind):
+		"card", "header", "description", "remaining_badge", "entry_marker", "one_x_marker", "range_marker", "salary_marker", "manager_card", "manager_header", "manager_description":
+			return true
+	return false
+
+func _find_employee_tree_host_for_control(control: Control) -> Control:
+	var current: Node = control
+	while current != null:
+		if current.get_parent() == graph and current is Control:
+			return current as Control
+		current = current.get_parent()
+	return null
+
+func _focus_tutorial_control(control: Control) -> void:
+	if control == null or not is_instance_valid(control):
+		return
+	if not is_instance_valid(viewport) or not is_instance_valid(graph):
+		return
+
+	var viewport_rect := viewport.get_global_rect()
+	var target_rect := control.get_global_rect()
+	if viewport_rect.size.x <= 0.0 or viewport_rect.size.y <= 0.0 or target_rect.size.x <= 0.0 or target_rect.size.y <= 0.0:
+		return
+
+	var viewport_center := viewport_rect.get_center()
+	var target_center := target_rect.get_center()
+	var center_delta := viewport_center - target_center
+	if center_delta != Vector2.ZERO:
+		graph.position += center_delta
+		graph.position = Vector2(round(graph.position.x), round(graph.position.y))
+		target_rect = control.get_global_rect()
+
+	var padding := Vector2(36.0, 28.0)
+	var safe_rect := viewport_rect.grow_individual(-padding.x, -padding.y, -padding.x, -padding.y)
+	if safe_rect.size.x <= 0.0 or safe_rect.size.y <= 0.0:
+		safe_rect = viewport_rect
+	if _rect_contains_rect(safe_rect, target_rect):
+		return
+
+	var delta := Vector2.ZERO
+	if target_rect.size.x >= safe_rect.size.x:
+		delta.x = safe_rect.get_center().x - target_rect.get_center().x
+	elif target_rect.position.x < safe_rect.position.x:
+		delta.x = safe_rect.position.x - target_rect.position.x
+	elif target_rect.end.x > safe_rect.end.x:
+		delta.x = safe_rect.end.x - target_rect.end.x
+
+	if target_rect.size.y >= safe_rect.size.y:
+		delta.y = safe_rect.get_center().y - target_rect.get_center().y
+	elif target_rect.position.y < safe_rect.position.y:
+		delta.y = safe_rect.position.y - target_rect.position.y
+	elif target_rect.end.y > safe_rect.end.y:
+		delta.y = safe_rect.end.y - target_rect.end.y
+
+	if delta == Vector2.ZERO:
+		return
+
+	graph.position += delta
+	graph.position = Vector2(round(graph.position.x), round(graph.position.y))
+
+func _rect_contains_rect(container: Rect2, rect: Rect2) -> bool:
+	return (
+		rect.position.x >= container.position.x
+		and rect.position.y >= container.position.y
+		and rect.end.x <= container.end.x
+		and rect.end.y <= container.end.y
+	)
+
+func _is_control_fully_visible_in_tutorial_viewport(control: Control) -> bool:
+	var target_rect := _get_control_visible_global_rect(control, false)
+	var visible_rect := _get_control_visible_global_rect(control, true)
+	if target_rect.size.x <= 0.0 or target_rect.size.y <= 0.0:
+		return false
+	return (
+		target_rect.position.distance_to(visible_rect.position) <= 0.5
+		and target_rect.size.distance_to(visible_rect.size) <= 0.5
+	)
+
+func _get_tutorial_target_visible_score(control: Control) -> float:
+	var target_rect := _get_control_visible_global_rect(control, false)
+	var visible_rect := _get_control_visible_global_rect(control, true)
+	if target_rect.size.x <= 0.0 or target_rect.size.y <= 0.0:
+		return -1.0
+	var full_area := target_rect.size.x * target_rect.size.y
+	if full_area <= 0.0:
+		return -1.0
+	var visible_area := maxf(0.0, visible_rect.size.x) * maxf(0.0, visible_rect.size.y)
+	return visible_area / full_area
+
+func _get_control_visible_global_rect(control: Control, clip_to_viewport: bool) -> Rect2:
+	if control == null or not is_instance_valid(control):
+		return Rect2()
+	var rect := control.get_global_rect()
+	if rect.size.x <= 0.0 or rect.size.y <= 0.0:
+		return Rect2()
+	if clip_to_viewport and is_instance_valid(viewport):
+		rect = rect.intersection(viewport.get_global_rect())
+		if rect.size.x <= 0.0 or rect.size.y <= 0.0:
+			return Rect2()
+
+	var parent_node: Node = control.get_parent()
+	while parent_node != null:
+		if parent_node is Control:
+			var parent_control := parent_node as Control
+			if parent_control == viewport and not clip_to_viewport:
+				break
+			if parent_control.clip_contents:
+				rect = rect.intersection(parent_control.get_global_rect())
+				if rect.size.x <= 0.0 or rect.size.y <= 0.0:
+					return Rect2()
+			if parent_control == viewport:
+				break
+		parent_node = parent_node.get_parent()
+	return rect
 
 func prepare_tutorial_layout() -> void:
 	if _tutorial_layout_in_progress:

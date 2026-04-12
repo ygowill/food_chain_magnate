@@ -60,7 +60,8 @@ func dispose() -> void:
 	_get_active_docked_panel = Callable()
 	_get_employee_tree_panel = Callable()
 
-func get_targets() -> Dictionary:
+func get_targets(target_key: String = "") -> Dictionary:
+	_prepare_employee_tree_focus_for_target_key(target_key)
 	return {
 		"status_bar": _status_bar,
 		"map_view": _map_view,
@@ -84,8 +85,15 @@ func get_targets() -> Dictionary:
 		"employee_tree_sample_card": _get_employee_tree_tutorial_target("sample_card"),
 		"employee_tree_sample_card_header": _get_employee_tree_tutorial_target("sample_card_header"),
 		"employee_tree_sample_card_remaining_badge": _get_employee_tree_tutorial_target("sample_card_remaining_badge"),
+		"employee_tree_entry_card": _get_employee_tree_tutorial_target("entry_card"),
 		"employee_tree_sample_card_entry_marker": _get_employee_tree_tutorial_target("sample_card_entry_marker"),
+		"employee_tree_one_x_card": _get_employee_tree_tutorial_target("one_x_card"),
+		"employee_tree_sample_card_one_x_marker": _get_employee_tree_tutorial_target("sample_card_one_x_marker"),
+		"employee_tree_manager_card": _get_employee_tree_tutorial_target("manager_card"),
+		"employee_tree_manager_header": _get_employee_tree_tutorial_target("manager_header"),
+		"employee_tree_range_card": _get_employee_tree_tutorial_target("range_card"),
 		"employee_tree_sample_card_range_marker": _get_employee_tree_tutorial_target("sample_card_range_marker"),
+		"employee_tree_salary_card": _get_employee_tree_tutorial_target("salary_card"),
 		"employee_tree_sample_card_salary_marker": _get_employee_tree_tutorial_target("sample_card_salary_marker"),
 		"employee_tree_sample_card_description": _get_employee_tree_tutorial_target("sample_card_description"),
 		"restructuring_player_buttons": _get_restructuring_tutorial_target("Panel/MarginContainer/VBoxContainer/PlayerRow/PlayerButtons"),
@@ -211,14 +219,28 @@ func _get_employee_tree_tutorial_target(target_kind: String) -> Control:
 				var sample = panel_control.call("get_tutorial_sample_card")
 				if sample is Control and is_instance_valid(sample):
 					return sample as Control
+		"entry_card":
+			return _get_employee_tree_sample_card_target(panel_control, "entry_card")
 		"sample_card_header":
 			return _get_employee_tree_sample_card_target(panel_control, "header")
 		"sample_card_remaining_badge":
 			return _get_employee_tree_sample_card_target(panel_control, "remaining_badge")
 		"sample_card_entry_marker":
 			return _get_employee_tree_sample_card_target(panel_control, "entry_marker")
+		"one_x_card":
+			return _get_employee_tree_sample_card_target(panel_control, "one_x_card")
+		"sample_card_one_x_marker":
+			return _get_employee_tree_sample_card_target(panel_control, "one_x_marker")
+		"manager_card":
+			return _get_employee_tree_sample_card_target(panel_control, "manager_card")
+		"manager_header":
+			return _get_employee_tree_sample_card_target(panel_control, "manager_header")
+		"range_card":
+			return _get_employee_tree_sample_card_target(panel_control, "range_card")
 		"sample_card_range_marker":
 			return _get_employee_tree_sample_card_target(panel_control, "range_marker")
+		"salary_card":
+			return _get_employee_tree_sample_card_target(panel_control, "salary_card")
 		"sample_card_salary_marker":
 			return _get_employee_tree_sample_card_target(panel_control, "salary_marker")
 		"sample_card_description":
@@ -234,3 +256,50 @@ func _get_employee_tree_sample_card_target(panel_control: Control, target_kind: 
 	if target is Control and is_instance_valid(target):
 		return target as Control
 	return null
+
+func _prepare_employee_tree_focus_for_target_key(target_key: String) -> void:
+	var kind := _map_employee_tree_target_key_to_focus_kind(target_key)
+	if kind.is_empty():
+		return
+	if not _get_employee_tree_panel.is_valid():
+		return
+	var panel = _get_employee_tree_panel.call()
+	if not (panel is Control):
+		return
+	var panel_control: Control = panel
+	if not is_instance_valid(panel_control) or not panel_control.visible:
+		return
+	if panel_control.has_method("prepare_tutorial_focus"):
+		panel_control.call("prepare_tutorial_focus", kind)
+
+func _map_employee_tree_target_key_to_focus_kind(target_key: String) -> String:
+	match str(target_key):
+		"employee_tree_sample_card":
+			return "card"
+		"employee_tree_entry_card":
+			return "entry_marker"
+		"employee_tree_sample_card_header":
+			return "header"
+		"employee_tree_sample_card_remaining_badge":
+			return "remaining_badge"
+		"employee_tree_sample_card_entry_marker":
+			return "entry_marker"
+		"employee_tree_one_x_card":
+			return "one_x_marker"
+		"employee_tree_sample_card_one_x_marker":
+			return "one_x_marker"
+		"employee_tree_manager_card":
+			return "manager_card"
+		"employee_tree_manager_header":
+			return "manager_header"
+		"employee_tree_range_card":
+			return "range_marker"
+		"employee_tree_sample_card_range_marker":
+			return "range_marker"
+		"employee_tree_salary_card":
+			return "salary_marker"
+		"employee_tree_sample_card_salary_marker":
+			return "salary_marker"
+		"employee_tree_sample_card_description":
+			return "description"
+	return ""

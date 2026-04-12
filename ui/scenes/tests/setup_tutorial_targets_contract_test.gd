@@ -46,6 +46,23 @@ static func run() -> Result:
 			await _cleanup_node(setup, tree)
 			_restore_tutorial_settings(tutorial_snapshot)
 			return Result.failure("Setup tutorial target 缺失或不可见: %s" % key)
+	var player_count_section = targets.get("player_count_section", null)
+	var seed_edit = setup.get("_seed_edit")
+	if not _is_visible_control(player_count_section):
+		await _cleanup_node(setup, tree)
+		_restore_tutorial_settings(tutorial_snapshot)
+		return Result.failure("Setup tutorial 缺少 player_count_section")
+	if not _is_visible_control(seed_edit):
+		await _cleanup_node(setup, tree)
+		_restore_tutorial_settings(tutorial_snapshot)
+		return Result.failure("Setup tutorial 缺少随机种子输入框")
+	var player_rect := (player_count_section as Control).get_global_rect()
+	var seed_rect := (seed_edit as Control).get_global_rect()
+	var overlap := player_rect.intersection(seed_rect)
+	if overlap.size.x > 1.0 and overlap.size.y > 1.0:
+		await _cleanup_node(setup, tree)
+		_restore_tutorial_settings(tutorial_snapshot)
+		return Result.failure("Setup tutorial 的游戏规模框选错误地覆盖了随机种子区域: overlap=%s" % overlap)
 
 	await _cleanup_node(setup, tree)
 	_restore_tutorial_settings(tutorial_snapshot)

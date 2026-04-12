@@ -23,12 +23,6 @@ visible = false
 mouse_filter = 2
 color = Color(0.05, 0.04, 0.03, 0.75)
 
-[node name="HighlightFrame" type="PanelContainer" parent="."]
-layout_mode = 0
-offset_right = 120.0
-offset_bottom = 80.0
-mouse_filter = 2
-
 [node name="CardPanel" type="PanelContainer" parent="."]
 layout_mode = 0
 offset_right = 420.0

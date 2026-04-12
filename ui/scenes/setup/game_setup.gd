@@ -38,6 +38,7 @@ var _players_container: VBoxContainer = null
 var _modules_section: VBoxContainer = null
 var _message_label: Label = null
 var _game_params_panel: PanelContainer = null
+var _player_count_tutorial_section: VBoxContainer = null
 
 var _player_name_edits: Array[LineEdit] = []
 var _player_logo_options: Array[OptionButton] = []
@@ -153,16 +154,21 @@ func _build_game_params_section() -> void:
 	UiStylesClass.apply_label_dark(header)
 	vbox.add_child(header)
 
+	var player_count_section := VBoxContainer.new()
+	player_count_section.add_theme_constant_override("separation", 8)
+	vbox.add_child(player_count_section)
+	_player_count_tutorial_section = player_count_section
+
 	# 玩家数量标签
 	var count_label := Label.new()
 	count_label.text = "玩家数量"
 	UiStylesClass.apply_label_hint_dark(count_label)
-	vbox.add_child(count_label)
+	player_count_section.add_child(count_label)
 
 	# 按钮组 [2] [3] [4] [5] [6]
 	var btn_row := HBoxContainer.new()
 	btn_row.add_theme_constant_override("separation", 8)
-	vbox.add_child(btn_row)
+	player_count_section.add_child(btn_row)
 
 	_player_count_buttons.clear()
 	for i in range(2, 7):
@@ -327,7 +333,7 @@ func _on_start_pressed() -> void:
 func _initialize_tutorial_flow() -> void:
 	_tutorials_controller = GameSetupTutorialsControllerClass.new(
 		self,
-		_game_params_panel,
+		_player_count_tutorial_section,
 		_modules_section,
 		start_button,
 		Callable(self, "_get_module_selector_tutorial_targets"),

@@ -79,6 +79,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return await TestRefs.TutorialSpotlightOverlayStartTestClass.run(),
 		},
 		{
+			"name": "TutorialSpotlightOverlayLayoutTest",
+			"fn": func() -> Result: return await TestRefs.TutorialSpotlightOverlayLayoutTestClass.run(),
+		},
+		{
 			"name": "EmployeeTreeTutorialTargetsTest",
 			"fn": func() -> Result: return await TestRefs.EmployeeTreeTutorialTargetsTestClass.run(),
 		},

@@ -27,7 +27,7 @@ func dispose() -> void:
 	_start_button = null
 	_get_module_selector_tutorial_targets = Callable()
 
-func get_targets() -> Dictionary:
+func get_targets(_target_key: String = "") -> Dictionary:
 	var module_targets := _get_module_targets()
 	return {
 		"player_count_section": _player_count_section,

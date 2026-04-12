@@ -36,7 +36,7 @@ static func run() -> Result:
 				"body": "测试正文",
 			}
 		],
-		func() -> Dictionary:
+		func(_target_key: String = "") -> Dictionary:
 			return {"target": target}
 	)
 
@@ -53,24 +53,49 @@ static func run() -> Result:
 		await tree.process_frame
 		return Result.failure("教学 spotlight 不应显示整屏遮罩 Overlay；否则会重新盖住高亮区域")
 
-	var highlight := overlay.get_node_or_null("HighlightFrame") as Control
 	var card_panel := overlay.get_node_or_null("CardPanel") as Control
-	if highlight == null or card_panel == null:
+	if card_panel == null:
 		_safe_free(host)
 		await tree.process_frame
-		return Result.failure("TutorialSpotlightOverlay 缺少高亮或说明面板节点")
+		return Result.failure("TutorialSpotlightOverlay 缺少说明面板节点")
 	if not bool(overlay.call("is_tour_running")):
 		_safe_free(host)
 		await tree.process_frame
 		return Result.failure("教学 spotlight 在首次启动后未进入运行状态")
-	if not highlight.visible or highlight.size.x <= 0.0 or highlight.size.y <= 0.0:
+	if overlay.get_node_or_null("HighlightFrame") != null:
 		_safe_free(host)
 		await tree.process_frame
-		return Result.failure("教学 spotlight 未生成有效高亮框")
+		return Result.failure("教学 spotlight 不应再保留旧的 HighlightFrame 节点")
 	if not card_panel.visible:
 		_safe_free(host)
 		await tree.process_frame
 		return Result.failure("教学 spotlight 未显示说明卡片")
+
+	var target_rect_val = overlay.get("_target_rect")
+	if not (target_rect_val is Rect2):
+		_safe_free(host)
+		await tree.process_frame
+		return Result.failure("教学 spotlight 缺少有效的 target rect 状态")
+	var target_rect: Rect2 = target_rect_val
+	if target_rect.size.x <= 0.0 or target_rect.size.y <= 0.0:
+		_safe_free(host)
+		await tree.process_frame
+		return Result.failure("教学 spotlight 未生成有效高亮区域")
+
+	target.position += Vector2(140, 60)
+	for _i in range(3):
+		await tree.process_frame
+
+	var moved_rect_val = overlay.get("_target_rect")
+	if not (moved_rect_val is Rect2):
+		_safe_free(host)
+		await tree.process_frame
+		return Result.failure("教学 spotlight 在目标移动后丢失 target rect")
+	var moved_rect: Rect2 = moved_rect_val
+	if moved_rect.position.distance_to(target_rect.position) <= 1.0:
+		_safe_free(host)
+		await tree.process_frame
+		return Result.failure("教学 spotlight 未跟随目标位置刷新高亮区域")
 
 	_safe_free(host)
 	await tree.process_frame

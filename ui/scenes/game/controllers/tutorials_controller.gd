@@ -495,10 +495,10 @@ func _complete_context_tour(tour_id: String) -> void:
 		Globals.mark_tutorial_flow_hint_seen(tour_id, true)
 	on_ui_updated()
 
-func get_tutorial_targets() -> Dictionary:
+func get_tutorial_targets(target_key: String = "") -> Dictionary:
 	if _targets_resolver == null or not _targets_resolver.has_method("get_targets"):
 		return {}
-	return _targets_resolver.get_targets()
+	return _targets_resolver.get_targets(target_key)
 
 func _ensure_tutorial_flow_hint_card() -> void:
 	if _tutorial_flow_hint_card != null and is_instance_valid(_tutorial_flow_hint_card):

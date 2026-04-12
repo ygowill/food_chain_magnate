@@ -188,63 +188,90 @@ static func build_employee_tree_tour_steps(targets: Dictionary) -> Array:
 		targets,
 		"employee_tree_viewport",
 		"这里用于规划员工路线",
-		"员工树是招聘和培训时最重要的参考视图。教学开始前，这个视图会先自动按宽度调整，帮助你看清整条升级路线和关键节点。"
+		"员工树是招聘和培训时最重要的参考视图。下面会先按一张员工卡从上到下说明，再补充特殊标记与连线。",
+		"",
+		"below"
 	)
 	_append_step_if_target_available(
 		steps,
 		targets,
 		"employee_tree_sample_card_header",
 		"先看卡片顶部色条和名称",
-		"顶部色条用于区分岗位类别，名称用于确认具体员工。阅读路线时，先看自己缺的是哪类能力，再找对应颜色的一条线继续追。"
+		"顶部色条用于区分岗位类别，名称用于确认具体员工。阅读路线时，先看自己缺的是哪类能力，再找对应颜色的一条线继续追。",
+		"employee_tree_sample_card",
+		"right"
 	)
 	_append_step_if_target_available(
 		steps,
 		targets,
 		"employee_tree_sample_card_remaining_badge",
 		"右上角数字表示剩余数量",
-		"右上角数字表示这个岗位当前还能拿到多少张。招聘和培训前，都建议先看这里，避免把行动花在已经接近拿空的路线节点上。"
-	)
-	_append_step_if_target_available(
-		steps,
-		targets,
-		"employee_tree_sample_card_entry_marker",
-		"左下角图标表示取得方式",
-		"左下角的 1 表示入门级员工，可以直接招聘；1x 表示这种职位对每位玩家通常只能拥有 1 张。查看升级路线时，先分清它是招聘入口，还是高位唯一岗位。"
-	)
-	_append_step_if_target_available(
-		steps,
-		targets,
-		"employee_tree_viewport",
-		"黑底卡通常是经理岗位",
-		"黑底表示经理。重组时，经理只能向 CEO 汇报，而经理下方只能放普通员工，所以看路线时也要同时考虑未来的结构容量。"
-	)
-	_append_step_if_target_available(
-		steps,
-		targets,
-		"employee_tree_sample_card_range_marker",
-		"底部中间是距离图标",
-		"底部中间的图标表示该岗位使用的是公路距离还是飞艇距离，以及对应范围。规则中的距离通常按跨过的地图板块边界数计算；若是飞艇图标，则按卡牌能力处理。"
-	)
-	_append_step_if_target_available(
-		steps,
-		targets,
-		"employee_tree_sample_card_salary_marker",
-		"右下角是薪水标志",
-		"右下角的 $ 标志表示正式对局发薪时通常要为这张员工支付薪水。教学局关闭了薪水成本，但正式对局里它会直接影响本轮净收入。"
+		"右上角数字表示这个岗位当前还能拿到多少张。招聘和培训前，都建议先看这里，避免把行动花在已经接近拿空的路线节点上。",
+		"employee_tree_sample_card",
+		"right"
 	)
 	_append_step_if_target_available(
 		steps,
 		targets,
 		"employee_tree_sample_card_description",
 		"正文说明岗位能力",
-		"正文会概括员工作用。读卡时，建议把岗位能力、剩余数量和你当前的经营目标一起看，而不是只看职位名称。"
+		"正文会概括员工作用。读卡时，建议把岗位能力和你当前的经营目标一起看，而不是只看职位名称。",
+		"employee_tree_sample_card",
+		"right"
+	)
+	_append_step_if_target_available(
+		steps,
+		targets,
+		"employee_tree_sample_card_entry_marker",
+		"左下角图标表示取得方式",
+		"左下角像播放键一样的三角形图标表示入门级员工，这类员工可以直接通过招聘取得。查看升级路线时，先确认自己拿到的是不是一条能力链的入口。",
+		"employee_tree_entry_card",
+		"right"
+	)
+	_append_step_if_target_available(
+		steps,
+		targets,
+		"employee_tree_sample_card_one_x_marker",
+		"1x 表示每位玩家通常只能拥有 1 张",
+		"如果左下角显示 1x，则表示这种职位对每位玩家通常只能拥有 1 张。它不是入门级标记，而是数量限制，决定是否投入这条路线前要先看清。",
+		"employee_tree_one_x_card",
+		"right"
+	)
+	_append_step_if_target_available(
+		steps,
+		targets,
+		"employee_tree_sample_card_range_marker",
+		"底部中间是距离图标",
+		"底部中间的图标表示该岗位使用的是公路距离还是飞艇距离，以及对应范围。规则中的距离通常按跨过的地图板块边界数计算；若是飞艇图标，则按卡牌能力处理。",
+		"employee_tree_range_card",
+		"right"
+	)
+	_append_step_if_target_available(
+		steps,
+		targets,
+		"employee_tree_sample_card_salary_marker",
+		"右下角是薪水标志",
+		"右下角的 $ 标志表示正式对局发薪时通常要为这张员工支付薪水。教学局关闭了薪水成本，但正式对局里它会直接影响本轮净收入。",
+		"employee_tree_salary_card",
+		"right"
+	)
+	_append_step_if_target_available(
+		steps,
+		targets,
+		"employee_tree_manager_header",
+		"最后看经理卡的黑色标题条",
+		"经理卡顶部是黑色标题条。经理在公司结构里只能向 CEO 汇报，并提供管理名额；如果没有足够的管理名额，就无法安置更多下属。",
+		"employee_tree_manager_card",
+		"right"
 	)
 	_append_step_if_target_available(
 		steps,
 		targets,
 		"employee_tree_viewport",
 		"连线表示培训方向",
-		"连线表示该员工可以进一步培训到哪里。招聘基础员工时，不只是在拿一张卡，而是在为后面的整条能力链预留入口。"
+		"连线表示该员工可以进一步培训到哪里。招聘基础员工时，不只是在拿一张卡，而是在为后面的整条能力链预留入口。",
+		"",
+		"below"
 	)
 	return steps
 
@@ -620,14 +647,27 @@ static func get_flow_tutorial_hint_for_state(state: GameState) -> Dictionary:
 			}
 	return {}
 
-static func _append_step_if_target_available(steps: Array, targets: Dictionary, target_key: String, title: String, body: String) -> void:
+static func _append_step_if_target_available(
+	steps: Array,
+	targets: Dictionary,
+	target_key: String,
+	title: String,
+	body: String,
+	layout_target_key: String = "",
+	preferred_card_side: String = ""
+) -> void:
 	if not _is_target_available(targets.get(target_key, null)):
 		return
-	steps.append({
+	var step := {
 		"target_key": target_key,
 		"title": title,
 		"body": body,
-	})
+	}
+	if not layout_target_key.is_empty():
+		step["layout_target_key"] = layout_target_key
+	if not preferred_card_side.is_empty():
+		step["preferred_card_side"] = preferred_card_side
+	steps.append(step)
 
 static func _duplicate_string_array(values: Array) -> Array[String]:
 	var out: Array[String] = []

@@ -44,6 +44,7 @@ var _portrait_texture: TextureRect
 var _portrait_placeholder_rect: ColorRect
 
 var _entry_icon_rect: TextureRect
+var _range_box: HBoxContainer
 var _range_icon_rect: TextureRect
 var _salary_icon_rect: TextureRect
 
@@ -139,6 +140,7 @@ func _build_ui() -> void:
 	_portrait_texture = null
 	_portrait_placeholder_rect = null
 	_entry_icon_rect = null
+	_range_box = null
 	_range_icon_rect = null
 	_salary_icon_rect = null
 
@@ -270,11 +272,12 @@ func _build_compact_layout(vbox: VBoxContainer) -> void:
 	_entry_icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bottom.add_child(_entry_icon_rect)
 
-	var range_box := HBoxContainer.new()
-	range_box.add_theme_constant_override("separation", _scaled(4.0, 0))
-	range_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	range_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	bottom.add_child(range_box)
+	_range_box = HBoxContainer.new()
+	_range_box.add_theme_constant_override("separation", _scaled(4.0, 0))
+	_range_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_range_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	_range_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bottom.add_child(_range_box)
 
 	_range_icon_rect = TextureRect.new()
 	_range_icon_rect.custom_minimum_size = Vector2(_scaled(16.0, 1), _scaled(16.0, 1))
@@ -283,13 +286,13 @@ func _build_compact_layout(vbox: VBoxContainer) -> void:
 	_range_icon_rect.size_flags_horizontal = 0
 	_range_icon_rect.size_flags_vertical = 0
 	_range_icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	range_box.add_child(_range_icon_rect)
+	_range_box.add_child(_range_icon_rect)
 
 	_range_label = Label.new()
 	_range_label.add_theme_font_size_override("font_size", _scaled(11.0, 1))
 	_range_label.add_theme_color_override("font_color", Color(0.18, 0.18, 0.2, 1))
 	_range_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	range_box.add_child(_range_label)
+	_range_box.add_child(_range_label)
 
 	var salary_box := HBoxContainer.new()
 	salary_box.add_theme_constant_override("separation", _scaled(4.0, 0))
@@ -364,11 +367,12 @@ func _build_full_layout(vbox: VBoxContainer) -> void:
 	_entry_icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bottom.add_child(_entry_icon_rect)
 
-	var range_box := HBoxContainer.new()
-	range_box.add_theme_constant_override("separation", _scaled(6.0, 0))
-	range_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	range_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	bottom.add_child(range_box)
+	_range_box = HBoxContainer.new()
+	_range_box.add_theme_constant_override("separation", _scaled(6.0, 0))
+	_range_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_range_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	_range_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bottom.add_child(_range_box)
 
 	_range_icon_rect = TextureRect.new()
 	_range_icon_rect.custom_minimum_size = Vector2(_scaled(18.0, 1), _scaled(18.0, 1))
@@ -377,13 +381,13 @@ func _build_full_layout(vbox: VBoxContainer) -> void:
 	_range_icon_rect.size_flags_horizontal = 0
 	_range_icon_rect.size_flags_vertical = 0
 	_range_icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	range_box.add_child(_range_icon_rect)
+	_range_box.add_child(_range_icon_rect)
 
 	_range_label = Label.new()
 	_range_label.add_theme_font_size_override("font_size", _scaled(12.0, 1))
 	_range_label.add_theme_color_override("font_color", Color(0.18, 0.18, 0.2, 1))
 	_range_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	range_box.add_child(_range_label)
+	_range_box.add_child(_range_label)
 
 	var salary_box := HBoxContainer.new()
 	salary_box.add_theme_constant_override("separation", _scaled(6.0, 0))
@@ -424,6 +428,8 @@ func get_tutorial_target(target_kind: String) -> Control:
 			if _entry_icon_rect != null and is_instance_valid(_entry_icon_rect) and _entry_icon_rect.visible:
 				return _entry_icon_rect
 		"range_marker":
+			if _range_box != null and is_instance_valid(_range_box) and _range_box.visible:
+				return _range_box
 			if _range_icon_rect != null and is_instance_valid(_range_icon_rect) and _range_icon_rect.visible:
 				return _range_icon_rect
 			if _range_label != null and is_instance_valid(_range_label) and _range_label.visible:
@@ -433,7 +439,7 @@ func get_tutorial_target(target_kind: String) -> Control:
 				return _salary_icon_rect
 			if _salary_label != null and is_instance_valid(_salary_label) and _salary_label.visible:
 				return _salary_label
-	return self
+	return null
 
 func set_selected(selected: bool) -> void:
 	_selected = selected

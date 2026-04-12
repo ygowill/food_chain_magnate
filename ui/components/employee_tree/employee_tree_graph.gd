@@ -149,78 +149,131 @@ func set_remaining_counts(counts: Dictionary) -> void:
 	_refresh_remaining_badges()
 
 func get_tutorial_sample_card() -> Control:
-	var sample_employee_id := _get_tutorial_sample_employee_id("card")
-	if sample_employee_id.is_empty():
-		return null
-	var card_obj = _nodes.get(sample_employee_id, null)
-	if card_obj is Control and is_instance_valid(card_obj):
-		return card_obj as Control
+	for employee_id in get_tutorial_candidate_employee_ids("card"):
+		var target := get_tutorial_target_for_employee(employee_id, "card")
+		if target != null:
+			return target
 	return null
 
 func get_tutorial_sample_card_target(target_kind: String) -> Control:
-	var sample_employee_id := _get_tutorial_sample_employee_id(target_kind)
-	if sample_employee_id.is_empty():
+	for employee_id in get_tutorial_candidate_employee_ids(target_kind):
+		var target := get_tutorial_target_for_employee(employee_id, target_kind)
+		if target != null:
+			return target
+	return get_tutorial_sample_card()
+
+func get_tutorial_target_for_employee(employee_id: String, target_kind: String) -> Control:
+	if employee_id.is_empty():
 		return null
 
-	match str(target_kind):
+	var lookup_kind := _get_tutorial_target_lookup_kind(target_kind)
+	match lookup_kind:
 		"remaining_badge":
-			var badge_obj = _remaining_badge_panels.get(sample_employee_id, null)
+			var badge_obj = _remaining_badge_panels.get(employee_id, null)
 			if badge_obj is Control and is_instance_valid(badge_obj):
 				return badge_obj as Control
 		"card", "header", "description", "entry_marker", "range_marker", "salary_marker":
-			var card_obj = _nodes.get(sample_employee_id, null)
+			var card_obj = _nodes.get(employee_id, null)
 			if card_obj is EmployeeCard and is_instance_valid(card_obj):
 				var card: EmployeeCard = card_obj
 				if card.has_method("get_tutorial_target"):
-					var target = card.get_tutorial_target(target_kind)
+					var target = card.get_tutorial_target(lookup_kind)
 					if target is Control and is_instance_valid(target):
 						return target as Control
 		"host":
-			var host_obj = _node_hosts.get(sample_employee_id, null)
+			var host_obj = _node_hosts.get(employee_id, null)
 			if host_obj is Control and is_instance_valid(host_obj):
 				return host_obj as Control
 
-	return get_tutorial_sample_card()
+	return null
 
-func _get_tutorial_sample_employee_id(target_kind: String = "card") -> String:
+func _get_tutorial_target_lookup_kind(target_kind: String) -> String:
+	match str(target_kind):
+		"one_x_marker":
+			return "entry_marker"
+		"entry_card", "one_x_card", "range_card", "salary_card":
+			return "card"
+		"manager_card":
+			return "card"
+		"manager_header":
+			return "header"
+		"manager_description":
+			return "description"
+	return str(target_kind)
+
+func get_tutorial_candidate_employee_ids(target_kind: String = "card") -> Array[String]:
 	var preferred_ids: Array[String] = _get_tutorial_sample_preferred_ids(target_kind)
+	var ordered_ids: Array[String] = []
+	var seen: Dictionary = {}
 	for employee_id in preferred_ids:
 		var preferred = _node_hosts.get(employee_id, null)
 		if preferred is Control and is_instance_valid(preferred):
-			return employee_id
+			ordered_ids.append(employee_id)
+			seen[employee_id] = true
 
-	var best_id := ""
-	var best_pos := Vector2(INF, INF)
+	var fallback_ids: Array[String] = []
 	for employee_id_val in _node_hosts.keys():
 		var employee_id := str(employee_id_val)
+		if seen.has(employee_id):
+			continue
 		var host_val = _node_hosts.get(employee_id, null)
 		if not (host_val is Control):
 			continue
 		var host: Control = host_val
 		if not is_instance_valid(host):
 			continue
-		if best_id.is_empty() or host.position.x < best_pos.x or (is_equal_approx(host.position.x, best_pos.x) and host.position.y < best_pos.y):
-			best_id = employee_id
-			best_pos = host.position
-	return best_id
+		fallback_ids.append(employee_id)
+
+	fallback_ids.sort_custom(Callable(self, "_sort_employee_ids_for_tutorial"))
+	ordered_ids.append_array(fallback_ids)
+	return ordered_ids
+
+func _sort_employee_ids_for_tutorial(a: String, b: String) -> bool:
+	var host_a_obj = _node_hosts.get(a, null)
+	var host_b_obj = _node_hosts.get(b, null)
+	if not (host_a_obj is Control):
+		return false
+	if not (host_b_obj is Control):
+		return true
+
+	var host_a: Control = host_a_obj
+	var host_b: Control = host_b_obj
+	if not is_instance_valid(host_a):
+		return false
+	if not is_instance_valid(host_b):
+		return true
+	if not is_equal_approx(host_a.position.x, host_b.position.x):
+		return host_a.position.x < host_b.position.x
+	return host_a.position.y < host_b.position.y
 
 func _get_tutorial_sample_preferred_ids(target_kind: String) -> Array[String]:
 	match str(target_kind):
-		"salary_marker":
+		"one_x_marker", "one_x_card":
+			return [
+				"cfo",
+				"executive_vice_president",
+			]
+		"manager_card", "manager_header", "manager_description":
+			return [
+				"management_trainee",
+				"junior_vice_president",
+				"senior_vice_president",
+			]
+		"salary_marker", "salary_card":
 			return [
 				"cart_operator",
 				"truck_driver",
 				"burger_cook",
 				"pizza_cook",
 			]
-		"range_marker":
+		"range_marker", "range_card":
 			return [
 				"marketing_trainee",
 				"cart_operator",
 				"truck_driver",
 				"zeppelin_pilot",
 			]
-		"entry_marker":
+		"entry_marker", "entry_card":
 			return [
 				"marketing_trainee",
 				"recruiting_girl",

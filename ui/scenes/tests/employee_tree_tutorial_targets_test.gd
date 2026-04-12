@@ -8,6 +8,8 @@ const REQUIRED_TARGET_KINDS: Array[String] = [
 	"header",
 	"remaining_badge",
 	"entry_marker",
+	"one_x_marker",
+	"manager_header",
 	"range_marker",
 	"salary_marker",
 	"description",
@@ -41,7 +43,9 @@ static func run() -> Result:
 
 	if panel is Control:
 		var control: Control = panel
-		control.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, 0)
+		control.position = Vector2(80, 50)
+		control.custom_minimum_size = Vector2(1120, 620)
+		control.size = Vector2(1120, 620)
 		control.visible = true
 
 	var state: GameState = engine.get_state()
@@ -66,7 +70,19 @@ static func run() -> Result:
 			engine.dispose()
 		return Result.failure("EmployeeTree 教学布局未在预期帧数内准备完成")
 
+	var tutorial_viewport = panel.call("get_tutorial_viewport")
+	if not (tutorial_viewport is Control):
+		_safe_free(host)
+		await tree.process_frame
+		if engine.has_method("dispose"):
+			engine.dispose()
+		return Result.failure("EmployeeTree 缺少 tutorial viewport")
+	var viewport_control: Control = tutorial_viewport
+	var viewport_rect := viewport_control.get_global_rect()
+
 	for target_kind in REQUIRED_TARGET_KINDS:
+		if panel.has_method("prepare_tutorial_focus"):
+			panel.call("prepare_tutorial_focus", target_kind)
 		if not panel.has_method("get_tutorial_sample_card_target"):
 			_safe_free(host)
 			await tree.process_frame
@@ -87,6 +103,20 @@ static func run() -> Result:
 			if engine.has_method("dispose"):
 				engine.dispose()
 			return Result.failure("EmployeeTree 教学 target 缺失或不可见: %s" % target_kind)
+		var visible_rect := _get_visible_global_rect(control_target, viewport_control)
+		if visible_rect.size.x <= 0.0 or visible_rect.size.y <= 0.0:
+			_safe_free(host)
+			await tree.process_frame
+			if engine.has_method("dispose"):
+				engine.dispose()
+			return Result.failure("EmployeeTree 教学 target 未落在可见视口内: %s" % target_kind)
+		var target_rect := control_target.get_global_rect()
+		if target_rect.position.distance_to(visible_rect.position) > 1.0 or target_rect.size.distance_to(visible_rect.size) > 1.0:
+			_safe_free(host)
+			await tree.process_frame
+			if engine.has_method("dispose"):
+				engine.dispose()
+			return Result.failure("EmployeeTree 教学 target 被裁切或超出视口: %s (viewport=%s, target=%s, visible=%s)" % [target_kind, viewport_rect, target_rect, visible_rect])
 
 	_safe_free(host)
 	await tree.process_frame
@@ -106,3 +136,26 @@ static func _get_tree() -> SceneTree:
 static func _safe_free(node: Node) -> void:
 	if node != null and is_instance_valid(node):
 		node.queue_free()
+
+static func _get_visible_global_rect(target: Control, viewport_control: Control) -> Rect2:
+	if target == null or not is_instance_valid(target):
+		return Rect2()
+	var rect := target.get_global_rect()
+	if rect.size.x <= 0.0 or rect.size.y <= 0.0:
+		return Rect2()
+	if viewport_control != null and is_instance_valid(viewport_control):
+		rect = rect.intersection(viewport_control.get_global_rect())
+		if rect.size.x <= 0.0 or rect.size.y <= 0.0:
+			return Rect2()
+	var parent_node: Node = target.get_parent()
+	while parent_node != null:
+		if parent_node is Control:
+			var parent_control := parent_node as Control
+			if parent_control.clip_contents:
+				rect = rect.intersection(parent_control.get_global_rect())
+				if rect.size.x <= 0.0 or rect.size.y <= 0.0:
+					return Rect2()
+			if parent_control == viewport_control:
+				break
+		parent_node = parent_node.get_parent()
+	return rect
