@@ -141,9 +141,11 @@
 	- 固定 seed：`20260411`
 	- 默认模块
 	- 教学预设 patch：
+		- `bank.default_per_player = 75`
 		- `rules.salary_cost = 0`
 		- `rules.bankruptcy_max_breaks = 1`
-		- `rules.bankruptcy_extra_reserve_per_player = 75`
+		- `rules.bankruptcy_extra_reserve_per_player = 0`
+		- `setup.auto_select_reserve_cards = true`
 		- `milestones.enabled = false`
 - 局内改用 `tutorial_match_content.gd`
 	- 主界面导览更短

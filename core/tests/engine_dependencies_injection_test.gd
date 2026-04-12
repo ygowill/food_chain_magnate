@@ -130,11 +130,77 @@ static func run(seed_val: int = 12345) -> Result:
 
 	var final_salary_cost := engine.state.get_rule_int("salary_cost")
 	engine.dispose()
+	var short_game_r := _test_short_game_option_overrides(seed_val + 1)
+	if not short_game_r.ok:
+		return short_game_r
 	return Result.success({
 		"cash_calls": event_provider.cash_calls,
 		"milestone_calls": event_provider.milestone_calls,
 		"logo_provider_called": logo_provider.called,
 		"salary_cost": final_salary_cost,
 		"force_execute_ok": true,
+		"short_game_verified": true,
 		"event_sink_events": event_sink.emitted_types.size(),
 	})
+
+static func _test_short_game_option_overrides(seed_val: int) -> Result:
+	var current_patch := {
+		"bank.default_per_player": 75,
+		"rules.salary_cost": 0,
+		"rules.bankruptcy_max_breaks": 1,
+		"rules.bankruptcy_extra_reserve_per_player": 0,
+		"setup.auto_select_reserve_cards": true,
+	}
+	var current_r := _assert_short_game_init_state(current_patch, seed_val, "current")
+	if not current_r.ok:
+		return current_r
+
+	var legacy_patch := {
+		"rules.salary_cost": 0,
+		"rules.bankruptcy_max_breaks": 1,
+		"rules.bankruptcy_extra_reserve_per_player": 75,
+	}
+	return _assert_short_game_init_state(legacy_patch, seed_val + 1, "legacy")
+
+static func _assert_short_game_init_state(option_overrides: Dictionary, seed_val: int, label: String) -> Result:
+	var engine := GameEngine.new()
+	engine.set_game_option_overrides(option_overrides)
+	var init_r := engine.initialize(2, seed_val)
+	if not init_r.ok:
+		engine.dispose()
+		return Result.failure("短游戏初始化失败(%s): %s" % [label, init_r.error])
+
+	var state: GameState = engine.get_state()
+	if state == null:
+		engine.dispose()
+		return Result.failure("短游戏初始化后 state 为空(%s)" % label)
+	if int(state.bank.get("total", -1)) != 150:
+		engine.dispose()
+		return Result.failure("短游戏银行初始资金错误(%s): %s" % [label, str(state.bank.get("total", null))])
+	if str(state.phase) != "Setup":
+		engine.dispose()
+		return Result.failure("短游戏阶段错误(%s): %s" % [label, str(state.phase)])
+	if str(state.sub_phase) != "":
+		engine.dispose()
+		return Result.failure("短游戏应跳过储备卡选择(%s): sub_phase=%s" % [label, str(state.sub_phase)])
+	if int(state.get_rule_int("bankruptcy_extra_reserve_per_player")) != 0:
+		engine.dispose()
+		return Result.failure("短游戏不应保留额外储备金规则(%s): %d" % [label, int(state.get_rule_int("bankruptcy_extra_reserve_per_player"))])
+
+	for pid in range(state.players.size()):
+		var player: Dictionary = Dictionary(state.players[pid])
+		var cards_val = player.get("reserve_cards", null)
+		if not (cards_val is Array):
+			engine.dispose()
+			return Result.failure("短游戏 reserve_cards 类型错误(%s, pid=%d)" % [label, pid])
+		var cards: Array = cards_val
+		var sel := int(player.get("reserve_card_selected", -1))
+		if sel < 0 or sel >= cards.size():
+			engine.dispose()
+			return Result.failure("短游戏应已自动选择储备卡(%s, pid=%d): %d" % [label, pid, sel])
+		if bool(player.get("reserve_card_revealed", true)):
+			engine.dispose()
+			return Result.failure("短游戏自动选择后不应揭示储备卡(%s, pid=%d)" % [label, pid])
+
+	engine.dispose()
+	return Result.success()

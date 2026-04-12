@@ -126,9 +126,11 @@ func get_game_config_overrides_patch() -> Dictionary:
 	var out: Dictionary = {}
 
 	if _opt_short_game:
+		out["bank.default_per_player"] = 75
 		out["rules.salary_cost"] = 0
 		out["rules.bankruptcy_max_breaks"] = 1
-		out["rules.bankruptcy_extra_reserve_per_player"] = 75
+		out["rules.bankruptcy_extra_reserve_per_player"] = 0
+		out["setup.auto_select_reserve_cards"] = true
 
 	if _opt_no_milestones:
 		out["milestones.enabled"] = false
@@ -155,8 +157,12 @@ func set_game_options_from_overrides_patch(overrides_patch: Dictionary) -> void:
 	var patch: Dictionary = Dictionary(overrides_patch) if overrides_patch is Dictionary else {}
 	var salary_cost := int(patch.get("rules.salary_cost", -1))
 	var bankruptcy_breaks := int(patch.get("rules.bankruptcy_max_breaks", -1))
+	var bank_default_per_player := int(patch.get("bank.default_per_player", -1))
 	var bankruptcy_reserve := int(patch.get("rules.bankruptcy_extra_reserve_per_player", -1))
-	_opt_short_game = salary_cost == 0 and bankruptcy_breaks == 1 and bankruptcy_reserve == 75
+	var auto_select_reserve_cards := bool(patch.get("setup.auto_select_reserve_cards", false))
+	var is_legacy_short_game := salary_cost == 0 and bankruptcy_breaks == 1 and bankruptcy_reserve == 75
+	var is_current_short_game := salary_cost == 0 and bankruptcy_breaks == 1 and bank_default_per_player == 75 and auto_select_reserve_cards
+	_opt_short_game = is_current_short_game or is_legacy_short_game
 
 	var milestones_enabled := true
 	if patch.has("milestones.enabled"):
@@ -437,7 +443,7 @@ func _build_game_options_group_box(bg_color: Color) -> Control:
 	box.add_child(inner)
 
 	_opt_short_game_cb = CheckBox.new()
-	_opt_short_game_cb.text = "短游戏(没有薪水，银行只破产一次，初始储备金 75$每人)"
+	_opt_short_game_cb.text = "短游戏(没有薪水，银行只破产一次，银行初始资金 75$每人，不使用储备卡)"
 	_opt_short_game_cb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	UiStylesClass.apply_check_box_field(_opt_short_game_cb)
 	_opt_short_game_cb.toggled.connect(_on_short_game_option_toggled)
@@ -479,7 +485,7 @@ func _refresh_game_options_ui() -> void:
 
 	_suppress_game_option_signals = true
 
-	var short_tt := "无薪水；银行只破产一次；首次破产额外注资 +$75/人"
+	var short_tt := "无薪水；银行只破产一次；银行初始资金 $75/人；自动跳过储备卡选择"
 	var no_ms_tt := "本局不触发任何里程碑奖励"
 	var first_time_tt := "一键启用：短游戏 + 不使用任何里程碑"
 	var no_cfo_tt := "禁用里程碑：首个拥有$100（first_have_100）"

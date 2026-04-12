@@ -62,6 +62,7 @@ static func initialize_new_game(
 	var _globals_node = AutoloadAccessClass.get_autoload("Globals")
 	var injected_config_overrides = null
 	var injected_option_overrides = null
+	var effective_option_overrides: Dictionary = {}
 	if engine.has_method("get_dependencies") and engine.get_dependencies() != null:
 		injected_config_overrides = engine.get_dependencies().game_config_overrides
 		injected_option_overrides = engine.get_dependencies().game_option_overrides
@@ -87,6 +88,7 @@ static func initialize_new_game(
 		if not (injected_option_overrides is Dictionary):
 			return Result.failure("初始化失败：GameEngineDependencies.game_option_overrides 类型错误（期望 Dictionary）")
 		var opt_overrides: Dictionary = injected_option_overrides
+		effective_option_overrides = opt_overrides.duplicate(true)
 		if not opt_overrides.is_empty():
 			cfg.apply_overrides(opt_overrides)
 			AutoloadAccessClass.log_info("GameEngine", "已应用 %d 项注入的游戏选项覆盖" % opt_overrides.size())
@@ -96,9 +98,16 @@ static func initialize_new_game(
 			if not (globals_option_overrides is Dictionary):
 				return Result.failure("初始化失败：全局 game_option_overrides 类型错误（期望 Dictionary）")
 			var opt_overrides: Dictionary = globals_option_overrides
+			effective_option_overrides = opt_overrides.duplicate(true)
 			if not opt_overrides.is_empty():
 				cfg.apply_overrides(opt_overrides)
 				AutoloadAccessClass.log_info("GameEngine", "已应用 %d 项游戏选项覆盖" % opt_overrides.size())
+
+	var legacy_short_game := _is_legacy_short_game_option_patch(effective_option_overrides)
+	if legacy_short_game:
+		cfg.bank_default_per_player = 75
+		cfg.rule_bankruptcy_extra_reserve_per_player = 0
+		AutoloadAccessClass.log_info("GameEngine", "检测到旧版短游戏配置：已兼容为“银行初始资金 $75/人 + 跳过储备卡选择”")
 
 	var span_inv := PerfTraceClass.begin_span("init:ModulesV2.validate_starting_inventory_products")
 	var inv_check := ModulesV2Class.validate_starting_inventory_products(cfg)
@@ -126,7 +135,7 @@ static func initialize_new_game(
 		player_count,
 		seed_value,
 		engine.random_manager,
-		config_result.value,
+		cfg,
 		restaurant_logo_choices_by_player,
 		logo_provider
 	)
@@ -135,11 +144,20 @@ static func initialize_new_game(
 		return Result.failure("创建初始状态失败: %s" % state_result.error)
 	engine.state = state_result.value
 	var state: GameState = engine.state
-	var reserve_apply := _apply_reserve_card_selections(state, reserve_card_selected_by_player)
+	var effective_reserve_card_selected_by_player: Array[int] = []
+	if reserve_card_selected_by_player != null:
+		for sel_val in reserve_card_selected_by_player:
+			effective_reserve_card_selected_by_player.append(int(sel_val))
+	if effective_reserve_card_selected_by_player.is_empty() and _should_auto_select_reserve_cards(effective_option_overrides, legacy_short_game):
+		var auto_select_read := _build_auto_reserve_card_selections(state, cfg)
+		if not auto_select_read.ok:
+			return Result.failure("创建初始状态失败：%s" % auto_select_read.error)
+		effective_reserve_card_selected_by_player = auto_select_read.value
+	var reserve_apply := _apply_reserve_card_selections(state, effective_reserve_card_selected_by_player)
 	if not reserve_apply.ok:
 		return Result.failure("创建初始状态失败：%s" % reserve_apply.error)
 	# 若初始化时已注入每位玩家的储备卡选择，则跳过 Setup/ReserveCards，直接进入起始餐厅放置流程。
-	if reserve_card_selected_by_player != null and not reserve_card_selected_by_player.is_empty():
+	if not effective_reserve_card_selected_by_player.is_empty():
 		state.sub_phase = ""
 		state.current_player_index = max(0, state.turn_order.size() - 1)
 	state.modules = Array(engine.module_plan_v2, TYPE_STRING, "", null)
@@ -249,6 +267,51 @@ static func initialize_new_game(
 	PerfTraceClass.end_span(span_total)
 
 	return Result.success(state).with_warnings(init_warnings)
+
+static func _should_auto_select_reserve_cards(option_overrides: Dictionary, legacy_short_game: bool) -> bool:
+	if legacy_short_game:
+		return true
+	if option_overrides == null or option_overrides.is_empty():
+		return false
+	if not option_overrides.has("setup.auto_select_reserve_cards"):
+		return false
+	return bool(option_overrides.get("setup.auto_select_reserve_cards", false))
+
+static func _is_legacy_short_game_option_patch(option_overrides: Dictionary) -> bool:
+	if option_overrides == null or option_overrides.is_empty():
+		return false
+	if int(option_overrides.get("rules.salary_cost", -1)) != 0:
+		return false
+	if int(option_overrides.get("rules.bankruptcy_max_breaks", -1)) != 1:
+		return false
+	if int(option_overrides.get("rules.bankruptcy_extra_reserve_per_player", -1)) != 75:
+		return false
+	return true
+
+static func _build_auto_reserve_card_selections(state: GameState, cfg) -> Result:
+	if state == null:
+		return Result.failure("自动选择储备卡失败：state 为空")
+	if cfg == null:
+		return Result.failure("自动选择储备卡失败：cfg 为空")
+	if not (state.players is Array):
+		return Result.failure("自动选择储备卡失败：state.players 类型错误（期望 Array）")
+
+	var selected_index := int(cfg.player_reserve_card_selected)
+	var out: Array[int] = []
+	for pid in range(state.players.size()):
+		var player_val = state.players[pid]
+		if not (player_val is Dictionary):
+			return Result.failure("自动选择储备卡失败：players[%d] 类型错误（期望 Dictionary）" % pid)
+		var player: Dictionary = player_val
+		var cards_val = player.get("reserve_cards", null)
+		if not (cards_val is Array):
+			return Result.failure("自动选择储备卡失败：players[%d].reserve_cards 缺失或类型错误（期望 Array）" % pid)
+		var cards: Array = cards_val
+		if cards.is_empty():
+			return Result.failure("自动选择储备卡失败：players[%d].reserve_cards 不能为空" % pid)
+		var idx := clampi(selected_index, 0, cards.size() - 1)
+		out.append(idx)
+	return Result.success(out)
 
 static func _apply_reserve_card_selections(state: GameState, selections: Array[int]) -> Result:
 	if state == null:

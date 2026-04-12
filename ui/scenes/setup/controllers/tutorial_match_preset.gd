@@ -15,9 +15,11 @@ static func build_preset() -> Dictionary:
 		"seed": FIXED_SEED,
 		"enabled_modules_v2": GameDefaultsClass.build_default_enabled_modules_v2(),
 		"game_option_overrides": {
+			"bank.default_per_player": 75,
 			"rules.salary_cost": 0,
 			"rules.bankruptcy_max_breaks": 1,
-			"rules.bankruptcy_extra_reserve_per_player": 75,
+			"rules.bankruptcy_extra_reserve_per_player": 0,
+			"setup.auto_select_reserve_cards": true,
 			"milestones.enabled": false,
 		},
 	}
