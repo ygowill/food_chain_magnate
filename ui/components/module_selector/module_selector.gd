@@ -143,6 +143,13 @@ func get_game_config_overrides_patch() -> Dictionary:
 
 	return out
 
+func get_tutorial_targets() -> Dictionary:
+	return {
+		"module_selector_root": self,
+		"game_options_root": _groups_container,
+		"first_time_option": _opt_first_time_cb,
+	}
+
 func set_game_options_from_overrides_patch(overrides_patch: Dictionary) -> void:
 	_ensure_base_ui()
 	var patch: Dictionary = Dictionary(overrides_patch) if overrides_patch is Dictionary else {}

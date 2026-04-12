@@ -35,6 +35,11 @@ func dispose() -> void:
 func has_open_modal_ui() -> bool:
 	return is_instance_valid(_restructuring_modal) and bool(_restructuring_modal.visible)
 
+func get_modal():
+	if not is_instance_valid(_restructuring_modal):
+		return null
+	return _restructuring_modal
+
 func hide_modal() -> void:
 	_hide_restructuring_modal()
 

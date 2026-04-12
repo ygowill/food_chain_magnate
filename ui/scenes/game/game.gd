@@ -51,6 +51,7 @@ extends Control
 @onready var turn_order_track: Control = $UIRoot/MainContent/CenterSplit/RightPanel/DefaultStack/TurnOrderTrack
 @onready var inventory_panel: Control = $UIRoot/MainContent/CenterSplit/RightPanel/DefaultStack/InventoryPanel
 @onready var action_panel: Control = $UIRoot/MainContent/CenterSplit/RightPanel/DefaultStack/ActionPanel
+@onready var toolbar: Control = $UIRoot/MainContent/CenterSplit/RightPanel/ToolBar
 @onready var hand_area: Control = $UIRoot/BottomPanel/HandArea
 @onready var company_structure: Control = $UIRoot/BottomPanel/CompanyStructure
 @onready var bottom_panel: Control = $UIRoot/BottomPanel
@@ -99,6 +100,7 @@ var _log_dock_controller = null
 var _procurement_log_preview_controller = null
 var _warmup_controller = null
 var _debug_panel_controller = null
+var _tutorials_controller = null
 var _startup_profile_reported: bool = false
 var _startup_suppress_game_over_modal: bool = false
 var _startup_intro_played: bool = false
@@ -111,6 +113,9 @@ var _match_details_requested_allow_spectators: Variant = null
 
 func _is_headless_runtime() -> bool:
 	return DisplayServer.get_name() == "headless"
+
+func _is_startup_intro_running() -> bool:
+	return _startup_intro_running
 
 func _ready() -> void:
 	var span_ready := PerfTraceClass.begin_span("game:_ready")
@@ -158,6 +163,7 @@ func _ready() -> void:
 	if Globals != null and not Globals.audio_muted_changed.is_connected(_on_audio_muted_changed):
 		Globals.audio_muted_changed.connect(_on_audio_muted_changed)
 	var build := GameControllersBuilderClass.build(self, {
+		"status_bar": status_bar,
 		"round_label": round_label,
 		"phase_track": phase_track,
 		"bank_label": bank_label,
@@ -186,6 +192,7 @@ func _ready() -> void:
 		"turn_order_track": turn_order_track,
 		"inventory_panel": inventory_panel,
 		"action_panel": action_panel,
+		"toolbar": toolbar,
 		"hand_area": hand_area,
 		"company_structure": company_structure,
 		"map_view": map_view,
@@ -201,6 +208,10 @@ func _ready() -> void:
 		"show_game_log_panel_in_right_panel": Callable(self, "_show_game_log_panel_in_right_panel"),
 		"open_replay_load_dialog": Callable(self, "_open_replay_load_dialog"),
 		"is_online_resync_in_progress": Callable(self, "_is_online_resync_in_progress"),
+		"is_headless_runtime": Callable(self, "_is_headless_runtime"),
+		"is_startup_intro_running": Callable(self, "_is_startup_intro_running"),
+		"is_replay_mode_active": Callable(self, "is_replay_mode_active"),
+		"is_timeline_read_only_active": Callable(self, "is_timeline_read_only_active"),
 		"start_replay_from_file": Callable(self, "_start_replay_from_file"),
 		"on_debug_command_executed": Callable(self, "_on_debug_command_executed"),
 		"ensure_right_panel_visible": Callable(self, "_ensure_right_panel_visible"),
@@ -233,6 +244,7 @@ func _ready() -> void:
 	_command_controller = build.get("command_controller", null)
 	_input_controller = build.get("input_controller", null)
 	_warmup_controller = build.get("warmup_controller", null)
+	_tutorials_controller = build.get("tutorials_controller", null)
 
 	_apply_ui_layout()
 	_init_left_panel_toggle()
@@ -617,6 +629,8 @@ func _update_ui() -> void:
 	_sync_online_waiting_log_auto_switch()
 	if start_intro:
 		_run_startup_intro()
+	if _tutorials_controller != null and _tutorials_controller.has_method("on_ui_updated"):
+		_tutorials_controller.on_ui_updated()
 
 func _prepare_startup_intro_before_ui_sync() -> bool:
 	# 在 UI 同步前把地图/顺位条“隐藏到动画起点”，避免先闪现完整结果再播放动画。
@@ -710,6 +724,8 @@ func _run_startup_intro() -> void:
 
 	_startup_intro_running = false
 	_startup_intro_played = true
+	if _tutorials_controller != null and _tutorials_controller.has_method("on_startup_intro_finished"):
+		_tutorials_controller.on_startup_intro_finished()
 
 func _on_debug_command_executed(command: String, _result: String) -> void:
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("on_debug_command_executed"):

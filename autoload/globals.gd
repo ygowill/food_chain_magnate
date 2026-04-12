@@ -11,6 +11,7 @@ const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const SoundManagerClass = preload("res://ui/audio/sound_manager.gd")
 const MusicManagerClass = preload("res://ui/audio/music_manager.gd")
 const FALLBACK_FONT_PATH := "res://assets/fonts/NotoSansSC-Regular.otf"
+const TUTORIAL_PROGRESS_VERSION := 2
 
 # 版本信息
 const SCHEMA_VERSION := GameStateClass.SCHEMA_VERSION
@@ -33,6 +34,10 @@ var game_option_overrides: Dictionary = {}
 var current_game_engine = null  # GameEngine 实例
 var is_game_active: bool = false
 var pending_replay_file_path: String = "" # 主菜单选择回放文件后，用于进入 Game 场景自动打开回放播放器
+var tutorial_pending_setup_tour: bool = false
+var tutorial_pending_game_ui_tour: bool = false
+var tutorial_pending_flow_tutorial: bool = false
+var tutorial_match_enabled: bool = false
 
 # 玩家数范围
 const MIN_PLAYERS := GameConstantsClass.MIN_PLAYERS
@@ -67,6 +72,11 @@ var show_tile_ids: bool = false
 var show_cell_hover_tooltip: bool = false
 var font_scale: float = 1.1
 var log_font_scale: float = 1.35
+var tutorial_enabled: bool = true
+var tutorial_progress_version: int = TUTORIAL_PROGRESS_VERSION
+var tutorial_setup_tour_seen: bool = false
+var tutorial_game_ui_tour_seen: bool = false
+var tutorial_flow_hints_seen: Array[String] = []
 
 var _base_fallback_font_size: int = 16
 
@@ -131,6 +141,7 @@ func _load_settings() -> void:
 		show_hints = bool(config.get_value("game", "show_hints", true))
 		animation_speed = float(config.get_value("game", "animation_speed", 1.0))
 		replay_load_playable = bool(config.get_value("game", "replay_load_playable", false))
+		tutorial_enabled = bool(config.get_value("game", "tutorial_enabled", tutorial_enabled))
 
 		var mods_val = config.get_value("game", "enabled_modules_v2", null)
 		if mods_val is Array and not Array(mods_val).is_empty():
@@ -157,6 +168,22 @@ func _load_settings() -> void:
 				var v = Array(logos_val)[i]
 				if v is int or v is float:
 					player_restaurant_logo_choices.append(int(v))
+
+		var loaded_tutorial_version := int(config.get_value("tutorial", "progress_version", 0))
+		if loaded_tutorial_version == TUTORIAL_PROGRESS_VERSION:
+			tutorial_progress_version = loaded_tutorial_version
+			tutorial_setup_tour_seen = bool(config.get_value("tutorial", "setup_tour_seen", false))
+			tutorial_game_ui_tour_seen = bool(config.get_value("tutorial", "game_ui_tour_seen", false))
+			var flow_seen_val = config.get_value("tutorial", "flow_hints_seen", [])
+			if flow_seen_val is Array:
+				tutorial_flow_hints_seen = Array(flow_seen_val, TYPE_STRING, "", null)
+			else:
+				tutorial_flow_hints_seen = []
+		else:
+			tutorial_progress_version = TUTORIAL_PROGRESS_VERSION
+			tutorial_setup_tour_seen = false
+			tutorial_game_ui_tour_seen = false
+			tutorial_flow_hints_seen = []
 
 		GameLog.info("Globals", "已加载用户设置")
 	# 强制新布局（v2），忽略历史配置值（issue_tracker #60）。
@@ -264,11 +291,66 @@ func save_settings() -> void:
 	config.set_value("game", "enabled_modules_v2", enabled_modules_v2)
 	modules_v2_base_dir = _normalize_modules_base_dir(modules_v2_base_dir)
 	config.set_value("game", "modules_v2_base_dir", modules_v2_base_dir)
+	config.set_value("game", "tutorial_enabled", tutorial_enabled)
+	if config.has_section_key("game", "tutorial_auto_popup"):
+		config.erase_section_key("game", "tutorial_auto_popup")
 	config.set_value("players", "names", player_names)
 	config.set_value("players", "color_indices", player_color_indices)
 	config.set_value("players", "restaurant_logo_choices", player_restaurant_logo_choices)
+	config.set_value("tutorial", "progress_version", tutorial_progress_version)
+	if config.has_section_key("tutorial", "setup_welcome_seen"):
+		config.erase_section_key("tutorial", "setup_welcome_seen")
+	config.set_value("tutorial", "setup_tour_seen", tutorial_setup_tour_seen)
+	config.set_value("tutorial", "game_ui_tour_seen", tutorial_game_ui_tour_seen)
+	config.set_value("tutorial", "flow_hints_seen", tutorial_flow_hints_seen)
 	config.save("user://settings.cfg")
 	GameLog.info("Globals", "用户设置已保存")
+
+func has_tutorial_flow_hint_seen(hint_id: String) -> bool:
+	var id := str(hint_id).strip_edges()
+	if id.is_empty():
+		return false
+	return tutorial_flow_hints_seen.has(id)
+
+func is_tutorial_runtime_enabled() -> bool:
+	return (
+		tutorial_enabled
+		or tutorial_pending_setup_tour
+		or tutorial_pending_game_ui_tour
+		or tutorial_pending_flow_tutorial
+		or tutorial_match_enabled
+	)
+
+func request_rules_tutorial() -> void:
+	reset_tutorial_progress(false)
+	tutorial_pending_setup_tour = true
+
+func apply_tutorial_preferences_from_settings(settings: Dictionary) -> void:
+	if settings == null:
+		return
+	tutorial_enabled = bool(settings.get("tutorial_enabled", tutorial_enabled))
+
+func mark_tutorial_flow_hint_seen(hint_id: String, save_now: bool = true) -> void:
+	var id := str(hint_id).strip_edges()
+	if id.is_empty():
+		return
+	if tutorial_flow_hints_seen.has(id):
+		return
+	tutorial_flow_hints_seen.append(id)
+	if save_now:
+		save_settings()
+
+func reset_tutorial_progress(save_now: bool = true) -> void:
+	tutorial_progress_version = TUTORIAL_PROGRESS_VERSION
+	tutorial_setup_tour_seen = false
+	tutorial_game_ui_tour_seen = false
+	tutorial_flow_hints_seen = []
+	tutorial_pending_setup_tour = false
+	tutorial_pending_game_ui_tour = false
+	tutorial_pending_flow_tutorial = false
+	tutorial_match_enabled = false
+	if save_now:
+		save_settings()
 
 # 重置游戏配置
 func reset_game_config() -> void:
@@ -281,6 +363,10 @@ func reset_game_config() -> void:
 	reserve_card_selected_by_player = []
 	is_game_active = false
 	current_game_engine = null
+	tutorial_pending_setup_tour = false
+	tutorial_pending_game_ui_tour = false
+	tutorial_pending_flow_tutorial = false
+	tutorial_match_enabled = false
 
 # 生成新的随机种子
 func generate_seed() -> int:

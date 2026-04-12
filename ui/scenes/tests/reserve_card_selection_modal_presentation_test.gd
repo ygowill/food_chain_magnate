@@ -36,9 +36,9 @@ static func run() -> Result:
 	if not (base_desc0 is Label):
 		_safe_free(modal_base)
 		return Result.failure("base: card_desc_0 无效（节点结构变更）")
-	if str((base_desc0 as Label).text).find("起始现金") < 0:
+	if str((base_desc0 as Label).text).find("首次破产注资") < 0:
 		_safe_free(modal_base)
-		return Result.failure("base: 应展示起始现金字段（Reserve Prices 不启用）")
+		return Result.failure("base: 应展示首次破产注资字段（Reserve Prices 不启用）")
 	_safe_free(modal_base)
 
 	var rp_engine := GameEngine.new()
@@ -84,9 +84,9 @@ static func run() -> Result:
 	if rp_text.find("基础单价候选") < 0:
 		_safe_free(modal_rp)
 		return Result.failure("reserve_prices: 应展示基础单价候选字段")
-	if rp_text.find("起始现金") >= 0:
+	if rp_text.find("首次破产注资") >= 0:
 		_safe_free(modal_rp)
-		return Result.failure("reserve_prices: 不应展示起始现金字段")
+		return Result.failure("reserve_prices: 不应展示首次破产注资字段")
 
 	var hint = modal_rp.get("hint_label")
 	if hint is Label:

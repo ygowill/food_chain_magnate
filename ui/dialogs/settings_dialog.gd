@@ -53,6 +53,8 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 @onready var confirm_actions_check: CheckBox = %ConfirmActionsCheck
 @onready var show_hints_check: CheckBox = %ShowHintsCheck
 @onready var replay_load_playable_check: CheckBox = %ReplayLoadPlayableCheck
+@onready var tutorial_enabled_check: CheckBox = %TutorialEnabledCheck
+@onready var reset_tutorial_progress_button: Button = %ResetTutorialProgressButton
 @onready var animation_speed_slider: HSlider = %AnimSpeedSlider
 @onready var anim_speed_value_label: Label = %AnimSpeedValue
 
@@ -95,6 +97,7 @@ var _default_settings: Dictionary = {
 	"confirm_actions": true,
 	"show_hints": true,
 	"replay_load_playable": false,
+	"tutorial_enabled": true,
 	"animation_speed": 1.0,
 }
 
@@ -184,7 +187,9 @@ func _apply_form_control_styles() -> void:
 	UiStylesClass.apply_check_box_field(confirm_actions_check)
 	UiStylesClass.apply_check_box_field(show_hints_check)
 	UiStylesClass.apply_check_box_field(replay_load_playable_check)
+	UiStylesClass.apply_check_box_field(tutorial_enabled_check)
 	UiStylesClass.apply_option_button_field(resolution_option)
+	UiStylesClass.apply_button_secondary(reset_tutorial_progress_button)
 
 # ── 导航 ──────────────────────────────────────────────
 
@@ -280,6 +285,7 @@ func _load_settings() -> void:
 			"confirm_actions": config.get_value("game", "confirm_actions", _default_settings.confirm_actions),
 			"show_hints": config.get_value("game", "show_hints", _default_settings.show_hints),
 			"replay_load_playable": config.get_value("game", "replay_load_playable", _default_settings.replay_load_playable),
+			"tutorial_enabled": bool(config.get_value("game", "tutorial_enabled", _default_settings.tutorial_enabled)),
 			"animation_speed": config.get_value("game", "animation_speed", _default_settings.animation_speed),
 		}
 	else:
@@ -305,6 +311,9 @@ func _save_settings() -> void:
 	config.set_value("game", "confirm_actions", _current_settings.confirm_actions)
 	config.set_value("game", "show_hints", _current_settings.show_hints)
 	config.set_value("game", "replay_load_playable", _current_settings.replay_load_playable)
+	config.set_value("game", "tutorial_enabled", bool(_current_settings.get("tutorial_enabled", true)))
+	if config.has_section_key("game", "tutorial_auto_popup"):
+		config.erase_section_key("game", "tutorial_auto_popup")
 	config.set_value("game", "animation_speed", _current_settings.animation_speed)
 
 	config.save("user://settings.cfg")
@@ -362,6 +371,7 @@ func _update_ui_from_settings() -> void:
 	_set_checkbox(confirm_actions_check, bool(_current_settings.get("confirm_actions", _default_settings.confirm_actions)))
 	_set_checkbox(show_hints_check, bool(_current_settings.get("show_hints", _default_settings.show_hints)))
 	_set_checkbox(replay_load_playable_check, bool(_current_settings.get("replay_load_playable", _default_settings.replay_load_playable)))
+	_set_checkbox(tutorial_enabled_check, bool(_current_settings.get("tutorial_enabled", _default_settings.tutorial_enabled)))
 	if animation_speed_slider != null:
 		animation_speed_slider.value = float(_current_settings.get("animation_speed", _default_settings.animation_speed)) * 100
 
@@ -419,6 +429,7 @@ func _update_settings_from_ui() -> void:
 	_current_settings["confirm_actions"] = _read_checkbox(confirm_actions_check, bool(_current_settings.get("confirm_actions", _default_settings.confirm_actions)))
 	_current_settings["show_hints"] = _read_checkbox(show_hints_check, bool(_current_settings.get("show_hints", _default_settings.show_hints)))
 	_current_settings["replay_load_playable"] = _read_checkbox(replay_load_playable_check, bool(_current_settings.get("replay_load_playable", _default_settings.replay_load_playable)))
+	_current_settings["tutorial_enabled"] = _read_checkbox(tutorial_enabled_check, bool(_current_settings.get("tutorial_enabled", _default_settings.tutorial_enabled)))
 	if animation_speed_slider != null:
 		_current_settings["animation_speed"] = float(animation_speed_slider.value) / 100.0
 
@@ -440,10 +451,13 @@ func _connect_setting_change_signals() -> void:
 	_connect_checkbox_change(confirm_actions_check)
 	_connect_checkbox_change(show_hints_check)
 	_connect_checkbox_change(replay_load_playable_check)
+	_connect_checkbox_change(tutorial_enabled_check)
 	_connect_slider_change(animation_speed_slider)
 
 	_connect_checkbox_change(show_tile_ids_check)
 	_connect_checkbox_change(show_cell_hover_tooltip_check)
+	if reset_tutorial_progress_button != null:
+		reset_tutorial_progress_button.pressed.connect(_on_reset_tutorial_progress_pressed)
 
 func _connect_slider_change(slider: HSlider) -> void:
 	if slider == null:
@@ -475,6 +489,9 @@ func _on_reset_pressed() -> void:
 func _on_close_pressed() -> void:
 	close()
 	closed.emit()
+
+func _on_reset_tutorial_progress_pressed() -> void:
+	_reset_tutorial_progress()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
@@ -655,6 +672,15 @@ func _sync_globals_runtime_settings() -> void:
 	Globals.confirm_actions = bool(_current_settings.confirm_actions)
 	Globals.show_hints = bool(_current_settings.show_hints)
 	Globals.replay_load_playable = bool(_current_settings.get("replay_load_playable", Globals.replay_load_playable))
+	if Globals.has_method("apply_tutorial_preferences_from_settings"):
+		Globals.apply_tutorial_preferences_from_settings(_current_settings)
+	else:
+		Globals.tutorial_enabled = bool(_current_settings.get("tutorial_enabled", Globals.tutorial_enabled))
 	Globals.animation_speed = float(_current_settings.animation_speed)
 	if Globals.has_method("apply_font_scale"):
 		Globals.apply_font_scale()
+
+func _reset_tutorial_progress() -> void:
+	if Globals == null or not Globals.has_method("reset_tutorial_progress"):
+		return
+	Globals.reset_tutorial_progress(true)

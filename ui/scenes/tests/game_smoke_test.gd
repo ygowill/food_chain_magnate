@@ -83,6 +83,12 @@ func _run_test() -> int:
 	]
 	if _find_first_existing_node(menu, new_game_paths) == null:
 		return await _fail("main_menu.tscn 缺少 NewGameButton 节点（节点路径漂移）")
+	var rules_tutorial_paths: PackedStringArray = [
+		"CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/RulesTutorialButton",
+		"CenterContainer/Card/Margin/VBoxContainer/RulesTutorialButton",
+	]
+	if _find_first_existing_node(menu, rules_tutorial_paths) == null:
+		return await _fail("main_menu.tscn 缺少 RulesTutorialButton 节点（节点路径漂移）")
 	var online_paths: PackedStringArray = [
 		"CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/OnlineButton",
 		"CenterContainer/Card/Margin/VBoxContainer/OnlineButton",

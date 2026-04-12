@@ -27,6 +27,7 @@ var _mute_icon_load_warned: bool = false
 @onready var title_logo: TextureRect = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/TitleLogo
 @onready var decorative_line: ColorRect = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/DecorativeLine
 @onready var new_game_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/NewGameButton
+@onready var rules_tutorial_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/RulesTutorialButton
 @onready var online_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/OnlineButton
 @onready var rules_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/RulesButton
 @onready var load_game_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/LoadGameButton
@@ -70,6 +71,7 @@ func _ready() -> void:
 
 	# 按钮样式
 	UiStylesClass.apply_button_secondary(new_game_button)
+	UiStylesClass.apply_button_secondary(rules_tutorial_button)
 	UiStylesClass.apply_button_primary(online_button)
 	UiStylesClass.apply_button_secondary(rules_button)
 	UiStylesClass.apply_button_secondary(load_game_button)
@@ -121,6 +123,15 @@ func _apply_title_logo_texture() -> void:
 
 func _on_new_game_pressed() -> void:
 	GameLog.info("MainMenu", "点击本地游戏")
+	SceneManager.goto_game_setup()
+
+func _on_rules_tutorial_pressed() -> void:
+	GameLog.info("MainMenu", "点击规则教学")
+	if Globals != null and Globals.has_method("request_rules_tutorial"):
+		Globals.request_rules_tutorial()
+	else:
+		if Globals != null:
+			Globals.tutorial_pending_setup_tour = true
 	SceneManager.goto_game_setup()
 
 func _on_online_pressed() -> void:

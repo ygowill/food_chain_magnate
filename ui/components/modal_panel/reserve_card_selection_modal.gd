@@ -27,8 +27,7 @@ var _card_button_group: ButtonGroup = ButtonGroup.new()
 func _ready() -> void:
 	allow_cancel = false
 	allow_peek_map = false
-	# 储备卡选择属于“保密/开局”流程：遮罩应完全覆盖底下的地图与顺位条，避免提前泄露开局动画结果。
-	_overlay_alpha_normal = 1.0
+	# 储备卡选择仍然禁止窥视地图，但遮罩应保持与其他弹窗一致的半透明风格。
 	super._ready()
 	set_process(false)
 	_apply_visual_styles()
@@ -143,7 +142,10 @@ func setup(state: GameState, current_player_id: int) -> void:
 	var name := Globals.get_player_name(current_player_id) if Globals != null else ("玩家%d" % (current_player_id + 1))
 	set_title_text("选择银行储备卡 | 当前: %s" % name)
 	if is_instance_valid(selection_label):
-		selection_label.text = "当前玩家：%s，请选择一张储备卡（其他玩家不应看到）" % name
+		if _is_tutorial_match_mode():
+			selection_label.text = "当前玩家：%s。请先阅读三张储备卡的说明，再秘密选择其中一张。" % name
+		else:
+			selection_label.text = "当前玩家：%s，请选择一张储备卡（其他玩家不应看到）" % name
 
 	_reset_card_buttons()
 
@@ -174,20 +176,24 @@ func setup(state: GameState, current_player_id: int) -> void:
 			has_any_price_only = true
 
 	if is_instance_valid(hint_label):
-		if has_any_price_only and not has_any_bank_fields:
-			hint_label.text = (
-				"请确保其他玩家未看到你的选择；确认后不可更改。\n"
-				+ "提示：本局储备卡不再影响起始现金/CEO 卡槽；银行首次破产后按多数类型决定基础单价（平局 20 > 5 > 10）。"
-			)
-		elif has_any_price_only and has_any_bank_fields:
-			hint_label.text = (
-				"请确保其他玩家未看到你的选择；确认后不可更改。\n"
-				+ "提示：储备卡字段不一致，将按卡片字段分别展示。"
-			)
+		var hint_lines: Array[String] = []
+		if _is_tutorial_match_mode():
+			hint_lines.append("教学说明：开局需要先秘密选择 1 张储备卡。请先阅读三张卡的效果，再确认选择；若与纸质规则或其他模块不同，请以当前卡面和本模式说明为准。")
+		else:
+			hint_lines.append("请确保其他玩家未看到你的选择；确认后不可更改。")
+		hint_lines.append(_build_reserve_card_rule_hint(has_any_bank_fields, has_any_price_only))
+		hint_label.text = "\n".join(hint_lines)
 
 	_apply_card(0, cards)
 	_apply_card(1, cards)
 	_apply_card(2, cards)
+
+func _is_tutorial_match_mode() -> bool:
+	if Globals == null or not bool(Globals.tutorial_match_enabled):
+		return false
+	if Globals.has_method("is_tutorial_runtime_enabled"):
+		return bool(Globals.is_tutorial_runtime_enabled())
+	return bool(Globals.tutorial_enabled)
 
 func setup_waiting(current_player_id: int) -> void:
 	# 联机：等待其他玩家选择（不展示任何卡片信息）
@@ -292,14 +298,23 @@ func _apply_card(index: int, cards: Array) -> void:
 		var slots: int = int(c.get("ceo_slots", 0))
 
 		title_label.text = option_text
-		desc_label.text = "起始现金：+$%d\nCEO 卡槽：%d" % [cash, slots]
+		desc_label.text = "首次破产注资：+$%d\n首次破产后 CEO 卡槽：%d" % [cash, slots]
 
-		var summary := "储备卡 %d：+$%d，CEO 卡槽=%d" % [index + 1, cash, slots]
+		var summary := "储备卡 %d：首次破产注资 +$%d，CEO 卡槽=%d" % [index + 1, cash, slots]
 		while _card_summaries.size() <= index:
 			_card_summaries.append("")
 		_card_summaries[index] = summary
 
 	btn.disabled = false
+
+func _build_reserve_card_rule_hint(has_any_bank_fields: bool, has_any_price_only: bool) -> String:
+	if has_any_price_only and not has_any_bank_fields:
+		return "提示：本局储备卡会在银行首次破产后按多数类型决定基础单价（平局 20 > 5 > 10），不再决定注资金额或 CEO 卡槽。"
+	if has_any_bank_fields and not has_any_price_only:
+		return "提示：本局储备卡会在银行首次破产时决定银行额外注资和 CEO 卡槽变化。"
+	if has_any_bank_fields and has_any_price_only:
+		return "提示：本局储备卡字段不完全一致，将按每张卡当前展示的字段分别生效。"
+	return "提示：请以当前卡面说明为准。"
 
 func _on_card_pressed(index: int) -> void:
 	_selected_index = int(index)

@@ -85,7 +85,7 @@ var HELP_DATABASE: Dictionary = {
 	},
 	"mechanic_distance": {
 		"title": "距离计算",
-		"content": "距离以道路格数计算。顾客会选择能满足需求的最近餐厅。如果距离相同，则按照回合顺序决定。"
+		"content": "距离通常沿道路计算，统计跨过多少个地图板块边界。从餐厅出发时要从入口开始算。顾客会在能满足需求的餐厅中比较这个距离；若相同，再按回合顺序判断。"
 	},
 	"mechanic_bank": {
 		"title": "银行破产",
@@ -121,9 +121,21 @@ var HELP_DATABASE: Dictionary = {
 		"title": "里程碑",
 		"content": "查看/选择里程碑（根据阶段与规则可用性变化）。"
 	},
+	"ui_topbar_employee_tree": {
+		"title": "升级路线",
+		"content": "打开员工升级树，查看某张员工卡能从哪里获得、又能升级到哪里。"
+	},
+	"ui_topbar_reserve_area": {
+		"title": "供应堆",
+		"content": "查看房屋编号、花园、营销板块、地图板块和玩家 token 等公共组件的剩余情况。员工卡剩余数量请在升级路线中查看。"
+	},
+	"ui_topbar_reserve_cards": {
+		"title": "储备卡",
+		"content": "查看已公开的储备卡信息。不同模式或模块下，储备卡效果可能不同，请以卡面说明为准。"
+	},
 	"ui_topbar_distance_tool": {
 		"title": "距离工具",
-		"content": "切换距离测量模式。\n快捷键：D。"
+		"content": "切换距离测量模式，用于比较从餐厅入口出发、沿道路统计的服务距离。距离按跨过的地图板块边界数计算。\n快捷键：D。"
 	},
 	"ui_topbar_settings": {
 		"title": "设置",

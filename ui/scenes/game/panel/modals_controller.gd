@@ -74,6 +74,9 @@ func hide() -> void:
 	hide_reserve_card_modal()
 	hide_phase_action_ui_modals_for_phase("")
 
+func get_turn_order_modal():
+	return _turn_order_modal
+
 func sync_for_state(state: GameState, covered: Rect2) -> void:
 	if state == null:
 		return

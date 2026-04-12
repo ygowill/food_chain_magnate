@@ -161,6 +161,8 @@ func toggle_employee_tree() -> void:
 
 	_hide_all_phase_panels(true, true)
 	_views_controller.show_employee_tree()
+	if _refresh_ui.is_valid():
+		_refresh_ui.call()
 
 func get_view_player_id() -> int:
 	return _view_player_id
@@ -365,6 +367,30 @@ func get_employee_tree_panel():
 	if _views_controller == null:
 		return null
 	return _views_controller.get_employee_tree_panel()
+
+func peek_employee_tree_panel():
+	if _views_controller == null:
+		return null
+	if _views_controller.has_method("peek_employee_tree_panel"):
+		return _views_controller.peek_employee_tree_panel()
+	return null
+
+func get_restructuring_modal():
+	if _restructuring_controller == null:
+		return null
+	if _restructuring_controller.has_method("get_modal"):
+		return _restructuring_controller.get_modal()
+	return null
+
+func get_turn_order_modal():
+	if _modals_controller == null:
+		return null
+	if _modals_controller.has_method("get_turn_order_modal"):
+		return _modals_controller.get_turn_order_modal()
+	return null
+
+func get_active_docked_panel():
+	return _get_active_right_panel_docked_panel()
 
 func _sync_reserve_cards_overview_access(state: GameState) -> void:
 	var can_open := can_open_reserve_cards_overview(state)

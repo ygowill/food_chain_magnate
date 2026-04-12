@@ -4,6 +4,7 @@ extends Control
 
 signal closed()
 signal build_finished()
+signal tutorial_layout_prepared()
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeDefClass = preload("res://core/data/employee_def.gd")
@@ -39,6 +40,9 @@ var _detail_dialog = null
 var _built: bool = false
 var _build_in_progress: bool = false
 var _needs_fit_after_show: bool = false
+var _employee_pool: Dictionary = {}
+var _tutorial_layout_in_progress: bool = false
+var _last_layout_mode: String = ""
 
 func _ready() -> void:
 	if is_instance_valid(close_button):
@@ -64,6 +68,7 @@ func _ready() -> void:
 	_set_loading_visible(true)
 
 func open() -> void:
+	_apply_remaining_counts_to_graph()
 	if _built:
 		_set_loading_visible(false)
 		if _needs_fit_after_show:
@@ -78,6 +83,43 @@ func begin_background_build() -> void:
 	_build_in_progress = true
 	call_deferred("_run_background_build")
 
+func set_employee_pool(pool: Dictionary) -> void:
+	_employee_pool = pool.duplicate(true)
+	_apply_remaining_counts_to_graph()
+
+func get_tutorial_viewport() -> Control:
+	if is_instance_valid(viewport):
+		return viewport
+	return null
+
+func get_tutorial_sample_card() -> Control:
+	if not is_instance_valid(graph):
+		return null
+	if not graph.has_method("get_tutorial_sample_card"):
+		return null
+	var sample = graph.get_tutorial_sample_card()
+	if sample is Control and is_instance_valid(sample):
+		return sample as Control
+	return null
+
+func get_tutorial_sample_card_target(target_kind: String) -> Control:
+	if not is_instance_valid(graph):
+		return null
+	if not graph.has_method("get_tutorial_sample_card_target"):
+		return null
+	var target = graph.call("get_tutorial_sample_card_target", target_kind)
+	if target is Control and is_instance_valid(target):
+		return target as Control
+	return null
+
+func prepare_tutorial_layout() -> void:
+	if _tutorial_layout_in_progress:
+		return
+	call_deferred("_prepare_tutorial_layout_async")
+
+func is_tutorial_layout_ready() -> bool:
+	return _built and visible and _last_layout_mode == "width"
+
 func _run_background_build() -> void:
 	# 先让“加载中...”有机会显示出来（避免 open 同帧就做重建导致看不到占位）。
 	await get_tree().process_frame
@@ -87,6 +129,7 @@ func _run_background_build() -> void:
 		_build_in_progress = false
 		return
 
+	_apply_remaining_counts_to_graph()
 	graph.scale = Vector2.ONE
 	graph.rebuild_from_registry(1.0)
 	await _fit_to_view()
@@ -115,6 +158,12 @@ func _set_loading_visible(loading: bool) -> void:
 		fit_button.disabled = loading
 	if is_instance_valid(fit_width_button):
 		fit_width_button.disabled = loading
+
+func _apply_remaining_counts_to_graph() -> void:
+	if not is_instance_valid(graph):
+		return
+	if graph.has_method("set_remaining_counts"):
+		graph.set_remaining_counts(_employee_pool)
 
 func _on_background_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
@@ -229,7 +278,45 @@ func _set_zoom_at(target_zoom: float, viewport_local: Vector2) -> void:
 	graph.rebuild_from_registry(_zoom)
 	graph.position = viewport_local - world * _zoom
 	graph.position = Vector2(round(graph.position.x), round(graph.position.y))
+	_last_layout_mode = "custom"
 	_sync_zoom_bar()
+
+func _prepare_tutorial_layout_async() -> void:
+	if _tutorial_layout_in_progress:
+		return
+	_tutorial_layout_in_progress = true
+
+	if not _built:
+		begin_background_build()
+
+	while is_instance_valid(self) and _build_in_progress:
+		await get_tree().process_frame
+
+	var waited_frames := 0
+	while is_instance_valid(self) and (
+		not visible
+		or not is_instance_valid(viewport)
+		or viewport.size.x <= 0.0
+		or viewport.size.y <= 0.0
+	):
+		if waited_frames >= 12:
+			_tutorial_layout_in_progress = false
+			call_deferred("prepare_tutorial_layout")
+			return
+		waited_frames += 1
+		await get_tree().process_frame
+
+	if not is_instance_valid(self):
+		return
+
+	await _fit_to_width()
+
+	if not is_instance_valid(self):
+		return
+
+	_tutorial_layout_in_progress = false
+	if is_tutorial_layout_ready():
+		tutorial_layout_prepared.emit()
 
 func _fit_to_view() -> void:
 	if not is_instance_valid(viewport) or not is_instance_valid(graph):
@@ -268,6 +355,7 @@ func _fit_to_view() -> void:
 	graph.position = (vp_size - content_size) * 0.5
 	graph.position = Vector2(round(graph.position.x), round(graph.position.y))
 	_needs_fit_after_show = false
+	_last_layout_mode = "view"
 
 func _fit_to_width() -> void:
 	if not is_instance_valid(viewport) or not is_instance_valid(graph):
@@ -306,6 +394,7 @@ func _fit_to_width() -> void:
 	if content_size.y > vp_size.y:
 		pos.y = 0.0
 	graph.position = Vector2(round(pos.x), round(pos.y))
+	_last_layout_mode = "width"
 
 func _normalize_zoom(target_zoom: float) -> float:
 	var clamped := clampf(target_zoom, ZOOM_MIN, ZOOM_MAX)

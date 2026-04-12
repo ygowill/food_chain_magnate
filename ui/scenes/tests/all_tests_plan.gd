@@ -59,6 +59,30 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.ModuleSelectorSetupConstraintsTestClass.run(12345),
 		},
 		{
+			"name": "SetupTutorialTargetsContractTest",
+			"fn": func() -> Result: return await TestRefs.SetupTutorialTargetsContractTestClass.run(),
+		},
+		{
+			"name": "GameTutorialTargetsContractTest",
+			"fn": func() -> Result: return await TestRefs.GameTutorialTargetsContractTestClass.run(),
+		},
+		{
+			"name": "TutorialSceneBoundaryContractTest",
+			"fn": func() -> Result: return TestRefs.TutorialSceneBoundaryContractTestClass.run(),
+		},
+		{
+			"name": "TutorialMatchRuntimeTest",
+			"fn": func() -> Result: return TestRefs.TutorialMatchRuntimeTestClass.run(),
+		},
+		{
+			"name": "TutorialSpotlightOverlayStartTest",
+			"fn": func() -> Result: return await TestRefs.TutorialSpotlightOverlayStartTestClass.run(),
+		},
+		{
+			"name": "EmployeeTreeTutorialTargetsTest",
+			"fn": func() -> Result: return await TestRefs.EmployeeTreeTutorialTargetsTestClass.run(),
+		},
+		{
 			"name": "PaydaySalaryTokenEligibilityTest",
 			"fn": func() -> Result: return TestRefs.PaydaySalaryTokenEligibilityTestClass.run(),
 		},
@@ -359,6 +383,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.ReserveCardSelectionModalPresentationTestClass.run(),
 			},
 			{
+				"name": "ModalOverlayOpacityContractTest",
+				"fn": func() -> Result: return await TestRefs.ModalOverlayOpacityContractTestClass.run(),
+			},
+			{
 				"name": "EntityTabReserveCardPrivacyTest",
 				"fn": func() -> Result: return TestRefs.EntityTabReserveCardPrivacyTestClass.run(),
 			},
@@ -393,6 +421,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			{
 				"name": "ActionPanelGlobalDisabledRestoreTest",
 				"fn": func() -> Result: return TestRefs.ActionPanelGlobalDisabledRestoreTestClass.run(),
+			},
+			{
+				"name": "ActionPanelExternalBlockReasonTest",
+				"fn": func() -> Result: return await TestRefs.ActionPanelExternalBlockReasonTestClass.run(),
 			},
 			{
 				"name": "ActionPanelExecutorMetadataTest",
@@ -877,6 +909,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			{
 				"name": "ActionPanelGuidedActionPlaceholderTest",
 				"fn": func() -> Result: return await TestRefs.ActionPanelGuidedActionPlaceholderTestClass.run(),
+			},
+			{
+				"name": "ActionPanelNoAvailableActionsHintTest",
+				"fn": func() -> Result: return await TestRefs.ActionPanelNoAvailableActionsHintTestClass.run(),
 			},
 			{
 				"name": "GameLogDockControllerTimelineSyncTest",

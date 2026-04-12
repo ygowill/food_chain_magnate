@@ -74,6 +74,8 @@ flowchart TB
 - 布局：`ui/scenes/game/controllers/layout_controller.gd`
 - 右侧 Dock：`ui/scenes/game/controllers/right_panel_dock_controller.gd`
 - 日志 Dock：`ui/scenes/game/controllers/log_dock_controller.gd`
+- 教学编排：`ui/scenes/game/controllers/tutorials_controller.gd`
+  - 配套子模块：`tutorial_content.gd`、`tutorial_targets_resolver.gd`
 - 输入：`ui/scenes/game/controllers/input_controller.gd`
 - 存档/回放对话框：`ui/scenes/game/controllers/save_load_controller.gd`
 - DebugPanel：`ui/scenes/game/controllers/debug_panel_controller.gd`

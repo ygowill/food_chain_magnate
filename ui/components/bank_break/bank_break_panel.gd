@@ -14,6 +14,7 @@ signal game_end_triggered()
 @onready var message_label: Label = $CenterContainer/Panel/MarginContainer/VBoxContainer/MessageLabel
 @onready var details_container: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBoxContainer/DetailsContainer
 @onready var continue_btn: Button = $CenterContainer/Panel/MarginContainer/VBoxContainer/ContinueButton
+@onready var background_rect: ColorRect = $Background
 @onready var _content_panel: PanelContainer = $CenterContainer/Panel
 
 var _bankruptcy_count: int = 0
@@ -31,6 +32,8 @@ func _ready() -> void:
 	# 应用对话框表面样式
 	if _content_panel != null:
 		UiStylesClass.apply_dialog_surface(_content_panel)
+	if background_rect != null:
+		UiStylesClass.apply_overlay_dim(background_rect)
 
 	# 初始隐藏
 	visible = false

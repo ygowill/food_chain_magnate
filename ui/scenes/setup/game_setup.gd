@@ -3,6 +3,8 @@ extends Control
 
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModuleSelectorClass = preload("res://ui/components/module_selector/module_selector.gd")
+const GameSetupTutorialsControllerClass = preload("res://ui/scenes/setup/controllers/tutorials_controller.gd")
+const GameSetupTutorialMatchPresetClass = preload("res://ui/scenes/setup/controllers/tutorial_match_preset.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const MapSkinBuilderClass = preload("res://ui/visual/map_skin_builder.gd")
 const GameConfigDialogScene = preload("res://ui/dialogs/game_config_dialog.tscn")
@@ -35,6 +37,7 @@ var _seed_edit: LineEdit = null
 var _players_container: VBoxContainer = null
 var _modules_section: VBoxContainer = null
 var _message_label: Label = null
+var _game_params_panel: PanelContainer = null
 
 var _player_name_edits: Array[LineEdit] = []
 var _player_logo_options: Array[OptionButton] = []
@@ -60,6 +63,7 @@ var _suppress_preset_revert: bool = false
 var _game_config_dialog = null
 var _advanced_game_overrides: Dictionary = {}
 var _game_option_overrides: Dictionary = {}
+var _tutorials_controller = null
 
 func _ready() -> void:
 	GameLog.info("GameSetup", "游戏设置界面已加载")
@@ -91,6 +95,12 @@ func _ready() -> void:
 	_rebuild_player_rows()
 	_sync_globals_modules_to_module_selector()
 	_sync_player_count_module_constraints()
+	_initialize_tutorial_flow()
+
+func _exit_tree() -> void:
+	if _tutorials_controller != null and _tutorials_controller.has_method("dispose"):
+		_tutorials_controller.dispose()
+	_tutorials_controller = null
 
 # ── 装饰分隔线 ──────────────────────────────────────────
 
@@ -130,6 +140,7 @@ func _build_section_panel(bg_color: Color = Color(0.95, 0.91, 0.83, 0.55)) -> Pa
 
 func _build_game_params_section() -> void:
 	var panel := _build_section_panel()
+	_game_params_panel = panel
 	left_column.add_child(panel)
 
 	var vbox := VBoxContainer.new()
@@ -277,6 +288,11 @@ func _sync_game_config_overrides() -> void:
 
 func _on_start_pressed() -> void:
 	_set_message("")
+
+	if _tutorials_controller != null and _tutorials_controller.has_method("should_apply_tutorial_match_preset_on_start"):
+		if bool(_tutorials_controller.should_apply_tutorial_match_preset_on_start()):
+			_apply_tutorial_match_preset()
+
 	_sync_game_config_overrides()
 
 	Globals.player_count = _selected_player_count
@@ -292,6 +308,8 @@ func _on_start_pressed() -> void:
 		return
 
 	_apply_player_profiles_to_globals()
+	if _tutorials_controller != null and _tutorials_controller.has_method("sync_start_flags"):
+		_tutorials_controller.sync_start_flags()
 	Globals.save_settings()
 
 	GameLog.info("GameSetup", "开始游戏 - 玩家数: %d, 种子: %d" % [
@@ -305,6 +323,50 @@ func _on_start_pressed() -> void:
 
 	Globals.set_current_game_engine(null)
 	SceneManager.goto_game()
+
+func _initialize_tutorial_flow() -> void:
+	_tutorials_controller = GameSetupTutorialsControllerClass.new(
+		self,
+		_game_params_panel,
+		_modules_section,
+		start_button,
+		Callable(self, "_get_module_selector_tutorial_targets"),
+		Callable(self, "_apply_tutorial_match_preset")
+	)
+	_tutorials_controller.initialize()
+
+func _apply_tutorial_match_preset() -> void:
+	var preset := GameSetupTutorialMatchPresetClass.build_preset()
+	var target_player_count := clampi(int(preset.get("player_count", _selected_player_count)), Globals.MIN_PLAYERS, Globals.MAX_PLAYERS)
+	if target_player_count != _selected_player_count:
+		_on_player_count_button_pressed(target_player_count)
+
+	if _seed_edit != null and is_instance_valid(_seed_edit):
+		_seed_edit.text = str(int(preset.get("seed", 0)))
+
+	var enabled_modules_val = preset.get("enabled_modules_v2", null)
+	if enabled_modules_val is Array:
+		var enabled_modules := Array(enabled_modules_val, TYPE_STRING, "", null)
+		if _module_selector != null and is_instance_valid(_module_selector) and _module_selector.has_method("set_initial_enabled_modules_v2"):
+			_module_selector.call("set_initial_enabled_modules_v2", enabled_modules)
+
+	var patch: Dictionary = {}
+	var patch_val = preset.get("game_option_overrides", null)
+	if patch_val is Dictionary:
+		patch = Dictionary(patch_val).duplicate(true)
+	_game_option_overrides = patch
+	if _module_selector != null and is_instance_valid(_module_selector) and _module_selector.has_method("set_game_options_from_overrides_patch"):
+		_module_selector.call("set_game_options_from_overrides_patch", patch)
+	_sync_game_config_overrides()
+	_set_message("已应用教学局预设：2 人、固定种子、简化规则。")
+
+func _get_module_selector_tutorial_targets() -> Dictionary:
+	var module_targets: Dictionary = {}
+	if _module_selector != null and is_instance_valid(_module_selector) and _module_selector.has_method("get_tutorial_targets"):
+		var val = _module_selector.call("get_tutorial_targets")
+		if val is Dictionary:
+			module_targets = val
+	return module_targets
 
 # ── 消息提示 ────────────────────────────────────────────
 

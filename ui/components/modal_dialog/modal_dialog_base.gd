@@ -4,9 +4,10 @@
 class_name ModalDialogBase
 extends Control
 
+const ModalDialogStylesClass = preload("res://ui/utils/ui_styles.gd")
 const ModalDialogUiZClass = preload("res://ui/utils/ui_z.gd")
 
-@export var overlay_color: Color = Color(0, 0, 0, 0.62)
+@export var overlay_color: Color = Color(0.05, 0.04, 0.03, 0.75)
 
 @onready var overlay: ColorRect = get_node_or_null("Overlay") as ColorRect
 
@@ -16,6 +17,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_process_unhandled_input(true)
 	ModalDialogUiZClass.apply_absolute(self, ModalDialogUiZClass.MODAL)
+	overlay_color = ModalDialogStylesClass.get_overlay_dim_color()
 
 	_apply_full_rect_layout()
 

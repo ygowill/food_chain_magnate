@@ -78,6 +78,11 @@ func show_employee_tree() -> void:
 	if not is_instance_valid(_employee_tree_panel):
 		return
 
+	if _scene.game_engine != null and _scene.game_engine.has_method("get_state"):
+		var state: GameState = _scene.game_engine.get_state()
+		if state != null and _employee_tree_panel.has_method("set_employee_pool"):
+			_employee_tree_panel.call("set_employee_pool", state.employee_pool)
+
 	if _employee_tree_panel.has_method("open"):
 		_employee_tree_panel.call("open")
 
@@ -103,6 +108,9 @@ func hide_employee_tree() -> void:
 
 func get_employee_tree_panel():
 	_ensure_employee_tree_panel()
+	return _employee_tree_panel
+
+func peek_employee_tree_panel():
 	return _employee_tree_panel
 
 func show_milestone_full_screen_view(state: GameState, map_skin) -> void:
@@ -198,6 +206,16 @@ func _ensure_employee_tree_panel() -> void:
 	if _employee_tree_panel.has_signal("closed"):
 		if not _employee_tree_panel.closed.is_connected(hide_employee_tree):
 			_employee_tree_panel.closed.connect(hide_employee_tree)
+	if _employee_tree_panel.has_signal("build_finished"):
+		UiSignalHelpersClass.safe_connect(_employee_tree_panel, "build_finished", _on_employee_tree_build_finished)
+	if _employee_tree_panel.has_signal("tutorial_layout_prepared"):
+		UiSignalHelpersClass.safe_connect(_employee_tree_panel, "tutorial_layout_prepared", _on_employee_tree_build_finished)
+
+func _on_employee_tree_build_finished() -> void:
+	if _scene == null or not is_instance_valid(_scene):
+		return
+	if _scene.has_method("_update_ui"):
+		_scene.call_deferred("_update_ui")
 
 func _ensure_milestone_full_screen_view() -> void:
 	if _scene == null:

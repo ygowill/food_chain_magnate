@@ -58,6 +58,7 @@ var _action_disabled_reason: Dictionary = {} # action_id -> String
 var _guided_action_id: String = ""
 var _flow_confirm_end_visible: bool = false
 var _flow_skip_step_visible: bool = false
+var _external_action_block_reason_provider: Callable = Callable()
 
 # 不在 UI 中展示的内部动作
 const BASE_HIDDEN_ACTION_IDS := {
@@ -281,8 +282,13 @@ func _on_context_panel_visibility_changed() -> void:
 	_sync_guided_action_placeholder()
 
 func _should_show_guided_action_placeholder() -> bool:
-	# 交互改版：不再显示“当前操作/继续xx”占位卡，始终直接进入实际动作页面。
-	return false
+	if not _flow_confirm_end_visible:
+		return false
+	if not _guided_action_id.is_empty():
+		return false
+	if is_instance_valid(context_panel) and context_panel.visible:
+		return false
+	return true
 
 func _sync_guided_action_placeholder() -> void:
 	if not is_instance_valid(guided_action_panel):
@@ -291,17 +297,17 @@ func _sync_guided_action_placeholder() -> void:
 	var show := _should_show_guided_action_placeholder()
 	guided_action_panel.visible = show
 	if not show:
+		if is_instance_valid(open_guided_action_button):
+			open_guided_action_button.visible = true
 		_sync_guided_action_button_state()
 		return
 
-	var name := get_action_display_name(_guided_action_id)
-	var desc := get_action_description(_guided_action_id)
 	if is_instance_valid(guided_action_title_label):
-		guided_action_title_label.text = "当前操作：%s" % name if not name.is_empty() else "当前操作"
+		guided_action_title_label.text = "当前没有更多可执行动作"
 	if is_instance_valid(guided_action_hint_label):
-		guided_action_hint_label.text = desc
+		guided_action_hint_label.text = "这表示当前阶段已经没有更多可执行动作，所以面板下方会显示“确认结束”。如果你接受当前结果，就点击“确认结束”继续流程；如果想重新安排本回合，也可以使用“回退到回合开始”。"
 	if is_instance_valid(open_guided_action_button):
-		open_guided_action_button.text = "继续%s" % name if not name.is_empty() else "继续"
+		open_guided_action_button.visible = false
 	_sync_guided_action_button_state()
 
 func _sync_guided_action_button_state() -> void:
@@ -377,6 +383,10 @@ func set_action_registry(registry) -> void:
 	_action_registry = registry
 	if _context_controller != null:
 		_context_controller.set_action_registry(_action_registry)
+	refresh()
+
+func set_external_action_block_reason_provider(provider: Callable) -> void:
+	_external_action_block_reason_provider = provider
 	refresh()
 
 func set_map_skin(skin) -> void:
@@ -499,6 +509,15 @@ func get_action_disabled_reason(action_id: String) -> String:
 	if _globally_disabled and not _globally_disabled_reason.is_empty():
 		return _globally_disabled_reason
 	return str(_action_disabled_reason.get(aid, "")).strip_edges()
+
+func _get_external_action_block_reason(action_id: String) -> String:
+	var aid := str(action_id).strip_edges()
+	if aid.is_empty():
+		return ""
+	if not _external_action_block_reason_provider.is_valid():
+		return ""
+	var value = _external_action_block_reason_provider.call(aid, _game_state, _current_player_id)
+	return str(value).strip_edges()
 
 func get_action_display_name(action_id: String) -> String:
 	var aid := str(action_id).strip_edges()

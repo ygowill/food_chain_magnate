@@ -410,6 +410,31 @@ func setup(employee_def: Dictionary) -> void:
 	employee_id = str(employee_def.get("id", ""))
 	_update_display()
 
+func get_tutorial_target(target_kind: String) -> Control:
+	match str(target_kind):
+		"card":
+			return self
+		"header":
+			if _role_color_panel != null and is_instance_valid(_role_color_panel):
+				return _role_color_panel
+		"description":
+			if _description_label != null and is_instance_valid(_description_label):
+				return _description_label
+		"entry_marker":
+			if _entry_icon_rect != null and is_instance_valid(_entry_icon_rect) and _entry_icon_rect.visible:
+				return _entry_icon_rect
+		"range_marker":
+			if _range_icon_rect != null and is_instance_valid(_range_icon_rect) and _range_icon_rect.visible:
+				return _range_icon_rect
+			if _range_label != null and is_instance_valid(_range_label) and _range_label.visible:
+				return _range_label
+		"salary_marker":
+			if _salary_icon_rect != null and is_instance_valid(_salary_icon_rect) and _salary_icon_rect.visible:
+				return _salary_icon_rect
+			if _salary_label != null and is_instance_valid(_salary_label) and _salary_label.visible:
+				return _salary_label
+	return self
+
 func set_selected(selected: bool) -> void:
 	_selected = selected
 	_update_style()

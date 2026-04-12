@@ -28,6 +28,15 @@ const TOAST_OFFSET_TOP := 16.0
 const TOAST_HEIGHT := 62.0
 const KIND_CONFIRM_DINNERTIME := "confirm_dinnertime"
 const MILESTONE_ID_FIRST_HAVE_20 := "first_have_20"
+const TOOLBAR_HELP_TARGETS := [
+	{"node_name": "LogButton", "help_key": "ui_topbar_log"},
+	{"node_name": "MilestonesButton", "help_key": "ui_topbar_milestones"},
+	{"node_name": "EmployeeTreeButton", "help_key": "ui_topbar_employee_tree"},
+	{"node_name": "ReserveAreaButton", "help_key": "ui_topbar_reserve_area"},
+	{"node_name": "ReserveCardsButton", "help_key": "ui_topbar_reserve_cards"},
+	{"node_name": "DistanceToolButton", "help_key": "ui_topbar_distance_tool"},
+	{"node_name": "SettingsButton", "help_key": "ui_topbar_settings"},
+]
 
 var _scene = null
 var _map_view = null
@@ -207,6 +216,10 @@ func _on_settings_changed(settings: Dictionary) -> void:
 	Globals.confirm_actions = bool(settings.get("confirm_actions", Globals.confirm_actions))
 	Globals.show_hints = bool(settings.get("show_hints", Globals.show_hints))
 	Globals.replay_load_playable = bool(settings.get("replay_load_playable", Globals.replay_load_playable))
+	if Globals.has_method("apply_tutorial_preferences_from_settings"):
+		Globals.apply_tutorial_preferences_from_settings(settings)
+	else:
+		Globals.tutorial_enabled = bool(settings.get("tutorial_enabled", Globals.tutorial_enabled))
 	Globals.animation_speed = float(settings.get("animation_speed", Globals.animation_speed))
 
 	# 字体倍率：允许在运行时立即生效（主要用于调试可读性）。
@@ -243,71 +256,112 @@ func _setup_help_tooltips() -> void:
 	if not help_tooltip_manager.has_method("register_control"):
 		return
 
-	# 静态 UI 元素：直接绑定固定 key
+	_register_core_help_tooltips()
+	_register_toolbar_help_tooltips()
+	_setup_phase_track_help_tooltips()
+
+func _register_core_help_tooltips() -> void:
 	var action_panel = _scene.get("action_panel")
-	if is_instance_valid(action_panel) and action_panel is Control:
-		help_tooltip_manager.register_control(action_panel, "ui_action_panel")
+	if action_panel is Control:
+		_register_help_control(action_panel as Control, "ui_action_panel")
 
-	var player_panel = _scene.get("player_panel")
-	if is_instance_valid(player_panel) and player_panel is Control:
-		help_tooltip_manager.register_control(player_panel, "ui_player_panel")
+	var player_panel_target = _resolve_player_panel_help_root()
+	if player_panel_target != null:
+		var overview_target = _get_left_panel_help_target(player_panel_target, "MarginContainer/MainVBox/RestaurantOverviewSection")
+		if overview_target != null:
+			_register_help_control(overview_target, "ui_player_panel")
+		else:
+			_register_help_control(player_panel_target, "ui_player_panel")
 
-	var inventory_panel = _scene.get("inventory_panel")
-	if is_instance_valid(inventory_panel) and inventory_panel is Control:
-		help_tooltip_manager.register_control(inventory_panel, "ui_inventory")
+		var inventory_target = _get_left_panel_help_target(player_panel_target, "MarginContainer/MainVBox/DualColumnArea/LeftColumn/InventorySection")
+		if inventory_target != null:
+			_register_help_control(inventory_target, "ui_inventory")
+	else:
+		var inventory_panel = _scene.get("inventory_panel")
+		if inventory_panel is Control:
+			_register_help_control(inventory_panel as Control, "ui_inventory")
 
 	var turn_order_track = _scene.get("turn_order_track")
-	if is_instance_valid(turn_order_track) and turn_order_track is Control:
-		help_tooltip_manager.register_control(turn_order_track, "mechanic_turn_order")
+	if turn_order_track is Control:
+		_register_help_control(turn_order_track as Control, "mechanic_turn_order")
 
 	var bank_label = _scene.get("bank_label")
-	if is_instance_valid(bank_label) and bank_label is Control:
-		bank_label.mouse_filter = Control.MOUSE_FILTER_STOP
-		bank_label.mouse_default_cursor_shape = Control.CURSOR_HELP
-		help_tooltip_manager.register_control(bank_label, "mechanic_bank")
+	if bank_label is Control:
+		_register_help_control(bank_label as Control, "mechanic_bank", true)
 
-	var btn_log = _scene.get_node_or_null("UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/LogButton")
-	if btn_log is Control:
-		var c1: Control = btn_log
-		c1.mouse_default_cursor_shape = Control.CURSOR_HELP
-		help_tooltip_manager.register_control(c1, "ui_topbar_log")
+func _register_toolbar_help_tooltips() -> void:
+	for entry_val in TOOLBAR_HELP_TARGETS:
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
+		var node_name := str(entry.get("node_name", "")).strip_edges()
+		var help_key := str(entry.get("help_key", "")).strip_edges()
+		if node_name.is_empty() or help_key.is_empty():
+			continue
+		var button := _get_toolbar_help_button(node_name)
+		if button != null:
+			_register_help_control(button, help_key, true)
 
-	var btn_milestones = _scene.get_node_or_null("UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/MilestonesButton")
-	if btn_milestones is Control:
-		var c2: Control = btn_milestones
-		c2.mouse_default_cursor_shape = Control.CURSOR_HELP
-		help_tooltip_manager.register_control(c2, "ui_topbar_milestones")
-
-	var btn_distance = _scene.get_node_or_null("UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/DistanceToolButton")
-	if btn_distance is Control:
-		var c3: Control = btn_distance
-		c3.mouse_default_cursor_shape = Control.CURSOR_HELP
-		help_tooltip_manager.register_control(c3, "ui_topbar_distance_tool")
-
-	var btn_settings = _scene.get_node_or_null("UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/SettingsButton")
-	if btn_settings is Control:
-		var c4: Control = btn_settings
-		c4.mouse_default_cursor_shape = Control.CURSOR_HELP
-		help_tooltip_manager.register_control(c4, "ui_topbar_settings")
-
-	# 动态：PhaseTrack 根据悬停阶段显示不同帮助
+func _setup_phase_track_help_tooltips() -> void:
 	var phase_track = _scene.get("phase_track")
-	if is_instance_valid(phase_track) and phase_track is Control:
-		phase_track.mouse_filter = Control.MOUSE_FILTER_STOP
-		phase_track.mouse_default_cursor_shape = Control.CURSOR_HELP
-		var hover_changed_cb := Callable(self, "_on_phase_track_hover_changed")
-		var hover_exited_cb := Callable(self, "_on_phase_track_hover_exited")
-		if phase_track.has_signal("phase_hover_changed") and phase_track.has_signal("phase_hover_exited"):
-			if not phase_track.is_connected("phase_hover_changed", hover_changed_cb):
-				phase_track.connect("phase_hover_changed", hover_changed_cb)
-			if not phase_track.is_connected("phase_hover_exited", hover_exited_cb):
-				phase_track.connect("phase_hover_exited", hover_exited_cb)
-		else:
-			# 兼容旧版 PhaseTrack（仅能显示当前阶段提示）
-			if not phase_track.mouse_entered.is_connected(_on_phase_label_mouse_entered):
-				phase_track.mouse_entered.connect(_on_phase_label_mouse_entered)
-			if not phase_track.mouse_exited.is_connected(_on_phase_label_mouse_exited):
-				phase_track.mouse_exited.connect(_on_phase_label_mouse_exited)
+	if not (phase_track is Control):
+		return
+
+	var phase_track_control: Control = phase_track
+	phase_track_control.mouse_filter = Control.MOUSE_FILTER_STOP
+	phase_track_control.mouse_default_cursor_shape = Control.CURSOR_HELP
+
+	var hover_changed_cb := Callable(self, "_on_phase_track_hover_changed")
+	var hover_exited_cb := Callable(self, "_on_phase_track_hover_exited")
+	if phase_track_control.has_signal("phase_hover_changed") and phase_track_control.has_signal("phase_hover_exited"):
+		if not phase_track_control.is_connected("phase_hover_changed", hover_changed_cb):
+			phase_track_control.connect("phase_hover_changed", hover_changed_cb)
+		if not phase_track_control.is_connected("phase_hover_exited", hover_exited_cb):
+			phase_track_control.connect("phase_hover_exited", hover_exited_cb)
+		return
+
+	# 兼容旧版 PhaseTrack（仅能显示当前阶段提示）
+	if not phase_track_control.mouse_entered.is_connected(_on_phase_label_mouse_entered):
+		phase_track_control.mouse_entered.connect(_on_phase_label_mouse_entered)
+	if not phase_track_control.mouse_exited.is_connected(_on_phase_label_mouse_exited):
+		phase_track_control.mouse_exited.connect(_on_phase_label_mouse_exited)
+
+func _register_help_control(control: Control, help_key: String, use_help_cursor: bool = false) -> void:
+	if control == null or not is_instance_valid(control):
+		return
+	if help_tooltip_manager == null or not is_instance_valid(help_tooltip_manager):
+		return
+	if not help_tooltip_manager.has_method("register_control"):
+		return
+	if use_help_cursor:
+		control.mouse_filter = Control.MOUSE_FILTER_STOP
+		control.mouse_default_cursor_shape = Control.CURSOR_HELP
+	help_tooltip_manager.register_control(control, help_key)
+
+func _resolve_player_panel_help_root() -> Control:
+	var player_panel_target = _player_panel
+	if player_panel_target == null and _scene != null and _scene.has_method("get"):
+		player_panel_target = _scene.get("left_panel")
+	if player_panel_target is Control and is_instance_valid(player_panel_target):
+		return player_panel_target as Control
+	return null
+
+func _get_left_panel_help_target(root: Control, path: String) -> Control:
+	if root == null or not is_instance_valid(root):
+		return null
+	var node := root.get_node_or_null(path)
+	if node is Control:
+		return node as Control
+	return null
+
+func _get_toolbar_help_button(node_name: String) -> Control:
+	if _scene == null:
+		return null
+	var path := "UIRoot/MainContent/CenterSplit/RightPanel/ToolBar/%s" % node_name
+	var node: Node = _scene.get_node_or_null(path)
+	if node is Control:
+		return node as Control
+	return null
 
 func _on_phase_track_hover_changed(phase_key: String, hover_global_pos: Vector2) -> void:
 	if help_tooltip_manager == null or not is_instance_valid(help_tooltip_manager):

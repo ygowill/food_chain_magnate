@@ -17,6 +17,10 @@ run/main_scene="res://ui/scenes/main_menu.tscn"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://assets/icon.png"
 
+[audio]
+
+driver/output_latency=30
+
 [autoload]
 
 GameLog="*res://autoload/game_log.gd"
@@ -30,10 +34,6 @@ NetClient="*res://autoload/net_client.gd"
 OnlineSessionCoordinator="*res://autoload/online_session_coordinator.gd"
 PlatformApi="*res://autoload/platform_api.gd"
 PlatformSession="*res://autoload/platform_session.gd"
-
-[audio]
-
-driver/output_latency=30
 
 [display]
 

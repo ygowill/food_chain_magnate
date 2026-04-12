@@ -32,6 +32,8 @@ func _ready() -> void:
 	UiStylesClass.apply_dialog_surface(panel)
 	UiStylesClass.apply_button_primary(confirm_button)
 	UiStylesClass.apply_button_secondary(cancel_button)
+	if is_instance_valid(overlay):
+		UiStylesClass.apply_overlay_dim(overlay, _overlay_alpha_normal)
 	if is_instance_valid(title_label):
 		title_label.text = title
 		UiStylesClass.apply_label_dark(title_label)

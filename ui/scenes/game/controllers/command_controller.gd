@@ -21,6 +21,7 @@ var _timeline_controller: Object = null
 var _panel_controller: Object = null
 var _online_resync_controller: Object = null
 var _game_log_panel: Control = null
+var _tutorial_match_runtime = null
 
 func _init(
 	get_game_engine: Callable,
@@ -28,7 +29,8 @@ func _init(
 	show_confirm: Callable,
 	timeline_controller: Object,
 	panel_controller: Object,
-	game_log_panel: Control
+	game_log_panel: Control,
+	tutorial_match_runtime = null
 ) -> void:
 	_get_game_engine = get_game_engine
 	_update_ui = update_ui
@@ -36,6 +38,7 @@ func _init(
 	_timeline_controller = timeline_controller
 	_panel_controller = panel_controller
 	_game_log_panel = game_log_panel
+	_tutorial_match_runtime = tutorial_match_runtime
 
 func dispose() -> void:
 	_get_game_engine = Callable()
@@ -45,6 +48,9 @@ func dispose() -> void:
 	_panel_controller = null
 	_online_resync_controller = null
 	_game_log_panel = null
+	if _tutorial_match_runtime != null and _tutorial_match_runtime.has_method("dispose"):
+		_tutorial_match_runtime.dispose()
+	_tutorial_match_runtime = null
 
 func set_online_resync_controller(controller: Object) -> void:
 	_online_resync_controller = controller
@@ -134,6 +140,14 @@ func execute_command(command: Command) -> Result:
 	if was_in_history and not can_edit_timeline:
 		return Result.failure("查看历史中无法执行命令（请先返回最新）")
 
+	var state: GameState = game_engine.get_state()
+	if _tutorial_match_runtime != null and _tutorial_match_runtime.has_method("validate_command"):
+		var tutorial_gate = _tutorial_match_runtime.validate_command(command, state, game_engine)
+		if tutorial_gate is Result and not tutorial_gate.ok:
+			GameLog.warn("Game", "教学局步骤限制: %s" % tutorial_gate.error)
+			_request_ui_refresh()
+			return tutorial_gate
+
 	var auto := _maybe_auto_complete_mandatory_actions_before_skip(command, game_engine)
 	if auto is Result and not auto.ok:
 		GameLog.warn("Game", "自动完成强制动作失败: %s" % auto.error)
@@ -153,6 +167,8 @@ func execute_command(command: Command) -> Result:
 				_timeline_controller.call("apply_live_log_timeline_from_engine")
 		if was_in_history and is_instance_valid(_timeline_controller) and _timeline_controller.has_method("set_timeline_edit_mode_active"):
 			_timeline_controller.call("set_timeline_edit_mode_active", false)
+		if _tutorial_match_runtime != null and _tutorial_match_runtime.has_method("on_command_executed"):
+			_tutorial_match_runtime.on_command_executed(command, game_engine.get_state(), result)
 
 	_request_ui_refresh()
 	return result

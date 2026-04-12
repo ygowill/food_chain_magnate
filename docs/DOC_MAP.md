@@ -74,10 +74,11 @@
 
 1. `docs/architecture/20-ui.md`
 2. `docs/architecture/21-ui-game-scene.md`
-3. `docs/design/ui_redesign.md`
-4. `docs/plans/ui_remediation_plan.md`
-5. `docs/plans/ui_development_plan.md`
-6. `docs/reports/ui/`
+3. `docs/architecture/23-ui-overlay-guidelines.md`
+4. `docs/design/ui_redesign.md`
+5. `docs/plans/ui_remediation_plan.md`
+6. `docs/plans/ui_development_plan.md`
+7. `docs/reports/ui/`
 
 ### 路线 C：准备改联机 / 平台
 

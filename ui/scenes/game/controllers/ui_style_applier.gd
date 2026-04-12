@@ -17,7 +17,7 @@ static func _apply_menu_dialog_styles(game) -> void:
 		game.menu_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
 		UiZClass.apply_absolute(game.menu_dialog, UiZClass.MENU)
 	if is_instance_valid(game.menu_dialog_overlay):
-		game.menu_dialog_overlay.color = Color(0.05, 0.04, 0.03, 0.75)
+		UiStylesClass.apply_overlay_dim(game.menu_dialog_overlay)
 		game.menu_dialog_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	UiStylesClass.apply_dialog_surface(game.menu_dialog_background_panel)
 	UiStylesClass.apply_button_primary(game.menu_resume_button)

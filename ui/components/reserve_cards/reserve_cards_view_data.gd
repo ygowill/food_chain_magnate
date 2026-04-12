@@ -92,11 +92,11 @@ static func describe_card(card: Dictionary, index: int) -> Dictionary:
 		var cash := int(card.get("cash", 0))
 		var slots := int(card.get("ceo_slots", 0))
 		var title := option_text
-		var desc := "起始现金：+$%d\nCEO 卡槽：%d" % [cash, slots]
+		var desc := "首次破产注资：+$%d\n首次破产后 CEO 卡槽：%d" % [cash, slots]
 		var summary_parts: Array[String] = []
 		if index >= 0:
 			summary_parts.append("选项#%d" % (index + 1))
-		summary_parts.append("注资 $%d" % cash)
+		summary_parts.append("首次破产注资 $%d" % cash)
 		summary_parts.append("CEO 槽位 %d" % slots)
 		return {
 			"index": index,

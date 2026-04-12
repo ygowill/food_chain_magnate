@@ -38,10 +38,17 @@ const COLOR_TEXT_MUTED := Color(0.5, 0.45, 0.35, 1.0)
 const COLOR_TEXT_HINT := Color(0.73, 0.23, 0.18, 0.85)
 const COLOR_TEXT_ERROR := Color(0.73, 0.23, 0.18, 1.0)
 const COLOR_TEXT_SUCCESS := Color(0.28, 0.55, 0.22, 1.0)
+const COLOR_OVERLAY_DIM := Color(0.05, 0.04, 0.03, 0.75)
 const COLOR_FIELD_BG := Color(0.95, 0.91, 0.82, 0.9)
 const COLOR_FIELD_BG_DISABLED := Color(0.92, 0.88, 0.78, 0.7)
 const COLOR_FIELD_BORDER := Color(0.17, 0.13, 0.09, 0.26)
 const COLOR_FIELD_BORDER_FOCUS := Color(0.73, 0.23, 0.18, 0.72)
+
+static func get_overlay_dim_color(alpha: float = -1.0) -> Color:
+	var color := COLOR_OVERLAY_DIM
+	if alpha >= 0.0:
+		color.a = clampf(alpha, 0.0, 1.0)
+	return color
 
 static func apply_dialog_surface(panel: Control) -> void:
 	if panel == null:
@@ -131,10 +138,10 @@ static func apply_native_tooltip_theme(root: Control) -> void:
 	t.set_color("font_color", "TooltipLabel", COLOR_TEXT_PRIMARY)
 	t.set_font_size("font_size", "TooltipLabel", 12)
 
-static func apply_overlay_dim(overlay: ColorRect) -> void:
+static func apply_overlay_dim(overlay: ColorRect, alpha: float = -1.0) -> void:
 	if overlay == null:
 		return
-	overlay.color = Color(0.05, 0.04, 0.03, 0.75)
+	overlay.color = get_overlay_dim_color(alpha)
 
 static func apply_label_dark(label: Label) -> void:
 	if label == null:

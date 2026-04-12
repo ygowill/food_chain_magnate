@@ -153,6 +153,8 @@ func refresh() -> void:
 			p.set_action_enabled(aid4, true)
 			p.set_action_disabled_reason(aid4, "")
 
+	_apply_external_block_reasons(visible_ids)
+
 	_compute_guided_flow_visibility()
 	p._apply_global_disabled_state()
 
@@ -197,6 +199,7 @@ func _set_visible_actions_from_list(action_ids: Array, initiatable_ids: Array) -
 	for aid in p._visible_action_ids:
 		p.set_action_enabled(aid, true)
 		p.set_action_disabled_reason(aid, "")
+	_apply_external_block_reasons(p._visible_action_ids)
 	_compute_guided_flow_visibility()
 	p._sync_guided_action_placeholder()
 
@@ -425,3 +428,26 @@ func _compute_disabled_reason(action_id: String) -> String:
 		return msg
 
 	return "当前不可用"
+
+func _apply_external_block_reasons(action_ids: Array[String]) -> void:
+	if _panel == null or not is_instance_valid(_panel):
+		return
+	var p = _panel
+	for aid_val in action_ids:
+		var aid := str(aid_val).strip_edges()
+		if aid.is_empty():
+			continue
+		var reason := _get_external_block_reason(aid)
+		if reason.is_empty():
+			continue
+		p.set_action_enabled(aid, false)
+		p.set_action_disabled_reason(aid, reason)
+
+func _get_external_block_reason(action_id: String) -> String:
+	if _panel == null or not is_instance_valid(_panel):
+		return ""
+	var p = _panel
+	if not p.has_method("_get_external_action_block_reason"):
+		return ""
+	var value = p.call("_get_external_action_block_reason", action_id)
+	return str(value).strip_edges()

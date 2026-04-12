@@ -20,6 +20,8 @@ const GameMapModeBarControllerClass = preload("res://ui/scenes/game/map_interact
 const GamePanelControllerClass = preload("res://ui/scenes/game/panel/controller.gd")
 const GameTimelineControllerClass = preload("res://ui/scenes/game/timeline/controller.gd")
 const GameProcurementLogPreviewControllerClass = preload("res://ui/scenes/game/panel/procurement/log_preview_controller.gd")
+const GameTutorialsControllerClass = preload("res://ui/scenes/game/controllers/tutorials_controller.gd")
+const GameTutorialMatchRuntimeClass = preload("res://ui/scenes/game/controllers/tutorial_match_runtime.gd")
 
 const DebugPanelScene = preload("res://ui/scenes/debug/debug_panel.tscn")
 const ConfirmDialogScene = preload("res://ui/dialogs/confirm_dialog.tscn")
@@ -205,6 +207,41 @@ static func build(host: Control, refs: Dictionary, callbacks: Dictionary, startu
 	overlay_controller.set_player_panel(refs.get("left_panel", null))
 	out["ui_sync_controller"] = ui_sync_controller
 
+	var tutorial_match_runtime = GameTutorialMatchRuntimeClass.new(
+		callbacks.get("get_game_engine", Callable())
+	)
+	out["tutorial_match_runtime"] = tutorial_match_runtime
+
+	var action_panel = refs.get("action_panel", null)
+	if is_instance_valid(action_panel) and action_panel.has_method("set_external_action_block_reason_provider"):
+		action_panel.set_external_action_block_reason_provider(
+			Callable(tutorial_match_runtime, "get_action_block_reason")
+		)
+
+	var tutorials_controller = GameTutorialsControllerClass.new(
+		host,
+		refs.get("status_bar", null),
+		map_view,
+		refs.get("action_panel", null),
+		refs.get("left_panel", null),
+		refs.get("toolbar", null),
+		refs.get("turn_order_track", null),
+		callbacks.get("get_game_engine", Callable()),
+		callbacks.get("ensure_right_panel_visible", Callable()),
+		Callable(panel_controller, "get_restructuring_modal"),
+		Callable(panel_controller, "get_turn_order_modal"),
+		Callable(panel_controller, "get_active_context_overlay"),
+		Callable(panel_controller, "get_active_docked_panel"),
+		Callable(panel_controller, "peek_employee_tree_panel"),
+		callbacks.get("is_headless_runtime", Callable()),
+		callbacks.get("is_startup_intro_running", Callable()),
+		callbacks.get("is_replay_mode_active", Callable()),
+		callbacks.get("is_timeline_read_only_active", Callable()),
+		callbacks.get("is_online_resync_in_progress", Callable())
+	)
+	tutorials_controller.initialize()
+	out["tutorials_controller"] = tutorials_controller
+
 	var debug_panel_controller = GameDebugPanelControllerClass.new(
 		host,
 		DebugPanelScene,
@@ -220,9 +257,9 @@ static func build(host: Control, refs: Dictionary, callbacks: Dictionary, startu
 		callbacks.get("show_confirm", Callable()),
 		timeline_controller,
 		panel_controller,
-		game_log_panel
+		game_log_panel,
+		tutorial_match_runtime
 	)
 	out["command_controller"] = command_controller
 
 	return out
-

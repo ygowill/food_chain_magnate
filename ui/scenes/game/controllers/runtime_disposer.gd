@@ -6,6 +6,10 @@ static func dispose_runtime(game) -> void:
 		return
 
 	# 释放 RefCounted 控制器（避免 headless 测试退出时资源泄漏）
+	if game._tutorials_controller != null and game._tutorials_controller.has_method("dispose"):
+		game._tutorials_controller.dispose()
+	game._tutorials_controller = null
+
 	if game._panel_controller != null and game._panel_controller.has_method("dispose"):
 		game._panel_controller.dispose()
 	game._panel_controller = null
