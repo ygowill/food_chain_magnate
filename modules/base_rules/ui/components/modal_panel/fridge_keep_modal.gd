@@ -4,7 +4,6 @@ extends "res://ui/components/modal_panel/modal_panel_base.gd"
 
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
-
 @onready var info_label: Label = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/InfoLabel
 @onready var summary_label: Label = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/SummaryLabel
 @onready var items_vbox: VBoxContainer = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/ItemsVBox
@@ -25,6 +24,10 @@ func _ready() -> void:
 
 	if is_instance_valid(hint_label):
 		hint_label.text = "请为各商品选择要保留的数量（允许保留少于容量）。"
+	if is_instance_valid(info_label):
+		UiStylesClass.apply_label_dark(info_label)
+	if is_instance_valid(summary_label):
+		UiStylesClass.apply_label_dark(summary_label)
 
 func setup(state: GameState, current_player_id: int) -> void:
 	_spinners_by_product.clear()
@@ -152,12 +155,14 @@ func _add_item_row(product_id: String, available: int, keep_default: int) -> voi
 	var name_label := Label.new()
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_label.text = _get_product_display_name(product_id)
+	UiStylesClass.apply_label_dark(name_label)
 	row.add_child(name_label)
 
 	var count_label := Label.new()
 	count_label.custom_minimum_size.x = 120
 	count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	count_label.text = "库存：%d" % available
+	UiStylesClass.apply_label_hint_dark(count_label)
 	row.add_child(count_label)
 
 	var sb := SpinBox.new()
@@ -169,6 +174,7 @@ func _add_item_row(product_id: String, available: int, keep_default: int) -> voi
 	sb.allow_greater = false
 	sb.allow_lesser = false
 	sb.rounded = true
+	UiStylesClass.apply_spin_box_field(sb)
 	if not sb.value_changed.is_connected(_on_keep_changed):
 		sb.value_changed.connect(_on_keep_changed)
 	row.add_child(sb)
@@ -191,8 +197,10 @@ func _update_summary() -> void:
 	if is_instance_valid(summary_label):
 		if ok:
 			summary_label.text = "已选择保留：%d/%d" % [total, _fridge_cap]
+			UiStylesClass.apply_label_dark(summary_label)
 		else:
 			summary_label.text = "已选择保留：%d/%d（超出容量）" % [total, _fridge_cap]
+			UiStylesClass.apply_label_error(summary_label)
 
 	set_confirm_enabled(ok)
 

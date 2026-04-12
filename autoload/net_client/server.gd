@@ -6,6 +6,7 @@ extends RefCounted
 const CommandClass = preload("res://core/types/command.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const EventHistoryRebuildClass = preload("res://core/engine/game_engine/event_history_rebuild.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const ConnectTokenClass = preload("res://core/utils/connect_token.gd")
 const ResyncSnapshotTransferClass = preload("res://core/utils/resync_snapshot_transfer.gd")
@@ -396,6 +397,111 @@ func _resolve_finalize_player_dict(room, state, seat_index: int) -> Dictionary:
 		return Dictionary(fallback_val)
 	return {}
 
+func _canonicalize_participant_stats_product_key(product_id: String) -> String:
+	var normalized := str(product_id).strip_edges().to_lower()
+	if normalized == "coke" or normalized == "cola":
+		return "soda"
+	return normalized
+
+func _append_participant_stats_count(target: Dictionary, key: String, amount: int = 1) -> void:
+	var stat_key := str(key).strip_edges()
+	if stat_key.is_empty():
+		return
+	var delta := int(amount)
+	if delta == 0:
+		return
+	target[stat_key] = int(target.get(stat_key, 0)) + delta
+
+func _build_participant_stats_payload(room, state, seat_index: int) -> Dictionary:
+	if room == null or state == null:
+		return {}
+	if room.game_engine == null:
+		return {}
+
+	var player_ordinal := _resolve_finalize_player_ordinal(room, state, seat_index)
+	if player_ordinal < 0:
+		return {}
+
+	var history_r := EventHistoryRebuildClass.build(room.game_engine, int(room.game_engine.current_command_index))
+	if not history_r.ok:
+		GameLog.warn(
+			"NetClient",
+			"Finalize stats rebuild failed room=%s seat=%d err=%s"
+				% [_safe_text(str(room.room_code)), seat_index, str(history_r.error)]
+		)
+		return {}
+	if not (history_r.value is Array):
+		return {}
+
+	var marketing_by_type: Dictionary = {}
+	var produced: Dictionary = {}
+	var sold: Dictionary = {}
+	var metrics: Dictionary = {}
+	var marketing_actions := 0
+	var hired_employees := 0
+	var trained_employees := 0
+
+	for event_val in Array(history_r.value):
+		if not (event_val is Dictionary):
+			continue
+		var event: Dictionary = event_val
+		var event_type := str(event.get("type", "")).strip_edges()
+		if event_type.is_empty():
+			continue
+		var data_val = event.get("data", null)
+		var data: Dictionary = data_val if (data_val is Dictionary) else {}
+		var event_player_id := int(data.get("player_id", data.get("actor", -1)))
+		if event_player_id != player_ordinal:
+			continue
+
+		match event_type:
+			"employee_recruited":
+				hired_employees += 1
+			"employee_trained":
+				trained_employees += 1
+			"marketing_placed":
+				marketing_actions += 1
+				_append_participant_stats_count(marketing_by_type, str(data.get("marketing_type", "")).strip_edges())
+			"food_produced":
+				var produced_key := _canonicalize_participant_stats_product_key(str(data.get("food_type", "")))
+				if not produced_key.is_empty():
+					_append_participant_stats_count(produced, produced_key, int(data.get("amount", 0)))
+			"food_sold":
+				var quantity := maxi(1, int(data.get("quantity", 1)))
+				var required_val = data.get("required", null)
+				if required_val is Dictionary:
+					var required: Dictionary = required_val
+					for product_key in required.keys():
+						var sold_key := _canonicalize_participant_stats_product_key(str(product_key))
+						if sold_key.is_empty():
+							continue
+						_append_participant_stats_count(sold, sold_key, int(required.get(product_key, 0)) * quantity)
+			"house_placed":
+				_append_participant_stats_count(metrics, "house_built")
+			"garden_added":
+				_append_participant_stats_count(metrics, "garden_built")
+			"restaurant_placed":
+				_append_participant_stats_count(metrics, "restaurant_built")
+			"restaurant_moved":
+				_append_participant_stats_count(metrics, "restaurant_moved")
+			"drinks_procured":
+				_append_participant_stats_count(metrics, "procurement_actions")
+			"command_executed":
+				var action_id := str(data.get("action_id", "")).strip_edges()
+				if action_id == "place_lobbyists_road" or action_id == "place_lobbyists_park":
+					_append_participant_stats_count(metrics, "lobbyists_actions")
+
+	return {
+		"marketing_actions": marketing_actions,
+		"billboard_placements": int(marketing_by_type.get("billboard", 0)),
+		"hired_employees": hired_employees,
+		"trained_employees": trained_employees,
+		"marketing_by_type": marketing_by_type,
+		"metrics": metrics,
+		"produced": produced,
+		"sold": sold,
+	}
+
 func _build_participant_score_payload(room, state, seat_index: int) -> Dictionary:
 	var seat_profile: Dictionary = {}
 	if room != null and (room._seat_profile_by_seat_index is Dictionary):
@@ -444,6 +550,8 @@ func _build_participant_score_payload(room, state, seat_index: int) -> Dictionar
 	if restaurant_logo_id < 0:
 		restaurant_logo_id = int(seat_profile.get("restaurant_logo_id", -1))
 
+	var stats_payload := _build_participant_stats_payload(room, state, seat_index)
+
 	return {
 		"display_name": str(seat_profile.get("name", "Player %d" % [seat_index + 1])),
 		"restaurant_logo_id": restaurant_logo_id,
@@ -455,6 +563,7 @@ func _build_participant_score_payload(room, state, seat_index: int) -> Dictionar
 		"restaurants": restaurants,
 		"milestones": milestones,
 		"inventory": inventory,
+		"stats": stats_payload,
 	}
 
 func _build_finalize_participants(room, state, winner_player_id: int) -> Array:

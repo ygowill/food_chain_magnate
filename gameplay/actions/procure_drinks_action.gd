@@ -72,6 +72,15 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 
 	return false
 
+func _build_preview_state_with_use_employee(state: GameState, player_id: int, employee_type: String) -> GameState:
+	if state == null or employee_type.is_empty():
+		return state
+
+	var preview_state := state.duplicate_state()
+	var preview_warnings: Array[String] = []
+	EmployeeUsageHelperClass.append_use_employee_warning(preview_warnings, preview_state, player_id, employee_type)
+	return preview_state
+
 func _validate_specific(state: GameState, command: Command) -> Result:
 	# 检查必需参数
 	if not command.params.has("employee_type"):
@@ -141,13 +150,15 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not command.params.has("selected_sources"):
 		return Result.failure("缺少参数: selected_sources（请先选择饮料点）", Result.ErrorCode.MISSING_PARAMS)
 
+	var preview_state := _build_preview_state_with_use_employee(state, command.actor, employee_type)
+
 	# 校验路线合法性与可拾取来源
-	var plan_result := DrinksProcurementClass.resolve_procurement_plan(state, command, restaurant_ids, emp_def)
+	var plan_result := DrinksProcurementClass.resolve_procurement_plan(preview_state, command, restaurant_ids, emp_def)
 	if not plan_result.ok:
 		return plan_result
 
 	# 校验里程碑效果（Fail Fast）：procure_plus_one
-	var bonus_check := DrinksProcurementClass.get_drinks_per_source_bonus_from_milestones(state, command.actor)
+	var bonus_check := DrinksProcurementClass.get_drinks_per_source_bonus_from_milestones(preview_state, command.actor)
 	if not bonus_check.ok:
 		return bonus_check
 
@@ -301,7 +312,8 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 		var emp_def = EmployeeRegistryClass.get_def(employee_type)
 		var restaurant_ids := StructuresClass.get_player_restaurants(_old_state, command.actor)
 		if emp_def != null and (emp_def is EmployeeDef) and not restaurant_ids.is_empty():
-			var plan_r := DrinksProcurementClass.resolve_procurement_plan(_old_state, command, restaurant_ids, emp_def)
+			var preview_state := _build_preview_state_with_use_employee(_old_state, command.actor, employee_type)
+			var plan_r := DrinksProcurementClass.resolve_procurement_plan(preview_state, command, restaurant_ids, emp_def)
 			if plan_r.ok and plan_r.value is Dictionary:
 				var plan: Dictionary = plan_r.value
 				var rest_id := str(plan.get("restaurant_id", "")).strip_edges()
@@ -341,8 +353,8 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 
 				var picked_sources_val = plan.get("picked_sources", null)
 				if picked_sources_val is Array:
-					var bonus_read := DrinksProcurementClass.get_drinks_per_source_bonus_from_milestones(_old_state, command.actor)
-					var delta_read := DrinksProcurementClass.get_drinks_per_source_delta_for_employee_from_milestones(_old_state, command.actor, employee_type)
+					var bonus_read := DrinksProcurementClass.get_drinks_per_source_bonus_from_milestones(preview_state, command.actor)
+					var delta_read := DrinksProcurementClass.get_drinks_per_source_delta_for_employee_from_milestones(preview_state, command.actor, employee_type)
 					if bonus_read.ok and delta_read.ok:
 						var drinks_per_source := DRINKS_PER_SOURCE + int(bonus_read.value) + int(delta_read.value)
 						for src_val in picked_sources_val:

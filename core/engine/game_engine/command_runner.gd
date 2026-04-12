@@ -2,6 +2,7 @@
 extends RefCounted
 
 const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
+const ReplayClass = preload("res://core/engine/game_engine/replay.gd")
 const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 
 const EVENT_BUILD_PROVIDER_PATH_SETTING = "fcm/command_runner_event_build_provider_path"
@@ -271,12 +272,12 @@ static func drain_auto_advances(engine: GameEngine, state_in: GameState) -> Resu
 static func _should_force_execute(engine: GameEngine, command: Command, is_replay: bool) -> bool:
 	if engine == null or command == null:
 		return false
+	if is_replay:
+		return ReplayClass.should_force_execute_in_replay(command, engine.state)
 	if OS.has_feature("release"):
 		return false
 	if not _is_force_execute_requested(command):
 		return false
-	if is_replay:
-		return true
 	return _is_debug_mode(engine) and _force_execute_commands_enabled(engine)
 
 static func _is_force_execute_requested(command: Command) -> bool:

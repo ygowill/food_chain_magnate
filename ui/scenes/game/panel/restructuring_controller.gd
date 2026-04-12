@@ -8,6 +8,7 @@ const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const UiZClass = preload("res://ui/utils/ui_z.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
 
 var _scene = null
 var _execute_command: Callable = Callable()
@@ -161,7 +162,7 @@ func on_hand_card_dropped(employee_id: String, target: Control) -> void:
 				var submitted_flag = submitted.get(actor_id, null)
 				if submitted_flag == null and submitted.has(str(actor_id)):
 					submitted_flag = submitted.get(str(actor_id), null)
-				if bool(submitted_flag):
+				if bool(submitted_flag) and not OnlinePhaseInteractionClass.can_player_reopen_online_restructuring(state, actor_id):
 					return
 
 	# 放到公司结构（经理下属区）
@@ -378,7 +379,7 @@ func _get_restructuring_actor_context() -> Dictionary:
 				var submitted_flag = submitted.get(actor_id, null)
 				if submitted_flag == null and submitted.has(str(actor_id)):
 					submitted_flag = submitted.get(str(actor_id), null)
-				if bool(submitted_flag):
+				if bool(submitted_flag) and not OnlinePhaseInteractionClass.can_player_reopen_online_restructuring(state, actor_id):
 					return {}
 
 	var player := state.get_player(actor_id)
@@ -668,7 +669,7 @@ func _on_restructuring_modal_auto_fill_requested() -> void:
 
 	# 已提交后禁止填充
 	var submitted := _get_restructuring_submitted_map(state)
-	if not submitted.is_empty() and _is_restructuring_player_submitted(submitted, actor_id):
+	if not submitted.is_empty() and _is_restructuring_player_submitted(submitted, actor_id) and not OnlinePhaseInteractionClass.can_player_reopen_online_restructuring(state, actor_id):
 		return
 
 	var player := state.get_player(actor_id)
@@ -894,6 +895,9 @@ func _sync_restructuring_modal_ui(state: GameState, view_player_id: int) -> void
 	var confirm_enabled := not view_submitted
 	var status_text := ""
 	var view_status := "已提交" if view_submitted else "未提交"
+	var reopen_allowed := OnlinePhaseInteractionClass.can_player_reopen_online_restructuring(state, view_player_id)
+	if view_submitted and reopen_allowed:
+		view_status = "已提交（修改后自动撤销提交）"
 
 	if is_online:
 		if local_pid < 0:
@@ -917,7 +921,8 @@ func _sync_restructuring_modal_ui(state: GameState, view_player_id: int) -> void
 	if _restructuring_modal.has_method("set_confirm_enabled"):
 		_restructuring_modal.call("set_confirm_enabled", confirm_enabled)
 	if _restructuring_modal.has_method("set_auto_fill_enabled"):
-		_restructuring_modal.call("set_auto_fill_enabled", confirm_enabled and show_content)
+		var auto_fill_enabled := show_content and (confirm_enabled or reopen_allowed)
+		_restructuring_modal.call("set_auto_fill_enabled", auto_fill_enabled)
 	if _restructuring_modal.has_method("set_status_text"):
 		_restructuring_modal.call("set_status_text", status_text)
 

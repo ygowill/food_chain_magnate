@@ -6,6 +6,7 @@ class_name RestructureEmployeeAction
 extends ActionExecutor
 
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 func _init() -> void:
@@ -31,7 +32,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 			var r: Dictionary = r_val
 			if r.has("submitted") and (r["submitted"] is Dictionary):
 				var submitted: Dictionary = r["submitted"]
-				if bool(submitted.get(command.actor, false)):
+				var submitted_flag = submitted.get(command.actor, null)
+				if submitted_flag == null and submitted.has(str(command.actor)):
+					submitted_flag = submitted.get(str(command.actor), null)
+				if bool(submitted_flag) and not OnlinePhaseInteractionClass.can_player_reopen_online_restructuring(state, command.actor):
 					return Result.failure("已提交重组，无法再调整员工")
 
 	var employee_id_r := require_string_param(command, "employee_id")
@@ -92,6 +96,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var to_reserve: bool = bool(payload.get("to_reserve", false))
 	if not to_reserve:
 		return Result.success({"employee_id": employee_id, "to_reserve": false, "no_op": true})
+
+	OnlinePhaseInteractionClass.clear_player_restructuring_submission_for_online_reopen(state, command.actor)
 
 	var player_read := PlayerStateAccessClass.require_player(state, command.actor, "restructure_employee")
 	if not player_read.ok:

@@ -3,6 +3,7 @@ class_name MatchFinalizeParticipantLogoPayloadTest
 extends RefCounted
 
 const ServerLogicClass = preload("res://autoload/net_client/server.gd")
+const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 
 
 class _DummyRoom:
@@ -10,6 +11,7 @@ class _DummyRoom:
 
 	var _seat_profile_by_seat_index: Dictionary = {}
 	var _user_id_by_seat_index: Dictionary = {}
+	var game_engine = null
 
 
 class _DummyState:
@@ -23,6 +25,9 @@ static func run() -> Result:
 	if not r.ok:
 		return r
 	r = _test_sparse_seat_indices_fall_back_to_player_order()
+	if not r.ok:
+		return r
+	r = _test_participant_stats_payload_uses_rebuilt_events()
 	if not r.ok:
 		return r
 	return Result.success()
@@ -109,4 +114,37 @@ static func _test_sparse_seat_indices_fall_back_to_player_order() -> Result:
 		return Result.failure("seat=1 应映射为 winner_player_id=0 的获胜者，实际: %s" % str(participants[0]))
 	if str(Dictionary(participants[1]).get("result", "")) != "lose":
 		return Result.failure("seat=3 应映射为失败者，实际: %s" % str(participants[1]))
+	return Result.success()
+
+static func _test_participant_stats_payload_uses_rebuilt_events() -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, 12345)
+	if not init.ok:
+		return Result.failure("stats payload 初始化失败: %s" % init.error)
+	var setup_r := TestPhaseUtilsClass.complete_setup(engine)
+	if not setup_r.ok:
+		return Result.failure("stats payload complete_setup 失败: %s" % setup_r.error)
+
+	var room := _DummyRoom.new()
+	room.game_engine = engine
+	room._seat_profile_by_seat_index = {
+		0: {"name": "P1", "restaurant_logo_id": 0},
+		1: {"name": "P2", "restaurant_logo_id": 1},
+	}
+	room._user_id_by_seat_index = {
+		0: "u1",
+		1: "u2",
+	}
+
+	var state := engine.get_state()
+	var payload_0: Dictionary = ServerLogicClass.new()._build_participant_score_payload(room, state, 0)
+	var payload_1: Dictionary = ServerLogicClass.new()._build_participant_score_payload(room, state, 1)
+	var stats_0 := Dictionary(payload_0.get("stats", {}))
+	var stats_1 := Dictionary(payload_1.get("stats", {}))
+	var metrics_0 := Dictionary(stats_0.get("metrics", {}))
+	var metrics_1 := Dictionary(stats_1.get("metrics", {}))
+	if int(metrics_0.get("restaurant_built", 0)) <= 0:
+		return Result.failure("player0 stats 应统计 setup 放置餐厅，实际: %s" % str(stats_0))
+	if int(metrics_1.get("restaurant_built", 0)) <= 0:
+		return Result.failure("player1 stats 应统计 setup 放置餐厅，实际: %s" % str(stats_1))
 	return Result.success()

@@ -384,6 +384,8 @@ func _on_fire_employees(items: Array) -> void:
 				continue
 			_execute_command.call(Command.create("fire", current_player_id, {"employee_id": emp_id2}))
 
+	if _refresh_ui.is_valid():
+		_refresh_ui.call()
 	if is_instance_valid(payday_panel):
 		show_payday_panel()
 

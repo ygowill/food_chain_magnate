@@ -2,6 +2,7 @@ class_name FridgeKeepModalUiTest
 extends RefCounted
 
 const ModalScene: PackedScene = preload("res://modules/base_rules/ui/components/modal_panel/fridge_keep_modal.tscn")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 static func run(seed_val: int = 12345) -> Result:
 	var tree = Engine.get_main_loop()
@@ -54,6 +55,52 @@ static func run(seed_val: int = 12345) -> Result:
 
 	if modal.has_method("setup"):
 		modal.call("setup", state, 0)
+
+	var info_label: Label = modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/InfoLabel")
+	var summary_label: Label = modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/SummaryLabel")
+	var items_vbox: VBoxContainer = modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/ItemsVBox")
+	if not info_label.has_theme_color_override("font_color"):
+		await _cleanup_modal(modal)
+		return _finish(Result.failure("InfoLabel 应应用深色主题文字覆盖"), modal, engine)
+	if info_label.get_theme_color("font_color") != UiStylesClass.COLOR_TEXT_PRIMARY:
+		await _cleanup_modal(modal)
+		return _finish(Result.failure("InfoLabel 字体颜色应为深色主题主文字，实际: %s" % str(info_label.get_theme_color("font_color"))), modal, engine)
+	if not summary_label.has_theme_color_override("font_color"):
+		await _cleanup_modal(modal)
+		return _finish(Result.failure("SummaryLabel 应应用深色主题文字覆盖"), modal, engine)
+	if items_vbox.get_child_count() <= 0:
+		await _cleanup_modal(modal)
+		return _finish(Result.failure("ItemsVBox 应至少生成一行库存项"), modal, engine)
+	var first_row := items_vbox.get_child(0)
+	if first_row == null or not is_instance_valid(first_row):
+		await _cleanup_modal(modal)
+		return _finish(Result.failure("库存项首行无效"), modal, engine)
+	var row_box := first_row as HBoxContainer
+	if row_box == null or row_box.get_child_count() < 3:
+		await _cleanup_modal(modal)
+		return _finish(Result.failure("库存项行结构不完整"), modal, engine)
+	var name_label := row_box.get_child(0) as Label
+	var count_label := row_box.get_child(1) as Label
+	var spin_box := row_box.get_child(2) as SpinBox
+	if name_label == null or not name_label.has_theme_color_override("font_color"):
+		await _cleanup_modal(modal)
+		return _finish(Result.failure("库存项名称应应用深色主题文字覆盖"), modal, engine)
+	if count_label == null or not count_label.has_theme_color_override("font_color"):
+		await _cleanup_modal(modal)
+		return _finish(Result.failure("库存项数量应应用主题文字覆盖"), modal, engine)
+	if spin_box == null:
+		await _cleanup_modal(modal)
+		return _finish(Result.failure("库存项缺少 SpinBox"), modal, engine)
+	var line_edit := spin_box.get_line_edit()
+	if line_edit == null or not is_instance_valid(line_edit):
+		await _cleanup_modal(modal)
+		return _finish(Result.failure("SpinBox 应包含可样式化的 LineEdit"), modal, engine)
+	if not line_edit.has_theme_color_override("font_color"):
+		await _cleanup_modal(modal)
+		return _finish(Result.failure("SpinBox 输入框应应用主题文字颜色"), modal, engine)
+	if not line_edit.has_theme_stylebox_override("normal"):
+		await _cleanup_modal(modal)
+		return _finish(Result.failure("SpinBox 输入框应应用主题输入框样式"), modal, engine)
 
 	if modal is ModalPanelBase:
 		var mb_ready: ModalPanelBase = modal

@@ -3,8 +3,10 @@
 class_name GamePanelWorkingTrainController
 extends RefCounted
 
+const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const TrainActionClass = preload("res://gameplay/actions/train_action.gd")
 const TrainPanelScene = preload("res://ui/components/train_panel/train_panel.tscn")
 
 var _scene = null
@@ -96,6 +98,18 @@ func _refresh_for_state(state: GameState) -> void:
 					if active_count > 0 and reserve_count <= 0:
 						requires_same_color[str(emp_id)] = true
 
+		sources = _filter_sources_with_valid_targets(state, actor_id, sources)
+		var filtered_requires_same_color := {}
+		for emp_id in requires_same_color.keys():
+			if sources.has(emp_id):
+				filtered_requires_same_color[str(emp_id)] = bool(requires_same_color.get(emp_id, false))
+		requires_same_color = filtered_requires_same_color
+		var filtered_badges := {}
+		for emp_id in badges.keys():
+			if sources.has(emp_id):
+				filtered_badges[str(emp_id)] = str(badges.get(emp_id, ""))
+		badges = filtered_badges
+
 		if train_panel.has_method("set_source_requires_same_color"):
 			train_panel.set_source_requires_same_color(requires_same_color)
 		if train_panel.has_method("set_source_badges"):
@@ -133,6 +147,87 @@ func _build_employee_type_counts(values: Array) -> Dictionary:
 			continue
 		counts[emp_id] = int(counts.get(emp_id, 0)) + 1
 	return counts
+
+func _filter_sources_with_valid_targets(state: GameState, actor_id: int, sources: Dictionary) -> Dictionary:
+	var filtered := {}
+	if state == null:
+		return filtered
+
+	for key in sources.keys():
+		if not (key is String):
+			continue
+		var emp_id: String = str(key)
+		if emp_id.is_empty():
+			continue
+		var count: int = int(sources.get(key, 0))
+		if count <= 0:
+			continue
+		if _source_has_valid_train_target(state, actor_id, emp_id):
+			filtered[emp_id] = count
+
+	return filtered
+
+func _source_has_valid_train_target(state: GameState, actor_id: int, from_employee: String) -> bool:
+	if state == null or from_employee.is_empty():
+		return false
+
+	var max_steps := int(EmployeeRulesClass.get_max_train_steps_for_single_employee_for_working(state, actor_id))
+	if max_steps <= 0:
+		return false
+
+	var targets := _collect_reachable_train_targets(from_employee, max_steps)
+	if targets.is_empty():
+		return false
+
+	var action := TrainActionClass.new()
+	for target in targets:
+		var validate_result := action.validate(state, Command.create("train", actor_id, {
+			"from_employee": from_employee,
+			"to_employee": target
+		}))
+		if validate_result.ok:
+			return true
+
+	return false
+
+func _collect_reachable_train_targets(from_employee: String, max_steps: int) -> Array[String]:
+	var targets: Array[String] = []
+	if from_employee.is_empty() or max_steps <= 0 or not EmployeeRegistryClass.is_loaded():
+		return targets
+
+	var visited := {}
+	visited[from_employee] = 0
+	var queue: Array[String] = [from_employee]
+	var qi := 0
+
+	while qi < queue.size():
+		var cur := queue[qi]
+		qi += 1
+		var dist := int(visited.get(cur, 0))
+		if dist >= max_steps:
+			continue
+
+		var def_val = EmployeeRegistryClass.get_def(cur)
+		if def_val == null or not (def_val is EmployeeDef):
+			continue
+		var def: EmployeeDef = def_val
+
+		for nxt_val in def.train_to:
+			var nxt: String = str(nxt_val)
+			if nxt.is_empty():
+				continue
+			if visited.has(nxt):
+				continue
+			var ndist := dist + 1
+			if ndist > max_steps:
+				continue
+
+			visited[nxt] = ndist
+			queue.append(nxt)
+			targets.append(nxt)
+
+	targets.sort()
+	return targets
 
 func _read_immediate_train_pending_sources(state: GameState, player_id: int) -> Dictionary:
 	var sources := {}

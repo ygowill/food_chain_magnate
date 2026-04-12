@@ -150,11 +150,11 @@ static func infer_current_player_turn_start_command_index_by_replay(
 		if executor == null:
 			return Result.failure("回放时找不到执行器: %s" % str(cmd.action_id)).with_warnings(warnings)
 
-		var force_execute := ReplayClass.should_force_execute_in_replay(cmd)
+		var force_execute := ReplayClass.should_force_execute_in_replay(cmd, replay_state)
 		if force_execute and executor.requires_actor:
-			var current_player_id := replay_state.get_current_player_id()
-			if cmd.actor != current_player_id:
-				return Result.failure("回放强制命令 #%d actor 非当前玩家: actor=%d current=%d" % [i, cmd.actor, current_player_id]).with_warnings(warnings)
+			var count := replay_state.players.size()
+			if cmd.actor < 0 or cmd.actor >= count:
+				return Result.failure("回放强制命令 #%d actor 超出范围: actor=%d players=%d" % [i, cmd.actor, count]).with_warnings(warnings)
 
 		var step_result := executor.compute_new_state_force(replay_state, cmd) if force_execute else executor.compute_new_state(replay_state, cmd)
 		if not step_result.ok:

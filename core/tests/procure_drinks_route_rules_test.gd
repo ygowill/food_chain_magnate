@@ -17,6 +17,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not truck_distance_plus_one.ok:
 		return truck_distance_plus_one
 
+	var cart_operator_same_turn_bonus := _run_cart_operator_same_turn_distance_bonus(action, player_count, seed_val)
+	if not cart_operator_same_turn_bonus.ok:
+		return cart_operator_same_turn_bonus
+
 	var air_result := _run_air_route_rules(action, player_count, seed_val)
 	if not air_result.ok:
 		return air_result
@@ -30,6 +34,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		"seed": seed_val,
 		"truck": truck_result.value,
 		"truck_distance_plus_one": truck_distance_plus_one.value,
+		"cart_operator_same_turn_bonus": cart_operator_same_turn_bonus.value,
 		"air": air_result.value,
 		"errand_boy": errand_result.value,
 	})
@@ -174,6 +179,84 @@ static func _run_truck_distance_plus_one(action: ProcureDrinksAction, player_cou
 	return Result.success({
 		"error_without_bonus": vr.error,
 		"inventory": inv
+	})
+
+static func _run_cart_operator_same_turn_distance_bonus(action: ProcureDrinksAction, player_count: int, seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+	var state: GameState = engine.get_state().duplicate_state()
+	_force_turn_order(state, player_count)
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
+
+	var actor := state.get_current_player_id()
+	state.players[actor]["employees"].append("cart_operator")
+
+	var map_result := _build_cart_operator_distance_plus_one_test_map(actor)
+	if not map_result.ok:
+		return map_result
+	state.map = map_result.value
+	RoadGraphCacheClass.invalidate_road_graph(state)
+
+	var route: Array = []
+	for x in range(20):
+		route.append([x, 1])
+
+	var cmd := Command.create("procure_drinks", actor, {
+		"employee_type": "cart_operator",
+		"restaurant_id": "rest_0",
+		"route": route,
+		"selected_sources": [[19, 0]]
+	})
+
+	if state.players[actor].get("milestones", []).has("first_cart_operator"):
+		return Result.failure("测试前不应已拥有 first_cart_operator")
+
+	var vr := action.validate(state, cmd)
+	if not vr.ok:
+		return Result.failure("首次使用 cart_operator 时应在当回合获得距离+1并允许路线，但失败: %s" % vr.error)
+	if state.players[actor].get("milestones", []).has("first_cart_operator"):
+		return Result.failure("validate 不应直接修改原状态里的里程碑")
+
+	var before := _sum_drinks(state.players[actor].get("inventory", {}))
+	var exec := action.compute_new_state(state, cmd)
+	if not exec.ok:
+		return Result.failure("首次使用 cart_operator 的采购应成功，但失败: %s" % exec.error)
+	var new_state: GameState = exec.value
+	var inv: Dictionary = new_state.players[actor].get("inventory", {})
+	var after := _sum_drinks(inv)
+	if after != before + 2:
+		return Result.failure("首次使用 cart_operator 后应获得 2 瓶饮品，实际增量: %d" % (after - before))
+	if not new_state.players[actor].get("milestones", []).has("first_cart_operator"):
+		return Result.failure("首次使用 cart_operator 后应立即获得 first_cart_operator")
+
+	var events := action.generate_events(state, new_state, cmd)
+	var found := false
+	for e_val in events:
+		if not (e_val is Dictionary):
+			continue
+		var e: Dictionary = e_val
+		if str(e.get("type", "")) != EventBus.EventType.DRINKS_PROCURED:
+			continue
+		var data_val = e.get("data", null)
+		if not (data_val is Dictionary):
+			return Result.failure("cart_operator drinks_procured.data 类型错误（期望 Dictionary）")
+		var data: Dictionary = data_val
+		if str(data.get("restaurant_id", "")).strip_edges() != "rest_0":
+			return Result.failure("cart_operator 首回合事件应包含 restaurant_id=rest_0，实际: %s" % str(data))
+		var picked_val = data.get("picked_sources", null)
+		if not (picked_val is Array) or (picked_val as Array).is_empty():
+			return Result.failure("cart_operator 首回合事件应包含 picked_sources，实际: %s" % str(data))
+		found = true
+		break
+	if not found:
+		return Result.failure("cart_operator 首回合应生成 DRINKS_PROCURED 事件")
+
+	return Result.success({
+		"inventory": inv,
+		"milestones": new_state.players[actor].get("milestones", []),
 	})
 
 static func _run_air_route_rules(action: ProcureDrinksAction, player_count: int, seed_val: int) -> Result:
@@ -426,6 +509,44 @@ static func _build_truck_distance_plus_one_test_map(owner: int) -> Result:
 	return Result.success({
 		"grid_size": grid_size,
 		"tile_grid_size": Vector2i(5, 1),
+		"cells": cells,
+		"houses": {},
+		"restaurants": restaurants,
+		"drink_sources": drink_sources,
+		"next_house_number": 1,
+		"next_restaurant_id": 1,
+		"boundary_index": {},
+		"marketing_placements": {}
+	})
+
+static func _build_cart_operator_distance_plus_one_test_map(owner: int) -> Result:
+	var grid_size := Vector2i(20, 5) # 4 个板块宽（TILE_SIZE=5），制造 3 次边界跨越
+	var cells := _build_empty_cells(grid_size)
+
+	for x in range(grid_size.x):
+		var dirs: Array = []
+		if x > 0:
+			dirs.append("W")
+		if x < grid_size.x - 1:
+			dirs.append("E")
+		_set_road(cells, Vector2i(x, 1), dirs)
+
+	var restaurants := {
+		"rest_0": {
+			"restaurant_id": "rest_0",
+			"owner": owner,
+			"anchor_pos": Vector2i(0, 0),
+			"entrance_pos": Vector2i(0, 0)
+		}
+	}
+
+	var drink_sources := [
+		{"world_pos": Vector2i(19, 0), "type": "soda", "tile_id": "C"},
+	]
+
+	return Result.success({
+		"grid_size": grid_size,
+		"tile_grid_size": Vector2i(4, 1),
 		"cells": cells,
 		"houses": {},
 		"restaurants": restaurants,

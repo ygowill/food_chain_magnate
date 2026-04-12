@@ -89,7 +89,7 @@ static func build_full_impl(engine: GameEngine) -> Result:
 		if executor == null:
 			return Result.failure("StepTimelineBuild: 回放时找不到执行器: %s" % str(cmd.action_id)).with_warnings(warnings)
 
-		var force_execute := ReplayClass.should_force_execute_in_replay(cmd)
+		var force_execute := ReplayClass.should_force_execute_in_replay(cmd, replay_state)
 		if force_execute and executor.requires_actor:
 			# 强制模式：允许“非当前玩家”执行（与 CommandRunner._validate_force_execute / ReplayClass 语义一致），但仍需保证 actor 合法。
 			var count := replay_state.players.size()

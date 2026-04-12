@@ -6,6 +6,7 @@ extends ActionExecutor
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 
 func _init() -> void:
@@ -36,7 +37,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		var submitted_val = r.get("submitted", null)
 		if submitted_val is Dictionary:
 			var submitted: Dictionary = submitted_val
-			if bool(submitted.get(command.actor, false)):
+			var submitted_flag = submitted.get(command.actor, null)
+			if submitted_flag == null and submitted.has(str(command.actor)):
+				submitted_flag = submitted.get(str(command.actor), null)
+			if bool(submitted_flag) and not OnlinePhaseInteractionClass.can_player_reopen_online_restructuring(state, command.actor):
 				return Result.failure("已提交重组，无法再调整公司结构")
 
 	var slot_index_r := require_int_param(command, "manager_slot_index")
@@ -162,6 +166,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var context_read := _require_apply_context(state, command.actor, manager_slot_index)
 	if not context_read.ok:
 		return context_read
+	OnlinePhaseInteractionClass.clear_player_restructuring_submission_for_online_reopen(state, command.actor)
 	var context: Dictionary = context_read.value
 	var player: Dictionary = context.get("player", {})
 	var employees: Array = context.get("employees", [])

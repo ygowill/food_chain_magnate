@@ -75,7 +75,7 @@ static func rewind_to_command(
 		if executor == null:
 			return Result.failure("回放时找不到执行器: %s" % cmd.action_id)
 
-		var force_execute := should_force_execute_in_replay(cmd)
+		var force_execute := should_force_execute_in_replay(cmd, replay_state)
 		if force_execute and executor.requires_actor:
 			# 强制模式：允许“非当前玩家”执行（与 CommandRunner._validate_force_execute 语义一致），但仍需保证 actor 合法。
 			var count := replay_state.players.size()
@@ -140,7 +140,7 @@ static func full_replay(
 		if executor == null:
 			return Result.failure("重放时找不到执行器: %s" % cmd.action_id)
 
-		var force_execute := should_force_execute_in_replay(cmd)
+		var force_execute := should_force_execute_in_replay(cmd, replay_state)
 		if force_execute and executor.requires_actor:
 			# 强制模式：允许“非当前玩家”执行（与 CommandRunner._validate_force_execute 语义一致），但仍需保证 actor 合法。
 			var count := replay_state.players.size()
@@ -166,14 +166,17 @@ static func full_replay(
 		"current_command_index": command_history.size() - 1
 	}).with_warnings(all_warnings)
 
-static func should_force_execute_in_replay(command: Command) -> bool:
+static func should_force_execute_in_replay(command: Command, replay_state: GameState = null) -> bool:
 	if command == null:
 		return false
-	if OS.has_feature("release"):
+	if not OS.has_feature("release"):
+		if command.metadata is Dictionary and bool(Dictionary(command.metadata).get("debug_force", false)):
+			return true
+	if replay_state == null:
 		return false
-	if not (command.metadata is Dictionary):
+	if command.actor < 0 or command.actor >= replay_state.players.size():
 		return false
-	return bool(Dictionary(command.metadata).get("debug_force", false))
+	return int(command.actor) != int(replay_state.get_current_player_id())
 
 static func _require_checkpoint_rng_calls(checkpoint: Dictionary, path: String) -> Result:
 	if not (checkpoint is Dictionary):
