@@ -7,6 +7,7 @@ const EmployeeRoleColorsClass = preload("res://ui/visual/employee_role_colors.gd
 const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
 
 signal card_clicked(employee_id: String)
+signal card_double_clicked(employee_id: String)
 signal card_drag_started(employee_id: String)
 signal card_drag_ended(employee_id: String, drop_position: Vector2)
 
@@ -634,6 +635,13 @@ func _draw() -> void:
 	draw_colored_polygon(points, base_color)
 
 func _on_gui_input(event: InputEvent) -> void:
+	if UiPointerInputClass.is_primary_double_press(event):
+		_pointer_pressed = true
+		_drag_start_pos = UiPointerInputClass.get_position(event)
+		_dragging = false
+		card_double_clicked.emit(employee_id)
+		return
+
 	if UiPointerInputClass.is_primary_press(event):
 		_pointer_pressed = true
 		_drag_start_pos = UiPointerInputClass.get_position(event)

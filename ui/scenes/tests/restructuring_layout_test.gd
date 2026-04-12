@@ -9,6 +9,7 @@ extends RefCounted
 const RestructuringModalScene = preload("res://ui/components/modal_panel/restructuring_modal.tscn")
 const HandAreaScene = preload("res://ui/components/hand_area/hand_area.tscn")
 const CompanyStructureScene = preload("res://ui/components/company_structure/company_structure.tscn")
+const RestructuringControllerClass = preload("res://ui/scenes/game/panel/restructuring_controller.gd")
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 
@@ -24,6 +25,40 @@ static func run() -> Result:
 	var manager_id := _find_employee_with_manager_slots(5)
 	if manager_id.is_empty():
 		return Result.failure("找不到 manager_slots>=5 的员工（用于测试下属槽多行布局）")
+	var worker_id := _find_non_manager_employee()
+	if worker_id.is_empty():
+		return Result.failure("找不到普通员工（用于测试重组双击行为）")
+
+	var restructuring_controller = RestructuringControllerClass.new(null, Callable(), Callable(), Callable())
+	var direct_target: Dictionary = restructuring_controller._find_auto_structure_target({
+		"employees": ["ceo"],
+		"reserve_employees": [worker_id],
+		"company_structure": {"ceo_slots": 1, "structure": []},
+	}, worker_id)
+	if str(direct_target.get("kind", "")) != "direct" or int(direct_target.get("slot_index", -1)) != 0:
+		return Result.failure("重组双击自动放置应优先进入直属槽，实际: %s" % str(direct_target))
+
+	var report_target: Dictionary = restructuring_controller._find_auto_structure_target({
+		"employees": ["ceo", manager_id],
+		"reserve_employees": [worker_id],
+		"company_structure": {
+			"ceo_slots": 1,
+			"structure": [{"employee_id": manager_id, "reports": []}],
+		},
+	}, worker_id)
+	if str(report_target.get("kind", "")) != "report" or int(report_target.get("manager_slot_index", -1)) != 0:
+		return Result.failure("重组双击自动放置应在直属槽占满后进入经理下属槽，实际: %s" % str(report_target))
+
+	var no_target: Dictionary = restructuring_controller._find_auto_structure_target({
+		"employees": ["ceo", worker_id],
+		"reserve_employees": [],
+		"company_structure": {
+			"ceo_slots": 1,
+			"structure": [{"employee_id": worker_id, "reports": []}],
+		},
+	}, worker_id)
+	if not no_target.is_empty():
+		return Result.failure("已在公司树中的员工不应再得到新的双击自动放置目标，实际: %s" % str(no_target))
 
 	var modal = RestructuringModalScene.instantiate()
 	var hand = HandAreaScene.instantiate()
@@ -121,6 +156,32 @@ static func run() -> Result:
 		_safe_free(company)
 		return Result.failure("HandArea.reserve_section 应可见（重组模式）")
 
+	var hand_active: Array[String] = ["ceo"]
+	var hand_reserve: Array[String] = [worker_id]
+	var hand_busy: Array[String] = []
+	hand.set_employees(hand_active, hand_reserve, hand_busy)
+	var hand_double_click_holder := {"employee_id": ""}
+	ha.card_double_clicked.connect(func(employee_id: String) -> void:
+		hand_double_click_holder["employee_id"] = employee_id
+	)
+	var reserve_card = _find_card_in_container(ha.reserve_container, worker_id)
+	if reserve_card == null:
+		_safe_free(modal)
+		_safe_free(hand)
+		_safe_free(company)
+		return Result.failure("重组模式下未找到待命员工卡: %s" % worker_id)
+	var hand_double_event := InputEventMouseButton.new()
+	hand_double_event.button_index = MOUSE_BUTTON_LEFT
+	hand_double_event.pressed = true
+	hand_double_event.double_click = true
+	hand_double_event.position = Vector2(8, 8)
+	reserve_card.call("_on_gui_input", hand_double_event)
+	if str(hand_double_click_holder.get("employee_id", "")) != worker_id:
+		_safe_free(modal)
+		_safe_free(hand)
+		_safe_free(company)
+		return Result.failure("HandArea 未透传员工双击信号，实际: %s" % str(hand_double_click_holder.get("employee_id", "")))
+
 	# CompanyStructure：下属槽应为 GridContainer(4列)
 	var cap := 0
 	var def_val = EmployeeRegistryClass.get_def(manager_id)
@@ -199,6 +260,28 @@ static func run() -> Result:
 		_safe_free(company)
 		return Result.failure("reports grid 子节点数量=%d (期望 %d)" % [grid.get_child_count(), cap])
 
+	var company_double_click_holder := {"employee_id": ""}
+	(company as CompanyStructure).card_double_clicked.connect(func(employee_id: String) -> void:
+		company_double_click_holder["employee_id"] = employee_id
+	)
+	var direct_card = _find_direct_card(company as CompanyStructure, 0)
+	if direct_card == null:
+		_safe_free(modal)
+		_safe_free(hand)
+		_safe_free(company)
+		return Result.failure("CompanyStructure 未找到直属员工卡")
+	var company_double_event := InputEventMouseButton.new()
+	company_double_event.button_index = MOUSE_BUTTON_LEFT
+	company_double_event.pressed = true
+	company_double_event.double_click = true
+	company_double_event.position = Vector2(8, 8)
+	direct_card.call("_on_gui_input", company_double_event)
+	if str(company_double_click_holder.get("employee_id", "")) != manager_id:
+		_safe_free(modal)
+		_safe_free(hand)
+		_safe_free(company)
+		return Result.failure("CompanyStructure 未透传员工双击信号，实际: %s" % str(company_double_click_holder.get("employee_id", "")))
+
 	# close：应恢复 HandArea display_mode
 	modal.close()
 	if str(hand.call("get_display_mode")) != "default":
@@ -223,6 +306,50 @@ static func _find_employee_with_manager_slots(min_slots: int) -> String:
 		if cap >= min_slots:
 			return str(def.id)
 	return ""
+
+static func _find_non_manager_employee() -> String:
+	var ids := EmployeeRegistryClass.get_all_ids()
+	for eid in ids:
+		var def_val = EmployeeRegistryClass.get_def(eid)
+		if not (def_val is EmployeeDef):
+			continue
+		var def: EmployeeDef = def_val
+		if str(def.id) == "ceo":
+			continue
+		if str(def.role) == "manager":
+			continue
+		if int(def.manager_slots) > 0:
+			continue
+		return str(def.id)
+	return ""
+
+static func _find_card_in_container(container: Node, employee_id: String):
+	if container == null or not is_instance_valid(container):
+		return null
+	for child in container.get_children():
+		if child is EmployeeCard and str((child as EmployeeCard).employee_id) == employee_id:
+			return child
+	return null
+
+static func _find_direct_card(company: CompanyStructure, slot_index: int):
+	if company == null or not is_instance_valid(company):
+		return null
+	if slot_index < 0:
+		return null
+	var manager_container := company.get_node_or_null("MarginContainer/VBoxContainer/ManagerRow/ManagerScroll/ManagerContainer")
+	if manager_container == null or slot_index >= manager_container.get_child_count():
+		return null
+	var col = manager_container.get_child(slot_index)
+	if not (col is VBoxContainer) or col.get_child_count() < 1:
+		return null
+	var direct_host = col.get_child(0)
+	if not (direct_host is CenterContainer) or direct_host.get_child_count() < 1:
+		return null
+	var slot = direct_host.get_child(0)
+	if slot == null or not is_instance_valid(slot) or slot.get_child_count() < 1:
+		return null
+	var card = slot.get_child(0)
+	return card if card is EmployeeCard else null
 
 static func _safe_free(node) -> void:
 	if node == null or not is_instance_valid(node):

@@ -66,20 +66,21 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return busy_read
 	var busy: Array = busy_read.value
 
-	if busy.has(employee_id):
-		return Result.failure("忙碌营销员不能在重组阶段被移动: %s" % employee_id)
-
 	if to_reserve:
 		if employees.has(employee_id):
 			return Result.success({"employee_id": employee_id, "to_reserve": true})
 		if reserve.has(employee_id):
 			return Result.success({"employee_id": employee_id, "to_reserve": true, "no_op": true})
+		if busy.has(employee_id):
+			return Result.failure("忙碌营销员不能在重组阶段被移动: %s" % employee_id)
 		return Result.failure("员工不在在岗区: %s" % employee_id)
 
 	if employees.has(employee_id):
 		return Result.success({"employee_id": employee_id, "to_reserve": false, "no_op": true})
 	if reserve.has(employee_id):
 		return Result.failure("不允许直接激活待命员工：请将员工放入公司结构以激活（employee_id=%s）" % employee_id)
+	if busy.has(employee_id):
+		return Result.failure("忙碌营销员不能在重组阶段被移动: %s" % employee_id)
 	return Result.failure("员工不属于当前玩家: %s" % employee_id)
 
 func _apply_changes(state: GameState, command: Command) -> Result:

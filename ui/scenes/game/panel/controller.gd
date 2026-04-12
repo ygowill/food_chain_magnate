@@ -81,8 +81,10 @@ func connect_signals(action_panel, action_flow_controls, turn_order_track, hand_
 	UiSignalHelpersClass.safe_connect(turn_order_track, "position_selected", _on_turn_order_position_selected)
 	UiSignalHelpersClass.safe_connect(hand_area, "cards_selected", _on_hand_cards_selected)
 	UiSignalHelpersClass.safe_connect(hand_area, "card_dropped", _on_hand_card_dropped)
+	UiSignalHelpersClass.safe_connect(hand_area, "card_double_clicked", _on_hand_card_double_clicked)
 	UiSignalHelpersClass.safe_connect(company_structure, "structure_changed", _on_company_structure_changed)
 	UiSignalHelpersClass.safe_connect(company_structure, "card_dropped", _on_hand_card_dropped)
+	UiSignalHelpersClass.safe_connect(company_structure, "card_double_clicked", _on_company_structure_card_double_clicked)
 
 	# 查看玩家（view_player）
 	if _scene != null:
@@ -830,6 +832,14 @@ func _on_hand_cards_selected(employee_ids: Array[String]) -> void:
 func _on_hand_card_dropped(employee_id: String, target: Control) -> void:
 	if _restructuring_controller != null and _restructuring_controller.has_method("on_hand_card_dropped"):
 		_restructuring_controller.on_hand_card_dropped(employee_id, target)
+
+func _on_hand_card_double_clicked(employee_id: String) -> void:
+	if _restructuring_controller != null and _restructuring_controller.has_method("on_hand_card_double_clicked"):
+		_restructuring_controller.on_hand_card_double_clicked(employee_id)
+
+func _on_company_structure_card_double_clicked(employee_id: String) -> void:
+	if _restructuring_controller != null and _restructuring_controller.has_method("on_company_structure_card_double_clicked"):
+		_restructuring_controller.on_company_structure_card_double_clicked(employee_id)
 
 func _on_company_structure_changed(new_structure: Dictionary) -> void:
 	GameLog.info("Game", "公司结构变更: %s" % str(new_structure))

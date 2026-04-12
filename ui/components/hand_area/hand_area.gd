@@ -5,6 +5,7 @@ extends Control
 
 signal cards_selected(employee_ids: Array[String])
 signal card_dropped(employee_id: String, target: Control)
+signal card_double_clicked(employee_id: String)
 
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
@@ -182,6 +183,7 @@ func _build_cards_for_container(employee_ids: Array[String], container: Control,
 			card.set_busy(true)
 
 		card.card_clicked.connect(_on_card_clicked)
+		card.card_double_clicked.connect(_on_card_double_clicked)
 		card.card_drag_started.connect(_on_card_drag_started.bind(card))
 		card.card_drag_ended.connect(_on_card_drag_ended.bind(card))
 
@@ -216,6 +218,9 @@ func _on_card_clicked(employee_id: String) -> void:
 
 	_update_selection_display()
 	cards_selected.emit(_selected_ids.duplicate())
+
+func _on_card_double_clicked(employee_id: String) -> void:
+	card_double_clicked.emit(employee_id)
 
 func _on_card_drag_started(employee_id: String, source_card: EmployeeCard) -> void:
 	_start_drag_visuals(employee_id, source_card)

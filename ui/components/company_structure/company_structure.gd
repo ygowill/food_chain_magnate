@@ -6,6 +6,7 @@ extends Control
 signal structure_changed(new_structure: Dictionary)
 signal slot_overflow_warning()
 signal card_dropped(employee_id: String, target: Control)
+signal card_double_clicked(employee_id: String)
 
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
@@ -236,6 +237,7 @@ func _fill_existing_structure(structure: Array) -> void:
 				card.setup(emp_def)
 			else:
 				card.setup({"id": direct_id, "name": direct_id})
+			card.card_double_clicked.connect(_on_card_double_clicked)
 			card.card_drag_started.connect(_on_direct_card_drag_started.bind(card))
 			card.card_drag_ended.connect(_on_direct_card_drag_ended.bind(card))
 			slot.place_card(card)
@@ -296,6 +298,7 @@ func _fill_existing_structure(structure: Array) -> void:
 					rep_card.setup(rep_def)
 				else:
 					rep_card.setup({"id": rep_id2, "name": rep_id2})
+				rep_card.card_double_clicked.connect(_on_card_double_clicked)
 				rep_card.card_drag_started.connect(_on_direct_card_drag_started.bind(rep_card))
 				rep_card.card_drag_ended.connect(_on_direct_card_drag_ended.bind(rep_card))
 				report_slot.place_card(rep_card)
@@ -440,6 +443,9 @@ func _on_direct_card_drag_started(employee_id: String, source_card: EmployeeCard
 	if emp_id.is_empty() or emp_id == "ceo":
 		return
 	_start_drag_visuals(emp_id, source_card)
+
+func _on_card_double_clicked(employee_id: String) -> void:
+	card_double_clicked.emit(employee_id)
 
 func _on_direct_card_drag_ended(employee_id: String, drop_position: Vector2, _source_card: EmployeeCard) -> void:
 	if not _drag_enabled:

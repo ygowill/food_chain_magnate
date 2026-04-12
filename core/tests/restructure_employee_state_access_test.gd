@@ -18,7 +18,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_apply_changes_fails_fast_on_invalid_player_employees_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 4})
+	r = _test_validate_allows_active_employee_when_same_id_is_busy(player_count, seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 5})
 
 static func _build_restructuring_state(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -123,4 +126,27 @@ static func _test_apply_changes_fails_fast_on_invalid_player_employees_without_p
 		return Result.failure("错误信息应包含 player[0].employees，实际: %s" % err)
 	if str(state.players[0]) != player_before:
 		return Result.failure("失败时不应提前改写 player")
+	return Result.success()
+
+static func _test_validate_allows_active_employee_when_same_id_is_busy(player_count: int, seed_val: int) -> Result:
+	var built := _build_restructuring_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.players[0]["employees"] = ["marketing_trainee"]
+	state.players[0]["reserve_employees"] = []
+	state.players[0]["busy_marketers"] = ["marketing_trainee"]
+	state.players[0]["company_structure"] = {
+		"ceo_slots": 1,
+		"structure": [
+			{"employee_id": "marketing_trainee", "reports": []},
+		],
+	}
+	var action = ActionClass.new()
+	var result := action._validate_specific(state, Command.create("restructure_employee", 0, {
+		"employee_id": "marketing_trainee",
+		"to_reserve": true,
+	}))
+	if not result.ok:
+		return Result.failure("active 中存在可用副本时不应被 busy 同名副本拦截，实际: %s" % result.error)
 	return Result.success()

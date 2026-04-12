@@ -40,6 +40,13 @@ static func run() -> Result:
 	if disconnected_card == null:
 		_cleanup_panel(panel)
 		return Result.failure("未找到 player_id=1 的概览卡")
+	var employees_scroll = panel.get_node_or_null("MarginContainer/MainVBox/DualColumnArea/LeftColumn/EmployeesScroll")
+	if employees_scroll == null:
+		_cleanup_panel(panel)
+		return Result.failure("未找到 EmployeesScroll")
+	if int(employees_scroll.get("vertical_scroll_mode")) != int(ScrollContainer.SCROLL_MODE_AUTO):
+		_cleanup_panel(panel)
+		return Result.failure("EmployeesScroll.vertical_scroll_mode 应为 AUTO，实际: %s" % str(employees_scroll.get("vertical_scroll_mode")))
 	if str(disconnected_card.get_meta("status_kind", "")) != "disconnected":
 		_cleanup_panel(panel)
 		return Result.failure("掉线玩家概览卡状态错误: %s" % str(disconnected_card.get_meta("status_kind", null)))

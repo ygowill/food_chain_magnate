@@ -280,6 +280,228 @@ func on_hand_card_dropped(employee_id: String, target: Control) -> void:
 	if not move_r.ok:
 		GameLog.warn("Game", "移动员工失败: %s" % move_r.error)
 
+func on_hand_card_double_clicked(employee_id: String) -> void:
+	var emp_id := str(employee_id).strip_edges()
+	if emp_id.is_empty() or emp_id == "ceo":
+		return
+
+	var context := _get_restructuring_actor_context()
+	if context.is_empty():
+		return
+	var actor_id := int(context.get("actor_id", -1))
+	var player: Dictionary = context.get("player", {})
+	if actor_id < 0 or player.is_empty():
+		return
+
+	var target := _find_auto_structure_target(player, emp_id)
+	if target.is_empty():
+		return
+
+	var kind := str(target.get("kind", "")).strip_edges()
+	if kind == "direct":
+		var direct_r: Result = _execute_command.call(Command.create("set_company_structure_direct", actor_id, {
+			"slot_index": int(target.get("slot_index", -1)),
+			"employee_id": emp_id,
+		}))
+		if not direct_r.ok:
+			GameLog.warn("Game", "双击放入公司结构失败（直属槽）: %s" % direct_r.error)
+		return
+
+	if kind == "report":
+		var report_r: Result = _execute_command.call(Command.create("set_company_structure_report", actor_id, {
+			"manager_slot_index": int(target.get("manager_slot_index", -1)),
+			"employee_id": emp_id,
+		}))
+		if not report_r.ok:
+			GameLog.warn("Game", "双击放入公司结构失败（下属槽）: %s" % report_r.error)
+
+func on_company_structure_card_double_clicked(employee_id: String) -> void:
+	var emp_id := str(employee_id).strip_edges()
+	if emp_id.is_empty() or emp_id == "ceo":
+		return
+
+	var context := _get_restructuring_actor_context()
+	if context.is_empty():
+		return
+	var actor_id := int(context.get("actor_id", -1))
+	if actor_id < 0:
+		return
+
+	var move_r: Result = _execute_command.call(Command.create("restructure_employee", actor_id, {
+		"employee_id": emp_id,
+		"to_reserve": true
+	}))
+	if not move_r.ok:
+		GameLog.warn("Game", "双击移回待命失败: %s" % move_r.error)
+
+func _get_restructuring_actor_context() -> Dictionary:
+	if _scene == null or _scene.get("game_engine") == null:
+		return {}
+
+	var engine = _scene.get("game_engine")
+	if engine == null or not (engine is GameEngine):
+		return {}
+
+	var state: GameState = engine.get_state()
+	if state == null or state.phase != DefsClass.PHASE_RESTRUCTURING:
+		return {}
+
+	var stored_view_id := -1
+	if _get_view_player_id.is_valid():
+		var v = _get_view_player_id.call()
+		if v is int:
+			stored_view_id = int(v)
+		elif v is float:
+			var vf: float = float(v)
+			if vf == floor(vf):
+				stored_view_id = int(vf)
+
+	var actor_id := _get_effective_view_player_id(state, stored_view_id)
+	if actor_id < 0:
+		return {}
+
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		var local_pid := int(NetContext.local_player_id)
+		if local_pid < 0:
+			return {}
+		if actor_id != local_pid:
+			GameLog.warn("Game", "联机模式下只能调整自己的公司结构")
+			return {}
+
+	if state.round_state is Dictionary:
+		var r_val = state.round_state.get("restructuring", null)
+		if r_val is Dictionary:
+			var r: Dictionary = r_val
+			var submitted_val = r.get("submitted", null)
+			if submitted_val is Dictionary:
+				var submitted: Dictionary = submitted_val
+				var submitted_flag = submitted.get(actor_id, null)
+				if submitted_flag == null and submitted.has(str(actor_id)):
+					submitted_flag = submitted.get(str(actor_id), null)
+				if bool(submitted_flag):
+					return {}
+
+	var player := state.get_player(actor_id)
+	if player.is_empty():
+		return {}
+
+	return {
+		"state": state,
+		"actor_id": actor_id,
+		"player": player,
+	}
+
+func _find_auto_structure_target(player: Dictionary, employee_id: String) -> Dictionary:
+	var emp_id := str(employee_id).strip_edges()
+	if emp_id.is_empty() or emp_id == "ceo":
+		return {}
+
+	var normalize_read := _normalize_structure_for_restructuring(player)
+	if not normalize_read.ok:
+		return {}
+	var normalize_value = normalize_read.value
+	if not (normalize_value is Dictionary):
+		return {}
+	var normalized: Dictionary = normalize_value
+	var ceo_slots := int(normalized.get("ceo_slots", 0))
+	var structure_val = normalized.get("structure", null)
+	var structure: Array = structure_val if structure_val is Array else []
+	if ceo_slots <= 0 or structure.is_empty():
+		return {}
+
+	var owned_count := _count_employee_in_array(Array(player.get("employees", [])), emp_id)
+	owned_count += _count_employee_in_array(Array(player.get("reserve_employees", [])), emp_id)
+	if owned_count <= 0:
+		return {}
+	var assigned_count := _count_employee_in_structure(structure, emp_id)
+	if assigned_count >= owned_count:
+		return {}
+
+	for slot_index in range(ceo_slots):
+		var entry_val = structure[slot_index]
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
+		var direct_id := str(entry.get("employee_id", "")).strip_edges()
+		if direct_id.is_empty():
+			return {
+				"kind": "direct",
+				"slot_index": slot_index,
+			}
+
+	if _is_manager_employee(emp_id):
+		return {}
+
+	for manager_slot_index in range(ceo_slots):
+		var entry_val2 = structure[manager_slot_index]
+		if not (entry_val2 is Dictionary):
+			continue
+		var entry2: Dictionary = entry_val2
+		var manager_id := str(entry2.get("employee_id", "")).strip_edges()
+		if manager_id.is_empty():
+			continue
+		var cap := _get_employee_manager_slots(manager_id)
+		if cap <= 0:
+			continue
+
+		var report_count := 0
+		var reports_val = entry2.get("reports", null)
+		if reports_val is Array:
+			for rep_val in Array(reports_val):
+				if not (rep_val is String):
+					continue
+				var rep_id := str(rep_val).strip_edges()
+				if rep_id.is_empty() or rep_id == "ceo":
+					continue
+				report_count += 1
+				if report_count >= cap:
+					break
+
+		if report_count < cap:
+			return {
+				"kind": "report",
+				"manager_slot_index": manager_slot_index,
+			}
+
+	return {}
+
+func _normalize_structure_for_restructuring(player: Dictionary) -> Result:
+	var cs_val = player.get("company_structure", null)
+	if not (cs_val is Dictionary):
+		return Result.failure("player.company_structure 缺失或类型错误（期望 Dictionary）")
+	var cs: Dictionary = cs_val
+	var slots_raw = cs.get("ceo_slots", null)
+	if not (slots_raw is int) and not (slots_raw is float):
+		return Result.failure("player.company_structure.ceo_slots 类型错误（期望 int/float）")
+	if slots_raw is float and float(slots_raw) != floor(float(slots_raw)):
+		return Result.failure("player.company_structure.ceo_slots 必须为整数")
+	var ceo_slots := int(slots_raw)
+	if ceo_slots <= 0:
+		return Result.failure("player.company_structure.ceo_slots 无效: %d" % ceo_slots)
+
+	var structure_val = cs.get("structure", null)
+	var structure_any: Array = structure_val if structure_val is Array else []
+	var normalized: Array = []
+	for i in range(ceo_slots):
+		var entry := {
+			"employee_id": "",
+			"reports": [],
+		}
+		if i < structure_any.size():
+			var entry_val = structure_any[i]
+			if entry_val is Dictionary:
+				var src: Dictionary = entry_val
+				entry["employee_id"] = str(src.get("employee_id", "")).strip_edges()
+				var reports_src = src.get("reports", null)
+				if reports_src is Array:
+					entry["reports"] = Array(reports_src).duplicate()
+		normalized.append(entry)
+
+	return Result.success({
+		"ceo_slots": ceo_slots,
+		"structure": normalized,
+	})
+
 func _show_restructuring_modal(covered: Rect2) -> void:
 	if _scene == null:
 		return
@@ -461,14 +683,6 @@ func _on_restructuring_modal_auto_fill_requested() -> void:
 	if ceo_slots <= 0:
 		return
 
-	var busy_any: Array = Array(player.get("busy_marketers", []))
-	var busy := {}
-	for b in busy_any:
-		if b is String:
-			var bid := str(b).strip_edges()
-			if not bid.is_empty():
-				busy[bid] = true
-
 	var struct_any = cs.get("structure", null)
 	var structure: Array = struct_any if (struct_any is Array) else []
 	var direct_by_slot: Array[String] = []
@@ -502,8 +716,6 @@ func _on_restructuring_modal_auto_fill_requested() -> void:
 			continue
 		var rid := str(r).strip_edges()
 		if rid.is_empty() or rid == "ceo":
-			continue
-		if busy.has(rid):
 			continue
 		reserve_ids.append(rid)
 
@@ -749,3 +961,36 @@ func _is_manager_employee(employee_id: String) -> bool:
 			var slots := maxi(0, int(d.get("manager_slots", 0)))
 			return role == "manager" or slots > 0
 	return false
+
+func _count_employee_in_array(items: Array, employee_id: String) -> int:
+	var emp_id := str(employee_id).strip_edges()
+	if emp_id.is_empty():
+		return 0
+	var count := 0
+	for item in items:
+		if not (item is String):
+			continue
+		if str(item).strip_edges() == emp_id:
+			count += 1
+	return count
+
+func _count_employee_in_structure(structure: Array, employee_id: String) -> int:
+	var emp_id := str(employee_id).strip_edges()
+	if emp_id.is_empty():
+		return 0
+	var count := 0
+	for entry_val in structure:
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
+		if str(entry.get("employee_id", "")).strip_edges() == emp_id:
+			count += 1
+		var reports_val = entry.get("reports", null)
+		if not (reports_val is Array):
+			continue
+		for rep_val in Array(reports_val):
+			if not (rep_val is String):
+				continue
+			if str(rep_val).strip_edges() == emp_id:
+				count += 1
+	return count

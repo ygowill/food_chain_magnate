@@ -77,9 +77,9 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return busy_read
 	var busy: Array = busy_read.value
 
-	if busy.has(employee_id):
-		return Result.failure("忙碌营销员不能被放入公司结构: %s" % employee_id)
 	if not employees.has(employee_id) and not reserve.has(employee_id):
+		if busy.has(employee_id):
+			return Result.failure("忙碌营销员不能被放入公司结构: %s" % employee_id)
 		return Result.failure("员工不属于当前玩家: %s" % employee_id)
 
 	var cs: Dictionary = cs_read.value

@@ -31,7 +31,13 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_report_apply_fails_fast_on_fractional_ceo_slots_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 8})
+	r = _test_direct_validate_allows_reserve_employee_when_same_id_is_busy(player_count, seed_val)
+	if not r.ok:
+		return r
+	r = _test_report_validate_allows_reserve_employee_when_same_id_is_busy(player_count, seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 10})
 
 static func _build_restructuring_state(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -243,4 +249,44 @@ static func _test_report_apply_fails_fast_on_fractional_ceo_slots_without_partia
 		return Result.failure("错误信息应包含 player.company_structure.ceo_slots，实际: %s" % err)
 	if str(state.players[0]) != player_before:
 		return Result.failure("失败时不应提前改写 player")
+	return Result.success()
+
+static func _test_direct_validate_allows_reserve_employee_when_same_id_is_busy(player_count: int, seed_val: int) -> Result:
+	var built := _build_restructuring_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.players[0]["employees"] = []
+	state.players[0]["reserve_employees"] = ["marketing_trainee"]
+	state.players[0]["busy_marketers"] = ["marketing_trainee"]
+	var action = DirectActionClass.new()
+	var result := action._validate_specific(state, Command.create("set_company_structure_direct", 0, {
+		"slot_index": 0,
+		"employee_id": "marketing_trainee",
+	}))
+	if not result.ok:
+		return Result.failure("reserve 中存在可用副本时不应被 busy 同名副本拦截，实际: %s" % result.error)
+	return Result.success()
+
+static func _test_report_validate_allows_reserve_employee_when_same_id_is_busy(player_count: int, seed_val: int) -> Result:
+	var built := _build_report_restructuring_state(player_count, seed_val)
+	if not built.ok:
+		return built
+	var state: GameState = built.value
+	state.players[0]["employees"] = ["management_trainee"]
+	state.players[0]["reserve_employees"] = ["marketing_trainee"]
+	state.players[0]["busy_marketers"] = ["marketing_trainee"]
+	state.players[0]["company_structure"] = {
+		"ceo_slots": 1,
+		"structure": [
+			{"employee_id": "management_trainee", "reports": []},
+		],
+	}
+	var action = ReportActionClass.new()
+	var result := action._validate_specific(state, Command.create("set_company_structure_report", 0, {
+		"manager_slot_index": 0,
+		"employee_id": "marketing_trainee",
+	}))
+	if not result.ok:
+		return Result.failure("reserve 中存在可用下属副本时不应被 busy 同名副本拦截，实际: %s" % result.error)
 	return Result.success()
