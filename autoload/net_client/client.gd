@@ -505,6 +505,12 @@ func _initialize_online_client_engine_from_config(config: Dictionary, room_code:
 		logo_choices.append(-1)
 
 	var engine = GameEngineClass.new()
+	var config_overrides_val = config.get("game_config_overrides", null)
+	if config_overrides_val is Dictionary:
+		engine.set_game_config_overrides(Dictionary(config_overrides_val).duplicate(true))
+	var option_overrides_val = config.get("game_option_overrides", null)
+	if option_overrides_val is Dictionary:
+		engine.set_game_option_overrides(Dictionary(option_overrides_val).duplicate(true))
 	var init_r = engine.initialize(player_count, seed, enabled_modules, base_dir, [], logo_choices)
 	if not init_r.ok:
 		GameLog.error(

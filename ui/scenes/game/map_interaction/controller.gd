@@ -35,6 +35,8 @@ var _custom_mode_overlays: Dictionary = {} # mode_id -> overlay (Node)
 
 var _mode: String = ""
 var _payload: Dictionary = {}
+var _suspended_mode_for_distance_tool: String = ""
+var _suspended_payload_for_distance_tool: Dictionary = {}
 var _restaurant_valid_anchors: Dictionary = {} # Vector2i -> true
 var _house_valid_anchors: Dictionary = {} # Vector2i -> true
 var _piece_valid_anchors: Dictionary = {} # Vector2i -> true
@@ -79,6 +81,7 @@ func dispose() -> void:
 	_marketing_outside_to_anchor.clear()
 	_payload.clear()
 	_mode = ""
+	_clear_suspended_distance_tool_state()
 	_procure_drinks_hover_restaurant_id = ""
 	_hide_map_hover_tooltip()
 
@@ -148,6 +151,8 @@ func notify_custom_mode_highlight(mode_id: String, tile_id: String, rotation: in
 		handler.call("on_highlight_requested", tile_id, rotation)
 
 func begin_selection(mode: String, payload: Dictionary = {}) -> void:
+	if str(mode) != "distance_tool":
+		_clear_suspended_distance_tool_state()
 	_mode = mode
 	_payload = payload.duplicate(true)
 	_reset_procure_drinks_restaurant_hover()
@@ -176,6 +181,7 @@ func clear_selection() -> void:
 	var old_mode := _mode
 	_mode = ""
 	_payload.clear()
+	_clear_suspended_distance_tool_state()
 	_reset_procure_drinks_restaurant_hover()
 	_hide_map_hover_tooltip()
 	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_structure_preview"):
@@ -203,6 +209,70 @@ func clear_selection() -> void:
 
 func get_mode() -> String:
 	return _mode
+
+func can_suspend_current_mode_for_distance_tool() -> bool:
+	if _mode != "restaurant_placement":
+		return false
+	if not is_instance_valid(restaurant_placement_overlay) or not restaurant_placement_overlay.visible:
+		return false
+	return true
+
+func suspend_current_mode_for_distance_tool() -> bool:
+	if not can_suspend_current_mode_for_distance_tool():
+		return false
+	_suspended_mode_for_distance_tool = _mode
+	_suspended_payload_for_distance_tool = _payload.duplicate(true)
+	if _placement_mode != null and _placement_mode.has_method("on_restaurant_preview_cleared"):
+		_placement_mode.on_restaurant_preview_cleared()
+	begin_selection("distance_tool")
+	return true
+
+func resume_suspended_mode_from_distance_tool() -> bool:
+	if _suspended_mode_for_distance_tool.is_empty():
+		return false
+	var restore_mode := _suspended_mode_for_distance_tool
+	var restore_payload := _suspended_payload_for_distance_tool.duplicate(true)
+	_clear_suspended_distance_tool_state()
+	begin_selection(restore_mode, restore_payload)
+	_restore_mode_after_distance_tool(restore_mode)
+	return true
+
+func _clear_suspended_distance_tool_state() -> void:
+	_suspended_mode_for_distance_tool = ""
+	_suspended_payload_for_distance_tool.clear()
+
+func _restore_mode_after_distance_tool(mode: String) -> void:
+	match str(mode).strip_edges():
+		"restaurant_placement":
+			_restore_restaurant_placement_after_distance_tool()
+
+func _restore_restaurant_placement_after_distance_tool() -> void:
+	if not is_instance_valid(restaurant_placement_overlay) or not restaurant_placement_overlay.visible:
+		return
+
+	var overlay_mode := "place_restaurant"
+	if restaurant_placement_overlay.has_method("get_mode"):
+		overlay_mode = str(restaurant_placement_overlay.get_mode()).strip_edges()
+
+	var rotation := 0
+	if restaurant_placement_overlay.has_method("get_selected_rotation"):
+		rotation = int(restaurant_placement_overlay.get_selected_rotation())
+
+	var restaurant_id := ""
+	if restaurant_placement_overlay.has_method("get_selected_restaurant"):
+		restaurant_id = str(restaurant_placement_overlay.get_selected_restaurant()).strip_edges()
+
+	on_restaurant_highlight_requested(overlay_mode, rotation, restaurant_id)
+
+	if restaurant_placement_overlay.has_method("get_selected_position"):
+		var pos_val = restaurant_placement_overlay.get_selected_position()
+		if pos_val is Vector2i:
+			var pos := Vector2i(pos_val)
+			if pos != Vector2i(-1, -1):
+				on_restaurant_preview_requested(overlay_mode, pos, rotation, restaurant_id)
+				return
+
+	on_restaurant_preview_cleared()
 
 func _ensure_module_modes_loaded() -> void:
 	if _module_modes_loaded:

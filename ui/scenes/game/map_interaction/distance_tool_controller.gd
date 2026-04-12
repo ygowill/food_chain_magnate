@@ -37,9 +37,24 @@ func toggle_distance_tool() -> void:
 		return
 
 	if str(owner._mode) == "distance_tool":
+		if owner.has_method("resume_suspended_mode_from_distance_tool"):
+			var resumed_val = owner.call("resume_suspended_mode_from_distance_tool")
+			if resumed_val is bool and bool(resumed_val):
+				GameLog.info("Game", "距离工具已关闭，已返回放置模式")
+				return
 		owner.clear_selection()
 		GameLog.info("Game", "距离工具已关闭")
 		return
+
+	if str(owner._mode) == "restaurant_placement":
+		if owner.has_method("suspend_current_mode_for_distance_tool"):
+			var suspended_val = owner.call("suspend_current_mode_for_distance_tool")
+			if suspended_val is bool and bool(suspended_val):
+				_from_pick.clear()
+				if _overlay_controller != null and _overlay_controller.has_method("hide_distance_overlay"):
+					_overlay_controller.hide_distance_overlay()
+				GameLog.info("Game", "距离工具已启用：支持道路到道路，或房屋到餐厅")
+				return
 
 	if not str(owner._mode).is_empty():
 		GameLog.warn("Game", "当前正在 %s 选点模式，无法启用距离工具" % str(owner._mode))

@@ -243,6 +243,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.OnlineClientGameStartedReconnectTestClass.run(),
 		},
 		{
+			"name": "OnlineClientConfigBootstrapOverridesTest",
+			"fn": func() -> Result: return TestRefs.OnlineClientConfigBootstrapOverridesTestClass.run(),
+		},
+		{
 			"name": "GameMenuDebugControllerOnlineQuitTest",
 			"fn": func() -> Result: return TestRefs.GameMenuDebugControllerOnlineQuitTestClass.run(),
 		},
@@ -909,6 +913,10 @@ static func build_tests(host) -> Array[Dictionary]:
 		{
 			"name": "MoveRestaurantDisplayLabelTest",
 			"fn": func() -> Result: return TestRefs.MoveRestaurantDisplayLabelTestClass.run(),
+		},
+		{
+			"name": "RestaurantPlacementDistanceToolToggleTest",
+			"fn": func() -> Result: return TestRefs.RestaurantPlacementDistanceToolToggleTestClass.run(),
 		},
 			{
 				"name": "ActionPanelGuidedActionPlaceholderTest",
