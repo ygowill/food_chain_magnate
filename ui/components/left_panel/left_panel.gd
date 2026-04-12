@@ -587,6 +587,11 @@ func _get_player_salary_cost(player: Dictionary) -> int:
 		return int(_summary_controller.get_player_salary_cost(player))
 	return 0
 
+func _get_player_total_salary(player: Dictionary) -> int:
+	if _summary_controller != null and is_instance_valid(_summary_controller):
+		return int(_summary_controller.get_player_total_salary(player))
+	return 0
+
 func _refresh_restaurant_overview_cards() -> void:
 	if not is_instance_valid(overview_grid):
 		return
@@ -629,7 +634,7 @@ func _build_restaurant_overview_snapshot() -> Dictionary:
 			"employees": _count_total_employees(player),
 			"restaurants": _count_restaurants(player),
 			"milestones": _count_milestones(player),
-			"salary": _get_player_salary_cost(player),
+			"salary": _get_player_total_salary(player),
 			"status": _get_player_status_kind(i, player),
 			"logo_id": int(_player_restaurant_logo_ids.get(i, -1)),
 		})
@@ -680,7 +685,7 @@ func _create_restaurant_overview_card(player_id: int, player: Dictionary, is_sel
 	var emp_count := _count_total_employees(player)
 	var rest_count := _count_restaurants(player)
 	var milestone_count := _count_milestones(player)
-	var salary_level := _get_player_salary_cost(player)
+	var total_salary := _get_player_total_salary(player)
 
 	var info_vbox := VBoxContainer.new()
 	info_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -723,12 +728,13 @@ func _create_restaurant_overview_card(player_id: int, player: Dictionary, is_sel
 	first_row.add_child(cash_label_item)
 
 	var metrics := Label.new()
+	metrics.name = "MetricsLabel"
 	metrics.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	metrics.clip_text = true
 	metrics.autowrap_mode = TextServer.AUTOWRAP_OFF
 	metrics.max_lines_visible = 2
 	metrics.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	metrics.text = "员工%d  餐厅%d\n里程碑%d  薪资$%d" % [emp_count, rest_count, milestone_count, salary_level]
+	metrics.text = "员工%d  餐厅%d\n里程碑%d  薪资$%d" % [emp_count, rest_count, milestone_count, total_salary]
 	UiStylesClass.apply_label_hint_dark(metrics)
 	var fs_metrics := 13
 	if Globals != null:
@@ -742,13 +748,13 @@ func _create_restaurant_overview_card(player_id: int, player: Dictionary, is_sel
 	if display_name != id_label and display_name != default_name:
 		tooltip_header = "%s (%s)" % [display_name, id_label]
 
-	card.tooltip_text = "%s\n现金: $%d\n员工: %d  餐厅: %d  里程碑: %d  薪资等级: $%d" % [
+	card.tooltip_text = "%s\n现金: $%d\n员工: %d  餐厅: %d  里程碑: %d  总薪资: $%d/回合" % [
 		tooltip_header,
 		cash,
 		emp_count,
 		rest_count,
 		milestone_count,
-		salary_level
+		total_salary
 	]
 	var status_text := _get_player_status_text(status_kind)
 	if not status_text.is_empty():

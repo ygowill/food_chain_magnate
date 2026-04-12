@@ -107,6 +107,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if state.get_player(payday_actor).get("busy_marketers", []).has("campaign_manager"):
 		return Result.failure("忙碌营销员解雇后不应仍包含 campaign_manager")
 
+	var online_parallel := _test_online_parallel_payday_fire(seed_val)
+	if not online_parallel.ok:
+		return online_parallel
+
 	return Result.success({
 		"player_count": player_count,
 		"seed": seed_val,
@@ -115,3 +119,58 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		"fire_in_restructuring_error": fire_in_restructuring.error,
 		"fire_busy_denied_error": fire_busy_denied.error
 	})
+
+static func _test_online_parallel_payday_fire(seed_val: int) -> Result:
+	if NetContext == null:
+		return Result.failure("NetContext autoload missing")
+
+	var prev_mode = NetContext.mode
+	var prev_local_player_id := int(NetContext.local_player_id)
+
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val + 101)
+	if not init.ok:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("online fire 测试初始化失败: %s" % init.error)
+
+	var to_payday := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_PAYDAY, 40)
+	if not to_payday.ok:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("online fire 测试推进失败: %s" % to_payday.error)
+
+	NetContext.mode = NetContext.Mode.ONLINE_SERVER
+	NetContext.local_player_id = -1
+
+	var state := engine.get_state()
+	var current_actor := int(state.get_current_player_id())
+	var other_actor := 1 if current_actor == 0 else 0
+
+	var pool_before: int = int(state.employee_pool.get("pizza_cook", 0))
+	if pool_before <= 0:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("online fire 测试员工池中 pizza_cook 数量不足")
+	state.employee_pool["pizza_cook"] = pool_before - 1
+	state.players[other_actor]["employees"].append("pizza_cook")
+
+	var fire_other := engine.execute_command(Command.create("fire", other_actor, {"employee_id": "pizza_cook"}))
+	if not fire_other.ok:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("online payday 非当前玩家 fire 应成功，实际失败: %s" % fire_other.error)
+
+	state = engine.get_state()
+	var pool_after: int = int(state.employee_pool.get("pizza_cook", 0))
+	if pool_after != pool_before:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("online payday 非当前玩家 fire 后员工池数量不匹配: %d != %d" % [pool_after, pool_before])
+	if state.get_player(other_actor).get("employees", []).has("pizza_cook"):
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("online payday 非当前玩家 fire 后仍包含 pizza_cook")
+
+	_restore_net_context(prev_mode, prev_local_player_id)
+	return Result.success()
+
+static func _restore_net_context(prev_mode, prev_local_player_id: int) -> void:
+	if NetContext == null:
+		return
+	NetContext.mode = prev_mode
+	NetContext.local_player_id = prev_local_player_id

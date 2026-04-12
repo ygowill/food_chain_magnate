@@ -5,6 +5,7 @@ const PaydayPanelScene = preload("res://ui/components/payday_panel/payday_panel.
 const GameOverPanelScene = preload("res://ui/components/game_over/game_over_panel.tscn")
 const BankBreakPanelScene = preload("res://ui/components/bank_break/bank_break_panel.tscn")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const GameMenuDebugControllerClass = preload("res://ui/scenes/game/menu/debug_controller.gd")
 const UiZClass = preload("res://ui/utils/ui_z.gd")
@@ -111,6 +112,20 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	elif is_instance_valid(game_over_panel):
 		game_over_panel.visible = false
 
+func _resolve_payday_player_id(state: GameState) -> int:
+	if state == null:
+		return -1
+	var fallback_player_id := int(state.get_current_player_id())
+	return int(OnlinePhaseInteractionClass.get_online_local_player_id(state, fallback_player_id))
+
+func _get_payday_player_snapshot(state: GameState) -> Dictionary:
+	if state == null:
+		return {}
+	var player_id := _resolve_payday_player_id(state)
+	if player_id < 0:
+		return {}
+	return state.get_player(player_id)
+
 func _sync_payday_panel(state: GameState, force_full_refresh: bool = false) -> void:
 	if state == null:
 		return
@@ -123,8 +138,8 @@ func _sync_payday_panel(state: GameState, force_full_refresh: bool = false) -> v
 	if not force_full_refresh:
 		return
 
-	var current_player: Dictionary = state.get_current_player()
-	var current_player_id: int = int(state.get_current_player_id())
+	var current_player_id := _resolve_payday_player_id(state)
+	var current_player := _get_payday_player_snapshot(state)
 	var effect_registry = null
 	if _scene != null and _scene.game_engine != null and _scene.game_engine.phase_manager != null and _scene.game_engine.phase_manager.has_method("get_effect_registry"):
 		effect_registry = _scene.game_engine.phase_manager.get_effect_registry()
@@ -166,8 +181,8 @@ func show_payday_panel() -> void:
 		_scene.add_child(payday_panel)
 
 	var state = cur_state
-	var current_player: Dictionary = state.get_current_player()
-	var current_player_id: int = int(state.get_current_player_id())
+	var current_player_id := _resolve_payday_player_id(state)
+	var current_player := _get_payday_player_snapshot(state)
 	var effect_registry = null
 	if _scene != null and _scene.game_engine != null and _scene.game_engine.phase_manager != null and _scene.game_engine.phase_manager.has_method("get_effect_registry"):
 		effect_registry = _scene.game_engine.phase_manager.get_effect_registry()
@@ -348,7 +363,9 @@ func _on_fire_employees(items: Array) -> void:
 		return
 	if not _execute_command.is_valid():
 		return
-	var current_player_id = _scene.game_engine.get_state().get_current_player_id()
+	var current_player_id := _resolve_payday_player_id(_scene.game_engine.get_state())
+	if current_player_id < 0:
+		return
 
 	for item in items:
 		if item is Dictionary:
@@ -380,7 +397,9 @@ func _on_pay_confirmed() -> void:
 	var state = _scene.game_engine.get_state()
 	if state == null:
 		return
-	var current_player_id: int = int(state.get_current_player_id())
+	var current_player_id := _resolve_payday_player_id(state)
+	if current_player_id < 0:
+		return
 	_execute_command.call(Command.create(ActionIdsClass.SKIP, current_player_id, {}))
 	if is_instance_valid(payday_panel):
 		show_payday_panel()

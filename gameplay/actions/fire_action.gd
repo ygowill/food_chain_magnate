@@ -7,6 +7,7 @@ const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
+const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 const SalaryTokenPaymentClass = preload("res://modules/base_rules/rules/phase/payday/payday_salary_token_payment.gd")
@@ -21,7 +22,12 @@ func _init() -> void:
 
 func _validate_specific(state: GameState, command: Command) -> Result:
 	var current_player_id := state.get_current_player_id()
-	if command.actor != current_player_id:
+	if OnlinePhaseInteractionClass.is_online_parallel_payday(state):
+		if command.actor < 0 or command.actor >= state.players.size():
+			return Result.failure("无效玩家: %d" % command.actor)
+		if OnlinePhaseInteractionClass.is_player_payday_confirmed(state, int(command.actor)):
+			return Result.failure("你已经确认结束发薪日")
+	elif command.actor != current_player_id:
 		return Result.failure("不是你的回合")
 
 	var employee_id_result := require_string_param(command, "employee_id")

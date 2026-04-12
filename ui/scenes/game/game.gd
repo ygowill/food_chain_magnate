@@ -66,6 +66,7 @@ const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 const ModuleUiMetadataBootstrapClass = preload("res://gameplay/module_ui_metadata_bootstrap.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
 const RulesDocsClass = preload("res://ui/utils/rules_docs.gd")
@@ -742,8 +743,8 @@ func _is_online_waiting_for_other_player() -> bool:
 	var state: GameState = game_engine.get_state()
 	if state == null:
 		return false
-	if str(state.phase) == DefsClass.PHASE_RESTRUCTURING:
-		return false
+	if OnlinePhaseInteractionClass.is_online_parallel_phase(state):
+		return not OnlinePhaseInteractionClass.can_local_player_act_in_online_phase(state)
 
 	var local_pid := int(NetContext.local_player_id)
 	if local_pid < 0:

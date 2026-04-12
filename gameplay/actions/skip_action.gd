@@ -9,6 +9,7 @@ const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
+const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
 const RoundStatePlayerStringListsClass = preload("res://core/utils/round_state_player_string_lists.gd")
 const RoundStateSubPhasePassedClass = preload("res://core/utils/round_state_sub_phase_passed.gd")
 
@@ -33,7 +34,18 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 	# 检查是否是当前玩家的回合
 	var current_player_id := state.get_current_player_id()
-	if command.actor != current_player_id:
+	if OnlinePhaseInteractionClass.is_online_parallel_payday(state):
+		if command.actor < 0 or command.actor >= state.players.size():
+			return Result.failure("无效玩家: %d" % command.actor)
+		if not (state.round_state is Dictionary):
+			return Result.failure("round_state 类型错误（期望 Dictionary）")
+		var passed_read := RoundStateSubPhasePassedClass.require_all_player_flags(state.round_state, state.players.size(), "skip")
+		if not passed_read.ok:
+			return passed_read
+		var passed: Dictionary = passed_read.value
+		if bool(passed.get(command.actor, false)):
+			return Result.failure("你已经确认结束发薪日")
+	elif command.actor != current_player_id:
 		return Result.failure("不是你的回合，当前玩家: %d" % current_player_id)
 
 	# Setup：必须先放置至少 1 个餐厅才能确认结束
@@ -144,6 +156,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		if not adv.ok:
 			return adv
 		return Result.success().with_warnings(adv.warnings)
+
+	if OnlinePhaseInteractionClass.is_online_parallel_payday(state):
+		return Result.success()
 
 	for offset in range(1, size + 1):
 		var idx: int
@@ -261,7 +276,10 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 
 	# 下一个玩家回合开始
 	var next_player_id := new_state.get_current_player_id()
-	if next_player_id != command.actor and _should_emit_player_turn_started(str(new_state.phase)):
+	var should_emit_turn_started := _should_emit_player_turn_started(str(new_state.phase))
+	if OnlinePhaseInteractionClass.is_online_parallel_payday(old_state) and str(new_state.phase) == DefsClass.PHASE_PAYDAY:
+		should_emit_turn_started = false
+	if next_player_id != command.actor and should_emit_turn_started:
 		events.append({
 			"type": EventBus.EventType.PLAYER_TURN_STARTED,
 			"data": {

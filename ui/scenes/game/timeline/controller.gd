@@ -7,6 +7,7 @@ const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const StepTimelineBuildHelpersClass = preload("res://ui/scenes/game/timeline/step_timeline_build_helpers.gd")
 const GameTimelineStepSeekHelpersClass = preload("res://ui/scenes/game/timeline/step_seek_helpers.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
 
 var _host: Control = null
 var _game_log_panel: Control = null
@@ -337,7 +338,7 @@ func sync_timeline_ui(head_index: int, cursor_index: int, state: GameState) -> v
 				reason = "联机：等待同步"
 			elif NetContext.local_player_id < 0:
 				reason = "联机：身份未就绪"
-			elif str(state.phase) != DefsClass.PHASE_RESTRUCTURING and state.get_current_player_id() != int(NetContext.local_player_id):
+			elif not OnlinePhaseInteractionClass.can_local_player_act_in_online_phase(state):
 				reason = "联机：等待其他玩家操作"
 		_action_panel.call("set_globally_disabled", reason)
 

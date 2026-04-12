@@ -17,6 +17,7 @@ const PopupLayoutControllerClass = preload("res://ui/scenes/game/panel/popup_lay
 const UiComponentsBinderClass = preload("res://ui/scenes/game/panel/ui_components_binder.gd")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const ReserveCardsViewDataClass = preload("res://ui/components/reserve_cards/reserve_cards_view_data.gd")
 
@@ -733,7 +734,7 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 		var local_pid := int(NetContext.local_player_id)
 		if local_pid < 0:
 			blocked_by_online_turn = true
-		elif str(state.phase) != DefsClass.PHASE_RESTRUCTURING and int(current_player_id) != local_pid:
+		elif not OnlinePhaseInteractionClass.can_local_player_act_in_online_phase(state):
 			blocked_by_online_turn = true
 
 	if blocked_by_action_panel or blocked_by_online_turn:
@@ -741,8 +742,8 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 
 	var actor_id := current_player_id
 	# 联机模式：所有玩家动作都应以本地玩家为 actor（避免误用 current_player_id 导致无法继续）
-	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT and int(NetContext.local_player_id) >= 0:
-		actor_id = int(NetContext.local_player_id)
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		actor_id = int(OnlinePhaseInteractionClass.get_online_local_player_id(state, current_player_id))
 
 	match action_id:
 		# UI 工具：时间线回退

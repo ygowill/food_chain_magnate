@@ -6,6 +6,7 @@ extends RefCounted
 const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
 
 const AUTO_MANDATORY_ACTION_IDS := {
 	ActionIdsClass.SET_PRICE: true,
@@ -196,8 +197,12 @@ func _confirm_skip() -> void:
 	var game_engine: GameEngine = _get_engine()
 	if game_engine == null:
 		return
-	var current_player_id := int(game_engine.get_state().get_current_player_id())
-	execute_command(Command.create(ActionIdsClass.SKIP, current_player_id))
+	var state: GameState = game_engine.get_state()
+	if state == null:
+		return
+	var actor_id := int(state.get_current_player_id())
+	actor_id = int(OnlinePhaseInteractionClass.get_online_local_player_id(state, actor_id))
+	execute_command(Command.create(ActionIdsClass.SKIP, actor_id))
 
 func _get_engine() -> GameEngine:
 	if not _get_game_engine.is_valid():

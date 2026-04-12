@@ -10,6 +10,7 @@ const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
 const ContextControllerClass = preload("res://ui/components/action_panel/action_panel_context_controller.gd")
 const ActionsControllerClass = preload("res://ui/components/action_panel/action_panel_actions_controller.gd")
 
@@ -422,10 +423,8 @@ func _update_title() -> void:
 		if _globally_disabled and _globally_disabled_reason == "联机：等待其他玩家操作":
 			title_label.text = "等待其他玩家行动"
 			return
-		if _game_state != null:
-			var phase := str(_game_state.phase)
-			var local_pid := int(NetContext.local_player_id)
-			if phase != DefsClass.PHASE_RESTRUCTURING and int(_game_state.get_current_player_id()) != local_pid:
+		if _game_state != null and int(NetContext.local_player_id) >= 0:
+			if not OnlinePhaseInteractionClass.can_local_player_act_in_online_phase(_game_state):
 				title_label.text = "等待其他玩家行动"
 				return
 		title_label.text = base + suffix

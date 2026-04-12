@@ -21,10 +21,52 @@ static func run() -> Result:
 	tree.root.add_child(panel)
 	await tree.process_frame
 
-	var state := _build_state()
+	var state_read := _build_state()
+	if not state_read.ok:
+		_cleanup_panel(panel)
+		if NetContext != null and NetContext.has_method("reset"):
+			NetContext.reset()
+		return state_read
+	var state: GameState = state_read.value
 	panel.call("set_game_state", state)
 	panel.call("set_current_player", 0)
 	panel.call("set_view_player", 0)
+	await tree.process_frame
+
+	var summary_salary = panel.get("salary_label")
+	if summary_salary == null or not is_instance_valid(summary_salary):
+		_cleanup_panel(panel)
+		if NetContext != null and NetContext.has_method("reset"):
+			NetContext.reset()
+		return Result.failure("未找到 summary salary_label")
+	if str(summary_salary.text) != "$10/回合":
+		_cleanup_panel(panel)
+		if NetContext != null and NetContext.has_method("reset"):
+			NetContext.reset()
+		return Result.failure("summary 总薪资显示错误，期望=$10/回合 实际=%s" % str(summary_salary.text))
+
+	var local_card := _find_overview_card(panel, 0)
+	if local_card == null:
+		_cleanup_panel(panel)
+		if NetContext != null and NetContext.has_method("reset"):
+			NetContext.reset()
+		return Result.failure("未找到 player_id=0 的概览卡")
+	var metrics_label = local_card.find_child("MetricsLabel", true, false)
+	if metrics_label == null or not is_instance_valid(metrics_label):
+		_cleanup_panel(panel)
+		if NetContext != null and NetContext.has_method("reset"):
+			NetContext.reset()
+		return Result.failure("未找到 player_id=0 概览卡的 MetricsLabel")
+	if str(metrics_label.text).find("薪资$10") < 0:
+		_cleanup_panel(panel)
+		if NetContext != null and NetContext.has_method("reset"):
+			NetContext.reset()
+		return Result.failure("概览卡总薪资显示错误: %s" % str(metrics_label.text))
+	if str(local_card.tooltip_text).find("总薪资: $10/回合") < 0:
+		_cleanup_panel(panel)
+		if NetContext != null and NetContext.has_method("reset"):
+			NetContext.reset()
+		return Result.failure("概览卡 tooltip 未显示总薪资: %s" % str(local_card.tooltip_text))
 
 	NetContext.room_state = {
 		"players": [
@@ -86,17 +128,22 @@ static func run() -> Result:
 		NetContext.reset()
 	return Result.success()
 
-static func _build_state() -> GameState:
-	var state := GameState.new()
-	state.seed = 12345
+static func _build_state() -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, 12345)
+	if not init.ok:
+		return Result.failure("LeftPanel 状态构建失败: %s" % init.error)
+
+	var state := engine.get_state().duplicate_state()
 	state.turn_order = [0, 1]
 	state.current_player_index = 0
+	state.rules["salary_cost"] = 5
 	state.players = [
 		{
 			"id": 0,
 			"cash": 10,
-			"employees": ["ceo"],
-			"reserve_employees": [],
+			"employees": ["ceo", "burger_cook"],
+			"reserve_employees": ["pizza_cook"],
 			"busy_marketers": [],
 			"inventory": {},
 			"milestones": [],
@@ -115,7 +162,7 @@ static func _build_state() -> GameState:
 			"forfeited": false,
 		},
 	]
-	return state
+	return Result.success(state)
 
 static func _find_overview_card(panel, player_id: int) -> Control:
 	if panel == null or not is_instance_valid(panel):

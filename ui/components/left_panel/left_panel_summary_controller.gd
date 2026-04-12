@@ -75,6 +75,9 @@ func get_player_salary_cost(player: Dictionary) -> int:
 
 	return maxi(0, salary_cost)
 
+func get_player_total_salary(player: Dictionary) -> int:
+	return _calculate_total_salary(player)
+
 func _refresh_summary() -> void:
 	if _panel._game_state == null:
 		if _summary_snapshot == {"empty": true}:
