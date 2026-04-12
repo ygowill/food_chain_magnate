@@ -25,15 +25,16 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 		return
 	if not is_instance_valid(milestone_panel) or not milestone_panel.visible:
 		return
-	if not force_full_refresh:
-		return
+
+	# 右侧里程碑面板在可见时允许继续执行其它操作；
+	# 若这里只在 force_full_refresh 才同步，会导致“里程碑池/玩家已获得里程碑”停留在旧状态。
 	if milestone_panel.has_method("set_milestone_pool"):
 		milestone_panel.set_milestone_pool(state.milestone_pool)
 	if milestone_panel.has_method("set_players"):
 		milestone_panel.set_players(state.players)
 	if milestone_panel.has_method("set_global_view"):
 		milestone_panel.set_global_view(true)
-	if milestone_panel.has_method("set_rules"):
+	if force_full_refresh and milestone_panel.has_method("set_rules"):
 		milestone_panel.set_rules(state.rules)
 
 func show() -> void:
@@ -69,4 +70,3 @@ func show() -> void:
 func _on_cancelled() -> void:
 	if _hide_all.is_valid():
 		_hide_all.call()
-

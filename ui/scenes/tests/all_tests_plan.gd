@@ -1135,6 +1135,10 @@ static func build_tests(host) -> Array[Dictionary]:
 							"fn": func() -> Result: return await TestRefs.FridgeKeepModalUiTestClass.run(12345),
 						},
 						{
+							"name": "MilestoneControllerVisibleSyncTest",
+							"fn": func() -> Result: return TestRefs.MilestoneControllerVisibleSyncTestClass.run(12345),
+						},
+						{
 							"name": "TrainControllerSourceFilterTest",
 							"fn": func() -> Result: return TestRefs.TrainControllerSourceFilterTestClass.run(12345),
 						},
