@@ -6,6 +6,7 @@ signal create_requested(room_password: String, config_patch: Dictionary, resume_
 signal cancelled()
 
 const ArchiveClass = preload("res://core/engine/game_engine/archive.gd")
+const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const ResumeLogHistoryBuilderClass = preload("res://ui/dialogs/create_room_resume_log_history_builder.gd")
@@ -435,18 +436,26 @@ func _build_resume_config_patch(path: String, archive: Dictionary, state, curren
 	var round_number := 0
 	var phase := ""
 	var sub_phase := ""
+	var current_player_id := -1
+	var bank_total := -1
+	var resume_player_summaries: Array[Dictionary] = []
 	if state != null:
 		player_count = state.players.size() if state.players is Array else 0
 		seed = int(state.seed)
 		round_number = int(state.round_number)
 		phase = str(state.phase)
 		sub_phase = str(state.sub_phase)
+		if state.has_method("get_current_player_id"):
+			current_player_id = int(state.get_current_player_id())
+		if state.bank is Dictionary:
+			bank_total = int(Dictionary(state.bank).get("total", 0))
 		if state.modules is Array:
 			for module_id in state.modules:
 				var mid := str(module_id).strip_edges()
 				if mid.is_empty():
 					continue
 				enabled_modules.append(mid)
+		resume_player_summaries = _build_resume_player_summaries(state)
 	var phase_text := phase
 	if not sub_phase.is_empty():
 		phase_text += " / %s" % sub_phase
@@ -465,8 +474,79 @@ func _build_resume_config_patch(path: String, archive: Dictionary, state, curren
 			"round_number": round_number,
 			"phase": phase_text,
 			"current_index": current_index,
+			"current_player_id": current_player_id,
+			"bank_total": bank_total,
 		},
+		"resume_player_summaries": resume_player_summaries,
 	}
+
+func _build_resume_player_summaries(state) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if state == null or not (state.players is Array):
+		return out
+	for player_index in range(state.players.size()):
+		var player_val = state.players[player_index]
+		if not (player_val is Dictionary):
+			continue
+		var player: Dictionary = Dictionary(player_val)
+		out.append({
+			"player_id": player_index,
+			"restaurant_logo_id": int(player.get("restaurant_logo_id", -1)),
+			"cash": int(player.get("cash", 0)),
+			"restaurants_count": _safe_resume_array_size(player.get("restaurants", [])),
+			"milestones_count": _safe_resume_array_size(player.get("milestones", [])),
+			"employee_counts": {
+				"active": _safe_resume_array_size(player.get("employees", [])),
+				"reserve": _safe_resume_array_size(player.get("reserve_employees", [])),
+				"busy": _safe_resume_array_size(player.get("busy_marketers", [])),
+			},
+			"employee_groups": {
+				"active": _build_resume_employee_group_summary(player.get("employees", [])),
+				"reserve": _build_resume_employee_group_summary(player.get("reserve_employees", [])),
+				"busy": _build_resume_employee_group_summary(player.get("busy_marketers", [])),
+			},
+		})
+	return out
+
+func _build_resume_employee_group_summary(raw_list) -> Array[Dictionary]:
+	var counts: Dictionary = {}
+	var order: Array[String] = []
+	if raw_list is Array:
+		for raw_entry in Array(raw_list):
+			var employee_id := ""
+			if raw_entry is String:
+				employee_id = str(raw_entry).strip_edges()
+			elif raw_entry is Dictionary:
+				employee_id = str(Dictionary(raw_entry).get("employee_id", "")).strip_edges()
+			if employee_id.is_empty():
+				continue
+			if not counts.has(employee_id):
+				counts[employee_id] = 0
+				order.append(employee_id)
+			counts[employee_id] = int(counts.get(employee_id, 0)) + 1
+	var out: Array[Dictionary] = []
+	for employee_id in order:
+		out.append({
+			"employee_id": employee_id,
+			"name": _get_resume_employee_display_name(employee_id),
+			"count": int(counts.get(employee_id, 0)),
+		})
+	return out
+
+func _get_resume_employee_display_name(employee_id: String) -> String:
+	var normalized_id := str(employee_id).strip_edges()
+	if normalized_id.is_empty():
+		return "未知员工"
+	if EmployeeRegistryClass.is_loaded() and EmployeeRegistryClass.has(normalized_id):
+		var def = EmployeeRegistryClass.get_def(normalized_id)
+		if def != null:
+			var display_name := str(def.name).strip_edges()
+			if not display_name.is_empty():
+				return display_name
+	return normalized_id
+
+func _safe_resume_array_size(value) -> int:
+	return Array(value).size() if value is Array else 0
 
 func _get_resume_archive_command_count() -> int:
 	var commands_val = _loaded_resume_archive.get("commands", null)

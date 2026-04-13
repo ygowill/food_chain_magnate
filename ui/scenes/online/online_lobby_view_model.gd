@@ -21,6 +21,14 @@ static func get_room_config(room_state: Dictionary) -> Dictionary:
 		return {}
 	return Dictionary(room_state.get("config", {}))
 
+static func get_resume_summary(room_state: Dictionary) -> Dictionary:
+	var cfg: Dictionary = get_room_config(room_state)
+	return Dictionary(cfg.get("resume_summary", {}))
+
+static func get_resume_player_summaries(room_state: Dictionary) -> Array:
+	var cfg: Dictionary = get_room_config(room_state)
+	return Array(cfg.get("resume_player_summaries", []))
+
 static func get_host_peer_id(room_state: Dictionary) -> int:
 	if room_state == null:
 		return 0

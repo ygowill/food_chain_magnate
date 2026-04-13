@@ -76,6 +76,7 @@ const _EXTRA_PLATFORM_SERVERS: Array = []
 @onready var spectators_list_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/LeftColumn/SpectatorsList
 @onready var room_params_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/LeftColumn/RoomParamsContainer
 @onready var room_modules_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/RightColumn/RoomModulesContainer
+@onready var resume_details_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/RightColumn/ResumeDetailsContainer
 @onready var leave_room_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomActionsRow/LeaveRoomButton
 @onready var start_game_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomActionsRow/StartGameButton
 @onready var room_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomStatus
@@ -257,6 +258,14 @@ func _scale_texture_square(tex: Texture2D, size_px: int) -> Texture2D:
 		return tex
 	img.resize(size_px, size_px, Image.INTERPOLATE_LANCZOS)
 	return ImageTexture.create_from_image(img)
+
+func _get_logo_icon_texture(restaurant_logo_id: int) -> Texture2D:
+	if restaurant_logo_id < 0:
+		return null
+	_ensure_logo_icons_cache()
+	if restaurant_logo_id >= 0 and restaurant_logo_id < _logo_icons_small.size():
+		return _logo_icons_small[restaurant_logo_id]
+	return null
 
 func _get_logo_display_name(piece_id: String, index: int) -> String:
 	if _LOGO_DISPLAY_NAMES.has(piece_id):

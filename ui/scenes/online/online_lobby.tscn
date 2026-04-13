@@ -313,6 +313,13 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_constants/separation = 10
 
+[node name="ResumeDetailsContainer" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/RightColumn"]
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
 [node name="RoomStatus" type="Label" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage"]
 layout_mode = 2
 autowrap_mode = 2

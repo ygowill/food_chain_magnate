@@ -15,10 +15,12 @@ const PLAYER_COLORS: Array[Color] = [
 
 var _lobby = null
 var _last_main_content_signature: String = ""
+var _last_side_panel_signature: String = ""
 
 func setup(lobby) -> void:
 	_lobby = lobby
 	_last_main_content_signature = ""
+	_last_side_panel_signature = ""
 
 func render_room_state(room_state: Dictionary) -> void:
 	if _lobby == null or not is_instance_valid(_lobby):
@@ -30,6 +32,9 @@ func render_room_state(room_state: Dictionary) -> void:
 		if _last_main_content_signature != "__disconnected__":
 			_clear_room_member_sections()
 			_last_main_content_signature = "__disconnected__"
+		if _last_side_panel_signature != "__disconnected__":
+			_reset_right_side_panels()
+			_last_side_panel_signature = "__disconnected__"
 		if _lobby.start_game_button != null and is_instance_valid(_lobby.start_game_button):
 			_lobby.start_game_button.disabled = true
 		return
@@ -63,6 +68,10 @@ func render_room_state(room_state: Dictionary) -> void:
 			local_peer_id
 		)
 		_last_main_content_signature = content_signature
+	var side_panel_signature := _build_side_panel_signature(room_state)
+	if side_panel_signature != _last_side_panel_signature:
+		_sync_right_side_panel(room_state, players)
+		_last_side_panel_signature = side_panel_signature
 
 	# ── 配置同步 ──
 	var is_host: bool = is_host_room
@@ -79,7 +88,9 @@ func render_room_state(room_state: Dictionary) -> void:
 		_lobby._show_page(_lobby.LobbyPage.ROOM, false)
 
 func has_visible_room_state_change(previous_room_state: Dictionary, next_room_state: Dictionary, local_peer_id: int) -> bool:
-	return _build_main_content_signature(previous_room_state, local_peer_id) != _build_main_content_signature(next_room_state, local_peer_id)
+	if _build_main_content_signature(previous_room_state, local_peer_id) != _build_main_content_signature(next_room_state, local_peer_id):
+		return true
+	return _build_side_panel_signature(previous_room_state) != _build_side_panel_signature(next_room_state)
 
 func _set_room_code_text(text: String) -> void:
 	if _lobby == null or not is_instance_valid(_lobby):
@@ -100,6 +111,21 @@ func _clear_room_member_sections() -> void:
 	if _lobby.spectators_list_container != null and is_instance_valid(_lobby.spectators_list_container):
 		for child in _lobby.spectators_list_container.get_children():
 			child.queue_free()
+
+func _clear_container_children(container: Node) -> void:
+	if container == null or not is_instance_valid(container):
+		return
+	for child in container.get_children():
+		child.queue_free()
+
+func _reset_right_side_panels() -> void:
+	if _lobby == null or not is_instance_valid(_lobby):
+		return
+	if _lobby.room_modules_container != null and is_instance_valid(_lobby.room_modules_container):
+		_lobby.room_modules_container.visible = true
+	if _lobby.resume_details_container != null and is_instance_valid(_lobby.resume_details_container):
+		_clear_container_children(_lobby.resume_details_container)
+		_lobby.resume_details_container.visible = false
 
 func _rebuild_room_member_sections(
 	players: Array,
@@ -287,6 +313,284 @@ func _build_main_content_signature(room_state: Dictionary, local_peer_id: int) -
 		"waiting_members": waiting_norm,
 		"spectators": spectators_norm,
 	})
+
+func _build_side_panel_signature(room_state: Dictionary) -> String:
+	var players_norm: Array = []
+	for p_val in LobbyViewModelClass.get_players(room_state):
+		if not (p_val is Dictionary):
+			continue
+		var p: Dictionary = Dictionary(p_val)
+		players_norm.append({
+			"seat_index": int(p.get("seat_index", -1)),
+			"name": str(p.get("name", "")).strip_edges(),
+			"connected": bool(p.get("connected", false)),
+			"forfeited": bool(p.get("forfeited", false)),
+			"role": str(p.get("role", "")).strip_edges(),
+		})
+	return JSON.stringify({
+		"room_code": LobbyViewModelClass.get_room_code(room_state),
+		"status": LobbyViewModelClass.get_room_status(room_state),
+		"room_mode": LobbyViewModelClass.get_room_mode(room_state),
+		"players": players_norm,
+		"resume_summary": LobbyViewModelClass.get_resume_summary(room_state),
+		"resume_player_summaries": LobbyViewModelClass.get_resume_player_summaries(room_state),
+	})
+
+func _sync_right_side_panel(room_state: Dictionary, current_players: Array) -> void:
+	if _lobby == null or not is_instance_valid(_lobby):
+		return
+	var show_resume_details := LobbyViewModelClass.is_resume_archive_room(room_state) and LobbyViewModelClass.get_room_status(room_state) == "Lobby"
+	if _lobby.room_modules_container != null and is_instance_valid(_lobby.room_modules_container):
+		_lobby.room_modules_container.visible = not show_resume_details
+	if _lobby.resume_details_container == null or not is_instance_valid(_lobby.resume_details_container):
+		return
+	_clear_container_children(_lobby.resume_details_container)
+	_lobby.resume_details_container.visible = show_resume_details
+	if not show_resume_details:
+		return
+
+	var resume_summary: Dictionary = LobbyViewModelClass.get_resume_summary(room_state)
+	var player_summaries: Array = LobbyViewModelClass.get_resume_player_summaries(room_state)
+	_lobby.resume_details_container.add_child(_build_resume_overview_panel(resume_summary, player_summaries))
+	_lobby.resume_details_container.add_child(_build_resume_players_panel(player_summaries, current_players))
+
+func _build_resume_overview_panel(resume_summary: Dictionary, player_summaries: Array) -> Control:
+	var panel := _build_section_panel(Color(0.95, 0.91, 0.83, 0.55))
+	var root := VBoxContainer.new()
+	root.add_theme_constant_override("separation", 6)
+	panel.add_child(root)
+
+	var header := Label.new()
+	header.text = "存档对局信息"
+	header.add_theme_font_size_override("font_size", 16)
+	UiStylesClass.apply_label_dark(header)
+	root.add_child(header)
+
+	var player_count := int(resume_summary.get("player_count", 0))
+	if player_count <= 0:
+		player_count = player_summaries.size()
+
+	var lines: Array[String] = []
+	var source_name := str(resume_summary.get("source_name", "")).strip_edges()
+	if not source_name.is_empty():
+		lines.append("来源：%s" % source_name)
+	if player_count > 0:
+		lines.append("存档玩家：%d" % player_count)
+	var current_index := int(resume_summary.get("current_index", -1))
+	if current_index >= 0:
+		lines.append("恢复位置：#%d" % current_index)
+	var round_number := int(resume_summary.get("round_number", -1))
+	if round_number >= 0:
+		lines.append("回合：%d" % round_number)
+	var phase_text := str(resume_summary.get("phase", "")).strip_edges()
+	if not phase_text.is_empty():
+		lines.append("阶段：%s" % phase_text)
+	var current_player_id := int(resume_summary.get("current_player_id", -1))
+	if current_player_id >= 0:
+		lines.append("当前玩家：P%d" % (current_player_id + 1))
+	var bank_total := int(resume_summary.get("bank_total", -1))
+	if bank_total >= 0:
+		lines.append("银行现金：$%d" % bank_total)
+	if lines.is_empty():
+		lines.append("当前存档未携带额外概览信息。")
+
+	var info_label := Label.new()
+	info_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	info_label.text = "\n".join(lines)
+	UiStylesClass.apply_label_hint_dark(info_label)
+	root.add_child(info_label)
+
+	return panel
+
+func _build_resume_players_panel(player_summaries: Array, current_players: Array) -> Control:
+	var panel := _build_section_panel(Color(0.93, 0.89, 0.80, 0.45))
+	var root := VBoxContainer.new()
+	root.add_theme_constant_override("separation", 8)
+	panel.add_child(root)
+
+	var header := Label.new()
+	header.text = "存档玩家详情"
+	header.add_theme_font_size_override("font_size", 16)
+	UiStylesClass.apply_label_dark(header)
+	root.add_child(header)
+
+	if player_summaries.is_empty():
+		var empty_label := Label.new()
+		empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+		empty_label.text = "当前存档未携带玩家现金、Logo 与员工详情。"
+		UiStylesClass.apply_label_hint_dark(empty_label)
+		root.add_child(empty_label)
+		return panel
+
+	var assigned_by_seat: Dictionary = {}
+	for player_val in current_players:
+		if not (player_val is Dictionary):
+			continue
+		var current_player: Dictionary = Dictionary(player_val)
+		var seat_index := int(current_player.get("seat_index", -1))
+		if seat_index < 0:
+			continue
+		var display_name := str(current_player.get("name", "")).strip_edges()
+		if display_name.is_empty():
+			display_name = "玩家 %d" % (seat_index + 1)
+		if not bool(current_player.get("connected", true)):
+			display_name += "（掉线）"
+		elif bool(current_player.get("forfeited", false)):
+			display_name += "（弃权）"
+		assigned_by_seat[seat_index] = display_name
+
+	for summary_val in player_summaries:
+		if not (summary_val is Dictionary):
+			continue
+		var summary: Dictionary = Dictionary(summary_val)
+		var player_id := int(summary.get("player_id", -1))
+		if player_id < 0:
+			continue
+		var assigned_name := str(assigned_by_seat.get(player_id, "未分配")).strip_edges()
+		if assigned_name.is_empty():
+			assigned_name = "未分配"
+		var accent_color := PLAYER_COLORS[player_id % PLAYER_COLORS.size()] if not PLAYER_COLORS.is_empty() else Color(0.5, 0.5, 0.5, 1.0)
+		root.add_child(_build_resume_player_detail_card(summary, assigned_name, accent_color))
+
+	return panel
+
+func _build_resume_player_detail_card(summary: Dictionary, assigned_name: String, accent_color: Color) -> Control:
+	var player_id := int(summary.get("player_id", -1))
+	var restaurant_logo_id := int(summary.get("restaurant_logo_id", -1))
+	var cash := int(summary.get("cash", 0))
+	var restaurants_count := int(summary.get("restaurants_count", 0))
+	var milestones_count := int(summary.get("milestones_count", 0))
+	var counts: Dictionary = Dictionary(summary.get("employee_counts", {}))
+	var groups: Dictionary = Dictionary(summary.get("employee_groups", {}))
+
+	var panel := PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.96, 0.92, 0.84, 0.50)
+	style.border_color = Color(0.17, 0.13, 0.09, 0.12)
+	style.set_border_width_all(1)
+	style.corner_radius_top_left = 8
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_right = 8
+	style.corner_radius_bottom_left = 8
+	style.content_margin_left = 12
+	style.content_margin_top = 10
+	style.content_margin_right = 12
+	style.content_margin_bottom = 10
+	panel.add_theme_stylebox_override("panel", style)
+
+	var root := VBoxContainer.new()
+	root.add_theme_constant_override("separation", 4)
+	panel.add_child(root)
+
+	var title_row := HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", 8)
+	root.add_child(title_row)
+
+	var accent := ColorRect.new()
+	accent.custom_minimum_size = Vector2(4, 22)
+	accent.color = accent_color
+	accent.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	title_row.add_child(accent)
+
+	var title_label := Label.new()
+	title_label.text = "P%d 存档" % (player_id + 1)
+	title_label.add_theme_font_size_override("font_size", 15)
+	UiStylesClass.apply_label_dark(title_label)
+	title_row.add_child(title_label)
+
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_row.add_child(spacer)
+
+	var logo_chip := _build_resume_logo_chip(restaurant_logo_id)
+	if logo_chip != null:
+		title_row.add_child(logo_chip)
+
+	var assignment_label := Label.new()
+	assignment_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	assignment_label.text = "当前分配：%s" % assigned_name
+	UiStylesClass.apply_label_hint_dark(assignment_label)
+	root.add_child(assignment_label)
+
+	var stats_label := Label.new()
+	stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	stats_label.text = "现金：$%d  |  餐厅：%d  |  里程碑：%d" % [cash, restaurants_count, milestones_count]
+	UiStylesClass.apply_label_dark(stats_label)
+	root.add_child(stats_label)
+
+	var employee_counts_label := Label.new()
+	employee_counts_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	employee_counts_label.text = "员工：在职 %d  |  储备 %d  |  忙碌营销 %d" % [
+		int(counts.get("active", 0)),
+		int(counts.get("reserve", 0)),
+		int(counts.get("busy", 0)),
+	]
+	UiStylesClass.apply_label_dark(employee_counts_label)
+	root.add_child(employee_counts_label)
+
+	var active_groups_val = groups.get("active", [])
+	var reserve_groups_val = groups.get("reserve", [])
+	var busy_groups_val = groups.get("busy", [])
+	_add_resume_employee_group_line(root, "在职", Array(active_groups_val) if active_groups_val is Array else [])
+	_add_resume_employee_group_line(root, "储备", Array(reserve_groups_val) if reserve_groups_val is Array else [])
+	_add_resume_employee_group_line(root, "忙碌", Array(busy_groups_val) if busy_groups_val is Array else [])
+
+	return panel
+
+func _build_resume_logo_chip(restaurant_logo_id: int) -> Control:
+	var chip := HBoxContainer.new()
+	chip.add_theme_constant_override("separation", 6)
+
+	var texture := _get_logo_texture(restaurant_logo_id)
+	if texture != null:
+		var texture_rect := TextureRect.new()
+		texture_rect.custom_minimum_size = Vector2(24, 24)
+		texture_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		texture_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		texture_rect.texture = texture
+		chip.add_child(texture_rect)
+
+	var label := Label.new()
+	label.text = "Logo：%s" % _get_logo_display_text(restaurant_logo_id)
+	UiStylesClass.apply_label_hint_dark(label)
+	chip.add_child(label)
+
+	return chip
+
+func _get_logo_texture(restaurant_logo_id: int) -> Texture2D:
+	if restaurant_logo_id < 0:
+		return null
+	if _lobby == null or not is_instance_valid(_lobby):
+		return null
+	if _lobby.has_method("_get_logo_icon_texture"):
+		return _lobby._get_logo_icon_texture(restaurant_logo_id)
+	return null
+
+func _add_resume_employee_group_line(parent: VBoxContainer, label_prefix: String, groups: Array) -> void:
+	var text := _format_resume_employee_groups(groups)
+	if text.is_empty():
+		return
+	var label := Label.new()
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.text = "%s：%s" % [label_prefix, text]
+	UiStylesClass.apply_label_hint_dark(label)
+	parent.add_child(label)
+
+func _format_resume_employee_groups(groups: Array) -> String:
+	var parts: Array[String] = []
+	for group_val in groups:
+		if not (group_val is Dictionary):
+			continue
+		var group: Dictionary = Dictionary(group_val)
+		var name := str(group.get("name", "")).strip_edges()
+		if name.is_empty():
+			name = str(group.get("employee_id", "员工")).strip_edges()
+		var count := int(group.get("count", 0))
+		if count <= 0:
+			continue
+		parts.append("%s×%d" % [name, count])
+	return "、".join(parts)
 
 # ── 区块面板构建器 ──
 
