@@ -167,12 +167,13 @@ func update_display_name(new_name: String) -> Dictionary:
 	if result.has("ok"):
 		var ok_val = result.get("ok", null)
 		if ok_val is Dictionary:
+			var before := _build_session_snapshot()
 			var ok: Dictionary = Dictionary(ok_val)
 			display_name = str(ok.get("display_name", "")).strip_edges()
 			is_guest = bool(ok.get("is_guest", is_guest))
 			_ensure_local_display_name()
 			_save()
-			session_changed.emit()
+			_emit_session_changed_if_snapshot_changed(before)
 	return result
 
 
@@ -256,6 +257,7 @@ func _should_apply_auth_result(result: Dictionary) -> bool:
 
 
 func _apply_auth(data: Dictionary, guest: bool) -> void:
+	var before := _build_session_snapshot()
 	user_id = str(data.get("user_id", ""))
 	session_id = str(data.get("session_id", ""))
 	is_guest = bool(data.get("is_guest", guest))
@@ -264,10 +266,11 @@ func _apply_auth(data: Dictionary, guest: bool) -> void:
 	_ensure_local_display_name()
 	_save()
 	_sync_net_context_user_id()
-	session_changed.emit()
+	_emit_session_changed_if_snapshot_changed(before)
 
 
 func _apply_account_profile(data: Dictionary) -> void:
+	var before := _build_session_snapshot()
 	user_id = str(data.get("user_id", user_id)).strip_edges()
 	display_name = str(data.get("display_name", display_name)).strip_edges()
 	is_guest = bool(data.get("is_guest", is_guest))
@@ -277,7 +280,7 @@ func _apply_account_profile(data: Dictionary) -> void:
 	_ensure_local_display_name()
 	_save()
 	_sync_net_context_user_id()
-	session_changed.emit()
+	_emit_session_changed_if_snapshot_changed(before)
 
 
 func _apply_auth_and_refresh(result: Dictionary, guest: bool) -> Dictionary:
@@ -303,6 +306,7 @@ func _build_session_snapshot() -> Dictionary:
 
 
 func _clear_auth_state(emit_signal: bool = true) -> void:
+	var before := _build_session_snapshot()
 	user_id = ""
 	session_id = ""
 	is_guest = true
@@ -311,7 +315,7 @@ func _clear_auth_state(emit_signal: bool = true) -> void:
 	_save()
 	_sync_net_context_user_id()
 	if emit_signal:
-		session_changed.emit()
+		_emit_session_changed_if_snapshot_changed(before)
 
 
 func _clear_account_metadata() -> void:
@@ -335,6 +339,11 @@ func _extract_http_status(result: Dictionary) -> int:
 		var err: Dictionary = Dictionary(err_val)
 		return int(err.get("_http_status", 0))
 	return 0
+
+func _emit_session_changed_if_snapshot_changed(before: Dictionary) -> void:
+	if before == _build_session_snapshot():
+		return
+	session_changed.emit()
 
 
 func _generate_device_id() -> String:

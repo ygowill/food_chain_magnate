@@ -665,15 +665,17 @@ func _setup_account_ui() -> void:
 func _update_account_status() -> void:
 	if account_status_label == null or not is_instance_valid(account_status_label):
 		return
+	var next_status := ""
+	var next_button_text := ""
 	if PlatformSession == null:
-		account_status_label.text = "账号：-"
-		if account_button != null and is_instance_valid(account_button):
-			account_button.text = "登录"
+		next_status = "账号：-"
+		next_button_text = "登录"
+		_apply_account_status_texts(next_status, next_button_text)
 		return
 	if not PlatformSession.is_logged_in:
-		account_status_label.text = "账号：未登录"
-		if account_button != null and is_instance_valid(account_button):
-			account_button.text = "登录"
+		next_status = "账号：未登录"
+		next_button_text = "登录"
+		_apply_account_status_texts(next_status, next_button_text)
 		return
 	var account_name := _get_platform_account_display_name()
 	var account_type := "游客" if PlatformSession.is_guest else "正式"
@@ -681,12 +683,19 @@ func _update_account_status() -> void:
 	var status_line := "状态：%s，%s" % [account_type, email_status]
 	if PlatformSession.is_admin:
 		status_line += "，管理员"
-	account_status_label.text = "账号：%s\n%s" % [account_name, status_line]
+	next_status = "账号：%s\n%s" % [account_name, status_line]
+	next_button_text = "绑定邮箱" if PlatformSession.is_guest else "切换账号"
+	_apply_account_status_texts(next_status, next_button_text)
+
+func _apply_account_status_texts(status_text: String, button_text: String) -> void:
+	if account_status_label != null and is_instance_valid(account_status_label):
+		var next_status := str(status_text)
+		if account_status_label.text != next_status:
+			account_status_label.text = next_status
 	if account_button != null and is_instance_valid(account_button):
-		if PlatformSession.is_guest:
-			account_button.text = "绑定邮箱"
-		else:
-			account_button.text = "切换账号"
+		var next_button_text := str(button_text)
+		if account_button.text != next_button_text:
+			account_button.text = next_button_text
 
 
 func _get_platform_account_display_name() -> String:
@@ -1161,13 +1170,22 @@ func _on_password_dialog_submitted(password: String) -> void:
 # ── 状态文本 ──
 
 func _set_connect_status(text: String) -> void:
-	connect_status_label.text = str(text).strip_edges()
+	var next_text := str(text).strip_edges()
+	if connect_status_label.text == next_text:
+		return
+	connect_status_label.text = next_text
 
 func _set_browse_status(text: String) -> void:
-	browse_status_label.text = str(text).strip_edges()
+	var next_text := str(text).strip_edges()
+	if browse_status_label.text == next_text:
+		return
+	browse_status_label.text = next_text
 
 func _set_room_status(text: String) -> void:
-	room_status_label.text = str(text).strip_edges()
+	var next_text := str(text).strip_edges()
+	if room_status_label.text == next_text:
+		return
+	room_status_label.text = next_text
 
 func _get_current_room_code() -> String:
 	if NetContext == null:

@@ -14,9 +14,11 @@ const PLAYER_COLORS: Array[Color] = [
 ]
 
 var _lobby = null
+var _last_main_content_signature: String = ""
 
 func setup(lobby) -> void:
 	_lobby = lobby
+	_last_main_content_signature = ""
 
 func render_room_state(room_state: Dictionary) -> void:
 	if _lobby == null or not is_instance_valid(_lobby):
@@ -24,21 +26,17 @@ func render_room_state(room_state: Dictionary) -> void:
 
 	var connected := NetClient != null and NetClient.is_online_client_connected()
 	if not connected:
-		_lobby.room_code_label.text = "房间：-"
+		_set_room_code_text("房间：-")
+		if _last_main_content_signature != "__disconnected__":
+			_clear_room_member_sections()
+			_last_main_content_signature = "__disconnected__"
+		if _lobby.start_game_button != null and is_instance_valid(_lobby.start_game_button):
+			_lobby.start_game_button.disabled = true
 		return
 
 	var local_peer_id := int(_lobby.multiplayer.get_unique_id())
 	var code := LobbyViewModelClass.get_room_code(room_state)
-	if code.is_empty():
-		_lobby.room_code_label.text = "房间：-"
-	else:
-		_lobby.room_code_label.text = "房间：%s" % code
-
-	# 清空玩家/旁观者列表
-	for child in _lobby.players_list_container.get_children():
-		child.queue_free()
-	for child2 in _lobby.spectators_list_container.get_children():
-		child2.queue_free()
+	_set_room_code_text("房间：-" if code.is_empty() else "房间：%s" % code)
 
 	var cfg: Dictionary = LobbyViewModelClass.get_room_config(room_state)
 	var desired_player_count := int(cfg.get("desired_player_count", 0))
@@ -46,12 +44,78 @@ func render_room_state(room_state: Dictionary) -> void:
 	var is_host_room: bool = in_room and LobbyViewModelClass.is_host(room_state, local_peer_id)
 	var is_lobby_status: bool = LobbyViewModelClass.get_room_status(room_state) == "Lobby"
 	var is_resume_room: bool = LobbyViewModelClass.is_resume_archive_room(room_state)
-
 	var host_peer_id := LobbyViewModelClass.get_host_peer_id(room_state)
 	var host_seat_index := LobbyViewModelClass.get_host_seat_index(room_state)
-	var player_by_seat: Dictionary = {}
 	var players: Array = LobbyViewModelClass.get_players(room_state)
 	var waiting_members: Array = LobbyViewModelClass.get_waiting_members(room_state)
+	var content_signature := _build_main_content_signature(room_state, local_peer_id)
+	if content_signature != _last_main_content_signature:
+		_rebuild_room_member_sections(
+			players,
+			waiting_members,
+			LobbyViewModelClass.get_spectators(room_state),
+			desired_player_count,
+			is_host_room,
+			is_lobby_status,
+			is_resume_room,
+			host_peer_id,
+			host_seat_index,
+			local_peer_id
+		)
+		_last_main_content_signature = content_signature
+
+	# ── 配置同步 ──
+	var is_host: bool = is_host_room
+	if _lobby._room_config_sync_controller != null and is_instance_valid(_lobby._room_config_sync_controller):
+		_lobby._room_config_sync_controller.sync_editor_from_room_state(room_state, is_host, _lobby._room_config_editor)
+
+	# ── StartGame 按钮 ──
+	var config_error := false
+	if _lobby._room_config_sync_controller != null and is_instance_valid(_lobby._room_config_sync_controller):
+		config_error = bool(_lobby._room_config_sync_controller.is_error())
+	_lobby.start_game_button.disabled = (not connected) or (not LobbyViewModelClass.can_start_game(room_state, local_peer_id)) or _lobby._start_game_flow_in_progress or config_error
+
+	if in_room and _lobby._current_page != _lobby.LobbyPage.ROOM:
+		_lobby._show_page(_lobby.LobbyPage.ROOM, false)
+
+func has_visible_room_state_change(previous_room_state: Dictionary, next_room_state: Dictionary, local_peer_id: int) -> bool:
+	return _build_main_content_signature(previous_room_state, local_peer_id) != _build_main_content_signature(next_room_state, local_peer_id)
+
+func _set_room_code_text(text: String) -> void:
+	if _lobby == null or not is_instance_valid(_lobby):
+		return
+	if _lobby.room_code_label == null or not is_instance_valid(_lobby.room_code_label):
+		return
+	var next_text := str(text)
+	if _lobby.room_code_label.text == next_text:
+		return
+	_lobby.room_code_label.text = next_text
+
+func _clear_room_member_sections() -> void:
+	if _lobby == null or not is_instance_valid(_lobby):
+		return
+	if _lobby.players_list_container != null and is_instance_valid(_lobby.players_list_container):
+		for child in _lobby.players_list_container.get_children():
+			child.queue_free()
+	if _lobby.spectators_list_container != null and is_instance_valid(_lobby.spectators_list_container):
+		for child in _lobby.spectators_list_container.get_children():
+			child.queue_free()
+
+func _rebuild_room_member_sections(
+	players: Array,
+	waiting_members: Array,
+	spectators: Array,
+	desired_player_count: int,
+	is_host_room: bool,
+	is_lobby_status: bool,
+	is_resume_room: bool,
+	host_peer_id: int,
+	host_seat_index: int,
+	local_peer_id: int
+) -> void:
+	_clear_room_member_sections()
+
+	var player_by_seat: Dictionary = {}
 	for p_val in players:
 		if not (p_val is Dictionary):
 			continue
@@ -61,7 +125,6 @@ func render_room_state(room_state: Dictionary) -> void:
 			continue
 		player_by_seat[seat] = p
 
-	# ── 玩家卡片（SectionPanel 包裹） ──
 	var players_panel := _build_section_panel()
 	_lobby.players_list_container.add_child(players_panel)
 
@@ -83,14 +146,14 @@ func render_room_state(room_state: Dictionary) -> void:
 	var seat_count := maxi(players.size(), desired_player_count)
 	for seat_index in range(seat_count):
 		if player_by_seat.has(seat_index):
-			var p: Dictionary = Dictionary(player_by_seat.get(seat_index, {}))
-			var name := str(p.get("name", "")).strip_edges()
+			var p2: Dictionary = Dictionary(player_by_seat.get(seat_index, {}))
+			var name := str(p2.get("name", "")).strip_edges()
 			if name.is_empty():
 				name = "玩家 %d" % (seat_index + 1)
-			var palette_index := int(p.get("color_index", 0))
-			var connected_flag := bool(p.get("connected", true))
-			var forfeited := bool(p.get("forfeited", false))
-			var peer_id := int(p.get("peer_id", 0))
+			var palette_index := int(p2.get("color_index", 0))
+			var connected_flag := bool(p2.get("connected", true))
+			var forfeited := bool(p2.get("forfeited", false))
+			var peer_id := int(p2.get("peer_id", 0))
 
 			var tag := ""
 			if seat_index == host_seat_index or (peer_id > 0 and peer_id == host_peer_id):
@@ -101,7 +164,7 @@ func render_room_state(room_state: Dictionary) -> void:
 				tag = "弃权"
 
 			var player_color := PLAYER_COLORS[palette_index] if palette_index < PLAYER_COLORS.size() else PLAYER_COLORS[0]
-			var restaurant_logo_id := int(p.get("restaurant_logo_id", -1))
+			var restaurant_logo_id := int(p2.get("restaurant_logo_id", -1))
 			var can_edit_logo := is_host_room and is_lobby_status and not is_resume_room
 			var show_unassign_button := is_resume_room and is_lobby_status and is_host_room
 			var card := _build_player_card(
@@ -119,10 +182,9 @@ func render_room_state(room_state: Dictionary) -> void:
 			)
 			players_vbox.add_child(card)
 		else:
-			var card := _build_player_card(seat_index, "等待加入...", Color(0.5, 0.5, 0.55, 0.6), "空位", true, -1, false)
-			players_vbox.add_child(card)
+			var empty_card := _build_player_card(seat_index, "等待加入...", Color(0.5, 0.5, 0.55, 0.6), "空位", true, -1, false)
+			players_vbox.add_child(empty_card)
 
-	# ── 旁观者（SectionPanel 包裹） ──
 	var spectators_panel := _build_section_panel()
 	_lobby.spectators_list_container.add_child(spectators_panel)
 
@@ -136,7 +198,6 @@ func render_room_state(room_state: Dictionary) -> void:
 	UiStylesClass.apply_label_dark(spectators_header)
 	spectators_vbox.add_child(spectators_header)
 
-	var spectators: Array = LobbyViewModelClass.get_spectators(room_state)
 	if spectators.is_empty():
 		var none := Label.new()
 		none.text = "暂无旁观者"
@@ -155,37 +216,77 @@ func render_room_state(room_state: Dictionary) -> void:
 			var s_item := _build_spectator_item(s_name, s_color)
 			spectators_vbox.add_child(s_item)
 
-	# ── 本地 profile 同步（房主分配 Logo 后回写到本地缓存） ──
+	_sync_local_profile_from_players(players, local_peer_id)
+
+func _sync_local_profile_from_players(players: Array, local_peer_id: int) -> void:
+	if _lobby == null or not is_instance_valid(_lobby):
+		return
 	if _lobby.my_color_option != null and is_instance_valid(_lobby.my_color_option):
 		var my_logo_row: Node = _lobby.my_color_option.get_parent()
 		if my_logo_row != null and my_logo_row is CanvasItem:
 			(my_logo_row as CanvasItem).visible = false
 		_lobby.my_color_option.disabled = true
-		var local_player_entry: Dictionary = {}
-		for p_val2 in players:
-			if not (p_val2 is Dictionary):
-				continue
-			var p2: Dictionary = Dictionary(p_val2)
-			if int(p2.get("peer_id", 0)) == local_peer_id:
-				local_player_entry = p2
-				break
-		if not local_player_entry.is_empty():
-			var local_logo_id := int(local_player_entry.get("restaurant_logo_id", -1))
-			_lobby._write_local_player_profile(str(local_player_entry.get("name", _lobby.player_name_edit.text)), local_logo_id)
+	var local_player_entry: Dictionary = {}
+	for p_val in players:
+		if not (p_val is Dictionary):
+			continue
+		var p: Dictionary = Dictionary(p_val)
+		if int(p.get("peer_id", 0)) == local_peer_id:
+			local_player_entry = p
+			break
+	if local_player_entry.is_empty():
+		return
+	var local_logo_id := int(local_player_entry.get("restaurant_logo_id", -1))
+	_lobby._write_local_player_profile(str(local_player_entry.get("name", _lobby.player_name_edit.text)), local_logo_id)
 
-	# ── 配置同步 ──
-	var is_host: bool = is_host_room
-	if _lobby._room_config_sync_controller != null and is_instance_valid(_lobby._room_config_sync_controller):
-		_lobby._room_config_sync_controller.sync_editor_from_room_state(room_state, is_host, _lobby._room_config_editor)
-
-	# ── StartGame 按钮 ──
-	var config_error := false
-	if _lobby._room_config_sync_controller != null and is_instance_valid(_lobby._room_config_sync_controller):
-		config_error = bool(_lobby._room_config_sync_controller.is_error())
-	_lobby.start_game_button.disabled = (not connected) or (not LobbyViewModelClass.can_start_game(room_state, local_peer_id)) or _lobby._start_game_flow_in_progress or config_error
-
-	if in_room and _lobby._current_page != _lobby.LobbyPage.ROOM:
-		_lobby._show_page(_lobby.LobbyPage.ROOM, false)
+func _build_main_content_signature(room_state: Dictionary, local_peer_id: int) -> String:
+	var cfg: Dictionary = LobbyViewModelClass.get_room_config(room_state)
+	var players_norm: Array = []
+	for p_val in LobbyViewModelClass.get_players(room_state):
+		if not (p_val is Dictionary):
+			continue
+		var p: Dictionary = Dictionary(p_val)
+		players_norm.append({
+			"seat_index": int(p.get("seat_index", -1)),
+			"name": str(p.get("name", "")).strip_edges(),
+			"color_index": int(p.get("color_index", 0)),
+			"connected": bool(p.get("connected", false)),
+			"forfeited": bool(p.get("forfeited", false)),
+			"peer_id": int(p.get("peer_id", 0)),
+			"restaurant_logo_id": int(p.get("restaurant_logo_id", -1)),
+		})
+	var waiting_norm: Array = []
+	for member_val in LobbyViewModelClass.get_waiting_members(room_state):
+		if not (member_val is Dictionary):
+			continue
+		var member: Dictionary = Dictionary(member_val)
+		waiting_norm.append({
+			"user_id": str(member.get("user_id", "")).strip_edges(),
+			"name": str(member.get("name", "")).strip_edges(),
+			"role": str(member.get("role", "")).strip_edges(),
+			"connected": bool(member.get("connected", false)),
+		})
+	var spectators_norm: Array = []
+	for s_val in LobbyViewModelClass.get_spectators(room_state):
+		if not (s_val is Dictionary):
+			continue
+		var spectator: Dictionary = Dictionary(s_val)
+		spectators_norm.append({
+			"name": str(spectator.get("name", "")).strip_edges(),
+			"color_index": int(spectator.get("color_index", 0)),
+		})
+	return JSON.stringify({
+		"room_code": LobbyViewModelClass.get_room_code(room_state),
+		"status": LobbyViewModelClass.get_room_status(room_state),
+		"room_mode": LobbyViewModelClass.get_room_mode(room_state),
+		"desired_player_count": int(cfg.get("desired_player_count", 0)),
+		"host_peer_id": LobbyViewModelClass.get_host_peer_id(room_state),
+		"host_seat_index": LobbyViewModelClass.get_host_seat_index(room_state),
+		"local_peer_id": int(local_peer_id),
+		"players": players_norm,
+		"waiting_members": waiting_norm,
+		"spectators": spectators_norm,
+	})
 
 # ── 区块面板构建器 ──
 

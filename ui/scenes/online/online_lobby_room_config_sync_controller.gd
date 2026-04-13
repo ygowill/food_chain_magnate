@@ -8,11 +8,13 @@ var _debounce_timer: Timer = null
 var _state: String = "synced" # synced/dirty/syncing/error
 var _message: String = ""
 var _pending_patch: Dictionary = {}
+var _last_editor_sync_signature: String = ""
 
 func setup(lobby, status_label: Label, debounce_timer: Timer) -> void:
 	_lobby = lobby
 	_status_label = status_label
 	_debounce_timer = debounce_timer
+	_last_editor_sync_signature = ""
 	set_state("synced", "")
 
 func get_state() -> String:
@@ -25,6 +27,7 @@ func reset() -> void:
 	if _debounce_timer != null and is_instance_valid(_debounce_timer):
 		_debounce_timer.stop()
 	_pending_patch = {}
+	_last_editor_sync_signature = ""
 	set_state("synced", "")
 
 func set_state(state: String, message: String) -> void:
@@ -47,6 +50,8 @@ func _apply_state_to_label() -> void:
 			s = "配置：错误 - %s" % _message
 		_:
 			s = "配置：%s" % _state
+	if _status_label.text == s:
+		return
 	_status_label.text = s
 
 func on_request_rejected(code: String, message: String) -> void:
@@ -103,17 +108,35 @@ func sync_editor_from_room_state(room_state: Dictionary, is_host: bool, room_con
 	if not bool(is_host) and _state != "synced":
 		set_state("synced", "")
 	if room_config_editor == null or not is_instance_valid(room_config_editor):
+		_last_editor_sync_signature = ""
 		return
 	var cfg: Dictionary = Dictionary(room_state.get("config", {}))
 	var editable: bool = bool(is_host) and str(room_state.get("status", "")).strip_edges() == "Lobby" and str(room_state.get("room_mode", "")).strip_edges() != "resume_archive"
-	if not bool(is_host) or _state == "synced" or _state == "syncing":
+	var should_sync_from_room := (not bool(is_host)) or _state == "synced" or _state == "syncing"
+	var sync_signature := _build_editor_sync_signature(cfg, editable, should_sync_from_room, room_config_editor)
+	if sync_signature == _last_editor_sync_signature:
+		return
+	if should_sync_from_room:
 		if room_config_editor.has_method("set_from_room_config"):
 			room_config_editor.call("set_from_room_config", cfg)
 		if bool(is_host) and _state == "syncing":
 			_pending_patch = {}
 			set_state("synced", "")
-		if room_config_editor.has_method("set_editable"):
-			room_config_editor.call("set_editable", editable)
+	if room_config_editor.has_method("set_editable"):
+		room_config_editor.call("set_editable", editable)
+	_last_editor_sync_signature = _build_editor_sync_signature(cfg, editable, ((not bool(is_host)) or _state == "synced" or _state == "syncing"), room_config_editor)
+
+func _build_editor_sync_signature(cfg: Dictionary, editable: bool, should_sync_from_room: bool, room_config_editor: Object) -> String:
+	var editor_id := 0
+	if room_config_editor != null and is_instance_valid(room_config_editor):
+		editor_id = int(room_config_editor.get_instance_id())
+	return JSON.stringify({
+		"editor_id": editor_id,
+		"cfg": cfg.duplicate(true),
+		"editable": bool(editable),
+		"should_sync_from_room": bool(should_sync_from_room),
+		"state": str(_state),
+	})
 
 func pre_sync_for_start_game(room_state: Dictionary, net_client: Object, room_config_editor: Object, timeout_sec: float = 5.0) -> bool:
 	if str(room_state.get("room_mode", "")).strip_edges() == "resume_archive":
