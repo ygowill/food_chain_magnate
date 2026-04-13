@@ -1,7 +1,7 @@
 {
   "id": "local_manager",
   "name": "区域经理",
-  "description": "放置新餐厅，并设置为即将开业。提供免下车服务",
+  "description": "放置一个即将开业的新餐厅；在岗时，你的所有餐厅提供免下车服务",
   "salary": true,
   "unique": false,
   "role": "new_shop",

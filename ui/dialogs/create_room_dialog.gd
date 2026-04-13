@@ -6,9 +6,9 @@ signal create_requested(room_password: String, config_patch: Dictionary, resume_
 signal cancelled()
 
 const ArchiveClass = preload("res://core/engine/game_engine/archive.gd")
+const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const ResumeLogHistoryBuilderClass = preload("res://ui/dialogs/create_room_resume_log_history_builder.gd")
-const RoomConfigEditorClass = preload("res://ui/components/room_config_editor/room_config_editor.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 const WEB_UPLOAD_DIR := "user://web_uploads"
@@ -41,7 +41,6 @@ var _archive_preview_label: Label = null
 var _resume_log_list: ItemList = null
 var _resume_hint_label: Label = null
 var _archive_file_dialog: FileDialog = null
-var _room_config_editor = null
 var _error_label: Label = null
 var _create_button: Button = null
 var _cancel_button: Button = null
@@ -165,6 +164,12 @@ func _build_ui() -> void:
 	_resume_checkbox.toggled.connect(_on_resume_checkbox_toggled)
 	content_root.add_child(_resume_checkbox)
 
+	var config_hint_label := Label.new()
+	config_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	config_hint_label.text = "其他游戏参数和模块选择会在进入房间后调整。"
+	UiStylesClass.apply_label_hint_dark(config_hint_label)
+	content_root.add_child(config_hint_label)
+
 	_archive_controls = VBoxContainer.new()
 	_archive_controls.add_theme_constant_override("separation", 8)
 	content_root.add_child(_archive_controls)
@@ -227,9 +232,6 @@ func _build_ui() -> void:
 	line2.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	content_root.add_child(line2)
 
-	_room_config_editor = RoomConfigEditorClass.new()
-	content_root.add_child(_room_config_editor)
-
 	_error_label = Label.new()
 	_error_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_error_label.autowrap_mode = TextServer.AUTOWRAP_WORD
@@ -281,10 +283,10 @@ func _update_dialog_panel_size() -> void:
 		return
 	var viewport_size := get_viewport_rect().size
 	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
-		_dialog_panel.custom_minimum_size = Vector2(1200, 860)
+		_dialog_panel.custom_minimum_size = Vector2(920, 760)
 		return
-	var panel_width := maxf(260.0, minf(1200.0, viewport_size.x - 32.0))
-	var panel_height := maxf(420.0, minf(860.0, viewport_size.y - 32.0))
+	var panel_width := maxf(260.0, minf(920.0, viewport_size.x - 32.0))
+	var panel_height := maxf(420.0, minf(760.0, viewport_size.y - 32.0))
 	_dialog_panel.custom_minimum_size = Vector2(panel_width, panel_height)
 
 func _open_archive_file_dialog_popup() -> void:
@@ -413,9 +415,18 @@ func _apply_resume_mode_ui() -> void:
 	var use_resume := _resume_checkbox != null and is_instance_valid(_resume_checkbox) and _resume_checkbox.button_pressed
 	if _archive_controls != null and is_instance_valid(_archive_controls):
 		_archive_controls.visible = use_resume
-	if _room_config_editor != null and is_instance_valid(_room_config_editor):
-		_room_config_editor.set_editable(not use_resume)
 	_create_button.text = "从存档创建房间" if use_resume else "创建并进入"
+
+func _build_default_room_config_patch() -> Dictionary:
+	return {
+		"desired_player_count": Globals.MIN_PLAYERS,
+		"seed_mode": "random",
+		"seed": 0,
+		"enabled_modules_v2": GameDefaultsClass.build_default_enabled_modules_v2(),
+		"modules_v2_base_dir": GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR,
+		"allow_spectators": true,
+		"game_option_overrides": {},
+	}
 
 func _build_resume_config_patch(path: String, archive: Dictionary, state, current_index: int) -> Dictionary:
 	var player_count := 0
@@ -670,8 +681,6 @@ func _apply_loaded_archive(path: String, archive: Dictionary, engine) -> void:
 		_archive_path_edit.tooltip_text = path
 	_populate_resume_log_history()
 	_apply_resume_target_index(_resume_original_current_index, _resume_original_log_item_index)
-	if _room_config_editor != null and is_instance_valid(_room_config_editor):
-		_room_config_editor.set_from_room_config(_resume_config_patch)
 
 func _load_archive_from_path(path: String) -> void:
 	var archive_r: Result = ArchiveClass.load_archive_from_file(path)
@@ -727,12 +736,9 @@ func _on_resume_log_item_selected(index: int) -> void:
 
 func _on_create_pressed() -> void:
 	_clear_error()
-	if _room_config_editor == null or not is_instance_valid(_room_config_editor):
-		_set_error("配置编辑器缺失。")
-		return
 
 	var use_resume := _resume_checkbox != null and is_instance_valid(_resume_checkbox) and _resume_checkbox.button_pressed
-	var patch: Dictionary = {}
+	var patch: Dictionary = _build_default_room_config_patch()
 	var resume_bootstrap: Dictionary = {}
 	if use_resume:
 		if _resume_room_bootstrap.is_empty() or _resume_config_patch.is_empty():
@@ -740,12 +746,6 @@ func _on_create_pressed() -> void:
 			return
 		patch = _resume_config_patch.duplicate(true)
 		resume_bootstrap = _resume_room_bootstrap.duplicate(true)
-	else:
-		var vr: Result = _room_config_editor.validate()
-		if not vr.ok:
-			_set_error(vr.error)
-			return
-		patch = _room_config_editor.get_config_patch()
 
 	var password := str(_password_edit.text) if (_password_edit != null and is_instance_valid(_password_edit)) else ""
 	close()
