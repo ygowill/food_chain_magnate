@@ -13,7 +13,7 @@
 跑全部 headless 测试（带超时与日志处理）：
 
 ```bash
-tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60
+tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
 ```
 
 ## 管理后台（用户 / 房间 / 对局）

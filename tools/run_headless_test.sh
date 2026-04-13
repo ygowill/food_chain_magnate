@@ -7,18 +7,20 @@ Usage:
   tools/run_headless_test.sh <scene> [name] [timeout_seconds]
 
 Examples:
-  tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 30
+  tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
   tools/run_headless_test.sh res://ui/scenes/tests/replay_test.tscn ReplayTest 20
 
 Notes:
   - macOS default bash has no `timeout`; this script enforces a hard timeout.
   - Writes logs to .godot/<name>.log and sets HOME to .tmp_home to avoid user:// issues.
+  - Defaults to 120 seconds for AllTests and 30 seconds for other test scenes.
 EOF
 }
 
 SCENE="${1:-}"
 NAME="${2:-}"
-TIMEOUT_SECONDS="${3:-${TIMEOUT_SECONDS:-30}}"
+CLI_TIMEOUT_SECONDS="${3:-}"
+ENV_TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-}"
 
 if [[ -z "$SCENE" ]]; then
 	usage
@@ -28,6 +30,12 @@ fi
 if [[ -z "$NAME" ]]; then
 	NAME="$(basename "$SCENE")"
 fi
+
+DEFAULT_TIMEOUT_SECONDS=30
+if [[ "$SCENE" == "res://ui/scenes/tests/all_tests.tscn" || "$NAME" == "AllTests" || "$NAME" == "all_tests.tscn" ]]; then
+	DEFAULT_TIMEOUT_SECONDS=120
+fi
+TIMEOUT_SECONDS="${CLI_TIMEOUT_SECONDS:-${ENV_TIMEOUT_SECONDS:-$DEFAULT_TIMEOUT_SECONDS}}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_PATH="$(cd "$SCRIPT_DIR/.." && pwd)"

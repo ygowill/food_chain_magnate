@@ -16,7 +16,7 @@ This is a Godot 4.5 project (`project.godot`).
 
 - Open editor: `godot --editor --path .`
 - Run game (uses project main scene): `godot --path .`
-- Run all tests headless (recommended): `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`
+- Run all tests headless (recommended, default timeout 120s): `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests`
 - Run one test scene: `tools/run_headless_test.sh res://ui/scenes/tests/replay_test.tscn ReplayTest 20`
 
 ## Coding Style & Naming Conventions

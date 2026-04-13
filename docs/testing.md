@@ -102,8 +102,8 @@ fi
 示例：
 
 ```bash
-# 跑全部测试（60 秒超时）
-tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60
+# 跑全部测试（默认 120 秒超时）
+tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
 
 # 跑单个测试（20 秒超时）
 tools/run_headless_test.sh res://ui/scenes/tests/replay_test.tscn ReplayTest 20

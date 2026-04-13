@@ -409,7 +409,7 @@ func _build_resume_players_panel(player_summaries: Array, current_players: Array
 	panel.add_child(root)
 
 	var header := Label.new()
-	header.text = "存档玩家详情"
+	header.text = "存档玩家详情（P1 / P2 为原存档位）"
 	header.add_theme_font_size_override("font_size", 16)
 	UiStylesClass.apply_label_dark(header)
 	root.add_child(header)
@@ -494,7 +494,7 @@ func _build_resume_player_detail_card(summary: Dictionary, assigned_name: String
 	title_row.add_child(accent)
 
 	var title_label := Label.new()
-	title_label.text = "P%d 存档" % (player_id + 1)
+	title_label.text = "存档位 P%d" % (player_id + 1)
 	title_label.add_theme_font_size_override("font_size", 15)
 	UiStylesClass.apply_label_dark(title_label)
 	title_row.add_child(title_label)
@@ -509,7 +509,7 @@ func _build_resume_player_detail_card(summary: Dictionary, assigned_name: String
 
 	var assignment_label := Label.new()
 	assignment_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	assignment_label.text = "当前分配：%s" % assigned_name
+	assignment_label.text = "当前接管该存档位：%s" % assigned_name
 	UiStylesClass.apply_label_hint_dark(assignment_label)
 	root.add_child(assignment_label)
 
@@ -746,6 +746,13 @@ func _build_waiting_members_panel(waiting_members: Array, desired_player_count: 
 	UiStylesClass.apply_label_dark(header)
 	root.add_child(header)
 
+	if is_host_room:
+		var hint := Label.new()
+		hint.autowrap_mode = TextServer.AUTOWRAP_WORD
+		hint.text = "请按右侧写明的存档位 P1 / P2 / P3 ... 分配；被分配的玩家会继续该存档位原本的公司状态。"
+		UiStylesClass.apply_label_hint_dark(hint)
+		root.add_child(hint)
+
 	var available_seats: Array[int] = []
 	for seat_index in range(desired_player_count):
 		if not player_by_seat.has(seat_index):
@@ -793,7 +800,7 @@ func _build_waiting_members_panel(waiting_members: Array, desired_player_count: 
 			continue
 		for seat_index2 in available_seats:
 			var btn := Button.new()
-			btn.text = "P%d" % (seat_index2 + 1)
+			btn.text = "分配到P%d" % (seat_index2 + 1)
 			UiStylesClass.apply_button_secondary(btn)
 			var user_id := str(member.get("user_id", "")).strip_edges()
 			btn.disabled = user_id.is_empty()

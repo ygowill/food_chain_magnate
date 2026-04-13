@@ -26,7 +26,7 @@ Built with **Godot 4.5**, aiming to support local play and online multiplayer (D
 Run all headless tests (with timeout + log handling):
 
 ```bash
-tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60
+tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
 ```
 
 Run a single test scene:

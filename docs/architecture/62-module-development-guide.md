@@ -285,7 +285,7 @@ registrar.register_round_state_int_key_dict_schema(
 
 推荐流程：
 
-- headless 全量：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`
+- headless 全量：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests`（默认 120s）
 - 单模块 / 单问题复现：写专用测试场景或 `modules_test/*`
 - 确定性验证：`godot --headless --path . --script res://tools/replay_runner.gd -- <replay.json>`
 

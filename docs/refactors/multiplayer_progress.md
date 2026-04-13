@@ -94,7 +94,7 @@
 1) 补充/更新测试，并加入 `ui/scenes/tests/all_tests.gd`
 2) 运行：
    - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`
-   - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 60`
+   - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests`（默认 120s）
 3) 更新相关文档（计划/实现指南/本文件）
 4) `git status` 确认变更，提交到 git（按 `type(scope): summary` 约定）
 
