@@ -108,6 +108,8 @@ var _logo_piece_ids: Array[String] = []
 
 var _platform_rooms: Array = []
 var _platform_busy: bool = false
+var _background_room_refresh_in_progress: bool = false
+var _room_refresh_request_serial: int = 0
 var _platform_entered: bool = false
 var _ws_connect_in_progress: bool = false
 var _editing_display_name: bool = false
@@ -827,27 +829,46 @@ func _platform_resume_room(room_code: String) -> Dictionary:
 			PlatformApi.base_url = base_url
 	return await PlatformApi.resume_room(str(room_code).strip_edges().to_upper(), PlatformSession.session_id)
 
-func _platform_refresh_rooms(show_error_dialog: bool = true) -> void:
+func _platform_refresh_rooms(show_error_dialog: bool = true, background_refresh: bool = false) -> void:
 	if _platform_busy:
 		return
-	_platform_busy = true
-	_set_browse_status("正在刷新房间列表...")
-	_refresh_ui()
-	var lr: Result = await _platform_ensure_session()
-	if not lr.ok:
-		_platform_busy = false
-		if show_error_dialog:
-			_set_browse_status("")
-			_show_error_dialog("平台登录失败", lr.error)
-		else:
-			_set_browse_status("自动刷新失败：%s" % lr.error)
-		_refresh_ui()
+	if background_refresh and _background_room_refresh_in_progress:
 		return
+
+	_room_refresh_request_serial += 1
+	var request_serial := _room_refresh_request_serial
+
+	if background_refresh:
+		_background_room_refresh_in_progress = true
+		if PlatformSession == null or not PlatformSession.is_logged_in:
+			_background_room_refresh_in_progress = false
+			return
+	else:
+		_platform_busy = true
+		_set_browse_status("正在刷新房间列表...")
+		_refresh_ui()
+		var lr: Result = await _platform_ensure_session()
+		if not lr.ok:
+			_platform_busy = false
+			if show_error_dialog:
+				_set_browse_status("")
+				_show_error_dialog("平台登录失败", lr.error)
+			else:
+				_set_browse_status("自动刷新失败：%s" % lr.error)
+			_refresh_ui()
+			return
 	_platform_entered = true
 
 	var rr: Dictionary = await PlatformApi.list_rooms(PlatformSession.session_id)
-	_platform_busy = false
+	if background_refresh:
+		_background_room_refresh_in_progress = false
+	else:
+		_platform_busy = false
+	if request_serial != _room_refresh_request_serial:
+		return
 	if rr.has("error"):
+		if background_refresh:
+			return
 		var rr_error := str(rr.get("error", "")).strip_edges()
 		if show_error_dialog:
 			_set_browse_status("")
@@ -858,6 +879,8 @@ func _platform_refresh_rooms(show_error_dialog: bool = true) -> void:
 		return
 	var ok_val = rr.get("ok", null)
 	if not (ok_val is Array):
+		if background_refresh:
+			return
 		if show_error_dialog:
 			_set_browse_status("")
 			_show_error_dialog("获取房间列表失败", "后端返回格式错误")
@@ -865,7 +888,16 @@ func _platform_refresh_rooms(show_error_dialog: bool = true) -> void:
 			_set_browse_status("自动刷新失败：后端返回格式错误")
 		_refresh_ui()
 		return
-	_platform_rooms = Array(ok_val).duplicate(true)
+	var next_rooms := Array(ok_val).duplicate(true)
+	var visible_changed := true
+	if _room_list_controller != null and is_instance_valid(_room_list_controller) and _room_list_controller.has_method("has_visible_room_list_change"):
+		visible_changed = bool(_room_list_controller.has_visible_room_list_change(_platform_rooms, next_rooms))
+	_platform_rooms = next_rooms
+	if background_refresh:
+		if _current_page == LobbyPage.BROWSE and visible_changed:
+			_set_browse_status("")
+			_refresh_ui()
+		return
 	_set_browse_status("")
 	_refresh_ui()
 
@@ -1396,7 +1428,7 @@ func _refresh_rooms_after_browse_entry() -> void:
 func _on_room_auto_refresh_timeout() -> void:
 	if not _should_auto_refresh_rooms():
 		return
-	await _platform_refresh_rooms(false)
+	await _platform_refresh_rooms(false, true)
 
 # ── 餐厅 Logo 选择 ──
 

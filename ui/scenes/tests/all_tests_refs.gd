@@ -65,6 +65,7 @@ const GameMenuDebugControllerOnlineSurrenderQuitTestClass = preload("res://core/
 const GameMenuControllerOnlineForfeitConfirmTestClass = preload("res://core/tests/game_menu_controller_online_forfeit_confirm_test.gd")
 const OnlineRoomManagerTestClass = preload("res://core/tests/online_room_manager_test.gd")
 const OnlineRoomListTestClass = preload("res://core/tests/online_room_list_test.gd")
+const OnlineLobbyRoomListControllerTestClass = preload("res://core/tests/online_lobby_room_list_controller_test.gd")
 const OnlineStartGameReplayTestClass = preload("res://core/tests/online_start_game_replay_test.gd")
 const MatchFinalizeParticipantLogoPayloadTestClass = preload("res://core/tests/match_finalize_participant_logo_payload_test.gd")
 const OnlineResyncArchiveTestClass = preload("res://core/tests/online_resync_archive_test.gd")

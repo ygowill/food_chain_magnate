@@ -5,17 +5,25 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 var _lobby = null
 var _rooms_list_container: VBoxContainer = null
+var _last_render_signature: String = ""
 
 func setup(lobby) -> void:
 	_lobby = lobby
 	if _lobby != null and is_instance_valid(_lobby):
 		_rooms_list_container = _lobby.rooms_list_container
+	_last_render_signature = ""
 
 func render_room_list(rooms: Array) -> void:
 	if _lobby == null or not is_instance_valid(_lobby):
 		return
 	if _rooms_list_container == null or not is_instance_valid(_rooms_list_container):
 		return
+
+	var current_code: String = _lobby._get_current_room_code()
+	var next_signature := _build_render_signature(rooms, current_code)
+	if next_signature == _last_render_signature:
+		return
+	_last_render_signature = next_signature
 
 	for child in _rooms_list_container.get_children():
 		child.queue_free()
@@ -27,8 +35,6 @@ func render_room_list(rooms: Array) -> void:
 		UiStylesClass.apply_label_hint_dark(hint)
 		_rooms_list_container.add_child(hint)
 		return
-
-	var current_code: String = _lobby._get_current_room_code()
 
 	for room_val in rooms:
 		if not (room_val is Dictionary):
@@ -47,6 +53,32 @@ func render_room_list(rooms: Array) -> void:
 
 		var card := _build_room_card(code, status, desired, player_count, password_required, allow_spectators, host_name, current_code)
 		_rooms_list_container.add_child(card)
+
+func has_visible_room_list_change(previous_rooms: Array, next_rooms: Array) -> bool:
+	var current_code := ""
+	if _lobby != null and is_instance_valid(_lobby):
+		current_code = _lobby._get_current_room_code()
+	return _build_render_signature(previous_rooms, current_code) != _build_render_signature(next_rooms, current_code)
+
+func _build_render_signature(rooms: Array, current_code: String) -> String:
+	var normalized: Array = []
+	for room_val in rooms:
+		if not (room_val is Dictionary):
+			continue
+		var room: Dictionary = Dictionary(room_val)
+		normalized.append({
+			"room_code": str(room.get("room_code", "")).strip_edges().to_upper(),
+			"status": str(room.get("status", "")).strip_edges(),
+			"desired_player_count": int(room.get("desired_player_count", 0)),
+			"player_count": int(room.get("player_count", 0)),
+			"password_required": bool(room.get("password_required", false)),
+			"allow_spectators": bool(room.get("allow_spectators", true)),
+			"host_name": str(room.get("host_name", "")).strip_edges(),
+		})
+	return JSON.stringify({
+		"current_code": str(current_code).strip_edges().to_upper(),
+		"rooms": normalized,
+	})
 
 func _build_room_card(code: String, status: String, desired: int, player_count: int, password_required: bool, allow_spectators: bool, host_name: String, current_code: String) -> Control:
 	# 卡片外壳
