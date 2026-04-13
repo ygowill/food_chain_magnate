@@ -73,7 +73,8 @@ const _EXTRA_PLATFORM_SERVERS: Array = []
 @onready var my_color_option: OptionButton = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/LeftColumn/MyColorRow/MyColorOption
 @onready var players_list_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/LeftColumn/PlayersList
 @onready var spectators_list_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/LeftColumn/SpectatorsList
-@onready var room_config_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/RightColumn/RoomConfigContainer
+@onready var room_params_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/LeftColumn/RoomParamsContainer
+@onready var room_modules_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/RightColumn/RoomModulesContainer
 @onready var leave_room_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomActionsRow/LeaveRoomButton
 @onready var start_game_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomActionsRow/StartGameButton
 @onready var room_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomStatus
@@ -270,7 +271,9 @@ func _get_default_logo_count() -> int:
 func _ensure_editors() -> void:
 	if _room_config_editor == null or not is_instance_valid(_room_config_editor):
 		_room_config_editor = RoomConfigEditorClass.new()
-		room_config_container.add_child(_room_config_editor)
+		page_room.add_child(_room_config_editor)
+		_room_config_editor.visible = false
+		_room_config_editor.mount_split_layout(room_params_container, room_modules_container)
 		_room_config_editor.changed.connect(_on_room_config_changed)
 		_room_config_editor.validation_failed.connect(func(msg: String) -> void:
 			_ensure_config_sync_controller()

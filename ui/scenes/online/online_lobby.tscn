@@ -256,14 +256,14 @@ custom_minimum_size = Vector2(0, 2)
 layout_mode = 2
 color = Color(0.73, 0.23, 0.18, 0.5)
 
-[node name="RoomBody" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage"]
+[node name="RoomBody" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage"]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 12
 
 [node name="LeftColumn" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody"]
 layout_mode = 2
-size_flags_horizontal = 3
+custom_minimum_size = Vector2(420, 0)
 theme_override_constants/separation = 8
 
 [node name="MyColorRow" type="HBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/LeftColumn"]
@@ -288,13 +288,19 @@ layout_mode = 2
 size_flags_vertical = 0
 theme_override_constants/separation = 4
 
+[node name="RoomParamsContainer" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/LeftColumn"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
 [node name="RightColumn" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody"]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 3
 theme_override_constants/separation = 8
 
-[node name="RoomConfigContainer" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/RightColumn"]
+[node name="RoomModulesContainer" type="VBoxContainer" parent="Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/RightColumn"]
 layout_mode = 2
+size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_constants/separation = 10
 

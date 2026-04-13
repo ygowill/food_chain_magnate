@@ -23,6 +23,9 @@ var _allow_spectators_check: CheckBox = null
 var _modules_base_dir: String = GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR
 
 var _error_label: Label = null
+var _main_columns: HBoxContainer = null
+var _left_column: VBoxContainer = null
+var _right_column: VBoxContainer = null
 
 var _presets: Array = []
 var _preset_option: OptionButton = null
@@ -59,6 +62,20 @@ func get_allow_spectators_value() -> bool:
 	if _allow_spectators_check == null or not is_instance_valid(_allow_spectators_check):
 		return true
 	return bool(_allow_spectators_check.button_pressed)
+
+func mount_split_layout(params_parent: Control, modules_parent: Control, error_parent: Control = null) -> void:
+	_ensure_ui()
+	if params_parent == null or not is_instance_valid(params_parent):
+		return
+	if modules_parent == null or not is_instance_valid(modules_parent):
+		return
+	_move_node_to(_left_column, params_parent)
+	_move_node_to(_right_column, modules_parent)
+
+	var target_error_parent: Control = params_parent
+	if error_parent != null and is_instance_valid(error_parent):
+		target_error_parent = error_parent
+	_move_node_to(_error_label, target_error_parent)
 
 func set_from_room_config(cfg: Dictionary) -> void:
 	_ensure_ui()
@@ -204,20 +221,20 @@ func _ensure_ui() -> void:
 	add_theme_constant_override("separation", 10)
 
 	# ── 双栏主布局 ──
-	var main_columns := HBoxContainer.new()
-	main_columns.add_theme_constant_override("separation", 40)
-	main_columns.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	main_columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	add_child(main_columns)
+	_main_columns = HBoxContainer.new()
+	_main_columns.add_theme_constant_override("separation", 40)
+	_main_columns.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_main_columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	add_child(_main_columns)
 
 	# ── 左栏：游戏参数 ──
-	var left_column := VBoxContainer.new()
-	left_column.custom_minimum_size = Vector2(400, 0)
-	left_column.add_theme_constant_override("separation", 10)
-	main_columns.add_child(left_column)
+	_left_column = VBoxContainer.new()
+	_left_column.custom_minimum_size = Vector2(400, 0)
+	_left_column.add_theme_constant_override("separation", 10)
+	_main_columns.add_child(_left_column)
 
 	var params_panel := _build_section_panel()
-	left_column.add_child(params_panel)
+	_left_column.add_child(params_panel)
 
 	var params_vbox := VBoxContainer.new()
 	params_vbox.add_theme_constant_override("separation", 14)
@@ -302,17 +319,18 @@ func _ensure_ui() -> void:
 	params_vbox.add_child(_allow_spectators_check)
 
 	# ── 右栏：预设方案 + 模块选择 ──
-	var right_column := VBoxContainer.new()
-	right_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_column.add_theme_constant_override("separation", 6)
-	main_columns.add_child(right_column)
+	_right_column = VBoxContainer.new()
+	_right_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_right_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_right_column.add_theme_constant_override("separation", 6)
+	_main_columns.add_child(_right_column)
 
 	_load_presets()
 	if not _presets.is_empty():
-		_build_preset_row(right_column)
+		_build_preset_row(_right_column)
 
 	_module_selector = ModuleSelectorClass.new()
-	right_column.add_child(_module_selector)
+	_right_column.add_child(_module_selector)
 	if _module_selector.has_method("set_show_tooltips"):
 		_module_selector.call("set_show_tooltips", false)
 	if _module_selector.has_method("set_show_notes"):
@@ -500,3 +518,15 @@ func _clear_error() -> void:
 		return
 	_error_label.text = ""
 	_error_label.visible = false
+
+func _move_node_to(node: Node, new_parent: Node) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if new_parent == null or not is_instance_valid(new_parent):
+		return
+	if node.get_parent() == new_parent:
+		return
+	var current_parent := node.get_parent()
+	if current_parent != null and is_instance_valid(current_parent):
+		current_parent.remove_child(node)
+	new_parent.add_child(node)
