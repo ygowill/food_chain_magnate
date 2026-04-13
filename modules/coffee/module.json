@@ -13,7 +13,7 @@
 			"module_selector": {
 				"group_id": "map_expansion",
 				"group_title": "地图变体",
-				"group_order": 10,
+				"group_order": 40,
 				"order": 2
 			},
 			"placement_overlays": [

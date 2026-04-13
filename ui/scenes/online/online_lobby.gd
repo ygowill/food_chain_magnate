@@ -35,7 +35,8 @@ const _EXTRA_PLATFORM_SERVERS: Array = []
 @onready var panel: PanelContainer = $Center/Panel
 @onready var inner_border: PanelContainer = $Center/Panel/OuterMargin/InnerBorder
 @onready var back_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/TopBar/BackButton
-@onready var top_title_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/TopBar/Title
+@onready var top_title_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/TopBar/TopContent/Title
+@onready var room_meta_bar: HBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/TopBar/TopContent/RoomMetaBar
 @onready var account_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/TopBar/AccountBar/AccountStatusLabel
 @onready var account_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/TopBar/AccountBar/AccountButton
 @onready var pages: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages
@@ -66,9 +67,9 @@ const _EXTRA_PLATFORM_SERVERS: Array = []
 
 # ── RoomPage ──
 @onready var page_room: Control = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage
-@onready var room_code_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomHeader/RoomCodeLabel
-@onready var copy_room_code_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomHeader/CopyRoomCodeButton
-@onready var config_sync_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomHeader/ConfigSyncStatus
+@onready var room_code_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/TopBar/TopContent/RoomMetaBar/RoomCodeLabel
+@onready var copy_room_code_button: Button = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/TopBar/TopContent/RoomMetaBar/CopyRoomCodeButton
+@onready var config_sync_status_label: Label = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/TopBar/TopContent/RoomMetaBar/ConfigSyncStatus
 @onready var my_logo_row: HBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/LeftColumn/MyColorRow
 @onready var my_color_option: OptionButton = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/LeftColumn/MyColorRow/MyColorOption
 @onready var players_list_container: VBoxContainer = $Center/Panel/OuterMargin/InnerBorder/Margin/Root/Pages/RoomPage/RoomBody/LeftColumn/PlayersList
@@ -671,23 +672,17 @@ func _update_account_status() -> void:
 	var next_status := ""
 	var next_button_text := ""
 	if PlatformSession == null:
-		next_status = "账号：-"
+		next_status = "未登录"
 		next_button_text = "登录"
 		_apply_account_status_texts(next_status, next_button_text)
 		return
 	if not PlatformSession.is_logged_in:
-		next_status = "账号：未登录"
+		next_status = "未登录"
 		next_button_text = "登录"
 		_apply_account_status_texts(next_status, next_button_text)
 		return
-	var account_name := _get_platform_account_display_name()
-	var account_type := "游客" if PlatformSession.is_guest else "正式"
-	var email_status := _get_platform_email_status_text()
-	var status_line := "状态：%s，%s" % [account_type, email_status]
-	if PlatformSession.is_admin:
-		status_line += "，管理员"
-	next_status = "账号：%s\n%s" % [account_name, status_line]
-	next_button_text = "绑定邮箱" if PlatformSession.is_guest else "切换账号"
+	next_status = _get_platform_account_display_name()
+	next_button_text = "账号设置"
 	_apply_account_status_texts(next_status, next_button_text)
 
 func _apply_account_status_texts(status_text: String, button_text: String) -> void:
@@ -700,7 +695,6 @@ func _apply_account_status_texts(status_text: String, button_text: String) -> vo
 		if account_button.text != next_button_text:
 			account_button.text = next_button_text
 
-
 func _get_platform_account_display_name() -> String:
 	if PlatformSession == null:
 		return "-"
@@ -712,14 +706,6 @@ func _get_platform_account_display_name() -> String:
 		return "%s%s" % [_GUEST_NAME_PREFIX, suffix]
 	return "%s%s" % [_ACCOUNT_NAME_PREFIX, suffix]
 
-
-func _get_platform_email_status_text() -> String:
-	if PlatformSession == null:
-		return "邮箱未知"
-	var bound_email := str(PlatformSession.email).strip_edges()
-	if bound_email.is_empty():
-		return "邮箱未绑定"
-	return "邮箱已绑定：%s" % bound_email
 
 func _ensure_auth_dialog() -> void:
 	if _auth_dialog != null and is_instance_valid(_auth_dialog):
@@ -774,12 +760,14 @@ func _on_account_bind_requested() -> void:
 func _on_account_pressed() -> void:
 	if OS.has_feature("headless"):
 		return
+	if _current_page == LobbyPage.ROOM:
+		return
 	_ensure_auth_dialog()
 	if PlatformSession == null or not PlatformSession.is_logged_in:
 		if _auth_dialog != null and is_instance_valid(_auth_dialog):
 			_auth_dialog.call("open")
 		return
-	# 统一打开账号详情；游客在详情中升级绑定，正式账号可修改邮箱/密码与切换账号。
+	# 统一打开账号详情；游客在详情中升级绑定，正式账号可修改邮箱/密码与退出登录。
 	_ensure_account_settings_dialog()
 	if _account_settings_dialog == null or not is_instance_valid(_account_settings_dialog):
 		return
@@ -1080,6 +1068,7 @@ func _show_page(page: int, _request_rooms_on_entry: bool = true) -> void:
 		panel.custom_minimum_size = Vector2(980, 720)
 
 	_update_top_title()
+	_refresh_top_bar_layout()
 	_sync_room_auto_refresh_timer()
 	if page == LobbyPage.BROWSE and _request_rooms_on_entry and previous_page != LobbyPage.BROWSE:
 		call_deferred("_refresh_rooms_after_browse_entry")
@@ -1108,6 +1097,15 @@ func _update_top_title() -> void:
 			top_title_label.text = "房间列表"
 		LobbyPage.ROOM:
 			top_title_label.text = "房间内"
+
+func _refresh_top_bar_layout() -> void:
+	var in_room_page := _current_page == LobbyPage.ROOM
+	if top_title_label != null and is_instance_valid(top_title_label):
+		top_title_label.visible = not in_room_page
+	if room_meta_bar != null and is_instance_valid(room_meta_bar):
+		room_meta_bar.visible = in_room_page
+	if account_button != null and is_instance_valid(account_button):
+		account_button.visible = not in_room_page
 
 func _refresh_ui() -> void:
 	_ensure_room_renderers()

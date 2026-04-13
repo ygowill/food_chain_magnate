@@ -1,6 +1,8 @@
 # OnlineLobby：Room 配置自动同步控制器（debounce/dirty/syncing/error）
 extends RefCounted
 
+const _ROOM_STATUS_ERROR_PREFIX := "配置异常："
+
 var _lobby = null
 var _status_label: Label = null
 var _debounce_timer: Timer = null
@@ -41,18 +43,38 @@ func _apply_state_to_label() -> void:
 	var s := ""
 	match _state:
 		"synced":
-			s = "配置：已同步"
+			s = "已同步"
 		"dirty":
-			s = "配置：待同步..."
+			s = "待同步"
 		"syncing":
-			s = "配置：同步中..."
+			s = "同步中"
 		"error":
-			s = "配置：错误 - %s" % _message
+			s = "配置异常"
 		_:
-			s = "配置：%s" % _state
+			s = str(_state)
 	if _status_label.text == s:
+		_sync_room_status_message()
 		return
 	_status_label.text = s
+	_sync_room_status_message()
+
+func _sync_room_status_message() -> void:
+	if _lobby == null or not is_instance_valid(_lobby):
+		return
+	if not _lobby.has_method("_set_room_status"):
+		return
+	if _state == "error":
+		var detail := _message
+		if detail.is_empty():
+			detail = "请检查房间配置。"
+		_lobby.call("_set_room_status", "%s%s" % [_ROOM_STATUS_ERROR_PREFIX, detail])
+		return
+	var room_status_label = _lobby.get("room_status_label")
+	if room_status_label == null or not is_instance_valid(room_status_label):
+		return
+	var current_text := str(room_status_label.text).strip_edges()
+	if current_text.begins_with(_ROOM_STATUS_ERROR_PREFIX):
+		_lobby.call("_set_room_status", "")
 
 func on_request_rejected(code: String, message: String) -> void:
 	var c := str(code).strip_edges()

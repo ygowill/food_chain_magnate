@@ -234,7 +234,7 @@ func _build_logout_section() -> Control:
 	section.add_theme_constant_override("separation", 8)
 
 	var title := Label.new()
-	title.text = "切换账号"
+	title.text = "退出登录"
 	UiStylesClass.apply_label_dark(title)
 	section.add_child(title)
 
@@ -269,7 +269,7 @@ func _reset_view_state() -> void:
 	if not is_guest_account:
 		_logout_btn.disabled = not _allow_logout
 		if _allow_logout:
-			_logout_hint_label.text = "退出后可重新登录其他账号。"
+			_logout_hint_label.text = "退出后可登录其他账号。"
 		else:
 			_logout_hint_label.text = _logout_hint if not _logout_hint.is_empty() else "请先离开房间后再退出登录。"
 
