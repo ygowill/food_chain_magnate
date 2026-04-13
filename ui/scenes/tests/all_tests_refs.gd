@@ -190,6 +190,7 @@ const ActionPanelOnlineLocalPlayerTestClass = preload("res://ui/scenes/tests/act
 const ActionPanelGlobalDisabledRestoreTestClass = preload("res://ui/scenes/tests/action_panel_global_disabled_restore_test.gd")
 const ActionPanelExternalBlockReasonTestClass = preload("res://ui/scenes/tests/action_panel_external_block_reason_test.gd")
 const ActionPanelExecutorMetadataTestClass = preload("res://ui/scenes/tests/action_panel_executor_metadata_test.gd")
+const ActionPanelRestaurantDualActionsTestClass = preload("res://ui/scenes/tests/action_panel_restaurant_dual_actions_test.gd")
 const ActionPanelNoAvailableActionsHintTestClass = preload("res://ui/scenes/tests/action_panel_no_available_actions_hint_test.gd")
 const DistanceOverlayRoadworksPenaltyTestClass = preload("res://ui/scenes/tests/distance_overlay_roadworks_penalty_test.gd")
 const GameSmokeTestScene = preload("res://ui/scenes/tests/game_smoke_test.tscn")

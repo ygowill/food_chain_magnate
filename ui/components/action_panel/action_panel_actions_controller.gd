@@ -2,6 +2,8 @@
 extends RefCounted
 
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
+const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_actions_rules.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
@@ -157,6 +159,7 @@ func refresh() -> void:
 
 	_compute_guided_flow_visibility()
 	p._apply_global_disabled_state()
+	_rebuild_action_buttons()
 
 func _clear_actions_cache() -> void:
 	if _panel == null or not is_instance_valid(_panel):
@@ -173,6 +176,7 @@ func _clear_actions_cache() -> void:
 	p._sync_guided_action_placeholder()
 	if p.items_container != null and is_instance_valid(p.items_container):
 		UiRebuildHelpersClass.free_children(p.items_container)
+		p.items_container.visible = false
 
 func _sanitize_action_id_list(action_ids: Array) -> Array[String]:
 	var out: Array[String] = []
@@ -191,8 +195,8 @@ func _set_visible_actions_from_list(action_ids: Array, initiatable_ids: Array) -
 	p._visible_action_ids = _sort_action_ids_for_display(_sanitize_action_id_list(action_ids))
 	p._visible_initiatable_action_ids = _sanitize_action_id_list(initiatable_ids)
 	if p.items_container != null and is_instance_valid(p.items_container):
-		# 压平动作流：ActionPanel 不再渲染动作按钮列表
 		UiRebuildHelpersClass.free_children(p.items_container)
+		p.items_container.visible = false
 
 	p._action_enabled.clear()
 	p._action_disabled_reason.clear()
@@ -202,6 +206,7 @@ func _set_visible_actions_from_list(action_ids: Array, initiatable_ids: Array) -
 	_apply_external_block_reasons(p._visible_action_ids)
 	_compute_guided_flow_visibility()
 	p._sync_guided_action_placeholder()
+	_rebuild_action_buttons()
 
 func _compute_guided_flow_visibility() -> void:
 	if _panel == null or not is_instance_valid(_panel):
@@ -217,13 +222,17 @@ func _compute_guided_flow_visibility() -> void:
 	var candidates: Array = initiatable_ids
 	if candidates.is_empty():
 		candidates = visible_ids
-	for aid in candidates:
-		if aid == ActionIdsClass.SKIP_SUB_PHASE:
-			continue
-		if aid == ActionIdsClass.SKIP:
-			continue
-		p._guided_action_id = aid
-		break
+	var preferred_guided := _get_preferred_guided_action_id(candidates)
+	if not preferred_guided.is_empty():
+		p._guided_action_id = preferred_guided
+	else:
+		for aid in candidates:
+			if aid == ActionIdsClass.SKIP_SUB_PHASE:
+				continue
+			if aid == ActionIdsClass.SKIP:
+				continue
+			p._guided_action_id = aid
+			break
 
 	p._flow_skip_step_visible = visible_ids.has(ActionIdsClass.SKIP_SUB_PHASE)
 
@@ -263,6 +272,11 @@ func _compute_guided_flow_visibility() -> void:
 
 	p._flow_confirm_end_visible = show_skip
 	p._sync_guided_action_placeholder()
+
+func _get_preferred_guided_action_id(candidates: Array) -> String:
+	if candidates.has("place_restaurant") and candidates.has("move_restaurant"):
+		return "place_restaurant"
+	return ""
 
 func _get_fallback_actions(phase: String, sub_phase: String) -> Array[String]:
 	var result: Array[String] = [ActionIdsClass.SKIP]
@@ -316,6 +330,95 @@ func _sort_action_ids_for_display(action_ids: Array[String]) -> Array[String]:
 	if has_skip:
 		out.append(ActionIdsClass.SKIP)
 	return out
+
+func _get_rendered_action_button_ids() -> Array[String]:
+	if _panel == null or not is_instance_valid(_panel):
+		return []
+	var p = _panel
+
+	var rendered: Array[String] = []
+	var guided := str(p._guided_action_id).strip_edges()
+	var visible_ids_val: Variant = p._visible_action_ids
+	var visible_ids: Array = visible_ids_val if visible_ids_val is Array else []
+	for aid_val in visible_ids:
+		var aid := str(aid_val).strip_edges()
+		if aid.is_empty():
+			continue
+		if aid == ActionIdsClass.SKIP or aid == ActionIdsClass.SKIP_SUB_PHASE:
+			continue
+		if not guided.is_empty() and aid == guided:
+			continue
+		rendered.append(aid)
+	return rendered
+
+func _rebuild_action_buttons() -> void:
+	if _panel == null or not is_instance_valid(_panel):
+		return
+	var p = _panel
+	if p.items_container == null or not is_instance_valid(p.items_container):
+		return
+
+	UiRebuildHelpersClass.free_children(p.items_container)
+
+	var rendered_ids := _get_rendered_action_button_ids()
+	p.items_container.visible = not rendered_ids.is_empty()
+	for action_id in rendered_ids:
+		var btn := Button.new()
+		btn.name = "ActionButton_%s" % action_id
+		btn.custom_minimum_size = Vector2(0, 34)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.set_meta("action_id", action_id)
+		UiStylesClass.apply_button_secondary(btn)
+		_configure_action_button(btn, action_id)
+		UiSignalHelpersClass.safe_connect(btn, "pressed", Callable(self, "_on_action_button_pressed").bind(action_id))
+		p.items_container.add_child(btn)
+
+func sync_rendered_action_buttons() -> void:
+	if _panel == null or not is_instance_valid(_panel):
+		return
+	var p = _panel
+	if p.items_container == null or not is_instance_valid(p.items_container):
+		return
+	for child in p.items_container.get_children():
+		if not (child is Button):
+			continue
+		var btn: Button = child
+		var aid := str(btn.get_meta("action_id", "")).strip_edges()
+		if aid.is_empty():
+			continue
+		_configure_action_button(btn, aid)
+
+func _configure_action_button(btn: Button, action_id: String) -> void:
+	if _panel == null or not is_instance_valid(_panel):
+		return
+	var p = _panel
+	var title: String = str(p.get_action_display_name(action_id))
+	if p._mandatory_action_ids.has(action_id):
+		title = "【强制】%s" % title
+	btn.text = title
+
+	var enabled: bool = bool(p.get_action_enabled(action_id))
+	btn.disabled = not enabled
+
+	var reason: String = str(p.get_action_disabled_reason(action_id))
+	var desc: String = str(p.get_action_description(action_id))
+	if not enabled and not reason.is_empty():
+		btn.tooltip_text = "不可用：%s" % reason
+	else:
+		btn.tooltip_text = desc
+
+func _on_action_button_pressed(action_id: String) -> void:
+	if _panel == null or not is_instance_valid(_panel):
+		return
+	var p = _panel
+	var aid := str(action_id).strip_edges()
+	if aid.is_empty():
+		return
+	if not p.get_action_enabled(aid):
+		return
+	if not p.has_signal("action_requested"):
+		return
+	p.emit_signal("action_requested", aid, {})
 
 func _get_missing_mandatory_actions_for_current_player() -> Array[String]:
 	if _panel == null or not is_instance_valid(_panel):

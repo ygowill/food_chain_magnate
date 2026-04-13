@@ -1,7 +1,7 @@
 {
   "id": "regional_manager",
   "name": "大区经理",
-  "description": "放置或现有餐厅，并设置为开业状态。提供免下车服务",
+  "description": "放置新餐厅或移动现有餐厅，并设置为开业状态。提供免下车服务",
   "salary": true,
   "unique": false,
   "role": "new_shop",

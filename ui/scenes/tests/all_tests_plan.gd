@@ -451,6 +451,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.ActionPanelExecutorMetadataTestClass.run(),
 			},
 			{
+				"name": "ActionPanelRestaurantDualActionsTest",
+				"fn": func() -> Result: return await TestRefs.ActionPanelRestaurantDualActionsTestClass.run(),
+			},
+			{
 				"name": "LeftPanelSelectionIsolationTest",
 				"fn": func() -> Result: return TestRefs.LeftPanelSelectionIsolationTestClass.run(),
 			},

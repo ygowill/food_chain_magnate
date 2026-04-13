@@ -573,9 +573,8 @@ func _apply_global_disabled_state() -> void:
 			if child is BaseButton:
 				(child as BaseButton).disabled = _globally_disabled
 	_sync_guided_action_button_state()
-
-	# 动作可用性通过 get_action_enabled/get_action_disabled_reason 动态体现；
-	# 这里不再直接操作动作按钮（已改为压平动作流，按钮由外部 ActionFlowControls 承载）。
+	if _actions_controller != null and is_instance_valid(_actions_controller) and _actions_controller.has_method("sync_rendered_action_buttons"):
+		_actions_controller.call("sync_rendered_action_buttons")
 
 func refresh() -> void:
 	_ensure_actions_controller()
