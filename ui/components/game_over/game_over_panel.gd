@@ -27,9 +27,11 @@ var _skin_modules_key: String = ""
 var _player_restaurant_logo_ids: Dictionary = {} # player_id -> logo_id
 var _fallback_logo_ids: Array[int] = []
 var _state_seed: int = 0
+var _return_button_text: String = "返回主菜单"
 
 func _ready() -> void:
 	if return_btn != null:
+		return_btn.text = _return_button_text
 		return_btn.pressed.connect(_on_return_pressed)
 	if play_again_btn != null:
 		play_again_btn.pressed.connect(_on_play_again_pressed)
@@ -58,6 +60,14 @@ func set_final_state(state: GameState) -> void:
 	_rebuild_player_logo_ids()
 	_calculate_rankings()
 	_rebuild_display()
+
+func set_return_button_text(text: String) -> void:
+	var next_text := str(text).strip_edges()
+	if next_text.is_empty():
+		next_text = "返回主菜单"
+	_return_button_text = next_text
+	if return_btn != null:
+		return_btn.text = _return_button_text
 
 func show_with_animation() -> void:
 	visible = true

@@ -349,6 +349,8 @@ func _show_game_over() -> void:
 
 	if game_over_panel.has_method("set_final_state"):
 		game_over_panel.set_final_state(_scene.game_engine.get_state())
+	if game_over_panel.has_method("set_return_button_text"):
+		game_over_panel.set_return_button_text(_get_game_over_return_button_text())
 
 	if game_over_panel.has_method("show_with_animation"):
 		game_over_panel.show_with_animation()
@@ -407,9 +409,23 @@ func _on_pay_confirmed() -> void:
 		show_payday_panel()
 
 func _on_game_over_return() -> void:
+	if _is_online_game_over_return_to_lobby():
+		if NetClient != null and NetClient.has_method("request_leave_room"):
+			NetClient.request_leave_room()
+		Globals.reset_game_config()
+		SceneManager.goto_online_lobby()
+		return
 	GameMenuDebugControllerClass.cleanup_online_state_before_quit()
 	Globals.reset_game_config()
 	SceneManager.goto_main_menu()
+
+func _is_online_game_over_return_to_lobby() -> bool:
+	return NetContext != null and int(NetContext.mode) == int(NetContext.Mode.ONLINE_CLIENT)
+
+func _get_game_over_return_button_text() -> String:
+	if _is_online_game_over_return_to_lobby():
+		return "返回房间列表"
+	return "返回主菜单"
 
 func _on_game_over_play_again() -> void:
 	SceneManager.goto_game()

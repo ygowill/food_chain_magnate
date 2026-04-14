@@ -47,12 +47,15 @@ func dispose() -> void:
 	_phase_action_modals_by_key.clear()
 	_phase_action_active_kind_by_phase.clear()
 
+	_clear_pending_reserve_card_open_state()
+
+	_scene = null
+
+func _clear_pending_reserve_card_open_state() -> void:
 	_pending_reserve_card_open_player_id = -1
 	_pending_reserve_card_open_interactive = true
 	_pending_reserve_card_open_attempts = 0
 	_reserve_card_open_routine_running = false
-
-	_scene = null
 
 func has_open_modal_ui() -> bool:
 	if _reserve_card_open_routine_running or _pending_reserve_card_open_player_id >= 0:
@@ -347,13 +350,13 @@ func _deferred_open_reserve_card_modal() -> void:
 		var expected_player_id := _pending_reserve_card_open_player_id
 		var expected_interactive := _pending_reserve_card_open_interactive
 		if expected_player_id < 0:
-			_reserve_card_open_routine_running = false
+			_clear_pending_reserve_card_open_state()
 			return
 		if _scene == null or _scene.game_engine == null:
-			_reserve_card_open_routine_running = false
+			_clear_pending_reserve_card_open_state()
 			return
 		if not is_instance_valid(_reserve_card_modal):
-			_reserve_card_open_routine_running = false
+			_clear_pending_reserve_card_open_state()
 			return
 
 		# 等待至少一帧，让 VBox/SplitContainer 等容器完成布局（位置/尺寸）。
@@ -366,17 +369,15 @@ func _deferred_open_reserve_card_modal() -> void:
 
 		var state: GameState = _scene.game_engine.get_state()
 		if state == null:
-			_reserve_card_open_routine_running = false
+			_clear_pending_reserve_card_open_state()
 			return
 		if str(state.phase) != DefsClass.PHASE_SETUP or str(state.sub_phase) != DefsClass.SUB_PHASE_RESERVE_CARDS:
-			_pending_reserve_card_open_player_id = -1
-			_pending_reserve_card_open_attempts = 0
-			_reserve_card_open_routine_running = false
+			_clear_pending_reserve_card_open_state()
 			return
 
 		var current_player_id := state.get_current_player_id()
 		if current_player_id != expected_player_id:
-			_reserve_card_open_routine_running = false
+			_clear_pending_reserve_card_open_state()
 			return
 
 		var covered := get_modal_cover_rect()
@@ -391,10 +392,7 @@ func _deferred_open_reserve_card_modal() -> void:
 			_pending_reserve_card_open_attempts += 1
 			continue
 
-		_pending_reserve_card_open_player_id = -1
-		_pending_reserve_card_open_interactive = true
-		_pending_reserve_card_open_attempts = 0
-		_reserve_card_open_routine_running = false
+		_clear_pending_reserve_card_open_state()
 
 		# 进入储备卡选择时再隐藏加载遮罩，避免“先闪一帧游戏 UI 再弹窗”的体验。
 		if SceneManager != null and SceneManager.has_method("hide_loading"):
@@ -423,9 +421,7 @@ func _close_game_menu_for_blocking_modal() -> void:
 		_scene.call("_ensure_game_menu_closed_for_blocking_modal")
 
 func hide_reserve_card_modal() -> void:
-	_pending_reserve_card_open_player_id = -1
-	_pending_reserve_card_open_interactive = true
-	_pending_reserve_card_open_attempts = 0
+	_clear_pending_reserve_card_open_state()
 	if not is_instance_valid(_reserve_card_modal):
 		return
 	if _reserve_card_modal.has_method("close"):

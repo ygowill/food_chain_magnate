@@ -207,6 +207,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.GamePanelModalsControllerKindContractTestClass.run(),
 		},
 		{
+			"name": "ReserveCardModalPendingStateResetTest",
+			"fn": func() -> Result: return await TestRefs.ReserveCardModalPendingStateResetTestClass.run(),
+		},
+		{
 			"name": "PhaseActionUiRegistryCleanupTest",
 			"fn": func() -> Result: return TestRefs.PhaseActionUiRegistryCleanupTestClass.run(),
 		},
@@ -489,6 +493,10 @@ static func build_tests(host) -> Array[Dictionary]:
 		{
 			"name": "SkipMandatoryActionsStateAccessTest",
 			"fn": func() -> Result: return TestRefs.SkipMandatoryActionsStateAccessTestClass.run(2, 12345),
+		},
+		{
+			"name": "SkipCleanupPendingRegressionTest",
+			"fn": func() -> Result: return TestRefs.SkipCleanupPendingRegressionTestClass.run(2, 12345),
 		},
 		{
 			"name": "BaseRulesPhaseAndMapStateAccessTest",
@@ -821,6 +829,14 @@ static func build_tests(host) -> Array[Dictionary]:
 		{
 			"name": "ActionPanelEndButtonsOrderTest",
 			"fn": func() -> Result: return TestRefs.ActionPanelEndButtonsOrderTestClass.run(),
+		},
+		{
+			"name": "GameOverOnlineReturnContractTest",
+			"fn": func() -> Result: return TestRefs.GameOverOnlineReturnContractTestClass.run(),
+		},
+		{
+			"name": "GameOverPanelReturnButtonTextTest",
+			"fn": func() -> Result: return await TestRefs.GameOverPanelReturnButtonTextTestClass.run(),
 		},
 		{
 			"name": "HandAreaViewSwitchTest",

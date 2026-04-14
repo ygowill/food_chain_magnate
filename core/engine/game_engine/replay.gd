@@ -2,8 +2,10 @@
 extends RefCounted
 
 const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const JsonValueParseHelpersClass = preload("res://core/utils/json_value_parse_helpers.gd")
 const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
+const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
 
 static func rewind_to_command(
 	command_history: Array[Command],
@@ -174,6 +176,14 @@ static func should_force_execute_in_replay(command: Command, replay_state: GameS
 			return true
 	if replay_state == null:
 		return false
+	if str(command.action_id) == ActionIdsClass.SKIP:
+		var blocked_r := RoundStatePendingPhaseActionsClass.is_phase_blocked(
+			replay_state.round_state,
+			str(replay_state.phase),
+			"replay:skip"
+		)
+		if blocked_r.ok and bool(blocked_r.value):
+			return true
 	if command.actor < 0 or command.actor >= replay_state.players.size():
 		return false
 	return int(command.actor) != int(replay_state.get_current_player_id())

@@ -10,6 +10,7 @@ const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
+const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
 const RoundStatePlayerStringListsClass = preload("res://core/utils/round_state_player_string_lists.gd")
 const RoundStateSubPhasePassedClass = preload("res://core/utils/round_state_sub_phase_passed.gd")
 
@@ -47,6 +48,12 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 			return Result.failure("你已经确认结束发薪日")
 	elif command.actor != current_player_id:
 		return Result.failure("不是你的回合，当前玩家: %d" % current_player_id)
+
+	var blocked_r := _is_current_phase_blocked_by_pending_actions(state)
+	if not blocked_r.ok:
+		return blocked_r
+	if bool(blocked_r.value):
+		return Result.failure("当前阶段仍有待处理动作，不能确认结束")
 
 	# Setup：必须先放置至少 1 个餐厅才能确认结束
 	if state.phase == DefsClass.PHASE_SETUP:
@@ -114,6 +121,12 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 func _apply_changes(state: GameState, command: Command) -> Result:
 	var player_id := command.actor
 
+	var blocked_r := _is_current_phase_blocked_by_pending_actions(state)
+	if not blocked_r.ok:
+		return blocked_r
+	if bool(blocked_r.value):
+		return Result.success().with_warnings(["skip: 当前阶段仍有待处理动作，已忽略该次确认结束"])
+
 	# 记录“已确认结束”（用于“所有玩家都确认结束 -> 自动推进子阶段/阶段”逻辑）
 	# 注意：skip 不应写入 mandatory_actions_completed（强制动作完成记录）。
 	if not (state.round_state is Dictionary):
@@ -180,6 +193,13 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 			return Result.success()
 
 	return Result.success()
+
+func _is_current_phase_blocked_by_pending_actions(state: GameState) -> Result:
+	if state == null:
+		return Result.failure("state 为空")
+	if not (state.round_state is Dictionary):
+		return Result.failure("round_state 类型错误（期望 Dictionary）")
+	return RoundStatePendingPhaseActionsClass.is_phase_blocked(state.round_state, str(state.phase), "skip")
 
 func _generate_specific_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
