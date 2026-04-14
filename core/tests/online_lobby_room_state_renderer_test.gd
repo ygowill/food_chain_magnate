@@ -102,4 +102,50 @@ static func run() -> Result:
 	if not renderer.has_visible_room_state_change(resume_room, resume_cash_changed, 1):
 		return Result.failure("恢复房玩家详情变化时应触发右侧信息重建")
 
+	var four_player_summaries: Array = []
+	var four_current_players: Array = []
+	for player_id in range(4):
+		four_player_summaries.append({
+			"player_id": player_id,
+			"restaurant_logo_id": player_id,
+			"cash": 20 + player_id,
+			"restaurants_count": 1 + (player_id % 2),
+			"milestones_count": 2 + player_id,
+			"employee_counts": {"active": 5 + player_id, "reserve": 1, "busy": 0},
+			"employee_groups": {
+				"active": [{"employee_id": "marketing_trainee", "name": "营销实习生", "count": 2 + player_id}],
+				"reserve": [{"employee_id": "kitchen_trainee", "name": "后厨实习生", "count": 1}],
+				"busy": [],
+			},
+		})
+		four_current_players.append({
+			"seat_index": player_id,
+			"name": "玩家%d" % (player_id + 1),
+			"connected": true,
+			"forfeited": false,
+		})
+
+	var resume_panel = renderer._build_resume_players_panel(four_player_summaries, four_current_players)
+	if resume_panel == null or not (resume_panel is PanelContainer):
+		return Result.failure("恢复房玩家详情面板构建失败")
+	if int(resume_panel.size_flags_vertical) != int(Control.SIZE_EXPAND_FILL):
+		return Result.failure("恢复房玩家详情面板应纵向扩展填充，避免整页被撑高")
+	var root := resume_panel.get_child(0)
+	if root == null or not (root is VBoxContainer):
+		return Result.failure("恢复房玩家详情面板根节点类型错误")
+	if root.get_child_count() < 2:
+		return Result.failure("恢复房玩家详情面板应包含固定标题和滚动列表")
+	if not (root.get_child(0) is Label):
+		return Result.failure("恢复房玩家详情面板首个子节点应为固定标题")
+	var players_scroll := root.get_child(1)
+	if players_scroll == null or not (players_scroll is ScrollContainer):
+		return Result.failure("恢复房玩家详情面板应使用 ScrollContainer 承载玩家卡片列表")
+	if int((players_scroll as ScrollContainer).horizontal_scroll_mode) != int(ScrollContainer.SCROLL_MODE_DISABLED):
+		return Result.failure("恢复房玩家详情滚动区应禁用横向滚动")
+	var players_list := players_scroll.get_node_or_null("PlayersList")
+	if players_list == null or not (players_list is VBoxContainer):
+		return Result.failure("恢复房玩家详情滚动区缺少 PlayersList")
+	if players_list.get_child_count() != 4:
+		return Result.failure("恢复房玩家详情滚动区应渲染 4 个玩家卡片，实际: %d" % players_list.get_child_count())
+
 	return Result.success()

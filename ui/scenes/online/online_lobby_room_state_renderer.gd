@@ -404,8 +404,10 @@ func _build_resume_overview_panel(resume_summary: Dictionary, player_summaries: 
 
 func _build_resume_players_panel(player_summaries: Array, current_players: Array) -> Control:
 	var panel := _build_section_panel(Color(0.93, 0.89, 0.80, 0.45))
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var root := VBoxContainer.new()
 	root.add_theme_constant_override("separation", 8)
+	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.add_child(root)
 
 	var header := Label.new()
@@ -421,6 +423,19 @@ func _build_resume_players_panel(player_summaries: Array, current_players: Array
 		UiStylesClass.apply_label_hint_dark(empty_label)
 		root.add_child(empty_label)
 		return panel
+
+	var players_scroll := ScrollContainer.new()
+	players_scroll.name = "PlayersScroll"
+	players_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	players_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	players_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	root.add_child(players_scroll)
+
+	var players_list := VBoxContainer.new()
+	players_list.name = "PlayersList"
+	players_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	players_list.add_theme_constant_override("separation", 8)
+	players_scroll.add_child(players_list)
 
 	var assigned_by_seat: Dictionary = {}
 	for player_val in current_players:
@@ -450,7 +465,7 @@ func _build_resume_players_panel(player_summaries: Array, current_players: Array
 		if assigned_name.is_empty():
 			assigned_name = "未分配"
 		var accent_color := PLAYER_COLORS[player_id % PLAYER_COLORS.size()] if not PLAYER_COLORS.is_empty() else Color(0.5, 0.5, 0.5, 1.0)
-		root.add_child(_build_resume_player_detail_card(summary, assigned_name, accent_color))
+		players_list.add_child(_build_resume_player_detail_card(summary, assigned_name, accent_color))
 
 	return panel
 
