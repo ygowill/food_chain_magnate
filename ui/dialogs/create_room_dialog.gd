@@ -9,6 +9,7 @@ const ArchiveClass = preload("res://core/engine/game_engine/archive.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
+const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const ResumeLogHistoryBuilderClass = preload("res://ui/dialogs/create_room_resume_log_history_builder.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
@@ -561,12 +562,54 @@ func _build_resume_selected_archive() -> Dictionary:
 	if _loaded_resume_archive.is_empty():
 		return {}
 	var archive := _loaded_resume_archive.duplicate(true)
+	var kept_command_count := maxi(0, _resume_selected_current_index + 1)
+	var commands_out: Array = []
+	var commands_val = _loaded_resume_archive.get("commands", null)
+	if commands_val is Array:
+		var commands: Array = Array(commands_val)
+		var max_keep := mini(kept_command_count, commands.size())
+		for i in range(max_keep):
+			commands_out.append(commands[i])
+	archive["commands"] = commands_out
 	archive["current_index"] = _resume_selected_current_index
+	archive["checkpoints"] = _build_resume_selected_checkpoint_metadata(kept_command_count)
 	if _resume_preview_engine != null and is_instance_valid(_resume_preview_engine):
+		if _resume_preview_engine.random_manager != null and _resume_preview_engine.random_manager.has_method("to_dict"):
+			archive["rng"] = _resume_preview_engine.random_manager.to_dict()
 		var state = _resume_preview_engine.get_state() if _resume_preview_engine.has_method("get_state") else null
 		if state != null and state.has_method("compute_hash"):
 			archive["final_hash"] = str(state.compute_hash())
 	return archive
+
+func _build_resume_selected_checkpoint_metadata(kept_command_count: int) -> Array:
+	var out: Array = []
+	var checkpoints_val = _loaded_resume_archive.get("checkpoints", null)
+	if checkpoints_val is Array:
+		for checkpoint_val in Array(checkpoints_val):
+			if not (checkpoint_val is Dictionary):
+				continue
+			var checkpoint: Dictionary = Dictionary(checkpoint_val).duplicate(true)
+			var checkpoint_index := int(checkpoint.get("index", -1))
+			if checkpoint_index < 0 or checkpoint_index > kept_command_count:
+				continue
+			out.append(checkpoint)
+
+	if not out.is_empty():
+		return out
+
+	var fallback_hash := ""
+	var fallback_rng_calls := 0
+	if _resume_preview_engine != null and is_instance_valid(_resume_preview_engine):
+		var state = _resume_preview_engine.get_state() if _resume_preview_engine.has_method("get_state") else null
+		if state != null and state.has_method("compute_hash"):
+			fallback_hash = str(state.compute_hash())
+		if _resume_preview_engine.random_manager != null and _resume_preview_engine.random_manager.has_method("get_call_count"):
+			fallback_rng_calls = int(_resume_preview_engine.random_manager.get_call_count())
+	return [{
+		"index": 0,
+		"hash": fallback_hash,
+		"rng_calls": fallback_rng_calls,
+	}]
 
 func _get_resume_log_item(index: int) -> Dictionary:
 	if index < 0 or index >= _resume_log_items.size():
@@ -744,10 +787,16 @@ func _apply_resume_target_index(target_index: int, preferred_log_item_index: int
 		_set_error("无法切换恢复位置：预览状态为空")
 		return
 	_resume_selected_current_index = normalized_index
-	_resume_config_patch = _build_resume_config_patch(_loaded_resume_archive_path, _loaded_resume_archive, state, normalized_index)
-	_resume_room_bootstrap = {"archive": _build_resume_selected_archive()}
+	var validate_r: Result = OnlineResumePointValidatorClass.validate_resume_point(_resume_preview_engine, false)
 	_sync_resume_selection_controls(_resolve_resume_log_item_index(preferred_log_item_index, normalized_index))
 	_update_resume_preview_label(state)
+	if not validate_r.ok:
+		_resume_room_bootstrap = {}
+		_resume_config_patch = {}
+		_set_error("该恢复点不可用于联机恢复：%s" % validate_r.error)
+		return
+	_resume_config_patch = _build_resume_config_patch(_loaded_resume_archive_path, _loaded_resume_archive, state, normalized_index)
+	_resume_room_bootstrap = {"archive": _build_resume_selected_archive()}
 	_clear_error()
 
 func _apply_loaded_archive(path: String, archive: Dictionary, engine) -> void:

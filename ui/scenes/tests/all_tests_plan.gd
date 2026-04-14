@@ -239,6 +239,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.OnlineResumeRoomLobbyTestClass.run(),
 		},
 		{
+			"name": "OnlineResumeStartValidationTest",
+			"fn": func() -> Result: return TestRefs.OnlineResumeStartValidationTestClass.run(),
+		},
+		{
 			"name": "OnlineClientDisconnectPreserveContextTest",
 			"fn": func() -> Result: return TestRefs.OnlineClientDisconnectPreserveContextTestClass.run(),
 		},

@@ -503,9 +503,17 @@ func _initialize_game() -> void:
 	game_engine = GameEngine.new()
 	# 银行储备卡在进入游戏后由玩家秘密选择（Setup/ReserveCards），这里不从游戏设置注入选择结果。
 	var logo_choices: Array[int] = []
+	var reserve_card_choices: Array[int] = []
 	for pid in range(Globals.player_count):
 		logo_choices.append(Globals.get_player_restaurant_logo_choice(pid))
-	var init_result := game_engine.initialize(Globals.player_count, Globals.random_seed, Globals.enabled_modules_v2, Globals.modules_v2_base_dir, [], logo_choices)
+	var init_result := game_engine.initialize(
+		Globals.player_count,
+		Globals.random_seed,
+		Globals.enabled_modules_v2,
+		Globals.modules_v2_base_dir,
+		reserve_card_choices,
+		logo_choices
+	)
 	if not init_result.ok:
 		GameLog.error("Game", "游戏初始化失败: %s" % init_result.error)
 		return

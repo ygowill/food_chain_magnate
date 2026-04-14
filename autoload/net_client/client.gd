@@ -7,8 +7,8 @@ const CommandClass = preload("res://core/types/command.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
+const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const ResyncSnapshotTransferClass = preload("res://core/utils/resync_snapshot_transfer.gd")
-const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
 
 var _net = null
 
@@ -503,6 +503,7 @@ func _initialize_online_client_engine_from_config(config: Dictionary, room_code:
 				logo_choices.append(int(it2))
 	while logo_choices.size() < player_count:
 		logo_choices.append(-1)
+	var reserve_card_choices: Array[int] = []
 
 	var engine = GameEngineClass.new()
 	var config_overrides_val = config.get("game_config_overrides", null)
@@ -511,7 +512,7 @@ func _initialize_online_client_engine_from_config(config: Dictionary, room_code:
 	var option_overrides_val = config.get("game_option_overrides", null)
 	if option_overrides_val is Dictionary:
 		engine.set_game_option_overrides(Dictionary(option_overrides_val).duplicate(true))
-	var init_r = engine.initialize(player_count, seed, enabled_modules, base_dir, [], logo_choices)
+	var init_r = engine.initialize(player_count, seed, enabled_modules, base_dir, reserve_card_choices, logo_choices)
 	if not init_r.ok:
 		GameLog.error(
 			"NetClient",
@@ -554,10 +555,7 @@ func _try_bootstrap_online_client_engine_from_archive(archive: Dictionary) -> vo
 func _mark_online_client_engine_ready(engine: GameEngine, room_code: String, local_pid: int) -> void:
 	if engine == null or engine.get_state() == null:
 		return
-	var state = engine.get_state()
-	if not (state.rules is Dictionary):
-		state.rules = {}
-	state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
+	OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
 	if local_pid >= -1:
 		NetContext.local_player_id = int(local_pid)
 	Globals.set_current_game_engine(engine)

@@ -3,9 +3,8 @@
 class_name GameOnlineResyncController
 extends RefCounted
 
-const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
-
 const ModuleUiMetadataBootstrapClass = preload("res://gameplay/module_ui_metadata_bootstrap.gd")
+const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const RECONNECT_MAX_ATTEMPTS := 6
 const RECONNECT_CONNECT_TIMEOUT_SEC := 3.0
 const RECONNECT_RESTORE_TIMEOUT_SEC := 6.0
@@ -339,11 +338,7 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 				_show_confirm.call("联机同步失败", r.error, Callable(), Callable(), "确定", "关闭")
 			return
 
-	var state = engine.get_state() if engine.has_method("get_state") else null
-	if state != null:
-		if not (state.rules is Dictionary):
-			state.rules = {}
-		state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
+	OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
 
 	var ui_metadata_apply := ModuleUiMetadataBootstrapClass.apply(engine)
 	if not ui_metadata_apply.ok:

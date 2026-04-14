@@ -109,6 +109,13 @@ static func run() -> Result:
 	if int(room.get_waiting_member_count()) != 0:
 		return Result.failure("分座完成后不应仍有待分配成员: %d" % int(room.get_waiting_member_count()))
 
+	var effective_r: Result = room.build_effective_resume_start_archive()
+	if not effective_r.ok:
+		return Result.failure("resume room build_effective_resume_start_archive 失败: %s" % effective_r.error)
+	var effective_info: Dictionary = Dictionary(effective_r.value) if effective_r.value is Dictionary else {}
+	if Dictionary(effective_info.get("archive", {})).is_empty():
+		return Result.failure("resume room build_effective_resume_start_archive 返回空 archive")
+
 	var start_r: Result = room.start_game()
 	if not start_r.ok:
 		return Result.failure("resume room start_game 失败: %s" % start_r.error)

@@ -83,9 +83,10 @@ static func run() -> Result:
 				logo_choices.append(int(it2))
 	while logo_choices.size() < player_count:
 		logo_choices.append(-1)
+	var reserve_card_choices: Array[int] = []
 
 	var client_engine = GameEngineClass.new()
-	var init_r: Result = client_engine.initialize(player_count, seed, enabled_modules, base_dir, [], logo_choices)
+	var init_r: Result = client_engine.initialize(player_count, seed, enabled_modules, base_dir, reserve_card_choices, logo_choices)
 	if not init_r.ok:
 		return Result.failure("Client GameEngine.initialize 失败: %s" % init_r.error)
 	var client_state = client_engine.get_state()

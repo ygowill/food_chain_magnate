@@ -57,6 +57,7 @@ const NetClientParseConnectTokenUrlTestClass = preload("res://core/tests/net_cli
 const OnlineClientHelloConnectTokenTestClass = preload("res://core/tests/online_client_hello_connect_token_test.gd")
 const PlatformConnectTokenAutoJoinTestClass = preload("res://core/tests/platform_connect_token_auto_join_test.gd")
 const OnlineResumeRoomLobbyTestClass = preload("res://core/tests/online_resume_room_lobby_test.gd")
+const OnlineResumeStartValidationTestClass = preload("res://core/tests/online_resume_start_validation_test.gd")
 const OnlineClientDisconnectPreserveContextTestClass = preload("res://core/tests/online_client_disconnect_preserve_context_test.gd")
 const OnlineClientGameStartedReconnectTestClass = preload("res://core/tests/online_client_game_started_reconnect_test.gd")
 const OnlineClientConfigBootstrapOverridesTestClass = preload("res://core/tests/online_client_config_bootstrap_overrides_test.gd")

@@ -2,8 +2,8 @@ class_name OnlineRoom
 extends RefCounted
 
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
+const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const DEFAULT_RESTAURANT_LOGO_COUNT := 6
-const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
 
 const STATUS_LOBBY := "Lobby"
 const STATUS_IN_GAME := "InGame"
@@ -57,6 +57,9 @@ var _resume_checkpoint_state_hash: String = ""
 var _resume_checkpoint_archive: Dictionary = {}
 var _resume_delta_log: Array[Dictionary] = []
 var _resume_checkpoint_counter: int = 0
+var _prepared_resume_start_engine = null
+var _prepared_resume_start_archive: Dictionary = {}
+var _prepared_resume_start_final_hash: String = ""
 
 func to_persistence_dict(include_runtime_membership: bool = false) -> Result:
 	if str(status) != STATUS_IN_GAME and str(status) != STATUS_LOBBY:
@@ -239,21 +242,50 @@ static func _normalize_room_mode(raw_mode: String) -> String:
 	return ROOM_MODE_NORMAL
 
 static func _enable_online_dinnertime_confirm_on_engine(engine) -> void:
-	if engine == null or not is_instance_valid(engine):
-		return
-	if not engine.has_method("get_state"):
-		return
-	var state = engine.get_state()
-	if state == null:
-		return
-	if not (state.rules is Dictionary):
-		state.rules = {}
-	state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
-	if int(engine.current_command_index) < 0 and engine.checkpoints.size() > 0 and (engine.checkpoints[0] is Dictionary):
-		var checkpoint0: Dictionary = engine.checkpoints[0]
-		checkpoint0["state_dict"] = state.to_dict().duplicate(true)
-		checkpoint0["hash"] = state.compute_hash()
-		engine.checkpoints[0] = checkpoint0
+	OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
+
+func _clear_prepared_resume_start_cache() -> void:
+	_prepared_resume_start_engine = null
+	_prepared_resume_start_archive = {}
+	_prepared_resume_start_final_hash = ""
+
+func _prepare_effective_resume_start_engine() -> Result:
+	if not is_resume_archive_room():
+		return Result.failure("Room is not a resume lobby")
+	if _resume_lobby_archive.is_empty():
+		return Result.failure("resume archive missing")
+	if _prepared_resume_start_engine != null and is_instance_valid(_prepared_resume_start_engine):
+		var prepared_state = _prepared_resume_start_engine.get_state() if _prepared_resume_start_engine.has_method("get_state") else null
+		var prepared_hash := ""
+		if prepared_state != null and prepared_state.has_method("compute_hash"):
+			prepared_hash = str(prepared_state.compute_hash())
+		return Result.success({
+			"engine": _prepared_resume_start_engine,
+			"history_size": int(_prepared_resume_start_engine.command_history.size()),
+			"current_index": int(_prepared_resume_start_engine.current_command_index),
+			"final_hash": prepared_hash,
+		})
+
+	var preview_engine = GameEngineClass.new()
+	var load_r: Result = preview_engine.load_from_archive(_resume_lobby_archive.duplicate(true))
+	if not load_r.ok:
+		return Result.failure("GameEngine.load_from_archive failed: %s" % load_r.error)
+	if int(preview_engine.current_command_index) < int(preview_engine.command_history.size()) - 1:
+		preview_engine.truncate_future_history()
+
+	var validate_r: Result = OnlineResumePointValidatorClass.validate_resume_point(preview_engine)
+	if not validate_r.ok:
+		return validate_r
+
+	_prepared_resume_start_engine = preview_engine
+	_prepared_resume_start_archive = {}
+	_prepared_resume_start_final_hash = str(preview_engine.get_state().compute_hash()) if preview_engine.get_state() != null else ""
+	return Result.success({
+		"engine": preview_engine,
+		"history_size": int(preview_engine.command_history.size()),
+		"current_index": int(preview_engine.current_command_index),
+		"final_hash": _prepared_resume_start_final_hash,
+	}).with_warnings(validate_r.warnings)
 
 func _touch() -> void:
 	updated_at_ms = int(Time.get_unix_time_from_system() * 1000.0)
@@ -770,6 +802,7 @@ func configure_resume_lobby(archive: Dictionary) -> Result:
 		return Result.failure("Room is not in Lobby")
 	if archive.is_empty():
 		return Result.failure("resume archive missing")
+	_clear_prepared_resume_start_cache()
 	room_mode = ROOM_MODE_RESUME_ARCHIVE
 	config["room_mode"] = ROOM_MODE_RESUME_ARCHIVE
 	_resume_lobby_archive = Dictionary(archive).duplicate(true)
@@ -785,29 +818,29 @@ func get_resume_lobby_archive() -> Dictionary:
 	return _resume_lobby_archive.duplicate(true)
 
 func build_effective_resume_start_archive() -> Result:
-	if not is_resume_archive_room():
-		return Result.failure("Room is not a resume lobby")
-	if _resume_lobby_archive.is_empty():
-		return Result.failure("resume archive missing")
+	var prepared_r: Result = _prepare_effective_resume_start_engine()
+	if not prepared_r.ok:
+		return prepared_r
+	var prepared_info: Dictionary = Dictionary(prepared_r.value) if prepared_r.value is Dictionary else {}
+	var preview_engine = prepared_info.get("engine", null)
+	if preview_engine == null or not is_instance_valid(preview_engine):
+		return Result.failure("resume start engine missing")
 
-	var preview_engine = GameEngineClass.new()
-	var load_r: Result = preview_engine.load_from_archive(_resume_lobby_archive.duplicate(true))
-	if not load_r.ok:
-		return Result.failure("GameEngine.load_from_archive failed: %s" % load_r.error)
-	if int(preview_engine.current_command_index) < int(preview_engine.command_history.size()) - 1:
-		preview_engine.truncate_future_history()
-	_enable_online_dinnertime_confirm_on_engine(preview_engine)
+	if _prepared_resume_start_archive.is_empty():
+		var archive_r: Result = preview_engine.create_archive()
+		if not archive_r.ok:
+			return Result.failure("create_archive failed: %s" % archive_r.error)
+		_prepared_resume_start_archive = Dictionary(archive_r.value).duplicate(true)
+		if _prepared_resume_start_final_hash.is_empty():
+			_prepared_resume_start_final_hash = str(_prepared_resume_start_archive.get("final_hash", "")).strip_edges()
 
-	var archive_r: Result = preview_engine.create_archive()
-	if not archive_r.ok:
-		return Result.failure("create_archive failed: %s" % archive_r.error)
-	var archive: Dictionary = Dictionary(archive_r.value).duplicate(true)
+	var archive: Dictionary = _prepared_resume_start_archive.duplicate(true)
 	return Result.success({
 		"archive": archive,
-		"history_size": int(preview_engine.command_history.size()),
-		"current_index": int(preview_engine.current_command_index),
-		"final_hash": str(archive.get("final_hash", "")).strip_edges(),
-	})
+		"history_size": int(prepared_info.get("history_size", preview_engine.command_history.size())),
+		"current_index": int(prepared_info.get("current_index", preview_engine.current_command_index)),
+		"final_hash": _prepared_resume_start_final_hash,
+	}).with_warnings(prepared_r.warnings)
 
 func add_waiting_member(peer_id: int, profile: Dictionary, role: String = "player", token_generation: int = -1) -> Result:
 	if has_peer(peer_id):
@@ -1427,19 +1460,16 @@ func start_game() -> Result:
 
 	var engine = GameEngineClass.new()
 	if is_resume_archive_room():
-		var effective_resume_r: Result = build_effective_resume_start_archive()
-		if not effective_resume_r.ok:
-			return Result.failure("构造恢复房起局存档失败: %s" % effective_resume_r.error)
-		var effective_resume_val = effective_resume_r.value
-		if not (effective_resume_val is Dictionary):
+		var prepared_r: Result = _prepare_effective_resume_start_engine()
+		if not prepared_r.ok:
+			return Result.failure("构造恢复房起局存档失败: %s" % prepared_r.error)
+		var prepared_val = prepared_r.value
+		if not (prepared_val is Dictionary):
 			return Result.failure("构造恢复房起局存档失败：返回值类型错误")
-		var effective_resume_info: Dictionary = effective_resume_val
-		var effective_archive: Dictionary = Dictionary(effective_resume_info.get("archive", {})).duplicate(true)
-		if effective_archive.is_empty():
-			return Result.failure("构造恢复房起局存档失败：archive 为空")
-		var load_r: Result = engine.load_from_archive(effective_archive)
-		if not load_r.ok:
-			return Result.failure("GameEngine.load_from_archive failed: %s" % load_r.error)
+		var prepared_info: Dictionary = prepared_val
+		engine = prepared_info.get("engine", null)
+		if engine == null or not is_instance_valid(engine):
+			return Result.failure("构造恢复房起局存档失败：engine 为空")
 	else:
 		var player_count := int(config.get("desired_player_count", 0))
 		var seed_mode := str(config.get("seed_mode", "random")).strip_edges()
@@ -1468,6 +1498,7 @@ func start_game() -> Result:
 			var profile: Dictionary = Dictionary(slot.get("profile", {}))
 			logo_choices.append(int(profile.get("restaurant_logo_id", -1)))
 		config["restaurant_logo_choices_by_player"] = logo_choices
+		var reserve_card_choices: Array[int] = []
 
 		var restore_game_config_overrides := false
 		var restore_game_option_overrides := false
@@ -1486,7 +1517,7 @@ func start_game() -> Result:
 			var option_overrides: Dictionary = Dictionary(option_overrides_val) if option_overrides_val is Dictionary else {}
 			Globals.game_option_overrides = option_overrides
 
-			var init_r: Result = engine.initialize(player_count, seed, enabled_modules, base_dir, [], logo_choices)
+			var init_r: Result = engine.initialize(player_count, seed, enabled_modules, base_dir, reserve_card_choices, logo_choices)
 			if restore_game_config_overrides:
 				Globals.game_config_overrides = prev_game_config_overrides
 			if restore_game_option_overrides:
@@ -1514,6 +1545,7 @@ func start_game() -> Result:
 		_set_slot(seat_index, slot)
 	_waiting_member_by_user_id.clear()
 	_resume_lobby_archive = {}
+	_clear_prepared_resume_start_cache()
 	_rebuild_runtime_views()
 	_touch()
 	var checkpoint_r: Result = _reset_recovery_store_from_current_engine("start_game")
