@@ -3,6 +3,8 @@
 class_name GameLogDockController
 extends RefCounted
 
+const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
+
 var _ensure_left_area_visible: Callable = Callable()
 var _ensure_right_panel_visible: Callable = Callable()
 var _cancel_right_panel_docked_panel: Callable = Callable()
@@ -48,6 +50,11 @@ func toggle_game_log() -> void:
 		return
 
 	var show_logs: bool = not is_game_log_visible_in_right_panel()
+	var span := OnlinePerfTraceClass.begin_span("ui.game_log.toggle", {
+		"show_logs": bool(show_logs),
+		"was_visible": not bool(show_logs),
+		"had_other_docked_panels": bool(_has_other_visible_docked_panels()),
+	})
 	if show_logs:
 		# 玩家信息与日志需要同屏：确保左侧信息区可见，同时确保右侧面板可见以承载日志。
 		if _ensure_left_area_visible.is_valid():
@@ -72,6 +79,10 @@ func toggle_game_log() -> void:
 	else:
 		# 关闭日志：返回默认右侧动作区。
 		hide_game_log_panel_in_right_panel(true)
+	OnlinePerfTraceClass.end_span(span, {
+		"show_logs": bool(show_logs),
+		"visible_after": bool(is_game_log_visible_in_right_panel()),
+	})
 
 func is_game_log_visible_in_right_panel() -> bool:
 	if not is_instance_valid(_game_log_panel):
@@ -101,6 +112,9 @@ func show_game_log_panel_in_right_panel() -> void:
 	# 已在 RightPanel 抽屉中显示
 	if _game_log_panel.visible and is_instance_valid(_right_panel_dock_host) and _game_log_panel.get_parent() == _right_panel_dock_host:
 		return
+	var span := OnlinePerfTraceClass.begin_span("ui.game_log.show_in_right_panel", {
+		"had_other_docked_panels": bool(_has_other_visible_docked_panels()),
+	})
 
 	if _ensure_left_area_visible.is_valid():
 		_ensure_left_area_visible.call()
@@ -120,6 +134,9 @@ func show_game_log_panel_in_right_panel() -> void:
 		_dock_popup_into_right_panel.call(_game_log_panel)
 	if _game_log_panel.has_method("ensure_display_ready"):
 		_game_log_panel.call_deferred("ensure_display_ready")
+	OnlinePerfTraceClass.end_span(span, {
+		"visible_after": bool(is_game_log_visible_in_right_panel()),
+	})
 
 func _has_other_visible_docked_panels() -> bool:
 	if not is_instance_valid(_right_panel_dock_host):

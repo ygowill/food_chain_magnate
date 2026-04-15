@@ -22,7 +22,7 @@
 import AppLayout from '../components/AppLayout.vue'
 
 function openGame() {
-  window.open(`/game/index.html?t=${Date.now()}`, '_blank')
+  window.open(`/game/index.html?t=${Date.now()}&profile_online_sync=1`, '_blank')
 }
 </script>
 

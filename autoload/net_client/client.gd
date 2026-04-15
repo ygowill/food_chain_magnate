@@ -9,6 +9,7 @@ const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const NetClientOnlineResumeSupportClass = preload("res://autoload/net_client_online_resume_support.gd")
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
+const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 const ResyncSnapshotTransferClass = preload("res://core/utils/resync_snapshot_transfer.gd")
 
 var _net = null
@@ -229,6 +230,38 @@ func handle_rpc_command_applied(payload: Dictionary) -> void:
 		return
 	var cmd_dict: Dictionary = _translate_live_command_dict_to_runtime(Dictionary(cmd_dict_val))
 	var state_hash := str(payload.get("state_hash", ""))
+	var perf_meta_val = payload.get("perf", null)
+	var perf_meta: Dictionary = Dictionary(perf_meta_val).duplicate(true) if perf_meta_val is Dictionary else {}
+	var request_id := str(perf_meta.get("request_id", "")).strip_edges()
+	if _net != null and is_instance_valid(_net):
+		var local_perf: Dictionary = {}
+		if _net.has_method("take_pending_action_perf"):
+			local_perf = _net.take_pending_action_perf(request_id)
+		if not local_perf.is_empty():
+			perf_meta["local_request_action_id"] = str(local_perf.get("action_id", ""))
+			perf_meta["client_request_unix_ms"] = int(local_perf.get("client_request_unix_ms", perf_meta.get("client_request_unix_ms", 0)))
+			perf_meta["client_request_mono_usec"] = int(local_perf.get("client_request_mono_usec", perf_meta.get("client_request_mono_usec", 0)))
+			perf_meta["client_request_to_rx_ms"] = float(maxi(
+				0,
+				OnlinePerfTraceClass.now_mono_usec() - int(local_perf.get("client_request_mono_usec", 0))
+			)) / 1000.0
+		perf_meta["client_rx_unix_ms"] = OnlinePerfTraceClass.now_unix_ms()
+		var server_peer_send_unix_ms := int(perf_meta.get("server_peer_send_unix_ms", 0))
+		if server_peer_send_unix_ms > 0:
+			perf_meta["server_to_client_ms_approx"] = int(perf_meta.get("client_rx_unix_ms", 0)) - server_peer_send_unix_ms
+		if _net.has_method("enqueue_command_applied_perf_meta"):
+			_net.enqueue_command_applied_perf_meta(perf_meta)
+	if OnlinePerfTraceClass.enabled():
+		OnlinePerfTraceClass.emit_event("client.command_applied.rx", {
+			"request_id": request_id,
+			"action_id": str(cmd_dict.get("action_id", "")),
+			"actor_id": int(cmd_dict.get("actor", -1)),
+			"command_index": int(cmd_dict.get("index", -1)),
+			"room_code": str(NetContext.room_state.get("room_code", "")).strip_edges().to_upper(),
+			"client_request_to_rx_ms": float(perf_meta.get("client_request_to_rx_ms", -1.0)),
+			"server_to_client_ms_approx": int(perf_meta.get("server_to_client_ms_approx", -1)),
+			"server_exec_ms": float(perf_meta.get("server_exec_ms", -1.0)),
+		})
 	GameLog.debug(
 		"NetClient",
 		"RX CommandApplied action=%s actor=%d index=%d state_hash=%s"
@@ -384,6 +417,15 @@ func handle_rpc_request_rejected(payload: Dictionary) -> void:
 	var request_id := str(payload.get("request_id", ""))
 	var code := str(payload.get("code", ""))
 	var message := str(payload.get("message", ""))
+	if _net != null and is_instance_valid(_net) and _net.has_method("take_pending_action_perf"):
+		_net.take_pending_action_perf(request_id)
+	if OnlinePerfTraceClass.enabled():
+		OnlinePerfTraceClass.emit_event("client.request_rejected.rx", {
+			"request_id": request_id,
+			"code": code,
+			"room_code": str(NetContext.room_state.get("room_code", "")).strip_edges().to_upper(),
+			"message": message,
+		})
 	GameLog.warn(
 		"NetClient",
 		"RX RequestRejected request_id=%s code=%s message=%s"

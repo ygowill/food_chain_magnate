@@ -5,6 +5,7 @@ extends RefCounted
 
 const ModuleUiMetadataBootstrapClass = preload("res://gameplay/module_ui_metadata_bootstrap.gd")
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
+const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 const RECONNECT_MAX_ATTEMPTS := 6
 const RECONNECT_CONNECT_TIMEOUT_SEC := 3.0
 const RECONNECT_RESTORE_TIMEOUT_SEC := 6.0
@@ -283,6 +284,9 @@ func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> voi
 	var engine = _get_engine()
 	if engine == null:
 		return
+	var perf_meta: Dictionary = {}
+	if NetClient != null and NetClient.has_method("consume_next_command_applied_perf_meta"):
+		perf_meta = NetClient.consume_next_command_applied_perf_meta()
 	if _resync_in_progress:
 		_pending_cmds.append({
 			"cmd_dict": cmd_dict.duplicate(true),
@@ -301,10 +305,35 @@ func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> voi
 			"state_hash": str(state_hash),
 		})
 		return
+	var apply_start_mono_usec := OnlinePerfTraceClass.now_mono_usec()
+	if OnlinePerfTraceClass.enabled():
+		OnlinePerfTraceClass.emit_event("client.command_applied.apply_start", {
+			"request_id": str(perf_meta.get("request_id", "")),
+			"action_id": str(cmd.action_id),
+			"actor_id": int(cmd.actor),
+			"command_index": int(cmd.index),
+			"room_code": str(NetContext.room_state.get("room_code", "")).strip_edges().to_upper(),
+			"history_size_before": int(engine.command_history.size()),
+		})
 	var r: Result = engine.execute_command(cmd, true)
+	var apply_end_mono_usec := OnlinePerfTraceClass.now_mono_usec()
 	if not r.ok:
 		GameLog.error("Game", "联机回放命令失败: %s" % r.error)
 		return
+	var apply_done_meta := {
+		"request_id": str(perf_meta.get("request_id", "")),
+		"action_id": str(cmd.action_id),
+		"actor_id": int(cmd.actor),
+		"command_index": int(cmd.index),
+		"room_code": str(NetContext.room_state.get("room_code", "")).strip_edges().to_upper(),
+		"history_size_after": int(engine.command_history.size()),
+		"client_apply_ms": float(maxi(0, apply_end_mono_usec - apply_start_mono_usec)) / 1000.0,
+		"client_request_to_rx_ms": float(perf_meta.get("client_request_to_rx_ms", -1.0)),
+		"server_exec_ms": float(perf_meta.get("server_exec_ms", -1.0)),
+		"server_to_client_ms_approx": int(perf_meta.get("server_to_client_ms_approx", -1)),
+	}
+	if OnlinePerfTraceClass.enabled():
+		OnlinePerfTraceClass.emit_event("client.command_applied.apply_done", apply_done_meta)
 	if NetClient != null and NetClient.has_method("record_online_resume_runtime_command_applied"):
 		NetClient.record_online_resume_runtime_command_applied(cmd_dict, state_hash)
 	var should_sync_resume_progress := true
@@ -324,6 +353,22 @@ func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> voi
 		_request_live_log_timeline_refresh.call()
 	if _update_ui.is_valid():
 		_update_ui.call()
+	_trace_online_command_ui_settled(apply_done_meta, apply_end_mono_usec)
+
+func _trace_online_command_ui_settled(meta: Dictionary, apply_end_mono_usec: int) -> void:
+	if not OnlinePerfTraceClass.enabled():
+		return
+	if _host == null or not is_instance_valid(_host):
+		return
+	_trace_online_command_ui_settled_async(meta.duplicate(true), int(apply_end_mono_usec))
+
+func _trace_online_command_ui_settled_async(meta: Dictionary, apply_end_mono_usec: int) -> void:
+	if _host == null or not is_instance_valid(_host):
+		return
+	await _host.get_tree().process_frame
+	var out := meta.duplicate(true)
+	out["client_ui_settled_ms"] = float(maxi(0, OnlinePerfTraceClass.now_mono_usec() - apply_end_mono_usec)) / 1000.0
+	OnlinePerfTraceClass.emit_event("client.command_applied.ui_settled", out)
 
 func _on_online_resync_archive_received(archive: Dictionary) -> void:
 	var engine = _get_engine()

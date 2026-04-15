@@ -11,6 +11,7 @@ const HEARTBEAT_INTERVAL_SEC := 15.0
 const PERSIST_INTERVAL_SEC := 2.0
 const ROOM_DIRECTORY_SYNC_DEBOUNCE_SEC := 0.2
 
+const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 const RoomPersistenceStoreClass = preload("res://server/room_persistence_store.gd")
 const ServerIdentityStoreClass = preload("res://server/server_identity_store.gd")
 
@@ -365,9 +366,25 @@ func _persist_rooms() -> void:
 		return
 	if NetClient == null or NetClient._room_manager == null or not is_instance_valid(NetClient._room_manager):
 		return
+	var span := OnlinePerfTraceClass.begin_span("server.persistence.persist_rooms", {
+		"room_count": int(NetClient._room_manager.rooms.size()) if NetClient._room_manager.get("rooms") is Dictionary else 0,
+		"snapshot_path": _room_persistence_store.get_snapshot_path() if _room_persistence_store.has_method("get_snapshot_path") else "",
+	})
 	var save_r: Result = _room_persistence_store.save_room_manager(NetClient._room_manager)
 	if not save_r.ok:
+		OnlinePerfTraceClass.end_span(span, {
+			"ok": false,
+			"error": str(save_r.error),
+		})
 		GameLog.warn("DedicatedServer", "Persist rooms failed: %s" % save_r.error)
+		return
+	var save_info: Dictionary = Dictionary(save_r.value).duplicate(true) if save_r.value is Dictionary else {}
+	OnlinePerfTraceClass.end_span(span, {
+		"ok": true,
+		"room_count": int(save_info.get("room_count", 0)),
+		"json_bytes": int(save_info.get("json_bytes", 0)),
+		"path": str(save_info.get("path", "")),
+	})
 
 func _setup_heartbeat(_port: int) -> void:
 	_heartbeat_timer = Timer.new()

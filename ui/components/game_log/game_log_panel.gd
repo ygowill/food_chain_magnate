@@ -28,6 +28,7 @@ const GameLogEntryUtilsClass = preload("res://ui/components/game_log/game_log_en
 const GameLogDetailsWindowControllerClass = preload("res://ui/components/game_log/game_log_details_window_controller.gd")
 const GameLogUnifiedTimelineBuilderClass = preload("res://ui/components/game_log/game_log_unified_timeline_builder.gd")
 const GameLogItemClass = preload("res://ui/components/game_log/game_log_item.gd")
+const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 
 const _POOL_KIND_FLAT_ENTRY := "flat_entry"
 
@@ -242,6 +243,12 @@ func load_entries(entries: Array[Dictionary]) -> void:
 
 func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_extra_entries: bool = false) -> void:
 	# Unified timeline view (M4.3): structure comes from steps, contents come from formatted entries.
+	var span := OnlinePerfTraceClass.begin_span("ui.game_log.load_step_timeline", {
+		"incoming_entries": int(entries.size()),
+		"current_entries": int(_entries_all.size()),
+		"reset_extra_entries": bool(reset_extra_entries),
+		"timeline_loaded": bool(_is_step_timeline_loaded()),
+	})
 	var next_timeline: Dictionary = timeline.duplicate(true) if (timeline is Dictionary) else {}
 	if _can_append_step_timeline(next_timeline, entries, bool(reset_extra_entries)):
 		var appended_entries := _build_appended_timeline_entries(entries)
@@ -260,6 +267,11 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 			_apply_timeline_state_to_items(true)
 			_request_scroll_to_bottom()
 			_update_entry_count()
+			OnlinePerfTraceClass.end_span(span, {
+				"mode": "append",
+				"entry_count": int(_entries_all.size()),
+				"timeline_step_count": int(_get_step_count(_step_timeline)),
+			})
 			return
 
 	_step_timeline = timeline.duplicate(true) if (timeline is Dictionary) else {}
@@ -286,6 +298,11 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 	_request_scroll_to_bottom()
 	_update_entry_count()
 	_last_step_timeline_update_mode = "rebuild"
+	OnlinePerfTraceClass.end_span(span, {
+		"mode": "rebuild",
+		"entry_count": int(_entries_all.size()),
+		"timeline_step_count": int(_get_step_count(_step_timeline)),
+	})
 
 func set_expand_enabled(_enabled: bool) -> void:
 	# 保留接口兼容 FullLogWindow，当前日志面板已移除“全屏”按钮。
@@ -404,10 +421,20 @@ func ensure_display_ready() -> void:
 		_blank_display_warned = false
 		return
 
+	var span := OnlinePerfTraceClass.begin_span("ui.game_log.ensure_display_ready", {
+		"entry_count": int(_entries_all.size()),
+		"timeline_loaded": bool(_is_step_timeline_loaded()),
+		"child_count_before": int(log_container.get_child_count()),
+	})
 	_rebuild_display()
 	_apply_timeline_state_to_items()
 	_request_scroll_to_bottom()
 	_update_entry_count()
+	OnlinePerfTraceClass.end_span(span, {
+		"entry_count": int(_entries_all.size()),
+		"timeline_loaded": bool(_is_step_timeline_loaded()),
+		"child_count_after": int(log_container.get_child_count()),
+	})
 
 	# 若数据存在但仍构建为空：打一次 warning（便于用户反馈时定位）。
 	if log_container.get_child_count() <= 0 and not _entries_all.is_empty() and not _blank_display_warned:
@@ -756,6 +783,11 @@ func _clear_display() -> void:
 	_log_items.clear()
 
 func _rebuild_display() -> void:
+	var span := OnlinePerfTraceClass.begin_span("ui.game_log.rebuild_display", {
+		"timeline_loaded": bool(_is_step_timeline_loaded()),
+		"entry_count": int(_entries_all.size()),
+		"visible_in_tree": bool(is_visible_in_tree()),
+	})
 	_clear_display()
 
 	if _is_step_timeline_loaded():
@@ -766,6 +798,12 @@ func _rebuild_display() -> void:
 				_add_log_item(Dictionary(entry_val))
 
 	_apply_timeline_state_to_items()
+	OnlinePerfTraceClass.end_span(span, {
+		"timeline_loaded": bool(_is_step_timeline_loaded()),
+		"entry_count": int(_entries_all.size()),
+		"child_count_after": int(log_container.get_child_count()) if log_container != null else 0,
+		"log_item_count": int(_log_items.size()),
+	})
 
 func _build_unified_timeline_display() -> void:
 	if log_container == null:

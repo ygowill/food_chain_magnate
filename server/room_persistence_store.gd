@@ -1,6 +1,7 @@
 class_name RoomPersistenceStore
 extends RefCounted
 
+const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 const SNAPSHOT_VERSION := 1
 
 var _snapshot_path := "user://dedicated_server/online_room_snapshots.json"
@@ -56,18 +57,51 @@ func save_room_manager(room_manager) -> Result:
 func save_snapshot(snapshot: Dictionary) -> Result:
 	var abs_path := ProjectSettings.globalize_path(_snapshot_path)
 	var abs_dir := abs_path.get_base_dir()
+	var room_count := Array(snapshot.get("rooms", [])).size() if snapshot.get("rooms", null) is Array else 0
 	var mkdir_err := DirAccess.make_dir_recursive_absolute(abs_dir)
 	if mkdir_err != OK:
 		return Result.failure("创建快照目录失败: %s err=%s" % [abs_dir, str(mkdir_err)])
 
+	var stringify_span := OnlinePerfTraceClass.begin_span("server.persistence.snapshot.stringify", {
+		"room_count": room_count,
+		"path": _snapshot_path,
+	})
+	var json_text := JSON.stringify(snapshot, "\t")
+	var json_bytes := json_text.to_utf8_buffer().size()
+	OnlinePerfTraceClass.end_span(stringify_span, {
+		"room_count": room_count,
+		"path": _snapshot_path,
+		"json_bytes": json_bytes,
+	})
+
+	var write_span := OnlinePerfTraceClass.begin_span("server.persistence.snapshot.write", {
+		"room_count": room_count,
+		"path": _snapshot_path,
+		"json_bytes": json_bytes,
+	})
 	var file := FileAccess.open(_snapshot_path, FileAccess.WRITE)
 	if file == null:
+		OnlinePerfTraceClass.end_span(write_span, {
+			"ok": false,
+			"error": "写入快照失败",
+			"path": _snapshot_path,
+			"room_count": room_count,
+			"json_bytes": json_bytes,
+		})
 		return Result.failure("写入快照失败: %s" % _snapshot_path)
-	file.store_string(JSON.stringify(snapshot, "\t"))
+	file.store_string(json_text)
 	file.close()
+	OnlinePerfTraceClass.end_span(write_span, {
+		"ok": true,
+		"path": _snapshot_path,
+		"room_count": room_count,
+		"json_bytes": json_bytes,
+	})
 
 	return Result.success({
 		"path": abs_path,
+		"room_count": room_count,
+		"json_bytes": json_bytes,
 	})
 
 func _empty_snapshot() -> Dictionary:

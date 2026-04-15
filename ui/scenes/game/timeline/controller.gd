@@ -11,6 +11,7 @@ const GameTimelineOnlineResumeHistoryViewSupportClass = preload("res://ui/scenes
 const GameTimelineSeekRoutingSupportClass = preload("res://ui/scenes/game/timeline/seek_routing_support.gd")
 const GameTimelineUiStateSupportClass = preload("res://ui/scenes/game/timeline/ui_state_support.gd")
 const GameTimelineReplaySessionSupportClass = preload("res://ui/scenes/game/timeline/replay_session_support.gd")
+const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 
 var _host: Control = null
 var _game_log_panel: Control = null
@@ -276,17 +277,42 @@ func apply_live_log_timeline_from_engine(force_rebuild: bool = false) -> void:
 	# M4.3：正常对局（实时）也使用 step_timeline 来渲染日志结构。
 	# - 仅在本地 engine 下使用（回放模式由 apply_full_replay_log_timeline 负责）。
 	# - timeline 的结构来自 steps，内容来自 formatter(entries)。
+	var span := OnlinePerfTraceClass.begin_span("ui.timeline.apply_live_log", {
+		"force_rebuild": bool(force_rebuild),
+		"replay_mode_active": bool(_replay_mode_active),
+	})
 	if _replay_mode_active:
+		OnlinePerfTraceClass.end_span(span, {
+			"ok": true,
+			"skipped": true,
+			"reason": "replay_mode_active",
+		})
 		return
 	var runtime_engine := _get_runtime_engine()
 	if runtime_engine == null:
+		OnlinePerfTraceClass.end_span(span, {
+			"ok": true,
+			"skipped": true,
+			"reason": "runtime_engine_missing",
+		})
 		return
 	if not is_instance_valid(_game_log_panel):
+		OnlinePerfTraceClass.end_span(span, {
+			"ok": true,
+			"skipped": true,
+			"reason": "game_log_panel_missing",
+		})
 		return
 	_live_history_refresh_scheduled = false
 	var signature := _build_live_history_signature(runtime_engine)
 	if not bool(force_rebuild) and _can_reuse_live_history(signature):
 		_sync_live_log_timeline_state_to_panel()
+		OnlinePerfTraceClass.end_span(span, {
+			"ok": true,
+			"reused": true,
+			"history_size": int(runtime_engine.command_history.size()),
+			"cursor_command_index": int(runtime_engine.current_command_index),
+		})
 		return
 
 	var build_r := GameTimelineOnlineResumeHistoryViewSupportClass.build_live_history_view(
@@ -296,9 +322,19 @@ func apply_live_log_timeline_from_engine(force_rebuild: bool = false) -> void:
 		Callable(self, "_command_index_to_last_step_index")
 	)
 	if not build_r.ok:
+		OnlinePerfTraceClass.end_span(span, {
+			"ok": false,
+			"error": str(build_r.error),
+			"history_size": int(runtime_engine.command_history.size()),
+		})
 		GameLog.warn("Game", "构建 step 时间线失败（实时日志将为空/不更新）: %s" % build_r.error)
 		return
 	if not (build_r.value is Dictionary):
+		OnlinePerfTraceClass.end_span(span, {
+			"ok": false,
+			"error": "build_live_history_view 返回类型错误",
+			"history_size": int(runtime_engine.command_history.size()),
+		})
 		GameLog.warn("Game", "构建 step 时间线失败（返回类型错误）")
 		return
 	var info: Dictionary = build_r.value
@@ -313,6 +349,15 @@ func apply_live_log_timeline_from_engine(force_rebuild: bool = false) -> void:
 	_live_history_dirty = false
 
 	_sync_live_log_timeline_state_to_panel()
+	OnlinePerfTraceClass.end_span(span, {
+		"ok": true,
+		"reused": false,
+		"history_size": int(runtime_engine.command_history.size()),
+		"cursor_command_index": int(runtime_engine.current_command_index),
+		"head_step_index": int(_history_head_step_index),
+		"cursor_step_index": int(_history_cursor_step_index),
+		"history_timeline_source": _history_timeline_source,
+	})
 
 func start_replay_from_file(file_path: String) -> void:
 	if file_path.is_empty():

@@ -2,6 +2,7 @@ class_name RoomManager
 extends RefCounted
 
 const OnlineRoomClass = preload("res://server/room.gd")
+const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 
 const ROOM_CODE_ALPHABET := "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 const ROOM_CODE_LENGTH := 6
@@ -423,6 +424,10 @@ func list_room_summaries() -> Array[Dictionary]:
 	return out
 
 func create_persistence_snapshot(include_runtime_membership: bool = false) -> Result:
+	var span := OnlinePerfTraceClass.begin_span("server.persistence.snapshot.room_manager", {
+		"room_count": int(rooms.size()),
+		"include_runtime_membership": bool(include_runtime_membership),
+	})
 	var room_codes: Array[String] = []
 	for code_val in rooms.keys():
 		var code := str(code_val).strip_edges().to_upper()
@@ -438,18 +443,55 @@ func create_persistence_snapshot(include_runtime_membership: bool = false) -> Re
 			continue
 		if str(room.status) != OnlineRoomClass.STATUS_IN_GAME and str(room.status) != OnlineRoomClass.STATUS_LOBBY:
 			continue
+		var room_span := OnlinePerfTraceClass.begin_span("server.persistence.snapshot.room", {
+			"room_code": room_code,
+			"status": str(room.status),
+			"include_runtime_membership": bool(include_runtime_membership),
+		})
 		if not room.has_method("to_persistence_dict"):
+			OnlinePerfTraceClass.end_span(room_span, {
+				"ok": false,
+				"error": "Room.to_persistence_dict missing",
+			})
+			OnlinePerfTraceClass.end_span(span, {
+				"ok": false,
+				"error": "Room.to_persistence_dict missing",
+				"failed_room_code": room_code,
+			})
 			return Result.failure("Room.to_persistence_dict missing")
 		var snapshot_r: Result = room.to_persistence_dict(include_runtime_membership)
 		if not snapshot_r.ok:
+			OnlinePerfTraceClass.end_span(room_span, {
+				"ok": false,
+				"error": str(snapshot_r.error),
+			})
+			OnlinePerfTraceClass.end_span(span, {
+				"ok": false,
+				"error": str(snapshot_r.error),
+				"failed_room_code": room_code,
+			})
 			return Result.failure("persist room %s 失败: %s" % [room_code, snapshot_r.error])
-		persisted_rooms.append(Dictionary(snapshot_r.value).duplicate(true))
+		var room_snapshot: Dictionary = Dictionary(snapshot_r.value).duplicate(true)
+		persisted_rooms.append(room_snapshot)
+		var archive_dict: Dictionary = Dictionary(room_snapshot.get("archive", {})).duplicate(true)
+		var commands_val = archive_dict.get("commands", null)
+		OnlinePerfTraceClass.end_span(room_span, {
+			"ok": true,
+			"persisted_status": str(room_snapshot.get("status", "")),
+			"has_archive": not archive_dict.is_empty(),
+			"archive_command_count": Array(commands_val).size() if commands_val is Array else 0,
+		})
 
-	return Result.success({
+	var snapshot := {
 		"version": 1,
 		"saved_at_unix_sec": int(Time.get_unix_time_from_system()),
 		"rooms": persisted_rooms,
+	}
+	OnlinePerfTraceClass.end_span(span, {
+		"ok": true,
+		"persisted_rooms": int(persisted_rooms.size()),
 	})
+	return Result.success(snapshot)
 
 func restore_from_persistence(snapshot: Dictionary, allowed_room_codes: Array[String] = []) -> Result:
 	var rooms_val = snapshot.get("rooms", null)

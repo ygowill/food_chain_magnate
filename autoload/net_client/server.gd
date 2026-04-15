@@ -9,6 +9,7 @@ const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const EventHistoryRebuildClass = preload("res://core/engine/game_engine/event_history_rebuild.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const ConnectTokenClass = preload("res://core/utils/connect_token.gd")
+const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 const ResyncSnapshotTransferClass = preload("res://core/utils/resync_snapshot_transfer.gd")
 const GameOverWinnerRulesClass = preload("res://core/rules/game_over_winner_rules.gd")
 const ResultClass = preload("res://core/types/result.gd")
@@ -2400,8 +2401,20 @@ func handle_rpc_action_request(request: Dictionary) -> void:
 	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
 	var request_id := str(request.get("request_id", ""))
 	var action_id := str(request.get("action_id", "")).strip_edges()
+	var perf_request_val = request.get("perf", null)
+	var perf_request: Dictionary = Dictionary(perf_request_val).duplicate(true) if perf_request_val is Dictionary else {}
+	var server_rx_unix_ms := OnlinePerfTraceClass.now_unix_ms()
 	var params_preview = request.get("params", null)
 	var params_keys: Array = Array(Dictionary(params_preview).keys()) if params_preview is Dictionary else []
+	if OnlinePerfTraceClass.enabled():
+		OnlinePerfTraceClass.emit_event("server.action_request.rx", {
+			"request_id": request_id,
+			"peer_id": peer_id,
+			"action_id": action_id,
+			"params_keys": params_keys,
+			"client_request_unix_ms": int(perf_request.get("client_request_unix_ms", 0)),
+			"client_to_server_ms_approx": server_rx_unix_ms - int(perf_request.get("client_request_unix_ms", server_rx_unix_ms)),
+		})
 	GameLog.debug(
 		"NetClient",
 		"RX ActionRequest %s action=%s params_keys=%s"
@@ -2450,7 +2463,32 @@ func handle_rpc_action_request(request: Dictionary) -> void:
 		return
 
 	var cmd = CommandClass.create(action_id, actor_id, params)
+	var exec_start_mono_usec := OnlinePerfTraceClass.now_mono_usec()
+	var exec_start_unix_ms := OnlinePerfTraceClass.now_unix_ms()
 	var r = room.game_engine.execute_command(cmd)
+	var exec_end_unix_ms := OnlinePerfTraceClass.now_unix_ms()
+	var perf_meta := {
+		"request_id": request_id,
+		"action_id": action_id,
+		"peer_id": peer_id,
+		"actor_id": actor_id,
+		"room_code": str(room.room_code).strip_edges().to_upper(),
+		"client_request_unix_ms": int(perf_request.get("client_request_unix_ms", 0)),
+		"server_rx_unix_ms": server_rx_unix_ms,
+		"server_exec_start_unix_ms": exec_start_unix_ms,
+		"server_exec_end_unix_ms": exec_end_unix_ms,
+		"server_exec_ms": float(maxi(0, OnlinePerfTraceClass.now_mono_usec() - exec_start_mono_usec)) / 1000.0,
+	}
+	if OnlinePerfTraceClass.enabled():
+		OnlinePerfTraceClass.emit_event("server.action_request.execute", {
+			"request_id": request_id,
+			"peer_id": peer_id,
+			"actor_id": actor_id,
+			"action_id": action_id,
+			"room_code": str(room.room_code).strip_edges().to_upper(),
+			"server_exec_ms": float(perf_meta.get("server_exec_ms", -1.0)),
+			"ok": bool(r.ok),
+		})
 	if not r.ok:
 		if action_id == "confirm_dinnertime":
 			var phase := _safe_text(str(state.phase)) if state != null else "-"
@@ -2493,7 +2531,7 @@ func handle_rpc_action_request(request: Dictionary) -> void:
 		"ActionRequest applied %s %s %s state_hash=%s"
 			% [_request_tag(peer_id, request_id), _command_brief(cmd), _room_brief(room), _short_hash(state_hash)]
 	)
-	broadcast_command_applied(room, cmd)
+	broadcast_command_applied(room, cmd, perf_meta)
 	server_drain_forfeited_auto_steps(room)
 	_try_finalize_match_if_game_over(room)
 
@@ -2678,7 +2716,7 @@ func handle_rpc_request_full_archive_export(request: Dictionary) -> void:
 			]
 	)
 
-func broadcast_command_applied(room, cmd) -> void:
+func broadcast_command_applied(room, cmd, perf_meta: Dictionary = {}) -> void:
 	if _net == null or not is_instance_valid(_net):
 		return
 	if room == null or cmd == null:
@@ -2696,8 +2734,28 @@ func broadcast_command_applied(room, cmd) -> void:
 	if room.has_method("record_resume_delta"):
 		room.record_resume_delta(cmd, state_hash)
 	var targets := Array(room.get_peer_ids())
+	var broadcast_start_mono_usec := OnlinePerfTraceClass.now_mono_usec()
+	var broadcast_fields := Dictionary(perf_meta).duplicate(true)
+	if not broadcast_fields.is_empty():
+		broadcast_fields["state_hash"] = state_hash
+		broadcast_fields["recipient_count"] = targets.size()
 	for pid in targets:
-		_net.rpc_id(int(pid), "rpc_command_applied", payload)
+		var per_peer_payload := payload.duplicate(true)
+		if not broadcast_fields.is_empty():
+			var per_peer_perf := broadcast_fields.duplicate(true)
+			per_peer_perf["target_peer_id"] = int(pid)
+			per_peer_perf["server_peer_send_unix_ms"] = OnlinePerfTraceClass.now_unix_ms()
+			per_peer_payload["perf"] = per_peer_perf
+		_net.rpc_id(int(pid), "rpc_command_applied", per_peer_payload)
+	if OnlinePerfTraceClass.enabled():
+		OnlinePerfTraceClass.emit_event("server.command_applied.tx", {
+			"request_id": str(broadcast_fields.get("request_id", "")),
+			"action_id": str(cmd.action_id),
+			"actor_id": int(cmd.actor),
+			"room_code": str(room.room_code).strip_edges().to_upper(),
+			"recipient_count": targets.size(),
+			"server_broadcast_ms": float(maxi(0, OnlinePerfTraceClass.now_mono_usec() - broadcast_start_mono_usec)) / 1000.0,
+		})
 	GameLog.debug(
 		"NetClient",
 		"TX CommandApplied %s state_hash=%s recipients=%d %s"

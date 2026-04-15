@@ -5,6 +5,7 @@ const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const ArchiveClass = preload("res://core/engine/game_engine/archive.gd")
 const OnlineResumeFastRuntimeArchiveBuilderClass = preload("res://core/engine/game_engine/online_resume_fast_runtime_archive_builder.gd")
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
+const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 const DEFAULT_RESTAURANT_LOGO_COUNT := 6
 const RESUME_PARTICIPANT_BINDINGS_CONFIG_KEY := "resume_participant_bindings"
 
@@ -80,17 +81,45 @@ func to_persistence_dict(include_runtime_membership: bool = false) -> Result:
 		persisted_status = STATUS_LOBBY
 	if persisted_status != STATUS_IN_GAME and persisted_status != STATUS_LOBBY:
 		return Result.failure("只支持持久化 Lobby/InGame 房间")
+	var span := OnlinePerfTraceClass.begin_span("server.persistence.room.to_dict", {
+		"room_code": room_code,
+		"status": persisted_status,
+		"include_runtime_membership": bool(include_runtime_membership),
+	})
 
 	_sync_seat_states_from_engine()
 
 	var archive: Dictionary = {}
 	if persisted_status == STATUS_IN_GAME:
 		if game_engine == null:
+			OnlinePerfTraceClass.end_span(span, {
+				"ok": false,
+				"error": "InGame 房间缺少 game_engine",
+			})
 			return Result.failure("InGame 房间缺少 game_engine")
+		var archive_span := OnlinePerfTraceClass.begin_span("server.persistence.room.create_archive", {
+			"room_code": room_code,
+			"history_size": int(game_engine.command_history.size()),
+			"current_index": int(game_engine.current_command_index),
+		})
 		var archive_r: Result = game_engine.create_archive()
 		if not archive_r.ok:
+			OnlinePerfTraceClass.end_span(archive_span, {
+				"ok": false,
+				"error": str(archive_r.error),
+			})
+			OnlinePerfTraceClass.end_span(span, {
+				"ok": false,
+				"error": str(archive_r.error),
+			})
 			return Result.failure("create_archive failed: %s" % archive_r.error)
 		archive = Dictionary(archive_r.value).duplicate(true)
+		var commands_val = archive.get("commands", null)
+		OnlinePerfTraceClass.end_span(archive_span, {
+			"ok": true,
+			"command_count": Array(commands_val).size() if commands_val is Array else 0,
+			"current_index": int(archive.get("current_index", -1)),
+		})
 
 	var out := {
 		"room_code": room_code,
@@ -118,6 +147,11 @@ func to_persistence_dict(include_runtime_membership: bool = false) -> Result:
 		out["resume_lobby_archive"] = _resume_lobby_archive.duplicate(true)
 	if include_runtime_membership:
 		out["spectators"] = _build_directory_spectators_array()
+	OnlinePerfTraceClass.end_span(span, {
+		"ok": true,
+		"has_archive": not archive.is_empty(),
+		"spectator_count": Array(out.get("spectators", [])).size() if out.get("spectators", null) is Array else 0,
+	})
 	return Result.success(out)
 
 static func from_persistence_dict(data: Dictionary) -> Result:

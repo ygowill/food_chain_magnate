@@ -11,7 +11,9 @@ const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const NetClientInternalClass = preload("res://autoload/net_client_internal.gd")
+const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 const WEBSOCKET_BUFFER_SIZE_BYTES := 16 * 1024 * 1024
+const MAX_PENDING_ONLINE_PERF := 256
 
 signal connected()
 signal disconnected(reason: String)
@@ -45,6 +47,9 @@ var _pending_resync_delta: Dictionary = {}
 var _resume_force_snapshot_once: bool = false
 var _pending_resume_room_bootstrap: Dictionary = {}
 var _online_client_engine_room_code: String = ""
+var _pending_action_perf_by_request_id: Dictionary = {}
+var _pending_action_perf_request_ids: Array[String] = []
+var _pending_command_applied_perf_queue: Array[Dictionary] = []
 var _internal = null
 
 func _ready() -> void:
@@ -179,6 +184,9 @@ func shutdown(reset_context: bool = true) -> void:
 	_resume_force_snapshot_once = false
 	_pending_resume_room_bootstrap = {}
 	_online_client_engine_room_code = ""
+	_pending_action_perf_by_request_id = {}
+	_pending_action_perf_request_ids.clear()
+	_pending_command_applied_perf_queue.clear()
 	if reset_context and _internal != null and is_instance_valid(_internal) and _internal.has_method("clear_online_resume_dual_engine_state"):
 		_internal.clear_online_resume_dual_engine_state()
 	_refresh_multiplayer_peer_binding()
@@ -453,6 +461,25 @@ func request_action(action_id: String, params: Dictionary) -> String:
 		"action_id": action_id,
 		"params": params.duplicate(true),
 	}
+	if OnlinePerfTraceClass.enabled():
+		var perf_meta := {
+			"request_id": request_id,
+			"action_id": str(action_id).strip_edges(),
+			"client_request_unix_ms": OnlinePerfTraceClass.now_unix_ms(),
+			"client_request_mono_usec": OnlinePerfTraceClass.now_mono_usec(),
+			"client_peer_id": int(multiplayer.get_unique_id()) if multiplayer != null else 0,
+			"room_code": _safe_room_code(NetContext.room_state),
+			"local_player_id": int(NetContext.local_player_id),
+		}
+		payload["perf"] = perf_meta.duplicate(true)
+		_remember_pending_action_perf(request_id, perf_meta)
+		OnlinePerfTraceClass.emit_event("client.action_request.tx", {
+			"request_id": request_id,
+			"action_id": str(action_id).strip_edges(),
+			"room_code": _safe_room_code(NetContext.room_state),
+			"local_player_id": int(NetContext.local_player_id),
+			"params_keys": Array(params.keys()),
+		})
 	rpc_id(1, "rpc_action_request", payload)
 	GameLog.debug(
 		"NetClient",
@@ -755,6 +782,42 @@ func _server_try_auto_submit_forfeited_restructuring(room) -> bool:
 func _server_drain_forfeited_auto_steps(room) -> void:
 	_ensure_internal()
 	_internal.server_drain_forfeited_auto_steps(room)
+
+func _remember_pending_action_perf(request_id: String, perf_meta: Dictionary) -> void:
+	var rid := str(request_id).strip_edges()
+	if rid.is_empty():
+		return
+	_pending_action_perf_by_request_id[rid] = perf_meta.duplicate(true)
+	_pending_action_perf_request_ids.append(rid)
+	while _pending_action_perf_request_ids.size() > MAX_PENDING_ONLINE_PERF:
+		var old_id := str(_pending_action_perf_request_ids.pop_front()).strip_edges()
+		if old_id.is_empty():
+			continue
+		_pending_action_perf_by_request_id.erase(old_id)
+
+func take_pending_action_perf(request_id: String) -> Dictionary:
+	var rid := str(request_id).strip_edges()
+	if rid.is_empty():
+		return {}
+	var out: Dictionary = Dictionary(_pending_action_perf_by_request_id.get(rid, {})).duplicate(true)
+	if _pending_action_perf_by_request_id.has(rid):
+		_pending_action_perf_by_request_id.erase(rid)
+	var idx := _pending_action_perf_request_ids.find(rid)
+	if idx >= 0:
+		_pending_action_perf_request_ids.remove_at(idx)
+	return out
+
+func enqueue_command_applied_perf_meta(perf_meta: Dictionary) -> void:
+	if perf_meta == null or perf_meta.is_empty():
+		return
+	_pending_command_applied_perf_queue.append(perf_meta.duplicate(true))
+	while _pending_command_applied_perf_queue.size() > MAX_PENDING_ONLINE_PERF:
+		_pending_command_applied_perf_queue.pop_front()
+
+func consume_next_command_applied_perf_meta() -> Dictionary:
+	if _pending_command_applied_perf_queue.is_empty():
+		return {}
+	return Dictionary(_pending_command_applied_perf_queue.pop_front()).duplicate(true)
 
 func _next_request_id() -> String:
 	_request_counter += 1
