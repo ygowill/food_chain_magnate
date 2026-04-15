@@ -2,6 +2,7 @@ class_name OnlineRoom
 extends RefCounted
 
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
+const OnlineResumeFastRuntimeArchiveBuilderClass = preload("res://core/engine/game_engine/online_resume_fast_runtime_archive_builder.gd")
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const DEFAULT_RESTAURANT_LOGO_COUNT := 6
 
@@ -841,6 +842,71 @@ func build_effective_resume_start_archive() -> Result:
 		"current_index": int(prepared_info.get("current_index", preview_engine.current_command_index)),
 		"final_hash": _prepared_resume_start_final_hash,
 	}).with_warnings(prepared_r.warnings)
+
+func build_full_authority_archive_export() -> Result:
+	if status != STATUS_IN_GAME:
+		return Result.failure("Room is not in game")
+	if game_engine == null:
+		return Result.failure("Room engine missing")
+	var archive_r: Result = game_engine.create_archive()
+	if not archive_r.ok:
+		return Result.failure("create_archive failed: %s" % archive_r.error)
+	var state = game_engine.get_state() if game_engine.has_method("get_state") else null
+	var final_hash := str(state.compute_hash()) if state != null and state.has_method("compute_hash") else str(Dictionary(archive_r.value).get("final_hash", "")).strip_edges()
+	return Result.success({
+		"room_code": str(room_code).strip_edges().to_upper(),
+		"archive": Dictionary(archive_r.value).duplicate(true),
+		"history_size": int(game_engine.command_history.size()),
+		"current_index": int(game_engine.current_command_index),
+		"final_hash": final_hash,
+	})
+
+func build_resume_fast_start_bundle(include_full_archive_payload: bool = false) -> Result:
+	var prepared_r: Result = _prepare_effective_resume_start_engine()
+	if not prepared_r.ok:
+		return prepared_r
+	var prepared_info: Dictionary = Dictionary(prepared_r.value) if prepared_r.value is Dictionary else {}
+	var preview_engine = prepared_info.get("engine", null)
+	if preview_engine == null or not is_instance_valid(preview_engine):
+		return Result.failure("resume start engine missing")
+
+	var full_archive_r: Result = build_effective_resume_start_archive()
+	if not full_archive_r.ok:
+		return full_archive_r
+	var full_archive_info: Dictionary = Dictionary(full_archive_r.value) if full_archive_r.value is Dictionary else {}
+	var full_archive: Dictionary = Dictionary(full_archive_info.get("archive", {})).duplicate(true)
+	if full_archive.is_empty():
+		return Result.failure("resume start archive missing")
+
+	var runtime_r: Result = OnlineResumeFastRuntimeArchiveBuilderClass.build_from_engine(
+		preview_engine,
+		{
+			"full_archive": full_archive,
+		}
+	)
+	if not runtime_r.ok:
+		return Result.failure("build runtime archive failed: %s" % runtime_r.error)
+	var runtime_info: Dictionary = Dictionary(runtime_r.value) if runtime_r.value is Dictionary else {}
+
+	var bundle := {
+		"runtime_archive": Dictionary(runtime_info.get("runtime_archive", {})).duplicate(true),
+		"runtime_anchor": Dictionary(runtime_info.get("runtime_anchor", {})).duplicate(true),
+		"full_archive_meta": {
+			"full_command_count": int(full_archive_info.get("history_size", preview_engine.command_history.size())),
+			"full_final_hash": str(full_archive_info.get("final_hash", "")).strip_edges(),
+			"schema_version": int(full_archive.get("schema_version", 0)),
+			"byte_size": int(var_to_bytes(full_archive).size()),
+			"source": "server_authority_engine",
+		},
+	}
+	if include_full_archive_payload:
+		bundle["full_archive_payload"] = full_archive
+
+	var warnings: Array[String] = []
+	warnings.append_array(prepared_r.warnings)
+	warnings.append_array(full_archive_r.warnings)
+	warnings.append_array(runtime_r.warnings)
+	return Result.success(bundle).with_warnings(warnings)
 
 func add_waiting_member(peer_id: int, profile: Dictionary, role: String = "player", token_generation: int = -1) -> Result:
 	if has_peer(peer_id):

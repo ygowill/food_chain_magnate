@@ -129,6 +129,35 @@ tools/run_headless_script.sh res://tools/check_compile.gd \
   res://core res://gameplay res://modules
 ```
 
+### 2.2.3 联机恢复房“快加载 + 完整历史”专项回归
+
+这条链路已经拆成“快启动 runtime + 后台补齐完整历史 + 服务端完整 archive 导出”三部分，建议在改动相关代码后至少回归下面这些用例：
+
+```bash
+# 编译/预加载扫描
+tools/run_headless_script.sh res://tools/check_compile.gd
+
+# 双轨初始化 / anchor / 完整历史尾追加 / 完整导出
+tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120
+```
+
+若只想做定向核验，优先关注 `ui/scenes/tests/all_tests_plan.gd` 中这些注册项：
+
+- `OnlineResumeFastStartBundleTest`
+- `OnlineResumeClientDualEngineBootstrapTest`
+- `OnlineResumeRuntimeAnchorLiveSyncTest`
+- `OnlineResumeFullHistoryTailAppendTest`
+- `OnlineResumeFullArchiveExportTest`
+- `GameOnlineResumeProgressSyncTest`
+- `GameOnlineResyncReconnectFlowTest`
+- `GameLogPanelReplayToggleAvailabilityTest`
+
+其中最后一个 UI 用例专门覆盖：
+
+- 完整历史未 ready 时，Replay 入口禁用
+- 按钮文案显示“完整历史加载中”
+- 完整历史 ready 后恢复为正常“进入回放”入口
+
 **批量运行所有测试**：
 
 **推荐：单命令触发所有测试（单进程聚合场景）**：

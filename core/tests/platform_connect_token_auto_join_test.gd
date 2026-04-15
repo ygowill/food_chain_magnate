@@ -487,30 +487,40 @@ static func _run_resume_archive_auto_join_scenario() -> Result:
 		return Result.failure("恢复房开局 current_command_index 错误: %d vs %d" % [int(room.game_engine.current_command_index), selected_index])
 	if _find_sent_method(mock_net.sent, 30, "rpc_game_started") < 0 or _find_sent_method(mock_net.sent, 31, "rpc_game_started") < 0:
 		return Result.failure("恢复房开局后双方都应收到 rpc_game_started")
-	if _find_sent_method(mock_net.sent, 30, "rpc_resync_snapshot_manifest") < 0 or _find_sent_method(mock_net.sent, 31, "rpc_resync_snapshot_manifest") < 0:
-		return Result.failure("恢复房开局后双方都应收到 snapshot manifest")
-	if _find_sent_method(mock_net.sent, 30, "rpc_resync_snapshot_chunk") < 0 or _find_sent_method(mock_net.sent, 31, "rpc_resync_snapshot_chunk") < 0:
-		return Result.failure("恢复房开局后双方都应收到 snapshot chunk")
+	if _find_sent_method(mock_net.sent, 30, "rpc_resync_snapshot_manifest") >= 0 or _find_sent_method(mock_net.sent, 31, "rpc_resync_snapshot_manifest") >= 0:
+		return Result.failure("恢复房 fast-start 路径不应再混用 snapshot manifest")
+	if _find_sent_method(mock_net.sent, 30, "rpc_resync_snapshot_chunk") >= 0 or _find_sent_method(mock_net.sent, 31, "rpc_resync_snapshot_chunk") >= 0:
+		return Result.failure("恢复房 fast-start 路径不应再混用 snapshot chunk")
 	if _find_sent_method(mock_net.sent, 30, "rpc_resync_archive") >= 0 or _find_sent_method(mock_net.sent, 31, "rpc_resync_archive") >= 0:
 		return Result.failure("恢复房开局主链路不应回退到旧 rpc_resync_archive")
-	var host_snapshot_r: Result = _extract_snapshot_archive(mock_net.sent, 30)
-	if not host_snapshot_r.ok:
-		return Result.failure("恢复房 host snapshot 组装失败: %s" % host_snapshot_r.error)
-	var host_snapshot: Dictionary = Dictionary(host_snapshot_r.value).duplicate(true)
-	var host_commands_val = host_snapshot.get("commands", null)
-	if not (host_commands_val is Array) or Array(host_commands_val).size() != expected_history_size:
-		return Result.failure("恢复房 host snapshot 历史长度错误: %s" % str(host_commands_val))
-	if int(host_snapshot.get("current_index", -999999)) != selected_index:
-		return Result.failure("恢复房 host snapshot current_index 错误: %d vs %d" % [int(host_snapshot.get("current_index", -999999)), selected_index])
-	var player_snapshot_r: Result = _extract_snapshot_archive(mock_net.sent, 31)
-	if not player_snapshot_r.ok:
-		return Result.failure("恢复房 player snapshot 组装失败: %s" % player_snapshot_r.error)
-	var player_snapshot: Dictionary = Dictionary(player_snapshot_r.value).duplicate(true)
-	var player_commands_val = player_snapshot.get("commands", null)
-	if not (player_commands_val is Array) or Array(player_commands_val).size() != expected_history_size:
-		return Result.failure("恢复房 player snapshot 历史长度错误: %s" % str(player_commands_val))
-	if int(player_snapshot.get("current_index", -999999)) != selected_index:
-		return Result.failure("恢复房 player snapshot current_index 错误: %d vs %d" % [int(player_snapshot.get("current_index", -999999)), selected_index])
+	var host_game_started := _get_sent_payload(mock_net.sent, 30, "rpc_game_started")
+	var player_game_started := _get_sent_payload(mock_net.sent, 31, "rpc_game_started")
+	if host_game_started.is_empty() or player_game_started.is_empty():
+		return Result.failure("恢复房开局缺少 rpc_game_started payload")
+	var host_bundle: Dictionary = Dictionary(host_game_started.get("resume_fast_start_bundle", {})).duplicate(true)
+	var player_bundle: Dictionary = Dictionary(player_game_started.get("resume_fast_start_bundle", {})).duplicate(true)
+	if host_bundle.is_empty() or player_bundle.is_empty():
+		return Result.failure("恢复房开局应通过 rpc_game_started 下发 resume_fast_start_bundle")
+	var host_runtime_archive: Dictionary = Dictionary(host_bundle.get("runtime_archive", {})).duplicate(true)
+	var player_runtime_archive: Dictionary = Dictionary(player_bundle.get("runtime_archive", {})).duplicate(true)
+	if host_runtime_archive.is_empty() or player_runtime_archive.is_empty():
+		return Result.failure("resume_fast_start_bundle 缺少 runtime_archive")
+	var host_runtime_commands := Array(host_runtime_archive.get("commands", []))
+	var player_runtime_commands := Array(player_runtime_archive.get("commands", []))
+	if host_runtime_commands.size() >= expected_history_size:
+		return Result.failure("host runtime_archive 应比完整历史更短: %d vs %d" % [host_runtime_commands.size(), expected_history_size])
+	if player_runtime_commands.size() >= expected_history_size:
+		return Result.failure("player runtime_archive 应比完整历史更短: %d vs %d" % [player_runtime_commands.size(), expected_history_size])
+	var host_full_archive: Dictionary = Dictionary(host_bundle.get("full_archive_payload", {})).duplicate(true)
+	var player_full_archive: Dictionary = Dictionary(player_bundle.get("full_archive_payload", {})).duplicate(true)
+	if Array(host_full_archive.get("commands", [])).size() != expected_history_size:
+		return Result.failure("host full_archive_payload 历史长度错误")
+	if Array(player_full_archive.get("commands", [])).size() != expected_history_size:
+		return Result.failure("player full_archive_payload 历史长度错误")
+	if str(Dictionary(host_bundle.get("full_archive_meta", {})).get("full_final_hash", "")).strip_edges() != expected_hash:
+		return Result.failure("host full_archive_meta.full_final_hash 错误")
+	if str(Dictionary(player_bundle.get("full_archive_meta", {})).get("full_final_hash", "")).strip_edges() != expected_hash:
+		return Result.failure("player full_archive_meta.full_final_hash 错误")
 
 	return Result.success()
 
@@ -657,6 +667,16 @@ static func _find_sent_method(sent: Array[Dictionary], peer_id: int, method: Str
 			continue
 		return i
 	return -1
+
+static func _get_sent_payload(sent: Array[Dictionary], peer_id: int, method: String) -> Dictionary:
+	var idx := _find_sent_method(sent, peer_id, method)
+	if idx < 0 or idx >= sent.size():
+		return {}
+	var item: Dictionary = Dictionary(sent[idx])
+	var payload_val = item.get("payload", null)
+	if not (payload_val is Dictionary):
+		return {}
+	return Dictionary(payload_val).duplicate(true)
 
 static func _find_request_rejected(sent: Array[Dictionary], peer_id: int, request_id: String, code: String) -> int:
 	for i in range(sent.size()):

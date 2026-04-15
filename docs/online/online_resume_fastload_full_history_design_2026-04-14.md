@@ -659,10 +659,15 @@ D 完整版里，锚点只影响客户端快加载，不影响权威历史。
 建议改动：
 
 - `ui/scenes/game/timeline/controller.gd`
-- `ui/scenes/game/event_log/controller.gd`
+- `ui/components/game_log/game_log_panel.gd`
 - `ui/scenes/game/timeline/step_timeline_build_helpers.gd`
 - 新增 adapter：
   - `ui/scenes/game/timeline/online_resume_full_history_adapter.gd`
+
+实现备注：
+
+- 第一版主路径以 `timeline/controller.gd + online_resume_full_history_adapter.gd + game_log_panel.gd` 收口完整历史读源切换；
+- `ui/scenes/game/event_log/controller.gd` 继续负责 runtime `EventBus` 历史恢复/格式化，不再作为恢复房完整历史主数据源。
 
 交付结果：
 
@@ -974,7 +979,7 @@ D 完整版里，锚点只影响客户端快加载，不影响权威历史。
 
 ### 15.2 UI / 交互测试
 
-1. 完整历史 ready 前，ReplayBar / 历史点击入口的可见性与文案正确。
+1. 完整历史 ready 前，ReplayBar / 历史点击入口的禁用状态、tooltip 与“完整历史加载中”文案正确。
 2. 完整历史 ready 后，log panel 显示完整历史，而不是仅短链尾部。
 3. 在历史只读态下，ActionPanel 仍保持禁用。
 4. 退出回放后回到 live 最新状态，不残留旧 cursor。

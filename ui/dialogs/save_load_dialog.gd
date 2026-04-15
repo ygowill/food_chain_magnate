@@ -6,6 +6,7 @@ extends ModalDialogBase
 
 signal load_selected(path: String)
 signal save_completed(path: String)
+signal external_save_requested(target: Dictionary)
 signal cancelled()
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
@@ -18,6 +19,7 @@ const WEB_UPLOAD_DIR := "user://web_uploads"
 
 var _dialog_mode: DialogMode = DialogMode.LOAD
 var _engine: GameEngine = null
+var _use_external_save_handler: bool = false
 
 var _title_label: Label
 var _dialog_panel: PanelContainer
@@ -57,6 +59,7 @@ func _is_web() -> bool:
 func open_for_load() -> void:
 	_dialog_mode = DialogMode.LOAD
 	_engine = null
+	_use_external_save_handler = false
 	_direct_file_pick_mode = true
 	_set_title("载入游戏")
 	_update_ui_state()
@@ -66,21 +69,34 @@ func open_for_load() -> void:
 func open_for_replay() -> void:
 	_dialog_mode = DialogMode.REPLAY
 	_engine = null
+	_use_external_save_handler = false
 	_direct_file_pick_mode = true
 	_set_title("选择回放文件")
 	_update_ui_state()
 	close()
 	_open_picker_for_load_mode()
 
-func open_for_save(engine: GameEngine, title: String = "保存游戏") -> void:
+func open_for_save(engine: GameEngine, title: String = "保存游戏", use_external_save_handler: bool = false) -> void:
 	_dialog_mode = DialogMode.SAVE
 	_engine = engine
+	_use_external_save_handler = bool(use_external_save_handler)
 	_direct_file_pick_mode = false
 	_set_title(title)
 	_refresh_slots()
 	_update_ui_state()
 	_prefer_file_tab_on_web()
 	open()
+
+func finish_external_save_success(path: String) -> void:
+	_set_status("已保存到: %s" % str(path))
+	save_completed.emit(str(path))
+	if _dialog_mode == DialogMode.SAVE:
+		_refresh_slots()
+		_select_slot_path(str(path))
+	close()
+
+func finish_external_save_error(message: String) -> void:
+	_set_status(str(message))
 
 func _prefer_file_tab_on_web() -> void:
 	if not _is_web():
@@ -641,6 +657,12 @@ func _save_to_file_or_download() -> void:
 		if file_name.is_empty():
 			_set_status("文件名无效")
 			return
+		if _use_external_save_handler:
+			_emit_external_save_request({
+				"target_kind": "web_download",
+				"file_name": file_name,
+			})
+			return
 
 		var archive_result := _engine.create_archive()
 		if not archive_result.ok:
@@ -659,6 +681,12 @@ func _save_to_file_or_download() -> void:
 		_set_status("请选择一个保存路径")
 		return
 	path = _ensure_json_extension(path)
+	if _use_external_save_handler:
+		_emit_external_save_request({
+			"target_kind": "file_path",
+			"path": path,
+		})
+		return
 
 	var result := _engine.save_to_file(path)
 	if not result.ok:
@@ -737,6 +765,12 @@ func _save_selected() -> void:
 		path = _get_selected_slot_path()
 		if path.is_empty():
 			path = QUICK_SAVE_PATH
+	if _use_external_save_handler:
+		_emit_external_save_request({
+			"target_kind": "slot_path",
+			"path": path,
+		})
+		return
 
 	var result := _engine.save_to_file(path)
 	if not result.ok:
@@ -774,3 +808,7 @@ func _on_file_dialog_selected(path: String) -> void:
 func _set_status(msg: String) -> void:
 	if _status_label != null:
 		_status_label.text = msg
+
+func _emit_external_save_request(target: Dictionary) -> void:
+	_set_status("正在准备导出...")
+	external_save_requested.emit(Dictionary(target).duplicate(true))

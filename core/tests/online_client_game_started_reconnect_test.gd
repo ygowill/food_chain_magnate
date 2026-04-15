@@ -272,6 +272,8 @@ static func _restore(
 	NetContext.room_list = prev_room_list.duplicate(true)
 	NetContext.player_profile = prev_player_profile.duplicate(true)
 	NetContext.online_resume_state = prev_resume_state.duplicate(true)
+	if NetContext.has_method("save_online_resume_state_to_disk"):
+		NetContext.save_online_resume_state_to_disk()
 	Globals.current_game_engine = prev_engine
 	Globals.is_game_active = prev_is_game_active
 

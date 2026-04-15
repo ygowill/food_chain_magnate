@@ -2121,35 +2121,47 @@ func handle_rpc_start_game(request: Dictionary) -> void:
 		return
 
 	var resume_start_snapshot_transfer: Dictionary = {}
+	var resume_fast_start_bundle: Dictionary = {}
 	if room.has_method("is_resume_archive_room") and room.is_resume_archive_room():
-		if not room.has_method("build_effective_resume_start_archive"):
-			send_request_rejected(peer_id, request_id, "start_game_failed", "Room.build_effective_resume_start_archive missing")
-			return
-		var effective_resume_r: Result = room.build_effective_resume_start_archive()
-		if not effective_resume_r.ok:
-			send_request_rejected(peer_id, request_id, "start_game_failed", effective_resume_r.error)
-			return
-		var effective_resume_val = effective_resume_r.value
-		if not (effective_resume_val is Dictionary):
-			send_request_rejected(peer_id, request_id, "start_game_failed", "resume start archive type invalid")
-			return
-		var effective_resume_info: Dictionary = effective_resume_val
-		var resume_archive: Dictionary = Dictionary(effective_resume_info.get("archive", {})).duplicate(true)
-		if resume_archive.is_empty():
-			send_request_rejected(peer_id, request_id, "start_game_failed", "resume start archive missing")
-			return
-		var resume_hash := str(effective_resume_info.get("final_hash", resume_archive.get("final_hash", ""))).strip_edges()
-		var history_size := int(effective_resume_info.get("history_size", -1))
-		var transfer_r: Result = _build_archive_resync_snapshot_transfer(
-			str(room.room_code),
-			resume_archive,
-			history_size,
-			resume_hash
-		)
-		if not transfer_r.ok:
-			send_request_rejected(peer_id, request_id, "start_game_failed", transfer_r.error)
-			return
-		resume_start_snapshot_transfer = Dictionary(transfer_r.value).duplicate(true)
+		if room.has_method("build_resume_fast_start_bundle"):
+			var fast_bundle_r: Result = room.build_resume_fast_start_bundle(true)
+			if fast_bundle_r.ok and fast_bundle_r.value is Dictionary:
+				resume_fast_start_bundle = Dictionary(fast_bundle_r.value).duplicate(true)
+			else:
+				GameLog.warn(
+					"NetClient",
+					"StartGame resume fast-start unavailable, fallback to snapshot room=%s err=%s"
+						% [_safe_text(str(room.room_code)), _safe_text(str(fast_bundle_r.error))]
+				)
+		if resume_fast_start_bundle.is_empty():
+			if not room.has_method("build_effective_resume_start_archive"):
+				send_request_rejected(peer_id, request_id, "start_game_failed", "Room.build_effective_resume_start_archive missing")
+				return
+			var effective_resume_r: Result = room.build_effective_resume_start_archive()
+			if not effective_resume_r.ok:
+				send_request_rejected(peer_id, request_id, "start_game_failed", effective_resume_r.error)
+				return
+			var effective_resume_val = effective_resume_r.value
+			if not (effective_resume_val is Dictionary):
+				send_request_rejected(peer_id, request_id, "start_game_failed", "resume start archive type invalid")
+				return
+			var effective_resume_info: Dictionary = effective_resume_val
+			var resume_archive: Dictionary = Dictionary(effective_resume_info.get("archive", {})).duplicate(true)
+			if resume_archive.is_empty():
+				send_request_rejected(peer_id, request_id, "start_game_failed", "resume start archive missing")
+				return
+			var resume_hash := str(effective_resume_info.get("final_hash", resume_archive.get("final_hash", ""))).strip_edges()
+			var history_size := int(effective_resume_info.get("history_size", -1))
+			var transfer_r: Result = _build_archive_resync_snapshot_transfer(
+				str(room.room_code),
+				resume_archive,
+				history_size,
+				resume_hash
+			)
+			if not transfer_r.ok:
+				send_request_rejected(peer_id, request_id, "start_game_failed", transfer_r.error)
+				return
+			resume_start_snapshot_transfer = Dictionary(transfer_r.value).duplicate(true)
 
 	var sr = room.start_game()
 	if not sr.ok:
@@ -2169,8 +2181,10 @@ func handle_rpc_start_game(request: Dictionary) -> void:
 	for pid in room.get_peer_ids():
 		var per_peer_payload := payload.duplicate(true)
 		per_peer_payload["local_player_id"] = room.get_seat_index_for_peer(int(pid)) if room.has_method("get_seat_index_for_peer") else -1
+		if not resume_fast_start_bundle.is_empty():
+			per_peer_payload["resume_fast_start_bundle"] = resume_fast_start_bundle.duplicate(true)
 		_net.rpc_id(int(pid), "rpc_game_started", per_peer_payload)
-		if not resume_start_snapshot_transfer.is_empty():
+		if resume_fast_start_bundle.is_empty() and not resume_start_snapshot_transfer.is_empty():
 			_send_prebuilt_resync_snapshot(int(pid), request_id, room, resume_start_snapshot_transfer, "start_game_resume_archive")
 	GameLog.warn(
 		"NetClient",
@@ -2410,6 +2424,60 @@ func handle_rpc_rewind_to_turn_start(request: Dictionary) -> void:
 		_net.rpc_id(peer_id, "rpc_rewind_to_turn_start_meta", out)
 
 	broadcast_room_state(room)
+
+func handle_rpc_request_full_archive_export(request: Dictionary) -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
+		return
+
+	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
+	var request_id := str(request.get("request_id", ""))
+	GameLog.info("NetClient", "RX FullArchiveExport %s" % _request_tag(peer_id, request_id))
+	var room = _net._room_manager.get_room_by_peer(peer_id)
+	if room == null:
+		send_request_rejected(peer_id, request_id, "not_in_room", "Not in room")
+		return
+	if str(room.status) != "InGame":
+		send_request_rejected(peer_id, request_id, "not_in_game", "Room not in game")
+		return
+	if room.game_engine == null:
+		send_request_rejected(peer_id, request_id, "engine_missing", "Room engine missing")
+		return
+	if not room.has_method("build_full_authority_archive_export"):
+		send_request_rejected(peer_id, request_id, "not_supported", "Room.build_full_authority_archive_export missing")
+		return
+
+	var export_r: Result = room.build_full_authority_archive_export()
+	if not export_r.ok:
+		send_request_rejected(peer_id, request_id, "full_archive_export_failed", export_r.error)
+		return
+	if not (export_r.value is Dictionary):
+		send_request_rejected(peer_id, request_id, "full_archive_export_failed", "export result type invalid")
+		return
+	var export_info: Dictionary = Dictionary(export_r.value)
+	var archive: Dictionary = Dictionary(export_info.get("archive", {})).duplicate(true)
+	if archive.is_empty():
+		send_request_rejected(peer_id, request_id, "full_archive_export_failed", "archive missing")
+		return
+
+	_net.rpc_id(peer_id, "rpc_full_archive_export_ready", {
+		"request_id": request_id,
+		"room_code": str(export_info.get("room_code", room.room_code)).strip_edges().to_upper(),
+		"archive": archive,
+		"history_size": int(export_info.get("history_size", Array(archive.get("commands", [])).size())),
+		"final_hash": str(export_info.get("final_hash", archive.get("final_hash", ""))).strip_edges(),
+	})
+	GameLog.info(
+		"NetClient",
+		"FullArchiveExport ready %s room=%s commands=%d final_hash=%s"
+			% [
+				_request_tag(peer_id, request_id),
+				_safe_text(str(export_info.get("room_code", room.room_code)).to_upper()),
+				Array(archive.get("commands", [])).size(),
+				_short_hash(str(export_info.get("final_hash", archive.get("final_hash", ""))))
+			]
+	)
 
 func broadcast_command_applied(room, cmd) -> void:
 	if _net == null or not is_instance_valid(_net):

@@ -86,11 +86,14 @@ static func dispose_runtime(game) -> void:
 		game._command_controller.dispose()
 	game._command_controller = null
 
-	var engine = game.game_engine
-	if engine != null and engine.has_method("dispose"):
-		engine.dispose()
+	var display_engine = game.game_engine
+	var runtime_engine = Globals.current_game_engine if Globals != null and Globals.current_game_engine is GameEngine else null
+	if display_engine != null and display_engine.has_method("dispose"):
+		display_engine.dispose()
+	if runtime_engine != null and runtime_engine != display_engine and runtime_engine.has_method("dispose"):
+		runtime_engine.dispose()
 
-	if Globals != null and Globals.current_game_engine == engine:
+	if Globals != null:
 		Globals.current_game_engine = null
 	if Globals != null:
 		Globals.is_game_active = false
