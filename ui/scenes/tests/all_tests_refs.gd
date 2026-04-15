@@ -5,6 +5,7 @@ extends RefCounted
 const ReplayDeterminismTestClass = preload("res://core/tests/replay_determinism_test.gd")
 const EmployeeActionTestClass = preload("res://core/tests/employee_action_test.gd")
 const RestructuringOverflowPenaltyTestClass = preload("res://core/tests/restructuring_overflow_penalty_test.gd")
+const RestructuringBusyDuplicateEmployeeRegressionTestClass = preload("res://core/tests/restructuring_busy_duplicate_employee_regression_test.gd")
 const RecruitOnCreditRulesTestClass = preload("res://core/tests/recruit_on_credit_rules_test.gd")
 const PaydaySalaryTestClass = preload("res://core/tests/payday_salary_test.gd")
 const PaydayReportEventTestClass = preload("res://core/tests/payday_report_event_test.gd")
