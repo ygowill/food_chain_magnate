@@ -2,9 +2,11 @@ class_name OnlineRoom
 extends RefCounted
 
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
+const ArchiveClass = preload("res://core/engine/game_engine/archive.gd")
 const OnlineResumeFastRuntimeArchiveBuilderClass = preload("res://core/engine/game_engine/online_resume_fast_runtime_archive_builder.gd")
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const DEFAULT_RESTAURANT_LOGO_COUNT := 6
+const RESUME_PARTICIPANT_BINDINGS_CONFIG_KEY := "resume_participant_bindings"
 
 const STATUS_LOBBY := "Lobby"
 const STATUS_IN_GAME := "InGame"
@@ -559,6 +561,168 @@ func _infer_resume_player_count_from_archive(archive: Dictionary) -> int:
 		return 0
 	return Array(players_val).size()
 
+func _get_resume_participant_bindings_from_config() -> Array[Dictionary]:
+	var bindings_val = config.get(RESUME_PARTICIPANT_BINDINGS_CONFIG_KEY, null)
+	if not (bindings_val is Array):
+		return []
+	return _normalize_resume_participant_bindings(Array(bindings_val))
+
+func _get_resume_participant_slots_from_archive() -> Array[Dictionary]:
+	if _resume_lobby_archive.is_empty():
+		return []
+	return ArchiveClass.get_online_resume_participant_slots(_resume_lobby_archive)
+
+func _normalize_resume_participant_bindings(value: Array) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for item in value:
+		if not (item is Dictionary):
+			continue
+		var slot_src: Dictionary = Dictionary(item)
+		var user_id := str(slot_src.get("user_id", "")).strip_edges()
+		if user_id.is_empty():
+			continue
+		var seat_index := _parse_optional_int(slot_src.get("seat_index", null), -1)
+		if seat_index < 0:
+			seat_index = _parse_optional_int(slot_src.get("player_id", null), -1)
+		if seat_index < 0:
+			continue
+		out.append({
+			"seat_index": seat_index,
+			"player_id": _parse_optional_int(slot_src.get("player_id", null), seat_index),
+			"user_id": user_id,
+			"role": "host" if str(slot_src.get("role", "")).strip_edges() == "host" else "player",
+		})
+	return out
+
+func _parse_optional_int(value, default_value: int = -1) -> int:
+	if value is int:
+		return int(value)
+	if value is float:
+		var f: float = float(value)
+		if f == floor(f):
+			return int(f)
+	return default_value
+
+func _find_resume_binding_for_user_id(user_id: String) -> Dictionary:
+	var uid := str(user_id).strip_edges()
+	if uid.is_empty():
+		return {}
+	for binding in _get_resume_participant_bindings_from_config():
+		if str(binding.get("user_id", "")).strip_edges() == uid:
+			return Dictionary(binding).duplicate(true)
+	for slot in _get_resume_participant_slots_from_archive():
+		if str(slot.get("user_id", "")).strip_edges() == uid:
+			return Dictionary(slot).duplicate(true)
+	return {}
+
+func _find_resume_expected_seat_index_for_user_id(user_id: String) -> int:
+	var binding: Dictionary = _find_resume_binding_for_user_id(user_id)
+	if binding.is_empty():
+		return -1
+	var seat_index := _parse_optional_int(binding.get("seat_index", null), -1)
+	if seat_index < 0:
+		seat_index = _parse_optional_int(binding.get("player_id", null), -1)
+	if seat_index < 0:
+		return -1
+	if _desired_player_count > 0 and seat_index >= _desired_player_count:
+		return -1
+	return seat_index
+
+func find_seat_index_for_user_id(user_id: String) -> int:
+	var uid := str(user_id).strip_edges()
+	if uid.is_empty():
+		return -1
+	for seat_index in _occupied_seat_indices():
+		var slot: Dictionary = _get_slot(seat_index)
+		if str(slot.get("user_id", "")).strip_edges() == uid:
+			return seat_index
+	return -1
+
+func _build_online_resume_meta_for_archive() -> Dictionary:
+	if status != STATUS_IN_GAME or game_engine == null or not game_engine.has_method("get_state"):
+		return {}
+	var state = game_engine.get_state()
+	if state == null or not (state.players is Array):
+		return {}
+	var participant_slots := _build_online_resume_participant_slots(state)
+	if participant_slots.is_empty():
+		return {}
+	return {
+		"version": ArchiveClass.ONLINE_RESUME_META_VERSION,
+		"owner_user_id": owner_user_id,
+		"saved_at": Time.get_datetime_string_from_system(),
+		"participant_slots": participant_slots,
+	}
+
+func _build_online_resume_participant_slots(state) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if state == null or not (state.players is Array):
+		return out
+	var players: Array = Array(state.players)
+	var map_restaurants: Dictionary = {}
+	if state.map is Dictionary:
+		map_restaurants = Dictionary(Dictionary(state.map).get("restaurants", {}))
+	for seat_index in _occupied_seat_indices():
+		var slot: Dictionary = _get_slot(seat_index)
+		var user_id := str(slot.get("user_id", "")).strip_edges()
+		if user_id.is_empty():
+			continue
+		var profile: Dictionary = Dictionary(slot.get("profile", {})).duplicate(true)
+		var player: Dictionary = {}
+		if seat_index >= 0 and seat_index < players.size() and players[seat_index] is Dictionary:
+			player = Dictionary(players[seat_index]).duplicate(true)
+		out.append({
+			"seat_index": seat_index,
+			"player_id": seat_index,
+			"user_id": user_id,
+			"display_name": str(profile.get("name", "")).strip_edges(),
+			"role": str(slot.get("role", "player")).strip_edges(),
+			"restaurant_logo_id": int(player.get("restaurant_logo_id", profile.get("restaurant_logo_id", -1))),
+			"cash": int(player.get("cash", 0)),
+			"restaurants_count": Array(player.get("restaurants", [])).size(),
+			"restaurant_summary": _build_online_resume_restaurant_summary(player, map_restaurants),
+		})
+	return out
+
+func _build_online_resume_restaurant_summary(player: Dictionary, map_restaurants: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var restaurant_ids: Array[String] = []
+	for rest_id_val in Array(player.get("restaurants", [])):
+		var restaurant_id := str(rest_id_val).strip_edges()
+		if restaurant_id.is_empty():
+			continue
+		restaurant_ids.append(restaurant_id)
+	restaurant_ids.sort()
+	for restaurant_id2 in restaurant_ids:
+		var rest: Dictionary = Dictionary(map_restaurants.get(restaurant_id2, {})).duplicate(true)
+		out.append({
+			"restaurant_id": restaurant_id2,
+			"anchor_pos": _serialize_grid_pos(rest.get("anchor_pos", null)),
+			"entrance_pos": _serialize_grid_pos(rest.get("entrance_pos", null)),
+			"rotation": int(rest.get("rotation", 0)),
+		})
+	return out
+
+func _serialize_grid_pos(value):
+	if value is Vector2i:
+		var pos: Vector2i = value
+		return [pos.x, pos.y]
+	if value is Vector2:
+		var pos2: Vector2 = value
+		return [int(pos2.x), int(pos2.y)]
+	if value is Array:
+		var arr: Array = Array(value)
+		if arr.size() >= 2:
+			return [int(arr[0]), int(arr[1])]
+	if value is Dictionary:
+		var dict_val: Dictionary = Dictionary(value)
+		if dict_val.has("x") and dict_val.has("y"):
+			return [int(dict_val.get("x", 0)), int(dict_val.get("y", 0))]
+	return []
+
+func _attach_online_resume_meta_to_archive(archive: Dictionary) -> Dictionary:
+	return ArchiveClass.with_online_resume_meta(archive, _build_online_resume_meta_for_archive())
+
 func is_resume_archive_room() -> bool:
 	return room_mode == ROOM_MODE_RESUME_ARCHIVE
 
@@ -851,11 +1015,12 @@ func build_full_authority_archive_export() -> Result:
 	var archive_r: Result = game_engine.create_archive()
 	if not archive_r.ok:
 		return Result.failure("create_archive failed: %s" % archive_r.error)
+	var archive: Dictionary = _attach_online_resume_meta_to_archive(Dictionary(archive_r.value).duplicate(true))
 	var state = game_engine.get_state() if game_engine.has_method("get_state") else null
-	var final_hash := str(state.compute_hash()) if state != null and state.has_method("compute_hash") else str(Dictionary(archive_r.value).get("final_hash", "")).strip_edges()
+	var final_hash := str(state.compute_hash()) if state != null and state.has_method("compute_hash") else str(archive.get("final_hash", "")).strip_edges()
 	return Result.success({
 		"room_code": str(room_code).strip_edges().to_upper(),
-		"archive": Dictionary(archive_r.value).duplicate(true),
+		"archive": archive,
 		"history_size": int(game_engine.command_history.size()),
 		"current_index": int(game_engine.current_command_index),
 		"final_hash": final_hash,
@@ -922,8 +1087,15 @@ func add_waiting_member(peer_id: int, profile: Dictionary, role: String = "playe
 
 	var normalized_role := "host" if str(role).strip_edges() == "host" else "player"
 	var existing_waiting: Dictionary = Dictionary(_waiting_member_by_user_id.get(user_id, {}))
-	if existing_waiting.is_empty() and _user_id_by_seat_index.values().has(user_id):
-		return Result.failure("user already assigned to seat")
+	var assigned_seat_index := find_seat_index_for_user_id(user_id)
+	if assigned_seat_index >= 0:
+		var reclaim_r: Result = reclaim_peer_at_seat(peer_id, profile, assigned_seat_index, user_id, token_generation)
+		if not reclaim_r.ok:
+			return reclaim_r
+		var reclaim_payload: Dictionary = Dictionary(reclaim_r.value) if reclaim_r.value is Dictionary else {}
+		reclaim_payload["auto_assigned"] = true
+		reclaim_payload["assigned_seat_index"] = assigned_seat_index
+		return Result.success(reclaim_payload)
 	if existing_waiting.is_empty() and is_full():
 		return Result.failure("Room is full")
 
@@ -942,6 +1114,15 @@ func add_waiting_member(peer_id: int, profile: Dictionary, role: String = "playe
 		"active",
 		generation
 	)
+	var expected_seat_index := _find_resume_expected_seat_index_for_user_id(user_id)
+	if expected_seat_index >= 0 and not _seat_slot_by_index.has(expected_seat_index):
+		var assign_r: Result = assign_waiting_member_to_seat(user_id, expected_seat_index)
+		if assign_r.ok:
+			return Result.success({
+				"replaced_peer_id": replaced_peer_id,
+				"auto_assigned": true,
+				"assigned_seat_index": expected_seat_index,
+			})
 	_rebuild_runtime_views()
 	_touch()
 	return Result.success({

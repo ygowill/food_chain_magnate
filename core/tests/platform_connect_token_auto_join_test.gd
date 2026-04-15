@@ -2,6 +2,7 @@
 class_name PlatformConnectTokenAutoJoinTest
 extends RefCounted
 
+const ArchiveClass = preload("res://core/engine/game_engine/archive.gd")
 const ConnectTokenClass = preload("res://core/utils/connect_token.gd")
 const ServerLogicClass = preload("res://autoload/net_client/server.gd")
 const RoomManagerClass = preload("res://server/room_manager.gd")
@@ -316,6 +317,10 @@ static func run() -> Result:
 	if not resume_auto_join_r.ok:
 		_reset_net_context()
 		return resume_auto_join_r
+	var resume_auto_assign_r: Result = _run_resume_archive_auto_assign_scenario()
+	if not resume_auto_assign_r.ok:
+		_reset_net_context()
+		return resume_auto_assign_r
 
 	_reset_net_context()
 	return Result.success()
@@ -521,6 +526,144 @@ static func _run_resume_archive_auto_join_scenario() -> Result:
 		return Result.failure("host full_archive_meta.full_final_hash 错误")
 	if str(Dictionary(player_bundle.get("full_archive_meta", {})).get("full_final_hash", "")).strip_edges() != expected_hash:
 		return Result.failure("player full_archive_meta.full_final_hash 错误")
+
+	return Result.success()
+
+static func _run_resume_archive_auto_assign_scenario() -> Result:
+	_reset_net_context()
+	if NetContext == null:
+		return Result.failure("NetContext autoload missing")
+	NetContext.mode = NetContext.Mode.ONLINE_SERVER
+
+	var archive_r: Result = _build_test_archive()
+	if not archive_r.ok:
+		return archive_r
+	var base_archive: Dictionary = Dictionary(archive_r.value).duplicate(true)
+	var resume_archive_r: Result = _build_midpoint_resume_archive(base_archive)
+	if not resume_archive_r.ok:
+		return resume_archive_r
+	var resume_info: Dictionary = Dictionary(resume_archive_r.value).duplicate(true)
+	var archive: Dictionary = Dictionary(resume_info.get("archive", {})).duplicate(true)
+	archive = ArchiveClass.with_online_resume_meta(archive, {
+		"version": ArchiveClass.ONLINE_RESUME_META_VERSION,
+		"owner_user_id": "u_resume_host_auto",
+		"participant_slots": [
+			{
+				"seat_index": 0,
+				"player_id": 0,
+				"user_id": "u_resume_host_auto",
+				"display_name": "ResumeHostAuto",
+				"role": "host",
+				"restaurant_logo_id": 0,
+				"restaurants_count": 1,
+				"restaurant_summary": [{"restaurant_id": "r_auto_host"}],
+			},
+			{
+				"seat_index": 1,
+				"player_id": 1,
+				"user_id": "u_resume_player_auto",
+				"display_name": "ResumeP2Auto",
+				"role": "player",
+				"restaurant_logo_id": 1,
+				"restaurants_count": 1,
+				"restaurant_summary": [{"restaurant_id": "r_auto_player"}],
+			},
+		],
+	})
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5150
+	var rm = RoomManagerClass.new(rng)
+	var mock_net := _MockNetClient.new(rm)
+	var server = ServerLogicClass.new()
+	server.setup(mock_net)
+	server.connect_token_secret_override = "test-secret"
+
+	var room_code := "RSA123"
+	var cfg := {
+		"room_mode": "resume_archive",
+		"desired_player_count": 2,
+		"seed_mode": "fixed",
+		"seed": 12345,
+		"allow_spectators": true,
+		"enabled_modules_v2": [],
+		"modules_v2_base_dir": GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR,
+		"resume_participant_bindings": [
+			{"user_id": "u_resume_host_auto", "seat_index": 0, "player_id": 0, "role": "host"},
+			{"user_id": "u_resume_player_auto", "seat_index": 1, "player_id": 1, "role": "player"},
+		],
+	}
+
+	var host_payload := {
+		"user_id": "u_resume_host_auto",
+		"room_code": room_code,
+		"role": "host",
+		"display_name": "ResumeHostAuto",
+		"seat_index": null,
+		"generation": 1,
+		"config_json": JSON.stringify(cfg),
+		"join_policy": "public",
+		"exp": int(Time.get_unix_time_from_system()) + 3600,
+	}
+	var host_token_r: Result = ConnectTokenClass.create_token(host_payload, server.connect_token_secret_override)
+	if not host_token_r.ok:
+		return Result.failure("create_token(resume auto host) 失败: %s" % host_token_r.error)
+
+	mock_net.multiplayer.remote_sender_id = 40
+	server.handle_rpc_client_hello({
+		"request_id": "r_resume_auto_host",
+		"protocol_version": NetContext.PROTOCOL_VERSION,
+		"game_version": "0.0.0",
+		"schema_version": 0,
+		"player_profile": {"name": "ResumeHostAutoLocal", "color_index": 1, "restaurant_logo_id": -1},
+		"connect_token": str(host_token_r.value),
+		"resume_room_bootstrap": {"archive": archive},
+	})
+
+	var room = rm.rooms.get(room_code, null)
+	if room == null:
+		return Result.failure("恢复房自动分配场景建房失败：room 为空")
+	if room.get_player_count() != 1:
+		return Result.failure("恢复房 host 应自动占回原 seat: %d" % room.get_player_count())
+	if int(room.get_waiting_member_count()) != 0:
+		return Result.failure("恢复房 host 自动分配后不应仍在 waiting: %d" % int(room.get_waiting_member_count()))
+	if int(room.find_seat_index_for_user_id("u_resume_host_auto")) != 0:
+		return Result.failure("恢复房 host 未自动回到 seat 0")
+
+	var player_payload := {
+		"user_id": "u_resume_player_auto",
+		"room_code": room_code,
+		"role": "player",
+		"display_name": "ResumeP2Auto",
+		"seat_index": null,
+		"generation": 1,
+		"exp": int(Time.get_unix_time_from_system()) + 3600,
+	}
+	var player_token_r: Result = ConnectTokenClass.create_token(player_payload, server.connect_token_secret_override)
+	if not player_token_r.ok:
+		return Result.failure("create_token(resume auto player) 失败: %s" % player_token_r.error)
+
+	mock_net.multiplayer.remote_sender_id = 41
+	server.handle_rpc_client_hello({
+		"request_id": "r_resume_auto_player",
+		"protocol_version": NetContext.PROTOCOL_VERSION,
+		"game_version": "0.0.0",
+		"schema_version": 0,
+		"player_profile": {"name": "ResumeP2AutoLocal", "color_index": 2, "restaurant_logo_id": -1},
+		"connect_token": str(player_token_r.value),
+	})
+
+	if room.get_player_count() != 2:
+		return Result.failure("恢复房同批玩家自动分配后 player_count 错误: %d" % room.get_player_count())
+	if int(room.get_waiting_member_count()) != 0:
+		return Result.failure("恢复房同批玩家自动分配后不应仍有 waiting 成员: %d" % int(room.get_waiting_member_count()))
+	if int(room.find_seat_index_for_user_id("u_resume_player_auto")) != 1:
+		return Result.failure("恢复房 player 未自动回到 seat 1")
+	if room.get_connected_player_count() != 2:
+		return Result.failure("恢复房同批玩家自动分配后 connected_player_count 错误: %d" % room.get_connected_player_count())
+	var ready_r: Result = room.can_start_game()
+	if not ready_r.ok:
+		return Result.failure("恢复房同批玩家自动分配后应允许开始游戏: %s" % ready_r.error)
 
 	return Result.success()
 

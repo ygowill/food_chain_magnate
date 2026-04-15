@@ -4,6 +4,8 @@ extends RefCounted
 
 const GameStateClass = preload("res://core/state/game_state.gd")
 const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
+const ONLINE_RESUME_META_KEY := "online_resume_meta"
+const ONLINE_RESUME_META_VERSION := 1
 
 static func create_archive(
 	state: GameState,
@@ -104,6 +106,72 @@ static func load_archive_from_file(path: String) -> Result:
 	# Godot JSON.parse_string 会把所有数字解析为 float。
 	# 存档/回放中大量字段（cash/库存/计数等）语义上是 int，若不归一化会导致加载后类型不匹配。
 	return Result.success(_normalize_json_numbers(parsed))
+
+static func with_online_resume_meta(archive: Dictionary, meta: Dictionary) -> Dictionary:
+	var out: Dictionary = Dictionary(archive).duplicate(true)
+	if meta.is_empty():
+		out.erase(ONLINE_RESUME_META_KEY)
+		return out
+	out[ONLINE_RESUME_META_KEY] = Dictionary(meta).duplicate(true)
+	return out
+
+static func get_online_resume_meta(archive: Dictionary) -> Dictionary:
+	if not (archive is Dictionary):
+		return {}
+	var meta_val = archive.get(ONLINE_RESUME_META_KEY, null)
+	if not (meta_val is Dictionary):
+		return {}
+	var meta: Dictionary = Dictionary(meta_val).duplicate(true)
+	meta["version"] = int(meta.get("version", ONLINE_RESUME_META_VERSION))
+	return meta
+
+static func get_online_resume_participant_slots(archive: Dictionary) -> Array[Dictionary]:
+	var meta: Dictionary = get_online_resume_meta(archive)
+	var slots_val = meta.get("participant_slots", null)
+	if not (slots_val is Array):
+		return []
+	return _normalize_online_resume_participant_slots(Array(slots_val))
+
+static func _normalize_online_resume_participant_slots(value: Array) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for item in value:
+		if not (item is Dictionary):
+			continue
+		var slot_src: Dictionary = Dictionary(item)
+		var user_id := str(slot_src.get("user_id", "")).strip_edges()
+		if user_id.is_empty():
+			continue
+		var seat_index := _parse_optional_int(slot_src.get("seat_index", null), -1)
+		if seat_index < 0:
+			seat_index = _parse_optional_int(slot_src.get("player_id", null), -1)
+		if seat_index < 0:
+			continue
+		out.append({
+			"seat_index": seat_index,
+			"player_id": _parse_optional_int(slot_src.get("player_id", null), seat_index),
+			"user_id": user_id,
+			"display_name": str(slot_src.get("display_name", "")).strip_edges(),
+			"role": "host" if str(slot_src.get("role", "")).strip_edges() == "host" else "player",
+			"restaurant_logo_id": _parse_optional_int(slot_src.get("restaurant_logo_id", null), -1),
+			"restaurants_count": _parse_optional_int(slot_src.get("restaurants_count", null), 0),
+			"cash": _parse_optional_int(slot_src.get("cash", null), 0),
+			"restaurant_summary": _duplicate_array_value(slot_src.get("restaurant_summary", [])),
+		})
+	return out
+
+static func _duplicate_array_value(value) -> Array:
+	if value is Array:
+		return Array(value).duplicate(true)
+	return []
+
+static func _parse_optional_int(value, default_value: int = -1) -> int:
+	if value is int:
+		return int(value)
+	if value is float:
+		var f: float = float(value)
+		if f == floor(f):
+			return int(f)
+	return default_value
 
 static func _normalize_json_numbers(value):
 	match typeof(value):

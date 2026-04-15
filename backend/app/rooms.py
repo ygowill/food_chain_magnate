@@ -118,6 +118,71 @@ def _is_resume_room_config(config: dict) -> bool:
     return str(config.get("room_mode", "")).strip() == "resume_archive"
 
 
+def _coerce_optional_int(value) -> Optional[int]:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return int(value)
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return None
+
+
+def _get_resume_participant_bindings(config: dict) -> list[dict]:
+    raw = config.get("resume_participant_bindings")
+    if not isinstance(raw, list):
+        return []
+    out: list[dict] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        user_id = str(item.get("user_id", "")).strip()
+        if not user_id:
+            continue
+        seat_index = _coerce_optional_int(item.get("seat_index"))
+        if seat_index is None:
+            seat_index = _coerce_optional_int(item.get("player_id"))
+        if seat_index is None or seat_index < 0:
+            continue
+        out.append({
+            "user_id": user_id,
+            "seat_index": int(seat_index),
+            "role": "host" if str(item.get("role", "")).strip() == "host" else "player",
+        })
+    return out
+
+
+def _find_resume_binding_for_user_id(config: dict, user_id: str) -> Optional[dict]:
+    target_user_id = str(user_id or "").strip()
+    if not target_user_id:
+        return None
+    for item in _get_resume_participant_bindings(config):
+        if str(item.get("user_id", "")).strip() == target_user_id:
+            return dict(item)
+    return None
+
+
+def _resolve_resume_binding_seat_index(
+    config: dict,
+    user_id: str,
+    occupied_seats: set[int] | None = None,
+    allow_same_user_existing_seat: Optional[int] = None,
+) -> Optional[int]:
+    binding = _find_resume_binding_for_user_id(config, user_id)
+    if binding is None:
+        return None
+    seat_index = _coerce_optional_int(binding.get("seat_index"))
+    if seat_index is None or seat_index < 0:
+        return None
+    desired_player_count = _coerce_optional_int(config.get("desired_player_count"))
+    if desired_player_count is not None and desired_player_count > 0 and seat_index >= desired_player_count:
+        return None
+    taken = occupied_seats or set()
+    if seat_index in taken and seat_index != allow_same_user_existing_seat:
+        return None
+    return int(seat_index)
+
+
 def _issue_member_connect_token(
     member: RoomMember,
     room: Room,
@@ -290,7 +355,9 @@ async def create_room(req: CreateRoomRequest, db: AsyncSession = Depends(get_db)
     db.add(room)
     await db.flush()
 
-    host_seat_index = None if is_resume_room else 0
+    host_seat_index = 0
+    if is_resume_room:
+        host_seat_index = _resolve_resume_binding_seat_index(room_cfg, sess.user_id)
     host_member = RoomMember(
         room_id=room.room_id,
         user_id=sess.user_id,
@@ -342,6 +409,21 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
     if existing:
         if str(existing.member_status or "").strip() == "forfeited":
             raise HTTPException(409, "room membership forfeited; use spectate")
+        if is_resume_room and existing.seat_index is None:
+            members = (await db.execute(
+                select(RoomMember).where(RoomMember.room_id == room.room_id, RoomMember.left_at.is_(None))
+            )).scalars().all()
+            occupied = {
+                int(m.seat_index) for m in members
+                if m.seat_index is not None and str(m.user_id) != str(existing.user_id)
+            }
+            resolved_existing_seat = _resolve_resume_binding_seat_index(
+                room_cfg,
+                sess.user_id,
+                occupied,
+            )
+            if resolved_existing_seat is not None:
+                existing.seat_index = resolved_existing_seat
         token = _issue_member_connect_token(existing, room, display_name, str(existing.role) == "host")
         await db.commit()
         return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)
@@ -364,7 +446,8 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
             ]
             if desired_player_count > 0 and len(active_participants) >= desired_player_count:
                 raise HTTPException(409, "room is full")
-            seat = None
+            taken = {int(m.seat_index) for m in members if m.seat_index is not None}
+            seat = _resolve_resume_binding_seat_index(room_cfg, sess.user_id, taken)
         else:
             taken = {m.seat_index for m in members if m.seat_index is not None}
             if desired_player_count > 0 and len(taken) >= desired_player_count:
@@ -395,6 +478,21 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
                 raise HTTPException(404, "room not found")
             existing = await _get_active_room_member(db, room.room_id, sess.user_id)
             if existing is not None:
+                if is_resume_room and existing.seat_index is None:
+                    members = (await db.execute(
+                        select(RoomMember).where(RoomMember.room_id == room.room_id, RoomMember.left_at.is_(None))
+                    )).scalars().all()
+                    occupied = {
+                        int(m.seat_index) for m in members
+                        if m.seat_index is not None and str(m.user_id) != str(existing.user_id)
+                    }
+                    resolved_existing_seat = _resolve_resume_binding_seat_index(
+                        room_cfg,
+                        sess.user_id,
+                        occupied,
+                    )
+                    if resolved_existing_seat is not None:
+                        existing.seat_index = resolved_existing_seat
                 token = _issue_member_connect_token(existing, room, display_name, str(existing.role) == "host")
                 await db.commit()
                 return RoomResponse(room_code=room.room_code, ws_url=room_ws_url, connect_token=token)
@@ -431,6 +529,18 @@ async def resume_room(room_code: str, req: ResumeRequest, db: AsyncSession = Dep
 
     role = str(existing.role)
     seat_index = existing.seat_index
+    if seat_index is None and is_resume_room:
+        members = (await db.execute(
+            select(RoomMember).where(RoomMember.room_id == room.room_id, RoomMember.left_at.is_(None))
+        )).scalars().all()
+        occupied = {
+            int(m.seat_index) for m in members
+            if m.seat_index is not None and str(m.user_id) != str(existing.user_id)
+        }
+        resolved_seat = _resolve_resume_binding_seat_index(room_cfg, sess.user_id, occupied)
+        if resolved_seat is not None:
+            existing.seat_index = resolved_seat
+            seat_index = resolved_seat
     if role in {"host", "player"} and seat_index is None and not is_resume_room:
         raise HTTPException(409, "seat missing for resumable role")
 

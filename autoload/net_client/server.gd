@@ -1455,6 +1455,8 @@ func _platform_auto_join(
 			if not rm.has_method("reconnect_player"):
 				return ResultClass.failure("RoomManager.reconnect_player missing")
 			var user_id := str(token_payload.get("user_id", "")).strip_edges()
+			if seat_index < 0 and is_resume_room and existing_room.has_method("find_seat_index_for_user_id"):
+				seat_index = int(existing_room.find_seat_index_for_user_id(user_id))
 			r = rm.reconnect_player(peer_id, profile, room_code, seat_index, user_id, "host", token_generation)
 		else:
 			var host_uid := str(token_payload.get("user_id", "")).strip_edges()
@@ -1488,6 +1490,8 @@ func _platform_auto_join(
 			if not rm.has_method("reconnect_player"):
 				return ResultClass.failure("RoomManager.reconnect_player missing")
 			var user_id2 := str(token_payload.get("user_id", "")).strip_edges()
+			if seat_index2 < 0 and is_resume_room and existing_room.has_method("find_seat_index_for_user_id"):
+				seat_index2 = int(existing_room.find_seat_index_for_user_id(user_id2))
 			r = rm.reconnect_player(peer_id, profile, room_code, seat_index2, user_id2, "player", token_generation)
 		else:
 			var player_uid := str(token_payload.get("user_id", "")).strip_edges()

@@ -1,6 +1,7 @@
 class_name OnlineResumeFullArchiveExportTest
 extends RefCounted
 
+const ArchiveClass = preload("res://core/engine/game_engine/archive.gd")
 const ClientLogicClass = preload("res://autoload/net_client/client.gd")
 const ServerLogicClass = preload("res://autoload/net_client/server.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
@@ -155,6 +156,46 @@ static func run() -> Result:
 			"导出 final_hash 错误: %s vs %s"
 				% [str(payload.get("final_hash", "")), authority_hash]
 		)
+	var participant_slots := ArchiveClass.get_online_resume_participant_slots(archive)
+	if participant_slots.size() != 2:
+		_restore(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state
+		)
+		return Result.failure("导出的 archive 应附带 2 个 online_resume_meta.participant_slots: %d" % participant_slots.size())
+	if str(Dictionary(participant_slots[0]).get("user_id", "")).strip_edges() != "u_export_host":
+		_restore(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state
+		)
+		return Result.failure("导出的 archive host user_id 错误")
+	if str(Dictionary(participant_slots[1]).get("user_id", "")).strip_edges() != "u_export_player":
+		_restore(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state
+		)
+		return Result.failure("导出的 archive player user_id 错误")
 
 	NetContext.reset()
 	NetContext.mode = NetContext.Mode.ONLINE_CLIENT

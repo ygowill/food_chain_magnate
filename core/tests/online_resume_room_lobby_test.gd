@@ -1,6 +1,7 @@
 class_name OnlineResumeRoomLobbyTest
 extends RefCounted
 
+const ArchiveClass = preload("res://core/engine/game_engine/archive.gd")
 const RoomManagerClass = preload("res://server/room_manager.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
@@ -8,6 +9,12 @@ const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
 
 static func run() -> Result:
+	var legacy_r := _run_manual_assignment_resume_room_scenario()
+	if not legacy_r.ok:
+		return legacy_r
+	return _run_auto_assignment_resume_room_scenario()
+
+static func _build_resume_archive() -> Result:
 	var engine = GameEngineClass.new()
 	var init_r: Result = engine.initialize(2, 12345, [], GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR)
 	if not init_r.ok:
@@ -46,7 +53,23 @@ static func run() -> Result:
 	var sub_phase_text := str(preview_state.sub_phase).strip_edges()
 	if not sub_phase_text.is_empty():
 		phase_text += " / %s" % sub_phase_text
+	return Result.success({
+		"archive": archive,
+		"expected_hash": expected_hash,
+		"selected_index": selected_index,
+		"round_number": int(preview_state.round_number),
+		"phase_text": phase_text,
+	})
 
+static func _run_manual_assignment_resume_room_scenario() -> Result:
+	var archive_info_r := _build_resume_archive()
+	if not archive_info_r.ok:
+		return archive_info_r
+	var archive_info: Dictionary = Dictionary(archive_info_r.value)
+	var archive: Dictionary = Dictionary(archive_info.get("archive", {})).duplicate(true)
+	var expected_hash := str(archive_info.get("expected_hash", "")).strip_edges()
+	var selected_index := int(archive_info.get("selected_index", -1))
+	var phase_text := str(archive_info.get("phase_text", "")).strip_edges()
 	var rm = RoomManagerClass.new()
 	var room_code := "RSM001"
 	var config := {
@@ -60,7 +83,7 @@ static func run() -> Result:
 		"resume_summary": {
 			"source_name": "resume_test.json",
 			"player_count": 2,
-			"round_number": int(preview_state.round_number),
+			"round_number": int(archive_info.get("round_number", 0)),
 			"phase": phase_text,
 			"current_index": selected_index,
 		},
@@ -138,7 +161,90 @@ static func run() -> Result:
 				% [int(room.game_engine.current_command_index), int(room.game_engine.command_history.size()) - 1]
 		)
 
+	return Result.success()
+
+static func _run_auto_assignment_resume_room_scenario() -> Result:
+	var archive_info_r := _build_resume_archive()
+	if not archive_info_r.ok:
+		return archive_info_r
+	var archive_info: Dictionary = Dictionary(archive_info_r.value)
+	var archive: Dictionary = Dictionary(archive_info.get("archive", {})).duplicate(true)
+	archive = ArchiveClass.with_online_resume_meta(archive, {
+		"version": ArchiveClass.ONLINE_RESUME_META_VERSION,
+		"owner_user_id": "u_resume_host",
+		"participant_slots": [
+			{
+				"seat_index": 0,
+				"player_id": 0,
+				"user_id": "u_resume_host",
+				"display_name": "HostResume",
+				"role": "host",
+				"restaurant_logo_id": 0,
+				"restaurants_count": 1,
+				"restaurant_summary": [{"restaurant_id": "r_host"}],
+			},
+			{
+				"seat_index": 1,
+				"player_id": 1,
+				"user_id": "u_resume_player",
+				"display_name": "PlayerResume",
+				"role": "player",
+				"restaurant_logo_id": 1,
+				"restaurants_count": 1,
+				"restaurant_summary": [{"restaurant_id": "r_player"}],
+			},
+		],
+	})
+
+	var rm = RoomManagerClass.new()
+	var room_code := "RSM002"
+	var config := {
+		"room_mode": "resume_archive",
+		"desired_player_count": 2,
+		"seed_mode": "fixed",
+		"seed": 12345,
+		"allow_spectators": true,
+		"enabled_modules_v2": [],
+		"modules_v2_base_dir": GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR,
+		"resume_participant_bindings": [
+			{"user_id": "u_resume_host", "seat_index": 0, "player_id": 0, "role": "host"},
+			{"user_id": "u_resume_player", "seat_index": 1, "player_id": 1, "role": "player"},
+		],
+	}
+	var host_profile := {
+		"name": "HostResume",
+		"color_index": 0,
+		"restaurant_logo_id": -1,
+		"user_id": "u_resume_host",
+	}
+	var player_profile := {
+		"name": "PlayerResume",
+		"color_index": 1,
+		"restaurant_logo_id": -1,
+		"user_id": "u_resume_player",
+	}
+
+	var create_r: Result = rm.create_resume_room_with_code(20, host_profile, room_code, config, archive)
+	if not create_r.ok:
+		return Result.failure("auto assign create_resume_room_with_code 失败: %s" % create_r.error)
+	var join_r: Result = rm.join_room_as_waiting_member(21, player_profile, room_code, "player")
+	if not join_r.ok:
+		return Result.failure("auto assign join_room_as_waiting_member 失败: %s" % join_r.error)
+
+	var room = rm.rooms.get(room_code, null)
+	if room == null:
+		return Result.failure("auto assign resume room missing")
+	if int(room.get_waiting_member_count()) != 0:
+		return Result.failure("同批玩家自动分配后不应仍有 waiting 成员: %d" % int(room.get_waiting_member_count()))
+	if room.get_player_count() != 2:
+		return Result.failure("同批玩家自动分配后 player_count 错误: %d" % room.get_player_count())
+	if room.get_connected_player_count() != 2:
+		return Result.failure("同批玩家自动分配后 connected_player_count 错误: %d" % room.get_connected_player_count())
+	if int(room.find_seat_index_for_user_id("u_resume_host")) != 0:
+		return Result.failure("host 未自动回到原 seat 0")
+	if int(room.find_seat_index_for_user_id("u_resume_player")) != 1:
+		return Result.failure("player 未自动回到原 seat 1")
+
 	return Result.success({
 		"room_code": room_code,
-		"hash": actual_hash.substr(0, 8),
 	})

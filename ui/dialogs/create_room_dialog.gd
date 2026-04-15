@@ -440,6 +440,7 @@ func _build_resume_config_patch(path: String, archive: Dictionary, state, curren
 	var current_player_id := -1
 	var bank_total := -1
 	var resume_player_summaries: Array[Dictionary] = []
+	var resume_participant_bindings: Array[Dictionary] = _build_resume_participant_bindings(archive)
 	if state != null:
 		player_count = state.players.size() if state.players is Array else 0
 		seed = int(state.seed)
@@ -460,7 +461,7 @@ func _build_resume_config_patch(path: String, archive: Dictionary, state, curren
 	var phase_text := phase
 	if not sub_phase.is_empty():
 		phase_text += " / %s" % sub_phase
-	return {
+	var out := {
 		"desired_player_count": player_count,
 		"seed_mode": "fixed",
 		"seed": seed,
@@ -480,6 +481,9 @@ func _build_resume_config_patch(path: String, archive: Dictionary, state, curren
 		},
 		"resume_player_summaries": resume_player_summaries,
 	}
+	if not resume_participant_bindings.is_empty():
+		out["resume_participant_bindings"] = resume_participant_bindings
+	return out
 
 func _build_resume_player_summaries(state) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -506,6 +510,23 @@ func _build_resume_player_summaries(state) -> Array[Dictionary]:
 				"reserve": _build_resume_employee_group_summary(player.get("reserve_employees", [])),
 				"busy": _build_resume_employee_group_summary(player.get("busy_marketers", [])),
 			},
+		})
+	return out
+
+func _build_resume_participant_bindings(archive: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for slot in ArchiveClass.get_online_resume_participant_slots(archive):
+		if not (slot is Dictionary):
+			continue
+		var binding_src: Dictionary = Dictionary(slot)
+		var user_id := str(binding_src.get("user_id", "")).strip_edges()
+		if user_id.is_empty():
+			continue
+		out.append({
+			"user_id": user_id,
+			"seat_index": int(binding_src.get("seat_index", binding_src.get("player_id", -1))),
+			"player_id": int(binding_src.get("player_id", binding_src.get("seat_index", -1))),
+			"role": "host" if str(binding_src.get("role", "")).strip_edges() == "host" else "player",
 		})
 	return out
 
