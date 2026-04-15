@@ -477,19 +477,21 @@ static func _run_resume_archive_auto_join_scenario() -> Result:
 	})
 	if _find_request_rejected(mock_net.sent, 30, "r_resume_start", "start_game_failed") >= 0:
 		return Result.failure("恢复房平台自动入房场景开局不应失败")
-	if room.game_engine == null or room.game_engine.get_state() == null:
-		return Result.failure("恢复房开局后缺少 game_engine/state")
-	var actual_hash := str(room.game_engine.get_state().compute_hash())
-	if actual_hash != expected_hash:
-		return Result.failure("恢复房开局 hash 不一致: %s vs %s" % [expected_hash, actual_hash])
+	if str(room.status) != "Starting":
+		return Result.failure("恢复房开局请求后房间应先进入 Starting: %s" % str(room.status))
+	if room.game_engine != null:
+		return Result.failure("恢复房在全部 ready 之前不应提前 commit game_engine")
+	if not room.has_method("has_pending_start_session") or not room.has_pending_start_session():
+		return Result.failure("恢复房开局后应存在 pending start session")
+	var bootstrap_id := str(room.get_pending_start_session_id()).strip_edges() if room.has_method("get_pending_start_session_id") else ""
+	if bootstrap_id.is_empty():
+		return Result.failure("恢复房开局后缺少 bootstrap_id")
+	var bootstrap_summary: Dictionary = room.get_pending_start_summary() if room.has_method("get_pending_start_summary") else {}
+	if int(Dictionary(bootstrap_summary).get("total_count", 0)) != 2:
+		return Result.failure("恢复房 bootstrap total_count 错误: %s" % str(bootstrap_summary))
+	if int(Dictionary(bootstrap_summary).get("ready_count", -1)) != 0:
+		return Result.failure("恢复房 bootstrap 初始 ready_count 应为 0: %s" % str(bootstrap_summary))
 	var expected_history_size := selected_index + 1
-	if int(room.game_engine.command_history.size()) != expected_history_size:
-		return Result.failure(
-			"恢复房开局后不应保留未来历史: %d vs %d"
-				% [int(room.game_engine.command_history.size()), expected_history_size]
-		)
-	if int(room.game_engine.current_command_index) != selected_index:
-		return Result.failure("恢复房开局 current_command_index 错误: %d vs %d" % [int(room.game_engine.current_command_index), selected_index])
 	if _find_sent_method(mock_net.sent, 30, "rpc_game_started") < 0 or _find_sent_method(mock_net.sent, 31, "rpc_game_started") < 0:
 		return Result.failure("恢复房开局后双方都应收到 rpc_game_started")
 	if _find_sent_method(mock_net.sent, 30, "rpc_resync_snapshot_manifest") >= 0 or _find_sent_method(mock_net.sent, 31, "rpc_resync_snapshot_manifest") >= 0:
@@ -526,6 +528,39 @@ static func _run_resume_archive_auto_join_scenario() -> Result:
 		return Result.failure("host full_archive_meta.full_final_hash 错误")
 	if str(Dictionary(player_bundle.get("full_archive_meta", {})).get("full_final_hash", "")).strip_edges() != expected_hash:
 		return Result.failure("player full_archive_meta.full_final_hash 错误")
+
+	mock_net.multiplayer.remote_sender_id = 30
+	server.handle_rpc_match_bootstrap_ready({
+		"request_id": "r_resume_ready_host",
+		"bootstrap_id": bootstrap_id,
+	})
+	if str(room.status) != "Starting":
+		return Result.failure("仅房主 ready 后房间仍应保持 Starting: %s" % str(room.status))
+	var host_ready_summary: Dictionary = room.get_pending_start_summary() if room.has_method("get_pending_start_summary") else {}
+	if int(Dictionary(host_ready_summary).get("ready_count", -1)) != 1:
+		return Result.failure("房主 ready 后 ready_count 应为 1: %s" % str(host_ready_summary))
+
+	mock_net.multiplayer.remote_sender_id = 31
+	server.handle_rpc_match_bootstrap_ready({
+		"request_id": "r_resume_ready_player",
+		"bootstrap_id": bootstrap_id,
+	})
+	if str(room.status) != "InGame":
+		return Result.failure("双方 ready 后房间应进入 InGame: %s" % str(room.status))
+	if room.has_method("has_pending_start_session") and room.has_pending_start_session():
+		return Result.failure("双方 ready commit 后不应仍保留 pending start session")
+	if room.game_engine == null or room.game_engine.get_state() == null:
+		return Result.failure("恢复房 commit 后缺少 game_engine/state")
+	var actual_hash := str(room.game_engine.get_state().compute_hash())
+	if actual_hash != expected_hash:
+		return Result.failure("恢复房开局 hash 不一致: %s vs %s" % [expected_hash, actual_hash])
+	if int(room.game_engine.command_history.size()) != expected_history_size:
+		return Result.failure(
+			"恢复房开局后不应保留未来历史: %d vs %d"
+				% [int(room.game_engine.command_history.size()), expected_history_size]
+		)
+	if int(room.game_engine.current_command_index) != selected_index:
+		return Result.failure("恢复房开局 current_command_index 错误: %d vs %d" % [int(room.game_engine.current_command_index), selected_index])
 
 	return Result.success()
 

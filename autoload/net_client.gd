@@ -19,6 +19,7 @@ signal room_list_updated(rooms: Array)
 signal room_state_updated(room_state: Dictionary)
 signal request_rejected(request_id: String, code: String, message: String)
 signal game_started(payload: Dictionary)
+signal match_bootstrap_local_failed(message: String)
 signal resume_fast_start_ready(payload: Dictionary)
 signal resume_full_history_ready(payload: Dictionary)
 signal full_archive_export_ready(payload: Dictionary)
@@ -403,6 +404,48 @@ func request_start_game() -> String:
 	GameLog.info("NetClient", "TX StartGame request_id=%s room=%s" % [request_id, _safe_room_code(NetContext.room_state)])
 	return request_id
 
+func request_match_bootstrap_ready(bootstrap_id: String) -> String:
+	var request_id := _next_request_id()
+	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return request_id
+	if not is_online_client_connected():
+		return request_id
+	var payload := {
+		"request_id": request_id,
+		"bootstrap_id": str(bootstrap_id).strip_edges(),
+	}
+	rpc_id(1, "rpc_match_bootstrap_ready", payload)
+	GameLog.info(
+		"NetClient",
+		"TX MatchBootstrapReady request_id=%s bootstrap_id=%s room=%s"
+			% [request_id, _safe_text(str(payload.get("bootstrap_id", ""))), _safe_room_code(NetContext.room_state)]
+	)
+	return request_id
+
+func request_match_bootstrap_failed(bootstrap_id: String, reason: String) -> String:
+	var request_id := _next_request_id()
+	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return request_id
+	if not is_online_client_connected():
+		return request_id
+	var payload := {
+		"request_id": request_id,
+		"bootstrap_id": str(bootstrap_id).strip_edges(),
+		"reason": str(reason).strip_edges(),
+	}
+	rpc_id(1, "rpc_match_bootstrap_failed", payload)
+	GameLog.warn(
+		"NetClient",
+		"TX MatchBootstrapFailed request_id=%s bootstrap_id=%s room=%s reason=%s"
+			% [
+				request_id,
+				_safe_text(str(payload.get("bootstrap_id", ""))),
+				_safe_room_code(NetContext.room_state),
+				_safe_text(str(payload.get("reason", ""))),
+			]
+	)
+	return request_id
+
 func request_action(action_id: String, params: Dictionary) -> String:
 	var request_id := _next_request_id()
 	var payload := {
@@ -559,6 +602,16 @@ func rpc_forfeit_and_leave_room(request: Dictionary) -> void:
 func rpc_start_game(request: Dictionary) -> void:
 	_ensure_internal()
 	_internal.handle_rpc_start_game(request)
+
+@rpc("any_peer", "reliable")
+func rpc_match_bootstrap_ready(request: Dictionary) -> void:
+	_ensure_internal()
+	_internal.handle_rpc_match_bootstrap_ready(request)
+
+@rpc("any_peer", "reliable")
+func rpc_match_bootstrap_failed(request: Dictionary) -> void:
+	_ensure_internal()
+	_internal.handle_rpc_match_bootstrap_failed(request)
 
 @rpc("any_peer", "reliable")
 func rpc_action_request(request: Dictionary) -> void:

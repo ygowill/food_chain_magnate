@@ -234,6 +234,16 @@ func handle_rpc_start_game(request: Dictionary) -> void:
 	if _server != null and is_instance_valid(_server):
 		_server.handle_rpc_start_game(request)
 
+func handle_rpc_match_bootstrap_ready(request: Dictionary) -> void:
+	_ensure_modules()
+	if _server != null and is_instance_valid(_server) and _server.has_method("handle_rpc_match_bootstrap_ready"):
+		_server.handle_rpc_match_bootstrap_ready(request)
+
+func handle_rpc_match_bootstrap_failed(request: Dictionary) -> void:
+	_ensure_modules()
+	if _server != null and is_instance_valid(_server) and _server.has_method("handle_rpc_match_bootstrap_failed"):
+		_server.handle_rpc_match_bootstrap_failed(request)
+
 func handle_rpc_action_request(request: Dictionary) -> void:
 	_ensure_modules()
 	if _server != null and is_instance_valid(_server):
