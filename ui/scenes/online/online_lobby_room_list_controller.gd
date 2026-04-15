@@ -109,7 +109,8 @@ func _build_room_card(code: String, status: String, desired: int, player_count: 
 	main_row.add_child(status_vbox)
 
 	var is_lobby := status == "Lobby"
-	var dot_color := Color(0.28, 0.55, 0.22) if is_lobby else Color(0.85, 0.55, 0.15)
+	var is_starting := status == "Starting"
+	var dot_color := Color(0.28, 0.55, 0.22) if is_lobby else (Color(0.85, 0.66, 0.18) if is_starting else Color(0.85, 0.55, 0.15))
 
 	var dot := ColorRect.new()
 	dot.custom_minimum_size = Vector2(12, 12)
@@ -119,7 +120,7 @@ func _build_room_card(code: String, status: String, desired: int, player_count: 
 	status_vbox.add_child(dot)
 
 	var status_text := Label.new()
-	status_text.text = "等待中" if is_lobby else "对局中"
+	status_text.text = "等待中" if is_lobby else ("启动中" if is_starting else "对局中")
 	status_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status_text.add_theme_font_size_override("font_size", 11)
 	UiStylesClass.apply_label_hint_dark(status_text)

@@ -310,14 +310,18 @@ static func build_tests(host) -> Array[Dictionary]:
 			"name": "OnlineLobbyRoomStateRendererTest",
 			"fn": func() -> Result: return TestRefs.OnlineLobbyRoomStateRendererTestClass.run(),
 		},
-		{
-			"name": "OnlineLobbyRoomConfigSyncControllerTest",
-			"fn": func() -> Result: return TestRefs.OnlineLobbyRoomConfigSyncControllerTestClass.run(),
-		},
-		{
-			"name": "OnlineStartGameReplayTest",
-			"fn": func() -> Result: return TestRefs.OnlineStartGameReplayTestClass.run(),
-		},
+			{
+				"name": "OnlineLobbyRoomConfigSyncControllerTest",
+				"fn": func() -> Result: return TestRefs.OnlineLobbyRoomConfigSyncControllerTestClass.run(),
+			},
+			{
+				"name": "OnlineMatchBootstrapServerFlowTest",
+				"fn": func() -> Result: return TestRefs.OnlineMatchBootstrapServerFlowTestClass.run(),
+			},
+			{
+				"name": "OnlineStartGameReplayTest",
+				"fn": func() -> Result: return TestRefs.OnlineStartGameReplayTestClass.run(),
+			},
 		{
 			"name": "MatchFinalizeParticipantLogoPayloadTest",
 			"fn": func() -> Result: return TestRefs.MatchFinalizeParticipantLogoPayloadTestClass.run(),

@@ -141,12 +141,12 @@ func _ensure_loading_overlay() -> void:
 	_loading_overlay = LoadingOverlayScene.instantiate()
 	add_child(_loading_overlay)
 
-func show_loading(message: String = "加载中...") -> void:
+func show_loading(title: String = "加载中...", detail: String = "", show_progress: bool = false) -> void:
 	_ensure_loading_overlay()
 	if _loading_overlay == null or not is_instance_valid(_loading_overlay):
 		return
 	if _loading_overlay.has_method("show_loading"):
-		_loading_overlay.call("show_loading", message)
+		_loading_overlay.call("show_loading", title, detail, show_progress)
 	else:
 		_loading_overlay.visible = true
 
@@ -160,6 +160,21 @@ func hide_loading() -> void:
 
 func is_loading_visible() -> bool:
 	return _loading_overlay != null and is_instance_valid(_loading_overlay) and _loading_overlay.visible
+
+func apply_loading_state(state: Dictionary) -> void:
+	_ensure_loading_overlay()
+	if _loading_overlay == null or not is_instance_valid(_loading_overlay):
+		return
+	if _loading_overlay.has_method("apply_loading_state"):
+		_loading_overlay.call("apply_loading_state", Dictionary(state).duplicate(true))
+		return
+	var title := str(state.get("title", "加载中..."))
+	var detail := str(state.get("detail", ""))
+	var show_progress := bool(state.get("show_progress", false))
+	show_loading(title, detail, show_progress)
+
+func clear_loading_state() -> void:
+	hide_loading()
 
 func shutdown_current_scene_after_cleanup(scene_to_release: Node, cleanup: Callable, exit_code: int) -> void:
 	call_deferred("_deferred_shutdown_current_scene_after_cleanup", scene_to_release, cleanup, exit_code)

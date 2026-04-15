@@ -125,7 +125,8 @@ func handle_rpc_room_state(payload: Dictionary) -> void:
 		NetContext.local_player_id = int(self_seat_val)
 	var self_role := str(NetContext.room_state.get("self_role", "")).strip_edges()
 	NetContext.local_role = self_role
-	if str(NetContext.room_state.get("status", "")).strip_edges() != "InGame":
+	var room_status := str(NetContext.room_state.get("status", "")).strip_edges()
+	if room_status != "InGame" and room_status != "Starting":
 		_set_online_client_engine_room_code("")
 		_clear_online_resume_dual_engine_state()
 	_sync_online_resume_state_from_room_state(NetContext.room_state)
@@ -205,6 +206,12 @@ func handle_rpc_game_started(payload: Dictionary) -> void:
 		_clear_online_resume_dual_engine_state()
 		init_r = _initialize_online_client_engine_from_config(config, room_code, local_pid)
 	if not init_r.ok:
+		GameLog.error(
+			"NetClient",
+			"GameStarted bootstrap failed room=%s err=%s" % [_safe_text(room_code), _safe_text(init_r.error)]
+		)
+		if _net != null and is_instance_valid(_net) and _net.has_signal("match_bootstrap_local_failed"):
+			_net.emit_signal("match_bootstrap_local_failed", str(init_r.error))
 		return
 
 	_net.game_started.emit(payload.duplicate(true))

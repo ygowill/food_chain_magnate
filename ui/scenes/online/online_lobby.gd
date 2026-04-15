@@ -638,6 +638,8 @@ func _bind_net_signals() -> void:
 		NetClient.request_rejected.connect(_on_request_rejected)
 	if not NetClient.game_started.is_connected(_on_game_started):
 		NetClient.game_started.connect(_on_game_started)
+	if NetClient.has_signal("match_bootstrap_local_failed") and not NetClient.match_bootstrap_local_failed.is_connected(_on_match_bootstrap_local_failed):
+		NetClient.match_bootstrap_local_failed.connect(_on_match_bootstrap_local_failed)
 	if not NetClient.resync_archive_received.is_connected(_on_online_resync_archive_received):
 		NetClient.resync_archive_received.connect(_on_online_resync_archive_received)
 
@@ -1220,6 +1222,8 @@ func _clear_online_resume_context() -> void:
 func _on_net_connected() -> void:
 	_ws_connect_in_progress = false
 	_enter_game_transition_requested = false
+	if OnlineMatchBootstrap != null and OnlineMatchBootstrap.has_method("reset"):
+		OnlineMatchBootstrap.reset()
 	_set_connect_status("已连接")
 	_set_browse_status("")
 	_set_room_status("")
@@ -1229,6 +1233,8 @@ func _on_net_connected() -> void:
 func _on_net_disconnected(reason: String) -> void:
 	_ws_connect_in_progress = false
 	_enter_game_transition_requested = false
+	if OnlineMatchBootstrap != null and OnlineMatchBootstrap.has_method("reset"):
+		OnlineMatchBootstrap.reset()
 	var has_resume_context := NetContext != null and NetContext.has_method("has_online_resume_context") and NetContext.has_online_resume_context()
 	var auto_resuming := NetContext != null and NetContext.has_method("is_online_reconnecting") and NetContext.is_online_reconnecting()
 	var recoverable_disconnect := has_resume_context
@@ -1288,13 +1294,22 @@ func _on_room_list_updated(_rooms: Array) -> void:
 
 func _on_room_state_updated(_room_state: Dictionary) -> void:
 	_refresh_ui()
+	var room_state: Dictionary = NetContext.room_state if NetContext != null else {}
+	if OnlineMatchBootstrap != null and OnlineMatchBootstrap.has_method("sync_from_room_state"):
+		OnlineMatchBootstrap.sync_from_room_state(room_state)
 	if OS.has_feature("headless"):
 		return
-	var room_state: Dictionary = NetContext.room_state if NetContext != null else {}
 	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("sync_room_state"):
 		OnlineSessionCoordinator.sync_room_state(room_state)
-	if str(room_state.get("status", "")).strip_edges() != "InGame":
+	var room_status := str(room_state.get("status", "")).strip_edges()
+	if room_status == "Starting":
 		_enter_game_transition_requested = false
+		return
+	if room_status != "InGame":
+		_enter_game_transition_requested = false
+		return
+	if OnlineMatchBootstrap != null and OnlineMatchBootstrap.has_method("should_enter_game") and OnlineMatchBootstrap.should_enter_game(room_state):
+		_enter_online_game_scene()
 		return
 	if _should_enter_online_game_scene_from_room_state(room_state):
 		GameLog.info(
@@ -1310,6 +1325,8 @@ func _on_room_state_updated(_room_state: Dictionary) -> void:
 		SceneManager.show_loading("正在进入联机对局...")
 
 func _on_request_rejected(request_id: String, code: String, message: String) -> void:
+	var c := str(code).strip_edges()
+	var m := str(message).strip_edges()
 	if SceneManager != null and SceneManager.has_method("hide_loading"):
 		SceneManager.hide_loading()
 
@@ -1322,18 +1339,23 @@ func _on_request_rejected(request_id: String, code: String, message: String) -> 
 			_start_game_flow_in_progress = false
 			if SceneManager != null and SceneManager.has_method("hide_loading"):
 				SceneManager.hide_loading()
+			if OnlineMatchBootstrap != null and OnlineMatchBootstrap.has_method("reset"):
+				OnlineMatchBootstrap.reset()
 
 	if not _start_game_request_id.is_empty() and str(request_id) == _start_game_request_id:
 		_start_game_request_id = ""
 		_start_game_flow_in_progress = false
 		if SceneManager != null and SceneManager.has_method("hide_loading"):
 			SceneManager.hide_loading()
+		if OnlineMatchBootstrap != null and OnlineMatchBootstrap.has_method("reset"):
+			OnlineMatchBootstrap.reset()
+
+	if (c == "start_game_failed" or c == "match_bootstrap_failed") and OnlineMatchBootstrap != null and OnlineMatchBootstrap.has_method("reset"):
+		OnlineMatchBootstrap.reset()
 
 	if OS.has_feature("headless"):
 		return
 
-	var c := str(code).strip_edges()
-	var m := str(message).strip_edges()
 	var mapped: Dictionary = RequestRejectionMapperClass.get_dialog_text(c, m)
 	var title := str(mapped.get("title", "请求失败"))
 	var body := str(mapped.get("body", ""))
@@ -1357,7 +1379,21 @@ func _on_game_started(_payload: Dictionary) -> void:
 		OnlineSessionCoordinator.mark_game_started()
 	_start_game_request_id = ""
 	_start_game_flow_in_progress = false
+	var room_state: Dictionary = NetContext.room_state if NetContext != null else {}
+	if OnlineMatchBootstrap != null and OnlineMatchBootstrap.has_method("is_active") and OnlineMatchBootstrap.is_active():
+		if OnlineMatchBootstrap.has_method("mark_local_bootstrap_ready"):
+			OnlineMatchBootstrap.mark_local_bootstrap_ready(room_state)
+		if OnlineMatchBootstrap.has_method("should_enter_game") and OnlineMatchBootstrap.should_enter_game(room_state):
+			_enter_online_game_scene()
+		return
 	_enter_online_game_scene()
+
+func _on_match_bootstrap_local_failed(message: String) -> void:
+	_start_game_request_id = ""
+	_start_game_flow_in_progress = false
+	var room_state: Dictionary = NetContext.room_state if NetContext != null else {}
+	if OnlineMatchBootstrap != null and OnlineMatchBootstrap.has_method("mark_local_bootstrap_failed"):
+		OnlineMatchBootstrap.mark_local_bootstrap_failed(message, room_state)
 
 func _on_online_resync_archive_received(_archive: Dictionary) -> void:
 	if OS.has_feature("headless"):
@@ -1375,7 +1411,11 @@ func _enter_online_game_scene() -> void:
 	if _enter_game_transition_requested:
 		return
 	_enter_game_transition_requested = true
-	if SceneManager != null and SceneManager.has_method("show_loading"):
+	if OnlineMatchBootstrap != null and OnlineMatchBootstrap.has_method("is_active") and OnlineMatchBootstrap.is_active():
+		if OnlineMatchBootstrap.has_method("mark_enter_game_requested"):
+			OnlineMatchBootstrap.mark_enter_game_requested()
+		await get_tree().process_frame
+	elif SceneManager != null and SceneManager.has_method("show_loading"):
 		SceneManager.show_loading("正在进入联机对局...")
 		await get_tree().process_frame
 	SceneManager.goto_game()
@@ -1651,6 +1691,8 @@ func _on_custom_server_url_submitted(_text: String) -> void:
 	await _on_custom_server_apply_pressed()
 
 func _on_disconnect_pressed() -> void:
+	if OnlineMatchBootstrap != null and OnlineMatchBootstrap.has_method("reset"):
+		OnlineMatchBootstrap.reset()
 	_clear_online_resume_context()
 	if NetClient != null:
 		NetClient.shutdown()
@@ -1691,6 +1733,8 @@ func _on_leave_room_pressed() -> void:
 		_show_error_dialog("未连接到服务器", "请先连接服务器。")
 		_set_room_status("")
 		return
+	if OnlineMatchBootstrap != null and OnlineMatchBootstrap.has_method("reset"):
+		OnlineMatchBootstrap.reset()
 	_ensure_config_sync_controller()
 	if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
 		_room_config_sync_controller.reset()
@@ -1732,10 +1776,10 @@ func _on_start_game_pressed() -> void:
 	_start_game_flow_in_progress = true
 	_refresh_ui()
 
+	if OnlineMatchBootstrap != null and OnlineMatchBootstrap.has_method("begin_local_start_request"):
+		OnlineMatchBootstrap.begin_local_start_request(room_state)
 	if not OS.has_feature("headless"):
-		if SceneManager != null and SceneManager.has_method("show_loading"):
-			SceneManager.show_loading("正在开始游戏...")
-			await get_tree().process_frame
+		await get_tree().process_frame
 
 	_ensure_config_sync_controller()
 	if _room_config_sync_controller != null and is_instance_valid(_room_config_sync_controller):
@@ -1745,6 +1789,8 @@ func _on_start_game_pressed() -> void:
 			_refresh_ui()
 			if SceneManager != null and SceneManager.has_method("hide_loading"):
 				SceneManager.hide_loading()
+			if OnlineMatchBootstrap != null and OnlineMatchBootstrap.has_method("reset"):
+				OnlineMatchBootstrap.reset()
 			_set_room_status("")
 			return
 

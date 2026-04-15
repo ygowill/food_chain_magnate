@@ -9,6 +9,7 @@ const DEFAULT_RESTAURANT_LOGO_COUNT := 6
 const RESUME_PARTICIPANT_BINDINGS_CONFIG_KEY := "resume_participant_bindings"
 
 const STATUS_LOBBY := "Lobby"
+const STATUS_STARTING := "Starting"
 const STATUS_IN_GAME := "InGame"
 const STATUS_ENDED := "Ended"
 const ROOM_MODE_NORMAL := "normal"
@@ -63,15 +64,27 @@ var _resume_checkpoint_counter: int = 0
 var _prepared_resume_start_engine = null
 var _prepared_resume_start_archive: Dictionary = {}
 var _prepared_resume_start_final_hash: String = ""
+var _pending_start_session_id: String = ""
+var _pending_start_request_id: String = ""
+var _pending_start_started_at_ms: int = 0
+var _pending_start_phase: String = ""
+var _pending_start_engine = null
+var _pending_start_payload: Dictionary = {}
+var _pending_start_target_peer_ids: Array[int] = []
+var _pending_start_ready_peer_ids: Dictionary = {}
+var _pending_start_error: String = ""
 
 func to_persistence_dict(include_runtime_membership: bool = false) -> Result:
-	if str(status) != STATUS_IN_GAME and str(status) != STATUS_LOBBY:
+	var persisted_status := str(status)
+	if persisted_status == STATUS_STARTING:
+		persisted_status = STATUS_LOBBY
+	if persisted_status != STATUS_IN_GAME and persisted_status != STATUS_LOBBY:
 		return Result.failure("只支持持久化 Lobby/InGame 房间")
 
 	_sync_seat_states_from_engine()
 
 	var archive: Dictionary = {}
-	if str(status) == STATUS_IN_GAME:
+	if persisted_status == STATUS_IN_GAME:
 		if game_engine == null:
 			return Result.failure("InGame 房间缺少 game_engine")
 		var archive_r: Result = game_engine.create_archive()
@@ -81,7 +94,7 @@ func to_persistence_dict(include_runtime_membership: bool = false) -> Result:
 
 	var out := {
 		"room_code": room_code,
-		"status": status,
+		"status": persisted_status,
 		"owner_user_id": owner_user_id,
 		"room_mode": room_mode,
 		"config": config.duplicate(true),
@@ -101,7 +114,7 @@ func to_persistence_dict(include_runtime_membership: bool = false) -> Result:
 		"user_ids_by_seat": _user_id_by_seat_index.duplicate(true),
 		"archive": archive,
 	}
-	if status == STATUS_LOBBY and room_mode == ROOM_MODE_RESUME_ARCHIVE:
+	if persisted_status == STATUS_LOBBY and room_mode == ROOM_MODE_RESUME_ARCHIVE:
 		out["resume_lobby_archive"] = _resume_lobby_archive.duplicate(true)
 	if include_runtime_membership:
 		out["spectators"] = _build_directory_spectators_array()
@@ -251,6 +264,101 @@ func _clear_prepared_resume_start_cache() -> void:
 	_prepared_resume_start_engine = null
 	_prepared_resume_start_archive = {}
 	_prepared_resume_start_final_hash = ""
+
+func _clear_pending_start_session() -> void:
+	_pending_start_session_id = ""
+	_pending_start_request_id = ""
+	_pending_start_started_at_ms = 0
+	_pending_start_phase = ""
+	_pending_start_engine = null
+	_pending_start_payload = {}
+	_pending_start_target_peer_ids.clear()
+	_pending_start_ready_peer_ids = {}
+	_pending_start_error = ""
+
+func has_pending_start_session() -> bool:
+	return not _pending_start_session_id.is_empty()
+
+func get_pending_start_session_id() -> String:
+	return _pending_start_session_id
+
+func get_pending_start_request_id() -> String:
+	return _pending_start_request_id
+
+func set_pending_start_phase(phase: String) -> void:
+	if not has_pending_start_session():
+		return
+	_pending_start_phase = str(phase).strip_edges()
+	_touch()
+
+func get_pending_start_target_peer_ids() -> Array[int]:
+	return _pending_start_target_peer_ids.duplicate()
+
+func begin_start_game_session(request_id: String) -> Result:
+	if has_pending_start_session():
+		return Result.failure("Room start already in progress")
+	var ready := can_start_game()
+	if not ready.ok:
+		return ready
+
+	var started_at_ms := int(Time.get_unix_time_from_system() * 1000.0)
+	status = STATUS_STARTING
+	_pending_start_session_id = "%s_%d" % [str(room_code).strip_edges().to_upper(), started_at_ms]
+	_pending_start_request_id = str(request_id).strip_edges()
+	_pending_start_started_at_ms = started_at_ms
+	_pending_start_phase = "preparing"
+	_pending_start_engine = null
+	_pending_start_payload = {}
+	_pending_start_target_peer_ids = get_peer_ids()
+	_pending_start_target_peer_ids.sort()
+	_pending_start_ready_peer_ids = {}
+	_pending_start_error = ""
+	_touch()
+	return Result.success(get_pending_start_summary())
+
+func get_pending_start_summary() -> Dictionary:
+	if not has_pending_start_session():
+		return {}
+	var total_count := _pending_start_target_peer_ids.size()
+	var ready_count := 0
+	for peer_id in _pending_start_target_peer_ids:
+		if bool(_pending_start_ready_peer_ids.get(peer_id, false)):
+			ready_count += 1
+	return {
+		"id": _pending_start_session_id,
+		"phase": _pending_start_phase,
+		"ready_count": ready_count,
+		"total_count": total_count,
+		"request_id": _pending_start_request_id,
+		"started_at_ms": _pending_start_started_at_ms,
+		"error": _pending_start_error,
+	}
+
+func mark_pending_start_peer_ready(peer_id: int) -> bool:
+	if not has_pending_start_session():
+		return false
+	if not _pending_start_target_peer_ids.has(peer_id):
+		return false
+	_pending_start_ready_peer_ids[peer_id] = true
+	_touch()
+	return true
+
+func is_pending_start_ready_to_commit() -> bool:
+	if not has_pending_start_session():
+		return false
+	for peer_id in _pending_start_target_peer_ids:
+		if not bool(_pending_start_ready_peer_ids.get(peer_id, false)):
+			return false
+	return true
+
+func abort_prepared_start_game(reason: String = "") -> void:
+	_pending_start_error = str(reason).strip_edges()
+	status = STATUS_LOBBY
+	game_engine = null
+	_clear_pending_start_session()
+	_clear_prepared_resume_start_cache()
+	_rebuild_runtime_views()
+	_touch()
 
 func _prepare_effective_resume_start_engine() -> Result:
 	if not is_resume_archive_room():
@@ -1375,7 +1483,7 @@ func remove_peer(peer_id: int) -> Result:
 
 	var slot := _get_slot(seat_index)
 	var host_changed := false
-	if status == STATUS_LOBBY:
+	if status == STATUS_LOBBY or status == STATUS_STARTING:
 		_erase_slot(seat_index)
 		if seat_index == _host_seat_index:
 			_promote_new_host_after_lobby_leave()
@@ -1569,7 +1677,7 @@ func set_player_logo_by_seat(seat_index: int, restaurant_logo_id: int) -> Result
 
 func to_room_state_dict() -> Dictionary:
 	_sync_seat_states_from_engine()
-	return {
+	var state := {
 		"room_code": room_code,
 		"room_mode": room_mode,
 		"host_peer_id": host_peer_id,
@@ -1582,11 +1690,19 @@ func to_room_state_dict() -> Dictionary:
 		"allow_spectators": get_allow_spectators(),
 		"status": status,
 	}
+	var bootstrap := get_pending_start_summary()
+	if not bootstrap.is_empty():
+		state["bootstrap"] = bootstrap
+	return state
 
 func to_room_state_dict_for_peer(peer_id: int) -> Dictionary:
 	var state := to_room_state_dict()
 	state["self_seat_index"] = get_seat_index_for_peer(peer_id)
 	state["self_role"] = get_role_for_peer(peer_id)
+	if state.get("bootstrap", null) is Dictionary:
+		var bootstrap: Dictionary = Dictionary(state.get("bootstrap", {})).duplicate(true)
+		bootstrap["self_ready"] = bool(_pending_start_ready_peer_ids.get(peer_id, false))
+		state["bootstrap"] = bootstrap
 	return state
 
 func to_room_summary_dict() -> Dictionary:
@@ -1608,7 +1724,7 @@ func to_room_summary_dict() -> Dictionary:
 	if not host_profile.is_empty():
 		host_name = str(host_profile.get("name", ""))
 
-	return {
+	var summary := {
 		"room_code": room_code,
 		"status": status,
 		"room_mode": room_mode,
@@ -1626,6 +1742,10 @@ func to_room_summary_dict() -> Dictionary:
 			"enabled_modules_count": mods_count,
 		},
 	}
+	var bootstrap := get_pending_start_summary()
+	if not bootstrap.is_empty():
+		summary["bootstrap"] = bootstrap
+	return summary
 
 func build_player_id_by_peer_id() -> Dictionary:
 	var out: Dictionary = {}
@@ -1700,11 +1820,7 @@ func can_start_game() -> Result:
 
 	return Result.success()
 
-func start_game() -> Result:
-	var ready := can_start_game()
-	if not ready.ok:
-		return ready
-
+func _build_start_game_engine_and_payload() -> Result:
 	var engine = GameEngineClass.new()
 	if is_resume_archive_room():
 		var prepared_r: Result = _prepare_effective_resume_start_engine()
@@ -1764,16 +1880,24 @@ func start_game() -> Result:
 			var option_overrides: Dictionary = Dictionary(option_overrides_val) if option_overrides_val is Dictionary else {}
 			Globals.game_option_overrides = option_overrides
 
-			var init_r: Result = engine.initialize(player_count, seed, enabled_modules, base_dir, reserve_card_choices, logo_choices)
-			if restore_game_config_overrides:
-				Globals.game_config_overrides = prev_game_config_overrides
-			if restore_game_option_overrides:
-				Globals.game_option_overrides = prev_game_option_overrides
-			if not init_r.ok:
-				return Result.failure("GameEngine.initialize failed: %s" % init_r.error)
+		var init_r: Result = engine.initialize(player_count, seed, enabled_modules, base_dir, reserve_card_choices, logo_choices)
+		if restore_game_config_overrides:
+			Globals.game_config_overrides = prev_game_config_overrides
+		if restore_game_option_overrides:
+			Globals.game_option_overrides = prev_game_option_overrides
+		if not init_r.ok:
+			return Result.failure("GameEngine.initialize failed: %s" % init_r.error)
 
 	_enable_online_dinnertime_confirm_on_engine(engine)
+	return Result.success({
+		"engine": engine,
+		"payload": {
+			"player_id_by_peer_id": build_player_id_by_peer_id(),
+			"config": config.duplicate(true),
+		},
+	})
 
+func _commit_started_engine(engine) -> Result:
 	game_engine = engine
 	status = STATUS_IN_GAME
 	started_at_iso = Time.get_datetime_string_from_system()
@@ -1791,18 +1915,65 @@ func start_game() -> Result:
 			slot["seat_state"] = SEAT_RECONNECTING
 		_set_slot(seat_index, slot)
 	_waiting_member_by_user_id.clear()
-	_resume_lobby_archive = {}
 	_clear_prepared_resume_start_cache()
 	_rebuild_runtime_views()
 	_touch()
 	var checkpoint_r: Result = _reset_recovery_store_from_current_engine("start_game")
 	if not checkpoint_r.ok:
 		return Result.failure("初始化 recovery store 失败: %s" % checkpoint_r.error)
+	_resume_lobby_archive = {}
+	return Result.success()
 
-	return Result.success({
-		"player_id_by_peer_id": player_id_by_peer_id.duplicate(true),
-		"config": config.duplicate(true),
-	})
+func prepare_start_game() -> Result:
+	if not has_pending_start_session():
+		var begin_r: Result = begin_start_game_session("")
+		if not begin_r.ok:
+			return begin_r
+	elif status != STATUS_STARTING:
+		return Result.failure("Room is not in Starting")
+
+	if _pending_start_engine != null and is_instance_valid(_pending_start_engine) and not _pending_start_payload.is_empty():
+		return Result.success(_pending_start_payload.duplicate(true))
+
+	var build_r: Result = _build_start_game_engine_and_payload()
+	if not build_r.ok:
+		return build_r
+	if not (build_r.value is Dictionary):
+		return Result.failure("start_game build result type invalid")
+
+	var build_info: Dictionary = build_r.value
+	_pending_start_engine = build_info.get("engine", null)
+	_pending_start_payload = Dictionary(build_info.get("payload", {})).duplicate(true)
+	_pending_start_phase = "waiting_for_players"
+	_touch()
+	return Result.success(_pending_start_payload.duplicate(true))
+
+func commit_prepared_start_game() -> Result:
+	if not has_pending_start_session():
+		return Result.failure("pending start session missing")
+	if _pending_start_engine == null or not is_instance_valid(_pending_start_engine):
+		return Result.failure("pending start engine missing")
+
+	var payload: Dictionary = _pending_start_payload.duplicate(true)
+	var commit_r: Result = _commit_started_engine(_pending_start_engine)
+	_clear_pending_start_session()
+	if not commit_r.ok:
+		return commit_r
+	return Result.success(payload)
+
+func start_game() -> Result:
+	var begin_r: Result = begin_start_game_session("")
+	if not begin_r.ok:
+		return begin_r
+	var prepare_r: Result = prepare_start_game()
+	if not prepare_r.ok:
+		abort_prepared_start_game(prepare_r.error)
+		return prepare_r
+	var commit_r: Result = commit_prepared_start_game()
+	if not commit_r.ok:
+		abort_prepared_start_game(commit_r.error)
+		return commit_r
+	return commit_r
 
 func rewind_to_current_player_turn_start(include_archive: bool = true) -> Result:
 	if status != STATUS_IN_GAME:

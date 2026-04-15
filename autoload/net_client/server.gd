@@ -1159,6 +1159,20 @@ func on_peer_disconnected(peer_id: int) -> void:
 	_net._profile_by_peer_id.erase(peer_id)
 	var room = _net._room_manager.get_room_by_peer(peer_id)
 	var room_status := str(room.status) if room != null else ""
+	var pending_start_notify_peer_ids: Array[int] = []
+	var pending_start_request_id := ""
+	var pending_start_reason := ""
+	if room != null and room_status == "Starting" and room.has_method("has_pending_start_session") and room.has_pending_start_session():
+		pending_start_reason = "有玩家掉线，本次开局已取消"
+		if room.has_method("get_pending_start_summary"):
+			var bootstrap_summary: Dictionary = room.get_pending_start_summary()
+			pending_start_request_id = str(bootstrap_summary.get("request_id", "")).strip_edges()
+		if room.has_method("get_pending_start_target_peer_ids"):
+			pending_start_notify_peer_ids = Array(room.get_pending_start_target_peer_ids())
+		pending_start_notify_peer_ids.erase(peer_id)
+		if room.has_method("abort_prepared_start_game"):
+			room.abort_prepared_start_game(pending_start_reason)
+		room_status = str(room.status)
 	var in_game := room != null and room_status == "InGame"
 	var preserve_room_on_disconnect := room != null and (room_status == "InGame" or room_status == "Lobby")
 	var disconnect_target: Dictionary = _resolve_disconnect_grace_target(room, peer_id)
@@ -1196,6 +1210,16 @@ func on_peer_disconnected(peer_id: int) -> void:
 		_mark_room_directory_dirty()
 		broadcast_room_state(room)
 		broadcast_room_list("")
+
+	if not pending_start_reason.is_empty():
+		_notify_request_rejected_to_peers(
+			pending_start_notify_peer_ids,
+			pending_start_request_id,
+			"match_bootstrap_failed",
+			pending_start_reason
+		)
+		GameLog.info("NetClient", "Disconnect handled keep-room peer=%d removed=%s %s" % [peer_id, str(removed), _room_brief(room)])
+	elif rr.ok and room != null and not removed:
 		GameLog.info("NetClient", "Disconnect handled keep-room peer=%d removed=%s %s" % [peer_id, str(removed), _room_brief(room)])
 	elif rr.ok and removed:
 		_mark_room_directory_dirty()
@@ -1215,6 +1239,40 @@ func send_request_rejected(peer_id: int, request_id: String, code: String, messa
 		"code": code,
 		"message": message,
 	})
+
+func _notify_request_rejected_to_peers(peer_ids: Array[int], request_id: String, code: String, message: String) -> void:
+	var sent_peer_ids: Dictionary = {}
+	for peer_id_val in peer_ids:
+		var peer_id := int(peer_id_val)
+		if peer_id <= 0 or sent_peer_ids.has(peer_id):
+			continue
+		sent_peer_ids[peer_id] = true
+		send_request_rejected(peer_id, request_id, code, message)
+
+func _get_pending_start_request_id(room, fallback: String = "") -> String:
+	if room == null:
+		return str(fallback).strip_edges()
+	if room.has_method("get_pending_start_request_id"):
+		var request_id := str(room.get_pending_start_request_id()).strip_edges()
+		if not request_id.is_empty():
+			return request_id
+	if room.has_method("get_pending_start_summary"):
+		var summary: Dictionary = room.get_pending_start_summary()
+		var request_id_from_summary := str(summary.get("request_id", "")).strip_edges()
+		if not request_id_from_summary.is_empty():
+			return request_id_from_summary
+	return str(fallback).strip_edges()
+
+func _abort_pending_start_session(room, request_id: String, reason: String, peer_ids: Array[int], code: String = "match_bootstrap_failed") -> void:
+	if room == null:
+		_notify_request_rejected_to_peers(peer_ids, request_id, code, reason)
+		return
+	if room.has_method("abort_prepared_start_game"):
+		room.abort_prepared_start_game(reason)
+	_mark_room_directory_dirty()
+	broadcast_room_state(room)
+	broadcast_room_list("")
+	_notify_request_rejected_to_peers(peer_ids, request_id, code, reason)
 
 func broadcast_room_state(room) -> void:
 	if _net == null or not is_instance_valid(_net):
@@ -2009,6 +2067,20 @@ func handle_rpc_leave_room(request: Dictionary) -> void:
 	var room = _net._room_manager.get_room_by_peer(peer_id)
 	GameLog.info("NetClient", "RX LeaveRoom %s %s" % [_request_tag(peer_id, request_id), _room_brief(room)])
 
+	var pending_start_notify_peer_ids: Array[int] = []
+	var pending_start_reason := ""
+	var pending_start_request_id := ""
+	if room != null and str(room.status) == "Starting" and room.has_method("has_pending_start_session") and room.has_pending_start_session():
+		pending_start_reason = "有玩家离开房间，本次开局已取消"
+		if room.has_method("get_pending_start_summary"):
+			var bootstrap_summary: Dictionary = room.get_pending_start_summary()
+			pending_start_request_id = str(bootstrap_summary.get("request_id", "")).strip_edges()
+		if room.has_method("get_pending_start_target_peer_ids"):
+			pending_start_notify_peer_ids = Array(room.get_pending_start_target_peer_ids())
+		pending_start_notify_peer_ids.erase(peer_id)
+		if room.has_method("abort_prepared_start_game"):
+			room.abort_prepared_start_game(pending_start_reason)
+
 	var lr = _net._room_manager.leave_room(peer_id)
 	if not lr.ok:
 		send_request_rejected(peer_id, request_id, "leave_room_failed", lr.error)
@@ -2023,6 +2095,13 @@ func handle_rpc_leave_room(request: Dictionary) -> void:
 	broadcast_room_list("")
 
 	_net.rpc_id(peer_id, "rpc_room_state", empty_room_state())
+	if not pending_start_reason.is_empty():
+		_notify_request_rejected_to_peers(
+			pending_start_notify_peer_ids,
+			pending_start_request_id,
+			"match_bootstrap_failed",
+			pending_start_reason
+		)
 	GameLog.info(
 		"NetClient",
 		"LeaveRoom success %s removed=%s previous_room=%s"
@@ -2123,9 +2202,39 @@ func handle_rpc_start_game(request: Dictionary) -> void:
 	if int(room.host_peer_id) != int(peer_id):
 		send_request_rejected(peer_id, request_id, "not_host", "Only host can start game")
 		return
+	if str(room.status) == "Starting" and room.has_method("has_pending_start_session") and room.has_pending_start_session():
+		var pending_request_id := _get_pending_start_request_id(room, "")
+		if not pending_request_id.is_empty() and pending_request_id == request_id:
+			GameLog.info(
+				"NetClient",
+				"Duplicate StartGame ignored %s %s"
+					% [_request_tag(peer_id, request_id), _room_brief(room)]
+			)
+			return
+		send_request_rejected(peer_id, request_id, "start_game_failed", "Game start already in progress")
+		return
+
+	if not room.has_method("begin_start_game_session") or not room.has_method("prepare_start_game") or not room.has_method("commit_prepared_start_game"):
+		send_request_rejected(peer_id, request_id, "start_game_failed", "Room bootstrap lifecycle missing")
+		return
+
+	var begin_r: Result = room.begin_start_game_session(request_id)
+	if not begin_r.ok:
+		send_request_rejected(peer_id, request_id, "start_game_failed", begin_r.error)
+		return
+
+	_mark_room_directory_dirty()
+	broadcast_room_state(room)
+	broadcast_room_list("")
 
 	var resume_start_snapshot_transfer: Dictionary = {}
 	var resume_fast_start_bundle: Dictionary = {}
+	var prepare_r: Result = room.prepare_start_game()
+	if not prepare_r.ok:
+		var failed_peer_ids: Array[int] = Array(room.get_pending_start_target_peer_ids()) if room.has_method("get_pending_start_target_peer_ids") else Array(room.get_peer_ids())
+		_abort_pending_start_session(room, request_id, prepare_r.error, failed_peer_ids, "start_game_failed")
+		return
+
 	if room.has_method("is_resume_archive_room") and room.is_resume_archive_room():
 		if room.has_method("build_resume_fast_start_bundle"):
 			var fast_bundle_r: Result = room.build_resume_fast_start_bundle(true)
@@ -2139,20 +2248,24 @@ func handle_rpc_start_game(request: Dictionary) -> void:
 				)
 		if resume_fast_start_bundle.is_empty():
 			if not room.has_method("build_effective_resume_start_archive"):
-				send_request_rejected(peer_id, request_id, "start_game_failed", "Room.build_effective_resume_start_archive missing")
+				var failed_peer_ids_3: Array[int] = Array(room.get_pending_start_target_peer_ids()) if room.has_method("get_pending_start_target_peer_ids") else Array(room.get_peer_ids())
+				_abort_pending_start_session(room, request_id, "Room.build_effective_resume_start_archive missing", failed_peer_ids_3, "start_game_failed")
 				return
 			var effective_resume_r: Result = room.build_effective_resume_start_archive()
 			if not effective_resume_r.ok:
-				send_request_rejected(peer_id, request_id, "start_game_failed", effective_resume_r.error)
+				var failed_peer_ids_4: Array[int] = Array(room.get_pending_start_target_peer_ids()) if room.has_method("get_pending_start_target_peer_ids") else Array(room.get_peer_ids())
+				_abort_pending_start_session(room, request_id, effective_resume_r.error, failed_peer_ids_4, "start_game_failed")
 				return
 			var effective_resume_val = effective_resume_r.value
 			if not (effective_resume_val is Dictionary):
-				send_request_rejected(peer_id, request_id, "start_game_failed", "resume start archive type invalid")
+				var failed_peer_ids_5: Array[int] = Array(room.get_pending_start_target_peer_ids()) if room.has_method("get_pending_start_target_peer_ids") else Array(room.get_peer_ids())
+				_abort_pending_start_session(room, request_id, "resume start archive type invalid", failed_peer_ids_5, "start_game_failed")
 				return
 			var effective_resume_info: Dictionary = effective_resume_val
 			var resume_archive: Dictionary = Dictionary(effective_resume_info.get("archive", {})).duplicate(true)
 			if resume_archive.is_empty():
-				send_request_rejected(peer_id, request_id, "start_game_failed", "resume start archive missing")
+				var failed_peer_ids_6: Array[int] = Array(room.get_pending_start_target_peer_ids()) if room.has_method("get_pending_start_target_peer_ids") else Array(room.get_peer_ids())
+				_abort_pending_start_session(room, request_id, "resume start archive missing", failed_peer_ids_6, "start_game_failed")
 				return
 			var resume_hash := str(effective_resume_info.get("final_hash", resume_archive.get("final_hash", ""))).strip_edges()
 			var history_size := int(effective_resume_info.get("history_size", -1))
@@ -2163,20 +2276,17 @@ func handle_rpc_start_game(request: Dictionary) -> void:
 				resume_hash
 			)
 			if not transfer_r.ok:
-				send_request_rejected(peer_id, request_id, "start_game_failed", transfer_r.error)
+				var failed_peer_ids_2: Array[int] = Array(room.get_pending_start_target_peer_ids()) if room.has_method("get_pending_start_target_peer_ids") else Array(room.get_peer_ids())
+				_abort_pending_start_session(room, request_id, transfer_r.error, failed_peer_ids_2, "start_game_failed")
 				return
 			resume_start_snapshot_transfer = Dictionary(transfer_r.value).duplicate(true)
-
-	var sr = room.start_game()
-	if not sr.ok:
-		send_request_rejected(peer_id, request_id, "start_game_failed", sr.error)
-		return
+	if room.has_method("set_pending_start_phase"):
+		room.set_pending_start_phase("waiting_for_players")
 
 	_mark_room_directory_dirty()
 	broadcast_room_state(room)
-	broadcast_room_list("")
 
-	var payload_val: Dictionary = Dictionary(sr.value)
+	var payload_val: Dictionary = Dictionary(prepare_r.value)
 	var payload := {
 		"player_id_by_peer_id": Dictionary(payload_val.get("player_id_by_peer_id", {})),
 		"config": Dictionary(payload_val.get("config", {})),
@@ -2192,9 +2302,94 @@ func handle_rpc_start_game(request: Dictionary) -> void:
 			_send_prebuilt_resync_snapshot(int(pid), request_id, room, resume_start_snapshot_transfer, "start_game_resume_archive")
 	GameLog.warn(
 		"NetClient",
-		"StartGame success %s %s mapped_players=%d"
-			% [_request_tag(peer_id, request_id), _room_brief(room), Dictionary(payload.get("player_id_by_peer_id", {})).size()]
+		"StartGame prepared %s %s mapped_players=%d waiting_for_ready=%d"
+			% [
+				_request_tag(peer_id, request_id),
+				_room_brief(room),
+				Dictionary(payload.get("player_id_by_peer_id", {})).size(),
+				Array(room.get_pending_start_target_peer_ids()).size() if room.has_method("get_pending_start_target_peer_ids") else 0,
+			]
 	)
+
+func handle_rpc_match_bootstrap_ready(request: Dictionary) -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
+		return
+
+	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
+	var request_id := str(request.get("request_id", ""))
+	var bootstrap_id := str(request.get("bootstrap_id", "")).strip_edges()
+	var room = _net._room_manager.get_room_by_peer(peer_id)
+	GameLog.info(
+		"NetClient",
+		"RX MatchBootstrapReady %s bootstrap_id=%s %s"
+			% [_request_tag(peer_id, request_id), _safe_text(bootstrap_id), _room_brief(room)]
+	)
+	if room == null or str(room.status) != "Starting":
+		return
+	if not room.has_method("has_pending_start_session") or not room.has_pending_start_session():
+		return
+	if room.has_method("get_pending_start_session_id") and str(room.get_pending_start_session_id()) != bootstrap_id:
+		return
+	if not room.has_method("mark_pending_start_peer_ready") or not room.mark_pending_start_peer_ready(peer_id):
+		return
+
+	_mark_room_directory_dirty()
+	broadcast_room_state(room)
+
+	if not room.has_method("is_pending_start_ready_to_commit") or not room.is_pending_start_ready_to_commit():
+		return
+
+	var start_request_id := _get_pending_start_request_id(room, request_id)
+	if room.has_method("set_pending_start_phase"):
+		room.set_pending_start_phase("committing")
+	_mark_room_directory_dirty()
+	broadcast_room_state(room)
+
+	var commit_r: Result = room.commit_prepared_start_game()
+	if not commit_r.ok:
+		var failed_peer_ids: Array[int] = Array(room.get_peer_ids())
+		_abort_pending_start_session(room, start_request_id, commit_r.error, failed_peer_ids, "match_bootstrap_failed")
+		return
+
+	_mark_room_directory_dirty()
+	broadcast_room_state(room)
+	broadcast_room_list("")
+	GameLog.warn(
+		"NetClient",
+		"Match bootstrap committed %s %s"
+			% [_request_tag(peer_id, request_id), _room_brief(room)]
+	)
+
+func handle_rpc_match_bootstrap_failed(request: Dictionary) -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
+		return
+
+	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
+	var request_id := str(request.get("request_id", ""))
+	var bootstrap_id := str(request.get("bootstrap_id", "")).strip_edges()
+	var reason := str(request.get("reason", "")).strip_edges()
+	if reason.is_empty():
+		reason = "客户端初始化失败"
+	var room = _net._room_manager.get_room_by_peer(peer_id)
+	GameLog.warn(
+		"NetClient",
+		"RX MatchBootstrapFailed %s bootstrap_id=%s reason=%s %s"
+			% [_request_tag(peer_id, request_id), _safe_text(bootstrap_id), _safe_text(reason), _room_brief(room)]
+	)
+	if room == null or str(room.status) != "Starting":
+		return
+	if not room.has_method("has_pending_start_session") or not room.has_pending_start_session():
+		return
+	if room.has_method("get_pending_start_session_id") and str(room.get_pending_start_session_id()) != bootstrap_id:
+		return
+
+	var failed_peer_ids: Array[int] = Array(room.get_pending_start_target_peer_ids()) if room.has_method("get_pending_start_target_peer_ids") else Array(room.get_peer_ids())
+	var start_request_id := _get_pending_start_request_id(room, request_id)
+	_abort_pending_start_session(room, start_request_id, reason, failed_peer_ids, "match_bootstrap_failed")
 
 func handle_rpc_action_request(request: Dictionary) -> void:
 	if _net == null or not is_instance_valid(_net):

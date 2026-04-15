@@ -125,10 +125,13 @@ func _ready() -> void:
 	if startup_direct_resume:
 		_set_startup_online_resume_ui_hidden(true)
 	# 初始化/读档可能耗时：确保加载遮罩至少绘制一帧，避免“卡住”的观感。
+	var bootstrap_loading_active := OnlineMatchBootstrap != null and OnlineMatchBootstrap.has_method("is_active") and OnlineMatchBootstrap.is_active()
 	var need_show_loading := true
 	if SceneManager != null and SceneManager.has_method("is_loading_visible"):
 		need_show_loading = not SceneManager.is_loading_visible()
-	if need_show_loading and SceneManager != null and SceneManager.has_method("show_loading"):
+	if bootstrap_loading_active and OnlineMatchBootstrap.has_method("on_game_scene_stage"):
+		OnlineMatchBootstrap.on_game_scene_stage("正在装配界面...", 97.0, "游戏场景已加载，正在准备首屏界面。")
+	elif need_show_loading and SceneManager != null and SceneManager.has_method("show_loading"):
 		SceneManager.show_loading("正在进入游戏...")
 	await get_tree().process_frame
 	if not is_instance_valid(self):
@@ -316,7 +319,9 @@ func _ready() -> void:
 			if s != null and str(s.phase) == DefsClass.PHASE_SETUP and str(s.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS:
 				keep_loading_until_reserve_modal = true
 		if not keep_loading_until_reserve_modal:
-			if SceneManager != null and SceneManager.has_method("hide_loading"):
+			if bootstrap_loading_active and OnlineMatchBootstrap != null and OnlineMatchBootstrap.has_method("finish_after_game_ui_ready"):
+				OnlineMatchBootstrap.finish_after_game_ui_ready()
+			elif SceneManager != null and SceneManager.has_method("hide_loading"):
 				SceneManager.hide_loading()
 		_set_startup_online_resume_ui_hidden(false)
 

@@ -76,6 +76,7 @@ const OnlineRoomListTestClass = preload("res://core/tests/online_room_list_test.
 const OnlineLobbyRoomListControllerTestClass = preload("res://core/tests/online_lobby_room_list_controller_test.gd")
 const OnlineLobbyRoomStateRendererTestClass = preload("res://core/tests/online_lobby_room_state_renderer_test.gd")
 const OnlineLobbyRoomConfigSyncControllerTestClass = preload("res://core/tests/online_lobby_room_config_sync_controller_test.gd")
+const OnlineMatchBootstrapServerFlowTestClass = preload("res://core/tests/online_match_bootstrap_server_flow_test.gd")
 const OnlineStartGameReplayTestClass = preload("res://core/tests/online_start_game_replay_test.gd")
 const MatchFinalizeParticipantLogoPayloadTestClass = preload("res://core/tests/match_finalize_participant_logo_payload_test.gd")
 const OnlineResyncArchiveTestClass = preload("res://core/tests/online_resync_archive_test.gd")
