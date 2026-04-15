@@ -13,7 +13,8 @@ static func is_seek_enabled(
 	if bool(replay_mode_active):
 		return true
 	if bool(history_step_timeline_active) and _has_steps(history_step_timeline):
-		return int(history_cursor_step_index) < int(history_head_step_index)
+		if int(history_cursor_step_index) < int(history_head_step_index):
+			return true
 	return bool(manual_replay_enabled)
 
 static func get_entry_timeline_index(game_log_panel: Object, entry_id: int) -> int:
