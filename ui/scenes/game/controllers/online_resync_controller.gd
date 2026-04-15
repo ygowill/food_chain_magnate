@@ -200,6 +200,13 @@ func _get_engine():
 		return null
 	return _get_game_engine.call()
 
+func _load_archive_for_online_client(engine, archive: Dictionary) -> Result:
+	if engine == null:
+		return Result.failure("load archive failed: engine 为空")
+	if NetClient != null and NetClient.has_method("load_archive_for_online_client"):
+		return NetClient.load_archive_for_online_client(engine, archive)
+	return engine.load_from_archive(archive)
+
 func _setup_online_client_bindings() -> void:
 	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
 		return
@@ -294,6 +301,8 @@ func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> voi
 	if not r.ok:
 		GameLog.error("Game", "联机回放命令失败: %s" % r.error)
 		return
+	if NetClient != null and NetClient.has_method("record_online_resume_runtime_command_applied"):
+		NetClient.record_online_resume_runtime_command_applied(cmd_dict, state_hash)
 	var should_sync_resume_progress := true
 	if not state_hash.is_empty():
 		var state = engine.get_state()
@@ -321,7 +330,7 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 		NetClient.clear_pending_resync_archive()
 	_resync_in_progress = true
 	_resync_request_id = ""
-	var r: Result = engine.load_from_archive(archive)
+	var r: Result = _load_archive_for_online_client(engine, archive)
 	if not r.ok:
 		GameLog.error("Game", "联机 ResyncArchive 加载失败: %s" % r.error)
 		if _reconnect_flow_active:
@@ -344,6 +353,8 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 	if not ui_metadata_apply.ok:
 		GameLog.error("Game", "联机 ResyncArchive UI metadata 装配失败: %s" % ui_metadata_apply.error)
 
+	if NetClient != null and NetClient.has_method("mark_runtime_engine_as_full_history"):
+		NetClient.mark_runtime_engine_as_full_history(engine)
 	if NetContext != null and NetContext.has_method("sync_online_resume_progress_from_engine"):
 		NetContext.sync_online_resume_progress_from_engine(engine)
 
@@ -583,6 +594,8 @@ func _flush_online_pending_commands_after_resync() -> void:
 				queue.remove_at(i)
 				progressed = true
 				break
+			if NetClient != null and NetClient.has_method("record_online_resume_runtime_command_applied"):
+				NetClient.record_online_resume_runtime_command_applied(item_cmd_dict, item_hash)
 			if not item_hash.is_empty():
 				var state = engine.get_state()
 				if state != null and state.has_method("compute_hash"):

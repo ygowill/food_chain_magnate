@@ -19,6 +19,9 @@ signal room_list_updated(rooms: Array)
 signal room_state_updated(room_state: Dictionary)
 signal request_rejected(request_id: String, code: String, message: String)
 signal game_started(payload: Dictionary)
+signal resume_fast_start_ready(payload: Dictionary)
+signal resume_full_history_ready(payload: Dictionary)
+signal full_archive_export_ready(payload: Dictionary)
 signal command_applied(cmd_dict: Dictionary, state_hash: String)
 signal resync_archive_received(archive: Dictionary)
 signal rewind_to_turn_start_meta_received(payload: Dictionary)
@@ -46,6 +49,12 @@ var _internal = null
 func _ready() -> void:
 	_ensure_internal()
 	_ensure_signal_connections()
+	_refresh_multiplayer_peer_binding()
+
+func _refresh_multiplayer_peer_binding() -> void:
+	if not is_inside_tree():
+		return
+	multiplayer.multiplayer_peer = _peer if _peer != null else OfflineMultiplayerPeer.new()
 
 func _ensure_internal() -> void:
 	if _internal == null or not is_instance_valid(_internal):
@@ -66,7 +75,7 @@ func start_server(port: int, bind_address: String = "0.0.0.0"):
 		NetContext.reset()
 		return ResultClass.failure("WebSocket server create_server failed: %s" % str(err))
 
-	multiplayer.multiplayer_peer = _peer
+	_refresh_multiplayer_peer_binding()
 	_room_manager = RoomManagerClass.new()
 	_profile_by_peer_id = {}
 	_client_transport_connected = false
@@ -104,7 +113,7 @@ func connect_to_server(url: String, preserve_context: bool = false):
 			NetContext.reset()
 		return ResultClass.failure("WebSocket client create_client failed: %s" % str(err))
 
-	multiplayer.multiplayer_peer = _peer
+	_refresh_multiplayer_peer_binding()
 	_client_transport_connected = false
 	GameLog.info("NetClient", "Connecting to %s" % connect_url)
 	return ResultClass.success()
@@ -169,7 +178,9 @@ func shutdown(reset_context: bool = true) -> void:
 	_resume_force_snapshot_once = false
 	_pending_resume_room_bootstrap = {}
 	_online_client_engine_room_code = ""
-	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	if reset_context and _internal != null and is_instance_valid(_internal) and _internal.has_method("clear_online_resume_dual_engine_state"):
+		_internal.clear_online_resume_dual_engine_state()
+	_refresh_multiplayer_peer_binding()
 	if reset_context:
 		NetContext.reset()
 	if should_log:
@@ -246,10 +257,10 @@ func request_leave_room() -> String:
 		OnlineSessionCoordinator.mark_resume_terminal("leave_room")
 	clear_pending_online_resync_state()
 	_online_client_engine_room_code = ""
+	if _internal != null and is_instance_valid(_internal) and _internal.has_method("clear_online_resume_dual_engine_state"):
+		_internal.clear_online_resume_dual_engine_state()
 	rpc_id(1, "rpc_leave_room", payload)
 	GameLog.info("NetClient", "TX LeaveRoom request_id=%s room=%s" % [request_id, _safe_room_code(NetContext.room_state)])
-	if NetContext != null and NetContext.has_method("clear_online_resume_context"):
-		NetContext.clear_online_resume_context()
 	NetContext.room_state = {}
 	room_state_updated.emit(NetContext.room_state)
 	return request_id
@@ -261,6 +272,8 @@ func request_forfeit_and_leave_room() -> String:
 		OnlineSessionCoordinator.mark_resume_terminal("forfeit_and_leave_room")
 	clear_pending_online_resync_state()
 	_online_client_engine_room_code = ""
+	if _internal != null and is_instance_valid(_internal) and _internal.has_method("clear_online_resume_dual_engine_state"):
+		_internal.clear_online_resume_dual_engine_state()
 	rpc_id(1, "rpc_forfeit_and_leave_room", payload)
 	GameLog.info(
 		"NetClient",
@@ -323,6 +336,47 @@ func take_pending_resume_room_bootstrap() -> Dictionary:
 
 func clear_pending_resume_room_bootstrap() -> void:
 	_pending_resume_room_bootstrap = {}
+
+func clear_online_resume_dual_engine_state() -> void:
+	_ensure_internal()
+	if _internal != null and is_instance_valid(_internal) and _internal.has_method("clear_online_resume_dual_engine_state"):
+		_internal.clear_online_resume_dual_engine_state()
+
+func get_online_resume_session_snapshot() -> Dictionary:
+	_ensure_internal()
+	if _internal != null and is_instance_valid(_internal) and _internal.has_method("get_online_resume_session_snapshot"):
+		return Dictionary(_internal.get_online_resume_session_snapshot()).duplicate(true)
+	return {}
+
+func get_online_resume_full_replay_engine():
+	_ensure_internal()
+	if _internal != null and is_instance_valid(_internal) and _internal.has_method("get_online_resume_full_replay_engine"):
+		return _internal.get_online_resume_full_replay_engine()
+	return null
+
+func load_archive_for_online_client(engine, archive: Dictionary) -> Result:
+	_ensure_internal()
+	if _internal != null and is_instance_valid(_internal) and _internal.has_method("load_archive_for_online_client"):
+		return _internal.load_archive_for_online_client(engine, archive)
+	if engine == null:
+		return ResultClass.failure("load archive failed: engine 为空")
+	return engine.load_from_archive(archive)
+
+func record_online_resume_runtime_command_applied(cmd_dict: Dictionary, state_hash: String = "") -> void:
+	_ensure_internal()
+	if _internal != null and is_instance_valid(_internal) and _internal.has_method("record_online_resume_runtime_command_applied"):
+		_internal.record_online_resume_runtime_command_applied(cmd_dict, state_hash)
+
+func map_online_resume_progress_from_engine(engine, checkpoint_id: String = "") -> Dictionary:
+	_ensure_internal()
+	if _internal != null and is_instance_valid(_internal) and _internal.has_method("map_online_resume_progress_from_engine"):
+		return Dictionary(_internal.map_online_resume_progress_from_engine(engine, checkpoint_id)).duplicate(true)
+	return {}
+
+func mark_runtime_engine_as_full_history(engine) -> void:
+	_ensure_internal()
+	if _internal != null and is_instance_valid(_internal) and _internal.has_method("mark_runtime_engine_as_full_history"):
+		_internal.mark_runtime_engine_as_full_history(engine)
 
 func request_update_player_profile(profile: Dictionary) -> void:
 	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
@@ -401,6 +455,19 @@ func request_rewind_to_turn_start() -> String:
 	GameLog.warn(
 		"NetClient",
 		"TX RewindToTurnStart request_id=%s room=%s" % [request_id, _safe_room_code(NetContext.room_state)]
+	)
+	return request_id
+
+func request_full_archive_export() -> String:
+	var request_id := _next_request_id()
+	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return request_id
+	if not is_online_client_connected():
+		return request_id
+	rpc_id(1, "rpc_request_full_archive_export", {"request_id": request_id})
+	GameLog.info(
+		"NetClient",
+		"TX FullArchiveExport request_id=%s room=%s" % [request_id, _safe_room_code(NetContext.room_state)]
 	)
 	return request_id
 
@@ -508,6 +575,11 @@ func rpc_rewind_to_turn_start(request: Dictionary) -> void:
 	_ensure_internal()
 	_internal.handle_rpc_rewind_to_turn_start(request)
 
+@rpc("any_peer", "reliable")
+func rpc_request_full_archive_export(request: Dictionary) -> void:
+	_ensure_internal()
+	_internal.handle_rpc_request_full_archive_export(request)
+
 @rpc("authority", "reliable")
 func rpc_room_state(payload: Dictionary) -> void:
 	_ensure_internal()
@@ -557,6 +629,11 @@ func rpc_resync_delta(payload: Dictionary) -> void:
 func rpc_request_rejected(payload: Dictionary) -> void:
 	_ensure_internal()
 	_internal.handle_rpc_request_rejected(payload)
+
+@rpc("authority", "reliable")
+func rpc_full_archive_export_ready(payload: Dictionary) -> void:
+	_ensure_internal()
+	_internal.handle_rpc_full_archive_export_ready(payload)
 
 func _ensure_signal_connections() -> void:
 	_ensure_internal()

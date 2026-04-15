@@ -97,6 +97,29 @@ static func run() -> Result:
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "delta 恢复路径应触发 on_game_started")
 
+	NetContext.set_online_resume_context("ROOM97", "player", "https://platform.example.test")
+	NetContext.mark_online_resume_in_game(true)
+	var fast_harness := _Harness.new(host)
+	fast_harness.use_fast_start_signal = true
+	var fast_controller = ControllerClass.new(
+		host,
+		Callable(fast_harness, "ensure_session"),
+		Callable(fast_harness, "resume_room"),
+		Callable(fast_harness, "connect_to_server"),
+		Callable(fast_harness, "on_game_started"),
+		Callable(fast_harness, "on_failure"),
+		Callable(fast_harness, "on_status")
+	)
+	var fast_started = await fast_controller.attempt_startup_resume_if_needed()
+	if not fast_started:
+		_dispose_controllers([idle_controller, controller, delta_controller, fast_controller])
+		host.queue_free()
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "fast-start 恢复路径应判定为启动成功")
+	if fast_harness.game_started_calls != 1:
+		_dispose_controllers([idle_controller, controller, delta_controller, fast_controller])
+		host.queue_free()
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "fast-start 恢复路径应触发 on_game_started")
+
 	NetContext.set_online_resume_context("ROOM101", "player", "https://platform.example.test")
 	NetContext.mark_online_resume_in_game(true)
 	var retry_harness := _Harness.new(host)
@@ -112,11 +135,11 @@ static func run() -> Result:
 	)
 	var retry_started = await retry_controller.attempt_startup_resume_if_needed()
 	if not retry_started:
-		_dispose_controllers([idle_controller, controller, delta_controller, retry_controller])
+		_dispose_controllers([idle_controller, controller, delta_controller, fast_controller, retry_controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "可重试失败后应最终恢复成功")
 	if retry_harness.resume_calls != 2:
-		_dispose_controllers([idle_controller, controller, delta_controller, retry_controller])
+		_dispose_controllers([idle_controller, controller, delta_controller, fast_controller, retry_controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "冷启动可重试失败后应再次调用 resume_room")
 
@@ -136,21 +159,23 @@ static func run() -> Result:
 	)
 	var mismatch_started = await mismatch_controller.attempt_startup_resume_if_needed()
 	if mismatch_started:
-		_dispose_controllers([idle_controller, controller, delta_controller, retry_controller, mismatch_controller])
+		_dispose_controllers([idle_controller, controller, delta_controller, fast_controller, retry_controller, mismatch_controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "账号不匹配时不应继续启动恢复")
 	if NetContext.has_online_resume_context():
-		_dispose_controllers([idle_controller, controller, delta_controller, retry_controller, mismatch_controller])
+		_dispose_controllers([idle_controller, controller, delta_controller, fast_controller, retry_controller, mismatch_controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "账号不匹配时应清理 resume 上下文")
 
-	_dispose_controllers([idle_controller, controller, delta_controller, retry_controller, mismatch_controller])
+	_dispose_controllers([idle_controller, controller, delta_controller, fast_controller, retry_controller, mismatch_controller])
 	host.queue_free()
 	_restore(prev_resume_state, prev_pending_replay, prev_user_id)
 	return Result.success()
 
 static func _restore(prev_resume_state: Dictionary, prev_pending_replay: String, prev_user_id: String) -> void:
 	NetContext.online_resume_state = prev_resume_state.duplicate(true)
+	if NetContext.has_method("save_online_resume_state_to_disk"):
+		NetContext.save_online_resume_state_to_disk()
 	Globals.pending_replay_file_path = prev_pending_replay
 	PlatformSession.user_id = prev_user_id
 
@@ -175,6 +200,7 @@ class _Harness:
 	var resume_failures_before_success: int = 0
 	var statuses: Array[String] = []
 	var use_delta_restore_signal: bool = false
+	var use_fast_start_signal: bool = false
 
 	func _init(p_host: Node) -> void:
 		host = p_host
@@ -197,7 +223,9 @@ class _Harness:
 	func connect_to_server(_url: String) -> Result:
 		connect_calls += 1
 		NetClient.call_deferred("emit_signal", "game_started", {})
-		if use_delta_restore_signal:
+		if use_fast_start_signal:
+			NetClient.call_deferred("emit_signal", "resume_fast_start_ready", {})
+		elif use_delta_restore_signal:
 			NetClient.call_deferred("emit_signal", "resync_delta_applied", {})
 		else:
 			NetClient.call_deferred("emit_signal", "resync_archive_received", {})

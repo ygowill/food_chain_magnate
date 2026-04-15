@@ -67,6 +67,47 @@ func send_client_hello() -> void:
 	if _client != null and is_instance_valid(_client):
 		_client.send_client_hello()
 
+func clear_online_resume_dual_engine_state() -> void:
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client) and _client.has_method("clear_online_resume_dual_engine_state"):
+		_client.clear_online_resume_dual_engine_state()
+
+func get_online_resume_session_snapshot() -> Dictionary:
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client) and _client.has_method("get_online_resume_session_snapshot"):
+		return Dictionary(_client.get_online_resume_session_snapshot()).duplicate(true)
+	return {}
+
+func get_online_resume_full_replay_engine():
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client) and _client.has_method("get_online_resume_full_replay_engine"):
+		return _client.get_online_resume_full_replay_engine()
+	return null
+
+func load_archive_for_online_client(engine, archive: Dictionary) -> Result:
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client) and _client.has_method("load_archive_for_online_client"):
+		return _client.load_archive_for_online_client(engine, archive)
+	if engine == null:
+		return Result.failure("load archive failed: engine 为空")
+	return engine.load_from_archive(archive)
+
+func record_online_resume_runtime_command_applied(cmd_dict: Dictionary, state_hash: String = "") -> void:
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client) and _client.has_method("record_online_resume_runtime_command_applied"):
+		_client.record_online_resume_runtime_command_applied(cmd_dict, state_hash)
+
+func map_online_resume_progress_from_engine(engine, checkpoint_id: String = "") -> Dictionary:
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client) and _client.has_method("map_online_resume_progress_from_engine"):
+		return Dictionary(_client.map_online_resume_progress_from_engine(engine, checkpoint_id)).duplicate(true)
+	return {}
+
+func mark_runtime_engine_as_full_history(engine) -> void:
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client) and _client.has_method("mark_runtime_engine_as_full_history"):
+		_client.mark_runtime_engine_as_full_history(engine)
+
 func handle_rpc_room_state(payload: Dictionary) -> void:
 	_ensure_modules()
 	if _client != null and is_instance_valid(_client):
@@ -116,6 +157,11 @@ func handle_rpc_request_rejected(payload: Dictionary) -> void:
 	_ensure_modules()
 	if _client != null and is_instance_valid(_client):
 		_client.handle_rpc_request_rejected(payload)
+
+func handle_rpc_full_archive_export_ready(payload: Dictionary) -> void:
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client) and _client.has_method("handle_rpc_full_archive_export_ready"):
+		_client.handle_rpc_full_archive_export_ready(payload)
 
 func send_request_rejected(peer_id: int, request_id: String, code: String, message: String) -> void:
 	_ensure_modules()
@@ -202,6 +248,11 @@ func handle_rpc_rewind_to_turn_start(request: Dictionary) -> void:
 	_ensure_modules()
 	if _server != null and is_instance_valid(_server):
 		_server.handle_rpc_rewind_to_turn_start(request)
+
+func handle_rpc_request_full_archive_export(request: Dictionary) -> void:
+	_ensure_modules()
+	if _server != null and is_instance_valid(_server) and _server.has_method("handle_rpc_request_full_archive_export"):
+		_server.handle_rpc_request_full_archive_export(request)
 
 func broadcast_command_applied(room, cmd) -> void:
 	_ensure_modules()

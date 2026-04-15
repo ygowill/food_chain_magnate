@@ -7,13 +7,29 @@ const CommandClass = preload("res://core/types/command.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
+const NetClientOnlineResumeSupportClass = preload("res://autoload/net_client_online_resume_support.gd")
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const ResyncSnapshotTransferClass = preload("res://core/utils/resync_snapshot_transfer.gd")
 
 var _net = null
+var _online_resume_support = NetClientOnlineResumeSupportClass.new()
 
 func setup(net_client) -> void:
 	_net = net_client
+	_configure_online_resume_support()
+
+func _configure_online_resume_support() -> void:
+	if _online_resume_support == null or not is_instance_valid(_online_resume_support):
+		_online_resume_support = NetClientOnlineResumeSupportClass.new()
+	_online_resume_support.setup(_net, {
+		"load_archive_for_online_client": Callable(self, "_load_archive_for_online_client"),
+		"mark_online_client_engine_ready": Callable(self, "_mark_online_client_engine_ready"),
+		"sync_online_resume_progress": Callable(self, "_sync_online_resume_progress"),
+		"get_online_client_engine_room_code": Callable(self, "_get_online_client_engine_room_code"),
+		"safe_text": Callable(self, "_safe_text"),
+		"short_hash": Callable(self, "_short_hash"),
+		"net_has_signal": Callable(self, "_net_has_signal"),
+	})
 
 func on_connected_to_server() -> void:
 	if _net == null or not is_instance_valid(_net):
@@ -64,8 +80,7 @@ func send_client_hello() -> void:
 	if NetContext.connect_token != "":
 		payload["connect_token"] = NetContext.connect_token
 	if Globals != null and Globals.current_game_engine != null:
-		if NetContext != null and NetContext.has_method("sync_online_resume_progress_from_engine"):
-			NetContext.sync_online_resume_progress_from_engine(Globals.current_game_engine)
+		_sync_online_resume_progress(Globals.current_game_engine)
 	if NetContext != null and NetContext.has_method("build_online_resume_cursor"):
 		var force_snapshot := false
 		if _net != null and is_instance_valid(_net):
@@ -103,6 +118,7 @@ func handle_rpc_room_state(payload: Dictionary) -> void:
 		if _net.has_method("clear_pending_online_resync_state"):
 			_net.clear_pending_online_resync_state()
 		_set_online_client_engine_room_code("")
+		_clear_online_resume_dual_engine_state()
 	NetContext.room_state = payload.duplicate(true)
 	var self_seat_val = NetContext.room_state.get("self_seat_index", null)
 	if self_seat_val is int or self_seat_val is float:
@@ -111,6 +127,7 @@ func handle_rpc_room_state(payload: Dictionary) -> void:
 	NetContext.local_role = self_role
 	if str(NetContext.room_state.get("status", "")).strip_edges() != "InGame":
 		_set_online_client_engine_room_code("")
+		_clear_online_resume_dual_engine_state()
 	_sync_online_resume_state_from_room_state(NetContext.room_state)
 	if Globals != null and Globals.has_method("apply_online_room_state"):
 		Globals.apply_online_room_state(NetContext.room_state)
@@ -170,17 +187,30 @@ func handle_rpc_game_started(payload: Dictionary) -> void:
 	)
 
 	var room_code := _get_expected_online_room_code()
+	var resume_fast_start_bundle := _extract_resume_fast_start_bundle(payload)
 	var existing_engine: GameEngine = _try_reuse_existing_online_client_engine(room_code, local_pid)
 	if existing_engine != null:
+		if not resume_fast_start_bundle.is_empty():
+			_bind_resume_fast_start_session(existing_engine, room_code, local_pid, resume_fast_start_bundle)
+			_schedule_full_replay_engine_bootstrap(room_code)
+			_emit_resume_fast_start_ready()
 		_net.game_started.emit(payload.duplicate(true))
 		_try_apply_pending_resync_delta()
 		return
 
-	var init_r: Result = _initialize_online_client_engine_from_config(config, room_code, local_pid)
+	var init_r: Result = Result.failure("missing bootstrap")
+	if not resume_fast_start_bundle.is_empty():
+		init_r = _bootstrap_runtime_engine_from_fast_start_bundle(resume_fast_start_bundle, room_code, local_pid)
+	else:
+		_clear_online_resume_dual_engine_state()
+		init_r = _initialize_online_client_engine_from_config(config, room_code, local_pid)
 	if not init_r.ok:
 		return
 
 	_net.game_started.emit(payload.duplicate(true))
+	if not resume_fast_start_bundle.is_empty():
+		_emit_resume_fast_start_ready()
+		_schedule_full_replay_engine_bootstrap(room_code)
 	_try_apply_pending_resync_delta()
 
 func handle_rpc_command_applied(payload: Dictionary) -> void:
@@ -190,7 +220,7 @@ func handle_rpc_command_applied(payload: Dictionary) -> void:
 	if not (cmd_dict_val is Dictionary):
 		GameLog.warn("NetClient", "RX CommandApplied ignored: cmd type invalid")
 		return
-	var cmd_dict: Dictionary = Dictionary(cmd_dict_val)
+	var cmd_dict: Dictionary = _translate_live_command_dict_to_runtime(Dictionary(cmd_dict_val))
 	var state_hash := str(payload.get("state_hash", ""))
 	GameLog.debug(
 		"NetClient",
@@ -211,6 +241,7 @@ func handle_rpc_resync_archive(payload: Dictionary) -> void:
 	if not (archive_val is Dictionary):
 		GameLog.warn("NetClient", "RX ResyncArchive ignored: archive type invalid")
 		return
+	_invalidate_full_replay_engine("live_resync_archive")
 	_set_pending_resync_archive(Dictionary(archive_val))
 	var pending_archive := _get_pending_resync_archive()
 	_try_bootstrap_online_client_engine_from_archive(pending_archive)
@@ -225,7 +256,8 @@ func handle_rpc_rewind_to_turn_start_meta(payload: Dictionary) -> void:
 		return
 	if not _matches_payload_room_code(payload, "RewindMeta"):
 		return
-	var rewind_meta := Dictionary(payload).duplicate(true)
+	_invalidate_full_replay_engine("rewind_to_turn_start_meta")
+	var rewind_meta := _translate_rewind_meta_to_runtime(Dictionary(payload).duplicate(true))
 	_set_pending_rewind_to_turn_start_meta(rewind_meta)
 	var pending_meta := _get_pending_rewind_to_turn_start_meta()
 	GameLog.warn(
@@ -248,6 +280,7 @@ func handle_rpc_resync_snapshot_manifest(payload: Dictionary) -> void:
 	var manifest: Dictionary = Dictionary(payload).duplicate(true)
 	if not _matches_payload_room_code(manifest, "ResyncSnapshot manifest"):
 		return
+	_invalidate_full_replay_engine("live_resync_snapshot")
 	var transfer_id := str(manifest.get("transfer_id", "")).strip_edges()
 	var chunk_count := int(manifest.get("chunk_count", 0))
 	if transfer_id.is_empty() or chunk_count <= 0:
@@ -319,9 +352,13 @@ func handle_rpc_resync_snapshot_chunk(payload: Dictionary) -> void:
 func handle_rpc_resync_delta(payload: Dictionary) -> void:
 	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
 		return
-	var delta_payload: Dictionary = Dictionary(payload).duplicate(true)
+	var original_payload: Dictionary = Dictionary(payload).duplicate(true)
+	var delta_payload: Dictionary = _translate_resync_delta_to_runtime(original_payload)
 	if not _matches_payload_room_code(delta_payload, "ResyncDelta"):
 		return
+	var original_entries_val = original_payload.get("entries", null)
+	if original_entries_val is Array:
+		delta_payload["_full_history_entries"] = Array(original_entries_val).duplicate(true)
 	if _get_active_resume_engine() == null:
 		_set_pending_resync_delta(delta_payload)
 		GameLog.warn(
@@ -347,6 +384,35 @@ func handle_rpc_request_rejected(payload: Dictionary) -> void:
 	)
 	_net.request_rejected.emit(request_id, code, message)
 
+func handle_rpc_full_archive_export_ready(payload: Dictionary) -> void:
+	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return
+	var archive_val = payload.get("archive", null)
+	if not (archive_val is Dictionary):
+		GameLog.warn("NetClient", "RX FullArchiveExport ignored: archive type invalid")
+		return
+	if not _matches_payload_room_code(payload, "FullArchiveExport"):
+		return
+	var archive: Dictionary = Dictionary(archive_val).duplicate(true)
+	GameLog.info(
+		"NetClient",
+		"RX FullArchiveExport request_id=%s room=%s commands=%d final_hash=%s"
+			% [
+				_safe_text(str(payload.get("request_id", ""))),
+				_safe_text(str(payload.get("room_code", "")).to_upper()),
+				Array(archive.get("commands", [])).size(),
+				_short_hash(str(archive.get("final_hash", payload.get("final_hash", ""))))
+			]
+	)
+	if _net != null and is_instance_valid(_net) and _net_has_signal("full_archive_export_ready"):
+		_net.emit_signal("full_archive_export_ready", {
+			"request_id": str(payload.get("request_id", "")),
+			"room_code": str(payload.get("room_code", "")).strip_edges().to_upper(),
+			"archive": archive,
+			"final_hash": str(payload.get("final_hash", archive.get("final_hash", ""))).strip_edges(),
+			"history_size": int(payload.get("history_size", Array(archive.get("commands", [])).size())),
+		})
+
 func _should_preserve_online_context_on_disconnect() -> bool:
 	if _net == null or not is_instance_valid(_net):
 		return false
@@ -361,6 +427,8 @@ func _sync_online_resume_state_from_room_state(room_state: Dictionary) -> void:
 		return
 	var room_code := str(room_state.get("room_code", "")).strip_edges().to_upper()
 	if room_code.is_empty():
+		if _should_preserve_terminal_resume_record():
+			return
 		NetContext.clear_online_resume_context()
 		return
 	if not NetContext.has_method("has_online_resume_context"):
@@ -373,6 +441,17 @@ func _sync_online_resume_state_from_room_state(room_state: Dictionary) -> void:
 		NetContext.sync_online_resume_context_from_room_state(room_state)
 	elif NetContext.has_method("mark_online_resume_in_game"):
 		NetContext.mark_online_resume_in_game(str(room_state.get("status", "")).strip_edges() == "InGame")
+
+func _should_preserve_terminal_resume_record() -> bool:
+	if NetContext == null:
+		return false
+	if not NetContext.has_method("has_online_resume_record"):
+		return false
+	if not NetContext.has_online_resume_record():
+		return false
+	if not NetContext.has_method("is_online_resume_allowed"):
+		return false
+	return not bool(NetContext.is_online_resume_allowed())
 
 func _matches_payload_room_code(payload: Dictionary, channel_name: String) -> bool:
 	var payload_room_code := str(payload.get("room_code", "")).strip_edges().to_upper()
@@ -541,7 +620,7 @@ func _try_bootstrap_online_client_engine_from_archive(archive: Dictionary) -> vo
 	if existing_engine != null:
 		return
 	var engine = GameEngineClass.new()
-	var load_r: Result = engine.load_from_archive(archive)
+	var load_r: Result = _load_archive_for_online_client(engine, archive)
 	if not load_r.ok:
 		GameLog.error("NetClient", "Online client archive bootstrap failed: %s" % load_r.error)
 		return
@@ -556,15 +635,203 @@ func _mark_online_client_engine_ready(engine: GameEngine, room_code: String, loc
 	if engine == null or engine.get_state() == null:
 		return
 	OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
+	_get_online_resume_session_state().bind_runtime(engine, room_code, local_pid)
 	if local_pid >= -1:
 		NetContext.local_player_id = int(local_pid)
 	Globals.set_current_game_engine(engine)
 	Globals.sync_runtime_config_from_engine(engine)
-	if NetContext != null and NetContext.has_method("sync_online_resume_progress_from_engine"):
-		NetContext.sync_online_resume_progress_from_engine(engine)
+	_sync_online_resume_progress(engine)
 	if Globals != null and Globals.has_method("apply_online_room_state"):
 		Globals.apply_online_room_state(NetContext.room_state if NetContext != null else {})
 	_set_online_client_engine_room_code(room_code)
+
+func clear_online_resume_dual_engine_state() -> void:
+	_clear_online_resume_dual_engine_state()
+
+func get_online_resume_session_snapshot() -> Dictionary:
+	return _get_online_resume_session_state().snapshot()
+
+func get_online_resume_full_replay_engine():
+	return _online_resume_support.get_full_replay_engine()
+
+func load_archive_for_online_client(engine, archive: Dictionary) -> Result:
+	if not (engine is GameEngine):
+		return Result.failure("load archive failed: engine 为空")
+	return _load_archive_for_online_client(engine, archive)
+
+func record_online_resume_runtime_command_applied(cmd_dict: Dictionary, state_hash: String = "") -> void:
+	var global_cmd_dict: Dictionary = _translate_runtime_command_dict_to_global(cmd_dict)
+	if global_cmd_dict.is_empty():
+		return
+	_online_resume_support.record_online_resume_full_history_command(
+		global_cmd_dict,
+		state_hash,
+		"runtime_command_applied"
+	)
+
+func mark_runtime_engine_as_full_history(engine) -> void:
+	_online_resume_support.mark_runtime_engine_as_full_history(engine)
+
+func map_online_resume_progress_from_engine(engine, checkpoint_id: String = "") -> Dictionary:
+	return _online_resume_support.map_online_resume_progress_from_engine(engine, checkpoint_id)
+
+func _get_online_resume_session_state():
+	return _online_resume_support.get_session_state()
+
+func _extract_resume_fast_start_bundle(payload: Dictionary) -> Dictionary:
+	return _online_resume_support.extract_resume_fast_start_bundle(payload)
+
+func _bootstrap_runtime_engine_from_fast_start_bundle(
+	bundle: Dictionary,
+	room_code: String,
+	local_pid: int
+) -> Result:
+	return _online_resume_support.bootstrap_runtime_engine_from_fast_start_bundle(bundle, room_code, local_pid)
+
+func _bind_resume_fast_start_session(
+	runtime_engine: GameEngine,
+	room_code: String,
+	local_pid: int,
+	bundle: Dictionary
+) -> void:
+	_online_resume_support.bind_resume_fast_start_session(runtime_engine, room_code, local_pid, bundle)
+
+func _schedule_full_replay_engine_bootstrap(room_code: String, preserve_live_tail: bool = false) -> void:
+	_online_resume_support.schedule_full_replay_engine_bootstrap(room_code, preserve_live_tail)
+
+func _deferred_build_full_replay_engine(room_code: String, generation: int) -> void:
+	_online_resume_support._deferred_build_full_replay_engine(room_code, generation)
+
+func _invalidate_full_replay_engine(reason: String) -> void:
+	_online_resume_support.invalidate_full_replay_engine(reason)
+
+func _clear_online_resume_dual_engine_state() -> void:
+	_online_resume_support.clear_online_resume_dual_engine_state()
+
+func _emit_resume_fast_start_ready() -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	if not _net_has_signal("resume_fast_start_ready"):
+		return
+	_net.emit_signal("resume_fast_start_ready", _get_online_resume_session_state().snapshot())
+
+func _load_archive_for_online_client(engine: GameEngine, archive: Dictionary) -> Result:
+	if engine == null:
+		return Result.failure("load archive failed: engine 为空")
+	if NetContext == null:
+		return engine.load_from_archive(archive)
+
+	var restore_mode := false
+	var previous_mode = NetContext.mode
+	if int(previous_mode) == int(NetContext.Mode.ONLINE_CLIENT):
+		restore_mode = true
+		NetContext.mode = NetContext.Mode.HOTSEAT
+
+	var load_r: Result = engine.load_from_archive(archive)
+
+	if restore_mode:
+		NetContext.mode = previous_mode
+	return load_r
+
+func _sync_online_resume_progress(engine, checkpoint_id: String = "") -> void:
+	if NetContext == null:
+		return
+	if engine == null:
+		return
+	var state = engine.get_state() if engine.has_method("get_state") else null
+	if state == null or not state.has_method("compute_hash"):
+		return
+	var mapped: Dictionary = Dictionary(map_online_resume_progress_from_engine(engine, checkpoint_id)).duplicate(true)
+	if not mapped.is_empty() and NetContext.has_method("set_online_resume_progress"):
+		NetContext.set_online_resume_progress(
+			int(mapped.get("last_applied_sequence", 0)),
+			str(mapped.get("last_state_hash", state.compute_hash())),
+			str(mapped.get("checkpoint_id", checkpoint_id))
+		)
+		return
+	if NetContext.has_method("sync_online_resume_progress_from_engine"):
+		NetContext.sync_online_resume_progress_from_engine(engine, checkpoint_id)
+
+func _get_runtime_global_command_start_index() -> int:
+	var session = _get_online_resume_session_state()
+	if session.runtime_engine == null:
+		return -1
+	if Globals == null or Globals.current_game_engine != session.runtime_engine:
+		return -1
+	return int(session.runtime_anchor.get("global_command_start_index", -1))
+
+func _translate_runtime_command_dict_to_global(cmd_dict: Dictionary) -> Dictionary:
+	var translated: Dictionary = Dictionary(cmd_dict).duplicate(true)
+	var global_start := _get_runtime_global_command_start_index()
+	if global_start < 0:
+		return translated
+	var index_val = translated.get("index", null)
+	if index_val is int or index_val is float:
+		translated["index"] = int(index_val) + global_start
+	return translated
+
+func _translate_live_command_dict_to_runtime(cmd_dict: Dictionary) -> Dictionary:
+	var translated: Dictionary = Dictionary(cmd_dict).duplicate(true)
+	var global_start := _get_runtime_global_command_start_index()
+	if global_start < 0:
+		return translated
+	var index_val = translated.get("index", null)
+	if index_val is int or index_val is float:
+		translated["index"] = int(index_val) - global_start
+	return translated
+
+func _translate_rewind_meta_to_runtime(payload: Dictionary) -> Dictionary:
+	var translated: Dictionary = Dictionary(payload).duplicate(true)
+	var global_start := _get_runtime_global_command_start_index()
+	if global_start < 0:
+		return translated
+	if translated.get("target_index", null) is int or translated.get("target_index", null) is float:
+		translated["target_index"] = int(translated.get("target_index", -1)) - global_start
+	if translated.get("before_index", null) is int or translated.get("before_index", null) is float:
+		translated["before_index"] = int(translated.get("before_index", -1)) - global_start
+	if translated.get("history_size", null) is int or translated.get("history_size", null) is float:
+		translated["history_size"] = int(translated.get("history_size", 0)) - global_start
+	return translated
+
+func _translate_resync_delta_to_runtime(payload: Dictionary) -> Dictionary:
+	var translated: Dictionary = Dictionary(payload).duplicate(true)
+	var global_start := _get_runtime_global_command_start_index()
+	if global_start < 0:
+		return translated
+	if translated.get("from_sequence", null) is int or translated.get("from_sequence", null) is float:
+		translated["from_sequence"] = int(translated.get("from_sequence", 0)) - global_start
+	if translated.get("to_sequence", null) is int or translated.get("to_sequence", null) is float:
+		translated["to_sequence"] = int(translated.get("to_sequence", 0)) - global_start
+	if translated.get("final_sequence", null) is int or translated.get("final_sequence", null) is float:
+		translated["final_sequence"] = int(translated.get("final_sequence", 0)) - global_start
+	var entries_val = translated.get("entries", null)
+	if entries_val is Array:
+		var mapped_entries: Array[Dictionary] = []
+		for item_val in Array(entries_val):
+			if not (item_val is Dictionary):
+				mapped_entries.append({})
+				continue
+			var entry: Dictionary = Dictionary(item_val).duplicate(true)
+			if entry.get("sequence", null) is int or entry.get("sequence", null) is float:
+				entry["sequence"] = int(entry.get("sequence", 0)) - global_start
+			var cmd_val = entry.get("cmd", null)
+			if cmd_val is Dictionary:
+				entry["cmd"] = _translate_live_command_dict_to_runtime(Dictionary(cmd_val))
+			mapped_entries.append(entry)
+		translated["entries"] = mapped_entries
+	return translated
+
+func _record_online_resume_full_history_entries(entries: Array, origin: String) -> void:
+	_online_resume_support.record_online_resume_full_history_entries(entries, origin)
+
+func _record_online_resume_full_history_command(cmd_dict: Dictionary, state_hash: String, origin: String) -> void:
+	_online_resume_support.record_online_resume_full_history_command(cmd_dict, state_hash, origin)
+
+func _replay_full_replay_live_tail(engine: GameEngine, generation: int) -> Result:
+	return _online_resume_support.replay_full_replay_live_tail(engine, generation)
+
+func _apply_full_history_command_to_engine(engine: GameEngine, cmd_dict: Dictionary, expected_state_hash: String) -> Result:
+	return _online_resume_support.apply_full_history_command_to_engine(engine, cmd_dict, expected_state_hash)
 
 func _get_online_client_engine_room_code() -> String:
 	if _net == null or not is_instance_valid(_net) or not (_net is Object):
@@ -589,6 +856,11 @@ func _net_has_property(property_name: String) -> bool:
 		if str(Dictionary(item).get("name", "")) == property_name:
 			return true
 	return false
+
+func _net_has_signal(signal_name: String) -> bool:
+	if _net == null or not is_instance_valid(_net) or not (_net is Object):
+		return false
+	return (_net as Object).has_signal(signal_name)
 
 func _get_pending_resync_archive() -> Dictionary:
 	if _net == null or not is_instance_valid(_net) or not (_net is Object):
@@ -667,8 +939,7 @@ func _apply_resync_delta(payload: Dictionary) -> void:
 
 	if current_sequence != from_sequence:
 		if current_sequence == final_sequence and not final_hash.is_empty() and current_hash == final_hash:
-			if NetContext != null and NetContext.has_method("sync_online_resume_progress_from_engine"):
-				NetContext.sync_online_resume_progress_from_engine(engine, checkpoint_id)
+			_sync_online_resume_progress(engine, checkpoint_id)
 			_net.resync_delta_applied.emit({
 				"from_sequence": from_sequence,
 				"final_sequence": final_sequence,
@@ -739,8 +1010,10 @@ func _apply_resync_delta(payload: Dictionary) -> void:
 		)
 		return
 
-	if NetContext != null and NetContext.has_method("sync_online_resume_progress_from_engine"):
-		NetContext.sync_online_resume_progress_from_engine(engine, checkpoint_id)
+	_sync_online_resume_progress(engine, checkpoint_id)
+	var full_history_entries_val = payload.get("_full_history_entries", null)
+	if full_history_entries_val is Array:
+		_record_online_resume_full_history_entries(Array(full_history_entries_val), "resync_delta")
 	GameLog.warn(
 		"NetClient",
 		"RX ResyncDelta applied from=%d to=%d entries=%d final_hash=%s"

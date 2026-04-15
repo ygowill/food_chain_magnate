@@ -143,6 +143,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.NetContextOnlineResumePersistenceTestClass.run(),
 		},
 		{
+			"name": "OnlineResumeTerminalRecordTest",
+			"fn": func() -> Result: return TestRefs.OnlineResumeTerminalRecordTestClass.run(),
+		},
+		{
 			"name": "NetClientConnectPreserveContextTest",
 			"fn": func() -> Result: return TestRefs.NetClientConnectPreserveContextTestClass.run(),
 		},
@@ -241,6 +245,26 @@ static func build_tests(host) -> Array[Dictionary]:
 		{
 			"name": "OnlineResumeStartValidationTest",
 			"fn": func() -> Result: return TestRefs.OnlineResumeStartValidationTestClass.run(),
+		},
+		{
+			"name": "OnlineResumeFastStartBundleTest",
+			"fn": func() -> Result: return TestRefs.OnlineResumeFastStartBundleTestClass.run(),
+		},
+		{
+			"name": "OnlineResumeClientDualEngineBootstrapTest",
+			"fn": func() -> Result: return await TestRefs.OnlineResumeClientDualEngineBootstrapTestClass.run(),
+		},
+		{
+			"name": "OnlineResumeRuntimeAnchorLiveSyncTest",
+			"fn": func() -> Result: return TestRefs.OnlineResumeRuntimeAnchorLiveSyncTestClass.run(),
+		},
+		{
+			"name": "OnlineResumeFullHistoryTailAppendTest",
+			"fn": func() -> Result: return await TestRefs.OnlineResumeFullHistoryTailAppendTestClass.run(),
+		},
+		{
+			"name": "OnlineResumeFullArchiveExportTest",
+			"fn": func() -> Result: return TestRefs.OnlineResumeFullArchiveExportTestClass.run(),
 		},
 		{
 			"name": "OnlineClientDisconnectPreserveContextTest",
@@ -977,6 +1001,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			{
 				"name": "LogRestoreAfterLoadTest",
 				"fn": func() -> Result: return TestRefs.LogRestoreAfterLoadTestClass.run(),
+			},
+			{
+				"name": "GameLogPanelReplayToggleAvailabilityTest",
+				"fn": func() -> Result: return await TestRefs.GameLogPanelReplayToggleAvailabilityTestClass.run(),
 			},
 			{
 				"name": "CreateRoomResumeLogHistoryBuilderTest",

@@ -86,6 +86,9 @@ var _timeline_cursor_index: int = -1
 
 var _details_controller = null
 var _blank_display_warned: bool = false
+var _replay_toggle_available: bool = true
+var _replay_toggle_inactive_text: String = "进入回放"
+var _replay_toggle_disabled_reason: String = ""
 
 func _ready() -> void:
 	if auto_scroll_check != null:
@@ -126,7 +129,7 @@ func _ready() -> void:
 
 	UiStylesClass.apply_button_secondary(close_btn)
 	UiStylesClass.apply_button_secondary(replay_toggle_button)
-	_sync_replay_toggle_button_text()
+	_sync_replay_toggle_button_state()
 
 	if not visibility_changed.is_connected(_on_visibility_changed):
 		visibility_changed.connect(_on_visibility_changed)
@@ -738,19 +741,41 @@ func set_replay_toggle_active(active: bool) -> void:
 	var v := bool(active)
 	if replay_toggle_button.button_pressed != v:
 		replay_toggle_button.button_pressed = v
-	_sync_replay_toggle_button_text()
+	_sync_replay_toggle_button_state()
+
+func set_replay_toggle_availability(
+	available: bool,
+	inactive_text: String = "进入回放",
+	disabled_reason: String = ""
+) -> void:
+	_replay_toggle_available = bool(available)
+	var next_inactive_text := str(inactive_text).strip_edges()
+	if next_inactive_text.is_empty():
+		next_inactive_text = "进入回放"
+	_replay_toggle_inactive_text = next_inactive_text
+	_replay_toggle_disabled_reason = str(disabled_reason).strip_edges()
+	_sync_replay_toggle_button_state()
 
 func _on_replay_toggle_toggled(toggled: bool) -> void:
-	_sync_replay_toggle_button_text()
+	_sync_replay_toggle_button_state()
 	replay_toggle_changed.emit(bool(toggled))
 
 func _on_close_pressed() -> void:
 	close_requested.emit()
 
-func _sync_replay_toggle_button_text() -> void:
+func _sync_replay_toggle_button_state() -> void:
 	if replay_toggle_button == null:
 		return
-	replay_toggle_button.text = "退出回放" if replay_toggle_button.button_pressed else "进入回放"
+	var pressed := bool(replay_toggle_button.button_pressed)
+	var should_disable := (not _replay_toggle_available) and (not pressed)
+	replay_toggle_button.disabled = should_disable
+	if should_disable and not _replay_toggle_disabled_reason.is_empty():
+		replay_toggle_button.tooltip_text = "不可用：%s" % _replay_toggle_disabled_reason
+	else:
+		replay_toggle_button.tooltip_text = ""
+	replay_toggle_button.text = "退出回放" if pressed else (
+		_replay_toggle_inactive_text if not _replay_toggle_available else "进入回放"
+	)
 
 func _on_entry_clicked(entry_id: int) -> void:
 	log_entry_clicked.emit(entry_id)

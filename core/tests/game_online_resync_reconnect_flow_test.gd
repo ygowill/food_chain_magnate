@@ -5,6 +5,8 @@ extends RefCounted
 const ControllerClass = preload("res://ui/scenes/game/controllers/online_resync_controller.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
+const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
+const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 
 static func run() -> Result:
 	if NetContext == null:
@@ -58,6 +60,86 @@ static func run() -> Result:
 			prev_display_name,
 			"初始化测试 engine 失败: %s" % init_r.error
 		)
+	var setup_r: Result = TestPhaseUtilsClass.complete_setup(engine)
+	if not setup_r.ok:
+		host.queue_free()
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_session_id,
+			prev_user_id,
+			prev_is_guest,
+			prev_display_name,
+			"complete_setup 失败: %s" % setup_r.error
+		)
+	var restructuring_r: Result = TestPhaseUtilsClass.complete_restructuring(engine)
+	if not restructuring_r.ok:
+		host.queue_free()
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_session_id,
+			prev_user_id,
+			prev_is_guest,
+			prev_display_name,
+			"complete_restructuring 失败: %s" % restructuring_r.error
+		)
+	var oob_r: Result = TestPhaseUtilsClass.complete_order_of_business(engine)
+	if not oob_r.ok:
+		host.queue_free()
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_session_id,
+			prev_user_id,
+			prev_is_guest,
+			prev_display_name,
+			"complete_order_of_business 失败: %s" % oob_r.error
+		)
+	var working_r: Result = TestPhaseUtilsClass.complete_working_phase(engine)
+	if not working_r.ok:
+		host.queue_free()
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_session_id,
+			prev_user_id,
+			prev_is_guest,
+			prev_display_name,
+			"complete_working_phase 失败: %s" % working_r.error
+		)
 	var archive_r = engine.create_archive()
 	if not archive_r.ok:
 		host.queue_free()
@@ -94,6 +176,27 @@ static func run() -> Result:
 	PlatformSession.display_name = "游客#1234"
 	NetContext.set_online_resume_context("ROOM03", "player", "https://platform.example.test")
 	NetContext.mark_online_resume_in_game(true)
+	var expected_engine_r: Result = _build_expected_resume_engine(Dictionary(archive_r.value).duplicate(true))
+	if not expected_engine_r.ok:
+		host.queue_free()
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_session_id,
+			prev_user_id,
+			prev_is_guest,
+			prev_display_name,
+			"expected resume engine 构建失败: %s" % expected_engine_r.error
+		)
+	var expected_engine = expected_engine_r.value
 
 	var harness := _Harness.new(host, engine, Dictionary(archive_r.value).duplicate(true))
 	var controller = ControllerClass.new(
@@ -121,6 +224,68 @@ static func run() -> Result:
 	controller._on_online_resync_archive_received(Dictionary(archive_r.value).duplicate(true))
 	await tree.process_frame
 	await tree.process_frame
+	if engine.get_state() == null or expected_engine == null or expected_engine.get_state() == null:
+		controller.dispose()
+		host.queue_free()
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_session_id,
+			prev_user_id,
+			prev_is_guest,
+			prev_display_name,
+			"resync 后应持有有效的 runtime/expected engine"
+		)
+	if str(engine.get_state().phase) != str(expected_engine.get_state().phase):
+		controller.dispose()
+		host.queue_free()
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_session_id,
+			prev_user_id,
+			prev_is_guest,
+			prev_display_name,
+			"resync archive 应保持 HOTSEAT 读档语义的 phase: %s vs %s"
+				% [str(engine.get_state().phase), str(expected_engine.get_state().phase)]
+		)
+	if str(engine.get_state().compute_hash()) != str(expected_engine.get_state().compute_hash()):
+		controller.dispose()
+		host.queue_free()
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_session_id,
+			prev_user_id,
+			prev_is_guest,
+			prev_display_name,
+			"resync archive hash 应与 HOTSEAT 读档 + prepare 一致: %s vs %s"
+				% [str(engine.get_state().compute_hash()), str(expected_engine.get_state().compute_hash())]
+		)
 
 	if harness.resume_calls != 1:
 		controller.dispose()
@@ -267,6 +432,8 @@ static func _restore(
 	NetContext.room_list = prev_room_list.duplicate(true)
 	NetContext.player_profile = prev_player_profile.duplicate(true)
 	NetContext.online_resume_state = prev_resume_state.duplicate(true)
+	if NetContext.has_method("save_online_resume_state_to_disk"):
+		NetContext.save_online_resume_state_to_disk()
 	Globals.current_game_engine = prev_engine
 	Globals.is_game_active = prev_is_game_active
 	PlatformSession.session_id = prev_session_id
@@ -308,6 +475,19 @@ static func _restore_and_fail(
 		prev_display_name
 	)
 	return Result.failure(message)
+
+static func _build_expected_resume_engine(archive: Dictionary) -> Result:
+	var engine = GameEngineClass.new()
+	var prev_mode = NetContext.mode
+	NetContext.mode = NetContext.Mode.HOTSEAT
+	var load_r: Result = engine.load_from_archive(archive)
+	NetContext.mode = prev_mode
+	if not load_r.ok:
+		return Result.failure("load_from_archive failed: %s" % load_r.error)
+	var prepare_r: Result = OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
+	if not prepare_r.ok:
+		return Result.failure("prepare_engine_for_online_resume failed: %s" % prepare_r.error)
+	return Result.success(engine)
 
 class _Harness:
 	extends RefCounted

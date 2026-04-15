@@ -25,6 +25,7 @@ class _ResumeWaitState:
 	var rejection_message: String = ""
 	var room_state_ready: bool = false
 	var game_started_received: bool = false
+	var fast_start_ready: bool = false
 	var archive_received: bool = false
 	var delta_applied: bool = false
 	var delta_failed: bool = false
@@ -339,7 +340,7 @@ func _wait_for_resume_ready(
 
 	while Time.get_ticks_msec() <= deadline:
 		if mode == "startup_game":
-			if wait_state.game_started_received and (wait_state.archive_received or wait_state.delta_applied):
+			if wait_state.game_started_received and (wait_state.fast_start_ready or wait_state.archive_received or wait_state.delta_applied):
 				_disconnect_resume_wait_signals(callbacks)
 				return {"ok": true}
 		elif wait_state.room_state_ready:
@@ -370,7 +371,14 @@ func _wait_for_resume_ready(
 				"terminal": false,
 			}
 
-		await host_node.get_tree().process_frame
+		var advanced := await _wait_process_frame(host_node)
+		if not advanced:
+			_disconnect_resume_wait_signals(callbacks)
+			return {
+				"ok": false,
+				"message": "Resume wait tree missing",
+				"terminal": false,
+			}
 
 	_disconnect_resume_wait_signals(callbacks)
 	return {
@@ -386,6 +394,7 @@ func _connect_resume_wait_signals(wait_state: _ResumeWaitState, on_game_started:
 		"request_rejected": Callable(self, "_on_wait_request_rejected").bind(wait_state),
 		"room_state_updated": Callable(self, "_on_wait_room_state_updated").bind(wait_state),
 		"game_started": Callable(self, "_on_wait_game_started").bind(wait_state, on_game_started, on_status_changed),
+		"resume_fast_start_ready": Callable(self, "_on_wait_resume_fast_start_ready").bind(wait_state, on_status_changed),
 		"resync_archive_received": Callable(self, "_on_wait_resync_archive_received").bind(wait_state, on_status_changed),
 		"resync_delta_applied": Callable(self, "_on_wait_resync_delta_applied").bind(wait_state, on_status_changed),
 		"resync_delta_failed": Callable(self, "_on_wait_resync_delta_failed").bind(wait_state),
@@ -400,6 +409,8 @@ func _connect_resume_wait_signals(wait_state: _ResumeWaitState, on_game_started:
 		NetClient.room_state_updated.connect(callbacks["room_state_updated"])
 	if not NetClient.game_started.is_connected(callbacks["game_started"]):
 		NetClient.game_started.connect(callbacks["game_started"])
+	if callbacks.has("resume_fast_start_ready") and NetClient.has_signal("resume_fast_start_ready") and not NetClient.resume_fast_start_ready.is_connected(callbacks["resume_fast_start_ready"]):
+		NetClient.resume_fast_start_ready.connect(callbacks["resume_fast_start_ready"])
 	if not NetClient.resync_archive_received.is_connected(callbacks["resync_archive_received"]):
 		NetClient.resync_archive_received.connect(callbacks["resync_archive_received"])
 	if not NetClient.resync_delta_applied.is_connected(callbacks["resync_delta_applied"]):
@@ -421,6 +432,8 @@ func _disconnect_resume_wait_signals(callbacks: Dictionary) -> void:
 		NetClient.room_state_updated.disconnect(callbacks["room_state_updated"])
 	if callbacks.has("game_started") and NetClient.game_started.is_connected(callbacks["game_started"]):
 		NetClient.game_started.disconnect(callbacks["game_started"])
+	if callbacks.has("resume_fast_start_ready") and NetClient.has_signal("resume_fast_start_ready") and NetClient.resume_fast_start_ready.is_connected(callbacks["resume_fast_start_ready"]):
+		NetClient.resume_fast_start_ready.disconnect(callbacks["resume_fast_start_ready"])
 	if callbacks.has("resync_archive_received") and NetClient.resync_archive_received.is_connected(callbacks["resync_archive_received"]):
 		NetClient.resync_archive_received.disconnect(callbacks["resync_archive_received"])
 	if callbacks.has("resync_delta_applied") and NetClient.resync_delta_applied.is_connected(callbacks["resync_delta_applied"]):
@@ -472,6 +485,16 @@ func _on_wait_game_started(
 	_emit_status(on_status_changed, "已连接，正在同步对局...")
 	if on_game_started.is_valid():
 		on_game_started.call(payload)
+
+func _on_wait_resume_fast_start_ready(
+	_payload: Dictionary,
+	wait_state: _ResumeWaitState,
+	on_status_changed: Callable
+) -> void:
+	if wait_state == null:
+		return
+	wait_state.fast_start_ready = true
+	_emit_status(on_status_changed, "已完成快启动，正在进入对局...")
 
 func _on_wait_resync_archive_received(
 	_archive: Dictionary,
@@ -582,10 +605,27 @@ func _emit_resume_context_changed() -> void:
 		state = Dictionary(NetContext.online_resume_state).duplicate(true)
 	resume_context_changed.emit(state)
 
+func _resolve_wait_tree(host_node: Node) -> SceneTree:
+	if host_node != null and is_instance_valid(host_node) and host_node.is_inside_tree():
+		var host_tree := host_node.get_tree()
+		if host_tree is SceneTree:
+			return host_tree
+	var loop = Engine.get_main_loop()
+	if loop is SceneTree:
+		return loop
+	return null
+
+func _wait_process_frame(host_node: Node) -> bool:
+	var tree := _resolve_wait_tree(host_node)
+	if tree == null:
+		return false
+	await tree.process_frame
+	return true
+
 func _wait_seconds(host_node: Node, duration_sec: float) -> void:
-	if host_node == null or not is_instance_valid(host_node):
+	if duration_sec <= 0.0:
 		return
-	var tree := host_node.get_tree()
+	var tree := _resolve_wait_tree(host_node)
 	if tree == null:
 		return
 	await tree.create_timer(duration_sec).timeout

@@ -190,6 +190,15 @@ func sync_online_resume_progress_from_engine(engine, checkpoint_id: String = "")
 				sequence = history_size
 			else:
 				sequence = mini(sequence, history_size)
+	if NetClient != null and NetClient.has_method("map_online_resume_progress_from_engine"):
+		var mapped: Dictionary = Dictionary(NetClient.map_online_resume_progress_from_engine(engine, checkpoint_id)).duplicate(true)
+		if not mapped.is_empty():
+			set_online_resume_progress(
+				int(mapped.get("last_applied_sequence", sequence)),
+				str(mapped.get("last_state_hash", state.compute_hash())),
+				str(mapped.get("checkpoint_id", checkpoint_id))
+			)
+			return
 	set_online_resume_progress(sequence, str(state.compute_hash()), checkpoint_id)
 
 func build_online_resume_cursor(force_snapshot: bool = false) -> Dictionary:

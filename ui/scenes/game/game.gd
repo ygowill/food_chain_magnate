@@ -204,7 +204,9 @@ func _ready() -> void:
 		"execute_command": Callable(self, "_execute_command"),
 		"update_ui": Callable(self, "_update_ui"),
 		"get_game_engine": Callable(self, "_get_game_engine"),
+		"get_runtime_game_engine": Callable(self, "_get_runtime_game_engine"),
 		"set_active_game_engine": Callable(self, "_set_active_game_engine"),
+		"set_display_game_engine": Callable(self, "_set_display_game_engine"),
 		"show_confirm": Callable(self, "_show_confirm"),
 		"show_game_log_panel_in_right_panel": Callable(self, "_show_game_log_panel_in_right_panel"),
 		"open_replay_load_dialog": Callable(self, "_open_replay_load_dialog"),
@@ -358,6 +360,8 @@ func _disconnect_runtime_signals() -> void:
 			NetClient.room_state_updated.disconnect(_on_online_match_room_state_updated)
 		if NetClient.request_rejected.is_connected(_on_online_match_request_rejected):
 			NetClient.request_rejected.disconnect(_on_online_match_request_rejected)
+		if NetClient.has_signal("resume_full_history_ready") and NetClient.resume_full_history_ready.is_connected(_on_online_resume_full_history_ready):
+			NetClient.resume_full_history_ready.disconnect(_on_online_resume_full_history_ready)
 
 func _on_root_resized() -> void:
 	_apply_responsive_layout()
@@ -563,7 +567,7 @@ func _ensure_online_resync_controller() -> void:
 	_online_resync_controller = GameOnlineResyncControllerClass.new(
 		self,
 		game_log_panel,
-		Callable(self, "_get_game_engine"),
+		Callable(self, "_get_runtime_game_engine"),
 		Callable(_timeline_controller, "apply_live_log_timeline_from_engine"),
 		Callable(self, "_update_ui"),
 		Callable(self, "_reset_timeline_state_after_online_resync"),
@@ -582,6 +586,8 @@ func _ensure_online_resync_controller() -> void:
 		_ui_sync_controller.set_online_resync_controller(_online_resync_controller)
 	if _command_controller != null and _command_controller.has_method("set_online_resync_controller"):
 		_command_controller.set_online_resync_controller(_online_resync_controller)
+	if NetClient != null and NetClient.has_signal("resume_full_history_ready") and not NetClient.resume_full_history_ready.is_connected(_on_online_resume_full_history_ready):
+		NetClient.resume_full_history_ready.connect(_on_online_resume_full_history_ready)
 
 func _ensure_platform_session_for_startup_resume() -> Result:
 	if PlatformSession == null:
@@ -1073,6 +1079,11 @@ func _show_confirm(title: String, message: String, on_confirm: Callable, on_canc
 func _get_game_engine() -> GameEngine:
 	return game_engine
 
+func _get_runtime_game_engine() -> GameEngine:
+	if Globals != null and Globals.current_game_engine is GameEngine:
+		return Globals.current_game_engine
+	return game_engine
+
 func should_suppress_game_over_modal() -> bool:
 	return _startup_suppress_game_over_modal
 
@@ -1104,6 +1115,27 @@ func _set_active_game_engine(engine: GameEngine) -> void:
 
 	if _panel_controller != null and game_engine != null:
 		_panel_controller.reset_bank_break_tracking(game_engine.get_state())
+
+func _set_display_game_engine(engine: GameEngine) -> void:
+	if engine == null:
+		return
+	var ui_metadata_apply := ModuleUiMetadataBootstrapClass.apply(engine)
+	if not ui_metadata_apply.ok:
+		GameLog.error("Game", "显示引擎 UI metadata 装配失败: %s" % ui_metadata_apply.error)
+
+	game_engine = engine
+
+	if _debug_panel_controller != null and _debug_panel_controller.has_method("set_game_engine"):
+		_debug_panel_controller.call("set_game_engine", game_engine)
+
+	if _panel_controller != null and game_engine != null:
+		_panel_controller.reset_bank_break_tracking(game_engine.get_state())
+
+func _on_online_resume_full_history_ready(_payload: Dictionary) -> void:
+	if _timeline_controller == null or not _timeline_controller.has_method("apply_live_log_timeline_from_engine"):
+		return
+	_timeline_controller.apply_live_log_timeline_from_engine()
+	_update_ui()
 
 func _open_replay_load_dialog() -> void:
 	GameLog.info("Game", "游戏内载入已禁用（仅主菜单可载入）")
