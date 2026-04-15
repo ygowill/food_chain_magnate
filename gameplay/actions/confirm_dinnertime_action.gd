@@ -14,6 +14,8 @@ func _init() -> void:
 	description = "确认晚餐结算结果，推进到下一阶段"
 	requires_actor = false
 	is_mandatory = false
+	ui_hide_if_not_initiatable = true
+	allowed_phases = [DefsClass.PHASE_DINNERTIME]
 
 func _validate_specific(state: GameState, command: Command) -> Result:
 	if str(state.phase) != DefsClass.PHASE_DINNERTIME:

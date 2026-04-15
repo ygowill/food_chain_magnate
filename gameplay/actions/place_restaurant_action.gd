@@ -25,6 +25,7 @@ func _init(piece_registry: Dictionary = {}, placement_validator = null) -> void:
 	description = "在地图上放置餐厅"
 	requires_actor = true
 	is_mandatory = false
+	ui_hide_if_not_initiatable = true
 	allowed_phases = [DefsClass.PHASE_SETUP, DefsClass.PHASE_WORKING]
 	allowed_sub_phases = [DefsClass.SUB_PHASE_PLACE_RESTAURANTS]
 	_piece_registry = piece_registry

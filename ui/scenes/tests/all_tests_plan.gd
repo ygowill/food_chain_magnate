@@ -487,6 +487,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.ActionPanelExecutorMetadataTestClass.run(),
 			},
 			{
+				"name": "ActionPanelHideNonInitiatableSpecialActionsTest",
+				"fn": func() -> Result: return TestRefs.ActionPanelHideNonInitiatableSpecialActionsTestClass.run(),
+			},
+			{
 				"name": "ActionPanelRestaurantDualActionsTest",
 				"fn": func() -> Result: return await TestRefs.ActionPanelRestaurantDualActionsTestClass.run(),
 			},
@@ -982,10 +986,14 @@ static func build_tests(host) -> Array[Dictionary]:
 			"name": "RestaurantPlacementDistanceToolToggleTest",
 			"fn": func() -> Result: return TestRefs.RestaurantPlacementDistanceToolToggleTestClass.run(),
 		},
-			{
-				"name": "ActionPanelGuidedActionPlaceholderTest",
-				"fn": func() -> Result: return await TestRefs.ActionPanelGuidedActionPlaceholderTestClass.run(),
-			},
+		{
+			"name": "ConfirmDinnertimeAvailabilityTest",
+			"fn": func() -> Result: return TestRefs.ConfirmDinnertimeAvailabilityTestClass.run(),
+		},
+		{
+			"name": "ActionPanelGuidedActionPlaceholderTest",
+			"fn": func() -> Result: return await TestRefs.ActionPanelGuidedActionPlaceholderTestClass.run(),
+		},
 			{
 				"name": "ActionPanelNoAvailableActionsHintTest",
 				"fn": func() -> Result: return await TestRefs.ActionPanelNoAvailableActionsHintTestClass.run(),
