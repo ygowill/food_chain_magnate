@@ -18,6 +18,7 @@ func _init() -> void:
 	description = "当触发“首个卖出披萨”里程碑后，本回合前3个买披萨的房屋，卖家需在该房屋所在 tile 内放置一个持续2回合的 radio(pizza)（若有空间）"
 	requires_actor = true
 	is_mandatory = true
+	ui_hide_if_not_initiatable = true
 	allowed_phases = ["Dinnertime"]
 	allowed_sub_phases = []  # 任何子阶段都可以执行
 

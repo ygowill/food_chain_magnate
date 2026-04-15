@@ -9,6 +9,10 @@ const GameStateClass = preload("res://core/state/game_state.gd")
 const PlaceRestaurantActionClass = preload("res://gameplay/actions/place_restaurant_action.gd")
 const MoveRestaurantActionClass = preload("res://gameplay/actions/move_restaurant_action.gd")
 const ConfirmDinnertimeActionClass = preload("res://gameplay/actions/confirm_dinnertime_action.gd")
+const PlaceNewRestaurantMailboxActionClass = preload("res://modules/new_milestones/actions/place_new_restaurant_mailbox_action.gd")
+const PlaceCampaignManagerSecondTileActionClass = preload("res://modules/new_milestones/actions/place_campaign_manager_second_tile_action.gd")
+const PlacePizzaRadioActionClass = preload("res://modules/new_milestones/actions/place_pizza_radio_action.gd")
+const SetBrandManagerAirplaneSecondGoodActionClass = preload("res://modules/new_milestones/actions/set_brand_manager_airplane_second_good_action.gd")
 
 class _MockActionRegistry:
 	extends RefCounted
@@ -54,6 +58,14 @@ static func run() -> Result:
 	var keep_r := _case_keep_initiatable_special_action_visible()
 	if not keep_r.ok:
 		return keep_r
+
+	var hide_milestone_r := _case_hide_non_initiatable_milestone_actions()
+	if not hide_milestone_r.ok:
+		return hide_milestone_r
+
+	var keep_milestone_r := _case_keep_initiatable_milestone_action_visible()
+	if not keep_milestone_r.ok:
+		return keep_milestone_r
 
 	return Result.success({})
 
@@ -104,6 +116,64 @@ static func _case_keep_initiatable_special_action_visible() -> Result:
 	if visible != expected:
 		_safe_free(panel)
 		return Result.failure("可启动的特殊动作应保留显示，实际: %s" % str(visible))
+
+	_safe_free(panel)
+	return Result.success({})
+
+static func _case_hide_non_initiatable_milestone_actions() -> Result:
+	var panel := ActionPanelClass.new()
+	var registry := _MockActionRegistry.new(
+		{
+			"place_new_restaurant_mailbox": PlaceNewRestaurantMailboxActionClass.new(),
+			"place_campaign_manager_second_tile": PlaceCampaignManagerSecondTileActionClass.new(),
+			"set_brand_manager_airplane_second_good": SetBrandManagerAirplaneSecondGoodActionClass.new(),
+			"place_pizza_radio": PlacePizzaRadioActionClass.new(),
+			ActionIdsClass.SKIP: _MockExecutor.new("确认结束", false),
+		},
+		[
+			"place_new_restaurant_mailbox",
+			"place_campaign_manager_second_tile",
+			"set_brand_manager_airplane_second_good",
+			"place_pizza_radio",
+			ActionIdsClass.SKIP,
+		],
+		[ActionIdsClass.SKIP]
+	)
+
+	panel.set_action_registry(registry)
+	panel.set_game_state(_build_state(DefsClass.PHASE_DINNERTIME, ""))
+	panel.set_current_player(0)
+
+	var visible := panel.get_visible_action_ids()
+	var expected: Array[String] = [ActionIdsClass.SKIP]
+	if visible != expected:
+		_safe_free(panel)
+		return Result.failure("不可启动的里程碑动作应被隐藏，实际: %s" % str(visible))
+
+	_safe_free(panel)
+	return Result.success({})
+
+static func _case_keep_initiatable_milestone_action_visible() -> Result:
+	var panel := ActionPanelClass.new()
+	var registry := _MockActionRegistry.new(
+		{
+			"place_pizza_radio": PlacePizzaRadioActionClass.new(),
+			"set_brand_manager_airplane_second_good": SetBrandManagerAirplaneSecondGoodActionClass.new(),
+			ActionIdsClass.SKIP: _MockExecutor.new("确认结束", false),
+		},
+		["place_pizza_radio", "set_brand_manager_airplane_second_good", ActionIdsClass.SKIP],
+		["place_pizza_radio", ActionIdsClass.SKIP]
+	)
+
+	panel.set_action_registry(registry)
+	panel.set_game_state(_build_state(DefsClass.PHASE_DINNERTIME, ""))
+	panel.set_current_player(0)
+
+	var visible := panel.get_visible_action_ids()
+	var expected: Array[String] = ["place_pizza_radio", ActionIdsClass.SKIP]
+	if visible != expected:
+		_safe_free(panel)
+		return Result.failure("可启动的里程碑动作应保留显示，实际: %s" % str(visible))
 
 	_safe_free(panel)
 	return Result.success({})

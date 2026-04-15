@@ -13,6 +13,7 @@ func _init() -> void:
 	description = "同回合内可为本次飞机营销追加第二种商品（A->B 顺序结算）；仅在获得里程碑的本回合可用一次"
 	requires_actor = true
 	is_mandatory = false
+	ui_hide_if_not_initiatable = true
 	allowed_phases = ["Working"]
 	allowed_sub_phases = ["Marketing"]
 

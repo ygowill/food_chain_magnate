@@ -20,6 +20,7 @@ func _init() -> void:
 	description = "占用一个 mailbox(#7-#10)，在自家餐厅所在街区免费放置一个永久邮箱营销（不绑定营销员）"
 	requires_actor = true
 	is_mandatory = false
+	ui_hide_if_not_initiatable = true
 	allowed_phases = ["Working"]
 	allowed_sub_phases = ["PlaceRestaurants"]
 

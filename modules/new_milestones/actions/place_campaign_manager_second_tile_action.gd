@@ -19,6 +19,7 @@ func _init() -> void:
 	description = "同回合内追加放置同类型营销板件（billboard/mailbox），与第一次相同商品/持续时间；不绑定额外营销员"
 	requires_actor = true
 	is_mandatory = false
+	ui_hide_if_not_initiatable = true
 	allowed_phases = ["Working"]
 	allowed_sub_phases = ["Marketing"]
 
