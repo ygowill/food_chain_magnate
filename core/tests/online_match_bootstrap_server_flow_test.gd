@@ -11,6 +11,10 @@ static func run() -> Result:
 	if not wait_r.ok:
 		_reset_net_context()
 		return wait_r
+	var join_r: Result = _run_rejects_join_and_spectate_during_starting_scenario()
+	if not join_r.ok:
+		_reset_net_context()
+		return join_r
 	var fail_r: Result = _run_failed_client_aborts_scenario()
 	_reset_net_context()
 	return fail_r
@@ -90,6 +94,57 @@ static func _run_waits_for_all_ready_scenario() -> Result:
 		return Result.failure("commit 后最后一次 room_state 广播应为 InGame: %s" % str(final_room_state))
 	if final_room_state.has("bootstrap"):
 		return Result.failure("commit 后 room_state 不应继续携带 bootstrap")
+
+	return Result.success()
+
+static func _run_rejects_join_and_spectate_during_starting_scenario() -> Result:
+	_reset_net_context()
+	if NetContext == null:
+		return Result.failure("NetContext autoload missing")
+	NetContext.mode = NetContext.Mode.ONLINE_SERVER
+
+	var fixture: Result = _create_fixture(7003)
+	if not fixture.ok:
+		return fixture
+	var ctx: Dictionary = Dictionary(fixture.value)
+	var server = ctx.get("server", null)
+	var room = ctx.get("room", null)
+	var room_manager = ctx.get("room_manager", null)
+	var mock_net = ctx.get("mock_net", null)
+	var room_code := str(ctx.get("room_code", "")).strip_edges()
+	if server == null or room == null or room_manager == null or mock_net == null or room_code.is_empty():
+		return Result.failure("Starting 拦截入房测试 fixture 缺少 server/room/room_manager/mock_net/room_code")
+
+	mock_net.multiplayer.remote_sender_id = 10
+	server.handle_rpc_start_game({"request_id": "r_start"})
+
+	if str(room.status) != "Starting":
+		return Result.failure("Starting 拦截入房测试中，开局请求后房间应进入 Starting: %s" % str(room.status))
+
+	var late_join_r: Result = room_manager.join_room(
+		12,
+		{"name": "LateJoin", "color_index": 3, "restaurant_logo_id": 2},
+		room_code,
+		"pw"
+	)
+	if late_join_r.ok:
+		return Result.failure("Starting 期间不应允许新的正式玩家 join_room")
+	if room_manager.peer_to_room.has(12):
+		return Result.failure("Starting 期间 join_room 失败后不应绑定 peer_to_room")
+
+	var late_spectate_r: Result = room_manager.spectate_room(
+		13,
+		{"name": "LateSpec", "color_index": 4, "restaurant_logo_id": 3},
+		room_code
+	)
+	if late_spectate_r.ok:
+		return Result.failure("Starting 期间不应允许新的观战者 spectate_room")
+	if room_manager.peer_to_room.has(13):
+		return Result.failure("Starting 期间 spectate_room 失败后不应绑定 peer_to_room")
+
+	var peer_ids: Array[int] = room.get_peer_ids()
+	if peer_ids.size() != 2 or not peer_ids.has(10) or not peer_ids.has(11):
+		return Result.failure("Starting 期间拦截入房后，房间成员不应变化: %s" % str(peer_ids))
 
 	return Result.success()
 
