@@ -1023,6 +1023,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return await TestRefs.GameLogPanelReplayToggleAvailabilityTestClass.run(),
 			},
 			{
+				"name": "GameLogPanelStepTimelineAppendTest",
+				"fn": func() -> Result: return await TestRefs.GameLogPanelStepTimelineAppendTestClass.run(),
+			},
+			{
 				"name": "GameTimelineSeekRoutingManualReplayTest",
 				"fn": func() -> Result: return TestRefs.GameTimelineSeekRoutingManualReplayTestClass.run(),
 			},

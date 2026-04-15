@@ -265,7 +265,7 @@ func on_debug_command_executed(command: String) -> void:
 		if _timeline_controller.has_method("request_force_full_panel_sync_next_update"):
 			_timeline_controller.call("request_force_full_panel_sync_next_update")
 		if _timeline_controller.has_method("apply_live_log_timeline_from_engine"):
-			_timeline_controller.call("apply_live_log_timeline_from_engine")
+			_timeline_controller.call("apply_live_log_timeline_from_engine", true)
 		# 调试面板的 undo/redo 需要进入“时间线编辑模式”，否则 undo 后 UI 会处于只读态导致无法继续操作。
 		if head == "undo" or head == "redo":
 			if _timeline_controller.has_method("set_timeline_edit_mode_active"):

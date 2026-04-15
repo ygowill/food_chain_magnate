@@ -15,6 +15,7 @@ var _game_log_panel: Control = null
 
 var _get_game_engine: Callable = Callable()
 var _apply_live_log_timeline_from_engine: Callable = Callable()
+var _request_live_log_timeline_refresh: Callable = Callable()
 var _update_ui: Callable = Callable()
 var _reset_timeline_state_after_resync: Callable = Callable()
 var _show_confirm: Callable = Callable()
@@ -46,6 +47,7 @@ func _init(
 	game_log_panel: Control,
 	get_game_engine: Callable,
 	apply_live_log_timeline_from_engine: Callable,
+	request_live_log_timeline_refresh: Callable,
 	update_ui: Callable,
 	reset_timeline_state_after_resync: Callable,
 	show_confirm: Callable,
@@ -62,6 +64,7 @@ func _init(
 	_game_log_panel = game_log_panel
 	_get_game_engine = get_game_engine
 	_apply_live_log_timeline_from_engine = apply_live_log_timeline_from_engine
+	_request_live_log_timeline_refresh = request_live_log_timeline_refresh
 	_update_ui = update_ui
 	_reset_timeline_state_after_resync = reset_timeline_state_after_resync
 	_show_confirm = show_confirm
@@ -80,6 +83,7 @@ func dispose() -> void:
 	_action_id_by_request_id.clear()
 	_action_request_ids.clear()
 	_resync_request_id = ""
+	_request_live_log_timeline_refresh = Callable()
 
 func is_resync_in_progress() -> bool:
 	return _resync_in_progress
@@ -316,9 +320,8 @@ func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> voi
 	if should_sync_resume_progress and NetContext != null and NetContext.has_method("sync_online_resume_progress_from_engine"):
 		NetContext.sync_online_resume_progress_from_engine(engine)
 
-	if is_instance_valid(_game_log_panel) and _game_log_panel.visible:
-		if _apply_live_log_timeline_from_engine.is_valid():
-			_apply_live_log_timeline_from_engine.call()
+	if _request_live_log_timeline_refresh.is_valid():
+		_request_live_log_timeline_refresh.call()
 	if _update_ui.is_valid():
 		_update_ui.call()
 
@@ -366,7 +369,9 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 		_reset_timeline_state_after_resync.call()
 	if is_instance_valid(_game_log_panel) and _game_log_panel.visible:
 		if _apply_live_log_timeline_from_engine.is_valid():
-			_apply_live_log_timeline_from_engine.call()
+			_apply_live_log_timeline_from_engine.call(true)
+	elif _request_live_log_timeline_refresh.is_valid():
+		_request_live_log_timeline_refresh.call()
 	if _update_ui.is_valid():
 		_update_ui.call()
 
@@ -392,7 +397,9 @@ func _on_online_resync_delta_applied(payload: Dictionary) -> void:
 		_reset_timeline_state_after_resync.call()
 	if is_instance_valid(_game_log_panel) and _game_log_panel.visible:
 		if _apply_live_log_timeline_from_engine.is_valid():
-			_apply_live_log_timeline_from_engine.call()
+			_apply_live_log_timeline_from_engine.call(true)
+	elif _request_live_log_timeline_refresh.is_valid():
+		_request_live_log_timeline_refresh.call()
 	if _update_ui.is_valid():
 		_update_ui.call()
 	_flush_online_pending_commands_after_resync()
@@ -445,7 +452,9 @@ func _on_online_rewind_to_turn_start_meta(payload: Dictionary) -> void:
 			_reset_timeline_state_after_resync.call()
 		if is_instance_valid(_game_log_panel) and _game_log_panel.visible:
 			if _apply_live_log_timeline_from_engine.is_valid():
-				_apply_live_log_timeline_from_engine.call()
+				_apply_live_log_timeline_from_engine.call(true)
+		elif _request_live_log_timeline_refresh.is_valid():
+			_request_live_log_timeline_refresh.call()
 		if _update_ui.is_valid():
 			_update_ui.call()
 		_flush_online_pending_commands_after_resync()
@@ -514,7 +523,9 @@ func _on_online_rewind_to_turn_start_meta(payload: Dictionary) -> void:
 		_reset_timeline_state_after_resync.call()
 	if is_instance_valid(_game_log_panel) and _game_log_panel.visible:
 		if _apply_live_log_timeline_from_engine.is_valid():
-			_apply_live_log_timeline_from_engine.call()
+			_apply_live_log_timeline_from_engine.call(true)
+	elif _request_live_log_timeline_refresh.is_valid():
+		_request_live_log_timeline_refresh.call()
 	if _update_ui.is_valid():
 		_update_ui.call()
 	_flush_online_pending_commands_after_resync()
@@ -620,7 +631,9 @@ func _flush_online_pending_commands_after_resync() -> void:
 
 	if is_instance_valid(_game_log_panel) and _game_log_panel.visible:
 		if _apply_live_log_timeline_from_engine.is_valid():
-			_apply_live_log_timeline_from_engine.call()
+			_apply_live_log_timeline_from_engine.call(true)
+	elif _request_live_log_timeline_refresh.is_valid():
+		_request_live_log_timeline_refresh.call()
 	if _update_ui.is_valid():
 		_update_ui.call()
 

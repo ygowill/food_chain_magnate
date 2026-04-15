@@ -26,6 +26,26 @@ const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
 func _ready() -> void:
 	_build_ui()
 
+func configure_action_group(
+	next_step_index: int,
+	next_summary: String,
+	next_primary_entry_id: int,
+	next_primary_entry: Dictionary,
+	next_fold_enabled: bool,
+	next_expanded: bool,
+	next_child_event_count: int
+) -> void:
+	step_index = int(next_step_index)
+	summary = str(next_summary)
+	primary_entry_id = int(next_primary_entry_id)
+	primary_entry = next_primary_entry.duplicate(true) if (next_primary_entry is Dictionary) else {}
+	fold_enabled = bool(next_fold_enabled)
+	expanded = bool(next_expanded)
+	child_event_count = int(next_child_event_count)
+	if _label != null:
+		_update_text()
+		_apply_timeline_visuals()
+
 func _build_ui() -> void:
 	var scale := 1.0
 	if Globals != null:

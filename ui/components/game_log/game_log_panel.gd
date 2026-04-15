@@ -29,6 +29,8 @@ const GameLogDetailsWindowControllerClass = preload("res://ui/components/game_lo
 const GameLogUnifiedTimelineBuilderClass = preload("res://ui/components/game_log/game_log_unified_timeline_builder.gd")
 const GameLogItemClass = preload("res://ui/components/game_log/game_log_item.gd")
 
+const _POOL_KIND_FLAT_ENTRY := "flat_entry"
+
 # 日志类型
 enum LogType {
 	SYSTEM,      # 系统消息
@@ -72,6 +74,7 @@ var _extra_entries: Array[Dictionary] = [] # UI-only logs (e.g. failed action)
 var _entries_all: Array[Dictionary] = []  # merged entries for details lookup
 var _entry_id_counter: int = 0
 var _log_items: Array[Control] = [] # GameLogItem / GameLogRoundHeaderItem / GameLogPhaseHeaderItem / GameLogActionGroupHeaderItem / GameLogEventItem
+var _log_item_pool: Dictionary = {} # kind -> Array[Control]
 var _auto_scroll: bool = true
 var _scroll_to_bottom_requested: bool = false
 var _max_entries: int = 0 # 0 表示不截断（完整时间线需要保留未来日志）
@@ -89,6 +92,7 @@ var _blank_display_warned: bool = false
 var _replay_toggle_available: bool = true
 var _replay_toggle_inactive_text: String = "进入回放"
 var _replay_toggle_disabled_reason: String = ""
+var _last_step_timeline_update_mode: String = ""
 
 func _ready() -> void:
 	if auto_scroll_check != null:
@@ -201,6 +205,9 @@ func append_entry(entry: Dictionary) -> void:
 func get_entries() -> Array[Dictionary]:
 	return _entries_all.duplicate(true)
 
+func get_last_step_timeline_update_mode() -> String:
+	return _last_step_timeline_update_mode
+
 func load_entries(entries: Array[Dictionary]) -> void:
 	# Flat list mode (legacy/tests). This intentionally clears step timeline view state.
 	_step_timeline.clear()
@@ -231,9 +238,30 @@ func load_entries(entries: Array[Dictionary]) -> void:
 	_apply_timeline_state_to_items(true)
 	_request_scroll_to_bottom()
 	_update_entry_count()
+	_last_step_timeline_update_mode = "flat"
 
 func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_extra_entries: bool = false) -> void:
 	# Unified timeline view (M4.3): structure comes from steps, contents come from formatted entries.
+	var next_timeline: Dictionary = timeline.duplicate(true) if (timeline is Dictionary) else {}
+	if _can_append_step_timeline(next_timeline, entries, bool(reset_extra_entries)):
+		var appended_entries := _build_appended_timeline_entries(entries)
+		var next_entries_all := _build_entries_all_for_append(appended_entries)
+		if _append_step_timeline_display(next_timeline, next_entries_all):
+			_step_timeline = next_timeline
+			for appended in appended_entries:
+				if appended is Dictionary:
+					_timeline_entries.append(Dictionary(appended))
+			_rebuild_entries_all()
+			_blank_display_warned = false
+			_prune_expanded_action_groups()
+			if fold_details_check != null:
+				fold_details_check.button_pressed = _fold_details_enabled
+			_last_step_timeline_update_mode = "append"
+			_apply_timeline_state_to_items(true)
+			_request_scroll_to_bottom()
+			_update_entry_count()
+			return
+
 	_step_timeline = timeline.duplicate(true) if (timeline is Dictionary) else {}
 	_timeline_entries.clear()
 	_blank_display_warned = false
@@ -257,6 +285,7 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 	_apply_timeline_state_to_items(true)
 	_request_scroll_to_bottom()
 	_update_entry_count()
+	_last_step_timeline_update_mode = "rebuild"
 
 func set_expand_enabled(_enabled: bool) -> void:
 	# 保留接口兼容 FullLogWindow，当前日志面板已移除“全屏”按钮。
@@ -349,6 +378,12 @@ func apply_font_settings() -> void:
 	for item in _log_items:
 		if is_instance_valid(item) and item.has_method("apply_font_settings"):
 			item.apply_font_settings()
+	for pool_val in _log_item_pool.values():
+		if not (pool_val is Array):
+			continue
+		for pooled_item in pool_val:
+			if pooled_item is Control and is_instance_valid(pooled_item) and pooled_item.has_method("apply_font_settings"):
+				pooled_item.apply_font_settings()
 
 func set_player_count(count: int) -> void:
 	_player_count = maxi(0, count)
@@ -453,6 +488,124 @@ func _get_initial_phase_segment() -> String:
 	var init := _get_initial_state_dict()
 	return str(init.get("phase", "")).strip_edges()
 
+func _get_step_count(timeline: Dictionary) -> int:
+	if timeline == null or timeline.is_empty():
+		return 0
+	var steps_val = timeline.get("steps", null)
+	return int((steps_val as Array).size()) if (steps_val is Array) else 0
+
+func _entry_equals_ignoring_id(lhs: Dictionary, rhs: Dictionary) -> bool:
+	var a := lhs.duplicate(true) if (lhs is Dictionary) else {}
+	var b := rhs.duplicate(true) if (rhs is Dictionary) else {}
+	if a.has("id"):
+		a.erase("id")
+	if b.has("id"):
+		b.erase("id")
+	return a == b
+
+func _can_append_step_timeline(timeline: Dictionary, entries: Array, reset_extra_entries: bool) -> bool:
+	if bool(reset_extra_entries):
+		return false
+	if not _is_step_timeline_loaded():
+		return false
+	if log_container == null or not is_instance_valid(log_container):
+		return false
+	if _log_items.is_empty():
+		return false
+
+	var old_steps_val = _step_timeline.get("steps", null)
+	var new_steps_val = timeline.get("steps", null)
+	if not (old_steps_val is Array) or not (new_steps_val is Array):
+		return false
+	var old_steps: Array = old_steps_val
+	var new_steps: Array = new_steps_val
+	if new_steps.size() <= old_steps.size():
+		return false
+
+	var old_init := Dictionary(_step_timeline.get("initial_state_dict", {}))
+	var new_init := Dictionary(timeline.get("initial_state_dict", {}))
+	if old_init != new_init:
+		return false
+
+	for idx in range(old_steps.size()):
+		var old_step_val = old_steps[idx]
+		var new_step_val = new_steps[idx]
+		if not (old_step_val is Dictionary) or not (new_step_val is Dictionary):
+			return false
+		if Dictionary(old_step_val) != Dictionary(new_step_val):
+			return false
+
+	if not (entries is Array):
+		return false
+	if entries.size() < _timeline_entries.size():
+		return false
+	for idx in range(_timeline_entries.size()):
+		var old_entry_val = _timeline_entries[idx]
+		var new_entry_val = entries[idx]
+		if not (old_entry_val is Dictionary) or not (new_entry_val is Dictionary):
+			return false
+		if not _entry_equals_ignoring_id(Dictionary(old_entry_val), Dictionary(new_entry_val)):
+			return false
+
+	return true
+
+func _build_appended_timeline_entries(entries: Array) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var start_idx := _timeline_entries.size()
+	for idx in range(start_idx, entries.size()):
+		var entry_val = entries[idx]
+		if not (entry_val is Dictionary):
+			continue
+		var d: Dictionary = Dictionary(entry_val).duplicate(true)
+		d["id"] = _entry_id_counter
+		_entry_id_counter += 1
+		out.append(d)
+	return out
+
+func _build_entries_all_for_append(appended_entries: Array[Dictionary]) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for entry in _timeline_entries:
+		if entry is Dictionary:
+			out.append(Dictionary(entry))
+	for entry2 in appended_entries:
+		if entry2 is Dictionary:
+			out.append(Dictionary(entry2))
+	for extra in _extra_entries:
+		if extra is Dictionary:
+			out.append(Dictionary(extra))
+	return out
+
+func _append_step_timeline_display(next_timeline: Dictionary, next_entries_all: Array[Dictionary]) -> bool:
+	var start_step_index := _get_step_count(_step_timeline)
+	var added_items = GameLogUnifiedTimelineBuilderClass.append_step_range(
+		_log_items,
+		log_container,
+		next_timeline,
+		next_entries_all,
+		start_step_index,
+		_show_phase_events,
+		_fold_details_enabled,
+		Callable(self, "_is_action_group_expanded"),
+		_timeline_cursor_index,
+		_timeline_head_index,
+		Callable(self, "_on_timeline_header_clicked"),
+		Callable(self, "_on_entry_clicked"),
+		Callable(self, "_on_entry_double_clicked"),
+		Callable(self, "_on_action_group_fold_toggled"),
+		_get_initial_round_number(),
+		_get_initial_phase_segment(),
+		Callable(self, "_acquire_log_item")
+	)
+	if not (added_items is Array):
+		return false
+	for item in added_items:
+		if not (item is Control):
+			continue
+		var ctrl: Control = item
+		_log_items.append(ctrl)
+		_connect_item_hover_signals(ctrl)
+	return true
+
 func _get_anchor_command_index_for_step(step_index: int) -> int:
 	var idx := int(step_index)
 	if idx < 0:
@@ -514,18 +667,59 @@ func _add_log_item(entry: Dictionary) -> void:
 	if log_container == null:
 		return
 
-	var item = GameLogItemClass.new()
-	item.entry_data = entry
-	item.log_type = entry.type
+	var item = _acquire_log_item(_POOL_KIND_FLAT_ENTRY)
+	if item == null:
+		item = GameLogItemClass.new()
+	item.set_meta("_log_pool_kind", _POOL_KIND_FLAT_ENTRY)
 	item.set_meta("log_entry_id", int(entry.get("id", -1)))
-	item.entry_clicked.connect(_on_entry_clicked)
-	item.entry_double_clicked.connect(_on_entry_double_clicked)
-	_connect_item_hover_signals(item)
 	log_container.add_child(item)
+	if item.has_method("configure_entry"):
+		item.configure_entry(entry, int(entry.get("type", 0)))
+	else:
+		item.entry_data = entry
+		item.log_type = entry.type
+	if not item.entry_clicked.is_connected(_on_entry_clicked):
+		item.entry_clicked.connect(_on_entry_clicked)
+	if not item.entry_double_clicked.is_connected(_on_entry_double_clicked):
+		item.entry_double_clicked.connect(_on_entry_double_clicked)
+	_connect_item_hover_signals(item)
 	_log_items.append(item)
 	item.apply_timeline_state(_timeline_cursor_index, _timeline_head_index)
 
 	_request_scroll_to_bottom()
+
+func _acquire_log_item(kind: String):
+	var k := str(kind).strip_edges()
+	if k.is_empty():
+		return null
+	var pool_val = _log_item_pool.get(k, null)
+	if not (pool_val is Array):
+		return null
+	var pool: Array = pool_val
+	while not pool.is_empty():
+		var item_val = pool.pop_back()
+		if item_val is Control and is_instance_valid(item_val):
+			_log_item_pool[k] = pool
+			var item: Control = item_val
+			item.visible = true
+			return item
+	_log_item_pool[k] = pool
+	return null
+
+func _release_log_item(item: Control) -> void:
+	if item == null or not is_instance_valid(item):
+		return
+	var kind := str(item.get_meta("_log_pool_kind", "")).strip_edges()
+	if kind.is_empty():
+		kind = _POOL_KIND_FLAT_ENTRY
+	if item.get_parent() != null:
+		item.get_parent().remove_child(item)
+	item.visible = false
+	if not _log_item_pool.has(kind) or not (_log_item_pool[kind] is Array):
+		_log_item_pool[kind] = []
+	var pool: Array = _log_item_pool[kind]
+	pool.append(item)
+	_log_item_pool[kind] = pool
 
 func _request_scroll_to_bottom() -> void:
 	if not _auto_scroll:
@@ -557,8 +751,8 @@ func _apply_scroll_to_bottom_final() -> void:
 
 func _clear_display() -> void:
 	for item in _log_items:
-		if is_instance_valid(item):
-			item.queue_free()
+		if item is Control and is_instance_valid(item):
+			_release_log_item(item)
 	_log_items.clear()
 
 func _rebuild_display() -> void:
@@ -591,7 +785,8 @@ func _build_unified_timeline_display() -> void:
 		Callable(self, "_on_entry_double_clicked"),
 		Callable(self, "_on_action_group_fold_toggled"),
 		_get_initial_round_number(),
-		_get_initial_phase_segment()
+		_get_initial_phase_segment(),
+		Callable(self, "_acquire_log_item")
 	)
 	_log_items = items
 	for item in _log_items:

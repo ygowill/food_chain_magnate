@@ -190,6 +190,7 @@ static func run() -> Result:
 		null,
 		Callable(harness, "get_engine"),
 		Callable(harness, "apply_timeline"),
+		Callable(),
 		Callable(harness, "update_ui"),
 		Callable(harness, "reset_timeline"),
 		Callable(harness, "show_confirm"),

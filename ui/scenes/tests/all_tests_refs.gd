@@ -255,6 +255,7 @@ const RightPanelDockControllerReplaceVisiblePanelTestClass = preload("res://ui/s
 const GamePanelControllerAutoOpenOverLogTestClass = preload("res://ui/scenes/tests/game_panel_controller_auto_open_over_log_test.gd")
 const LogRestoreAfterLoadTestClass = preload("res://ui/scenes/tests/log_restore_after_load_test.gd")
 const GameLogPanelReplayToggleAvailabilityTestClass = preload("res://ui/scenes/tests/game_log_panel_replay_toggle_availability_test.gd")
+const GameLogPanelStepTimelineAppendTestClass = preload("res://ui/scenes/tests/game_log_panel_step_timeline_append_test.gd")
 const GameTimelineSeekRoutingManualReplayTestClass = preload("res://ui/scenes/tests/game_timeline_seek_routing_manual_replay_test.gd")
 const CreateRoomResumeLogHistoryBuilderTestClass = preload("res://ui/scenes/tests/create_room_resume_log_history_builder_test.gd")
 const ProductionPanelUsedCountsSyncTestClass = preload("res://ui/scenes/tests/production_panel_used_counts_sync_test.gd")

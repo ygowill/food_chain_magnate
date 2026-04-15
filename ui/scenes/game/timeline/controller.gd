@@ -40,6 +40,9 @@ var _history_step_timeline: Dictionary = {} # {initial_state_dict, steps, events
 var _history_head_step_index: int = -1
 var _history_cursor_step_index: int = -1
 var _history_timeline_source: String = "runtime"
+var _live_history_dirty: bool = true
+var _live_history_refresh_scheduled: bool = false
+var _live_history_last_signature: Dictionary = {}
 
 # 时间线编辑模式：允许在 cursor<head 时继续执行命令（将丢弃未来时间线并产生新分支）。
 var _timeline_edit_mode_active: bool = false
@@ -95,6 +98,9 @@ func dispose() -> void:
 	_history_head_step_index = -1
 	_history_cursor_step_index = -1
 	_history_timeline_source = "runtime"
+	_live_history_dirty = true
+	_live_history_refresh_scheduled = false
+	_live_history_last_signature.clear()
 
 func initialize() -> void:
 	_connect_log_panel_signals()
@@ -185,10 +191,24 @@ func get_ui_head_cursor(engine: GameEngine) -> Vector2i:
 	if _replay_mode_active and _replay_step_timeline.has("steps"):
 		head_index = _replay_head_step_index
 		cursor_index = _replay_cursor_step_index
-	elif _history_step_timeline_active and _history_step_timeline.has("steps"):
+	elif _should_use_history_step_timeline_for_ui(engine):
 		head_index = _history_head_step_index
 		cursor_index = _history_cursor_step_index
 	return Vector2i(head_index, cursor_index)
+
+func _should_use_history_step_timeline_for_ui(engine: GameEngine) -> bool:
+	if not _history_step_timeline_active or not _history_step_timeline.has("steps"):
+		return false
+	if _manual_replay_enabled:
+		return true
+	if is_instance_valid(_game_log_panel) and _game_log_panel.visible:
+		return true
+	if engine != null:
+		var head_index := engine.command_history.size() - 1
+		var cursor_index := int(engine.current_command_index)
+		if cursor_index < head_index:
+			return true
+	return false
 
 func get_ui_replay_suffix(engine: GameEngine, head_index: int, cursor_index: int) -> String:
 	if _replay_mode_active:
@@ -210,7 +230,49 @@ func is_timeline_read_only_active(engine: GameEngine) -> bool:
 	var cursor_index := int(engine.current_command_index)
 	return cursor_index < head_index
 
-func apply_live_log_timeline_from_engine() -> void:
+func mark_live_log_timeline_dirty() -> void:
+	if _replay_mode_active:
+		return
+	_live_history_dirty = true
+
+func request_live_log_timeline_refresh() -> void:
+	if _replay_mode_active:
+		return
+	_live_history_dirty = true
+	if not is_instance_valid(_game_log_panel) or not _game_log_panel.visible:
+		return
+	if _live_history_refresh_scheduled:
+		return
+	_live_history_refresh_scheduled = true
+	call_deferred("_flush_live_log_timeline_refresh")
+
+func _flush_live_log_timeline_refresh() -> void:
+	_live_history_refresh_scheduled = false
+	apply_live_log_timeline_from_engine()
+
+func _build_live_history_signature(runtime_engine: GameEngine) -> Dictionary:
+	var active_source := "online_resume_full_history" if _is_online_resume_full_history_ready() else "runtime"
+	return {
+		"engine_id": int(runtime_engine.get_instance_id()),
+		"history_size": int(runtime_engine.command_history.size()),
+		"cursor_command_index": int(runtime_engine.current_command_index),
+		"history_source": active_source,
+	}
+
+func _can_reuse_live_history(signature: Dictionary) -> bool:
+	if _live_history_dirty:
+		return false
+	if not _history_step_timeline_active or not _history_step_timeline.has("steps"):
+		return false
+	return _live_history_last_signature == signature
+
+func _sync_live_log_timeline_state_to_panel() -> void:
+	if not is_instance_valid(_game_log_panel):
+		return
+	_game_log_panel.call("set_timeline_head", _history_head_step_index)
+	_game_log_panel.call("set_timeline_cursor", _history_cursor_step_index)
+
+func apply_live_log_timeline_from_engine(force_rebuild: bool = false) -> void:
 	# M4.3：正常对局（实时）也使用 step_timeline 来渲染日志结构。
 	# - 仅在本地 engine 下使用（回放模式由 apply_full_replay_log_timeline 负责）。
 	# - timeline 的结构来自 steps，内容来自 formatter(entries)。
@@ -220,6 +282,11 @@ func apply_live_log_timeline_from_engine() -> void:
 	if runtime_engine == null:
 		return
 	if not is_instance_valid(_game_log_panel):
+		return
+	_live_history_refresh_scheduled = false
+	var signature := _build_live_history_signature(runtime_engine)
+	if not bool(force_rebuild) and _can_reuse_live_history(signature):
+		_sync_live_log_timeline_state_to_panel()
 		return
 
 	var build_r := GameTimelineOnlineResumeHistoryViewSupportClass.build_live_history_view(
@@ -242,9 +309,10 @@ func apply_live_log_timeline_from_engine() -> void:
 	_history_timeline_source = str(info.get("history_timeline_source", "runtime"))
 	_history_head_step_index = int(info.get("head_step_index", -1))
 	_history_cursor_step_index = int(info.get("cursor_step_index", _history_head_step_index))
+	_live_history_last_signature = signature
+	_live_history_dirty = false
 
-	_game_log_panel.call("set_timeline_head", _history_head_step_index)
-	_game_log_panel.call("set_timeline_cursor", _history_cursor_step_index)
+	_sync_live_log_timeline_state_to_panel()
 
 func start_replay_from_file(file_path: String) -> void:
 	if file_path.is_empty():
@@ -323,6 +391,8 @@ func _enter_loaded_archive_as_playable(engine: GameEngine) -> void:
 	_history_step_timeline.clear()
 	_history_head_step_index = -1
 	_history_cursor_step_index = -1
+	_live_history_dirty = true
+	_live_history_last_signature.clear()
 	_timeline_edit_mode_active = false
 	_manual_replay_enabled = false
 	_sync_log_panel_replay_toggle_state(false)
@@ -667,6 +737,12 @@ func _exit_replay_mode_with_restore() -> void:
 		_replay_original_log_entries
 	)
 	_replay_original_log_entries.clear()
+	_live_history_dirty = true
+	_live_history_last_signature.clear()
+	_history_step_timeline_active = false
+	_history_step_timeline.clear()
+	_history_head_step_index = -1
+	_history_cursor_step_index = -1
 
 	var engine: GameEngine = _get_game_engine.call() if _get_game_engine.is_valid() else null
 	GameTimelineReplaySessionSupportClass.sync_log_panel_cursor_from_engine(_game_log_panel, engine)

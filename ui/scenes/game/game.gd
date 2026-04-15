@@ -574,6 +574,7 @@ func _ensure_online_resync_controller() -> void:
 		game_log_panel,
 		Callable(self, "_get_runtime_game_engine"),
 		Callable(_timeline_controller, "apply_live_log_timeline_from_engine"),
+		Callable(_timeline_controller, "request_live_log_timeline_refresh"),
 		Callable(self, "_update_ui"),
 		Callable(self, "_reset_timeline_state_after_online_resync"),
 		Callable(self, "_show_confirm"),
@@ -1139,7 +1140,7 @@ func _set_display_game_engine(engine: GameEngine) -> void:
 func _on_online_resume_full_history_ready(_payload: Dictionary) -> void:
 	if _timeline_controller == null or not _timeline_controller.has_method("apply_live_log_timeline_from_engine"):
 		return
-	_timeline_controller.apply_live_log_timeline_from_engine()
+	_timeline_controller.apply_live_log_timeline_from_engine(true)
 	_update_ui()
 
 func _open_replay_load_dialog() -> void:

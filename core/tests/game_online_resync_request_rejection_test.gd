@@ -35,6 +35,7 @@ static func run() -> Result:
 		null,
 		Callable(),
 		Callable(),
+		Callable(),
 		Callable(harness, "update_ui"),
 		Callable(),
 		Callable(harness, "show_confirm"),

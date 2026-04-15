@@ -8,6 +8,7 @@ var entry_data: Dictionary = {}
 var indent_level: int = 0
 
 var _label: RichTextLabel
+var _indent_spacer: Control
 var _panel_style: StyleBoxFlat = null
 var _timeline_is_future: bool = false
 var _timeline_is_cursor: bool = false
@@ -25,6 +26,15 @@ const LOG_TYPE_COLORS: Dictionary = {
 
 func _ready() -> void:
 	_build_ui()
+
+func configure_entry(next_entry_data: Dictionary, next_indent_level: int) -> void:
+	entry_data = next_entry_data.duplicate(true) if (next_entry_data is Dictionary) else {}
+	indent_level = int(next_indent_level)
+	if _indent_spacer != null:
+		_indent_spacer.custom_minimum_size = Vector2(14 + 14 * maxi(0, indent_level - 1), 0)
+	if _label != null:
+		update_display()
+		_apply_timeline_visuals()
 
 func _build_ui() -> void:
 	var scale := 1.0
@@ -47,9 +57,9 @@ func _build_ui() -> void:
 	add_child(hbox)
 
 	# 缩进：默认作为 ActionGroup 的子项
-	var spacer := Control.new()
-	spacer.custom_minimum_size = Vector2(14 + 14 * maxi(0, indent_level - 1), 0)
-	hbox.add_child(spacer)
+	_indent_spacer = Control.new()
+	_indent_spacer.custom_minimum_size = Vector2(14 + 14 * maxi(0, indent_level - 1), 0)
+	hbox.add_child(_indent_spacer)
 
 	_label = RichTextLabel.new()
 	_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL

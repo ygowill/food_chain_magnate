@@ -16,6 +16,14 @@ var _timeline_is_future: bool = false
 func _ready() -> void:
 	_build_ui()
 
+func configure_round_header(next_round_number: int, next_start_step_index: int) -> void:
+	round_number = int(next_round_number)
+	start_step_index = int(next_start_step_index)
+	if _label != null:
+		var rn := int(round_number)
+		_label.text = ("回合 %d" % rn) if rn > 0 else "回合 ?"
+		_apply_timeline_visuals()
+
 func _build_ui() -> void:
 	var scale := 1.0
 	if Globals != null:

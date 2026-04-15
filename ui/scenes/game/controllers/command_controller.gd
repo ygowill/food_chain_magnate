@@ -116,7 +116,7 @@ func _confirm_rewind_to_turn_start(target_index: int) -> void:
 			if _timeline_controller.has_method("request_force_full_panel_sync_next_update"):
 				_timeline_controller.call("request_force_full_panel_sync_next_update")
 			if _timeline_controller.has_method("apply_live_log_timeline_from_engine"):
-				_timeline_controller.call("apply_live_log_timeline_from_engine")
+				_timeline_controller.call("apply_live_log_timeline_from_engine", true)
 	_request_ui_refresh()
 
 func execute_command(command: Command) -> Result:
@@ -162,10 +162,15 @@ func execute_command(command: Command) -> Result:
 	else:
 		GameLog.info("Game", "命令执行成功: %s" % command.action_id)
 		# 时间线被回退过时，执行新命令会截断未来时间线并生成新分支：需要重建 step_timeline 视图，避免 UI 仍引用旧 head。
-		# 其它情况下：仅在日志面板可见时重建（降低每步全量回放开销）。
-		if was_in_history or (is_instance_valid(_game_log_panel) and _game_log_panel.visible):
-			if is_instance_valid(_timeline_controller) and _timeline_controller.has_method("apply_live_log_timeline_from_engine"):
-				_timeline_controller.call("apply_live_log_timeline_from_engine")
+		# 其它情况下：仅标记 dirty，并在日志面板可见时合帧刷新，降低每步全量回放开销。
+		if is_instance_valid(_timeline_controller):
+			if was_in_history:
+				if _timeline_controller.has_method("apply_live_log_timeline_from_engine"):
+					_timeline_controller.call("apply_live_log_timeline_from_engine", true)
+			elif _timeline_controller.has_method("request_live_log_timeline_refresh"):
+				_timeline_controller.call("request_live_log_timeline_refresh")
+			elif _timeline_controller.has_method("mark_live_log_timeline_dirty"):
+				_timeline_controller.call("mark_live_log_timeline_dirty")
 		if was_in_history and is_instance_valid(_timeline_controller) and _timeline_controller.has_method("set_timeline_edit_mode_active"):
 			_timeline_controller.call("set_timeline_edit_mode_active", false)
 		if _tutorial_match_runtime != null and _tutorial_match_runtime.has_method("on_command_executed"):

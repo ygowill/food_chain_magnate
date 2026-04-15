@@ -18,6 +18,14 @@ var _timeline_is_phase_start: bool = false
 func _ready() -> void:
 	_build_ui()
 
+func configure_phase_header(next_phase_segment: String, next_start_step_index: int, next_end_step_index: int) -> void:
+	phase_segment = str(next_phase_segment)
+	start_step_index = int(next_start_step_index)
+	end_step_index = int(next_end_step_index)
+	if _label != null:
+		_update_text()
+		_apply_timeline_visuals()
+
 func _build_ui() -> void:
 	var scale := 1.0
 	if Globals != null:

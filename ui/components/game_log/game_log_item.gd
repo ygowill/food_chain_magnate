@@ -36,6 +36,13 @@ const LOG_TYPE_NAMES: Dictionary = {
 func _ready() -> void:
 	_build_ui()
 
+func configure_entry(next_entry_data: Dictionary, next_log_type: int) -> void:
+	entry_data = next_entry_data.duplicate(true) if (next_entry_data is Dictionary) else {}
+	log_type = int(next_log_type)
+	if _message_label != null:
+		update_display()
+		_apply_timeline_visuals()
+
 func _build_ui() -> void:
 	var scale := 1.0
 	if Globals != null:
