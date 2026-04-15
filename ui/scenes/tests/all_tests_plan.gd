@@ -27,6 +27,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.RestructuringOverflowPenaltyTestClass.run(2, 12345),
 		},
 		{
+			"name": "RestructuringBusyDuplicateEmployeeRegressionTest",
+			"fn": func() -> Result: return TestRefs.RestructuringBusyDuplicateEmployeeRegressionTestClass.run(2, 12345),
+		},
+		{
 			"name": "RecruitOnCreditRulesTest",
 			"fn": func() -> Result: return TestRefs.RecruitOnCreditRulesTestClass.run(2, 12345),
 		},

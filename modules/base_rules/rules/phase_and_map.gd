@@ -114,7 +114,6 @@ func _on_restructuring_before_enter(state: GameState) -> Result:
 
 		var employees: Array = p["employees"]
 		var reserve: Array = p["reserve_employees"]
-		var busy: Array = p["busy_marketers"]
 
 		var has_ceo := false
 		var moved: Array[String] = []
@@ -128,9 +127,7 @@ func _on_restructuring_before_enter(state: GameState) -> Result:
 			if emp_id == "ceo":
 				has_ceo = true
 				continue
-			# 忙碌营销员不参与在岗/待命切换（理论上不在 employees；此处仅做容错去重）
-			if busy.has(emp_id):
-				continue
+			# 忙碌营销员位于独立区域；同名 busy 不能抵消 employees 中的在岗实例。
 			moved.append(emp_id)
 
 		# CEO 必须存在：若被错误放入待命区，纠正回在岗
