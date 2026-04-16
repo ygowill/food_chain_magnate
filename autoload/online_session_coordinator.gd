@@ -163,6 +163,7 @@ func request_resume_ticket(options: Dictionary = {}) -> Result:
 
 	var ensure_session := _get_callable_option(options, "ensure_session", Callable(self, "_default_ensure_session"))
 	var resume_room := _get_callable_option(options, "resume_room", Callable(self, "_default_resume_room"))
+	var defer_resume_room_terminal_clear := bool(options.get("defer_resume_room_terminal_clear", false))
 
 	var ensure_r = await ensure_session.call()
 	if not (ensure_r is Result) or not ensure_r.ok:
@@ -190,7 +191,7 @@ func request_resume_ticket(options: Dictionary = {}) -> Result:
 	if resume_dict.has("error"):
 		var policy := ResumeErrorPolicyClass.classify_resume_failure(resume_dict.get("error", ""))
 		var message := str(policy.get("user_message", _stringify_platform_error(resume_dict.get("error", ""))))
-		if bool(policy.get("clear_resume_context", false)):
+		if bool(policy.get("clear_resume_context", false)) and not defer_resume_room_terminal_clear:
 			mark_resume_terminal(message)
 		return Result.failure(message)
 	var ok_val = resume_dict.get("ok", null)

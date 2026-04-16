@@ -13,6 +13,7 @@ const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const NetClientInternalClass = preload("res://autoload/net_client_internal.gd")
 const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 const WEBSOCKET_BUFFER_SIZE_BYTES := 16 * 1024 * 1024
+const WEBSOCKET_HEARTBEAT_INTERVAL_SEC := 15.0
 const MAX_PENDING_ONLINE_PERF := 256
 
 signal connected()
@@ -743,6 +744,7 @@ func _ensure_signal_connections() -> void:
 	_internal.ensure_signal_connections()
 
 func _on_peer_connected(peer_id: int) -> void:
+	_configure_websocket_keepalive(peer_id)
 	_ensure_internal()
 	_internal.on_peer_connected(peer_id)
 
@@ -751,6 +753,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	_internal.on_peer_disconnected(peer_id)
 
 func _on_connected_to_server() -> void:
+	_configure_websocket_keepalive(1)
 	_ensure_internal()
 	_internal.on_connected_to_server()
 
@@ -845,6 +848,28 @@ func consume_next_command_applied_perf_meta() -> Dictionary:
 func _next_request_id() -> String:
 	_request_counter += 1
 	return "%d-%d" % [Time.get_unix_time_from_system(), _request_counter]
+
+func _configure_websocket_keepalive(peer_id: int) -> void:
+	if _peer == null:
+		return
+	if peer_id <= 0:
+		return
+	if not _peer.has_method("get_peer"):
+		return
+	var raw_peer = _peer.get_peer(peer_id)
+	if raw_peer == null:
+		return
+	if not (raw_peer is WebSocketPeer):
+		return
+	var ws_peer: WebSocketPeer = raw_peer
+	if is_equal_approx(float(ws_peer.heartbeat_interval), WEBSOCKET_HEARTBEAT_INTERVAL_SEC):
+		return
+	ws_peer.heartbeat_interval = WEBSOCKET_HEARTBEAT_INTERVAL_SEC
+	GameLog.debug(
+		"NetClient",
+		"Configured WebSocket heartbeat peer=%d interval=%.1fs mode=%s"
+			% [peer_id, WEBSOCKET_HEARTBEAT_INTERVAL_SEC, _mode_name(int(NetContext.mode))]
+	)
 
 func _mode_name(mode_value: int) -> String:
 	match mode_value:

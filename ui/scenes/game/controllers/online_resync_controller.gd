@@ -898,6 +898,7 @@ func _request_resume_ticket() -> Result:
 		return await OnlineSessionCoordinator.request_resume_ticket({
 			"ensure_session": _ensure_platform_session,
 			"resume_room": _resume_room_request,
+			"defer_resume_room_terminal_clear": true,
 		})
 	if NetContext == null or not NetContext.has_method("get_online_resume_room_code"):
 		return Result.failure("联机恢复状态缺失")

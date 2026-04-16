@@ -96,6 +96,7 @@ const OnlineLobbyDisconnectReclaimTestClass = preload("res://core/tests/online_l
 const OnlineLobbyDisconnectGraceReleaseTestClass = preload("res://core/tests/online_lobby_disconnect_grace_release_test.gd")
 const OnlineDisconnectGraceReconnectTestClass = preload("res://core/tests/online_disconnect_grace_reconnect_test.gd")
 const OnlineForfeitAndLeaveRoomTestClass = preload("res://core/tests/online_forfeit_and_leave_room_test.gd")
+const GameOnlineResyncResumeTicketRetryPolicyTestClass = preload("res://core/tests/game_online_resync_resume_ticket_retry_policy_test.gd")
 const GameOnlineResyncReconnectFlowTestClass = preload("res://core/tests/game_online_resync_reconnect_flow_test.gd")
 const GameOnlineResumeProgressSyncTestClass = preload("res://core/tests/game_online_resume_progress_sync_test.gd")
 const GameOnlineResyncRequestRejectionTestClass = preload("res://core/tests/game_online_resync_request_rejection_test.gd")

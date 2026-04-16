@@ -143,6 +143,8 @@ func to_persistence_dict(include_runtime_membership: bool = false) -> Result:
 		"user_ids_by_seat": _user_id_by_seat_index.duplicate(true),
 		"archive": archive,
 	}
+	if include_runtime_membership:
+		out["runtime_status"] = str(status)
 	if persisted_status == STATUS_LOBBY and room_mode == ROOM_MODE_RESUME_ARCHIVE:
 		out["resume_lobby_archive"] = _resume_lobby_archive.duplicate(true)
 	if include_runtime_membership:
