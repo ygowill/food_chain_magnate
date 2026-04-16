@@ -395,6 +395,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.OnlineForfeitAndLeaveRoomTestClass.run(),
 		},
 		{
+			"name": "GameOnlineResyncResumeTicketRetryPolicyTest",
+			"fn": func() -> Result: return await TestRefs.GameOnlineResyncResumeTicketRetryPolicyTestClass.run(),
+		},
+		{
 			"name": "GameOnlineResyncReconnectFlowTest",
 			"fn": func() -> Result: return await TestRefs.GameOnlineResyncReconnectFlowTestClass.run(),
 		},
