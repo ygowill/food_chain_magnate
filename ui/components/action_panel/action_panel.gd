@@ -402,6 +402,16 @@ func set_game_state(state: GameState) -> void:
 	_update_title()
 	refresh()
 
+func set_display_context(state: GameState, player_id: int) -> void:
+	_game_state = state
+	# 联机模式：行动面板始终以“本地玩家”为上下文（避免显示他人的可用动作导致误导/无法继续）。
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT and int(NetContext.local_player_id) >= 0:
+		_current_player_id = int(NetContext.local_player_id)
+	else:
+		_current_player_id = int(player_id)
+	_update_title()
+	refresh()
+
 func set_current_player(player_id: int) -> void:
 	# 联机模式：行动面板始终以“本地玩家”为上下文（避免显示他人的可用动作导致误导/无法继续）。
 	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT and int(NetContext.local_player_id) >= 0:

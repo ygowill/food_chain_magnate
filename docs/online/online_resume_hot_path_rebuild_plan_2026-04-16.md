@@ -54,6 +54,18 @@
   - 测试：
     - `ui/scenes/tests/timeline_ui_state_support_batch_update_test.gd`
 
+- [x] **阶段 3（第二步）：基础面板批量上下文同步**
+  - `PlayerPanel / LeftPanel / TurnOrderDisplay / ActionPanel` 新增批量上下文接口
+  - `UiComponentsBinder` 改为优先走批量接口，避免一次 `panel_controller.sync` 中对同一控件连续触发多次 refresh
+  - 代码：
+    - `ui/components/player_panel/player_panel.gd`
+    - `ui/components/left_panel/left_panel.gd`
+    - `ui/components/turn_order/turn_order_display.gd`
+    - `ui/components/action_panel/action_panel.gd`
+    - `ui/scenes/game/panel/ui_components_binder.gd`
+  - 测试：
+    - `ui/scenes/tests/ui_components_binder_batch_context_test.gd`
+
 ### 仍待继续收敛
 
 - [ ] **阶段 3（剩余部分）**
@@ -66,7 +78,8 @@
 - 本次已经把最伤 live 热路径的“完整历史同步推进”拆出；
 - 已经取消恢复房进局对完整历史 cache 的 gate；
 - 已经对日志时间线状态同步做了第一步降耗；
-- 但更细粒度的 panel/map 增量刷新仍可继续做，以进一步压低 `ui.online_sync.total`。
+- 已经把 panel binder 中多处重复 refresh 收敛为批量上下文更新；
+- 但更细粒度的 `map_view` / phase panel / overlay dirty-driven 收敛仍可继续做，以进一步压低 `ui.online_sync.total`。
 
 ### 本次验证
 
@@ -78,7 +91,7 @@
 - 结果：
   - `CheckCompile PASS`
   - `GameSmokeTest PASS`
-  - `AllTests PASS (357/357)`
+  - `AllTests PASS (358/358)`
 
 ---
 

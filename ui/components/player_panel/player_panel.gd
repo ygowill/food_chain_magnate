@@ -60,6 +60,27 @@ func set_game_state(state: GameState) -> void:
 
 	_refresh()
 
+func set_display_context(state: GameState, current_player_id: int, view_player_id: int) -> void:
+	_game_state = state
+	_current_player_id = int(current_player_id)
+	_view_player_id = int(view_player_id)
+	_ensure_skin()
+	var next_logo_snapshot := _build_logo_snapshot()
+	if next_logo_snapshot != _logo_snapshot:
+		_logo_snapshot = next_logo_snapshot
+		_rebuild_player_logo_ids()
+
+	var count := 0
+	if state != null and (state.players is Array):
+		count = state.players.size()
+	if count != _player_count:
+		_player_count = count
+		_rebuild_player_tabs()
+	else:
+		_update_player_tab_icons()
+
+	_refresh()
+
 func set_current_player(player_id: int) -> void:
 	if _current_player_id == player_id:
 		return

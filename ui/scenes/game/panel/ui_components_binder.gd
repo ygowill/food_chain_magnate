@@ -92,18 +92,24 @@ func sync(state: GameState) -> void:
 
 	# 玩家面板
 	if is_instance_valid(scene.player_panel) and scene.player_panel.has_method("set_game_state"):
-		scene.player_panel.set_game_state(state)
-		if scene.player_panel.has_method("set_current_player"):
-			scene.player_panel.set_current_player(current_player_id)
-		if scene.player_panel.has_method("set_view_player"):
-			scene.player_panel.set_view_player(view_player_id)
+		if scene.player_panel.has_method("set_display_context"):
+			scene.player_panel.set_display_context(state, current_player_id, view_player_id)
+		else:
+			scene.player_panel.set_game_state(state)
+			if scene.player_panel.has_method("set_current_player"):
+				scene.player_panel.set_current_player(current_player_id)
+			if scene.player_panel.has_method("set_view_player"):
+				scene.player_panel.set_view_player(view_player_id)
 
 	# 左侧信息面板（P3：骨架）
 	if is_instance_valid(scene.left_panel):
-		if scene.left_panel.has_method("set_game_state"):
-			scene.left_panel.set_game_state(state)
-		if scene.left_panel.has_method("set_current_player"):
-			scene.left_panel.set_current_player(current_player_id)
+		if scene.left_panel.has_method("set_display_context"):
+			scene.left_panel.set_display_context(state, current_player_id, view_player_id)
+		else:
+			if scene.left_panel.has_method("set_game_state"):
+				scene.left_panel.set_game_state(state)
+			if scene.left_panel.has_method("set_current_player"):
+				scene.left_panel.set_current_player(current_player_id)
 
 	# 顺序轨
 	# selections: position -> player_id
@@ -138,14 +144,18 @@ func sync(state: GameState) -> void:
 
 	# 顶部顺序显示（展示用）
 	if is_instance_valid(scene.turn_order_display):
-		if scene.turn_order_display.has_method("set_game_state"):
-			scene.turn_order_display.set_game_state(state)
-		if scene.turn_order_display.has_method("set_player_count"):
+		if scene.turn_order_display.has_method("set_display_context"):
 			scene.turn_order_display.set_player_count(state.players.size())
-		if scene.turn_order_display.has_method("set_current_selections"):
-			scene.turn_order_display.set_current_selections(selections)
-		if scene.turn_order_display.has_method("set_current_player"):
-			scene.turn_order_display.set_current_player(current_player_id)
+			scene.turn_order_display.set_display_context(state, selections, current_player_id)
+		else:
+			if scene.turn_order_display.has_method("set_game_state"):
+				scene.turn_order_display.set_game_state(state)
+			if scene.turn_order_display.has_method("set_player_count"):
+				scene.turn_order_display.set_player_count(state.players.size())
+			if scene.turn_order_display.has_method("set_current_selections"):
+				scene.turn_order_display.set_current_selections(selections)
+			if scene.turn_order_display.has_method("set_current_player"):
+				scene.turn_order_display.set_current_player(current_player_id)
 
 	# 库存面板
 	if is_instance_valid(scene.inventory_panel) and scene.inventory_panel.has_method("set_inventory"):
@@ -158,13 +168,16 @@ func sync(state: GameState) -> void:
 
 	# 动作面板
 	if is_instance_valid(scene.action_panel):
-		if scene.action_panel.has_method("set_game_state"):
-			scene.action_panel.set_game_state(state)
-		if scene.action_panel.has_method("set_current_player"):
-			var action_player_id := current_player_id
-			if is_online and local_player_id >= 0:
-				action_player_id = local_player_id
-			scene.action_panel.set_current_player(action_player_id)
+		var action_player_id := current_player_id
+		if is_online and local_player_id >= 0:
+			action_player_id = local_player_id
+		if scene.action_panel.has_method("set_display_context"):
+			scene.action_panel.set_display_context(state, action_player_id)
+		else:
+			if scene.action_panel.has_method("set_game_state"):
+				scene.action_panel.set_game_state(state)
+			if scene.action_panel.has_method("set_current_player"):
+				scene.action_panel.set_current_player(action_player_id)
 		if scene.action_panel.has_method("set_map_skin"):
 			scene.action_panel.set_map_skin(controller._get_current_map_skin())
 		if scene.action_panel.has_method("set_action_registry") and scene.game_engine != null:
@@ -316,4 +329,3 @@ func _get_fridge_capacity_for_player(player: Dictionary) -> int:
 					capacity = maxi(capacity, int(f))
 
 	return capacity if has_fridge else -1
-

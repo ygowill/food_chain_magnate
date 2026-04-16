@@ -483,6 +483,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.TimelineUiStateSupportBatchUpdateTestClass.run(),
 			},
 			{
+				"name": "UiComponentsBinderBatchContextTest",
+				"fn": func() -> Result: return TestRefs.UiComponentsBinderBatchContextTestClass.run(),
+			},
+			{
 				"name": "TurnOrderSelectionModalOnlineVisibilityTest",
 				"fn": func() -> Result: return TestRefs.TurnOrderSelectionModalOnlineVisibilityTestClass.run(),
 			},

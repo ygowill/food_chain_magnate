@@ -66,6 +66,19 @@ func set_game_state(state: GameState) -> void:
 		return
 	_update_display()
 
+func set_display_context(state: GameState, selections: Dictionary, current_player_id: int) -> void:
+	_game_state = state
+	_current_selections = selections.duplicate()
+	_current_player_id = int(current_player_id)
+	_ensure_skin()
+	var next_logo_snapshot := _build_logo_snapshot()
+	if next_logo_snapshot != _logo_snapshot:
+		_logo_snapshot = next_logo_snapshot
+		_rebuild_player_logo_ids()
+	if _intro_roll_active:
+		return
+	_update_display()
+
 func set_current_selections(selections: Dictionary) -> void:
 	var next_selections := selections.duplicate()
 	if next_selections == _current_selections:
