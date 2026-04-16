@@ -1107,6 +1107,10 @@ static func build_tests(host) -> Array[Dictionary]:
 									"fn": func() -> Result: return TestRefs.StepTimelinePhaseBoundaryOrderTestClass.run(12345),
 								},
 								{
+									"name": "StepTimelineIncrementalAppendTest",
+									"fn": func() -> Result: return TestRefs.StepTimelineIncrementalAppendTestClass.run(12345),
+								},
+								{
 									"name": "StepTimelineCleanupDiscardOrderTest",
 									"fn": func() -> Result: return TestRefs.StepTimelineCleanupDiscardOrderTestClass.run(12345),
 								},

@@ -129,3 +129,68 @@ static func has_pending_cleanup_actions(state: GameState) -> bool:
 	if not read.ok:
 		return false
 	return bool(read.value)
+
+static func attach_build_meta(timeline: Dictionary, processed_command_count: int, last_event_sequence: int) -> Dictionary:
+	var out: Dictionary = timeline.duplicate(true) if (timeline is Dictionary) else {}
+	out["_build_meta"] = {
+		"processed_command_count": int(processed_command_count),
+		"last_event_sequence": int(last_event_sequence),
+	}
+	return out
+
+static func read_build_meta(timeline: Dictionary) -> Dictionary:
+	if timeline == null or not (timeline is Dictionary):
+		return {}
+	var meta_val = timeline.get("_build_meta", null)
+	return Dictionary(meta_val).duplicate(true) if (meta_val is Dictionary) else {}
+
+static func read_processed_command_count(timeline: Dictionary) -> int:
+	var meta := read_build_meta(timeline)
+	if meta.has("processed_command_count"):
+		return maxi(0, int(meta.get("processed_command_count", 0)))
+	return maxi(0, _infer_processed_command_count(timeline))
+
+static func read_last_event_sequence(timeline: Dictionary) -> int:
+	var meta := read_build_meta(timeline)
+	if meta.has("last_event_sequence"):
+		return maxi(0, int(meta.get("last_event_sequence", 0)))
+	return maxi(0, _infer_last_event_sequence(timeline))
+
+static func _infer_processed_command_count(timeline: Dictionary) -> int:
+	if timeline == null or not (timeline is Dictionary) or timeline.is_empty():
+		return 0
+
+	var max_cmd := -1
+	var events_val = timeline.get("events", null)
+	if events_val is Array:
+		for ev_val in events_val:
+			if not (ev_val is Dictionary):
+				continue
+			max_cmd = maxi(max_cmd, int(Dictionary(ev_val).get("command_index", -1)))
+	if max_cmd >= 0:
+		return max_cmd + 1
+
+	var steps_val = timeline.get("steps", null)
+	if steps_val is Array:
+		for step_val in steps_val:
+			if not (step_val is Dictionary):
+				continue
+			max_cmd = maxi(max_cmd, int(Dictionary(step_val).get("anchor_command_index", -1)))
+	if max_cmd >= 0:
+		return max_cmd + 1
+
+	return 0
+
+static func _infer_last_event_sequence(timeline: Dictionary) -> int:
+	if timeline == null or not (timeline is Dictionary) or timeline.is_empty():
+		return 0
+	var events_val = timeline.get("events", null)
+	if not (events_val is Array):
+		return 0
+	var events: Array = events_val
+	for idx in range(events.size() - 1, -1, -1):
+		var ev_val = events[idx]
+		if not (ev_val is Dictionary):
+			continue
+		return maxi(0, int(Dictionary(ev_val).get("sequence", 0)))
+	return 0

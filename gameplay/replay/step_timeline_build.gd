@@ -12,6 +12,7 @@
 extends RefCounted
 
 const BuildFullImplClass = preload("res://gameplay/replay/step_timeline_build/build_full_impl.gd")
+const BuildAppendImplClass = preload("res://gameplay/replay/step_timeline_build/build_append_impl.gd")
 
 static func build_full(engine: GameEngine) -> Result:
 	if engine == null:
@@ -30,6 +31,22 @@ static func build_full(engine: GameEngine) -> Result:
 
 	return r
 
+static func append_from_existing(engine: GameEngine, existing_timeline: Dictionary) -> Result:
+	if engine == null:
+		return Result.failure("StepTimelineBuild: engine 为空")
+
+	var pm = engine.phase_manager
+	var trace_was_enabled := false
+	if pm != null:
+		trace_was_enabled = pm.is_timeline_trace_enabled()
+		pm.set_timeline_trace_enabled(true)
+
+	var r := BuildAppendImplClass.build_append_impl(engine, existing_timeline)
+
+	if pm != null:
+		pm.set_timeline_trace_enabled(trace_was_enabled)
+
+	return r
+
 static func _build_full_impl(engine: GameEngine) -> Result:
 	return BuildFullImplClass.build_full_impl(engine)
-

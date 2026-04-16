@@ -1138,10 +1138,12 @@ func _set_display_game_engine(engine: GameEngine) -> void:
 		_panel_controller.reset_bank_break_tracking(game_engine.get_state())
 
 func _on_online_resume_full_history_ready(_payload: Dictionary) -> void:
-	if _timeline_controller == null or not _timeline_controller.has_method("apply_live_log_timeline_from_engine"):
+	if _timeline_controller == null:
 		return
-	_timeline_controller.apply_live_log_timeline_from_engine(true)
-	_update_ui()
+	if _timeline_controller.has_method("on_online_resume_full_history_ready"):
+		_timeline_controller.call("on_online_resume_full_history_ready")
+	elif _timeline_controller.has_method("apply_live_log_timeline_from_engine"):
+		_timeline_controller.call("apply_live_log_timeline_from_engine", true)
 
 func _open_replay_load_dialog() -> void:
 	GameLog.info("Game", "游戏内载入已禁用（仅主菜单可载入）")

@@ -73,11 +73,11 @@ static func build_full_impl(engine: GameEngine) -> Result:
 	})
 
 	if engine.command_history.is_empty():
-		return Result.success({
+		return Result.success(StepTimelineHelpersClass.attach_build_meta({
 			"initial_state_dict": state_dict_val.duplicate(true),
 			"steps": steps,
 			"events": events_out,
-		}).with_warnings(warnings)
+		}, 0, seq)).with_warnings(warnings)
 
 	# 按命令重放 + 分段 auto-advance（在 phase 变化处插入 step）
 	for i in range(engine.command_history.size()):
@@ -264,11 +264,11 @@ static func build_full_impl(engine: GameEngine) -> Result:
 			seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
 		pending_cleanup_throw_away_milestone_events = []
 
-	return Result.success({
+	return Result.success(StepTimelineHelpersClass.attach_build_meta({
 		"initial_state_dict": state_dict_val.duplicate(true),
 		"steps": steps,
 		"events": events_out,
-	}).with_warnings(warnings)
+	}, int(engine.command_history.size()), seq)).with_warnings(warnings)
 
 static func _build_step_dict(kind: String, anchor_command_index: int, state: GameState, extra: Dictionary = {}) -> Dictionary:
 	return StepTimelineHelpersClass.build_step_dict(kind, anchor_command_index, state, extra)

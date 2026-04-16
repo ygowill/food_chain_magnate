@@ -272,6 +272,7 @@ const StepTimelineCleanupPendingStateAccessTestClass = preload("res://core/tests
 const StepTimelineForceExecuteActorMismatchTestClass = preload("res://core/tests/step_timeline_force_execute_actor_mismatch_test.gd")
 const StepTimelineMarketingMilestoneOrderTestClass = preload("res://core/tests/step_timeline_marketing_milestone_order_test.gd")
 const StepTimelinePhaseBoundaryOrderTestClass = preload("res://core/tests/step_timeline_phase_boundary_order_test.gd")
+const StepTimelineIncrementalAppendTestClass = preload("res://core/tests/step_timeline_incremental_append_test.gd")
 const StepTimelineCleanupDiscardOrderTestClass = preload("res://core/tests/step_timeline_cleanup_discard_order_test.gd")
 const StepTimelineKetchupMilestoneOrderTestClass = preload("res://core/tests/step_timeline_ketchup_milestone_order_test.gd")
 const ReplayLogFutureVisibilityTestClass = preload("res://ui/scenes/tests/replay_log_future_visibility_test.gd")

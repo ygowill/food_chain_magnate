@@ -6,6 +6,7 @@ const CommandClass = preload("res://core/types/command.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const OnlineResumeSessionStateClass = preload("res://autoload/online_resume_session_state.gd")
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
+const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
 
 class _LocalEventSink:
 	extends RefCounted
@@ -70,6 +71,12 @@ func snapshot() -> Dictionary:
 
 func get_full_replay_engine():
 	return _session_state.full_replay_engine
+
+func get_full_replay_step_timeline() -> Dictionary:
+	return _session_state.get_full_replay_step_timeline()
+
+func set_full_replay_step_timeline(timeline: Dictionary) -> void:
+	_session_state.set_full_replay_step_timeline(timeline)
 
 func clear_online_resume_dual_engine_state() -> void:
 	_session_state.reset()
@@ -229,12 +236,24 @@ func _deferred_build_full_replay_engine(room_code: String, generation: int) -> v
 		_session_state.mark_full_history_error("replay_full_replay_live_tail failed: %s" % replay_tail_r.error, generation)
 		GameLog.error("NetClient", "Online resume full_replay_engine tail replay failed: %s" % replay_tail_r.error)
 		return
+	var timeline_cache_r: Result = _refresh_full_replay_step_timeline_cache(engine, false)
+	if not timeline_cache_r.ok:
+		_session_state.set_full_replay_step_timeline({})
+		GameLog.warn(
+			"NetClient",
+			"Online resume full_replay step timeline cache build failed room=%s err=%s"
+				% [_safe_text_value(normalized_room_code), _safe_text_value(timeline_cache_r.error)]
+		)
 	if not _session_state.mark_full_replay_engine_ready(engine, generation):
 		return
 	GameLog.info(
 		"NetClient",
-		"Online resume full_replay_engine ready room=%s commands=%d"
-			% [_safe_text_value(normalized_room_code), int(engine.command_history.size())]
+		"Online resume full_replay_engine ready room=%s commands=%d timeline_cached=%s"
+			% [
+				_safe_text_value(normalized_room_code),
+				int(engine.command_history.size()),
+				str(_session_state.has_full_replay_step_timeline())
+			]
 	)
 	if _net != null and is_instance_valid(_net) and _net_has_signal_value("resume_full_history_ready"):
 		_net.emit_signal("resume_full_history_ready", _session_state.snapshot())
@@ -277,6 +296,21 @@ func record_online_resume_full_history_command(cmd_dict: Dictionary, state_hash:
 		return
 	var apply_r: Result = apply_full_history_command_to_engine(full_engine, cmd_dict, state_hash)
 	if apply_r.ok:
+		var cache_r: Result = _refresh_full_replay_step_timeline_cache(full_engine, true)
+		if cache_r.ok:
+			return
+		GameLog.warn(
+			"NetClient",
+			"Online resume full_replay step timeline tail append failed room=%s origin=%s err=%s"
+				% [
+					_safe_text_value(_session_state.runtime_room_code),
+					_safe_text_value(str(origin)),
+					_safe_text_value(cache_r.error)
+				]
+		)
+		if _session_state.full_history_source_mode == "archive_payload" and not _session_state.full_archive.is_empty():
+			schedule_full_replay_engine_bootstrap(_session_state.runtime_room_code, true)
+			return
 		return
 	GameLog.warn(
 		"NetClient",
@@ -287,6 +321,37 @@ func record_online_resume_full_history_command(cmd_dict: Dictionary, state_hash:
 		schedule_full_replay_engine_bootstrap(_session_state.runtime_room_code, true)
 		return
 	_session_state.mark_full_history_error("append failed: %s" % apply_r.error, _session_state.full_history_generation)
+
+func _refresh_full_replay_step_timeline_cache(engine: GameEngine, allow_incremental_append: bool = false) -> Result:
+	if engine == null or engine.get_state() == null:
+		return Result.failure("full_replay_engine 未就绪")
+
+	var previous_timeline := _session_state.get_full_replay_step_timeline()
+	if bool(allow_incremental_append) and not previous_timeline.is_empty():
+		var append_r: Result = StepTimelineBuildClass.append_from_existing(engine, previous_timeline)
+		if append_r.ok and append_r.value is Dictionary:
+			var append_info: Dictionary = Dictionary(append_r.value)
+			var append_timeline_val = append_info.get("timeline", null)
+			if append_timeline_val is Dictionary:
+				var append_timeline: Dictionary = Dictionary(append_timeline_val).duplicate(true)
+				_session_state.set_full_replay_step_timeline(append_timeline)
+				return Result.success({
+					"timeline": append_timeline,
+					"append_applied": bool(append_info.get("append_applied", false)),
+				}).with_warnings(append_r.warnings)
+
+	var build_r: Result = StepTimelineBuildClass.build_full(engine)
+	if not build_r.ok:
+		return build_r
+	if not (build_r.value is Dictionary):
+		return Result.failure("step timeline cache build 返回类型错误")
+
+	var timeline: Dictionary = Dictionary(build_r.value).duplicate(true)
+	_session_state.set_full_replay_step_timeline(timeline)
+	return Result.success({
+		"timeline": timeline,
+		"append_applied": false,
+	}).with_warnings(build_r.warnings)
 
 func replay_full_replay_live_tail(engine: GameEngine, generation: int) -> Result:
 	if int(generation) != int(_session_state.full_history_generation):

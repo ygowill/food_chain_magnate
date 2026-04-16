@@ -4,6 +4,7 @@ class_name OnlineResumeFullHistoryAdapter
 extends RefCounted
 
 const StepTimelineBuildHelpersClass = preload("res://ui/scenes/game/timeline/step_timeline_build_helpers.gd")
+const StepTimelineHelpersClass = preload("res://gameplay/replay/step_timeline_build/helpers.gd")
 
 static func is_applicable() -> bool:
 	if NetContext == null:
@@ -41,11 +42,71 @@ static func get_history_engine() -> GameEngine:
 		return engine
 	return null
 
-static func build_history_timeline(game_log_panel: Object, read_only: bool) -> Result:
+static func get_cached_history_timeline() -> Dictionary:
+	if NetClient == null or not NetClient.has_method("get_online_resume_full_replay_step_timeline"):
+		return {}
+	var timeline_val = NetClient.get_online_resume_full_replay_step_timeline()
+	return Dictionary(timeline_val).duplicate(true) if (timeline_val is Dictionary) else {}
+
+static func set_cached_history_timeline(timeline: Dictionary) -> void:
+	if NetClient == null or not NetClient.has_method("set_online_resume_full_replay_step_timeline"):
+		return
+	NetClient.set_online_resume_full_replay_step_timeline(Dictionary(timeline).duplicate(true))
+
+static func build_history_timeline(
+	game_log_panel: Object,
+	read_only: bool,
+	previous_timeline: Dictionary = {},
+	allow_incremental_append: bool = false
+) -> Result:
 	var engine := get_history_engine()
 	if engine == null:
 		return Result.failure("full_replay_engine 未就绪")
-	return StepTimelineBuildHelpersClass.build_and_load(engine, game_log_panel, read_only)
+
+	var baseline_timeline: Dictionary = {}
+	if bool(allow_incremental_append) and previous_timeline is Dictionary and not previous_timeline.is_empty():
+		baseline_timeline = previous_timeline.duplicate(true)
+	if baseline_timeline.is_empty():
+		baseline_timeline = get_cached_history_timeline()
+
+	if not baseline_timeline.is_empty():
+		var cached_processed_count := StepTimelineHelpersClass.read_processed_command_count(baseline_timeline)
+		var current_count := int(engine.command_history.size())
+		var build_r: Result
+		if cached_processed_count >= current_count:
+			build_r = StepTimelineBuildHelpersClass.load_prebuilt_timeline(
+				baseline_timeline,
+				game_log_panel,
+				read_only
+			)
+		else:
+			build_r = StepTimelineBuildHelpersClass.build_and_load(
+				engine,
+				game_log_panel,
+				read_only,
+				baseline_timeline,
+				true
+			)
+		if build_r.ok and build_r.value is Dictionary:
+			var info: Dictionary = Dictionary(build_r.value)
+			var next_timeline_val = info.get("timeline", null)
+			if next_timeline_val is Dictionary:
+				set_cached_history_timeline(Dictionary(next_timeline_val))
+		return build_r
+
+	var build_r := StepTimelineBuildHelpersClass.build_and_load(
+		engine,
+		game_log_panel,
+		read_only,
+		{},
+		false
+	)
+	if build_r.ok and build_r.value is Dictionary:
+		var info: Dictionary = Dictionary(build_r.value)
+		var timeline_val = info.get("timeline", null)
+		if timeline_val is Dictionary:
+			set_cached_history_timeline(Dictionary(timeline_val))
+	return build_r
 
 static func map_runtime_command_index_to_global(runtime_command_index: int) -> int:
 	var snapshot := get_session_snapshot()

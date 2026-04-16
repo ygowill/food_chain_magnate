@@ -15,6 +15,7 @@ var full_history_source_mode: String = "none"
 var last_full_history_error: String = ""
 var full_history_generation: int = 0
 var full_replay_live_tail_commands: Array[Dictionary] = []
+var full_replay_step_timeline: Dictionary = {}
 
 func reset() -> void:
 	clear_runtime()
@@ -69,6 +70,15 @@ func mark_full_history_error(message: String, generation: int) -> bool:
 func has_full_archive_payload() -> bool:
 	return not full_archive.is_empty()
 
+func set_full_replay_step_timeline(timeline: Dictionary) -> void:
+	full_replay_step_timeline = Dictionary(timeline).duplicate(true) if (timeline is Dictionary) else {}
+
+func get_full_replay_step_timeline() -> Dictionary:
+	return full_replay_step_timeline.duplicate(true)
+
+func has_full_replay_step_timeline() -> bool:
+	return not full_replay_step_timeline.is_empty()
+
 func append_full_replay_live_tail_command(cmd_dict: Dictionary, state_hash: String = "") -> void:
 	if cmd_dict.is_empty():
 		return
@@ -105,6 +115,7 @@ func snapshot() -> Dictionary:
 		"full_replay_command_count": int(full_replay_engine.command_history.size()) if full_replay_engine != null else 0,
 		"full_replay_state_hash": full_hash,
 		"full_replay_live_tail_count": full_replay_live_tail_commands.size(),
+		"full_replay_step_timeline_ready": not full_replay_step_timeline.is_empty(),
 		"full_history_source_mode": full_history_source_mode,
 		"full_archive_meta": full_archive_meta.duplicate(true),
 		"has_full_archive_payload": not full_archive.is_empty(),
@@ -120,5 +131,6 @@ func _reset_full_history_state(preserve_live_tail: bool) -> void:
 	full_archive_meta = {}
 	full_history_source_mode = "none"
 	last_full_history_error = ""
+	full_replay_step_timeline = {}
 	if not bool(preserve_live_tail):
 		full_replay_live_tail_commands.clear()

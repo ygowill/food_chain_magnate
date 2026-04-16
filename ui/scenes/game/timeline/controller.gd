@@ -8,6 +8,7 @@ const GameTimelineHistoryStepSupportClass = preload("res://ui/scenes/game/timeli
 const GameTimelineReplayStepTimelineSupportClass = preload("res://ui/scenes/game/timeline/replay_step_timeline_support.gd")
 const GameTimelineReplayBarSupportClass = preload("res://ui/scenes/game/timeline/replay_bar_support.gd")
 const GameTimelineOnlineResumeHistoryViewSupportClass = preload("res://ui/scenes/game/timeline/online_resume_history_view_support.gd")
+const OnlineResumeFullHistoryAdapterClass = preload("res://ui/scenes/game/timeline/online_resume_full_history_adapter.gd")
 const GameTimelineSeekRoutingSupportClass = preload("res://ui/scenes/game/timeline/seek_routing_support.gd")
 const GameTimelineUiStateSupportClass = preload("res://ui/scenes/game/timeline/ui_state_support.gd")
 const GameTimelineReplaySessionSupportClass = preload("res://ui/scenes/game/timeline/replay_session_support.gd")
@@ -251,13 +252,29 @@ func _flush_live_log_timeline_refresh() -> void:
 	_live_history_refresh_scheduled = false
 	apply_live_log_timeline_from_engine()
 
+func on_online_resume_full_history_ready() -> void:
+	if _replay_mode_active:
+		return
+	_live_history_dirty = true
+	_live_history_last_signature.clear()
+	_sync_online_resume_replay_entry_state()
+	if is_instance_valid(_game_log_panel) and _game_log_panel.visible:
+		apply_live_log_timeline_from_engine(true)
+
 func _build_live_history_signature(runtime_engine: GameEngine) -> Dictionary:
 	var active_source := "online_resume_full_history" if _is_online_resume_full_history_ready() else "runtime"
+	var timeline_engine: GameEngine = runtime_engine
+	if active_source == "online_resume_full_history":
+		var history_engine := OnlineResumeFullHistoryAdapterClass.get_history_engine()
+		if history_engine != null and is_instance_valid(history_engine):
+			timeline_engine = history_engine
 	return {
 		"engine_id": int(runtime_engine.get_instance_id()),
 		"history_size": int(runtime_engine.command_history.size()),
 		"cursor_command_index": int(runtime_engine.current_command_index),
 		"history_source": active_source,
+		"timeline_engine_id": int(timeline_engine.get_instance_id()) if timeline_engine != null else -1,
+		"timeline_history_size": int(timeline_engine.command_history.size()) if timeline_engine != null else -1,
 	}
 
 func _can_reuse_live_history(signature: Dictionary) -> bool:
@@ -315,10 +332,20 @@ func apply_live_log_timeline_from_engine(force_rebuild: bool = false) -> void:
 		})
 		return
 
+	var allow_incremental_append := false
+	if _history_step_timeline_active and not _history_step_timeline.is_empty():
+		allow_incremental_append = (
+			_history_timeline_source == str(signature.get("history_source", "runtime"))
+			and int(_live_history_last_signature.get("timeline_engine_id", -1)) == int(signature.get("timeline_engine_id", -2))
+			and int(signature.get("timeline_history_size", -1)) > int(_live_history_last_signature.get("timeline_history_size", -1))
+		)
+
 	var build_r := GameTimelineOnlineResumeHistoryViewSupportClass.build_live_history_view(
 		runtime_engine,
 		_game_log_panel,
 		_history_timeline_source,
+		_history_step_timeline,
+		allow_incremental_append,
 		Callable(self, "_command_index_to_last_step_index")
 	)
 	if not build_r.ok:
@@ -352,7 +379,9 @@ func apply_live_log_timeline_from_engine(force_rebuild: bool = false) -> void:
 	OnlinePerfTraceClass.end_span(span, {
 		"ok": true,
 		"reused": false,
+		"incremental_append_requested": bool(allow_incremental_append),
 		"history_size": int(runtime_engine.command_history.size()),
+		"timeline_history_size": int(signature.get("timeline_history_size", -1)),
 		"cursor_command_index": int(runtime_engine.current_command_index),
 		"head_step_index": int(_history_head_step_index),
 		"cursor_step_index": int(_history_cursor_step_index),

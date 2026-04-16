@@ -36,6 +36,8 @@ static func build_live_history_view(
 	runtime_engine: GameEngine,
 	game_log_panel: Object,
 	previous_history_timeline_source: String,
+	previous_history_timeline: Dictionary,
+	allow_incremental_append: bool,
 	command_index_to_last_step_index: Callable
 ) -> Result:
 	if runtime_engine == null:
@@ -54,9 +56,20 @@ static func build_live_history_view(
 	var build_r: Result
 	var cursor_step_index := -1
 	if is_full_history_ready():
-		build_r = OnlineResumeFullHistoryAdapterClass.build_history_timeline(game_log_panel, false)
+		build_r = OnlineResumeFullHistoryAdapterClass.build_history_timeline(
+			game_log_panel,
+			false,
+			previous_history_timeline,
+			allow_incremental_append
+		)
 	else:
-		build_r = StepTimelineBuildHelpersClass.build_and_load(runtime_engine, game_log_panel, false)
+		build_r = StepTimelineBuildHelpersClass.build_and_load(
+			runtime_engine,
+			game_log_panel,
+			false,
+			previous_history_timeline,
+			allow_incremental_append
+		)
 	if not build_r.ok:
 		return build_r
 	if not (build_r.value is Dictionary):

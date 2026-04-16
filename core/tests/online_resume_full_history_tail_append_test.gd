@@ -7,6 +7,7 @@ const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const OnlineResumeFastRuntimeArchiveBuilderClass = preload("res://core/engine/game_engine/online_resume_fast_runtime_archive_builder.gd")
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
+const StepTimelineHelpersClass = preload("res://gameplay/replay/step_timeline_build/helpers.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 
 static func run() -> Result:
@@ -347,6 +348,59 @@ static func run() -> Result:
 			"最终 full_replay_live_tail_count 错误: %d"
 				% int(session_final.get("full_replay_live_tail_count", 0))
 		)
+	if not bool(session_final.get("full_replay_step_timeline_ready", false)):
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"最终 snapshot 应标记 full_replay_step_timeline_ready"
+		)
+
+	var cached_timeline_val = client.get_online_resume_full_replay_step_timeline()
+	if not (cached_timeline_val is Dictionary):
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"cached full_replay_step_timeline 类型错误"
+		)
+	var cached_timeline: Dictionary = Dictionary(cached_timeline_val).duplicate(true)
+	var cached_processed_count := StepTimelineHelpersClass.read_processed_command_count(cached_timeline)
+	if cached_processed_count != full_history_size + 2:
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"cached full_replay_step_timeline processed_command_count 错误: %d vs %d"
+				% [cached_processed_count, full_history_size + 2]
+		)
 
 	_restore(
 		prev_mode,
@@ -366,6 +420,7 @@ static func run() -> Result:
 		"full_history_size": full_history_size,
 		"runtime_history_size": runtime_history_size,
 		"tail_count": int(session_final.get("full_replay_live_tail_count", 0)),
+		"cached_processed_count": cached_processed_count,
 	})
 
 static func _build_resume_bundle_with_live_tail() -> Result:

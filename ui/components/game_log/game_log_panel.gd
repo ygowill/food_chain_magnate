@@ -206,6 +206,9 @@ func append_entry(entry: Dictionary) -> void:
 func get_entries() -> Array[Dictionary]:
 	return _entries_all.duplicate(true)
 
+func get_step_timeline_entries() -> Array[Dictionary]:
+	return _timeline_entries.duplicate(true)
+
 func get_last_step_timeline_update_mode() -> String:
 	return _last_step_timeline_update_mode
 
@@ -252,21 +255,7 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 	var next_timeline: Dictionary = timeline.duplicate(true) if (timeline is Dictionary) else {}
 	if _can_append_step_timeline(next_timeline, entries, bool(reset_extra_entries)):
 		var appended_entries := _build_appended_timeline_entries(entries)
-		var next_entries_all := _build_entries_all_for_append(appended_entries)
-		if _append_step_timeline_display(next_timeline, next_entries_all):
-			_step_timeline = next_timeline
-			for appended in appended_entries:
-				if appended is Dictionary:
-					_timeline_entries.append(Dictionary(appended))
-			_rebuild_entries_all()
-			_blank_display_warned = false
-			_prune_expanded_action_groups()
-			if fold_details_check != null:
-				fold_details_check.button_pressed = _fold_details_enabled
-			_last_step_timeline_update_mode = "append"
-			_apply_timeline_state_to_items(true)
-			_request_scroll_to_bottom()
-			_update_entry_count()
+		if append_step_timeline(next_timeline, appended_entries, bool(reset_extra_entries)):
 			OnlinePerfTraceClass.end_span(span, {
 				"mode": "append",
 				"entry_count": int(_entries_all.size()),
@@ -303,6 +292,55 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 		"entry_count": int(_entries_all.size()),
 		"timeline_step_count": int(_get_step_count(_step_timeline)),
 	})
+
+func append_step_timeline(timeline: Dictionary, appended_entries: Array[Dictionary], reset_extra_entries: bool = false) -> bool:
+	var span := OnlinePerfTraceClass.begin_span("ui.game_log.append_step_timeline", {
+		"appended_entries": int(appended_entries.size()),
+		"current_entries": int(_entries_all.size()),
+		"timeline_loaded": bool(_is_step_timeline_loaded()),
+		"reset_extra_entries": bool(reset_extra_entries),
+	})
+	if bool(reset_extra_entries):
+		OnlinePerfTraceClass.end_span(span, {"ok": false, "reason": "reset_extra_entries"})
+		return false
+	if not _is_step_timeline_loaded():
+		OnlinePerfTraceClass.end_span(span, {"ok": false, "reason": "timeline_not_loaded"})
+		return false
+	if log_container == null or not is_instance_valid(log_container):
+		OnlinePerfTraceClass.end_span(span, {"ok": false, "reason": "log_container_missing"})
+		return false
+	if _log_items.is_empty():
+		OnlinePerfTraceClass.end_span(span, {"ok": false, "reason": "log_items_empty"})
+		return false
+	if timeline == null or not (timeline is Dictionary) or timeline.is_empty():
+		OnlinePerfTraceClass.end_span(span, {"ok": false, "reason": "timeline_invalid"})
+		return false
+
+	var next_timeline: Dictionary = timeline.duplicate(true)
+	var next_entries_all := _build_entries_all_for_append(appended_entries)
+	if not _append_step_timeline_display(next_timeline, next_entries_all):
+		OnlinePerfTraceClass.end_span(span, {"ok": false, "reason": "append_display_failed"})
+		return false
+
+	_step_timeline = next_timeline
+	for appended in appended_entries:
+		if appended is Dictionary:
+			_timeline_entries.append(Dictionary(appended))
+	_rebuild_entries_all()
+	_blank_display_warned = false
+	_prune_expanded_action_groups()
+	if fold_details_check != null:
+		fold_details_check.button_pressed = _fold_details_enabled
+	_last_step_timeline_update_mode = "append"
+	_apply_timeline_state_to_items(true)
+	_request_scroll_to_bottom()
+	_update_entry_count()
+	OnlinePerfTraceClass.end_span(span, {
+		"ok": true,
+		"entry_count": int(_entries_all.size()),
+		"timeline_step_count": int(_get_step_count(_step_timeline)),
+	})
+	return true
 
 func set_expand_enabled(_enabled: bool) -> void:
 	# 保留接口兼容 FullLogWindow，当前日志面板已移除“全屏”按钮。

@@ -703,6 +703,12 @@ func get_online_resume_session_snapshot() -> Dictionary:
 func get_online_resume_full_replay_engine():
 	return _online_resume_support.get_full_replay_engine()
 
+func get_online_resume_full_replay_step_timeline() -> Dictionary:
+	return _online_resume_support.get_full_replay_step_timeline()
+
+func set_online_resume_full_replay_step_timeline(timeline: Dictionary) -> void:
+	_online_resume_support.set_full_replay_step_timeline(timeline)
+
 func load_archive_for_online_client(engine, archive: Dictionary) -> Result:
 	if not (engine is GameEngine):
 		return Result.failure("load archive failed: engine 为空")
