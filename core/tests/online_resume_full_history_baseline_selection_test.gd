@@ -21,16 +21,16 @@ static func run() -> Result:
 		],
 	}
 
-	var prefer_cached: Dictionary = OnlineResumeFullHistoryAdapterClass.select_preferred_baseline_timeline(
+	var prefer_previous_incremental: Dictionary = OnlineResumeFullHistoryAdapterClass.select_preferred_baseline_timeline(
 		previous_timeline,
 		cached_timeline,
 		20,
 		true
 	)
-	if str(prefer_cached.get("source", "")) != "cached":
-		return Result.failure("应优先选择更新鲜的 cached timeline")
-	if Dictionary(prefer_cached.get("timeline", {})) != cached_timeline:
-		return Result.failure("更新鲜的 cached timeline 应作为 baseline 返回")
+	if str(prefer_previous_incremental.get("source", "")) != "previous":
+		return Result.failure("允许增量 append 时应优先复用 previous timeline")
+	if Dictionary(prefer_previous_incremental.get("timeline", {})) != previous_timeline:
+		return Result.failure("允许增量 append 时应返回 previous timeline 作为 baseline")
 
 	var prefer_previous: Dictionary = OnlineResumeFullHistoryAdapterClass.select_preferred_baseline_timeline(
 		{

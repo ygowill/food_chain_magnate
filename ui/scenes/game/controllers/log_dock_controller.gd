@@ -121,17 +121,19 @@ func show_game_log_panel_in_right_panel() -> void:
 	if _ensure_right_panel_visible.is_valid():
 		_ensure_right_panel_visible.call()
 
-	# 自动打开日志（例如联机等待他人操作）也需要先重建一次时间线，
-	# 否则会出现“上一条动作直到下一次命令到来才显示”的滞后感。
-	if is_instance_valid(_timeline_controller) and _timeline_controller.has_method("apply_live_log_timeline_from_engine"):
-		_timeline_controller.call("apply_live_log_timeline_from_engine")
-
 	# 若右侧 DockHost 内已有可见面板（例如当前动作 UI），先临时隐藏，避免多个 docked 视图竞争焦点。
 	_hide_other_visible_docked_panels()
 
 	_game_log_panel.set_meta("popup_title", "日志")
 	if _dock_popup_into_right_panel.is_valid():
 		_dock_popup_into_right_panel.call(_game_log_panel)
+	# 自动打开日志（例如联机等待他人操作）仍需要尽快刷新时间线，
+	# 但这里不要在 UI 热路径里同步重建；改为 dock 完成后 deferred 请求刷新。
+	if is_instance_valid(_timeline_controller):
+		if _timeline_controller.has_method("request_live_log_timeline_refresh"):
+			_timeline_controller.call("request_live_log_timeline_refresh")
+		elif _timeline_controller.has_method("apply_live_log_timeline_from_engine"):
+			_timeline_controller.call_deferred("apply_live_log_timeline_from_engine")
 	if _game_log_panel.has_method("ensure_display_ready"):
 		_game_log_panel.call_deferred("ensure_display_ready")
 	OnlinePerfTraceClass.end_span(span, {

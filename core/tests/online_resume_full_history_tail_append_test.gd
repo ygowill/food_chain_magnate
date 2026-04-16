@@ -386,7 +386,7 @@ static func run() -> Result:
 		)
 	var cached_timeline: Dictionary = Dictionary(cached_timeline_val).duplicate(true)
 	var cached_processed_count := StepTimelineHelpersClass.read_processed_command_count(cached_timeline)
-	if cached_processed_count != full_history_size + 2:
+	if cached_processed_count != full_history_size + 1:
 		return _restore_and_fail(
 			prev_mode,
 			prev_local_player_id,
@@ -400,8 +400,8 @@ static func run() -> Result:
 			prev_engine,
 			prev_is_game_active,
 			prev_event_history,
-			"cached full_replay_step_timeline processed_command_count 错误: %d vs %d"
-				% [cached_processed_count, full_history_size + 2]
+			"cached full_replay_step_timeline 应保留上次按需构建结果，实际: %d vs %d"
+				% [cached_processed_count, full_history_size + 1]
 		)
 
 	_restore(

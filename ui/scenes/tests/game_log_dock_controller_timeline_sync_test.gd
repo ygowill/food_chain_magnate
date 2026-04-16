@@ -1,4 +1,5 @@
-# Regression: when log panel is auto-opened (not via manual toggle), timeline should refresh immediately.
+# Regression: when log panel is auto-opened (not via manual toggle), it should request
+# a deferred timeline refresh without blocking the current UI update path.
 class_name GameLogDockControllerTimelineSyncTest
 extends RefCounted
 
@@ -7,8 +8,11 @@ const GameLogDockControllerClass = preload("res://ui/scenes/game/controllers/log
 class _TimelineSpy:
 	extends RefCounted
 	var apply_count: int = 0
+	var request_count: int = 0
 	func apply_live_log_timeline_from_engine() -> void:
 		apply_count += 1
+	func request_live_log_timeline_refresh() -> void:
+		request_count += 1
 
 static func run() -> Result:
 	var tree = Engine.get_main_loop()
@@ -55,11 +59,16 @@ static func run() -> Result:
 	)
 
 	controller.show_game_log_panel_in_right_panel()
-	if timeline.apply_count != 1:
+	if timeline.request_count != 1:
 		if controller != null and controller.has_method("dispose"):
 			controller.dispose()
 		await _cleanup_nodes([game_log_panel, right_dock_host], st)
-		return Result.failure("首次 show 应触发 1 次时间线刷新，实际=%d" % timeline.apply_count)
+		return Result.failure("首次 show 应触发 1 次 deferred 时间线刷新请求，实际=%d" % timeline.request_count)
+	if timeline.apply_count != 0:
+		if controller != null and controller.has_method("dispose"):
+			controller.dispose()
+		await _cleanup_nodes([game_log_panel, right_dock_host], st)
+		return Result.failure("自动 show 不应同步执行时间线刷新，实际 apply=%d" % timeline.apply_count)
 	if game_log_panel.get_parent() != right_dock_host or not game_log_panel.visible:
 		if controller != null and controller.has_method("dispose"):
 			controller.dispose()
@@ -68,11 +77,11 @@ static func run() -> Result:
 
 	# 已经显示在右侧时重复调用，不应重复触发刷新。
 	controller.show_game_log_panel_in_right_panel()
-	if timeline.apply_count != 1:
+	if timeline.request_count != 1:
 		if controller != null and controller.has_method("dispose"):
 			controller.dispose()
 		await _cleanup_nodes([game_log_panel, right_dock_host], st)
-		return Result.failure("重复 show 不应重复刷新，实际=%d" % timeline.apply_count)
+		return Result.failure("重复 show 不应重复请求刷新，实际=%d" % timeline.request_count)
 
 	if controller != null and controller.has_method("dispose"):
 		controller.dispose()

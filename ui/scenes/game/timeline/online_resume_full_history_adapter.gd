@@ -154,7 +154,7 @@ static func select_preferred_baseline_timeline(
 	if bool(allow_incremental_append) and not previous_normalized.is_empty():
 		selected_timeline = previous_normalized
 		source = "previous"
-	if not cached_normalized.is_empty():
+	if not cached_normalized.is_empty() and source != "previous":
 		if selected_timeline.is_empty() or cached_processed_count >= previous_processed_count:
 			selected_timeline = cached_normalized
 			source = "cached"

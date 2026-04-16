@@ -402,7 +402,17 @@ func record_online_resume_full_history_command(cmd_dict: Dictionary, state_hash:
 		return
 	var apply_r: Result = apply_full_history_command_to_engine(full_engine, cmd_dict, state_hash)
 	if apply_r.ok:
-		_schedule_deferred_full_replay_step_timeline_cache_refresh(true, origin)
+		if not _session_state.has_full_replay_step_timeline():
+			_schedule_deferred_full_replay_step_timeline_cache_refresh(true, origin)
+		else:
+			_emit_resume_cache_event("resume_cache.timeline_cache_refresh.skipped_on_demand", {
+				"origin": str(origin),
+				"reason": "cache_will_refresh_on_demand",
+				"full_replay_command_count": int(full_engine.command_history.size()),
+				"cached_timeline_processed_command_count": int(
+					_session_state.full_replay_step_timeline.get("_build_meta", {}).get("processed_command_count", -1)
+				),
+			})
 		return
 	GameLog.warn(
 		"NetClient",
