@@ -18,8 +18,11 @@ static func sync_ui(
 	hide_replay_bar: Callable
 ) -> void:
 	if is_instance_valid(game_log_panel):
-		game_log_panel.call("set_timeline_head", int(head_index))
-		game_log_panel.call("set_timeline_cursor", int(cursor_index))
+		if game_log_panel.has_method("set_timeline_head_cursor"):
+			game_log_panel.call("set_timeline_head_cursor", int(head_index), int(cursor_index))
+		else:
+			game_log_panel.call("set_timeline_head", int(head_index))
+			game_log_panel.call("set_timeline_cursor", int(cursor_index))
 
 	var show_bar := bool(replay_mode_active) or int(cursor_index) < int(head_index) or bool(manual_replay_enabled)
 	if show_bar:

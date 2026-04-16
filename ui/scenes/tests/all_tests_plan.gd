@@ -479,6 +479,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.UiSyncFirstHave20PopupTestClass.run(),
 			},
 			{
+				"name": "TimelineUiStateSupportBatchUpdateTest",
+				"fn": func() -> Result: return TestRefs.TimelineUiStateSupportBatchUpdateTestClass.run(),
+			},
+			{
 				"name": "TurnOrderSelectionModalOnlineVisibilityTest",
 				"fn": func() -> Result: return TestRefs.TurnOrderSelectionModalOnlineVisibilityTestClass.run(),
 			},

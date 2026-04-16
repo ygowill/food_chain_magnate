@@ -15,6 +15,7 @@ var full_history_source_mode: String = "none"
 var last_full_history_error: String = ""
 var full_history_generation: int = 0
 var full_replay_live_tail_commands: Array[Dictionary] = []
+var full_replay_live_tail_applied_count: int = 0
 var full_replay_step_timeline: Dictionary = {}
 
 func reset() -> void:
@@ -56,6 +57,7 @@ func mark_full_replay_engine_ready(engine: GameEngine, generation: int) -> bool:
 		return false
 	full_replay_engine = engine
 	full_replay_engine_ready = engine != null and engine.get_state() != null
+	full_replay_live_tail_applied_count = full_replay_live_tail_commands.size()
 	last_full_history_error = ""
 	return full_replay_engine_ready
 
@@ -79,6 +81,9 @@ func get_full_replay_step_timeline() -> Dictionary:
 func has_full_replay_step_timeline() -> bool:
 	return not full_replay_step_timeline.is_empty()
 
+func mark_full_replay_live_tail_applied(count: int) -> void:
+	full_replay_live_tail_applied_count = clampi(int(count), 0, full_replay_live_tail_commands.size())
+
 func append_full_replay_live_tail_command(cmd_dict: Dictionary, state_hash: String = "") -> void:
 	if cmd_dict.is_empty():
 		return
@@ -90,6 +95,19 @@ func append_full_replay_live_tail_command(cmd_dict: Dictionary, state_hash: Stri
 func get_full_replay_live_tail_commands() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for item_val in full_replay_live_tail_commands:
+		if not (item_val is Dictionary):
+			continue
+		out.append(Dictionary(item_val).duplicate(true))
+	return out
+
+func get_pending_full_replay_live_tail_commands(start_index: int = -1) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var start := int(start_index)
+	if start < 0:
+		start = int(full_replay_live_tail_applied_count)
+	start = clampi(start, 0, full_replay_live_tail_commands.size())
+	for idx in range(start, full_replay_live_tail_commands.size()):
+		var item_val = full_replay_live_tail_commands[idx]
 		if not (item_val is Dictionary):
 			continue
 		out.append(Dictionary(item_val).duplicate(true))
@@ -115,6 +133,8 @@ func snapshot() -> Dictionary:
 		"full_replay_command_count": int(full_replay_engine.command_history.size()) if full_replay_engine != null else 0,
 		"full_replay_state_hash": full_hash,
 		"full_replay_live_tail_count": full_replay_live_tail_commands.size(),
+		"full_replay_live_tail_applied_count": int(full_replay_live_tail_applied_count),
+		"full_replay_live_tail_pending_count": maxi(0, int(full_replay_live_tail_commands.size()) - int(full_replay_live_tail_applied_count)),
 		"full_replay_step_timeline_ready": not full_replay_step_timeline.is_empty(),
 		"full_history_source_mode": full_history_source_mode,
 		"full_archive_meta": full_archive_meta.duplicate(true),
@@ -132,5 +152,6 @@ func _reset_full_history_state(preserve_live_tail: bool) -> void:
 	full_history_source_mode = "none"
 	last_full_history_error = ""
 	full_replay_step_timeline = {}
+	full_replay_live_tail_applied_count = 0
 	if not bool(preserve_live_tail):
 		full_replay_live_tail_commands.clear()

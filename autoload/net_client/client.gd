@@ -703,6 +703,12 @@ func get_online_resume_session_snapshot() -> Dictionary:
 func get_online_resume_full_replay_engine():
 	return _online_resume_support.get_full_replay_engine()
 
+func ensure_online_resume_full_history_current() -> Result:
+	return _online_resume_support.ensure_full_replay_engine_current()
+
+func ensure_online_resume_full_history_timeline_current(allow_incremental_append: bool = true) -> Result:
+	return _online_resume_support.ensure_full_replay_step_timeline_current(bool(allow_incremental_append))
+
 func get_online_resume_full_replay_step_timeline() -> Dictionary:
 	return _online_resume_support.get_full_replay_step_timeline()
 

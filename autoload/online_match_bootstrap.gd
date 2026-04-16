@@ -243,14 +243,7 @@ static func should_wait_for_resume_full_history(room_state: Dictionary, session_
 	var room_code := str(room_state.get("room_code", "")).strip_edges().to_upper()
 	if not snapshot_room_code.is_empty() and not room_code.is_empty() and snapshot_room_code != room_code:
 		return false
-	var source_mode := str(snapshot.get("full_history_source_mode", "")).strip_edges()
-	var has_full_archive := bool(snapshot.get("has_full_archive_payload", false))
-	if not has_full_archive and source_mode != "archive_payload":
-		return false
-	return not (
-		bool(snapshot.get("full_replay_ready", false))
-		and bool(snapshot.get("full_replay_step_timeline_ready", false))
-	)
+	return false
 
 func _build_starting_loading_state(room_state: Dictionary, bootstrap: Dictionary) -> Dictionary:
 	var phase := str(bootstrap.get("phase", PHASE_PREPARING)).strip_edges()

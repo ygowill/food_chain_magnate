@@ -147,10 +147,10 @@ static func run() -> Result:
 		_dispose_controllers([idle_controller, controller, delta_controller, fast_controller, full_history_controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "带完整历史的 fast-start 恢复路径应触发 on_game_started")
-	if full_history_harness.statuses.find("已完成完整历史加载，正在进入对局...") < 0:
+	if full_history_harness.statuses.find("已完成快启动，正在进入对局（完整历史后台加载）...") < 0:
 		_dispose_controllers([idle_controller, controller, delta_controller, fast_controller, full_history_controller])
 		host.queue_free()
-		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "带完整历史的 fast-start 恢复路径应等待 full history ready")
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "带完整历史的 fast-start 恢复路径应提示后台加载完整历史")
 
 	NetContext.set_online_resume_context("ROOM101", "player", "https://platform.example.test")
 	NetContext.mark_online_resume_in_game(true)

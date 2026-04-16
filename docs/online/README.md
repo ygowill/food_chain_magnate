@@ -10,3 +10,4 @@
 补充文档：
 
 - `docs/online/online_resume_fastload_full_history_design_2026-04-14.md`：恢复房“快加载 + 完整历史”双轨设计（方案 D 完整版）
+- `docs/online/online_resume_hot_path_rebuild_plan_2026-04-16.md`：恢复房热路径重构结论，包含根因、证据、保留/推倒范围、分阶段计划与预估收益

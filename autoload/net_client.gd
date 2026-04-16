@@ -363,6 +363,18 @@ func get_online_resume_full_replay_engine():
 		return _internal.get_online_resume_full_replay_engine()
 	return null
 
+func ensure_online_resume_full_history_current() -> Result:
+	_ensure_internal()
+	if _internal != null and is_instance_valid(_internal) and _internal.has_method("ensure_online_resume_full_history_current"):
+		return _internal.ensure_online_resume_full_history_current()
+	return ResultClass.failure("online resume full history unavailable")
+
+func ensure_online_resume_full_history_timeline_current(allow_incremental_append: bool = true) -> Result:
+	_ensure_internal()
+	if _internal != null and is_instance_valid(_internal) and _internal.has_method("ensure_online_resume_full_history_timeline_current"):
+		return _internal.ensure_online_resume_full_history_timeline_current(bool(allow_incremental_append))
+	return ResultClass.failure("online resume full history timeline unavailable")
+
 func get_online_resume_full_replay_step_timeline() -> Dictionary:
 	_ensure_internal()
 	if _internal != null and is_instance_valid(_internal) and _internal.has_method("get_online_resume_full_replay_step_timeline"):

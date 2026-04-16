@@ -54,10 +54,6 @@ var _get_online_client_engine_room_code: Callable = Callable()
 var _safe_text: Callable = Callable()
 var _short_hash: Callable = Callable()
 var _net_has_signal: Callable = Callable()
-var _full_replay_timeline_refresh_scheduled: bool = false
-var _full_replay_timeline_refresh_allow_incremental_append: bool = false
-var _full_replay_timeline_refresh_generation: int = 0
-var _full_replay_timeline_refresh_room_code: String = ""
 
 func setup(net_client, callbacks: Dictionary = {}) -> void:
 	_net = net_client
@@ -77,6 +73,40 @@ func snapshot() -> Dictionary:
 
 func get_full_replay_engine():
 	return _session_state.full_replay_engine
+
+func ensure_full_replay_engine_current() -> Result:
+	var full_engine: GameEngine = _session_state.full_replay_engine
+	var generation := int(_session_state.full_history_generation)
+	var room_code := str(_session_state.full_replay_room_code).strip_edges().to_upper()
+	if room_code.is_empty():
+		room_code = str(_session_state.runtime_room_code).strip_edges().to_upper()
+
+	if not _session_state.full_replay_engine_ready or full_engine == null or full_engine.get_state() == null:
+		if _session_state.full_history_source_mode != "archive_payload" or _session_state.full_archive.is_empty():
+			return Result.failure("full_replay_engine 未就绪")
+		var build_r := _build_full_replay_engine_for_generation(room_code, generation, false, true)
+		if not build_r.ok:
+			return build_r
+		full_engine = _session_state.full_replay_engine
+		if full_engine == null or full_engine.get_state() == null:
+			return Result.failure("full_replay_engine 构建后仍未就绪")
+
+	var tail_r := _replay_pending_full_replay_live_tail(full_engine, generation)
+	if not tail_r.ok:
+		return tail_r
+	return Result.success(full_engine)
+
+func ensure_full_replay_step_timeline_current(allow_incremental_append: bool = true) -> Result:
+	var ensure_r := ensure_full_replay_engine_current()
+	if not ensure_r.ok:
+		return ensure_r
+	var full_engine: GameEngine = _session_state.full_replay_engine
+	if full_engine == null or full_engine.get_state() == null:
+		return Result.failure("full_replay_engine 未就绪")
+	var cache_r := _refresh_full_replay_step_timeline_cache(full_engine, bool(allow_incremental_append))
+	if not cache_r.ok:
+		return cache_r
+	return Result.success(_session_state.get_full_replay_step_timeline())
 
 func get_full_replay_step_timeline() -> Dictionary:
 	return _session_state.get_full_replay_step_timeline()
@@ -242,6 +272,15 @@ func _deferred_build_full_replay_engine(room_code: String, generation: int) -> v
 		return
 	if _session_state.full_replay_room_code != normalized_room_code:
 		return
+	_build_full_replay_engine_for_generation(normalized_room_code, generation, true, true)
+
+func _build_full_replay_engine_for_generation(
+	room_code: String,
+	generation: int,
+	build_timeline_cache: bool,
+	emit_ready_signal: bool
+) -> Result:
+	var normalized_room_code := str(room_code).strip_edges().to_upper()
 	var archive: Dictionary = Dictionary(_session_state.full_archive).duplicate(true)
 	if archive.is_empty():
 		_emit_resume_cache_event("resume_cache.startup_full_build.failed", {
@@ -250,7 +289,7 @@ func _deferred_build_full_replay_engine(room_code: String, generation: int) -> v
 			"reason": "archive_empty",
 		})
 		_maybe_emit_match_bootstrap_local_failed("完整历史构建失败：恢复存档为空", normalized_room_code)
-		return
+		return Result.failure("archive_empty")
 	if not _load_archive_for_online_client.is_valid():
 		_session_state.mark_full_history_error("load_archive_for_online_client 未绑定", generation)
 		_emit_resume_cache_event("resume_cache.startup_full_build.failed", {
@@ -259,7 +298,7 @@ func _deferred_build_full_replay_engine(room_code: String, generation: int) -> v
 			"reason": "load_archive_callback_missing",
 		})
 		_maybe_emit_match_bootstrap_local_failed("完整历史构建失败：本地载入回调缺失", normalized_room_code)
-		return
+		return Result.failure("load_archive_for_online_client 未绑定")
 
 	var engine = GameEngineClass.new()
 	engine.set_event_sink(_LocalEventSink.new())
@@ -272,7 +311,7 @@ func _deferred_build_full_replay_engine(room_code: String, generation: int) -> v
 			"reason": "load_archive_callback_bad_return",
 		})
 		_maybe_emit_match_bootstrap_local_failed("完整历史构建失败：本地载入回调返回类型错误", normalized_room_code)
-		return
+		return Result.failure("load_archive_for_online_client 返回类型错误")
 	if not load_r.ok:
 		_session_state.mark_full_history_error("load_from_archive failed: %s" % load_r.error, generation)
 		_emit_resume_cache_event("resume_cache.startup_full_build.failed", {
@@ -286,7 +325,8 @@ func _deferred_build_full_replay_engine(room_code: String, generation: int) -> v
 			"完整历史构建失败：载入恢复存档失败：%s" % str(load_r.error),
 			normalized_room_code
 		)
-		return
+		return Result.failure(str(load_r.error))
+
 	var prepare_r: Result = OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
 	if not prepare_r.ok:
 		_session_state.mark_full_history_error("prepare_engine_for_online_resume failed: %s" % prepare_r.error, generation)
@@ -301,7 +341,8 @@ func _deferred_build_full_replay_engine(room_code: String, generation: int) -> v
 			"完整历史构建失败：恢复点校验失败：%s" % str(prepare_r.error),
 			normalized_room_code
 		)
-		return
+		return Result.failure(str(prepare_r.error))
+
 	var replay_tail_r: Result = replay_full_replay_live_tail(engine, generation)
 	if not replay_tail_r.ok:
 		_session_state.mark_full_history_error("replay_full_replay_live_tail failed: %s" % replay_tail_r.error, generation)
@@ -316,31 +357,37 @@ func _deferred_build_full_replay_engine(room_code: String, generation: int) -> v
 			"完整历史构建失败：补放实时尾部命令失败：%s" % str(replay_tail_r.error),
 			normalized_room_code
 		)
-		return
-	var timeline_cache_r: Result = _refresh_full_replay_step_timeline_cache(engine, false)
-	if not timeline_cache_r.ok:
-		_session_state.set_full_replay_step_timeline({})
-		_emit_resume_cache_event("resume_cache.startup_full_build.failed", {
-			"room_code": normalized_room_code,
-			"generation": generation,
-			"reason": "timeline_cache_build_failed",
-			"error": str(timeline_cache_r.error),
-			"full_replay_command_count": int(engine.command_history.size()),
-		})
-		GameLog.warn(
-			"NetClient",
-			"Online resume full_replay step timeline cache build failed room=%s err=%s"
-				% [_safe_text_value(normalized_room_code), _safe_text_value(timeline_cache_r.error)]
-		)
-		if _should_abort_match_bootstrap_on_full_history_failure(normalized_room_code):
-			_session_state.mark_full_history_error("timeline cache build failed: %s" % timeline_cache_r.error, generation)
-			_maybe_emit_match_bootstrap_local_failed(
-				"完整历史构建失败：日志时间线缓存构建失败：%s" % str(timeline_cache_r.error),
-				normalized_room_code
+		return Result.failure(str(replay_tail_r.error))
+
+	if bool(build_timeline_cache):
+		var timeline_cache_r: Result = _refresh_full_replay_step_timeline_cache(engine, false)
+		if not timeline_cache_r.ok:
+			_session_state.set_full_replay_step_timeline({})
+			_emit_resume_cache_event("resume_cache.startup_full_build.failed", {
+				"room_code": normalized_room_code,
+				"generation": generation,
+				"reason": "timeline_cache_build_failed",
+				"error": str(timeline_cache_r.error),
+				"full_replay_command_count": int(engine.command_history.size()),
+			})
+			GameLog.warn(
+				"NetClient",
+				"Online resume full_replay step timeline cache build failed room=%s err=%s"
+					% [_safe_text_value(normalized_room_code), _safe_text_value(timeline_cache_r.error)]
 			)
-			return
+			if _should_abort_match_bootstrap_on_full_history_failure(normalized_room_code):
+				_session_state.mark_full_history_error("timeline cache build failed: %s" % timeline_cache_r.error, generation)
+				_maybe_emit_match_bootstrap_local_failed(
+					"完整历史构建失败：日志时间线缓存构建失败：%s" % str(timeline_cache_r.error),
+					normalized_room_code
+				)
+				return Result.failure(str(timeline_cache_r.error))
+		else:
+			_session_state.mark_full_replay_live_tail_applied(_session_state.full_replay_live_tail_commands.size())
+
 	if not _session_state.mark_full_replay_engine_ready(engine, generation):
-		return
+		return Result.failure("generation changed")
+
 	_emit_resume_cache_event("resume_cache.startup_full_build.done", {
 		"room_code": normalized_room_code,
 		"generation": generation,
@@ -351,6 +398,7 @@ func _deferred_build_full_replay_engine(room_code: String, generation: int) -> v
 			_session_state.full_replay_step_timeline.get("_build_meta", {}).get("processed_command_count", -1)
 		),
 		"live_tail_count": int(_session_state.full_replay_live_tail_commands.size()),
+		"live_tail_applied_count": int(_session_state.full_replay_live_tail_applied_count),
 	})
 	GameLog.info(
 		"NetClient",
@@ -361,8 +409,9 @@ func _deferred_build_full_replay_engine(room_code: String, generation: int) -> v
 				str(_session_state.has_full_replay_step_timeline())
 			]
 	)
-	if _net != null and is_instance_valid(_net) and _net_has_signal_value("resume_full_history_ready"):
+	if bool(emit_ready_signal) and _net != null and is_instance_valid(_net) and _net_has_signal_value("resume_full_history_ready"):
 		_net.emit_signal("resume_full_history_ready", _session_state.snapshot())
+	return Result.success(engine)
 
 func invalidate_full_replay_engine(reason: String) -> void:
 	if not _session_state.full_replay_engine_ready \
@@ -397,119 +446,15 @@ func record_online_resume_full_history_command(cmd_dict: Dictionary, state_hash:
 	if _session_state.full_history_source_mode != "archive_payload" and _session_state.full_archive.is_empty():
 		return
 	_session_state.append_full_replay_live_tail_command(cmd_dict, state_hash)
-	var full_engine: GameEngine = _session_state.full_replay_engine
-	if not _session_state.full_replay_engine_ready or full_engine == null or full_engine.get_state() == null:
-		return
-	var apply_r: Result = apply_full_history_command_to_engine(full_engine, cmd_dict, state_hash)
-	if apply_r.ok:
-		if not _session_state.has_full_replay_step_timeline():
-			_schedule_deferred_full_replay_step_timeline_cache_refresh(true, origin)
-		else:
-			_emit_resume_cache_event("resume_cache.timeline_cache_refresh.skipped_on_demand", {
-				"origin": str(origin),
-				"reason": "cache_will_refresh_on_demand",
-				"full_replay_command_count": int(full_engine.command_history.size()),
-				"cached_timeline_processed_command_count": int(
-					_session_state.full_replay_step_timeline.get("_build_meta", {}).get("processed_command_count", -1)
-				),
-			})
-		return
-	GameLog.warn(
-		"NetClient",
-		"Online resume full_replay_engine append failed room=%s origin=%s err=%s"
-			% [_safe_text_value(_session_state.runtime_room_code), _safe_text_value(str(origin)), _safe_text_value(apply_r.error)]
-	)
-	if _session_state.full_history_source_mode == "archive_payload" and not _session_state.full_archive.is_empty():
-		schedule_full_replay_engine_bootstrap(_session_state.runtime_room_code, true)
-		return
-	_session_state.mark_full_history_error("append failed: %s" % apply_r.error, _session_state.full_history_generation)
-
-func _schedule_deferred_full_replay_step_timeline_cache_refresh(
-	allow_incremental_append: bool,
-	origin: String
-) -> void:
-	if not _session_state.full_replay_engine_ready:
-		return
-	if _session_state.full_replay_engine == null or _session_state.full_replay_engine.get_state() == null:
-		return
-	_full_replay_timeline_refresh_allow_incremental_append = (
-		_full_replay_timeline_refresh_allow_incremental_append or bool(allow_incremental_append)
-	)
-	_full_replay_timeline_refresh_generation = int(_session_state.full_history_generation)
-	_full_replay_timeline_refresh_room_code = str(_session_state.full_replay_room_code).strip_edges().to_upper()
-	if _full_replay_timeline_refresh_scheduled:
-		_emit_resume_cache_event("resume_cache.timeline_cache_refresh.deferred_merge", {
-			"allow_incremental_append": bool(_full_replay_timeline_refresh_allow_incremental_append),
-			"origin": str(origin),
-			"generation": int(_full_replay_timeline_refresh_generation),
-			"full_replay_command_count": int(_session_state.full_replay_engine.command_history.size()),
-		})
-		return
-	_full_replay_timeline_refresh_scheduled = true
-	_emit_resume_cache_event("resume_cache.timeline_cache_refresh.deferred_scheduled", {
-		"allow_incremental_append": bool(_full_replay_timeline_refresh_allow_incremental_append),
+	_emit_resume_cache_event("resume_cache.live_tail.recorded", {
 		"origin": str(origin),
-		"generation": int(_full_replay_timeline_refresh_generation),
-		"full_replay_command_count": int(_session_state.full_replay_engine.command_history.size()),
+		"full_replay_live_tail_count": int(_session_state.full_replay_live_tail_commands.size()),
+		"full_replay_live_tail_applied_count": int(_session_state.full_replay_live_tail_applied_count),
+		"full_replay_live_tail_pending_count": maxi(
+			0,
+			int(_session_state.full_replay_live_tail_commands.size()) - int(_session_state.full_replay_live_tail_applied_count)
+		),
 	})
-	call_deferred("_deferred_refresh_full_replay_step_timeline_cache")
-
-func _deferred_refresh_full_replay_step_timeline_cache() -> void:
-	var allow_incremental_append := bool(_full_replay_timeline_refresh_allow_incremental_append)
-	var generation := int(_full_replay_timeline_refresh_generation)
-	var room_code := str(_full_replay_timeline_refresh_room_code).strip_edges().to_upper()
-	_full_replay_timeline_refresh_scheduled = false
-	_full_replay_timeline_refresh_allow_incremental_append = false
-
-	if generation != int(_session_state.full_history_generation):
-		_emit_resume_cache_event("resume_cache.timeline_cache_refresh.deferred_skipped", {
-			"reason": "generation_changed",
-			"scheduled_generation": int(generation),
-			"current_generation": int(_session_state.full_history_generation),
-			"allow_incremental_append": bool(allow_incremental_append),
-		})
-		return
-	if room_code.is_empty() or room_code != str(_session_state.full_replay_room_code).strip_edges().to_upper():
-		_emit_resume_cache_event("resume_cache.timeline_cache_refresh.deferred_skipped", {
-			"reason": "room_code_changed",
-			"scheduled_room_code": room_code,
-			"current_room_code": str(_session_state.full_replay_room_code).strip_edges().to_upper(),
-			"allow_incremental_append": bool(allow_incremental_append),
-		})
-		return
-
-	var full_engine: GameEngine = _session_state.full_replay_engine
-	if not _session_state.full_replay_engine_ready or full_engine == null or full_engine.get_state() == null:
-		_emit_resume_cache_event("resume_cache.timeline_cache_refresh.deferred_skipped", {
-			"reason": "engine_unavailable",
-			"allow_incremental_append": bool(allow_incremental_append),
-		})
-		return
-
-	var span := OnlinePerfTraceClass.begin_span("resume_cache.timeline_cache_refresh.deferred", {
-		"allow_incremental_append": bool(allow_incremental_append),
-		"generation": int(generation),
-		"room_code": room_code,
-		"full_replay_command_count": int(full_engine.command_history.size()),
-	})
-	var cache_r: Result = _refresh_full_replay_step_timeline_cache(full_engine, allow_incremental_append)
-	OnlinePerfTraceClass.end_span(span, {
-		"ok": bool(cache_r.ok),
-		"generation": int(generation),
-		"room_code": room_code,
-		"full_replay_command_count": int(full_engine.command_history.size()),
-		"error": "" if cache_r.ok else str(cache_r.error),
-	})
-	if cache_r.ok:
-		return
-
-	GameLog.warn(
-		"NetClient",
-		"Online resume deferred step timeline refresh failed room=%s err=%s"
-			% [_safe_text_value(room_code), _safe_text_value(str(cache_r.error))]
-	)
-	if _session_state.full_history_source_mode == "archive_payload" and not _session_state.full_archive.is_empty():
-		schedule_full_replay_engine_bootstrap(_session_state.runtime_room_code, true)
 
 func _refresh_full_replay_step_timeline_cache(engine: GameEngine, allow_incremental_append: bool = false) -> Result:
 	if engine == null or engine.get_state() == null:
@@ -589,12 +534,24 @@ func _refresh_full_replay_step_timeline_cache(engine: GameEngine, allow_incremen
 	}).with_warnings(build_r.warnings)
 
 func replay_full_replay_live_tail(engine: GameEngine, generation: int) -> Result:
+	return _replay_pending_full_replay_live_tail(engine, generation, 0)
+
+func _replay_pending_full_replay_live_tail(
+	engine: GameEngine,
+	generation: int,
+	start_index: int = -1
+) -> Result:
 	if int(generation) != int(_session_state.full_history_generation):
 		return Result.failure("generation mismatch")
 	var tail_commands: Array[Dictionary] = _session_state.get_full_replay_live_tail_commands()
-	for item_val in tail_commands:
+	var start := int(start_index)
+	if start < 0:
+		start = int(_session_state.full_replay_live_tail_applied_count)
+	start = clampi(start, 0, tail_commands.size())
+	for idx in range(start, tail_commands.size()):
 		if int(generation) != int(_session_state.full_history_generation):
 			return Result.failure("generation changed while replaying tail")
+		var item_val = tail_commands[idx]
 		if not (item_val is Dictionary):
 			continue
 		var item: Dictionary = Dictionary(item_val)
@@ -606,6 +563,7 @@ func replay_full_replay_live_tail(engine: GameEngine, generation: int) -> Result
 		)
 		if not apply_r.ok:
 			return apply_r
+	_session_state.mark_full_replay_live_tail_applied(tail_commands.size())
 	return Result.success()
 
 func apply_full_history_command_to_engine(engine: GameEngine, cmd_dict: Dictionary, expected_state_hash: String) -> Result:

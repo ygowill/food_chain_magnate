@@ -84,6 +84,18 @@ func get_online_resume_full_replay_engine():
 		return _client.get_online_resume_full_replay_engine()
 	return null
 
+func ensure_online_resume_full_history_current() -> Result:
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client) and _client.has_method("ensure_online_resume_full_history_current"):
+		return _client.ensure_online_resume_full_history_current()
+	return Result.failure("online resume full history unavailable")
+
+func ensure_online_resume_full_history_timeline_current(allow_incremental_append: bool = true) -> Result:
+	_ensure_modules()
+	if _client != null and is_instance_valid(_client) and _client.has_method("ensure_online_resume_full_history_timeline_current"):
+		return _client.ensure_online_resume_full_history_timeline_current(bool(allow_incremental_append))
+	return Result.failure("online resume full history timeline unavailable")
+
 func get_online_resume_full_replay_step_timeline() -> Dictionary:
 	_ensure_modules()
 	if _client != null and is_instance_valid(_client) and _client.has_method("get_online_resume_full_replay_step_timeline"):

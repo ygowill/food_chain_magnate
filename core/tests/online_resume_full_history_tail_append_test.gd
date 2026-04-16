@@ -279,7 +279,7 @@ static func run() -> Result:
 		)
 	client.record_online_resume_runtime_command_applied(runtime_second_cmd, expected_after_second_hash)
 
-	if int(full_replay_engine.command_history.size()) != full_history_size + 2:
+	if int(full_replay_engine.command_history.size()) != full_history_size + 1:
 		return _restore_and_fail(
 			prev_mode,
 			prev_local_player_id,
@@ -293,10 +293,10 @@ static func run() -> Result:
 			prev_engine,
 			prev_is_game_active,
 			prev_event_history,
-			"full_replay_engine ready 后未继续追尾: %d vs %d"
-				% [int(full_replay_engine.command_history.size()), full_history_size + 2]
+			"full_replay_engine 不应在 hot path 继续追尾: %d vs %d"
+				% [int(full_replay_engine.command_history.size()), full_history_size + 1]
 		)
-	if str(full_replay_engine.get_state().compute_hash()) != expected_after_second_hash:
+	if str(full_replay_engine.get_state().compute_hash()) != expected_after_first_hash:
 		return _restore_and_fail(
 			prev_mode,
 			prev_local_player_id,
@@ -310,8 +310,8 @@ static func run() -> Result:
 			prev_engine,
 			prev_is_game_active,
 			prev_event_history,
-				"full_replay_engine 第二次追尾 hash 错误: %s vs %s"
-					% [str(full_replay_engine.get_state().compute_hash()), expected_after_second_hash]
+			"full_replay_engine hot path 不应提前变更 hash: %s vs %s"
+				% [str(full_replay_engine.get_state().compute_hash()), expected_after_first_hash]
 		)
 
 	await tree.process_frame
@@ -404,6 +404,79 @@ static func run() -> Result:
 				% [cached_processed_count, full_history_size + 1]
 		)
 
+	var history_build_r := client.ensure_online_resume_full_history_timeline_current(true)
+	if not history_build_r.ok:
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"按需构建完整历史时间线失败: %s" % history_build_r.error
+		)
+	if int(full_replay_engine.command_history.size()) != full_history_size + 2:
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"按需构建后 full_replay_engine 应补齐尾部命令: %d vs %d"
+				% [int(full_replay_engine.command_history.size()), full_history_size + 2]
+		)
+	if str(full_replay_engine.get_state().compute_hash()) != expected_after_second_hash:
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"按需构建后 full_replay_engine hash 错误: %s vs %s"
+				% [str(full_replay_engine.get_state().compute_hash()), expected_after_second_hash]
+		)
+
+	var refreshed_timeline_val = client.get_online_resume_full_replay_step_timeline()
+	var refreshed_timeline: Dictionary = Dictionary(refreshed_timeline_val).duplicate(true)
+	var refreshed_processed_count := StepTimelineHelpersClass.read_processed_command_count(refreshed_timeline)
+	if refreshed_processed_count != full_history_size + 2:
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"按需构建后 cached timeline 应补齐尾部命令，实际: %d vs %d"
+				% [refreshed_processed_count, full_history_size + 2]
+		)
+
 	_restore(
 		prev_mode,
 		prev_local_player_id,
@@ -422,7 +495,7 @@ static func run() -> Result:
 		"full_history_size": full_history_size,
 		"runtime_history_size": runtime_history_size,
 		"tail_count": int(session_final.get("full_replay_live_tail_count", 0)),
-		"cached_processed_count": cached_processed_count,
+		"cached_processed_count": refreshed_processed_count,
 	})
 
 static func _build_resume_bundle_with_live_tail() -> Result:

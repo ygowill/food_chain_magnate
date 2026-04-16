@@ -11,20 +11,20 @@ static func run() -> Result:
 		"full_replay_ready": false,
 		"full_replay_step_timeline_ready": false,
 	}
-	if not OnlineMatchBootstrapClass.should_wait_for_resume_full_history({
+	if OnlineMatchBootstrapClass.should_wait_for_resume_full_history({
 		"room_code": "ROOM88",
 		"room_mode": "resume_archive",
 	}, waiting_snapshot):
-		return Result.failure("恢复房在完整历史未就绪时应继续等待")
+		return Result.failure("恢复房快启动路径不应再等待完整历史")
 
 	var no_timeline_snapshot := waiting_snapshot.duplicate(true)
 	no_timeline_snapshot["full_replay_ready"] = true
 	no_timeline_snapshot["full_replay_step_timeline_ready"] = false
-	if not OnlineMatchBootstrapClass.should_wait_for_resume_full_history({
+	if OnlineMatchBootstrapClass.should_wait_for_resume_full_history({
 		"room_code": "ROOM88",
 		"room_mode": "resume_archive",
 	}, no_timeline_snapshot):
-		return Result.failure("恢复房在 timeline cache 未就绪时也应继续等待")
+		return Result.failure("恢复房快启动路径不应被 timeline cache gate")
 
 	var ready_snapshot := waiting_snapshot.duplicate(true)
 	ready_snapshot["full_replay_ready"] = true

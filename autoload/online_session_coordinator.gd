@@ -508,7 +508,7 @@ func _on_wait_resume_fast_start_ready(
 	wait_state.full_history_expected = bool(expects_full_history)
 	_emit_status(
 		on_status_changed,
-		"已完成快启动，正在加载完整历史..." if wait_state.full_history_expected else "已完成快启动，正在进入对局..."
+		"已完成快启动，正在进入对局（完整历史后台加载）..." if wait_state.full_history_expected else "已完成快启动，正在进入对局..."
 	)
 
 func _on_wait_resume_full_history_ready(
@@ -553,8 +553,6 @@ func _is_startup_game_wait_ready(wait_state: _ResumeWaitState) -> bool:
 	var transport_ready := wait_state.fast_start_ready or wait_state.archive_received or wait_state.delta_applied
 	if not wait_state.game_started_received or not transport_ready:
 		return false
-	if wait_state.fast_start_ready and wait_state.full_history_expected:
-		return wait_state.full_history_ready
 	return true
 
 func _default_ensure_session() -> Result:

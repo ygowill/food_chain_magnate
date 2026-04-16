@@ -362,6 +362,16 @@ func set_timeline_cursor(cursor_index: int) -> void:
 
 	_apply_timeline_state_to_items(should_scroll)
 
+func set_timeline_head_cursor(head_index: int, cursor_index: int) -> void:
+	var h := int(head_index)
+	var c := int(cursor_index)
+	if h == _timeline_head_index and c == _timeline_cursor_index:
+		return
+	_timeline_head_index = h
+	var should_scroll := c < h and c != _timeline_cursor_index
+	_timeline_cursor_index = c
+	_apply_timeline_state_to_items(should_scroll)
+
 func set_entry_command_index(entry_id: int, command_index: int) -> void:
 	var cmd := int(command_index)
 	for i in range(_entries_all.size()):

@@ -60,12 +60,25 @@ static func build_history_timeline(
 	previous_timeline: Dictionary = {},
 	allow_incremental_append: bool = false
 ) -> Result:
+	var cached_history_timeline: Dictionary = {}
+	if NetClient != null and NetClient.has_method("ensure_online_resume_full_history_timeline_current"):
+		var ensure_timeline_r = NetClient.ensure_online_resume_full_history_timeline_current(bool(allow_incremental_append))
+		if ensure_timeline_r is Result:
+			if not ensure_timeline_r.ok:
+				return ensure_timeline_r
+			if ensure_timeline_r.value is Dictionary:
+				cached_history_timeline = Dictionary(ensure_timeline_r.value).duplicate(true)
+	elif NetClient != null and NetClient.has_method("ensure_online_resume_full_history_current"):
+		var ensure_r = NetClient.ensure_online_resume_full_history_current()
+		if ensure_r is Result and not ensure_r.ok:
+			return ensure_r
 	var engine := get_history_engine()
 	if engine == null:
 		return Result.failure("full_replay_engine 未就绪")
 
 	var current_count := int(engine.command_history.size())
-	var cached_history_timeline := get_cached_history_timeline()
+	if cached_history_timeline.is_empty():
+		cached_history_timeline = get_cached_history_timeline()
 	var baseline_choice := select_preferred_baseline_timeline(
 		previous_timeline,
 		cached_history_timeline,
