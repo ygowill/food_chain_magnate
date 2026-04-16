@@ -47,12 +47,12 @@ static func get_cached_history_timeline() -> Dictionary:
 	if NetClient == null or not NetClient.has_method("get_online_resume_full_replay_step_timeline"):
 		return {}
 	var timeline_val = NetClient.get_online_resume_full_replay_step_timeline()
-	return Dictionary(timeline_val).duplicate(true) if (timeline_val is Dictionary) else {}
+	return Dictionary(timeline_val).duplicate(false) if (timeline_val is Dictionary) else {}
 
 static func set_cached_history_timeline(timeline: Dictionary) -> void:
 	if NetClient == null or not NetClient.has_method("set_online_resume_full_replay_step_timeline"):
 		return
-	NetClient.set_online_resume_full_replay_step_timeline(Dictionary(timeline).duplicate(true))
+	NetClient.set_online_resume_full_replay_step_timeline(Dictionary(timeline).duplicate(false))
 
 static func build_history_timeline(
 	game_log_panel: Object,

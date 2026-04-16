@@ -71,10 +71,10 @@ func has_full_archive_payload() -> bool:
 	return not full_archive.is_empty()
 
 func set_full_replay_step_timeline(timeline: Dictionary) -> void:
-	full_replay_step_timeline = Dictionary(timeline).duplicate(true) if (timeline is Dictionary) else {}
+	full_replay_step_timeline = Dictionary(timeline).duplicate(false) if (timeline is Dictionary) else {}
 
 func get_full_replay_step_timeline() -> Dictionary:
-	return full_replay_step_timeline.duplicate(true)
+	return full_replay_step_timeline.duplicate(false)
 
 func has_full_replay_step_timeline() -> bool:
 	return not full_replay_step_timeline.is_empty()

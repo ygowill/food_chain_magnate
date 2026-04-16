@@ -271,6 +271,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.OnlineResumeFullHistoryBaselineSelectionTestClass.run(),
 		},
 		{
+			"name": "NetClientOnlineResumeCachedTimelineForwardingTest",
+			"fn": func() -> Result: return TestRefs.NetClientOnlineResumeCachedTimelineForwardingTestClass.run(),
+		},
+		{
 			"name": "OnlineResumeFullArchiveExportTest",
 			"fn": func() -> Result: return TestRefs.OnlineResumeFullArchiveExportTestClass.run(),
 		},

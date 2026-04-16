@@ -16,22 +16,15 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 	if existing_timeline == null or not (existing_timeline is Dictionary) or existing_timeline.is_empty():
 		return Result.failure("StepTimelineBuild: existing_timeline 为空")
 
-	var timeline: Dictionary = existing_timeline.duplicate(true)
-	var steps_val = timeline.get("steps", null)
-	if not (steps_val is Array):
-		timeline["steps"] = []
-	var events_val = timeline.get("events", null)
-	if not (events_val is Array):
-		timeline["events"] = []
-
+	var timeline: Dictionary = existing_timeline.duplicate(false)
 	var steps: Array[Dictionary] = []
-	for step_val in timeline.get("steps", []):
+	for step_val in existing_timeline.get("steps", []):
 		if step_val is Dictionary:
-			steps.append(Dictionary(step_val).duplicate(true))
+			steps.append(step_val)
 	var events_out: Array[Dictionary] = []
-	for event_val in timeline.get("events", []):
+	for event_val in existing_timeline.get("events", []):
 		if event_val is Dictionary:
-			events_out.append(Dictionary(event_val).duplicate(true))
+			events_out.append(event_val)
 	var processed_command_count := StepTimelineHelpersClass.read_processed_command_count(timeline)
 	var total_command_count := int(engine.command_history.size())
 	if processed_command_count > total_command_count:

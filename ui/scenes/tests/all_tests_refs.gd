@@ -65,6 +65,7 @@ const OnlineResumeClientDualEngineBootstrapTestClass = preload("res://core/tests
 const OnlineResumeRuntimeAnchorLiveSyncTestClass = preload("res://core/tests/online_resume_runtime_anchor_live_sync_test.gd")
 const OnlineResumeFullHistoryTailAppendTestClass = preload("res://core/tests/online_resume_full_history_tail_append_test.gd")
 const OnlineResumeFullHistoryBaselineSelectionTestClass = preload("res://core/tests/online_resume_full_history_baseline_selection_test.gd")
+const NetClientOnlineResumeCachedTimelineForwardingTestClass = preload("res://core/tests/net_client_online_resume_cached_timeline_forwarding_test.gd")
 const OnlineResumeFullArchiveExportTestClass = preload("res://core/tests/online_resume_full_archive_export_test.gd")
 const OnlineClientDisconnectPreserveContextTestClass = preload("res://core/tests/online_client_disconnect_preserve_context_test.gd")
 const OnlineClientGameStartedReconnectTestClass = preload("res://core/tests/online_client_game_started_reconnect_test.gd")
