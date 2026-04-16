@@ -132,6 +132,14 @@ func _on_eventbus_event(event: Dictionary) -> void:
 		return
 	if not (event is Dictionary) or event.is_empty():
 		return
+	# 根因修复：
+	# - 当 GameLogPanel 已进入 step_timeline 模式后，实时 EventBus 事件会在下一次
+	#   apply_live_log_timeline_from_engine 中被统一投影到 _timeline_entries。
+	# - 若这里仍直接 add_log，会把同一事件再写入 _extra_entries，
+	#   后续 timeline append/load 后就会出现 recruit/train 等日志重复一份。
+	# - 因此 timeline 模式下交给 timeline 刷新链路唯一产生日志；仅在 flat/legacy 模式下直接追加。
+	if _game_log_panel.has_method("has_step_timeline_loaded") and bool(_game_log_panel.call("has_step_timeline_loaded")):
+		return
 	_ensure_formatter()
 	if _formatter == null or not is_instance_valid(_formatter):
 		return

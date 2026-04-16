@@ -230,6 +230,9 @@ func get_step_timeline_entries() -> Array[Dictionary]:
 func get_last_step_timeline_update_mode() -> String:
 	return _last_step_timeline_update_mode
 
+func has_step_timeline_loaded() -> bool:
+	return _is_step_timeline_loaded()
+
 func _duplicate_entry_array(entries: Array) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for entry_val in entries:
@@ -369,7 +372,7 @@ func _apply_background_timeline_result(job: Dictionary, result: Dictionary) -> v
 	if fold_details_check != null:
 		fold_details_check.button_pressed = _fold_details_enabled
 	_last_step_timeline_update_mode = mode if not mode.is_empty() else "rebuild"
-	_apply_timeline_state_to_items(true)
+	_apply_timeline_state_to_items()
 	_request_scroll_to_bottom()
 	_update_entry_count()
 
@@ -383,7 +386,7 @@ func _apply_background_timeline_job_fallback(job: Dictionary) -> void:
 	_apply_committed_step_timeline_state(timeline, timeline_entries, extra_entries)
 	_rebuild_display()
 	_last_step_timeline_update_mode = "append" if mode == "append" else "rebuild"
-	_apply_timeline_state_to_items(true)
+	_apply_timeline_state_to_items()
 	_request_scroll_to_bottom()
 	_update_entry_count()
 
@@ -488,7 +491,7 @@ func load_entries(entries: Array[Dictionary]) -> void:
 				_entry_id_counter = maxi(_entry_id_counter, int(f) + 1)
 
 	_rebuild_display()
-	_apply_timeline_state_to_items(true)
+	_apply_timeline_state_to_items()
 	_request_scroll_to_bottom()
 	_update_entry_count()
 	_last_step_timeline_update_mode = "flat"
@@ -554,7 +557,7 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 		fold_details_check.button_pressed = _fold_details_enabled
 
 	_rebuild_display()
-	_apply_timeline_state_to_items(true)
+	_apply_timeline_state_to_items()
 	_request_scroll_to_bottom()
 	_update_entry_count()
 	_last_step_timeline_update_mode = "rebuild"
@@ -627,7 +630,7 @@ func append_step_timeline(timeline: Dictionary, appended_entries: Array[Dictiona
 	if fold_details_check != null:
 		fold_details_check.button_pressed = _fold_details_enabled
 	_last_step_timeline_update_mode = "append"
-	_apply_timeline_state_to_items(true)
+	_apply_timeline_state_to_items()
 	_request_scroll_to_bottom()
 	_update_entry_count()
 	OnlinePerfTraceClass.end_span(span, {
@@ -651,21 +654,28 @@ func set_timeline_head(head_index: int) -> void:
 func set_timeline_cursor(cursor_index: int) -> void:
 	var c := int(cursor_index)
 	if c == _timeline_cursor_index:
+		if _timeline_cursor_index >= _timeline_head_index:
+			_request_scroll_to_bottom()
 		return
 	_timeline_cursor_index = c
-	var should_scroll := _timeline_cursor_index < _timeline_head_index
-
-	_apply_timeline_state_to_items(should_scroll)
+	var should_scroll_to_cursor := _timeline_cursor_index < _timeline_head_index
+	_apply_timeline_state_to_items(should_scroll_to_cursor)
+	if not should_scroll_to_cursor:
+		_request_scroll_to_bottom()
 
 func set_timeline_head_cursor(head_index: int, cursor_index: int) -> void:
 	var h := int(head_index)
 	var c := int(cursor_index)
 	if h == _timeline_head_index and c == _timeline_cursor_index:
+		if c >= h:
+			_request_scroll_to_bottom()
 		return
 	_timeline_head_index = h
-	var should_scroll := c < h and c != _timeline_cursor_index
 	_timeline_cursor_index = c
-	_apply_timeline_state_to_items(should_scroll)
+	var should_scroll_to_cursor := c < h
+	_apply_timeline_state_to_items(should_scroll_to_cursor)
+	if not should_scroll_to_cursor:
+		_request_scroll_to_bottom()
 
 func set_entry_command_index(entry_id: int, command_index: int) -> void:
 	var cmd := int(command_index)

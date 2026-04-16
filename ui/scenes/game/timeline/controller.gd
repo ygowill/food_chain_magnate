@@ -287,6 +287,9 @@ func _can_reuse_live_history(signature: Dictionary) -> bool:
 func _sync_live_log_timeline_state_to_panel() -> void:
 	if not is_instance_valid(_game_log_panel):
 		return
+	if _game_log_panel.has_method("set_timeline_head_cursor"):
+		_game_log_panel.call("set_timeline_head_cursor", _history_head_step_index, _history_cursor_step_index)
+		return
 	_game_log_panel.call("set_timeline_head", _history_head_step_index)
 	_game_log_panel.call("set_timeline_cursor", _history_cursor_step_index)
 
