@@ -240,6 +240,17 @@ func _duplicate_entry_array(entries: Array) -> Array[Dictionary]:
 			out.append(Dictionary(entry_val).duplicate(true))
 	return out
 
+func _duplicate_entry_array_with_fresh_ids(entries: Array) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for entry_val in entries:
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = Dictionary(entry_val).duplicate(true)
+		entry["id"] = _entry_id_counter
+		_entry_id_counter += 1
+		out.append(entry)
+	return out
+
 func _build_entries_all_for_state(timeline_entries: Array[Dictionary], extra_entries: Array[Dictionary]) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for entry in timeline_entries:
@@ -516,14 +527,7 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 			return
 
 	next_timeline = timeline.duplicate(true) if (timeline is Dictionary) else {}
-	var next_timeline_entries: Array[Dictionary] = []
-	if entries is Array:
-		for e in entries:
-			if e is Dictionary:
-				var d: Dictionary = Dictionary(e).duplicate(true)
-				d["id"] = _entry_id_counter
-				_entry_id_counter += 1
-				next_timeline_entries.append(d)
+	var next_timeline_entries: Array[Dictionary] = _duplicate_entry_array_with_fresh_ids(entries)
 
 	var next_extra_entries: Array[Dictionary] = []
 	if not bool(reset_extra_entries):
@@ -592,9 +596,9 @@ func append_step_timeline(timeline: Dictionary, appended_entries: Array[Dictiona
 
 	var next_timeline: Dictionary = timeline.duplicate(true)
 	var next_timeline_entries := _duplicate_entry_array(_timeline_entries)
-	for appended in appended_entries:
-		if appended is Dictionary:
-			next_timeline_entries.append(Dictionary(appended).duplicate(true))
+	var normalized_appended_entries := _duplicate_entry_array_with_fresh_ids(appended_entries)
+	for appended in normalized_appended_entries:
+		next_timeline_entries.append(Dictionary(appended).duplicate(true))
 	var next_extra_entries := _duplicate_entry_array(_extra_entries)
 	var next_entries_all := _build_entries_all_for_state(next_timeline_entries, next_extra_entries)
 	if _should_use_background_timeline_job(next_timeline, next_entries_all):
@@ -931,17 +935,14 @@ func _can_append_step_timeline(timeline: Dictionary, entries: Array, reset_extra
 	return true
 
 func _build_appended_timeline_entries(entries: Array) -> Array[Dictionary]:
-	var out: Array[Dictionary] = []
+	var raw_entries: Array[Dictionary] = []
 	var start_idx := _timeline_entries.size()
 	for idx in range(start_idx, entries.size()):
 		var entry_val = entries[idx]
 		if not (entry_val is Dictionary):
 			continue
-		var d: Dictionary = Dictionary(entry_val).duplicate(true)
-		d["id"] = _entry_id_counter
-		_entry_id_counter += 1
-		out.append(d)
-	return out
+		raw_entries.append(Dictionary(entry_val).duplicate(true))
+	return _duplicate_entry_array_with_fresh_ids(raw_entries)
 
 func _build_entries_all_for_append(appended_entries: Array[Dictionary]) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []

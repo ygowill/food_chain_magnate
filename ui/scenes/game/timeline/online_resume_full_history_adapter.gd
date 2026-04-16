@@ -164,13 +164,22 @@ static func select_preferred_baseline_timeline(
 
 	var selected_timeline: Dictionary = {}
 	var source := "none"
-	if bool(allow_incremental_append) and not previous_normalized.is_empty():
-		selected_timeline = previous_normalized
-		source = "previous"
-	if not cached_normalized.is_empty() and source != "previous":
-		if selected_timeline.is_empty() or cached_processed_count >= previous_processed_count:
+	if bool(allow_incremental_append):
+		if not cached_normalized.is_empty() and (previous_normalized.is_empty() or cached_processed_count > previous_processed_count):
 			selected_timeline = cached_normalized
 			source = "cached"
+		elif not previous_normalized.is_empty():
+			selected_timeline = previous_normalized
+			source = "previous"
+		elif not cached_normalized.is_empty():
+			selected_timeline = cached_normalized
+			source = "cached"
+	elif not cached_normalized.is_empty() and (previous_normalized.is_empty() or cached_processed_count >= previous_processed_count):
+		selected_timeline = cached_normalized
+		source = "cached"
+	elif not previous_normalized.is_empty():
+		selected_timeline = previous_normalized
+		source = "previous"
 
 	var selected_processed_count := -1
 	if not selected_timeline.is_empty():
