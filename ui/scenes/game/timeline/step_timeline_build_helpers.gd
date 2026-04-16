@@ -3,6 +3,8 @@ extends RefCounted
 
 const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
 const GameTimelineLogEntriesBuilderClass = preload("res://ui/scenes/game/timeline/log_entries_builder.gd")
+const StepTimelineHelpersClass = preload("res://gameplay/replay/step_timeline_build/helpers.gd")
+const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 
 static func build_step_timeline(
 	engine: GameEngine,
@@ -13,6 +15,13 @@ static func build_step_timeline(
 		return Result.failure("engine 为空")
 
 	if bool(allow_incremental_append) and previous_timeline is Dictionary and not previous_timeline.is_empty():
+		var previous_processed_count := StepTimelineHelpersClass.read_processed_command_count(previous_timeline)
+		if OnlinePerfTraceClass.enabled():
+			OnlinePerfTraceClass.emit_event("resume_cache.live_append.start", {
+				"engine_command_count": int(engine.command_history.size()),
+				"previous_processed_command_count": int(previous_processed_count),
+				"previous_step_count": int(Array(previous_timeline.get("steps", [])).size()),
+			})
 		var append_r: Result = StepTimelineBuildClass.append_from_existing(engine, previous_timeline)
 		if append_r.ok and append_r.value is Dictionary:
 			var append_info: Dictionary = Dictionary(append_r.value)
@@ -24,6 +33,16 @@ static func build_step_timeline(
 
 				var append_steps_val = append_timeline.get("steps", [])
 				var append_steps: Array = append_steps_val if (append_steps_val is Array) else []
+				if OnlinePerfTraceClass.enabled():
+					OnlinePerfTraceClass.emit_event("resume_cache.live_append.done", {
+						"engine_command_count": int(engine.command_history.size()),
+						"previous_processed_command_count": int(previous_processed_count),
+						"appended_event_count": int(appended_events.size()),
+						"appended_step_count": int(append_steps.size()) - int(Array(previous_timeline.get("steps", [])).size()),
+						"timeline_processed_command_count": int(
+							StepTimelineHelpersClass.read_processed_command_count(append_timeline)
+						),
+					})
 
 				return Result.success({
 					"timeline": append_timeline,
@@ -33,6 +52,19 @@ static func build_step_timeline(
 					"steps": append_steps,
 					"head_step_index": append_steps.size() - 1,
 				}).with_warnings(append_r.warnings)
+			if OnlinePerfTraceClass.enabled():
+				OnlinePerfTraceClass.emit_event("resume_cache.live_append.failed_fallback_full", {
+					"engine_command_count": int(engine.command_history.size()),
+					"previous_processed_command_count": int(previous_processed_count),
+					"reason": "append_not_applied",
+				})
+		elif OnlinePerfTraceClass.enabled():
+			OnlinePerfTraceClass.emit_event("resume_cache.live_append.failed_fallback_full", {
+				"engine_command_count": int(engine.command_history.size()),
+				"previous_processed_command_count": int(previous_processed_count),
+				"reason": "append_failed",
+				"error": str(append_r.error),
+			})
 
 	var build_r: Result = StepTimelineBuildClass.build_full(engine)
 	if not build_r.ok:

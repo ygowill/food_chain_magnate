@@ -355,6 +355,55 @@ static func run() -> Result:
 			prev_event_history,
 			"session snapshot 应标记 full_replay_ready"
 		)
+	if not bool(session_ready.get("full_replay_step_timeline_ready", false)):
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"session snapshot 应标记 full_replay_step_timeline_ready"
+		)
+	if mock_net.full_history_ready_payloads.is_empty():
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"应发出 resume_full_history_ready 信号"
+		)
+	var full_history_ready_payload: Dictionary = Dictionary(mock_net.full_history_ready_payloads.back()).duplicate(true)
+	if not bool(full_history_ready_payload.get("full_replay_step_timeline_ready", false)):
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"resume_full_history_ready 负载应包含 full_replay_step_timeline_ready=true"
+		)
 
 	_restore(
 		prev_mode,

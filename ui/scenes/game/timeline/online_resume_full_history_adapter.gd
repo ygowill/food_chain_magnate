@@ -5,6 +5,7 @@ extends RefCounted
 
 const StepTimelineBuildHelpersClass = preload("res://ui/scenes/game/timeline/step_timeline_build_helpers.gd")
 const StepTimelineHelpersClass = preload("res://gameplay/replay/step_timeline_build/helpers.gd")
+const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 
 static func is_applicable() -> bool:
 	if NetContext == null:
@@ -63,15 +64,33 @@ static func build_history_timeline(
 	if engine == null:
 		return Result.failure("full_replay_engine 未就绪")
 
-	var baseline_timeline: Dictionary = {}
-	if bool(allow_incremental_append) and previous_timeline is Dictionary and not previous_timeline.is_empty():
-		baseline_timeline = previous_timeline.duplicate(true)
-	if baseline_timeline.is_empty():
-		baseline_timeline = get_cached_history_timeline()
+	var current_count := int(engine.command_history.size())
+	var cached_history_timeline := get_cached_history_timeline()
+	var baseline_choice := select_preferred_baseline_timeline(
+		previous_timeline,
+		cached_history_timeline,
+		current_count,
+		allow_incremental_append
+	)
+	var baseline_timeline: Dictionary = Dictionary(baseline_choice.get("timeline", {})).duplicate(true)
+	_emit_resume_cache_event("resume_cache.baseline_timeline.selected", {
+		"source": str(baseline_choice.get("source", "none")),
+		"allow_incremental_append": bool(allow_incremental_append),
+		"current_command_count": int(current_count),
+		"previous_processed_command_count": int(baseline_choice.get("previous_processed_command_count", -1)),
+		"cached_processed_command_count": int(baseline_choice.get("cached_processed_command_count", -1)),
+		"selected_processed_command_count": int(baseline_choice.get("selected_processed_command_count", -1)),
+	})
 
 	if not baseline_timeline.is_empty():
 		var cached_processed_count := StepTimelineHelpersClass.read_processed_command_count(baseline_timeline)
-		var current_count := int(engine.command_history.size())
+		if cached_processed_count >= current_count:
+			_emit_resume_cache_event("resume_cache.used_prebuilt_timeline", {
+				"cached_processed_command_count": int(cached_processed_count),
+				"current_command_count": int(current_count),
+				"allow_incremental_append": bool(allow_incremental_append),
+				"timeline_step_count": int(Array(baseline_timeline.get("steps", [])).size()),
+			})
 		var build_r: Result
 		if cached_processed_count >= current_count:
 			build_r = StepTimelineBuildHelpersClass.load_prebuilt_timeline(
@@ -94,6 +113,12 @@ static func build_history_timeline(
 				set_cached_history_timeline(Dictionary(next_timeline_val))
 		return build_r
 
+	_emit_resume_cache_event("resume_cache.miss_prebuilt_timeline", {
+		"current_command_count": int(engine.command_history.size()),
+		"allow_incremental_append": bool(allow_incremental_append),
+		"previous_timeline_present": bool(previous_timeline is Dictionary and not previous_timeline.is_empty()),
+		"cached_timeline_present": bool(not cached_history_timeline.is_empty()),
+	})
 	var build_r := StepTimelineBuildHelpersClass.build_and_load(
 		engine,
 		game_log_panel,
@@ -107,6 +132,45 @@ static func build_history_timeline(
 		if timeline_val is Dictionary:
 			set_cached_history_timeline(Dictionary(timeline_val))
 	return build_r
+
+static func select_preferred_baseline_timeline(
+	previous_timeline: Dictionary,
+	cached_timeline: Dictionary,
+	current_command_count: int,
+	allow_incremental_append: bool
+) -> Dictionary:
+	var previous_normalized := previous_timeline.duplicate(true) if (previous_timeline is Dictionary) else {}
+	var cached_normalized := cached_timeline.duplicate(true) if (cached_timeline is Dictionary) else {}
+
+	var previous_processed_count := -1
+	if not previous_normalized.is_empty():
+		previous_processed_count = int(StepTimelineHelpersClass.read_processed_command_count(previous_normalized))
+	var cached_processed_count := -1
+	if not cached_normalized.is_empty():
+		cached_processed_count = int(StepTimelineHelpersClass.read_processed_command_count(cached_normalized))
+
+	var selected_timeline: Dictionary = {}
+	var source := "none"
+	if bool(allow_incremental_append) and not previous_normalized.is_empty():
+		selected_timeline = previous_normalized
+		source = "previous"
+	if not cached_normalized.is_empty():
+		if selected_timeline.is_empty() or cached_processed_count >= previous_processed_count:
+			selected_timeline = cached_normalized
+			source = "cached"
+
+	var selected_processed_count := -1
+	if not selected_timeline.is_empty():
+		selected_processed_count = int(StepTimelineHelpersClass.read_processed_command_count(selected_timeline))
+
+	return {
+		"timeline": selected_timeline,
+		"source": source,
+		"current_command_count": int(current_command_count),
+		"previous_processed_command_count": int(previous_processed_count),
+		"cached_processed_command_count": int(cached_processed_count),
+		"selected_processed_command_count": int(selected_processed_count),
+	}
 
 static func map_runtime_command_index_to_global(runtime_command_index: int) -> int:
 	var snapshot := get_session_snapshot()
@@ -142,3 +206,17 @@ static func map_runtime_command_index_to_step_index(runtime_command_index: int, 
 		map_runtime_command_index_to_global(runtime_command_index),
 		timeline
 	)
+
+static func _emit_resume_cache_event(event: String, fields: Dictionary = {}) -> void:
+	if not OnlinePerfTraceClass.enabled():
+		return
+	var snapshot := get_session_snapshot()
+	var out: Dictionary = {
+		"room_code": str(snapshot.get("runtime_room_code", "")).strip_edges().to_upper(),
+		"full_replay_ready": bool(snapshot.get("full_replay_ready", false)),
+		"cached_timeline_ready": bool(snapshot.get("full_replay_step_timeline_ready", false)),
+		"full_replay_command_count": int(snapshot.get("full_replay_command_count", -1)),
+	}
+	for key in fields.keys():
+		out[str(key)] = fields[key]
+	OnlinePerfTraceClass.emit_event(str(event).strip_edges(), out)

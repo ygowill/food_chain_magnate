@@ -7,6 +7,8 @@ const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const OnlineResumeSessionStateClass = preload("res://autoload/online_resume_session_state.gd")
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
+const StepTimelineHelpersClass = preload("res://gameplay/replay/step_timeline_build/helpers.gd")
+const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 
 class _LocalEventSink:
 	extends RefCounted
@@ -182,8 +184,19 @@ func map_online_resume_progress_from_engine(engine, checkpoint_id: String = "") 
 func schedule_full_replay_engine_bootstrap(room_code: String, preserve_live_tail: bool = false) -> void:
 	var normalized_room_code := str(room_code).strip_edges().to_upper()
 	if _session_state.runtime_room_code != normalized_room_code:
+		_emit_resume_cache_event("resume_cache.startup_full_build.skipped", {
+			"reason": "runtime_room_mismatch",
+			"requested_room_code": normalized_room_code,
+			"preserve_live_tail": bool(preserve_live_tail),
+		})
 		return
 	if _session_state.full_history_source_mode != "archive_payload" or _session_state.full_archive.is_empty():
+		_emit_resume_cache_event("resume_cache.startup_full_build.skipped", {
+			"reason": "archive_payload_missing",
+			"requested_room_code": normalized_room_code,
+			"preserve_live_tail": bool(preserve_live_tail),
+			"full_history_source_mode": str(_session_state.full_history_source_mode),
+		})
 		return
 	var expected_hash := str(_session_state.full_archive_meta.get("full_final_hash", "")).strip_edges()
 	if _session_state.full_replay_engine_ready \
@@ -192,6 +205,14 @@ func schedule_full_replay_engine_bootstrap(room_code: String, preserve_live_tail
 		if _session_state.full_replay_room_code == normalized_room_code:
 			var current_hash := str(_session_state.full_replay_engine.get_state().compute_hash())
 			if expected_hash.is_empty() or current_hash == expected_hash:
+				_emit_resume_cache_event("resume_cache.startup_full_build.skipped", {
+					"reason": "full_replay_engine_current",
+					"requested_room_code": normalized_room_code,
+					"preserve_live_tail": bool(preserve_live_tail),
+					"full_replay_command_count": int(_session_state.full_replay_engine.command_history.size()),
+					"current_hash": current_hash,
+					"expected_hash": expected_hash,
+				})
 				return
 	var generation = _session_state.begin_full_history_build(
 		normalized_room_code,
@@ -201,6 +222,14 @@ func schedule_full_replay_engine_bootstrap(room_code: String, preserve_live_tail
 		_session_state.full_history_source_mode,
 		bool(preserve_live_tail)
 	)
+	_emit_resume_cache_event("resume_cache.startup_full_build.start", {
+		"room_code": normalized_room_code,
+		"generation": generation,
+		"preserve_live_tail": bool(preserve_live_tail),
+		"runtime_command_count": int(_session_state.runtime_engine.command_history.size()) if _session_state.runtime_engine != null else -1,
+		"full_archive_command_count": int(Array(_session_state.full_archive.get("commands", [])).size()),
+		"live_tail_count": int(_session_state.full_replay_live_tail_commands.size()),
+	})
 	call_deferred("_deferred_build_full_replay_engine", normalized_room_code, generation)
 
 func _deferred_build_full_replay_engine(room_code: String, generation: int) -> void:
@@ -211,9 +240,21 @@ func _deferred_build_full_replay_engine(room_code: String, generation: int) -> v
 		return
 	var archive: Dictionary = Dictionary(_session_state.full_archive).duplicate(true)
 	if archive.is_empty():
+		_emit_resume_cache_event("resume_cache.startup_full_build.failed", {
+			"room_code": normalized_room_code,
+			"generation": generation,
+			"reason": "archive_empty",
+		})
+		_maybe_emit_match_bootstrap_local_failed("完整历史构建失败：恢复存档为空", normalized_room_code)
 		return
 	if not _load_archive_for_online_client.is_valid():
 		_session_state.mark_full_history_error("load_archive_for_online_client 未绑定", generation)
+		_emit_resume_cache_event("resume_cache.startup_full_build.failed", {
+			"room_code": normalized_room_code,
+			"generation": generation,
+			"reason": "load_archive_callback_missing",
+		})
+		_maybe_emit_match_bootstrap_local_failed("完整历史构建失败：本地载入回调缺失", normalized_room_code)
 		return
 
 	var engine = GameEngineClass.new()
@@ -221,31 +262,92 @@ func _deferred_build_full_replay_engine(room_code: String, generation: int) -> v
 	var load_r = _load_archive_for_online_client.call(engine, archive)
 	if not (load_r is Result):
 		_session_state.mark_full_history_error("load_archive_for_online_client 返回类型错误", generation)
+		_emit_resume_cache_event("resume_cache.startup_full_build.failed", {
+			"room_code": normalized_room_code,
+			"generation": generation,
+			"reason": "load_archive_callback_bad_return",
+		})
+		_maybe_emit_match_bootstrap_local_failed("完整历史构建失败：本地载入回调返回类型错误", normalized_room_code)
 		return
 	if not load_r.ok:
 		_session_state.mark_full_history_error("load_from_archive failed: %s" % load_r.error, generation)
+		_emit_resume_cache_event("resume_cache.startup_full_build.failed", {
+			"room_code": normalized_room_code,
+			"generation": generation,
+			"reason": "load_archive_failed",
+			"error": str(load_r.error),
+		})
 		GameLog.error("NetClient", "Online resume full_replay_engine load failed: %s" % load_r.error)
+		_maybe_emit_match_bootstrap_local_failed(
+			"完整历史构建失败：载入恢复存档失败：%s" % str(load_r.error),
+			normalized_room_code
+		)
 		return
 	var prepare_r: Result = OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
 	if not prepare_r.ok:
 		_session_state.mark_full_history_error("prepare_engine_for_online_resume failed: %s" % prepare_r.error, generation)
+		_emit_resume_cache_event("resume_cache.startup_full_build.failed", {
+			"room_code": normalized_room_code,
+			"generation": generation,
+			"reason": "prepare_resume_point_failed",
+			"error": str(prepare_r.error),
+		})
 		GameLog.error("NetClient", "Online resume full_replay_engine prepare failed: %s" % prepare_r.error)
+		_maybe_emit_match_bootstrap_local_failed(
+			"完整历史构建失败：恢复点校验失败：%s" % str(prepare_r.error),
+			normalized_room_code
+		)
 		return
 	var replay_tail_r: Result = replay_full_replay_live_tail(engine, generation)
 	if not replay_tail_r.ok:
 		_session_state.mark_full_history_error("replay_full_replay_live_tail failed: %s" % replay_tail_r.error, generation)
+		_emit_resume_cache_event("resume_cache.startup_full_build.failed", {
+			"room_code": normalized_room_code,
+			"generation": generation,
+			"reason": "replay_live_tail_failed",
+			"error": str(replay_tail_r.error),
+		})
 		GameLog.error("NetClient", "Online resume full_replay_engine tail replay failed: %s" % replay_tail_r.error)
+		_maybe_emit_match_bootstrap_local_failed(
+			"完整历史构建失败：补放实时尾部命令失败：%s" % str(replay_tail_r.error),
+			normalized_room_code
+		)
 		return
 	var timeline_cache_r: Result = _refresh_full_replay_step_timeline_cache(engine, false)
 	if not timeline_cache_r.ok:
 		_session_state.set_full_replay_step_timeline({})
+		_emit_resume_cache_event("resume_cache.startup_full_build.failed", {
+			"room_code": normalized_room_code,
+			"generation": generation,
+			"reason": "timeline_cache_build_failed",
+			"error": str(timeline_cache_r.error),
+			"full_replay_command_count": int(engine.command_history.size()),
+		})
 		GameLog.warn(
 			"NetClient",
 			"Online resume full_replay step timeline cache build failed room=%s err=%s"
 				% [_safe_text_value(normalized_room_code), _safe_text_value(timeline_cache_r.error)]
 		)
+		if _should_abort_match_bootstrap_on_full_history_failure(normalized_room_code):
+			_session_state.mark_full_history_error("timeline cache build failed: %s" % timeline_cache_r.error, generation)
+			_maybe_emit_match_bootstrap_local_failed(
+				"完整历史构建失败：日志时间线缓存构建失败：%s" % str(timeline_cache_r.error),
+				normalized_room_code
+			)
+			return
 	if not _session_state.mark_full_replay_engine_ready(engine, generation):
 		return
+	_emit_resume_cache_event("resume_cache.startup_full_build.done", {
+		"room_code": normalized_room_code,
+		"generation": generation,
+		"full_replay_command_count": int(engine.command_history.size()),
+		"timeline_cached": bool(_session_state.has_full_replay_step_timeline()),
+		"timeline_step_count": int(Array(_session_state.full_replay_step_timeline.get("steps", [])).size()),
+		"timeline_processed_command_count": int(
+			_session_state.full_replay_step_timeline.get("_build_meta", {}).get("processed_command_count", -1)
+		),
+		"live_tail_count": int(_session_state.full_replay_live_tail_commands.size()),
+	})
 	GameLog.info(
 		"NetClient",
 		"Online resume full_replay_engine ready room=%s commands=%d timeline_cached=%s"
@@ -327,6 +429,13 @@ func _refresh_full_replay_step_timeline_cache(engine: GameEngine, allow_incremen
 		return Result.failure("full_replay_engine 未就绪")
 
 	var previous_timeline := _session_state.get_full_replay_step_timeline()
+	var previous_processed_count := StepTimelineHelpersClass.read_processed_command_count(previous_timeline)
+	_emit_resume_cache_event("resume_cache.timeline_cache_refresh.start", {
+		"allow_incremental_append": bool(allow_incremental_append),
+		"previous_timeline_ready": bool(not previous_timeline.is_empty()),
+		"previous_processed_command_count": int(previous_processed_count),
+		"full_replay_command_count": int(engine.command_history.size()),
+	})
 	if bool(allow_incremental_append) and not previous_timeline.is_empty():
 		var append_r: Result = StepTimelineBuildClass.append_from_existing(engine, previous_timeline)
 		if append_r.ok and append_r.value is Dictionary:
@@ -335,19 +444,58 @@ func _refresh_full_replay_step_timeline_cache(engine: GameEngine, allow_incremen
 			if append_timeline_val is Dictionary:
 				var append_timeline: Dictionary = Dictionary(append_timeline_val).duplicate(true)
 				_session_state.set_full_replay_step_timeline(append_timeline)
+				_emit_resume_cache_event("resume_cache.timeline_cache_refresh.done", {
+					"mode": "append" if bool(append_info.get("append_applied", false)) else "reuse",
+					"allow_incremental_append": bool(allow_incremental_append),
+					"previous_processed_command_count": int(previous_processed_count),
+					"timeline_processed_command_count": int(
+						StepTimelineHelpersClass.read_processed_command_count(append_timeline)
+					),
+					"timeline_step_count": int(Array(append_timeline.get("steps", [])).size()),
+				})
 				return Result.success({
 					"timeline": append_timeline,
 					"append_applied": bool(append_info.get("append_applied", false)),
 				}).with_warnings(append_r.warnings)
+		_emit_resume_cache_event("resume_cache.timeline_cache_refresh.append_failed_fallback_full", {
+			"allow_incremental_append": bool(allow_incremental_append),
+			"previous_processed_command_count": int(previous_processed_count),
+			"full_replay_command_count": int(engine.command_history.size()),
+			"append_ok": bool(append_r.ok),
+			"append_error": str(append_r.error),
+		})
 
 	var build_r: Result = StepTimelineBuildClass.build_full(engine)
 	if not build_r.ok:
+		_emit_resume_cache_event("resume_cache.timeline_cache_refresh.failed", {
+			"mode": "full_rebuild",
+			"allow_incremental_append": bool(allow_incremental_append),
+			"previous_processed_command_count": int(previous_processed_count),
+			"full_replay_command_count": int(engine.command_history.size()),
+			"error": str(build_r.error),
+		})
 		return build_r
 	if not (build_r.value is Dictionary):
+		_emit_resume_cache_event("resume_cache.timeline_cache_refresh.failed", {
+			"mode": "full_rebuild",
+			"allow_incremental_append": bool(allow_incremental_append),
+			"previous_processed_command_count": int(previous_processed_count),
+			"full_replay_command_count": int(engine.command_history.size()),
+			"error": "step timeline cache build 返回类型错误",
+		})
 		return Result.failure("step timeline cache build 返回类型错误")
 
 	var timeline: Dictionary = Dictionary(build_r.value).duplicate(true)
 	_session_state.set_full_replay_step_timeline(timeline)
+	_emit_resume_cache_event("resume_cache.timeline_cache_refresh.done", {
+		"mode": "full_rebuild",
+		"allow_incremental_append": bool(allow_incremental_append),
+		"previous_processed_command_count": int(previous_processed_count),
+		"timeline_processed_command_count": int(
+			StepTimelineHelpersClass.read_processed_command_count(timeline)
+		),
+		"timeline_step_count": int(Array(timeline.get("steps", [])).size()),
+	})
 	return Result.success({
 		"timeline": timeline,
 		"append_applied": false,
@@ -418,3 +566,45 @@ func _net_has_signal_value(signal_name: String) -> bool:
 	if _net == null or not is_instance_valid(_net) or not (_net is Object):
 		return false
 	return (_net as Object).has_signal(signal_name)
+
+func _emit_resume_cache_event(event: String, fields: Dictionary = {}) -> void:
+	if not OnlinePerfTraceClass.enabled():
+		return
+	var out: Dictionary = {
+		"room_code": str(_session_state.runtime_room_code).strip_edges().to_upper(),
+		"full_history_generation": int(_session_state.full_history_generation),
+		"full_replay_ready": bool(_session_state.full_replay_engine_ready),
+		"full_replay_live_tail_count": int(_session_state.full_replay_live_tail_commands.size()),
+		"cached_timeline_ready": bool(_session_state.has_full_replay_step_timeline()),
+		"cached_timeline_processed_command_count": int(
+			_session_state.full_replay_step_timeline.get("_build_meta", {}).get("processed_command_count", -1)
+		),
+	}
+	for key in fields.keys():
+		out[str(key)] = fields[key]
+	OnlinePerfTraceClass.emit_event(str(event).strip_edges(), out)
+
+func _maybe_emit_match_bootstrap_local_failed(message: String, room_code: String = "") -> void:
+	if not _should_abort_match_bootstrap_on_full_history_failure(room_code):
+		return
+	if _net == null or not is_instance_valid(_net):
+		return
+	if not _net_has_signal_value("match_bootstrap_local_failed"):
+		return
+	_net.emit_signal("match_bootstrap_local_failed", str(message).strip_edges())
+
+func _should_abort_match_bootstrap_on_full_history_failure(room_code: String = "") -> bool:
+	if NetContext == null:
+		return false
+	var room_state: Dictionary = Dictionary(NetContext.room_state).duplicate(true)
+	if str(room_state.get("status", "")).strip_edges() != "Starting":
+		return false
+	if str(room_state.get("room_mode", "")).strip_edges() != "resume_archive":
+		return false
+	var expected_room_code := str(room_state.get("room_code", "")).strip_edges().to_upper()
+	var normalized_room_code := str(room_code).strip_edges().to_upper()
+	if expected_room_code.is_empty():
+		return false
+	if not normalized_room_code.is_empty() and normalized_room_code != expected_room_code:
+		return false
+	return true

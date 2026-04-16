@@ -7,7 +7,7 @@ const TARGET_GAME := "game"
 const LOBBY_AUTO_RESUME_RETRY_DELAYS_SEC := [0.0, 0.5, 1.5]
 const STARTUP_GAME_RESUME_RETRY_DELAYS_SEC := [0.0, 0.5, 1.5]
 const LOBBY_CONNECT_TIMEOUT_SEC := 3.0
-const STARTUP_GAME_RESUME_TIMEOUT_SEC := 6.0
+const STARTUP_GAME_RESUME_TIMEOUT_SEC := 15.0
 
 signal resume_context_changed(state: Dictionary)
 signal resume_terminal(reason: String)
@@ -26,6 +26,8 @@ class _ResumeWaitState:
 	var room_state_ready: bool = false
 	var game_started_received: bool = false
 	var fast_start_ready: bool = false
+	var full_history_expected: bool = false
+	var full_history_ready: bool = false
 	var archive_received: bool = false
 	var delta_applied: bool = false
 	var delta_failed: bool = false
@@ -340,7 +342,7 @@ func _wait_for_resume_ready(
 
 	while Time.get_ticks_msec() <= deadline:
 		if mode == "startup_game":
-			if wait_state.game_started_received and (wait_state.fast_start_ready or wait_state.archive_received or wait_state.delta_applied):
+			if _is_startup_game_wait_ready(wait_state):
 				_disconnect_resume_wait_signals(callbacks)
 				return {"ok": true}
 		elif wait_state.room_state_ready:
@@ -395,6 +397,7 @@ func _connect_resume_wait_signals(wait_state: _ResumeWaitState, on_game_started:
 		"room_state_updated": Callable(self, "_on_wait_room_state_updated").bind(wait_state),
 		"game_started": Callable(self, "_on_wait_game_started").bind(wait_state, on_game_started, on_status_changed),
 		"resume_fast_start_ready": Callable(self, "_on_wait_resume_fast_start_ready").bind(wait_state, on_status_changed),
+		"resume_full_history_ready": Callable(self, "_on_wait_resume_full_history_ready").bind(wait_state, on_status_changed),
 		"resync_archive_received": Callable(self, "_on_wait_resync_archive_received").bind(wait_state, on_status_changed),
 		"resync_delta_applied": Callable(self, "_on_wait_resync_delta_applied").bind(wait_state, on_status_changed),
 		"resync_delta_failed": Callable(self, "_on_wait_resync_delta_failed").bind(wait_state),
@@ -411,6 +414,8 @@ func _connect_resume_wait_signals(wait_state: _ResumeWaitState, on_game_started:
 		NetClient.game_started.connect(callbacks["game_started"])
 	if callbacks.has("resume_fast_start_ready") and NetClient.has_signal("resume_fast_start_ready") and not NetClient.resume_fast_start_ready.is_connected(callbacks["resume_fast_start_ready"]):
 		NetClient.resume_fast_start_ready.connect(callbacks["resume_fast_start_ready"])
+	if callbacks.has("resume_full_history_ready") and NetClient.has_signal("resume_full_history_ready") and not NetClient.resume_full_history_ready.is_connected(callbacks["resume_full_history_ready"]):
+		NetClient.resume_full_history_ready.connect(callbacks["resume_full_history_ready"])
 	if not NetClient.resync_archive_received.is_connected(callbacks["resync_archive_received"]):
 		NetClient.resync_archive_received.connect(callbacks["resync_archive_received"])
 	if not NetClient.resync_delta_applied.is_connected(callbacks["resync_delta_applied"]):
@@ -434,6 +439,8 @@ func _disconnect_resume_wait_signals(callbacks: Dictionary) -> void:
 		NetClient.game_started.disconnect(callbacks["game_started"])
 	if callbacks.has("resume_fast_start_ready") and NetClient.has_signal("resume_fast_start_ready") and NetClient.resume_fast_start_ready.is_connected(callbacks["resume_fast_start_ready"]):
 		NetClient.resume_fast_start_ready.disconnect(callbacks["resume_fast_start_ready"])
+	if callbacks.has("resume_full_history_ready") and NetClient.has_signal("resume_full_history_ready") and NetClient.resume_full_history_ready.is_connected(callbacks["resume_full_history_ready"]):
+		NetClient.resume_full_history_ready.disconnect(callbacks["resume_full_history_ready"])
 	if callbacks.has("resync_archive_received") and NetClient.resync_archive_received.is_connected(callbacks["resync_archive_received"]):
 		NetClient.resync_archive_received.disconnect(callbacks["resync_archive_received"])
 	if callbacks.has("resync_delta_applied") and NetClient.resync_delta_applied.is_connected(callbacks["resync_delta_applied"]):
@@ -487,14 +494,32 @@ func _on_wait_game_started(
 		on_game_started.call(payload)
 
 func _on_wait_resume_fast_start_ready(
-	_payload: Dictionary,
+	payload: Dictionary,
 	wait_state: _ResumeWaitState,
 	on_status_changed: Callable
 ) -> void:
 	if wait_state == null:
 		return
 	wait_state.fast_start_ready = true
-	_emit_status(on_status_changed, "已完成快启动，正在进入对局...")
+	var snapshot: Dictionary = Dictionary(payload).duplicate(true) if (payload is Dictionary) else {}
+	var expects_full_history := bool(snapshot.get("has_full_archive_payload", false))
+	if not expects_full_history:
+		expects_full_history = str(snapshot.get("full_history_source_mode", "")).strip_edges() == "archive_payload"
+	wait_state.full_history_expected = bool(expects_full_history)
+	_emit_status(
+		on_status_changed,
+		"已完成快启动，正在加载完整历史..." if wait_state.full_history_expected else "已完成快启动，正在进入对局..."
+	)
+
+func _on_wait_resume_full_history_ready(
+	_payload: Dictionary,
+	wait_state: _ResumeWaitState,
+	on_status_changed: Callable
+) -> void:
+	if wait_state == null:
+		return
+	wait_state.full_history_ready = true
+	_emit_status(on_status_changed, "已完成完整历史加载，正在进入对局...")
 
 func _on_wait_resync_archive_received(
 	_archive: Dictionary,
@@ -521,6 +546,16 @@ func _on_wait_resync_delta_failed(message: String, wait_state: _ResumeWaitState)
 		return
 	wait_state.delta_failed = true
 	wait_state.delta_error = str(message)
+
+func _is_startup_game_wait_ready(wait_state: _ResumeWaitState) -> bool:
+	if wait_state == null:
+		return false
+	var transport_ready := wait_state.fast_start_ready or wait_state.archive_received or wait_state.delta_applied
+	if not wait_state.game_started_received or not transport_ready:
+		return false
+	if wait_state.fast_start_ready and wait_state.full_history_expected:
+		return wait_state.full_history_ready
+	return true
 
 func _default_ensure_session() -> Result:
 	if PlatformSession == null:
