@@ -5,6 +5,7 @@ extends RefCounted
 
 const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 
 # 阶段英文 → 中文映射（用于 toast 等）
 const PHASE_DISPLAY_NAMES: Dictionary = {
@@ -111,6 +112,12 @@ func update_ui(do_profile: bool) -> void:
 	var state: GameState = game_engine.get_state()
 	if state == null:
 		return
+	var online_span_total := OnlinePerfTraceClass.begin_span("ui.online_sync.total", {
+		"phase": str(state.phase),
+		"round": int(state.round_number),
+		"history_size": int(game_engine.command_history.size()),
+		"cursor_command_index": int(game_engine.current_command_index),
+	})
 
 	if is_instance_valid(_round_label):
 		if str(state.phase) == DefsClass.PHASE_SETUP:
@@ -140,14 +147,34 @@ func update_ui(do_profile: bool) -> void:
 	# 回放/复盘/联机等待：先同步“是否可操作”的状态，再同步面板。
 	# 否则会出现“本帧先刷新出可点击面板，下一步才被禁用”的短暂交互窗口。
 	if is_instance_valid(_timeline_controller) and _timeline_controller.has_method("sync_timeline_ui"):
+		var online_span_timeline := OnlinePerfTraceClass.begin_span("ui.online_sync.timeline_ui", {
+			"phase": str(state.phase),
+			"round": int(state.round_number),
+			"head_index": int(head_index),
+			"cursor_index": int(cursor_index),
+		})
 		_timeline_controller.call("sync_timeline_ui", head_index, cursor_index, state)
+		OnlinePerfTraceClass.end_span(online_span_timeline, {
+			"phase": str(state.phase),
+			"round": int(state.round_number),
+			"head_index": int(head_index),
+			"cursor_index": int(cursor_index),
+		})
 
 	# 地图渲染
 	if is_instance_valid(_map_view) and _map_view.has_method("set_game_state"):
 		var span_map := PerfTraceClass.begin_span("ui:map_view.set_game_state") if do_profile else -1
+		var online_span_map := OnlinePerfTraceClass.begin_span("ui.online_sync.map_view", {
+			"phase": str(state.phase),
+			"round": int(state.round_number),
+		})
 		_map_view.call("set_game_state", state)
 		if do_profile:
 			PerfTraceClass.end_span(span_map)
+		OnlinePerfTraceClass.end_span(online_span_map, {
+			"phase": str(state.phase),
+			"round": int(state.round_number),
+		})
 
 	# 面板/覆盖层同步
 	if is_instance_valid(_panel_controller) and _panel_controller.has_method("sync"):
@@ -155,20 +182,40 @@ func update_ui(do_profile: bool) -> void:
 		var force_refresh := false
 		if is_instance_valid(_timeline_controller) and _timeline_controller.has_method("consume_force_full_panel_sync_next_update"):
 			force_refresh = bool(_timeline_controller.call("consume_force_full_panel_sync_next_update"))
+		var online_span_panels := OnlinePerfTraceClass.begin_span("ui.online_sync.panel_controller", {
+			"phase": str(state.phase),
+			"round": int(state.round_number),
+			"force_refresh": bool(force_refresh),
+		})
 		_panel_controller.call("sync", state, force_refresh)
 		if _sync_right_panel_docked_view.is_valid():
 			_sync_right_panel_docked_view.call()
 		if do_profile:
 			PerfTraceClass.end_span(span_panels)
+		OnlinePerfTraceClass.end_span(online_span_panels, {
+			"phase": str(state.phase),
+			"round": int(state.round_number),
+			"force_refresh": bool(force_refresh),
+		})
 
 	if is_instance_valid(_overlay_controller):
 		var span_overlays := PerfTraceClass.begin_span("ui:overlay_controller.sync") if do_profile else -1
+		var online_span_overlays := OnlinePerfTraceClass.begin_span("ui.online_sync.overlay_controller", {
+			"phase": str(state.phase),
+			"round": int(state.round_number),
+			"timeline_at_head": bool(head_index == cursor_index),
+		})
 		if _overlay_controller.has_method("sync_demand_indicator"):
 			_overlay_controller.call("sync_demand_indicator", state)
 		if _overlay_controller.has_method("sync_dinnertime_overlay"):
 			_overlay_controller.call("sync_dinnertime_overlay", state, head_index == cursor_index)
 		if do_profile:
 			PerfTraceClass.end_span(span_overlays)
+		OnlinePerfTraceClass.end_span(online_span_overlays, {
+			"phase": str(state.phase),
+			"round": int(state.round_number),
+			"timeline_at_head": bool(head_index == cursor_index),
+		})
 
 	_maybe_show_online_turn_toast(head_index, cursor_index, state)
 	_maybe_show_phase_change_toast(head_index, cursor_index, state)
@@ -176,7 +223,21 @@ func update_ui(do_profile: bool) -> void:
 
 	# 同步调试面板
 	if _debug_panel != null and is_instance_valid(_debug_panel) and _debug_panel.visible and _debug_panel.has_method("refresh_state"):
+		var online_span_debug_panel := OnlinePerfTraceClass.begin_span("ui.online_sync.debug_panel", {
+			"phase": str(state.phase),
+			"round": int(state.round_number),
+		})
 		_debug_panel.call("refresh_state")
+		OnlinePerfTraceClass.end_span(online_span_debug_panel, {
+			"phase": str(state.phase),
+			"round": int(state.round_number),
+		})
+	OnlinePerfTraceClass.end_span(online_span_total, {
+		"phase": str(state.phase),
+		"round": int(state.round_number),
+		"history_size": int(game_engine.command_history.size()),
+		"cursor_command_index": int(game_engine.current_command_index),
+	})
 
 func _maybe_open_first_have_20_overview(game_engine: GameEngine, state: GameState) -> void:
 	if state == null or not (state.players is Array):

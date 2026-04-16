@@ -54,6 +54,10 @@ var _get_online_client_engine_room_code: Callable = Callable()
 var _safe_text: Callable = Callable()
 var _short_hash: Callable = Callable()
 var _net_has_signal: Callable = Callable()
+var _full_replay_timeline_refresh_scheduled: bool = false
+var _full_replay_timeline_refresh_allow_incremental_append: bool = false
+var _full_replay_timeline_refresh_generation: int = 0
+var _full_replay_timeline_refresh_room_code: String = ""
 
 func setup(net_client, callbacks: Dictionary = {}) -> void:
 	_net = net_client
@@ -398,21 +402,7 @@ func record_online_resume_full_history_command(cmd_dict: Dictionary, state_hash:
 		return
 	var apply_r: Result = apply_full_history_command_to_engine(full_engine, cmd_dict, state_hash)
 	if apply_r.ok:
-		var cache_r: Result = _refresh_full_replay_step_timeline_cache(full_engine, true)
-		if cache_r.ok:
-			return
-		GameLog.warn(
-			"NetClient",
-			"Online resume full_replay step timeline tail append failed room=%s origin=%s err=%s"
-				% [
-					_safe_text_value(_session_state.runtime_room_code),
-					_safe_text_value(str(origin)),
-					_safe_text_value(cache_r.error)
-				]
-		)
-		if _session_state.full_history_source_mode == "archive_payload" and not _session_state.full_archive.is_empty():
-			schedule_full_replay_engine_bootstrap(_session_state.runtime_room_code, true)
-			return
+		_schedule_deferred_full_replay_step_timeline_cache_refresh(true, origin)
 		return
 	GameLog.warn(
 		"NetClient",
@@ -423,6 +413,93 @@ func record_online_resume_full_history_command(cmd_dict: Dictionary, state_hash:
 		schedule_full_replay_engine_bootstrap(_session_state.runtime_room_code, true)
 		return
 	_session_state.mark_full_history_error("append failed: %s" % apply_r.error, _session_state.full_history_generation)
+
+func _schedule_deferred_full_replay_step_timeline_cache_refresh(
+	allow_incremental_append: bool,
+	origin: String
+) -> void:
+	if not _session_state.full_replay_engine_ready:
+		return
+	if _session_state.full_replay_engine == null or _session_state.full_replay_engine.get_state() == null:
+		return
+	_full_replay_timeline_refresh_allow_incremental_append = (
+		_full_replay_timeline_refresh_allow_incremental_append or bool(allow_incremental_append)
+	)
+	_full_replay_timeline_refresh_generation = int(_session_state.full_history_generation)
+	_full_replay_timeline_refresh_room_code = str(_session_state.full_replay_room_code).strip_edges().to_upper()
+	if _full_replay_timeline_refresh_scheduled:
+		_emit_resume_cache_event("resume_cache.timeline_cache_refresh.deferred_merge", {
+			"allow_incremental_append": bool(_full_replay_timeline_refresh_allow_incremental_append),
+			"origin": str(origin),
+			"generation": int(_full_replay_timeline_refresh_generation),
+			"full_replay_command_count": int(_session_state.full_replay_engine.command_history.size()),
+		})
+		return
+	_full_replay_timeline_refresh_scheduled = true
+	_emit_resume_cache_event("resume_cache.timeline_cache_refresh.deferred_scheduled", {
+		"allow_incremental_append": bool(_full_replay_timeline_refresh_allow_incremental_append),
+		"origin": str(origin),
+		"generation": int(_full_replay_timeline_refresh_generation),
+		"full_replay_command_count": int(_session_state.full_replay_engine.command_history.size()),
+	})
+	call_deferred("_deferred_refresh_full_replay_step_timeline_cache")
+
+func _deferred_refresh_full_replay_step_timeline_cache() -> void:
+	var allow_incremental_append := bool(_full_replay_timeline_refresh_allow_incremental_append)
+	var generation := int(_full_replay_timeline_refresh_generation)
+	var room_code := str(_full_replay_timeline_refresh_room_code).strip_edges().to_upper()
+	_full_replay_timeline_refresh_scheduled = false
+	_full_replay_timeline_refresh_allow_incremental_append = false
+
+	if generation != int(_session_state.full_history_generation):
+		_emit_resume_cache_event("resume_cache.timeline_cache_refresh.deferred_skipped", {
+			"reason": "generation_changed",
+			"scheduled_generation": int(generation),
+			"current_generation": int(_session_state.full_history_generation),
+			"allow_incremental_append": bool(allow_incremental_append),
+		})
+		return
+	if room_code.is_empty() or room_code != str(_session_state.full_replay_room_code).strip_edges().to_upper():
+		_emit_resume_cache_event("resume_cache.timeline_cache_refresh.deferred_skipped", {
+			"reason": "room_code_changed",
+			"scheduled_room_code": room_code,
+			"current_room_code": str(_session_state.full_replay_room_code).strip_edges().to_upper(),
+			"allow_incremental_append": bool(allow_incremental_append),
+		})
+		return
+
+	var full_engine: GameEngine = _session_state.full_replay_engine
+	if not _session_state.full_replay_engine_ready or full_engine == null or full_engine.get_state() == null:
+		_emit_resume_cache_event("resume_cache.timeline_cache_refresh.deferred_skipped", {
+			"reason": "engine_unavailable",
+			"allow_incremental_append": bool(allow_incremental_append),
+		})
+		return
+
+	var span := OnlinePerfTraceClass.begin_span("resume_cache.timeline_cache_refresh.deferred", {
+		"allow_incremental_append": bool(allow_incremental_append),
+		"generation": int(generation),
+		"room_code": room_code,
+		"full_replay_command_count": int(full_engine.command_history.size()),
+	})
+	var cache_r: Result = _refresh_full_replay_step_timeline_cache(full_engine, allow_incremental_append)
+	OnlinePerfTraceClass.end_span(span, {
+		"ok": bool(cache_r.ok),
+		"generation": int(generation),
+		"room_code": room_code,
+		"full_replay_command_count": int(full_engine.command_history.size()),
+		"error": "" if cache_r.ok else str(cache_r.error),
+	})
+	if cache_r.ok:
+		return
+
+	GameLog.warn(
+		"NetClient",
+		"Online resume deferred step timeline refresh failed room=%s err=%s"
+			% [_safe_text_value(room_code), _safe_text_value(str(cache_r.error))]
+	)
+	if _session_state.full_history_source_mode == "archive_payload" and not _session_state.full_archive.is_empty():
+		schedule_full_replay_engine_bootstrap(_session_state.runtime_room_code, true)
 
 func _refresh_full_replay_step_timeline_cache(engine: GameEngine, allow_incremental_append: bool = false) -> Result:
 	if engine == null or engine.get_state() == null:

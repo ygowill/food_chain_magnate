@@ -335,7 +335,21 @@ func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> voi
 	if OnlinePerfTraceClass.enabled():
 		OnlinePerfTraceClass.emit_event("client.command_applied.apply_done", apply_done_meta)
 	if NetClient != null and NetClient.has_method("record_online_resume_runtime_command_applied"):
+		var resume_cache_span := OnlinePerfTraceClass.begin_span("client.command_applied.resume_cache_sync", {
+			"request_id": str(perf_meta.get("request_id", "")),
+			"action_id": str(cmd.action_id),
+			"actor_id": int(cmd.actor),
+			"command_index": int(cmd.index),
+			"room_code": str(NetContext.room_state.get("room_code", "")).strip_edges().to_upper(),
+		})
 		NetClient.record_online_resume_runtime_command_applied(cmd_dict, state_hash)
+		OnlinePerfTraceClass.end_span(resume_cache_span, {
+			"request_id": str(perf_meta.get("request_id", "")),
+			"action_id": str(cmd.action_id),
+			"actor_id": int(cmd.actor),
+			"command_index": int(cmd.index),
+			"room_code": str(NetContext.room_state.get("room_code", "")).strip_edges().to_upper(),
+		})
 	var should_sync_resume_progress := true
 	if not state_hash.is_empty():
 		var state = engine.get_state()
@@ -352,7 +366,21 @@ func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> voi
 	if _request_live_log_timeline_refresh.is_valid():
 		_request_live_log_timeline_refresh.call()
 	if _update_ui.is_valid():
+		var ui_update_span := OnlinePerfTraceClass.begin_span("client.command_applied.ui_update", {
+			"request_id": str(perf_meta.get("request_id", "")),
+			"action_id": str(cmd.action_id),
+			"actor_id": int(cmd.actor),
+			"command_index": int(cmd.index),
+			"room_code": str(NetContext.room_state.get("room_code", "")).strip_edges().to_upper(),
+		})
 		_update_ui.call()
+		OnlinePerfTraceClass.end_span(ui_update_span, {
+			"request_id": str(perf_meta.get("request_id", "")),
+			"action_id": str(cmd.action_id),
+			"actor_id": int(cmd.actor),
+			"command_index": int(cmd.index),
+			"room_code": str(NetContext.room_state.get("room_code", "")).strip_edges().to_upper(),
+		})
 	_trace_online_command_ui_settled(apply_done_meta, apply_end_mono_usec)
 
 func _trace_online_command_ui_settled(meta: Dictionary, apply_end_mono_usec: int) -> void:

@@ -310,9 +310,11 @@ static func run() -> Result:
 			prev_engine,
 			prev_is_game_active,
 			prev_event_history,
-			"full_replay_engine 第二次追尾 hash 错误: %s vs %s"
-				% [str(full_replay_engine.get_state().compute_hash()), expected_after_second_hash]
+				"full_replay_engine 第二次追尾 hash 错误: %s vs %s"
+					% [str(full_replay_engine.get_state().compute_hash()), expected_after_second_hash]
 		)
+
+	await tree.process_frame
 
 	var session_final: Dictionary = client.get_online_resume_session_snapshot()
 	if not bool(session_final.get("full_replay_ready", false)):
