@@ -246,7 +246,7 @@ func _sync_room_directory_snapshot(snapshot: Dictionary) -> Result:
 			rooms_payload.append({
 				"room_code": str(room.get("room_code", "")).strip_edges().to_upper(),
 				"owner_user_id": owner_user_id,
-				"status": str(room.get("status", "Lobby")).strip_edges(),
+				"status": str(room.get("runtime_status", room.get("status", "Lobby"))).strip_edges(),
 				"join_policy": str(room.get("join_policy", "public")).strip_edges(),
 				"password_hash": str(room.get("password_hash", "")).strip_edges(),
 				"config_json": JSON.stringify(Dictionary(room.get("config", {})).duplicate(true)),
@@ -430,7 +430,7 @@ func _send_heartbeat() -> void:
 				if room == null:
 					continue
 				var room_status := str(room.status).strip_edges()
-				if room_status != "Lobby" and room_status != "InGame":
+				if room_status != "Lobby" and room_status != "Starting" and room_status != "InGame":
 					continue
 				room_codes.append(code)
 

@@ -441,7 +441,9 @@ func create_persistence_snapshot(include_runtime_membership: bool = false) -> Re
 		var room = rooms.get(room_code, null)
 		if room == null:
 			continue
-		if str(room.status) != OnlineRoomClass.STATUS_IN_GAME and str(room.status) != OnlineRoomClass.STATUS_LOBBY:
+		if str(room.status) != OnlineRoomClass.STATUS_IN_GAME \
+			and str(room.status) != OnlineRoomClass.STATUS_LOBBY \
+			and str(room.status) != OnlineRoomClass.STATUS_STARTING:
 			continue
 		var room_span := OnlinePerfTraceClass.begin_span("server.persistence.snapshot.room", {
 			"room_code": room_code,

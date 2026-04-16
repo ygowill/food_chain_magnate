@@ -31,9 +31,10 @@ static func _run_waits_for_all_ready_scenario() -> Result:
 	var ctx: Dictionary = Dictionary(fixture.value)
 	var server = ctx.get("server", null)
 	var room = ctx.get("room", null)
+	var room_manager = ctx.get("room_manager", null)
 	var mock_net = ctx.get("mock_net", null)
-	if server == null or room == null or mock_net == null:
-		return Result.failure("开局 bootstrap 测试 fixture 缺少 server/room/mock_net")
+	if server == null or room == null or room_manager == null or mock_net == null:
+		return Result.failure("开局 bootstrap 测试 fixture 缺少 server/room/room_manager/mock_net")
 
 	mock_net.multiplayer.remote_sender_id = 10
 	server.handle_rpc_start_game({"request_id": "r_start"})
@@ -51,6 +52,25 @@ static func _run_waits_for_all_ready_scenario() -> Result:
 		return Result.failure("bootstrap total_count 错误: %s" % str(bootstrap_summary))
 	if int(Dictionary(bootstrap_summary).get("ready_count", -1)) != 0:
 		return Result.failure("bootstrap 初始 ready_count 应为 0: %s" % str(bootstrap_summary))
+	var snapshot_r: Result = room_manager.create_persistence_snapshot(true)
+	if not snapshot_r.ok:
+		return Result.failure("Starting 期间创建目录快照失败: %s" % snapshot_r.error)
+	var snapshot_rooms_val = Dictionary(snapshot_r.value).get("rooms", null)
+	if not (snapshot_rooms_val is Array):
+		return Result.failure("Starting 期间目录快照缺少 rooms 数组")
+	var found_starting_room := false
+	for item in Array(snapshot_rooms_val):
+		if not (item is Dictionary):
+			continue
+		var room_dict: Dictionary = Dictionary(item)
+		if str(room_dict.get("room_code", "")).strip_edges().to_upper() != str(room.room_code).strip_edges().to_upper():
+			continue
+		if str(room_dict.get("runtime_status", "")).strip_edges() != "Starting":
+			return Result.failure("Starting 期间目录快照应保留 runtime_status=Starting: %s" % str(room_dict))
+		found_starting_room = true
+		break
+	if not found_starting_room:
+		return Result.failure("Starting 期间目录快照不应丢失当前房间")
 	var bootstrap_id := str(Dictionary(bootstrap_summary).get("id", "")).strip_edges()
 	if bootstrap_id.is_empty():
 		return Result.failure("开局请求后 bootstrap_id 为空")

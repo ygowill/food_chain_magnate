@@ -15,7 +15,7 @@ from app.models import GameServer, Room, RoomMember, RoomTombstone, Match, Match
 from app.replay_storage import save_local_replay_archive
 
 router = APIRouter(prefix="/internal", tags=["internal"])
-ACTIVE_ROOM_STATUSES = ("Lobby", "InGame")
+ACTIVE_ROOM_STATUSES = ("Lobby", "Starting", "InGame")
 RESUMABLE_MEMBER_STATUSES = ("active", "reconnecting")
 
 async def _mark_room_members_left(

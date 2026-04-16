@@ -89,6 +89,30 @@ async def test_list_active_rooms_for_server(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_list_active_rooms_for_server_includes_starting(client: AsyncClient, db_session: AsyncSession):
+    user = await _create_user(client)
+    create = await client.post("/v1/rooms", json={"session_id": user["session_id"]})
+    code = create.json()["room_code"]
+
+    hb = await client.post("/internal/game_servers/heartbeat", json={
+        "game_server_id": "gs-active-starting-1",
+        "ws_url": "ws://127.0.0.1:7000",
+        "room_codes": [code],
+    }, headers=INTERNAL_HEADERS)
+    assert hb.status_code == 200
+
+    room = (await db_session.execute(select(Room).where(Room.room_code == code))).scalar_one()
+    room.status = "Starting"
+    await db_session.commit()
+
+    resp = await client.get("/internal/game_servers/gs-active-starting-1/rooms/active", headers=INTERNAL_HEADERS)
+    assert resp.status_code == 200
+    data = resp.json()["ok"]
+    assert isinstance(data, list)
+    assert any(item["room_code"] == code and item["status"] == "Starting" for item in data)
+
+
+@pytest.mark.asyncio
 async def test_sync_room_directory_creates_room_and_members(client: AsyncClient, db_session: AsyncSession):
     payload = {
         "ws_url": "wss://single.example.test",
