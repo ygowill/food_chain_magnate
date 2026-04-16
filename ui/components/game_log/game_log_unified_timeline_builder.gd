@@ -252,6 +252,405 @@ static func append_step_range(
 
 	return items
 
+static func build_descriptors(
+	step_timeline: Dictionary,
+	entries_all: Array[Dictionary],
+	show_phase_events: bool,
+	fold_details_enabled: bool,
+	expanded_action_groups: Dictionary,
+	initial_round_number: int,
+	initial_phase_segment: String
+) -> Dictionary:
+	var descriptors: Array[Dictionary] = []
+	var steps_val = step_timeline.get("steps", null)
+	if not (steps_val is Array):
+		return {
+			"items": descriptors,
+			"timeline_step_count": 0,
+		}
+	var steps: Array = steps_val
+
+	var entries_by_step := _build_entries_by_step(entries_all)
+
+	var prev_round := int(initial_round_number)
+	var prev_phase := str(initial_phase_segment).strip_edges()
+	if prev_phase.is_empty():
+		prev_phase = "?"
+
+	if prev_round >= 1:
+		descriptors.append({
+			"kind": "round_header",
+			"round_number": int(prev_round),
+			"start_step_index": -1,
+		})
+
+	descriptors.append({
+		"kind": "phase_header",
+		"phase_segment": str(prev_phase),
+		"start_step_index": -1,
+		"end_step_index": -1,
+	})
+	var current_phase_descriptor_index := descriptors.size() - 1
+
+	var init_entries: Array = entries_by_step.get(-1, [])
+	var init_header := _build_action_group_header_data(-1, {}, init_entries, show_phase_events)
+	var init_primary_id := int(init_header.get("primary_entry_id", -1))
+	var init_primary_entry_val = init_header.get("primary_entry", {})
+	var init_primary_entry: Dictionary = init_primary_entry_val if (init_primary_entry_val is Dictionary) else {}
+	var init_child_count := _count_event_items_for_action_group(init_entries, init_primary_id, show_phase_events)
+	var init_expanded := _is_expanded_from_snapshot(bool(fold_details_enabled), expanded_action_groups, -1)
+	descriptors.append({
+		"kind": "action_group_header",
+		"step_index": -1,
+		"summary": str(init_header.get("summary", "")),
+		"primary_entry_id": int(init_primary_id),
+		"primary_entry": init_primary_entry.duplicate(true),
+		"fold_enabled": bool(fold_details_enabled),
+		"expanded": bool(init_expanded),
+		"child_event_count": int(init_child_count),
+	})
+	if init_expanded:
+		_append_event_descriptors_for_step(
+			descriptors,
+			-1,
+			entries_by_step,
+			show_phase_events,
+			2,
+			init_primary_id
+		)
+
+	for idx in range(steps.size()):
+		var step_val = steps[idx]
+		if not (step_val is Dictionary):
+			continue
+		var step: Dictionary = step_val
+		var round_num := int(step.get("round", -1))
+		var phase_seg := str(step.get("phase", "")).strip_edges()
+		if phase_seg.is_empty():
+			phase_seg = "?"
+		var action_id := str(step.get("action_id", "")).strip_edges()
+
+		var round_changed := (round_num != prev_round)
+		if round_changed and round_num >= 1:
+			descriptors.append({
+				"kind": "round_header",
+				"round_number": int(round_num),
+				"start_step_index": int(idx),
+			})
+
+		if round_changed or phase_seg != prev_phase:
+			if current_phase_descriptor_index >= 0 and current_phase_descriptor_index < descriptors.size():
+				var prev_desc: Dictionary = Dictionary(descriptors[current_phase_descriptor_index])
+				prev_desc["end_step_index"] = int(idx) - 1
+				descriptors[current_phase_descriptor_index] = prev_desc
+			descriptors.append({
+				"kind": "phase_header",
+				"phase_segment": str(phase_seg),
+				"start_step_index": int(idx),
+				"end_step_index": int(idx),
+			})
+			current_phase_descriptor_index = descriptors.size() - 1
+
+		var kind := str(step.get("kind", "")).strip_edges()
+		if kind == "phase":
+			_append_event_descriptors_for_step(
+				descriptors,
+				idx,
+				entries_by_step,
+				show_phase_events,
+				1,
+				-1
+			)
+		elif _is_hidden_restructuring_noise_action(action_id):
+			pass
+		elif _is_flow_command_action_id(str(step.get("action_id", "")).strip_edges()):
+			_append_event_descriptors_for_step(
+				descriptors,
+				idx,
+				entries_by_step,
+				show_phase_events,
+				1,
+				-1
+			)
+		else:
+			var step_entries: Array = entries_by_step.get(idx, [])
+			var header: Dictionary = _build_action_group_header_data(idx, step, step_entries, show_phase_events)
+			var primary_id := int(header.get("primary_entry_id", -1))
+			var primary_entry_val = header.get("primary_entry", {})
+			var primary_entry: Dictionary = primary_entry_val if (primary_entry_val is Dictionary) else {}
+			var child_count := _count_event_items_for_action_group(step_entries, primary_id, show_phase_events)
+			var expanded := _is_expanded_from_snapshot(bool(fold_details_enabled), expanded_action_groups, idx)
+			descriptors.append({
+				"kind": "action_group_header",
+				"step_index": int(idx),
+				"summary": str(header.get("summary", "")),
+				"primary_entry_id": int(primary_id),
+				"primary_entry": primary_entry.duplicate(true),
+				"fold_enabled": bool(fold_details_enabled),
+				"expanded": bool(expanded),
+				"child_event_count": int(child_count),
+			})
+			if expanded:
+				_append_event_descriptors_for_step(
+					descriptors,
+					idx,
+					entries_by_step,
+					show_phase_events,
+					2,
+					primary_id
+				)
+
+		prev_round = round_num
+		prev_phase = phase_seg
+
+	if current_phase_descriptor_index >= 0 and current_phase_descriptor_index < descriptors.size():
+		var final_desc: Dictionary = Dictionary(descriptors[current_phase_descriptor_index])
+		final_desc["end_step_index"] = steps.size() - 1
+		descriptors[current_phase_descriptor_index] = final_desc
+
+	return {
+		"items": descriptors,
+		"timeline_step_count": int(steps.size()),
+	}
+
+static func build_append_descriptors(
+	step_timeline: Dictionary,
+	entries_all: Array[Dictionary],
+	start_step_index: int,
+	show_phase_events: bool,
+	fold_details_enabled: bool,
+	expanded_action_groups: Dictionary,
+	initial_round_number: int,
+	initial_phase_segment: String
+) -> Dictionary:
+	var steps_val = step_timeline.get("steps", null)
+	if not (steps_val is Array):
+		return {
+			"items": [],
+			"timeline_step_count": 0,
+			"patch_existing_last_phase_header_end_step_index": -999,
+		}
+	var steps: Array = steps_val
+	var start_idx := maxi(0, int(start_step_index))
+	if start_idx >= steps.size():
+		return {
+			"items": [],
+			"timeline_step_count": int(steps.size()),
+			"patch_existing_last_phase_header_end_step_index": -999,
+		}
+
+	var entries_by_step := _build_entries_by_step(entries_all)
+	var prev_round := int(initial_round_number)
+	var prev_phase := str(initial_phase_segment).strip_edges()
+	if prev_phase.is_empty():
+		prev_phase = "?"
+
+	if start_idx > 0:
+		var prev_idx := start_idx - 1
+		if prev_idx >= 0 and prev_idx < steps.size():
+			var prev_step_val = steps[prev_idx]
+			if prev_step_val is Dictionary:
+				var prev_step: Dictionary = prev_step_val
+				prev_round = int(prev_step.get("round", prev_round))
+				prev_phase = str(prev_step.get("phase", prev_phase)).strip_edges()
+				if prev_phase.is_empty():
+					prev_phase = "?"
+
+	var descriptors: Array[Dictionary] = []
+	var current_phase_descriptor_index := -1
+	var patch_existing_last_phase_header_end_step_index := -999
+	var needs_patch_existing_phase_header := true
+
+	for idx in range(start_idx, steps.size()):
+		var step_val = steps[idx]
+		if not (step_val is Dictionary):
+			continue
+		var step: Dictionary = step_val
+		var round_num := int(step.get("round", -1))
+		var phase_seg := str(step.get("phase", "")).strip_edges()
+		if phase_seg.is_empty():
+			phase_seg = "?"
+		var action_id := str(step.get("action_id", "")).strip_edges()
+
+		var round_changed := (round_num != prev_round)
+		if round_changed and round_num >= 1:
+			descriptors.append({
+				"kind": "round_header",
+				"round_number": int(round_num),
+				"start_step_index": int(idx),
+			})
+
+		if round_changed or phase_seg != prev_phase:
+			if current_phase_descriptor_index >= 0 and current_phase_descriptor_index < descriptors.size():
+				var prev_desc: Dictionary = Dictionary(descriptors[current_phase_descriptor_index])
+				prev_desc["end_step_index"] = int(idx) - 1
+				descriptors[current_phase_descriptor_index] = prev_desc
+			elif needs_patch_existing_phase_header:
+				patch_existing_last_phase_header_end_step_index = int(idx) - 1
+			needs_patch_existing_phase_header = false
+
+			descriptors.append({
+				"kind": "phase_header",
+				"phase_segment": str(phase_seg),
+				"start_step_index": int(idx),
+				"end_step_index": int(idx),
+			})
+			current_phase_descriptor_index = descriptors.size() - 1
+		elif needs_patch_existing_phase_header:
+			needs_patch_existing_phase_header = false
+
+		var kind := str(step.get("kind", "")).strip_edges()
+		if kind == "phase":
+			_append_event_descriptors_for_step(
+				descriptors,
+				idx,
+				entries_by_step,
+				show_phase_events,
+				1,
+				-1
+			)
+		elif _is_hidden_restructuring_noise_action(action_id):
+			pass
+		elif _is_flow_command_action_id(str(step.get("action_id", "")).strip_edges()):
+			_append_event_descriptors_for_step(
+				descriptors,
+				idx,
+				entries_by_step,
+				show_phase_events,
+				1,
+				-1
+			)
+		else:
+			var step_entries: Array = entries_by_step.get(idx, [])
+			var header: Dictionary = _build_action_group_header_data(idx, step, step_entries, show_phase_events)
+			var primary_id := int(header.get("primary_entry_id", -1))
+			var primary_entry_val = header.get("primary_entry", {})
+			var primary_entry: Dictionary = primary_entry_val if (primary_entry_val is Dictionary) else {}
+			var child_count := _count_event_items_for_action_group(step_entries, primary_id, show_phase_events)
+			var expanded := _is_expanded_from_snapshot(bool(fold_details_enabled), expanded_action_groups, idx)
+			descriptors.append({
+				"kind": "action_group_header",
+				"step_index": int(idx),
+				"summary": str(header.get("summary", "")),
+				"primary_entry_id": int(primary_id),
+				"primary_entry": primary_entry.duplicate(true),
+				"fold_enabled": bool(fold_details_enabled),
+				"expanded": bool(expanded),
+				"child_event_count": int(child_count),
+			})
+			if expanded:
+				_append_event_descriptors_for_step(
+					descriptors,
+					idx,
+					entries_by_step,
+					show_phase_events,
+					2,
+					primary_id
+				)
+
+		prev_round = round_num
+		prev_phase = phase_seg
+
+	if current_phase_descriptor_index >= 0 and current_phase_descriptor_index < descriptors.size():
+		var final_desc: Dictionary = Dictionary(descriptors[current_phase_descriptor_index])
+		final_desc["end_step_index"] = steps.size() - 1
+		descriptors[current_phase_descriptor_index] = final_desc
+	elif not needs_patch_existing_phase_header:
+		patch_existing_last_phase_header_end_step_index = steps.size() - 1
+
+	return {
+		"items": descriptors,
+		"timeline_step_count": int(steps.size()),
+		"patch_existing_last_phase_header_end_step_index": int(patch_existing_last_phase_header_end_step_index),
+	}
+
+static func append_descriptor_slice(
+	items: Array[Control],
+	log_container: VBoxContainer,
+	descriptors: Array,
+	from_index: int,
+	to_exclusive: int,
+	timeline_cursor_index: int,
+	timeline_head_index: int,
+	on_timeline_header_clicked: Callable,
+	on_entry_clicked: Callable,
+	on_entry_double_clicked: Callable,
+	on_action_group_fold_toggled: Callable,
+	acquire_item: Callable = Callable()
+) -> void:
+	if log_container == null or not is_instance_valid(log_container):
+		return
+	var from_idx := maxi(0, int(from_index))
+	var to_idx := mini(int(to_exclusive), descriptors.size())
+	for idx in range(from_idx, to_idx):
+		var descriptor_val = descriptors[idx]
+		if not (descriptor_val is Dictionary):
+			continue
+		var descriptor: Dictionary = descriptor_val
+		var kind := str(descriptor.get("kind", "")).strip_edges()
+		match kind:
+			"round_header":
+				_add_round_header_item(
+					items,
+					log_container,
+					int(descriptor.get("round_number", -1)),
+					int(descriptor.get("start_step_index", -1)),
+					timeline_cursor_index,
+					timeline_head_index,
+					on_timeline_header_clicked,
+					acquire_item
+				)
+			"phase_header":
+				var phase_item = _add_phase_header_item(
+					items,
+					log_container,
+					str(descriptor.get("phase_segment", "")),
+					int(descriptor.get("start_step_index", -1)),
+					timeline_cursor_index,
+					timeline_head_index,
+					on_timeline_header_clicked,
+					acquire_item
+				)
+				if phase_item != null and is_instance_valid(phase_item):
+					phase_item.end_step_index = int(descriptor.get("end_step_index", phase_item.end_step_index))
+			"action_group_header":
+				var primary_entry_val = descriptor.get("primary_entry", {})
+				var primary_entry: Dictionary = primary_entry_val if (primary_entry_val is Dictionary) else {}
+				_add_action_group_header_item(
+					items,
+					log_container,
+					int(descriptor.get("step_index", -1)),
+					str(descriptor.get("summary", "")),
+					int(descriptor.get("primary_entry_id", -1)),
+					primary_entry,
+					bool(descriptor.get("fold_enabled", false)),
+					bool(descriptor.get("expanded", true)),
+					int(descriptor.get("child_event_count", 0)),
+					timeline_cursor_index,
+					timeline_head_index,
+					on_entry_clicked,
+					on_timeline_header_clicked,
+					on_entry_double_clicked,
+					on_action_group_fold_toggled,
+					acquire_item
+				)
+			"event_item":
+				var entry_val = descriptor.get("entry", {})
+				var entry: Dictionary = entry_val if (entry_val is Dictionary) else {}
+				_add_event_item(
+					items,
+					log_container,
+					entry,
+					int(descriptor.get("indent_level", 1)),
+					timeline_cursor_index,
+					timeline_head_index,
+					on_entry_clicked,
+					on_entry_double_clicked,
+					acquire_item
+				)
+			_:
+				pass
+
 static func compute_visible_entry_count(
 	step_timeline: Dictionary,
 	entries_all: Array[Dictionary],
@@ -355,6 +754,11 @@ static func _is_expanded(is_action_group_expanded: Callable, step_index: int) ->
 	if not is_action_group_expanded.is_valid():
 		return false
 	return bool(is_action_group_expanded.call(int(step_index)))
+
+static func _is_expanded_from_snapshot(fold_details_enabled: bool, expanded_action_groups: Dictionary, step_index: int) -> bool:
+	if not bool(fold_details_enabled):
+		return true
+	return bool(expanded_action_groups.get(int(step_index), false))
 
 static func _build_entries_by_step(entries_all: Array[Dictionary]) -> Dictionary:
 	var out: Dictionary = {} # step_index -> Array[Dictionary]
@@ -600,6 +1004,34 @@ static func _count_event_items_for_action_group(entries: Array, skip_entry_id: i
 			continue
 		count += 1
 	return count
+
+static func _append_event_descriptors_for_step(
+	descriptors: Array[Dictionary],
+	step_index: int,
+	entries_by_step: Dictionary,
+	show_phase_events: bool,
+	indent_level: int,
+	skip_entry_id: int
+) -> void:
+	var idx := int(step_index)
+	var list_val = entries_by_step.get(idx, [])
+	if not (list_val is Array):
+		return
+	var list: Array = list_val
+	var skip_id := int(skip_entry_id)
+	for entry_val in list:
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
+		if skip_id >= 0 and int(entry.get("id", -1)) == skip_id:
+			continue
+		if not _should_show_event_item(entry, show_phase_events):
+			continue
+		descriptors.append({
+			"kind": "event_item",
+			"entry": entry.duplicate(true),
+			"indent_level": int(indent_level),
+		})
 
 static func _add_event_items_for_step(
 	items: Array[Control],

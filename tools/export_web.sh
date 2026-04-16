@@ -120,8 +120,80 @@ else
 	template_dir="$HOME_DIR/.local/share/godot/export_templates/${godot_version}.stable"
 fi
 
-debug_tpl="${template_dir}/web_nothreads_debug.zip"
-release_tpl="${template_dir}/web_nothreads_release.zip"
+get_web_thread_support_for_preset() {
+	local preset_name="$1"
+	local export_presets="$PROJECT_PATH/export_presets.cfg"
+	local preset_index=""
+	local thread_support=""
+
+	if [[ ! -f "$export_presets" ]]; then
+		echo "false"
+		return
+	fi
+
+	preset_index="$(awk -v preset_name="$preset_name" '
+		BEGIN { current = ""; in_preset = 0 }
+		/^\[preset\.[0-9]+\]$/ {
+			current = $0
+			sub(/^\[preset\./, "", current)
+			sub(/\]$/, "", current)
+			in_preset = 1
+			next
+		}
+		/^\[/ {
+			in_preset = 0
+		}
+		in_preset && $0 ~ /^name=/ {
+			name = $0
+			sub(/^name="/, "", name)
+			sub(/"$/, "", name)
+			if (name == preset_name) {
+				print current
+				exit
+			}
+		}
+	' "$export_presets")"
+
+	if [[ -z "$preset_index" ]]; then
+		echo "false"
+		return
+	fi
+
+	thread_support="$(awk -v preset_index="$preset_index" '
+		BEGIN { in_options = 0 }
+		$0 == "[preset." preset_index ".options]" {
+			in_options = 1
+			next
+		}
+		/^\[/ {
+			in_options = 0
+		}
+		in_options && $0 ~ /^variant\/thread_support=/ {
+			value = $0
+			sub(/^variant\/thread_support=/, "", value)
+			gsub(/"/, "", value)
+			print value
+			exit
+		}
+	' "$export_presets")"
+
+	if [[ "$thread_support" == "true" ]]; then
+		echo "true"
+	else
+		echo "false"
+	fi
+}
+
+thread_support="$(get_web_thread_support_for_preset "$PRESET")"
+if [[ "$thread_support" == "true" ]]; then
+	debug_tpl="${template_dir}/web_debug.zip"
+	release_tpl="${template_dir}/web_release.zip"
+	template_label="threads"
+else
+	debug_tpl="${template_dir}/web_nothreads_debug.zip"
+	release_tpl="${template_dir}/web_nothreads_release.zip"
+	template_label="nothreads"
+fi
 
 if [[ "${INSTALL_TEMPLATES}" -eq 1 ]]; then
 	if ! command -v curl >/dev/null 2>&1; then
@@ -148,7 +220,7 @@ if [[ "${INSTALL_TEMPLATES}" -eq 1 ]]; then
 fi
 
 if [[ ! -f "${debug_tpl}" || ! -f "${release_tpl}" ]]; then
-	echo "[ExportWeb] FAIL missing export templates for Web (nothreads)." >&2
+	echo "[ExportWeb] FAIL missing export templates for Web (${template_label})." >&2
 	echo "[ExportWeb] Expected:" >&2
 	echo "[ExportWeb] - ${debug_tpl}" >&2
 	echo "[ExportWeb] - ${release_tpl}" >&2
@@ -157,7 +229,7 @@ if [[ ! -f "${debug_tpl}" || ! -f "${release_tpl}" ]]; then
 	exit 2
 fi
 
-echo "[ExportWeb] START preset=${PRESET} out=${OUT}"
+echo "[ExportWeb] START preset=${PRESET} out=${OUT} thread_support=${thread_support}"
 echo "[ExportWeb] LOG=${LOG_FILE}"
 
 HOME="$HOME_DIR" godot --headless \
