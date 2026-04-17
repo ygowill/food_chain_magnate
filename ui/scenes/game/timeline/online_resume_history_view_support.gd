@@ -56,10 +56,15 @@ static func build_live_history_view(
 	if not is_instance_valid(game_log_panel):
 		return Result.failure("game_log_panel 无效")
 
-	if OnlineResumeFullHistoryAdapterClass.is_applicable() and is_full_history_ready():
+	if OnlineResumeFullHistoryAdapterClass.is_applicable() \
+		and is_full_history_ready() \
+		and previous_history_timeline is Dictionary \
+		and not previous_history_timeline.is_empty():
 		var baseline_r := OnlineResumeFullHistoryAdapterClass.build_live_history_timeline_from_cached_baseline(
 			runtime_engine,
 			game_log_panel,
+			previous_history_timeline,
+			allow_incremental_append,
 			false
 		)
 		if baseline_r.ok:

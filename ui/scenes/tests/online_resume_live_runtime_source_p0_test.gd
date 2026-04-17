@@ -2,8 +2,10 @@ class_name OnlineResumeLiveRuntimeSourceP0Test
 extends RefCounted
 
 const GameTimelineControllerClass = preload("res://ui/scenes/game/timeline/controller.gd")
-const OnlineResumeClientDualEngineBootstrapTestClass = preload("res://core/tests/online_resume_client_dual_engine_bootstrap_test.gd")
+const OnlineResumeFullHistoryAdapterClass = preload("res://ui/scenes/game/timeline/online_resume_full_history_adapter.gd")
+const OnlineResumeRuntimeAnchorLiveSyncTestClass = preload("res://core/tests/online_resume_runtime_anchor_live_sync_test.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
+const StepTimelineHelpersClass = preload("res://gameplay/replay/step_timeline_build/helpers.gd")
 
 class _CallbackHost:
 	extends RefCounted
@@ -44,6 +46,16 @@ class _CallbackHost:
 	func get_online_resync_in_progress() -> bool:
 		return false
 
+class _CommandCapture:
+	extends RefCounted
+
+	var last_cmd: Dictionary = {}
+	var last_state_hash: String = ""
+
+	func on_command_applied(cmd_dict: Dictionary, state_hash: String) -> void:
+		last_cmd = Dictionary(cmd_dict).duplicate(true)
+		last_state_hash = str(state_hash)
+
 class _FakeGameLogPanel:
 	extends Control
 
@@ -58,11 +70,16 @@ class _FakeGameLogPanel:
 	var _replay_toggle_available: bool = true
 	var _replay_toggle_text: String = ""
 	var _replay_toggle_reason: String = ""
+	var load_step_timeline_call_count: int = 0
+	var append_step_timeline_call_count: int = 0
+	var last_update_mode: String = ""
 
 	func has_step_timeline_loaded() -> bool:
 		return not _timeline.is_empty() and _timeline.get("steps", null) is Array
 
 	func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], _reset_extra_entries: bool = false) -> void:
+		load_step_timeline_call_count += 1
+		last_update_mode = "load"
 		_timeline = Dictionary(timeline).duplicate(true)
 		_entries.clear()
 		for entry_val in entries:
@@ -72,6 +89,8 @@ class _FakeGameLogPanel:
 	func append_step_timeline(timeline: Dictionary, appended_entries: Array[Dictionary], _reset_extra_entries: bool = false) -> bool:
 		if not has_step_timeline_loaded():
 			return false
+		append_step_timeline_call_count += 1
+		last_update_mode = "append"
 		_timeline = Dictionary(timeline).duplicate(true)
 		for entry_val in appended_entries:
 			if entry_val is Dictionary:
@@ -137,7 +156,7 @@ static func run() -> Result:
 	var prev_is_game_active := bool(Globals.is_game_active)
 	var prev_event_history := EventBus.get_history()
 
-	var build_r := OnlineResumeClientDualEngineBootstrapTestClass._build_resume_fast_start_bundle()
+	var build_r := OnlineResumeRuntimeAnchorLiveSyncTestClass._build_resume_point_and_follow_up_history()
 	if not build_r.ok:
 		return _restore_and_fail(
 			prev_mode,
@@ -156,6 +175,24 @@ static func run() -> Result:
 		)
 	var build_info: Dictionary = Dictionary(build_r.value)
 	var bundle: Dictionary = Dictionary(build_info.get("bundle", {})).duplicate(true)
+	var next_cmd: Dictionary = Dictionary(build_info.get("next_cmd", {})).duplicate(true)
+	var runtime_history_size := int(build_info.get("runtime_history_size", -1))
+	if next_cmd.is_empty():
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"测试 follow-up 命令缺失"
+		)
 
 	NetClient.shutdown()
 	EventBus.clear_history_and_reset_sequence()
@@ -196,6 +233,7 @@ static func run() -> Result:
 		},
 		"resume_fast_start_bundle": bundle,
 	})
+	await tree.process_frame
 
 	var runtime_engine = Globals.current_game_engine
 	if runtime_engine == null or runtime_engine.get_state() == null:
@@ -215,8 +253,8 @@ static func run() -> Result:
 			"fast-start 后 runtime_engine 缺失"
 		)
 
-	var snapshot_before_ready := NetClient.get_online_resume_session_snapshot()
-	if bool(snapshot_before_ready.get("full_replay_ready", false)):
+	var ensure_history_r := NetClient.ensure_online_resume_full_history_timeline_current(false)
+	if not ensure_history_r.ok:
 		return _restore_and_fail(
 			prev_mode,
 			prev_local_player_id,
@@ -230,7 +268,41 @@ static func run() -> Result:
 			prev_engine,
 			prev_is_game_active,
 			prev_event_history,
-			"完整历史在 deferred bootstrap 前不应已就绪"
+			"构建完整历史失败: %s" % ensure_history_r.error
+		)
+	var snapshot := NetClient.get_online_resume_session_snapshot()
+	if not bool(snapshot.get("full_replay_ready", false)):
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"完整历史应已就绪"
+		)
+	var cached_history_entries := NetClient.get_online_resume_full_replay_step_timeline_entries()
+	if cached_history_entries.is_empty():
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"完整历史 entries cache 应已就绪"
 		)
 
 	var host := Control.new()
@@ -239,6 +311,7 @@ static func run() -> Result:
 	host.add_child(game_log_panel)
 	var action_panel := Control.new()
 	host.add_child(action_panel)
+	await tree.process_frame
 
 	var callbacks := _CallbackHost.new(runtime_engine)
 	var controller := GameTimelineControllerClass.new(
@@ -290,7 +363,7 @@ static func run() -> Result:
 			prev_engine,
 			prev_is_game_active,
 			prev_event_history,
-			"完整历史未 ready 前不应提前进入 global baseline live 模式"
+			"首次 live 构建不应直接进入 global baseline 模式"
 		)
 	var runtime_only_entries := game_log_panel.get_step_timeline_entries()
 	if runtime_only_entries.is_empty():
@@ -308,11 +381,13 @@ static func run() -> Result:
 			prev_engine,
 			prev_is_game_active,
 			prev_event_history,
-			"完整历史未 ready 前仍应先显示 runtime live 日志"
+			"首次 live 构建仍应先显示 runtime 日志"
 		)
 
-	var ensure_history_r := NetClient.ensure_online_resume_full_history_timeline_current(false)
-	if not ensure_history_r.ok:
+	var hydrated := await _wait_until(func() -> bool:
+		return bool(controller._live_history_uses_global_timeline)
+	, tree, 30)
+	if not hydrated:
 		_cleanup_nodes(controller, host)
 		return _restore_and_fail(
 			prev_mode,
@@ -327,62 +402,7 @@ static func run() -> Result:
 			prev_engine,
 			prev_is_game_active,
 			prev_event_history,
-			"构建完整历史失败: %s" % ensure_history_r.error
-		)
-	var snapshot := NetClient.get_online_resume_session_snapshot()
-	if not bool(snapshot.get("full_replay_ready", false)):
-		_cleanup_nodes(controller, host)
-		return _restore_and_fail(
-			prev_mode,
-			prev_local_player_id,
-			prev_local_role,
-			prev_server_url,
-			prev_connect_token,
-			prev_room_state,
-			prev_room_list,
-			prev_player_profile,
-			prev_resume_state,
-			prev_engine,
-			prev_is_game_active,
-			prev_event_history,
-			"完整历史应已就绪"
-		)
-	var cached_history_entries := NetClient.get_online_resume_full_replay_step_timeline_entries()
-	if cached_history_entries.is_empty():
-		_cleanup_nodes(controller, host)
-		return _restore_and_fail(
-			prev_mode,
-			prev_local_player_id,
-			prev_local_role,
-			prev_server_url,
-			prev_connect_token,
-			prev_room_state,
-			prev_room_list,
-			prev_player_profile,
-			prev_resume_state,
-			prev_engine,
-			prev_is_game_active,
-			prev_event_history,
-			"完整历史 entries cache 应已就绪"
-		)
-
-	controller.on_online_resume_full_history_ready()
-	if not bool(controller._live_history_uses_global_timeline):
-		_cleanup_nodes(controller, host)
-		return _restore_and_fail(
-			prev_mode,
-			prev_local_player_id,
-			prev_local_role,
-			prev_server_url,
-			prev_connect_token,
-			prev_room_state,
-			prev_room_list,
-			prev_player_profile,
-			prev_resume_state,
-			prev_engine,
-			prev_is_game_active,
-			prev_event_history,
-			"恢复房默认 live 日志应复用 full-history baseline"
+			"完整历史 ready 后应异步补完默认 live 日志 baseline"
 		)
 	var displayed_entries := game_log_panel.get_step_timeline_entries()
 	if displayed_entries.size() != cached_history_entries.size():
@@ -400,7 +420,7 @@ static func run() -> Result:
 			prev_engine,
 			prev_is_game_active,
 			prev_event_history,
-			"恢复房默认日志应显示完整历史前缀：displayed=%d cached=%d"
+			"baseline 补完后默认日志应显示完整历史前缀：displayed=%d cached=%d"
 				% [displayed_entries.size(), cached_history_entries.size()]
 		)
 	if displayed_entries.size() < runtime_only_entries.size():
@@ -418,8 +438,196 @@ static func run() -> Result:
 			prev_engine,
 			prev_is_game_active,
 			prev_event_history,
-			"完整历史回填后日志条目数不应少于 runtime live：runtime=%d merged=%d"
+			"baseline 补完后条目数不应少于 runtime-only：runtime=%d merged=%d"
 				% [runtime_only_entries.size(), displayed_entries.size()]
+		)
+
+	var entries_before_append_count := displayed_entries.size()
+	var load_count_before_append := int(game_log_panel.load_step_timeline_call_count)
+	var append_count_before_append := int(game_log_panel.append_step_timeline_call_count)
+	var capture := _CommandCapture.new()
+	var capture_cb := Callable(capture, "on_command_applied")
+	if NetClient.command_applied.is_connected(capture_cb):
+		NetClient.command_applied.disconnect(capture_cb)
+	NetClient.command_applied.connect(capture_cb)
+	NetClient.rpc_command_applied({
+		"cmd": next_cmd,
+		"state_hash": "",
+	})
+	if NetClient.command_applied.is_connected(capture_cb):
+		NetClient.command_applied.disconnect(capture_cb)
+	if capture.last_cmd.is_empty():
+		_cleanup_nodes(controller, host)
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"follow-up 命令应先被翻译成 runtime cmd"
+		)
+	var parsed_follow_up_r := Command.from_dict(capture.last_cmd)
+	if not parsed_follow_up_r.ok:
+		_cleanup_nodes(controller, host)
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"follow-up runtime cmd 解析失败: %s" % parsed_follow_up_r.error
+		)
+	var follow_up_cmd: Command = parsed_follow_up_r.value
+	var follow_up_apply_r: Result = runtime_engine.execute_command(follow_up_cmd, true)
+	if not follow_up_apply_r.ok:
+		_cleanup_nodes(controller, host)
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"follow-up runtime cmd 执行失败: %s" % follow_up_apply_r.error
+		)
+	NetClient.record_online_resume_runtime_command_applied(capture.last_cmd, capture.last_state_hash)
+	if runtime_history_size >= 0 and runtime_engine.command_history.size() != runtime_history_size + 1:
+		_cleanup_nodes(controller, host)
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"follow-up 命令后 runtime history size 应 +1：actual=%d expected=%d"
+				% [runtime_engine.command_history.size(), runtime_history_size + 1]
+		)
+	controller.apply_live_log_timeline_from_engine()
+	var displayed_entries_after_follow_up := game_log_panel.get_step_timeline_entries()
+	if int(game_log_panel.append_step_timeline_call_count) != append_count_before_append:
+		_cleanup_nodes(controller, host)
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"follow-up 已被 baseline 预取时不应重复 append：before=%d after=%d"
+				% [append_count_before_append, int(game_log_panel.append_step_timeline_call_count)]
+		)
+	if int(game_log_panel.load_step_timeline_call_count) != load_count_before_append:
+		_cleanup_nodes(controller, host)
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"follow-up 已被 baseline 预取时不应重新走整表 load：before=%d after=%d"
+				% [load_count_before_append, int(game_log_panel.load_step_timeline_call_count)]
+		)
+	if displayed_entries_after_follow_up.size() != entries_before_append_count:
+		_cleanup_nodes(controller, host)
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"follow-up 已被 baseline 预取时，日志条目数应保持不变：before=%d after=%d"
+				% [entries_before_append_count, displayed_entries_after_follow_up.size()]
+		)
+	if not bool(controller._live_history_uses_global_timeline):
+		_cleanup_nodes(controller, host)
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"append 后 live baseline 模式不应丢失"
+		)
+	var runtime_timeline_after_follow_up := Dictionary(
+		controller._history_step_timeline.get(
+			OnlineResumeFullHistoryAdapterClass.META_LIVE_RUNTIME_TIMELINE,
+			{}
+		)
+	).duplicate(true)
+	if StepTimelineHelpersClass.read_processed_command_count(runtime_timeline_after_follow_up) != runtime_history_size + 1:
+		_cleanup_nodes(controller, host)
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"follow-up 命令后隐藏 runtime timeline 应前进：actual=%d expected=%d"
+				% [
+					StepTimelineHelpersClass.read_processed_command_count(runtime_timeline_after_follow_up),
+					runtime_history_size + 1
+				]
 		)
 
 	var target_runtime_command_index := maxi(0, runtime_engine.command_history.size() - 2)
@@ -517,6 +725,13 @@ static func _cleanup_nodes(controller, host: Node) -> void:
 		controller.dispose()
 	if host != null and is_instance_valid(host):
 		host.queue_free()
+
+static func _wait_until(predicate: Callable, st: SceneTree, max_frames: int) -> bool:
+	for _i in range(maxi(1, int(max_frames))):
+		if predicate.is_valid() and bool(predicate.call()):
+			return true
+		await st.process_frame
+	return predicate.is_valid() and bool(predicate.call())
 
 static func _restore(
 	prev_mode,

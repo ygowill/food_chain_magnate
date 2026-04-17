@@ -46,6 +46,7 @@ var _live_history_uses_global_timeline: bool = false
 var _live_history_dirty: bool = true
 var _live_history_refresh_scheduled: bool = false
 var _live_history_last_signature: Dictionary = {}
+var _live_history_pending_baseline_hydration: bool = false
 
 # 时间线编辑模式：允许在 cursor<head 时继续执行命令（将丢弃未来时间线并产生新分支）。
 var _timeline_edit_mode_active: bool = false
@@ -105,11 +106,14 @@ func dispose() -> void:
 	_live_history_dirty = true
 	_live_history_refresh_scheduled = false
 	_live_history_last_signature.clear()
+	_live_history_pending_baseline_hydration = false
 
 func initialize() -> void:
 	_connect_log_panel_signals()
 	_connect_replay_bar_signals()
 	_sync_online_resume_replay_entry_state()
+	if OnlineResumeFullHistoryAdapterClass.is_applicable() and OnlineResumeFullHistoryAdapterClass.is_ready():
+		_live_history_pending_baseline_hydration = true
 
 func set_startup_replay_from_main_menu(active: bool) -> void:
 	_startup_replay_from_main_menu = bool(active)
@@ -274,12 +278,24 @@ func on_online_resume_full_history_ready() -> void:
 	if _replay_mode_active:
 		return
 	_sync_online_resume_replay_entry_state()
+	_live_history_pending_baseline_hydration = true
 	_live_history_dirty = true
 	if _is_history_cursor_detached_from_live_head():
 		return
 	if not is_instance_valid(_game_log_panel) or not _game_log_panel.visible:
 		return
-	apply_live_log_timeline_from_engine(true)
+	request_live_log_timeline_refresh()
+
+func _request_pending_live_baseline_hydration() -> void:
+	if not _live_history_pending_baseline_hydration:
+		return
+	if _replay_mode_active:
+		return
+	if _is_history_cursor_detached_from_live_head():
+		return
+	if not is_instance_valid(_game_log_panel) or not _game_log_panel.visible:
+		return
+	request_live_log_timeline_refresh()
 
 func _build_live_history_signature(runtime_engine: GameEngine) -> Dictionary:
 	return {
@@ -340,6 +356,7 @@ func apply_live_log_timeline_from_engine(force_rebuild: bool = false) -> void:
 		})
 		return
 	_live_history_refresh_scheduled = false
+	var had_history_timeline_before_build := _history_step_timeline_active and not _history_step_timeline.is_empty()
 	var signature := _build_live_history_signature(runtime_engine)
 	if not bool(force_rebuild) and _can_reuse_live_history(signature):
 		_sync_live_log_timeline_state_to_panel()
@@ -394,6 +411,10 @@ func apply_live_log_timeline_from_engine(force_rebuild: bool = false) -> void:
 	_history_cursor_step_index = int(info.get("cursor_step_index", _history_head_step_index))
 	_live_history_last_signature = signature
 	_live_history_dirty = false
+	if _live_history_uses_global_timeline:
+		_live_history_pending_baseline_hydration = false
+	elif _live_history_pending_baseline_hydration and not had_history_timeline_before_build:
+		call_deferred("_request_pending_live_baseline_hydration")
 
 	_sync_live_log_timeline_state_to_panel()
 	OnlinePerfTraceClass.end_span(span, {

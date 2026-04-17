@@ -455,6 +455,39 @@ func record_online_resume_full_history_command(cmd_dict: Dictionary, state_hash:
 		return
 	if _session_state.full_history_source_mode != "archive_payload" and _session_state.full_archive.is_empty():
 		return
+	var cmd_index := int(cmd_dict.get("index", -1))
+	if cmd_index >= 0:
+		var full_engine: GameEngine = _session_state.full_replay_engine if (_session_state.full_replay_engine is GameEngine) else null
+		if full_engine != null and full_engine.get_state() != null:
+			if cmd_index < int(full_engine.command_history.size()):
+				_emit_resume_cache_event("resume_cache.live_tail.ignored_duplicate", {
+					"origin": str(origin),
+					"cmd_index": int(cmd_index),
+					"reason": "already_in_full_replay_engine",
+				})
+				return
+		elif _session_state.full_archive.has("commands"):
+			var archive_commands_val = _session_state.full_archive.get("commands", [])
+			var archive_command_count := int(archive_commands_val.size()) if (archive_commands_val is Array) else 0
+			if cmd_index < archive_command_count:
+				_emit_resume_cache_event("resume_cache.live_tail.ignored_duplicate", {
+					"origin": str(origin),
+					"cmd_index": int(cmd_index),
+					"reason": "already_in_full_archive",
+				})
+				return
+		for pending_val in _session_state.get_full_replay_live_tail_commands():
+			if not (pending_val is Dictionary):
+				continue
+			var pending_cmd := Dictionary(Dictionary(pending_val).get("cmd_dict", {}))
+			if int(pending_cmd.get("index", -1)) != cmd_index:
+				continue
+			_emit_resume_cache_event("resume_cache.live_tail.ignored_duplicate", {
+				"origin": str(origin),
+				"cmd_index": int(cmd_index),
+				"reason": "already_pending",
+			})
+			return
 	_session_state.append_full_replay_live_tail_command(cmd_dict, state_hash)
 	_emit_resume_cache_event("resume_cache.live_tail.recorded", {
 		"origin": str(origin),
