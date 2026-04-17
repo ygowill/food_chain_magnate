@@ -40,7 +40,6 @@ static func run() -> Result:
 	var setup: Dictionary = Dictionary(setup_r.value)
 	var room_manager = setup.get("room_manager", null)
 	var room = setup.get("room", null)
-	var runtime_history_size := int(setup.get("runtime_history_size", -1))
 	if room_manager == null or room == null:
 		_restore(
 			prev_mode,
@@ -123,22 +122,6 @@ static func run() -> Result:
 		return Result.failure(
 			"导出的 archive 应等于服务端完整权威历史: %d vs %d"
 				% [int(Array(archive.get("commands", [])).size()), authority_history_size]
-		)
-	if authority_history_size <= runtime_history_size:
-		_restore(
-			prev_mode,
-			prev_local_player_id,
-			prev_local_role,
-			prev_server_url,
-			prev_connect_token,
-			prev_room_state,
-			prev_room_list,
-			prev_player_profile,
-			prev_resume_state
-		)
-		return Result.failure(
-			"测试前置错误：权威历史应长于 runtime 短链: authority=%d runtime=%d"
-				% [authority_history_size, runtime_history_size]
 		)
 	if str(payload.get("final_hash", "")).strip_edges() != authority_hash:
 		_restore(
@@ -266,7 +249,6 @@ static func run() -> Result:
 	)
 	return Result.success({
 		"authority_history_size": authority_history_size,
-		"runtime_history_size": runtime_history_size,
 	})
 
 static func _build_started_resume_room() -> Result:
@@ -324,12 +306,6 @@ static func _build_started_resume_room() -> Result:
 	if room == null:
 		return Result.failure("resume room missing")
 
-	var bundle_r: Result = room.build_resume_fast_start_bundle()
-	if not bundle_r.ok:
-		return Result.failure("build_resume_fast_start_bundle failed: %s" % bundle_r.error)
-	var bundle: Dictionary = Dictionary(bundle_r.value) if bundle_r.value is Dictionary else {}
-	var runtime_history_size := int(Array(Dictionary(bundle.get("runtime_archive", {})).get("commands", [])).size())
-
 	var start_r: Result = room.start_game()
 	if not start_r.ok:
 		return Result.failure("room.start_game failed: %s" % start_r.error)
@@ -338,7 +314,6 @@ static func _build_started_resume_room() -> Result:
 	return Result.success({
 		"room_manager": room_manager,
 		"room": room,
-		"runtime_history_size": runtime_history_size,
 		"full_history_size": int(engine.command_history.size()),
 	})
 

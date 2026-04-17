@@ -273,7 +273,7 @@ v1 策略：
 
 - 现有 `online_lobby_in_game_entry_fallback_test`
 - `online_client_game_started_reconnect_test`
-- `online_resume_fast_start_bundle_test`
+- `online_resume_full_snapshot_bootstrap_test`
 - `platform_connect_token_auto_join_test`
 
 ## 实施顺序
