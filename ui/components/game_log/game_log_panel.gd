@@ -102,6 +102,7 @@ var _timeline_background_thread: Thread = null
 var _timeline_background_running_job: Dictionary = {}
 var _timeline_background_pending_job: Dictionary = {}
 var _timeline_background_generation: int = 0
+var _visible_entry_count_cached: int = -1
 
 func _ready() -> void:
 	set_process(false)
@@ -286,7 +287,10 @@ func _get_initial_phase_segment_for_timeline(timeline: Dictionary) -> String:
 	return str(Dictionary(init_val).get("phase", "")).strip_edges()
 
 func _should_use_background_timeline_job(timeline: Dictionary, entries_all: Array[Dictionary]) -> bool:
-	return _get_step_count(timeline) >= _BACKGROUND_TIMELINE_MIN_STEPS or entries_all.size() >= _BACKGROUND_TIMELINE_MIN_ENTRIES
+	return _should_use_background_timeline_job_for_count(timeline, entries_all.size())
+
+func _should_use_background_timeline_job_for_count(timeline: Dictionary, entry_count: int) -> bool:
+	return _get_step_count(timeline) >= _BACKGROUND_TIMELINE_MIN_STEPS or int(entry_count) >= _BACKGROUND_TIMELINE_MIN_ENTRIES
 
 func _invalidate_background_timeline_jobs() -> void:
 	_timeline_background_generation += 1
@@ -294,7 +298,7 @@ func _invalidate_background_timeline_jobs() -> void:
 
 func _queue_background_timeline_job(job: Dictionary) -> void:
 	_timeline_background_generation += 1
-	var next_job: Dictionary = job.duplicate(true)
+	var next_job: Dictionary = job.duplicate(false)
 	next_job["generation"] = int(_timeline_background_generation)
 	if _timeline_background_thread != null:
 		_timeline_background_pending_job = next_job
@@ -330,9 +334,9 @@ func _poll_background_timeline_worker() -> void:
 		return
 
 	var finished_thread := _timeline_background_thread
-	var finished_job := _timeline_background_running_job.duplicate(true)
+	var finished_job := _timeline_background_running_job
 	_timeline_background_thread = null
-	_timeline_background_running_job.clear()
+	_timeline_background_running_job = {}
 
 	var result = finished_thread.wait_to_finish()
 	var has_newer_job := not _timeline_background_pending_job.is_empty()
@@ -363,11 +367,8 @@ func _apply_background_timeline_result(job: Dictionary, result: Dictionary) -> v
 		return
 
 	var mode := str(job.get("mode", "")).strip_edges()
-	var timeline_val = job.get("timeline", {})
-	var timeline: Dictionary = timeline_val if (timeline_val is Dictionary) else {}
-	var timeline_entries := _duplicate_entry_array(job.get("timeline_entries", []))
-	var extra_entries := _duplicate_entry_array(job.get("extra_entries", []))
-	_apply_committed_step_timeline_state(timeline, timeline_entries, extra_entries)
+	_apply_background_job_state(job)
+	_update_visible_entry_count_cache_from_background_result(job, descriptor_info)
 
 	match mode:
 		"append":
@@ -389,12 +390,8 @@ func _apply_background_timeline_result(job: Dictionary, result: Dictionary) -> v
 
 func _apply_background_timeline_job_fallback(job: Dictionary) -> void:
 	var mode := str(job.get("mode", "")).strip_edges()
-	var timeline_val = job.get("timeline", {})
-	var timeline: Dictionary = timeline_val if (timeline_val is Dictionary) else {}
-	var timeline_entries := _duplicate_entry_array(job.get("timeline_entries", []))
-	var extra_entries := _duplicate_entry_array(job.get("extra_entries", []))
-
-	_apply_committed_step_timeline_state(timeline, timeline_entries, extra_entries)
+	_apply_background_job_state(job)
+	_visible_entry_count_cached = -1
 	_rebuild_display()
 	_last_step_timeline_update_mode = "append" if mode == "append" else "rebuild"
 	_apply_timeline_state_to_items()
@@ -407,7 +404,96 @@ func _apply_committed_step_timeline_state(timeline: Dictionary, timeline_entries
 	_extra_entries = _duplicate_entry_array(extra_entries)
 	_rebuild_entries_all()
 
+func _apply_background_job_state(job: Dictionary) -> void:
+	var mode := str(job.get("mode", "")).strip_edges()
+	if mode == "append":
+		var append_state := _build_append_committed_state_from_job(job)
+		var append_timeline_val = append_state.get("timeline", {})
+		var append_timeline: Dictionary = append_timeline_val if (append_timeline_val is Dictionary) else {}
+		var append_timeline_entries_val = append_state.get("timeline_entries", [])
+		var append_timeline_entries: Array = append_timeline_entries_val if (append_timeline_entries_val is Array) else []
+		var append_extra_entries_val = append_state.get("extra_entries", [])
+		var append_extra_entries: Array = append_extra_entries_val if (append_extra_entries_val is Array) else []
+		_apply_committed_step_timeline_state_owned(
+			append_timeline,
+			append_timeline_entries,
+			append_extra_entries
+		)
+		return
+
+	var timeline_val = job.get("timeline", {})
+	var timeline: Dictionary = timeline_val if (timeline_val is Dictionary) else {}
+	var timeline_entries_val = job.get("timeline_entries", [])
+	var timeline_entries: Array = timeline_entries_val if (timeline_entries_val is Array) else []
+	var extra_entries_val = job.get("extra_entries", [])
+	var extra_entries: Array = extra_entries_val if (extra_entries_val is Array) else []
+	_apply_committed_step_timeline_state_owned(timeline, timeline_entries, extra_entries)
+
+func _apply_committed_step_timeline_state_owned(timeline: Dictionary, timeline_entries: Array, extra_entries: Array) -> void:
+	_step_timeline = timeline.duplicate(false) if (timeline is Dictionary) else {}
+
+	var committed_timeline_entries: Array[Dictionary] = []
+	if timeline_entries is Array:
+		for entry_val in timeline_entries:
+			if entry_val is Dictionary:
+				committed_timeline_entries.append(entry_val)
+	_timeline_entries = committed_timeline_entries
+
+	var committed_extra_entries: Array[Dictionary] = []
+	if extra_entries is Array:
+		for entry_val in extra_entries:
+			if entry_val is Dictionary:
+				committed_extra_entries.append(entry_val)
+	_extra_entries = committed_extra_entries
+
+	_rebuild_entries_all()
+
+func _build_append_committed_state_from_job(job: Dictionary) -> Dictionary:
+	var timeline_val = job.get("timeline", {})
+	var timeline: Dictionary = timeline_val if (timeline_val is Dictionary) else {}
+	var base_timeline_entry_count := int(job.get("base_timeline_entry_count", -1))
+	var base_extra_entry_count := int(job.get("base_extra_entry_count", -1))
+	if OnlinePerfTraceClass.enabled():
+		var timeline_count_mismatch := base_timeline_entry_count >= 0 and base_timeline_entry_count != _timeline_entries.size()
+		var extra_count_mismatch := base_extra_entry_count >= 0 and base_extra_entry_count != _extra_entries.size()
+		if timeline_count_mismatch or extra_count_mismatch:
+			OnlinePerfTraceClass.emit_event("ui.game_log.append_background_state_mismatch", {
+				"expected_timeline_entry_count": int(base_timeline_entry_count),
+				"actual_timeline_entry_count": int(_timeline_entries.size()),
+				"expected_extra_entry_count": int(base_extra_entry_count),
+				"actual_extra_entry_count": int(_extra_entries.size()),
+			})
+
+	var next_timeline_entries: Array = _timeline_entries.duplicate(false)
+	var appended_entries_val = job.get("appended_timeline_entries", [])
+	if appended_entries_val is Array:
+		for entry_val in appended_entries_val:
+			if entry_val is Dictionary:
+				next_timeline_entries.append(entry_val)
+
+	return {
+		"timeline": timeline,
+		"timeline_entries": next_timeline_entries,
+		"extra_entries": _extra_entries.duplicate(false),
+	}
+
+func _update_visible_entry_count_cache_from_background_result(job: Dictionary, descriptor_info: Dictionary) -> void:
+	var mode := str(job.get("mode", "")).strip_edges()
+	if mode == "append":
+		var base_visible_entry_count := int(job.get("base_visible_entry_count", -1))
+		var visible_entry_count_delta := int(descriptor_info.get("visible_entry_count_delta", -1))
+		if base_visible_entry_count >= 0 and visible_entry_count_delta >= 0:
+			_visible_entry_count_cached = base_visible_entry_count + visible_entry_count_delta
+		else:
+			_visible_entry_count_cached = -1
+		return
+
+	_visible_entry_count_cached = int(descriptor_info.get("visible_entry_count", -1))
+
 func _apply_descriptor_rebuild_result(descriptors: Array) -> void:
+	var span := OnlinePerfTraceClass.begin_span("ui.game_log.apply_descriptor_rebuild", {
+		"descriptor_count": int(descriptors.size()),
+	})
 	_clear_display()
 	var items: Array[Control] = []
 	GameLogUnifiedTimelineBuilderClass.append_descriptor_slice(
@@ -428,8 +514,16 @@ func _apply_descriptor_rebuild_result(descriptors: Array) -> void:
 	for item in _log_items:
 		if item is Control:
 			_connect_item_hover_signals(item)
+	OnlinePerfTraceClass.end_span(span, {
+		"descriptor_count": int(descriptors.size()),
+		"log_item_count": int(_log_items.size()),
+	})
 
 func _apply_descriptor_append_result(descriptors: Array, patch_end_step_index: int) -> void:
+	var span := OnlinePerfTraceClass.begin_span("ui.game_log.apply_descriptor_append", {
+		"descriptor_count": int(descriptors.size()),
+		"patch_end_step_index": int(patch_end_step_index),
+	})
 	if int(patch_end_step_index) > -999:
 		_patch_last_phase_header_end_step_index(int(patch_end_step_index))
 	var added_items: Array[Control] = []
@@ -452,6 +546,11 @@ func _apply_descriptor_append_result(descriptors: Array, patch_end_step_index: i
 			var ctrl: Control = item
 			_log_items.append(ctrl)
 			_connect_item_hover_signals(ctrl)
+	OnlinePerfTraceClass.end_span(span, {
+		"descriptor_count": int(descriptors.size()),
+		"added_item_count": int(added_items.size()),
+		"log_item_count": int(_log_items.size()),
+	})
 
 func _patch_last_phase_header_end_step_index(end_step_index: int) -> void:
 	for idx in range(_log_items.size() - 1, -1, -1):
@@ -481,6 +580,7 @@ func load_entries(entries: Array[Dictionary]) -> void:
 	_timeline_entries.clear()
 	_extra_entries.clear()
 	_entries_all.clear()
+	_visible_entry_count_cached = -1
 	_blank_display_warned = false
 	_entry_id_counter = 0
 	_fold_details_enabled = false
@@ -532,8 +632,9 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 	var next_extra_entries: Array[Dictionary] = []
 	if not bool(reset_extra_entries):
 		next_extra_entries = _duplicate_entry_array(_extra_entries)
-	var next_entries_all := _build_entries_all_for_state(next_timeline_entries, next_extra_entries)
-	if _should_use_background_timeline_job(next_timeline, next_entries_all):
+	var next_entries_count := next_timeline_entries.size() + next_extra_entries.size()
+	if _should_use_background_timeline_job_for_count(next_timeline, next_entries_count):
+		var next_entries_all := _build_entries_all_for_state(next_timeline_entries, next_extra_entries)
 		_queue_background_timeline_job({
 			"mode": "rebuild",
 			"timeline": next_timeline,
@@ -549,7 +650,7 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 		OnlinePerfTraceClass.end_span(span, {
 			"mode": "rebuild_async",
 			"background": true,
-			"entry_count": int(next_entries_all.size()),
+			"entry_count": int(next_entries_count),
 			"timeline_step_count": int(_get_step_count(next_timeline)),
 		})
 		return
@@ -595,36 +696,37 @@ func append_step_timeline(timeline: Dictionary, appended_entries: Array[Dictiona
 		return false
 
 	var next_timeline: Dictionary = timeline.duplicate(true)
-	var next_timeline_entries := _duplicate_entry_array(_timeline_entries)
 	var normalized_appended_entries := _duplicate_entry_array_with_fresh_ids(appended_entries)
-	for appended in normalized_appended_entries:
-		next_timeline_entries.append(Dictionary(appended).duplicate(true))
-	var next_extra_entries := _duplicate_entry_array(_extra_entries)
-	var next_entries_all := _build_entries_all_for_state(next_timeline_entries, next_extra_entries)
-	if _should_use_background_timeline_job(next_timeline, next_entries_all):
+	var next_entries_count := _timeline_entries.size() + normalized_appended_entries.size() + _extra_entries.size()
+	if _should_use_background_timeline_job_for_count(next_timeline, next_entries_count):
 		_queue_background_timeline_job({
 			"mode": "append",
 			"timeline": next_timeline,
-			"timeline_entries": next_timeline_entries,
-			"extra_entries": next_extra_entries,
-			"entries_all": next_entries_all,
+			"appended_timeline_entries": normalized_appended_entries,
+			"base_timeline_entry_count": int(_timeline_entries.size()),
+			"base_extra_entry_count": int(_extra_entries.size()),
 			"show_phase_events": _show_phase_events,
 			"fold_details_enabled": _fold_details_enabled,
 			"expanded_action_groups": _expanded_action_groups.duplicate(true),
 			"initial_round_number": _get_initial_round_number_for_timeline(next_timeline),
 			"initial_phase_segment": _get_initial_phase_segment_for_timeline(next_timeline),
 			"start_step_index": _get_step_count(_step_timeline),
+			"base_visible_entry_count": int(_visible_entry_count_cached),
 		})
 		OnlinePerfTraceClass.end_span(span, {
 			"ok": true,
 			"background": true,
 			"mode": "append_async",
-			"entry_count": int(next_entries_all.size()),
+			"entry_count": int(next_entries_count),
 			"timeline_step_count": int(_get_step_count(next_timeline)),
 		})
 		return true
 
-	if not _append_step_timeline_display(next_timeline, next_entries_all):
+	var next_timeline_entries := _duplicate_entry_array(_timeline_entries)
+	for appended in normalized_appended_entries:
+		next_timeline_entries.append(appended)
+	var next_extra_entries := _duplicate_entry_array(_extra_entries)
+	if not _append_step_timeline_display(next_timeline, normalized_appended_entries):
 		OnlinePerfTraceClass.end_span(span, {"ok": false, "reason": "append_display_failed"})
 		return false
 
@@ -737,6 +839,7 @@ func clear_logs() -> void:
 	_timeline_entries.clear()
 	_extra_entries.clear()
 	_entries_all.clear()
+	_visible_entry_count_cached = -1
 	_blank_display_warned = false
 	_fold_details_enabled = false
 	_expanded_action_groups.clear()
@@ -942,28 +1045,19 @@ func _build_appended_timeline_entries(entries: Array) -> Array[Dictionary]:
 		if not (entry_val is Dictionary):
 			continue
 		raw_entries.append(Dictionary(entry_val).duplicate(true))
-	return _duplicate_entry_array_with_fresh_ids(raw_entries)
+	return raw_entries
 
-func _build_entries_all_for_append(appended_entries: Array[Dictionary]) -> Array[Dictionary]:
-	var out: Array[Dictionary] = []
-	for entry in _timeline_entries:
-		if entry is Dictionary:
-			out.append(Dictionary(entry))
-	for entry2 in appended_entries:
-		if entry2 is Dictionary:
-			out.append(Dictionary(entry2))
-	for extra in _extra_entries:
-		if extra is Dictionary:
-			out.append(Dictionary(extra))
-	return out
-
-func _append_step_timeline_display(next_timeline: Dictionary, next_entries_all: Array[Dictionary]) -> bool:
+func _append_step_timeline_display(next_timeline: Dictionary, appended_entries: Array[Dictionary]) -> bool:
 	var start_step_index := _get_step_count(_step_timeline)
-	var added_items = GameLogUnifiedTimelineBuilderClass.append_step_range(
+	var span := OnlinePerfTraceClass.begin_span("ui.game_log.append_step_range", {
+		"start_step_index": int(start_step_index),
+		"appended_entry_count": int(appended_entries.size()),
+	})
+	var append_info_val = GameLogUnifiedTimelineBuilderClass.append_step_range(
 		_log_items,
 		log_container,
 		next_timeline,
-		next_entries_all,
+		appended_entries,
 		start_step_index,
 		_show_phase_events,
 		_fold_details_enabled,
@@ -978,14 +1072,38 @@ func _append_step_timeline_display(next_timeline: Dictionary, next_entries_all: 
 		_get_initial_phase_segment(),
 		Callable(self, "_acquire_log_item")
 	)
-	if not (added_items is Array):
+	if not (append_info_val is Dictionary):
+		OnlinePerfTraceClass.end_span(span, {
+			"ok": false,
+			"reason": "append_info_invalid",
+		})
 		return false
+	var append_info: Dictionary = append_info_val
+	var added_items_val = append_info.get("items", [])
+	if not (added_items_val is Array):
+		OnlinePerfTraceClass.end_span(span, {
+			"ok": false,
+			"reason": "append_items_invalid",
+		})
+		return false
+	var added_items: Array = added_items_val
 	for item in added_items:
 		if not (item is Control):
 			continue
 		var ctrl: Control = item
 		_log_items.append(ctrl)
 		_connect_item_hover_signals(ctrl)
+	var visible_entry_count_delta := int(append_info.get("visible_entry_count", -1))
+	if visible_entry_count_delta >= 0 and _visible_entry_count_cached >= 0:
+		_visible_entry_count_cached += visible_entry_count_delta
+	else:
+		_visible_entry_count_cached = -1
+	OnlinePerfTraceClass.end_span(span, {
+		"ok": true,
+		"added_item_count": int(added_items.size()),
+		"visible_entry_count_delta": int(visible_entry_count_delta),
+		"log_item_count": int(_log_items.size()),
+	})
 	return true
 
 func _get_anchor_command_index_for_step(step_index: int) -> int:
@@ -1164,7 +1282,11 @@ func _build_unified_timeline_display() -> void:
 	if log_container == null:
 		return
 
-	var items = GameLogUnifiedTimelineBuilderClass.build(
+	var span := OnlinePerfTraceClass.begin_span("ui.game_log.build_unified_timeline_display", {
+		"entry_count": int(_entries_all.size()),
+		"timeline_step_count": int(_get_step_count(_step_timeline)),
+	})
+	var build_info_val = GameLogUnifiedTimelineBuilderClass.build(
 		log_container,
 		_step_timeline,
 		_entries_all,
@@ -1181,10 +1303,17 @@ func _build_unified_timeline_display() -> void:
 		_get_initial_phase_segment(),
 		Callable(self, "_acquire_log_item")
 	)
-	_log_items = items
+	var build_info: Dictionary = build_info_val if (build_info_val is Dictionary) else {}
+	var items_val = build_info.get("items", [])
+	_log_items = items_val if (items_val is Array) else []
+	_visible_entry_count_cached = int(build_info.get("visible_entry_count", -1))
 	for item in _log_items:
 		if item is Control:
 			_connect_item_hover_signals(item)
+	OnlinePerfTraceClass.end_span(span, {
+		"log_item_count": int(_log_items.size()),
+		"visible_entry_count": int(_visible_entry_count_cached),
+	})
 
 func _on_timeline_header_clicked(timeline_index: int) -> void:
 	timeline_seek_requested.emit(int(timeline_index))
@@ -1213,15 +1342,30 @@ func _update_entry_count() -> void:
 	var total := _entries_all.size()
 	var visible := total
 	if _is_step_timeline_loaded():
-		visible = GameLogUnifiedTimelineBuilderClass.compute_visible_entry_count(
-			_step_timeline,
-			_entries_all,
-			_show_phase_events,
-			Callable(self, "_is_action_group_expanded")
-		)
+		if _visible_entry_count_cached >= 0:
+			visible = int(_visible_entry_count_cached)
+		else:
+			var span := OnlinePerfTraceClass.begin_span("ui.game_log.compute_visible_entry_count", {
+				"entry_count": int(_entries_all.size()),
+				"timeline_step_count": int(_get_step_count(_step_timeline)),
+			})
+			visible = GameLogUnifiedTimelineBuilderClass.compute_visible_entry_count(
+				_step_timeline,
+				_entries_all,
+				_show_phase_events,
+				Callable(self, "_is_action_group_expanded")
+			)
+			_visible_entry_count_cached = int(visible)
+			OnlinePerfTraceClass.end_span(span, {
+				"visible_entry_count": int(visible),
+			})
 	entry_count_label.text = "显示 %d / %d" % [visible, total]
 
 func _apply_timeline_state_to_items(scroll_to_cursor: bool = false) -> void:
+	var span := OnlinePerfTraceClass.begin_span("ui.game_log.apply_timeline_state", {
+		"log_item_count": int(_log_items.size()),
+		"scroll_to_cursor": bool(scroll_to_cursor),
+	})
 	for item in _log_items:
 		if not is_instance_valid(item):
 			continue
@@ -1229,12 +1373,34 @@ func _apply_timeline_state_to_items(scroll_to_cursor: bool = false) -> void:
 			item.apply_timeline_state(_timeline_cursor_index, _timeline_head_index)
 
 	if not scroll_to_cursor:
+		OnlinePerfTraceClass.end_span(span, {
+			"log_item_count": int(_log_items.size()),
+			"scroll_to_cursor": false,
+		})
 		return
 	if OS.has_feature("headless"):
+		OnlinePerfTraceClass.end_span(span, {
+			"log_item_count": int(_log_items.size()),
+			"scroll_to_cursor": true,
+			"skipped_scroll": true,
+			"reason": "headless",
+		})
 		return
 	if scroll_container == null:
+		OnlinePerfTraceClass.end_span(span, {
+			"log_item_count": int(_log_items.size()),
+			"scroll_to_cursor": true,
+			"skipped_scroll": true,
+			"reason": "scroll_container_missing",
+		})
 		return
 	if not scroll_container.has_method("ensure_control_visible"):
+		OnlinePerfTraceClass.end_span(span, {
+			"log_item_count": int(_log_items.size()),
+			"scroll_to_cursor": true,
+			"skipped_scroll": true,
+			"reason": "ensure_control_visible_missing",
+		})
 		return
 
 	# 定位到当前 cursor 对应的第一条可见日志（过滤后可能不存在）。
@@ -1247,6 +1413,10 @@ func _apply_timeline_state_to_items(scroll_to_cursor: bool = false) -> void:
 			continue
 		scroll_container.call("ensure_control_visible", item)
 		break
+	OnlinePerfTraceClass.end_span(span, {
+		"log_item_count": int(_log_items.size()),
+		"scroll_to_cursor": bool(scroll_to_cursor),
+	})
 
 func _connect_item_hover_signals(item: Control) -> void:
 	if item == null or not is_instance_valid(item):

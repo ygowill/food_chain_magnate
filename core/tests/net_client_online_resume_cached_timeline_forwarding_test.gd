@@ -11,6 +11,10 @@ static func run() -> Result:
 		return Result.failure("NetClient 缺少 get_online_resume_full_replay_step_timeline()")
 	if not NetClient.has_method("set_online_resume_full_replay_step_timeline"):
 		return Result.failure("NetClient 缺少 set_online_resume_full_replay_step_timeline()")
+	if not NetClient.has_method("get_online_resume_full_replay_step_timeline_entries"):
+		return Result.failure("NetClient 缺少 get_online_resume_full_replay_step_timeline_entries()")
+	if not NetClient.has_method("set_online_resume_full_replay_step_timeline_entries"):
+		return Result.failure("NetClient 缺少 set_online_resume_full_replay_step_timeline_entries()")
 
 	NetClient.clear_online_resume_dual_engine_state()
 
@@ -40,6 +44,16 @@ static func run() -> Result:
 	}
 
 	NetClient.set_online_resume_full_replay_step_timeline(cached_timeline)
+	NetClient.set_online_resume_full_replay_step_timeline_entries([
+		{
+			"message": "玩家1: 测试日志",
+			"step_index": 0,
+			"event_seq": 512,
+			"details": {
+				"sentinel": {"value": 11},
+			},
+		},
+	])
 
 	var read_back := NetClient.get_online_resume_full_replay_step_timeline()
 	if Dictionary(read_back.get("_build_meta", {})).get("processed_command_count", -1) != 248:
@@ -64,6 +78,20 @@ static func run() -> Result:
 	if int(nested_value.get("value", -1)) != 7:
 		NetClient.clear_online_resume_dual_engine_state()
 		return Result.failure("cached timeline 深层字段在 autoload 转发后丢失")
+
+	var read_back_entries := NetClient.get_online_resume_full_replay_step_timeline_entries()
+	if not (read_back_entries is Array) or Array(read_back_entries).size() != 1:
+		NetClient.clear_online_resume_dual_engine_state()
+		return Result.failure("NetClient 读取的 cached timeline entries 数量错误")
+	var first_entry_val = Array(read_back_entries)[0]
+	if not (first_entry_val is Dictionary):
+		NetClient.clear_online_resume_dual_engine_state()
+		return Result.failure("NetClient 读取的 cached timeline entry 类型错误")
+	var first_entry: Dictionary = Dictionary(first_entry_val)
+	var entry_sentinel := Dictionary(Dictionary(first_entry.get("details", {})).get("sentinel", {}))
+	if int(entry_sentinel.get("value", -1)) != 11:
+		NetClient.clear_online_resume_dual_engine_state()
+		return Result.failure("cached timeline entries 深层字段在 autoload 转发后丢失")
 
 	NetClient.clear_online_resume_dual_engine_state()
 	return Result.success()

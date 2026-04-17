@@ -111,8 +111,12 @@ func _get_entry_timeline_index() -> int:
 
 func apply_timeline_state(cursor_index: int, head_index: int) -> void:
 	var idx := _get_entry_timeline_index()
-	_timeline_is_future = (cursor_index < head_index and idx >= 0 and idx > cursor_index)
-	_timeline_is_cursor = (idx == cursor_index)
+	var next_is_future := (cursor_index < head_index and idx >= 0 and idx > cursor_index)
+	var next_is_cursor := (idx == cursor_index)
+	if next_is_future == _timeline_is_future and next_is_cursor == _timeline_is_cursor:
+		return
+	_timeline_is_future = next_is_future
+	_timeline_is_cursor = next_is_cursor
 	_apply_timeline_visuals()
 
 func _apply_timeline_visuals() -> void:

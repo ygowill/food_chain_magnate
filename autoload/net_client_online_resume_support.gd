@@ -8,6 +8,7 @@ const OnlineResumeSessionStateClass = preload("res://autoload/online_resume_sess
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
 const StepTimelineHelpersClass = preload("res://gameplay/replay/step_timeline_build/helpers.gd")
+const GameTimelineLogEntriesBuilderClass = preload("res://ui/scenes/game/timeline/log_entries_builder.gd")
 const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 
 class _LocalEventSink:
@@ -113,6 +114,15 @@ func get_full_replay_step_timeline() -> Dictionary:
 
 func set_full_replay_step_timeline(timeline: Dictionary) -> void:
 	_session_state.set_full_replay_step_timeline(timeline)
+
+func get_full_replay_step_timeline_entries() -> Array[Dictionary]:
+	return _session_state.get_full_replay_step_timeline_entries()
+
+func set_full_replay_step_timeline_entries(entries: Array) -> void:
+	var processed_count := StepTimelineHelpersClass.read_processed_command_count(
+		_session_state.get_full_replay_step_timeline()
+	)
+	_session_state.set_full_replay_step_timeline_entries(entries, processed_count)
 
 func clear_online_resume_dual_engine_state() -> void:
 	_session_state.reset()
@@ -475,19 +485,37 @@ func _refresh_full_replay_step_timeline_cache(engine: GameEngine, allow_incremen
 			var append_timeline_val = append_info.get("timeline", null)
 			if append_timeline_val is Dictionary:
 				var append_timeline: Dictionary = Dictionary(append_timeline_val).duplicate(true)
-				_session_state.set_full_replay_step_timeline(append_timeline)
+				var next_entries: Array[Dictionary] = []
+				var append_applied := bool(append_info.get("append_applied", false))
+				var cached_entries_ready := _session_state.has_full_replay_step_timeline_entries()
+				var previous_entries := _session_state.get_full_replay_step_timeline_entries()
+				if append_applied and cached_entries_ready:
+					var appended_events_val = append_info.get("appended_events", [])
+					var appended_events: Array = appended_events_val if (appended_events_val is Array) else []
+					next_entries = previous_entries
+					for appended_entry in GameTimelineLogEntriesBuilderClass.build(appended_events):
+						if appended_entry is Dictionary:
+							next_entries.append(Dictionary(appended_entry).duplicate(false))
+				elif cached_entries_ready and int(previous_processed_count) >= 0:
+					next_entries = previous_entries
+				else:
+					var append_events_val = append_timeline.get("events", [])
+					var append_events_all: Array = append_events_val if (append_events_val is Array) else []
+					next_entries = GameTimelineLogEntriesBuilderClass.build(append_events_all)
+				_store_full_replay_step_timeline_cache(append_timeline, next_entries)
 				_emit_resume_cache_event("resume_cache.timeline_cache_refresh.done", {
-					"mode": "append" if bool(append_info.get("append_applied", false)) else "reuse",
+					"mode": "append" if append_applied else "reuse",
 					"allow_incremental_append": bool(allow_incremental_append),
 					"previous_processed_command_count": int(previous_processed_count),
 					"timeline_processed_command_count": int(
 						StepTimelineHelpersClass.read_processed_command_count(append_timeline)
 					),
 					"timeline_step_count": int(Array(append_timeline.get("steps", [])).size()),
+					"timeline_entry_count": int(next_entries.size()),
 				})
 				return Result.success({
 					"timeline": append_timeline,
-					"append_applied": bool(append_info.get("append_applied", false)),
+					"append_applied": append_applied,
 				}).with_warnings(append_r.warnings)
 		_emit_resume_cache_event("resume_cache.timeline_cache_refresh.append_failed_fallback_full", {
 			"allow_incremental_append": bool(allow_incremental_append),
@@ -518,7 +546,10 @@ func _refresh_full_replay_step_timeline_cache(engine: GameEngine, allow_incremen
 		return Result.failure("step timeline cache build 返回类型错误")
 
 	var timeline: Dictionary = Dictionary(build_r.value).duplicate(true)
-	_session_state.set_full_replay_step_timeline(timeline)
+	var events_val = timeline.get("events", [])
+	var events: Array = events_val if (events_val is Array) else []
+	var entries := GameTimelineLogEntriesBuilderClass.build(events)
+	_store_full_replay_step_timeline_cache(timeline, entries)
 	_emit_resume_cache_event("resume_cache.timeline_cache_refresh.done", {
 		"mode": "full_rebuild",
 		"allow_incremental_append": bool(allow_incremental_append),
@@ -527,6 +558,7 @@ func _refresh_full_replay_step_timeline_cache(engine: GameEngine, allow_incremen
 			StepTimelineHelpersClass.read_processed_command_count(timeline)
 		),
 		"timeline_step_count": int(Array(timeline.get("steps", [])).size()),
+		"timeline_entry_count": int(entries.size()),
 	})
 	return Result.success({
 		"timeline": timeline,
@@ -624,10 +656,23 @@ func _emit_resume_cache_event(event: String, fields: Dictionary = {}) -> void:
 		"cached_timeline_processed_command_count": int(
 			_session_state.full_replay_step_timeline.get("_build_meta", {}).get("processed_command_count", -1)
 		),
+		"cached_timeline_entries_ready": bool(_session_state.has_full_replay_step_timeline_entries()),
+		"cached_timeline_entry_count": int(_session_state.full_replay_step_timeline_entries.size()),
+		"cached_timeline_entries_processed_command_count": int(
+			_session_state.get_full_replay_step_timeline_entries_processed_command_count()
+		),
 	}
 	for key in fields.keys():
 		out[str(key)] = fields[key]
 	OnlinePerfTraceClass.emit_event(str(event).strip_edges(), out)
+
+func _store_full_replay_step_timeline_cache(timeline: Dictionary, entries: Array) -> void:
+	var normalized_timeline := Dictionary(timeline).duplicate(false) if (timeline is Dictionary) else {}
+	_session_state.set_full_replay_step_timeline(normalized_timeline)
+	_session_state.set_full_replay_step_timeline_entries(
+		entries,
+		StepTimelineHelpersClass.read_processed_command_count(normalized_timeline)
+	)
 
 func _maybe_emit_match_bootstrap_local_failed(message: String, room_code: String = "") -> void:
 	if not _should_abort_match_bootstrap_on_full_history_failure(room_code):

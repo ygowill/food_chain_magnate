@@ -95,8 +95,12 @@ func _build_ui() -> void:
 
 func apply_timeline_state(cursor_index: int, head_index: int) -> void:
 	var cmd_index := _get_entry_command_index()
-	_timeline_is_future = (cursor_index < head_index and cmd_index >= 0 and cmd_index > cursor_index)
-	_timeline_is_cursor = (cmd_index == cursor_index)
+	var next_is_future := (cursor_index < head_index and cmd_index >= 0 and cmd_index > cursor_index)
+	var next_is_cursor := (cmd_index == cursor_index)
+	if next_is_future == _timeline_is_future and next_is_cursor == _timeline_is_cursor:
+		return
+	_timeline_is_future = next_is_future
+	_timeline_is_cursor = next_is_cursor
 	_apply_timeline_visuals()
 
 func get_timeline_index() -> int:

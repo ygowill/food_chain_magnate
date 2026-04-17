@@ -83,6 +83,15 @@ static func build_info_from_timeline(timeline: Dictionary) -> Result:
 	if timeline == null or not (timeline is Dictionary) or timeline.is_empty():
 		return Result.failure("timeline 为空")
 
+	var span_steps_val = timeline.get("steps", [])
+	var span_steps_count := int(span_steps_val.size()) if (span_steps_val is Array) else 0
+	var span_events_val = timeline.get("events", [])
+	var span_events_count := int(span_events_val.size()) if (span_events_val is Array) else 0
+	var span := OnlinePerfTraceClass.begin_span("ui.timeline.build_info_from_timeline", {
+		"mode": "build_from_events",
+		"timeline_step_count": int(span_steps_count),
+		"timeline_event_count": int(span_events_count),
+	})
 	var normalized_timeline: Dictionary = Dictionary(timeline).duplicate(true)
 	var events_val = timeline.get("events", [])
 	var events: Array = events_val if (events_val is Array) else []
@@ -91,9 +100,53 @@ static func build_info_from_timeline(timeline: Dictionary) -> Result:
 	var steps_val = timeline.get("steps", [])
 	var steps: Array = steps_val if (steps_val is Array) else []
 
+	OnlinePerfTraceClass.end_span(span, {
+		"ok": true,
+		"mode": "build_from_events",
+		"timeline_step_count": int(steps.size()),
+		"timeline_event_count": int(events.size()),
+		"entry_count": int(entries.size()),
+	})
 	return Result.success({
 		"timeline": normalized_timeline,
 		"entries": entries,
+		"appended_entries": [],
+		"append_applied": false,
+		"steps": steps,
+		"head_step_index": steps.size() - 1,
+	})
+
+static func build_info_from_prebuilt_entries(timeline: Dictionary, entries: Array) -> Result:
+	if timeline == null or not (timeline is Dictionary) or timeline.is_empty():
+		return Result.failure("timeline 为空")
+
+	var span_steps_val = timeline.get("steps", [])
+	var span_steps_count := int(span_steps_val.size()) if (span_steps_val is Array) else 0
+	var span := OnlinePerfTraceClass.begin_span("ui.timeline.build_info_from_timeline", {
+		"mode": "use_prebuilt_entries",
+		"timeline_step_count": int(span_steps_count),
+		"entry_count": int(entries.size()),
+	})
+	var normalized_timeline: Dictionary = Dictionary(timeline).duplicate(true)
+	var normalized_entries: Array[Dictionary] = []
+	if entries is Array:
+		for entry_val in entries:
+			if not (entry_val is Dictionary):
+				continue
+			normalized_entries.append(Dictionary(entry_val).duplicate(true))
+
+	var steps_val = timeline.get("steps", [])
+	var steps: Array = steps_val if (steps_val is Array) else []
+
+	OnlinePerfTraceClass.end_span(span, {
+		"ok": true,
+		"mode": "use_prebuilt_entries",
+		"timeline_step_count": int(steps.size()),
+		"entry_count": int(normalized_entries.size()),
+	})
+	return Result.success({
+		"timeline": normalized_timeline,
+		"entries": normalized_entries,
 		"appended_entries": [],
 		"append_applied": false,
 		"steps": steps,
@@ -118,6 +171,17 @@ static func load_prebuilt_timeline(
 	read_only: bool
 ) -> Result:
 	var info_r := build_info_from_timeline(timeline)
+	if not info_r.ok:
+		return info_r
+	return load_timeline_info(Dictionary(info_r.value), game_log_panel, read_only).with_warnings(info_r.warnings)
+
+static func load_prebuilt_timeline_with_entries(
+	timeline: Dictionary,
+	entries: Array,
+	game_log_panel: Object,
+	read_only: bool
+) -> Result:
+	var info_r := build_info_from_prebuilt_entries(timeline, entries)
 	if not info_r.ok:
 		return info_r
 	return load_timeline_info(Dictionary(info_r.value), game_log_panel, read_only).with_warnings(info_r.warnings)

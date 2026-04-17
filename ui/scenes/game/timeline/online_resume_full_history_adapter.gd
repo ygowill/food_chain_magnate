@@ -54,6 +54,23 @@ static func set_cached_history_timeline(timeline: Dictionary) -> void:
 		return
 	NetClient.set_online_resume_full_replay_step_timeline(Dictionary(timeline).duplicate(false))
 
+static func get_cached_history_timeline_entries() -> Array[Dictionary]:
+	if NetClient == null or not NetClient.has_method("get_online_resume_full_replay_step_timeline_entries"):
+		return []
+	var entries_val = NetClient.get_online_resume_full_replay_step_timeline_entries()
+	var out: Array[Dictionary] = []
+	if entries_val is Array:
+		for entry_val in entries_val:
+			if not (entry_val is Dictionary):
+				continue
+			out.append(Dictionary(entry_val).duplicate(false))
+	return out
+
+static func set_cached_history_timeline_entries(entries: Array) -> void:
+	if NetClient == null or not NetClient.has_method("set_online_resume_full_replay_step_timeline_entries"):
+		return
+	NetClient.set_online_resume_full_replay_step_timeline_entries(entries)
+
 static func build_history_timeline(
 	game_log_panel: Object,
 	read_only: bool,
@@ -97,20 +114,39 @@ static func build_history_timeline(
 
 	if not baseline_timeline.is_empty():
 		var cached_processed_count := StepTimelineHelpersClass.read_processed_command_count(baseline_timeline)
+		var snapshot := get_session_snapshot()
+		var cached_entry_count := int(snapshot.get("full_replay_step_timeline_entry_count", -1))
+		var cached_entries_processed_count := int(
+			snapshot.get("full_replay_step_timeline_entries_processed_command_count", -1)
+		)
+		var can_use_cached_entries := bool(snapshot.get("full_replay_step_timeline_entries_ready", false)) \
+			and cached_entries_processed_count == cached_processed_count
 		if cached_processed_count >= current_count:
 			_emit_resume_cache_event("resume_cache.used_prebuilt_timeline", {
 				"cached_processed_command_count": int(cached_processed_count),
 				"current_command_count": int(current_count),
 				"allow_incremental_append": bool(allow_incremental_append),
 				"timeline_step_count": int(Array(baseline_timeline.get("steps", [])).size()),
+				"cached_entry_count": int(cached_entry_count),
+				"cached_entries_processed_command_count": int(cached_entries_processed_count),
+				"used_cached_entries": bool(can_use_cached_entries),
 			})
 		var build_r: Result
 		if cached_processed_count >= current_count:
-			build_r = StepTimelineBuildHelpersClass.load_prebuilt_timeline(
-				baseline_timeline,
-				game_log_panel,
-				read_only
-			)
+			if can_use_cached_entries:
+				var cached_history_entries := get_cached_history_timeline_entries()
+				build_r = StepTimelineBuildHelpersClass.load_prebuilt_timeline_with_entries(
+					baseline_timeline,
+					cached_history_entries,
+					game_log_panel,
+					read_only
+				)
+			else:
+				build_r = StepTimelineBuildHelpersClass.load_prebuilt_timeline(
+					baseline_timeline,
+					game_log_panel,
+					read_only
+				)
 		else:
 			build_r = StepTimelineBuildHelpersClass.build_and_load(
 				engine,
@@ -124,6 +160,10 @@ static func build_history_timeline(
 			var next_timeline_val = info.get("timeline", null)
 			if next_timeline_val is Dictionary:
 				set_cached_history_timeline(Dictionary(next_timeline_val))
+			if not bool(info.get("append_applied", false)):
+				var entries_val = info.get("entries", [])
+				if entries_val is Array:
+					set_cached_history_timeline_entries(entries_val)
 		return build_r
 
 	_emit_resume_cache_event("resume_cache.miss_prebuilt_timeline", {

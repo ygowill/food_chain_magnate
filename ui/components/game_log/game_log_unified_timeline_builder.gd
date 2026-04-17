@@ -30,14 +30,21 @@ static func build(
 	initial_round_number: int,
 	initial_phase_segment: String,
 	acquire_item: Callable = Callable()
-) -> Array[Control]:
+) -> Dictionary:
 	var items: Array[Control] = []
+	var visible_entry_count := 0
 	if log_container == null or not is_instance_valid(log_container):
-		return items
+		return {
+			"items": items,
+			"visible_entry_count": int(visible_entry_count),
+		}
 
 	var steps_val = step_timeline.get("steps", null)
 	if not (steps_val is Array):
-		return items
+		return {
+			"items": items,
+			"visible_entry_count": int(visible_entry_count),
+		}
 	var steps: Array = steps_val
 
 	var entries_by_step := _build_entries_by_step(entries_all)
@@ -60,6 +67,8 @@ static func build(
 	var init_primary_entry: Dictionary = init_primary_entry_val if (init_primary_entry_val is Dictionary) else {}
 	var init_child_count := _count_event_items_for_action_group(init_entries, init_primary_id, show_phase_events)
 	var init_expanded := _is_expanded(is_action_group_expanded, -1)
+	if init_primary_id >= 0:
+		visible_entry_count += 1
 	_add_action_group_header_item(
 		items,
 		log_container,
@@ -80,6 +89,7 @@ static func build(
 	)
 	if init_expanded:
 		_add_event_items_for_step(items, log_container, -1, entries_by_step, show_phase_events, 2, init_primary_id, timeline_cursor_index, timeline_head_index, on_entry_clicked, on_entry_double_clicked, acquire_item)
+		visible_entry_count += init_child_count
 
 	for idx in range(steps.size()):
 		var step_val = steps[idx]
@@ -105,6 +115,7 @@ static func build(
 		if kind == "phase":
 			# phase step：不再渲染“进入X”类 ActionGroup 行；阶段标题已足够承载该锚点。
 			_add_event_items_for_step(items, log_container, idx, entries_by_step, show_phase_events, 1, -1, timeline_cursor_index, timeline_head_index, on_entry_clicked, on_entry_double_clicked, acquire_item)
+			visible_entry_count += _count_event_items_for_action_group(entries_by_step.get(idx, []), -1, show_phase_events)
 		elif _is_hidden_restructuring_noise_action(action_id):
 			# 重组阶段拖拽调整动作（直属槽/下属/在岗待命）不再逐条显示日志。
 			# 仍保留 submit_restructuring（确认重组）的日志项。
@@ -112,6 +123,7 @@ static func build(
 		elif _is_flow_command_action_id(str(step.get("action_id", "")).strip_edges()):
 			# flow command（skip/end_turn/skip_sub_phase/advance_phase）不再显示“系统推进”分组行。
 			_add_event_items_for_step(items, log_container, idx, entries_by_step, show_phase_events, 1, -1, timeline_cursor_index, timeline_head_index, on_entry_clicked, on_entry_double_clicked, acquire_item)
+			visible_entry_count += _count_event_items_for_action_group(entries_by_step.get(idx, []), -1, show_phase_events)
 		else:
 			var step_entries: Array = entries_by_step.get(idx, [])
 			var header := _build_action_group_header_data(idx, step, step_entries, show_phase_events)
@@ -120,6 +132,8 @@ static func build(
 			var primary_entry: Dictionary = primary_entry_val if (primary_entry_val is Dictionary) else {}
 			var child_count := _count_event_items_for_action_group(step_entries, primary_id, show_phase_events)
 			var expanded := _is_expanded(is_action_group_expanded, idx)
+			if primary_id >= 0:
+				visible_entry_count += 1
 			_add_action_group_header_item(
 				items,
 				log_container,
@@ -140,6 +154,7 @@ static func build(
 			)
 			if expanded:
 				_add_event_items_for_step(items, log_container, idx, entries_by_step, show_phase_events, 2, primary_id, timeline_cursor_index, timeline_head_index, on_entry_clicked, on_entry_double_clicked, acquire_item)
+				visible_entry_count += child_count
 
 		prev_round = round_num
 		prev_phase = phase_seg
@@ -147,7 +162,10 @@ static func build(
 	if phase_header != null and is_instance_valid(phase_header):
 		phase_header.end_step_index = steps.size() - 1
 
-	return items
+	return {
+		"items": items,
+		"visible_entry_count": int(visible_entry_count),
+	}
 
 static func append_step_range(
 	existing_items: Array[Control],
@@ -167,18 +185,28 @@ static func append_step_range(
 	initial_round_number: int,
 	initial_phase_segment: String,
 	acquire_item: Callable = Callable()
-) -> Array[Control]:
+) -> Dictionary:
 	var items: Array[Control] = []
+	var visible_entry_count := 0
 	if log_container == null or not is_instance_valid(log_container):
-		return items
+		return {
+			"items": items,
+			"visible_entry_count": int(visible_entry_count),
+		}
 
 	var steps_val = step_timeline.get("steps", null)
 	if not (steps_val is Array):
-		return items
+		return {
+			"items": items,
+			"visible_entry_count": int(visible_entry_count),
+		}
 	var steps: Array = steps_val
 	var start_idx := maxi(0, int(start_step_index))
 	if start_idx >= steps.size():
-		return items
+		return {
+			"items": items,
+			"visible_entry_count": int(visible_entry_count),
+		}
 
 	var entries_by_step := _build_entries_by_step(entries_all)
 	var context := _resolve_append_context(existing_items, step_timeline, start_idx, initial_round_number, initial_phase_segment)
@@ -211,10 +239,12 @@ static func append_step_range(
 		var kind := str(step.get("kind", "")).strip_edges()
 		if kind == "phase":
 			_add_event_items_for_step(items, log_container, idx, entries_by_step, show_phase_events, 1, -1, timeline_cursor_index, timeline_head_index, on_entry_clicked, on_entry_double_clicked, acquire_item)
+			visible_entry_count += _count_event_items_for_action_group(entries_by_step.get(idx, []), -1, show_phase_events)
 		elif _is_hidden_restructuring_noise_action(action_id):
 			continue
 		elif _is_flow_command_action_id(str(step.get("action_id", "")).strip_edges()):
 			_add_event_items_for_step(items, log_container, idx, entries_by_step, show_phase_events, 1, -1, timeline_cursor_index, timeline_head_index, on_entry_clicked, on_entry_double_clicked, acquire_item)
+			visible_entry_count += _count_event_items_for_action_group(entries_by_step.get(idx, []), -1, show_phase_events)
 		else:
 			var step_entries: Array = entries_by_step.get(idx, [])
 			var header: Dictionary = _build_action_group_header_data(idx, step, step_entries, show_phase_events)
@@ -223,6 +253,8 @@ static func append_step_range(
 			var primary_entry: Dictionary = primary_entry_val if (primary_entry_val is Dictionary) else {}
 			var child_count := _count_event_items_for_action_group(step_entries, primary_id, show_phase_events)
 			var expanded := _is_expanded(is_action_group_expanded, idx)
+			if primary_id >= 0:
+				visible_entry_count += 1
 			_add_action_group_header_item(
 				items,
 				log_container,
@@ -243,6 +275,7 @@ static func append_step_range(
 			)
 			if expanded:
 				_add_event_items_for_step(items, log_container, idx, entries_by_step, show_phase_events, 2, primary_id, timeline_cursor_index, timeline_head_index, on_entry_clicked, on_entry_double_clicked, acquire_item)
+				visible_entry_count += child_count
 
 		prev_round = round_num
 		prev_phase = phase_seg
@@ -250,7 +283,10 @@ static func append_step_range(
 	if phase_header != null and is_instance_valid(phase_header):
 		phase_header.end_step_index = steps.size() - 1
 
-	return items
+	return {
+		"items": items,
+		"visible_entry_count": int(visible_entry_count),
+	}
 
 static func build_descriptors(
 	step_timeline: Dictionary,
@@ -262,11 +298,13 @@ static func build_descriptors(
 	initial_phase_segment: String
 ) -> Dictionary:
 	var descriptors: Array[Dictionary] = []
+	var visible_entry_count := 0
 	var steps_val = step_timeline.get("steps", null)
 	if not (steps_val is Array):
 		return {
 			"items": descriptors,
 			"timeline_step_count": 0,
+			"visible_entry_count": int(visible_entry_count),
 		}
 	var steps: Array = steps_val
 
@@ -299,6 +337,8 @@ static func build_descriptors(
 	var init_primary_entry: Dictionary = init_primary_entry_val if (init_primary_entry_val is Dictionary) else {}
 	var init_child_count := _count_event_items_for_action_group(init_entries, init_primary_id, show_phase_events)
 	var init_expanded := _is_expanded_from_snapshot(bool(fold_details_enabled), expanded_action_groups, -1)
+	if init_primary_id >= 0:
+		visible_entry_count += 1
 	descriptors.append({
 		"kind": "action_group_header",
 		"step_index": -1,
@@ -310,6 +350,7 @@ static func build_descriptors(
 		"child_event_count": int(init_child_count),
 	})
 	if init_expanded:
+		visible_entry_count += init_child_count
 		_append_event_descriptors_for_step(
 			descriptors,
 			-1,
@@ -353,6 +394,7 @@ static func build_descriptors(
 
 		var kind := str(step.get("kind", "")).strip_edges()
 		if kind == "phase":
+			visible_entry_count += _count_event_items_for_action_group(entries_by_step.get(idx, []), -1, show_phase_events)
 			_append_event_descriptors_for_step(
 				descriptors,
 				idx,
@@ -364,6 +406,7 @@ static func build_descriptors(
 		elif _is_hidden_restructuring_noise_action(action_id):
 			pass
 		elif _is_flow_command_action_id(str(step.get("action_id", "")).strip_edges()):
+			visible_entry_count += _count_event_items_for_action_group(entries_by_step.get(idx, []), -1, show_phase_events)
 			_append_event_descriptors_for_step(
 				descriptors,
 				idx,
@@ -380,6 +423,8 @@ static func build_descriptors(
 			var primary_entry: Dictionary = primary_entry_val if (primary_entry_val is Dictionary) else {}
 			var child_count := _count_event_items_for_action_group(step_entries, primary_id, show_phase_events)
 			var expanded := _is_expanded_from_snapshot(bool(fold_details_enabled), expanded_action_groups, idx)
+			if primary_id >= 0:
+				visible_entry_count += 1
 			descriptors.append({
 				"kind": "action_group_header",
 				"step_index": int(idx),
@@ -391,6 +436,7 @@ static func build_descriptors(
 				"child_event_count": int(child_count),
 			})
 			if expanded:
+				visible_entry_count += child_count
 				_append_event_descriptors_for_step(
 					descriptors,
 					idx,
@@ -411,6 +457,7 @@ static func build_descriptors(
 	return {
 		"items": descriptors,
 		"timeline_step_count": int(steps.size()),
+		"visible_entry_count": int(visible_entry_count),
 	}
 
 static func build_append_descriptors(
@@ -429,6 +476,7 @@ static func build_append_descriptors(
 			"items": [],
 			"timeline_step_count": 0,
 			"patch_existing_last_phase_header_end_step_index": -999,
+			"visible_entry_count_delta": 0,
 		}
 	var steps: Array = steps_val
 	var start_idx := maxi(0, int(start_step_index))
@@ -437,6 +485,7 @@ static func build_append_descriptors(
 			"items": [],
 			"timeline_step_count": int(steps.size()),
 			"patch_existing_last_phase_header_end_step_index": -999,
+			"visible_entry_count_delta": 0,
 		}
 
 	var entries_by_step := _build_entries_by_step(entries_all)
@@ -457,6 +506,7 @@ static func build_append_descriptors(
 					prev_phase = "?"
 
 	var descriptors: Array[Dictionary] = []
+	var visible_entry_count_delta := 0
 	var current_phase_descriptor_index := -1
 	var patch_existing_last_phase_header_end_step_index := -999
 	var needs_patch_existing_phase_header := true
@@ -501,6 +551,7 @@ static func build_append_descriptors(
 
 		var kind := str(step.get("kind", "")).strip_edges()
 		if kind == "phase":
+			visible_entry_count_delta += _count_event_items_for_action_group(entries_by_step.get(idx, []), -1, show_phase_events)
 			_append_event_descriptors_for_step(
 				descriptors,
 				idx,
@@ -512,6 +563,7 @@ static func build_append_descriptors(
 		elif _is_hidden_restructuring_noise_action(action_id):
 			pass
 		elif _is_flow_command_action_id(str(step.get("action_id", "")).strip_edges()):
+			visible_entry_count_delta += _count_event_items_for_action_group(entries_by_step.get(idx, []), -1, show_phase_events)
 			_append_event_descriptors_for_step(
 				descriptors,
 				idx,
@@ -528,6 +580,8 @@ static func build_append_descriptors(
 			var primary_entry: Dictionary = primary_entry_val if (primary_entry_val is Dictionary) else {}
 			var child_count := _count_event_items_for_action_group(step_entries, primary_id, show_phase_events)
 			var expanded := _is_expanded_from_snapshot(bool(fold_details_enabled), expanded_action_groups, idx)
+			if primary_id >= 0:
+				visible_entry_count_delta += 1
 			descriptors.append({
 				"kind": "action_group_header",
 				"step_index": int(idx),
@@ -539,6 +593,7 @@ static func build_append_descriptors(
 				"child_event_count": int(child_count),
 			})
 			if expanded:
+				visible_entry_count_delta += child_count
 				_append_event_descriptors_for_step(
 					descriptors,
 					idx,
@@ -562,6 +617,7 @@ static func build_append_descriptors(
 		"items": descriptors,
 		"timeline_step_count": int(steps.size()),
 		"patch_existing_last_phase_header_end_step_index": int(patch_existing_last_phase_header_end_step_index),
+		"visible_entry_count_delta": int(visible_entry_count_delta),
 	}
 
 static func append_descriptor_slice(

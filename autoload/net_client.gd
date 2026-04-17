@@ -387,6 +387,17 @@ func set_online_resume_full_replay_step_timeline(timeline: Dictionary) -> void:
 	if _internal != null and is_instance_valid(_internal) and _internal.has_method("set_online_resume_full_replay_step_timeline"):
 		_internal.set_online_resume_full_replay_step_timeline(Dictionary(timeline).duplicate(false))
 
+func get_online_resume_full_replay_step_timeline_entries() -> Array[Dictionary]:
+	_ensure_internal()
+	if _internal != null and is_instance_valid(_internal) and _internal.has_method("get_online_resume_full_replay_step_timeline_entries"):
+		return _internal.get_online_resume_full_replay_step_timeline_entries()
+	return []
+
+func set_online_resume_full_replay_step_timeline_entries(entries: Array) -> void:
+	_ensure_internal()
+	if _internal != null and is_instance_valid(_internal) and _internal.has_method("set_online_resume_full_replay_step_timeline_entries"):
+		_internal.set_online_resume_full_replay_step_timeline_entries(entries)
+
 func load_archive_for_online_client(engine, archive: Dictionary) -> Result:
 	_ensure_internal()
 	if _internal != null and is_instance_valid(_internal) and _internal.has_method("load_archive_for_online_client"):

@@ -8,11 +8,17 @@ func execute(job: Dictionary) -> Dictionary:
 	var timeline: Dictionary = timeline_val if (timeline_val is Dictionary) else {}
 
 	var entries_all: Array[Dictionary] = []
-	var entries_all_val = job.get("entries_all", [])
-	if entries_all_val is Array:
-		for entry_val in entries_all_val:
+	var appended_entries_val = job.get("appended_timeline_entries", [])
+	if mode == "append" and appended_entries_val is Array:
+		for entry_val in appended_entries_val:
 			if entry_val is Dictionary:
 				entries_all.append(Dictionary(entry_val).duplicate(true))
+	else:
+		var entries_all_val = job.get("entries_all", [])
+		if entries_all_val is Array:
+			for entry_val in entries_all_val:
+				if entry_val is Dictionary:
+					entries_all.append(Dictionary(entry_val).duplicate(true))
 
 	var descriptor_info: Dictionary = {}
 	match mode:

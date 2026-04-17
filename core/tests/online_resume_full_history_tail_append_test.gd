@@ -404,6 +404,41 @@ static func run() -> Result:
 				% [cached_processed_count, full_history_size + 1]
 		)
 
+	var cached_entries_val = client.get_online_resume_full_replay_step_timeline_entries()
+	if not (cached_entries_val is Array):
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"cached full_replay_step_timeline_entries 类型错误"
+		)
+	var cached_entries := Array(cached_entries_val)
+	if cached_entries.is_empty():
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"cached full_replay_step_timeline_entries 不应为空"
+		)
+
 	var history_build_r := client.ensure_online_resume_full_history_timeline_current(true)
 	if not history_build_r.ok:
 		return _restore_and_fail(
@@ -475,6 +510,42 @@ static func run() -> Result:
 			prev_event_history,
 			"按需构建后 cached timeline 应补齐尾部命令，实际: %d vs %d"
 				% [refreshed_processed_count, full_history_size + 2]
+		)
+
+	var refreshed_entries_val = client.get_online_resume_full_replay_step_timeline_entries()
+	if not (refreshed_entries_val is Array):
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"refreshed full_replay_step_timeline_entries 类型错误"
+		)
+	var refreshed_entries := Array(refreshed_entries_val)
+	if refreshed_entries.size() < cached_entries.size():
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"refreshed full_replay_step_timeline_entries 不应回退: %d -> %d"
+				% [cached_entries.size(), refreshed_entries.size()]
 		)
 
 	_restore(

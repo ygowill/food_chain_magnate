@@ -20,6 +20,10 @@ static func run() -> Result:
 	if log_container == null or not is_instance_valid(log_container):
 		_cleanup(panel)
 		return Result.failure("未找到 LogContainer")
+	var entry_count_label = panel.get_node_or_null("MarginContainer/VBoxContainer/BottomRow/EntryCountLabel")
+	if entry_count_label == null or not is_instance_valid(entry_count_label):
+		_cleanup(panel)
+		return Result.failure("未找到 EntryCountLabel")
 
 	var timeline1 := {
 		"initial_state_dict": {
@@ -57,6 +61,9 @@ static func run() -> Result:
 	if log_container.get_child_count() <= 0:
 		_cleanup(panel)
 		return Result.failure("首次加载后日志 UI 为空")
+	if str(entry_count_label.text) != "显示 1 / 1":
+		_cleanup(panel)
+		return Result.failure("首次加载后可见条目数错误，实际=%s" % str(entry_count_label.text))
 
 	var first_child = log_container.get_child(0)
 	var old_child_count := log_container.get_child_count()
@@ -122,6 +129,9 @@ static func run() -> Result:
 	if int(last_phase_header.end_step_index) != 1:
 		_cleanup(panel)
 		return Result.failure("append 后最后一个 phase header.end_step_index 应扩展到 1，实际=%d" % int(last_phase_header.end_step_index))
+	if str(entry_count_label.text) != "显示 2 / 2":
+		_cleanup(panel)
+		return Result.failure("append 后可见条目数错误，实际=%s" % str(entry_count_label.text))
 
 	var async_timeline1 := _build_linear_timeline(119)
 	var async_entries1 := _build_linear_entries(119)
@@ -136,6 +146,9 @@ static func run() -> Result:
 	if panel.call("get_last_step_timeline_update_mode") != "rebuild":
 		_cleanup(panel)
 		return Result.failure("大时间线首次加载完成后应为 rebuild")
+	if str(entry_count_label.text) != "显示 119 / 119":
+		_cleanup(panel)
+		return Result.failure("大时间线首次加载后可见条目数错误，实际=%s" % str(entry_count_label.text))
 
 	var async_first_child = log_container.get_child(0)
 	var async_old_child_count := log_container.get_child_count()
@@ -163,6 +176,9 @@ static func run() -> Result:
 	if int(async_last_phase_header.end_step_index) != 119:
 		_cleanup(panel)
 		return Result.failure("后台 append 后最后一个 phase header.end_step_index 应扩展到 119，实际=%d" % int(async_last_phase_header.end_step_index))
+	if str(entry_count_label.text) != "显示 120 / 120":
+		_cleanup(panel)
+		return Result.failure("后台 append 后可见条目数错误，实际=%s" % str(entry_count_label.text))
 
 	_cleanup(panel)
 	return Result.success()
