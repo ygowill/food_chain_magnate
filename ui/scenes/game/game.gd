@@ -630,7 +630,12 @@ func _on_startup_online_resume_failed(message: String) -> void:
 		"关闭"
 	)
 
-func _on_startup_online_resume_status(message: String) -> void:
+func _on_startup_online_resume_status(message) -> void:
+	if message is Dictionary:
+		var state: Dictionary = Dictionary(message).duplicate(true)
+		if SceneManager != null and SceneManager.has_method("apply_loading_state"):
+			SceneManager.apply_loading_state(state)
+			return
 	_show_online_reconnect_loading(str(message))
 
 func _set_startup_online_resume_ui_hidden(hidden: bool) -> void:

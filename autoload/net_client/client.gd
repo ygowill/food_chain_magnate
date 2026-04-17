@@ -11,9 +11,24 @@ const NetClientOnlineResumeSupportClass = preload("res://autoload/net_client_onl
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 const ResyncSnapshotTransferClass = preload("res://core/utils/resync_snapshot_transfer.gd")
+const RESUME_BOOTSTRAP_MODE_FULL_ARCHIVE_SNAPSHOT := "full_archive_snapshot"
+const RESUME_PHASE_DISPLAY_NAMES := {
+	"setup": "开局设置",
+	"restructuring": "重组结构",
+	"order_of_business": "商业秩序",
+	"working": "工作时间",
+	"marketing": "广告行动",
+	"dinnertime": "晚餐结算",
+	"cleanup": "清理阶段",
+	"payday": "发薪日",
+	"game_over": "游戏结束",
+}
 
 var _net = null
 var _online_resume_support = NetClientOnlineResumeSupportClass.new()
+var _pending_resume_full_snapshot_payload: Dictionary = {}
+var _pending_resume_full_snapshot_room_code: String = ""
+var _pending_resume_full_snapshot_local_pid: int = -1
 
 func setup(net_client) -> void:
 	_net = net_client
@@ -189,10 +204,22 @@ func handle_rpc_game_started(payload: Dictionary) -> void:
 	)
 
 	var room_code := _get_expected_online_room_code()
+	var resume_bootstrap_mode := str(payload.get("resume_bootstrap_mode", "")).strip_edges()
 	var resume_fast_start_bundle := _extract_resume_fast_start_bundle(payload)
 	var existing_engine: GameEngine = _try_reuse_existing_online_client_engine(room_code, local_pid)
 	if existing_engine != null:
-		if not resume_fast_start_bundle.is_empty():
+		if resume_bootstrap_mode == RESUME_BOOTSTRAP_MODE_FULL_ARCHIVE_SNAPSHOT:
+			var prepare_existing_r := _online_resume_support.prepare_single_full_engine_runtime(
+				existing_engine,
+				room_code,
+				local_pid,
+				{},
+				true
+			)
+			if not prepare_existing_r.ok:
+				GameLog.warn("NetClient", "Reuse existing resume engine prepare failed: %s" % prepare_existing_r.error)
+			_emit_resume_full_history_ready()
+		elif not resume_fast_start_bundle.is_empty():
 			_bind_resume_fast_start_session(existing_engine, room_code, local_pid, resume_fast_start_bundle)
 			_schedule_full_replay_engine_bootstrap(room_code)
 			_emit_resume_fast_start_ready()
@@ -201,7 +228,20 @@ func handle_rpc_game_started(payload: Dictionary) -> void:
 		return
 
 	var init_r: Result = Result.failure("missing bootstrap")
-	if not resume_fast_start_bundle.is_empty():
+	if resume_bootstrap_mode == RESUME_BOOTSTRAP_MODE_FULL_ARCHIVE_SNAPSHOT:
+		_clear_online_resume_dual_engine_state()
+		_pending_resume_full_snapshot_payload = Dictionary(payload).duplicate(true)
+		_pending_resume_full_snapshot_room_code = str(room_code).strip_edges().to_upper()
+		_pending_resume_full_snapshot_local_pid = int(local_pid)
+		_emit_local_bootstrap_progress(_make_local_bootstrap_progress_state(
+			room_code,
+			"waiting_snapshot",
+			"正在接收恢复快照...",
+			"服务器已开始下发完整存档快照，收到后将进行本地回放与日志构建。",
+			18.0
+		))
+		return
+	elif not resume_fast_start_bundle.is_empty():
 		init_r = _bootstrap_runtime_engine_from_fast_start_bundle(resume_fast_start_bundle, room_code, local_pid)
 	else:
 		_clear_online_resume_dual_engine_state()
@@ -284,6 +324,25 @@ func handle_rpc_resync_archive(payload: Dictionary) -> void:
 	_invalidate_full_replay_engine("live_resync_archive")
 	_set_pending_resync_archive(Dictionary(archive_val))
 	var pending_archive := _get_pending_resync_archive()
+	var room_code := str(payload.get("room_code", _get_expected_online_room_code())).strip_edges().to_upper()
+	var deferred_resume_payload := _consume_pending_resume_full_snapshot_payload(room_code)
+	if not deferred_resume_payload.is_empty():
+		var bootstrap_r := _bootstrap_resume_full_snapshot_archive(
+			pending_archive,
+			room_code,
+			_pending_resume_full_snapshot_local_pid
+		)
+		if not bootstrap_r.ok:
+			GameLog.error("NetClient", "Resume archive bootstrap failed: %s" % bootstrap_r.error)
+			_pending_resume_full_snapshot_local_pid = -1
+			if _net != null and is_instance_valid(_net) and _net.has_signal("match_bootstrap_local_failed"):
+				_net.emit_signal("match_bootstrap_local_failed", str(bootstrap_r.error))
+			return
+		_emit_resume_full_history_ready()
+		_net.resync_archive_received.emit(pending_archive.duplicate(true))
+		_net.game_started.emit(deferred_resume_payload)
+		_try_apply_pending_resync_delta()
+		return
 	_try_bootstrap_online_client_engine_from_archive(pending_archive)
 	GameLog.warn(
 		"NetClient",
@@ -328,6 +387,15 @@ func handle_rpc_resync_snapshot_manifest(payload: Dictionary) -> void:
 		return
 	_set_pending_resync_snapshot_manifest(manifest)
 	_set_pending_resync_snapshot_chunks({})
+	var room_code := str(manifest.get("room_code", "")).strip_edges().to_upper()
+	var chunk_count_progress := maxi(1, chunk_count)
+	_emit_local_bootstrap_progress(_make_local_bootstrap_progress_state(
+		room_code,
+		"snapshot_manifest",
+		"正在接收恢复快照...",
+		"正在接收完整存档快照分片：0 / %d。" % chunk_count_progress,
+		18.0
+	))
 	GameLog.warn(
 		"NetClient",
 		"RX ResyncSnapshot manifest request_id=%s transfer_id=%s chunks=%d total_bytes=%d"
@@ -367,6 +435,16 @@ func handle_rpc_resync_snapshot_chunk(payload: Dictionary) -> void:
 	var chunk_bytes: PackedByteArray = bytes_val
 	chunks[chunk_index] = chunk_bytes
 	_set_pending_resync_snapshot_chunks(chunks)
+	var room_code := str(manifest.get("room_code", "")).strip_edges().to_upper()
+	var received_count := int(chunks.size())
+	var chunk_ratio := float(received_count) / float(maxi(1, chunk_count))
+	_emit_local_bootstrap_progress(_make_local_bootstrap_progress_state(
+		room_code,
+		"snapshot_download",
+		"正在接收恢复快照...",
+		"正在接收完整存档快照分片：%d / %d。" % [received_count, chunk_count],
+		18.0 + 14.0 * chunk_ratio
+	))
 	if chunks.size() < chunk_count:
 		return
 
@@ -377,7 +455,25 @@ func handle_rpc_resync_snapshot_chunk(payload: Dictionary) -> void:
 		return
 	var archive: Dictionary = Dictionary(assemble_r.value).duplicate(true)
 	_set_pending_resync_archive(archive)
-	_try_bootstrap_online_client_engine_from_archive(archive)
+	var deferred_resume_payload := _consume_pending_resume_full_snapshot_payload(room_code)
+	if not deferred_resume_payload.is_empty():
+		var bootstrap_r := _bootstrap_resume_full_snapshot_archive(
+			archive,
+			room_code,
+			_pending_resume_full_snapshot_local_pid
+		)
+		if not bootstrap_r.ok:
+			GameLog.error("NetClient", "Resume snapshot bootstrap failed: %s" % bootstrap_r.error)
+			_pending_resume_full_snapshot_local_pid = -1
+			if _net != null and is_instance_valid(_net) and _net.has_signal("match_bootstrap_local_failed"):
+				_net.emit_signal("match_bootstrap_local_failed", str(bootstrap_r.error))
+			return
+		_emit_resume_full_history_ready()
+		_net.resync_archive_received.emit(archive.duplicate(true))
+		_net.game_started.emit(deferred_resume_payload)
+		_try_apply_pending_resync_delta()
+	else:
+		_try_bootstrap_online_client_engine_from_archive(archive)
 	GameLog.warn(
 		"NetClient",
 		"RX ResyncSnapshot assembled transfer_id=%s chunks=%d total_bytes=%d"
@@ -674,6 +770,16 @@ func _try_bootstrap_online_client_engine_from_archive(archive: Dictionary) -> vo
 		GameLog.error("NetClient", "Online client archive bootstrap failed: %s" % load_r.error)
 		return
 	_mark_online_client_engine_ready(engine, room_code, local_pid)
+	if _is_resume_archive_room_state():
+		var prepare_r := _online_resume_support.prepare_single_full_engine_runtime(
+			engine,
+			room_code,
+			local_pid,
+			_build_archive_meta(archive),
+			true
+		)
+		if not prepare_r.ok:
+			GameLog.warn("NetClient", "Online client resume archive cache prepare failed: %s" % prepare_r.error)
 	GameLog.info(
 		"NetClient",
 		"Online client engine bootstrapped from archive room=%s commands=%d"
@@ -773,6 +879,9 @@ func _invalidate_full_replay_engine(reason: String) -> void:
 	_online_resume_support.invalidate_full_replay_engine(reason)
 
 func _clear_online_resume_dual_engine_state() -> void:
+	_pending_resume_full_snapshot_payload = {}
+	_pending_resume_full_snapshot_room_code = ""
+	_pending_resume_full_snapshot_local_pid = -1
 	_online_resume_support.clear_online_resume_dual_engine_state()
 
 func _emit_resume_fast_start_ready() -> void:
@@ -782,11 +891,180 @@ func _emit_resume_fast_start_ready() -> void:
 		return
 	_net.emit_signal("resume_fast_start_ready", _get_online_resume_session_state().snapshot())
 
-func _load_archive_for_online_client(engine: GameEngine, archive: Dictionary) -> Result:
+func _emit_resume_full_history_ready() -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	if not _net_has_signal("resume_full_history_ready"):
+		return
+	_net.emit_signal("resume_full_history_ready", _get_online_resume_session_state().snapshot())
+
+func _emit_local_bootstrap_progress(state: Dictionary) -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	if not _net_has_signal("local_bootstrap_progress"):
+		return
+	_net.emit_signal("local_bootstrap_progress", Dictionary(state).duplicate(true))
+
+func _consume_pending_resume_full_snapshot_payload(room_code: String) -> Dictionary:
+	var normalized_room_code := str(room_code).strip_edges().to_upper()
+	if normalized_room_code.is_empty():
+		return {}
+	if _pending_resume_full_snapshot_room_code != normalized_room_code:
+		return {}
+	var payload := _pending_resume_full_snapshot_payload.duplicate(true)
+	_pending_resume_full_snapshot_payload = {}
+	_pending_resume_full_snapshot_room_code = ""
+	return payload
+
+func _bootstrap_resume_full_snapshot_archive(
+	archive: Dictionary,
+	room_code: String,
+	local_pid: int
+) -> Result:
+	var normalized_room_code := str(room_code).strip_edges().to_upper()
+	if archive.is_empty():
+		return Result.failure("resume full snapshot archive missing")
+	var engine = GameEngineClass.new()
+	_emit_local_bootstrap_progress(_make_local_bootstrap_progress_state(
+		normalized_room_code,
+		"archive_prepare",
+		"正在校验恢复存档...",
+		"正在校验存档格式并装配规则模块。",
+		34.0
+	))
+	var load_span := OnlinePerfTraceClass.begin_span("client.resume_single_full.load_archive", {
+		"room_code": normalized_room_code,
+		"command_count": int(Array(archive.get("commands", [])).size()),
+	})
+	var load_r: Result = _load_archive_for_online_client(
+		engine,
+		archive,
+		Callable(self, "_on_archive_load_progress").bind(normalized_room_code)
+	)
+	if not load_r.ok:
+		OnlinePerfTraceClass.end_span(load_span, {
+			"ok": false,
+			"error": str(load_r.error),
+			"room_code": normalized_room_code,
+		})
+		return load_r
+	OnlinePerfTraceClass.end_span(load_span, {
+		"ok": true,
+		"room_code": normalized_room_code,
+		"command_count": int(engine.command_history.size()),
+		"current_index": int(engine.current_command_index),
+	})
+	_mark_online_client_engine_ready(engine, normalized_room_code, int(local_pid))
+	_emit_local_bootstrap_progress(_make_local_bootstrap_progress_state(
+		normalized_room_code,
+		"timeline_cache",
+		"正在整理历史日志...",
+		"正在构建历史步骤与日志缓存，进入对局后将直接复用。",
+		84.0
+	))
+	var prepare_r := _online_resume_support.prepare_single_full_engine_runtime(
+		engine,
+		normalized_room_code,
+		int(local_pid),
+		_build_archive_meta(archive),
+		true
+	)
+	if not prepare_r.ok:
+		return Result.failure("single full-engine 准备失败: %s" % prepare_r.error)
+	_emit_local_bootstrap_progress(_make_local_bootstrap_progress_state(
+		normalized_room_code,
+		"bootstrap_ready",
+		"本地恢复已完成",
+		"完整历史、日志与时间线已准备完成，正在等待进入对局。",
+		92.0
+	))
+	_pending_resume_full_snapshot_local_pid = -1
+	return Result.success(engine)
+
+func _on_archive_load_progress(progress: Dictionary, room_code: String) -> void:
+	var normalized_room_code := str(room_code).strip_edges().to_upper()
+	var stage := str(progress.get("stage", "")).strip_edges()
+	if stage == "prepare":
+		_emit_local_bootstrap_progress(_make_local_bootstrap_progress_state(
+			normalized_room_code,
+			"archive_prepare",
+			"正在校验恢复存档...",
+			"正在校验存档格式并装配规则模块。",
+			36.0
+		))
+		return
+	if stage != "replay" and stage != "finalize":
+		return
+	var current := int(progress.get("current", 0))
+	var total := maxi(1, int(progress.get("total", 0)))
+	var ratio := clampf(float(progress.get("ratio", 0.0)), 0.0, 1.0)
+	var round_number := int(progress.get("round_number", -1))
+	var phase_text := _format_resume_phase_progress_text(
+		str(progress.get("phase", "")),
+		str(progress.get("sub_phase", ""))
+	)
+	var detail := "正在回放历史 %d / %d" % [current, total]
+	if round_number >= 0:
+		detail += "（第 %d 回合" % round_number
+		if not phase_text.is_empty():
+			detail += " / %s" % phase_text
+		detail += "）"
+	elif not phase_text.is_empty():
+		detail += "（%s）" % phase_text
+	_emit_local_bootstrap_progress(_make_local_bootstrap_progress_state(
+		normalized_room_code,
+		"archive_replay",
+		"正在回放恢复存档...",
+		detail,
+		40.0 + 38.0 * ratio
+	))
+
+func _make_local_bootstrap_progress_state(
+	room_code: String,
+	stage_key: String,
+	stage_text: String,
+	detail_text: String,
+	progress_value: float
+) -> Dictionary:
+	return {
+		"room_code": str(room_code).strip_edges().to_upper(),
+		"title": "正在恢复联机对局...",
+		"stage": str(stage_text).strip_edges(),
+		"detail": str(detail_text).strip_edges(),
+		"wait_text": "",
+		"show_progress": true,
+		"progress_value": clampf(float(progress_value), 0.0, 100.0),
+		"progress_max": 100.0,
+		"stage_key": str(stage_key).strip_edges(),
+	}
+
+func _format_resume_phase_progress_text(phase: String, sub_phase: String) -> String:
+	var phase_name := str(RESUME_PHASE_DISPLAY_NAMES.get(str(phase).strip_edges(), str(phase).strip_edges())).strip_edges()
+	var sub_phase_name := str(sub_phase).strip_edges()
+	if phase_name.is_empty():
+		return sub_phase_name
+	if sub_phase_name.is_empty():
+		return phase_name
+	return "%s / %s" % [phase_name, sub_phase_name]
+
+func _build_archive_meta(archive: Dictionary) -> Dictionary:
+	return {
+		"full_command_count": int(Array(archive.get("commands", [])).size()),
+		"full_final_hash": str(archive.get("final_hash", "")).strip_edges(),
+		"schema_version": int(archive.get("schema_version", 0)),
+		"byte_size": int(var_to_bytes(archive).size()),
+	}
+
+func _is_resume_archive_room_state() -> bool:
+	if NetContext == null:
+		return false
+	return str(NetContext.room_state.get("room_mode", "")).strip_edges() == "resume_archive"
+
+func _load_archive_for_online_client(engine: GameEngine, archive: Dictionary, progress_callback: Callable = Callable()) -> Result:
 	if engine == null:
 		return Result.failure("load archive failed: engine 为空")
 	if NetContext == null:
-		return engine.load_from_archive(archive)
+		return engine.load_from_archive(archive, progress_callback)
 
 	var restore_mode := false
 	var previous_mode = NetContext.mode
@@ -794,7 +1072,7 @@ func _load_archive_for_online_client(engine: GameEngine, archive: Dictionary) ->
 		restore_mode = true
 		NetContext.mode = NetContext.Mode.HOTSEAT
 
-	var load_r: Result = engine.load_from_archive(archive)
+	var load_r: Result = engine.load_from_archive(archive, progress_callback)
 
 	if restore_mode:
 		NetContext.mode = previous_mode

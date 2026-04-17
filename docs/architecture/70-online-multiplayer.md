@@ -5,7 +5,7 @@
 - 平台房间创建 / 加入 / 恢复
 - 游戏内 resync / rewind
 - 启动恢复
-- 恢复房快启动 + 完整历史后台构建
+- 恢复房完整 archive 本地回放 + 启动期 timeline/log cache 预构建
 
 ## 模块关系图（联机的主要对象与依赖）
 
@@ -21,8 +21,8 @@ flowchart TB
     NetClientC["NetClient"]
     NetCtx["NetContext"]
     ResyncCtl["controllers/online_resync_controller.gd"]
-    Runtime["runtime_engine"]
-    FullReplay["full_replay_engine"]
+    FullLive["single full-history engine"]
+    ResumeCache["resume timeline/log cache"]
     SessionState["OnlineResumeSessionState"]
   end
 
@@ -48,17 +48,17 @@ flowchart TB
   NetClientC --> NetCtx
   NetClientC --> Bootstrap
   Bootstrap --> Game
-  Game --> ResyncCtl --> Runtime
-  NetClientC --> SessionState
-  SessionState --> Runtime
-  SessionState --> FullReplay
+    Game --> ResyncCtl --> FullLive
+    NetClientC --> SessionState
+    SessionState --> FullLive
+    SessionState --> ResumeCache
 
   Dedicated --> NetClientS --> RoomMgr --> Room --> EngineS
   NetClientS --> Internal
   Backend -->|"connect_token / room directory"| NetClientC
 ```
 
-## 模块关系图（房间创建 / 实时命令 / Resync / 恢复房双轨）
+## 模块关系图（房间创建 / 实时命令 / Resync / 恢复房单引擎启动）
 
 ```mermaid
 sequenceDiagram
@@ -69,8 +69,7 @@ sequenceDiagram
   participant Room as OnlineRoom
   participant ES as GameEngine(Server)
   participant RC as OnlineResyncController
-  participant Runtime as runtime_engine
-  participant Full as full_replay_engine
+  participant FullLive as single_full_engine
 
   Lobby->>API: create_room / join_room / resume_room
   API-->>Lobby: { ws_url, connect_token }
@@ -81,8 +80,9 @@ sequenceDiagram
     NS->>Room: start_game()
     Room->>ES: initialize(...)
     NS-->>NC: game_started(payload)
-    NC->>Runtime: initialize / fast-start restore
-    NC-->>Full: deferred full-history bootstrap
+    NS-->>NC: resync_snapshot_manifest/chunk
+    NC->>FullLive: load_from_archive(full archive)
+    NC->>FullLive: prebuild timeline/log cache
   end
 
   alt ActionRequest
@@ -91,20 +91,20 @@ sequenceDiagram
     NS->>ES: execute_command(cmd)
     NS-->>NC: command_applied(cmd_dict, state_hash)
     NC-->>RC: signal
-    RC->>Runtime: execute_command(cmd, is_replay=true)
-    NC-->>Full: record live tail only
+    RC->>FullLive: execute_command(cmd, is_replay=true)
+    NC->>FullLive: refresh single timeline cache (append only)
   end
 
   alt Resync / Rewind
     NC->>NS: request_resync / request_rewind_to_turn_start
     NS->>ES: create_archive / rewind_to_command
     NS-->>NC: resync_archive_received(...)
-    RC->>Runtime: load_from_archive / rewind_to_command
+    RC->>FullLive: load_from_archive / rewind_to_command
   end
 
   alt History / Replay View
-    Game->>Full: ensure_full_history_current()
-    Full-->>Game: timeline / entries / append
+    Game->>FullLive: ensure history timeline current()
+    FullLive-->>Game: timeline / entries / append
   end
 ```
 
@@ -126,12 +126,12 @@ sequenceDiagram
   - `autoload/online_session_coordinator.gd`
   - `autoload/online_match_bootstrap.gd`
   - `ui/scenes/game/controllers/startup_online_resume_controller.gd`
-- 恢复房完整历史双轨：
+- 恢复房单引擎恢复与缓存：
   - `autoload/net_client_online_resume_support.gd`
   - `autoload/online_resume_session_state.gd`
   - `ui/scenes/game/timeline/online_resume_full_history_adapter.gd`
 
-## 恢复房双轨模型（当前实现）
+## 恢复房单引擎模型（当前实现）
 
 ### 1. 服务器权威轨
 
@@ -139,110 +139,84 @@ sequenceDiagram
 - 持有完整命令历史
 - 负责权威执行、resync、archive 导出
 
-### 2. 客户端 runtime 轨
+### 2. 客户端 full live 轨
 
-- `runtime_engine`
-- 用于当前 live 对局
-- 接收 `command_applied` 后立即更新
-- 是玩家操作与 UI 主视图的实时数据源
+- 恢复房客户端常态只保留一个完整历史 engine
+- 启动时直接对完整 archive 执行 `load_from_archive()`
+- 该 engine 同时承担：
+  - 当前 live 对局
+  - 日志 / timeline 的历史真相
+  - Replay / History View 的基础数据源
 
-### 3. 客户端 full history 轨
+### 3. 预构建缓存
 
-- `full_replay_engine`
-- 用于日志、timeline、回放、复盘
-- 恢复房中不再要求每条 live 命令都同步推进到这个 engine
-- 当前做法是：
-  - 先记录 `live_tail`
-  - 在完整历史查看 / timeline 构建前按需补齐
+- 启动后立即预构建：
+  - `full_replay_step_timeline`
+  - `full_replay_step_timeline_entries`
+- 这些字段仍保留在 `OnlineResumeSessionState` 中，但语义已从“双轨 full-side cache”收敛为“单 full-engine cache”
 
 ## OnlineResumeSessionState
 
 代码：`autoload/online_resume_session_state.gd`
 
-这是当前恢复房双轨状态的中心存储，主要持有：
+这是当前恢复房状态的中心存储，主要持有：
 
-- `runtime_engine`
-- `full_replay_engine`
-- `full_archive`
-- `runtime_anchor`
-- `full_replay_live_tail_commands`
+- `runtime_engine`（在恢复房单引擎模式下，它就是完整历史 live engine）
+- `full_replay_engine`（兼容字段，当前与 `runtime_engine` 指向同一实例）
+- `runtime_anchor`（恢复房单引擎模式下固定从 `0` 开始）
 - `full_replay_step_timeline`
 - `full_replay_step_timeline_entries`
+- `single_full_engine_mode`
 
 补充说明：
 
 - `snapshot()` 现在会基于 engine/state signature 缓存 `runtime_state_hash` / `full_replay_state_hash`
-- `full_replay_step_timeline_entries` 用于避免恢复房每次都重新格式化完整日志 entries
+- `single_full_engine_mode=true` 时表示恢复房已完成“完整 archive 本地回放 + cache 预构建”
+- `full_replay_step_timeline_entries` 用于避免进入游戏场景后再次 full rebuild 日志 entries
 
 ## 恢复房进入策略
 
-当前恢复房已不是“必须等完整历史 ready 才能进游戏”的模式。
+当前恢复房重新改回“本地完整 bootstrap 完成后再进入”的模式。
 
 现状：
 
-- 快启动优先把 `runtime_engine` 拉起
-- 进入对局后，完整历史在后台继续准备
-- `OnlineSessionCoordinator` / `OnlineMatchBootstrap` 仍保留完整历史 ready 的状态通知
-- 但默认不再把它作为进入主对局的硬 gate
+- 客户端收到 `game_started` 后，不再 fast-start
+- 改为等待完整 archive snapshot 分块到达
+- 本地完成：
+  - archive replay
+  - timeline/log cache 预构建
+- `OnlineMatchBootstrap` / `OnlineSessionCoordinator` 会把这一步重新作为 ready gate
+- 代价是进入更慢，但坐标、日志与时间线语义显著简化
 
 ## timeline / log 的数据源选择
 
-截至 `2026-04-17` 的最新实现，恢复房 timeline / log 已开始按 P0 分层：
+截至 `2026-04-17` 的最新实现，恢复房 timeline / log 已调整为“单引擎 + 预构建 cache”：
 
 - `ui/scenes/game/timeline/controller.gd`
 - `ui/scenes/game/timeline/online_resume_history_view_support.gd`
 - `ui/scenes/game/timeline/online_resume_full_history_adapter.gd`
 
-- **live 热路径默认走 runtime 侧**
-  - `apply_live_log_timeline_from_engine()` 只读取 `runtime_engine`
-  - `resume_full_history_ready` 不再自动接管 live log
-- **完整历史只在按需场景启用**
+- **live 热路径默认仍标记为 runtime source**
+  - 但恢复房此时的 live engine 已经是完整历史 engine
+  - `apply_live_log_timeline_from_engine()` 启动后优先复用 prebuilt timeline / entries cache
+- **历史查看仍只在按需场景启用**
   - Replay
   - History View
   - 完整历史 seek / 复盘
 
-完整历史适配层仍会优先复用：
+完整历史适配层当前仍会优先复用：
 
 - cached full-history timeline
 - cached full-history timeline entries
 - incremental append
 
-### 已确认的问题（2026-04-17）
+### 当前约束
 
-最新实测日志表明，这一“live 日志默认优先走完整历史侧”的实现仍会把完整历史成本带回实时联机热路径。
-
-典型现象：
-
-- `client_request_to_rx_ms` 与 `server_exec_ms` 都不高；
-- 但在客户端收到 `command_applied` 之后，仍会出现：
-  - `resume_cache.timeline_cache_refresh.done` 数百毫秒
-  - `ui.game_log.append_step_timeline` 数百毫秒
-  - `ui.game_log.load_step_timeline` 近秒级
-  - `ui.timeline.apply_live_log` 秒级
-
-这说明当前问题的根因不是服务器慢，而是：
-
-> **实时联机 UI 仍然默认依赖 full-history timeline / log 资产。**
-
-### P0 收敛结果（当前）
-
-为彻底解决这一问题，当前架构已先落地 P0 第一阶段：
-
-- **实时联机热路径默认只依赖 `runtime_engine`**
-  - 当前操作 UI
-  - 地图 / 面板 / overlay
-  - 实时日志 append
-  - 实时 timeline head / cursor
-- **完整历史资产只在按需场景接管**
-  - Replay
-  - History View
-  - 完整历史 seek / 复盘
-  - 完整 archive 导出 / 校验
-
-当前仍需继续验证与收敛的部分：
-
-- 显式进入完整历史时的 timeline / log 装配成本
-- 通用 `panel_controller.sync` / `map_view` / overlay 刷新成本
+- 启动时允许一次性承担完整 archive replay 与 full timeline/log build 成本
+- 进入游戏后，不允许重新回到“双轨同步推进”的热路径
+- 启动后收到新 `command_applied` 时，仍必须走：
+  - 单引擎状态推进
+  - 单 timeline cache append / refresh
 
 ## 补充说明
 

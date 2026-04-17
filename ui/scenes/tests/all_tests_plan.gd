@@ -251,20 +251,12 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.OnlineResumeStartValidationTestClass.run(),
 		},
 		{
-			"name": "OnlineResumeFastStartBundleTest",
-			"fn": func() -> Result: return TestRefs.OnlineResumeFastStartBundleTestClass.run(),
+			"name": "OnlineResumeFullSnapshotBootstrapTest",
+			"fn": func() -> Result: return TestRefs.OnlineResumeFullSnapshotBootstrapTestClass.run(),
 		},
 		{
-			"name": "OnlineResumeClientDualEngineBootstrapTest",
-			"fn": func() -> Result: return await TestRefs.OnlineResumeClientDualEngineBootstrapTestClass.run(),
-		},
-		{
-			"name": "OnlineResumeRuntimeAnchorLiveSyncTest",
-			"fn": func() -> Result: return TestRefs.OnlineResumeRuntimeAnchorLiveSyncTestClass.run(),
-		},
-		{
-			"name": "OnlineResumeFullHistoryTailAppendTest",
-			"fn": func() -> Result: return await TestRefs.OnlineResumeFullHistoryTailAppendTestClass.run(),
+			"name": "OnlineResumeSingleFullEngineCacheTest",
+			"fn": func() -> Result: return TestRefs.OnlineResumeSingleFullEngineCacheTestClass.run(),
 		},
 		{
 			"name": "OnlineResumeFullHistoryBaselineSelectionTest",
@@ -1065,10 +1057,6 @@ static func build_tests(host) -> Array[Dictionary]:
 			{
 				"name": "GameLogTimelineRuntimeEventSourceTest",
 				"fn": func() -> Result: return await TestRefs.GameLogTimelineRuntimeEventSourceTestClass.run(),
-			},
-			{
-				"name": "OnlineResumeLiveRuntimeSourceP0Test",
-				"fn": func() -> Result: return await TestRefs.OnlineResumeLiveRuntimeSourceP0TestClass.run(),
 			},
 			{
 				"name": "OnlineResumeReplayEntryStateNoopTest",

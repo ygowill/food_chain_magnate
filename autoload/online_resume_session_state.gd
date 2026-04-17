@@ -12,6 +12,7 @@ var full_archive: Dictionary = {}
 var full_archive_meta: Dictionary = {}
 var runtime_anchor: Dictionary = {}
 var full_history_source_mode: String = "none"
+var single_full_engine_mode: bool = false
 var last_full_history_error: String = ""
 var full_history_generation: int = 0
 var full_replay_live_tail_commands: Array[Dictionary] = []
@@ -174,6 +175,7 @@ func snapshot() -> Dictionary:
 			full_replay_step_timeline_entries_processed_command_count
 		),
 		"full_history_source_mode": full_history_source_mode,
+		"single_full_engine_mode": bool(single_full_engine_mode),
 		"full_archive_meta": full_archive_meta.duplicate(true),
 		"has_full_archive_payload": not full_archive.is_empty(),
 		"last_full_history_error": last_full_history_error,
@@ -187,6 +189,7 @@ func _reset_full_history_state(preserve_live_tail: bool) -> void:
 	full_archive = {}
 	full_archive_meta = {}
 	full_history_source_mode = "none"
+	single_full_engine_mode = false
 	last_full_history_error = ""
 	full_replay_step_timeline = {}
 	full_replay_step_timeline_entries.clear()

@@ -11,6 +11,7 @@ const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const ConnectTokenClass = preload("res://core/utils/connect_token.gd")
 const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 const ResyncSnapshotTransferClass = preload("res://core/utils/resync_snapshot_transfer.gd")
+const RESUME_BOOTSTRAP_MODE_FULL_ARCHIVE_SNAPSHOT := "full_archive_snapshot"
 const GameOverWinnerRulesClass = preload("res://core/rules/game_over_winner_rules.gd")
 const ResultClass = preload("res://core/types/result.gd")
 const DEFAULT_PLATFORM_BACKEND_URL := "http://127.0.0.1:8000"
@@ -1831,6 +1832,8 @@ func handle_rpc_join_room(request: Dictionary) -> void:
 			"config": room.config.duplicate(true),
 			"local_player_id": room.get_seat_index_for_peer(peer_id) if room.has_method("get_seat_index_for_peer") else -1,
 		}
+		if room.has_method("is_resume_archive_room") and room.is_resume_archive_room():
+			payload["resume_bootstrap_mode"] = RESUME_BOOTSTRAP_MODE_FULL_ARCHIVE_SNAPSHOT
 		_net.rpc_id(peer_id, "rpc_game_started", payload)
 		var transfer_to_send := in_game_resync_snapshot_transfer
 		if transfer_to_send.is_empty():
@@ -2229,7 +2232,6 @@ func handle_rpc_start_game(request: Dictionary) -> void:
 	broadcast_room_list("")
 
 	var resume_start_snapshot_transfer: Dictionary = {}
-	var resume_fast_start_bundle: Dictionary = {}
 	var prepare_r: Result = room.prepare_start_game()
 	if not prepare_r.ok:
 		var failed_peer_ids: Array[int] = Array(room.get_pending_start_target_peer_ids()) if room.has_method("get_pending_start_target_peer_ids") else Array(room.get_peer_ids())
@@ -2237,50 +2239,39 @@ func handle_rpc_start_game(request: Dictionary) -> void:
 		return
 
 	if room.has_method("is_resume_archive_room") and room.is_resume_archive_room():
-		if room.has_method("build_resume_fast_start_bundle"):
-			var fast_bundle_r: Result = room.build_resume_fast_start_bundle(true)
-			if fast_bundle_r.ok and fast_bundle_r.value is Dictionary:
-				resume_fast_start_bundle = Dictionary(fast_bundle_r.value).duplicate(true)
-			else:
-				GameLog.warn(
-					"NetClient",
-					"StartGame resume fast-start unavailable, fallback to snapshot room=%s err=%s"
-						% [_safe_text(str(room.room_code)), _safe_text(str(fast_bundle_r.error))]
-				)
-		if resume_fast_start_bundle.is_empty():
-			if not room.has_method("build_effective_resume_start_archive"):
-				var failed_peer_ids_3: Array[int] = Array(room.get_pending_start_target_peer_ids()) if room.has_method("get_pending_start_target_peer_ids") else Array(room.get_peer_ids())
-				_abort_pending_start_session(room, request_id, "Room.build_effective_resume_start_archive missing", failed_peer_ids_3, "start_game_failed")
-				return
-			var effective_resume_r: Result = room.build_effective_resume_start_archive()
-			if not effective_resume_r.ok:
-				var failed_peer_ids_4: Array[int] = Array(room.get_pending_start_target_peer_ids()) if room.has_method("get_pending_start_target_peer_ids") else Array(room.get_peer_ids())
-				_abort_pending_start_session(room, request_id, effective_resume_r.error, failed_peer_ids_4, "start_game_failed")
-				return
-			var effective_resume_val = effective_resume_r.value
-			if not (effective_resume_val is Dictionary):
-				var failed_peer_ids_5: Array[int] = Array(room.get_pending_start_target_peer_ids()) if room.has_method("get_pending_start_target_peer_ids") else Array(room.get_peer_ids())
-				_abort_pending_start_session(room, request_id, "resume start archive type invalid", failed_peer_ids_5, "start_game_failed")
-				return
-			var effective_resume_info: Dictionary = effective_resume_val
-			var resume_archive: Dictionary = Dictionary(effective_resume_info.get("archive", {})).duplicate(true)
-			if resume_archive.is_empty():
-				var failed_peer_ids_6: Array[int] = Array(room.get_pending_start_target_peer_ids()) if room.has_method("get_pending_start_target_peer_ids") else Array(room.get_peer_ids())
-				_abort_pending_start_session(room, request_id, "resume start archive missing", failed_peer_ids_6, "start_game_failed")
-				return
-			var resume_hash := str(effective_resume_info.get("final_hash", resume_archive.get("final_hash", ""))).strip_edges()
-			var history_size := int(effective_resume_info.get("history_size", -1))
-			var transfer_r: Result = _build_archive_resync_snapshot_transfer(
-				str(room.room_code),
-				resume_archive,
-				history_size,
-				resume_hash
-			)
-			if not transfer_r.ok:
-				var failed_peer_ids_2: Array[int] = Array(room.get_pending_start_target_peer_ids()) if room.has_method("get_pending_start_target_peer_ids") else Array(room.get_peer_ids())
-				_abort_pending_start_session(room, request_id, transfer_r.error, failed_peer_ids_2, "start_game_failed")
-				return
-			resume_start_snapshot_transfer = Dictionary(transfer_r.value).duplicate(true)
+		if not room.has_method("build_effective_resume_start_archive"):
+			var failed_peer_ids_3: Array[int] = Array(room.get_pending_start_target_peer_ids()) if room.has_method("get_pending_start_target_peer_ids") else Array(room.get_peer_ids())
+			_abort_pending_start_session(room, request_id, "Room.build_effective_resume_start_archive missing", failed_peer_ids_3, "start_game_failed")
+			return
+		var effective_resume_r: Result = room.build_effective_resume_start_archive()
+		if not effective_resume_r.ok:
+			var failed_peer_ids_4: Array[int] = Array(room.get_pending_start_target_peer_ids()) if room.has_method("get_pending_start_target_peer_ids") else Array(room.get_peer_ids())
+			_abort_pending_start_session(room, request_id, effective_resume_r.error, failed_peer_ids_4, "start_game_failed")
+			return
+		var effective_resume_val = effective_resume_r.value
+		if not (effective_resume_val is Dictionary):
+			var failed_peer_ids_5: Array[int] = Array(room.get_pending_start_target_peer_ids()) if room.has_method("get_pending_start_target_peer_ids") else Array(room.get_peer_ids())
+			_abort_pending_start_session(room, request_id, "resume start archive type invalid", failed_peer_ids_5, "start_game_failed")
+			return
+		var effective_resume_info: Dictionary = effective_resume_val
+		var resume_archive: Dictionary = Dictionary(effective_resume_info.get("archive", {})).duplicate(true)
+		if resume_archive.is_empty():
+			var failed_peer_ids_6: Array[int] = Array(room.get_pending_start_target_peer_ids()) if room.has_method("get_pending_start_target_peer_ids") else Array(room.get_peer_ids())
+			_abort_pending_start_session(room, request_id, "resume start archive missing", failed_peer_ids_6, "start_game_failed")
+			return
+		var resume_hash := str(effective_resume_info.get("final_hash", resume_archive.get("final_hash", ""))).strip_edges()
+		var history_size := int(effective_resume_info.get("history_size", -1))
+		var transfer_r: Result = _build_archive_resync_snapshot_transfer(
+			str(room.room_code),
+			resume_archive,
+			history_size,
+			resume_hash
+		)
+		if not transfer_r.ok:
+			var failed_peer_ids_2: Array[int] = Array(room.get_pending_start_target_peer_ids()) if room.has_method("get_pending_start_target_peer_ids") else Array(room.get_peer_ids())
+			_abort_pending_start_session(room, request_id, transfer_r.error, failed_peer_ids_2, "start_game_failed")
+			return
+		resume_start_snapshot_transfer = Dictionary(transfer_r.value).duplicate(true)
 	if room.has_method("set_pending_start_phase"):
 		room.set_pending_start_phase("waiting_for_players")
 
@@ -2296,10 +2287,10 @@ func handle_rpc_start_game(request: Dictionary) -> void:
 	for pid in room.get_peer_ids():
 		var per_peer_payload := payload.duplicate(true)
 		per_peer_payload["local_player_id"] = room.get_seat_index_for_peer(int(pid)) if room.has_method("get_seat_index_for_peer") else -1
-		if not resume_fast_start_bundle.is_empty():
-			per_peer_payload["resume_fast_start_bundle"] = resume_fast_start_bundle.duplicate(true)
+		if room.has_method("is_resume_archive_room") and room.is_resume_archive_room():
+			per_peer_payload["resume_bootstrap_mode"] = RESUME_BOOTSTRAP_MODE_FULL_ARCHIVE_SNAPSHOT
 		_net.rpc_id(int(pid), "rpc_game_started", per_peer_payload)
-		if resume_fast_start_bundle.is_empty() and not resume_start_snapshot_transfer.is_empty():
+		if not resume_start_snapshot_transfer.is_empty():
 			_send_prebuilt_resync_snapshot(int(pid), request_id, room, resume_start_snapshot_transfer, "start_game_resume_archive")
 	GameLog.warn(
 		"NetClient",

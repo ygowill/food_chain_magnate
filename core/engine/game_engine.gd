@@ -237,8 +237,8 @@ func initialize(
 	return InitializerClass.initialize_new_game(self, player_count, seed_value, enabled_modules_v2, modules_v2_base_dir, reserve_card_selected_by_player, restaurant_logo_choices_by_player)
 
 # 从存档恢复
-func load_from_archive(archive: Dictionary) -> Result:
-	return LoaderClass.load_from_archive(self, archive)
+func load_from_archive(archive: Dictionary, progress_callback: Callable = Callable()) -> Result:
+	return LoaderClass.load_from_archive(self, archive, progress_callback)
 
 func reset_modules_v2() -> void:
 	ModulesV2Class.reset(self)

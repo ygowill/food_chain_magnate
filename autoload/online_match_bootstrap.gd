@@ -238,11 +238,19 @@ static func should_wait_for_resume_full_history(room_state: Dictionary, session_
 		return false
 	var snapshot: Dictionary = Dictionary(session_snapshot).duplicate(true) if (session_snapshot is Dictionary) else {}
 	if snapshot.is_empty():
-		return false
+		return true
 	var snapshot_room_code := str(snapshot.get("runtime_room_code", "")).strip_edges().to_upper()
 	var room_code := str(room_state.get("room_code", "")).strip_edges().to_upper()
 	if not snapshot_room_code.is_empty() and not room_code.is_empty() and snapshot_room_code != room_code:
 		return false
+	if not bool(snapshot.get("single_full_engine_mode", false)):
+		return true
+	if not bool(snapshot.get("runtime_ready", false)):
+		return true
+	if not bool(snapshot.get("full_replay_ready", false)):
+		return true
+	if not bool(snapshot.get("full_replay_step_timeline_ready", false)):
+		return true
 	return false
 
 func _build_starting_loading_state(room_state: Dictionary, bootstrap: Dictionary) -> Dictionary:
@@ -345,9 +353,23 @@ func _ensure_net_signal_connections() -> void:
 		return
 	if NetClient.has_signal("resume_full_history_ready") and not NetClient.resume_full_history_ready.is_connected(_on_resume_full_history_ready):
 		NetClient.resume_full_history_ready.connect(_on_resume_full_history_ready)
+	if NetClient.has_signal("local_bootstrap_progress") and not NetClient.local_bootstrap_progress.is_connected(_on_local_bootstrap_progress):
+		NetClient.local_bootstrap_progress.connect(_on_local_bootstrap_progress)
 
 func _on_resume_full_history_ready(payload: Dictionary) -> void:
 	on_resume_full_history_ready(payload)
+
+func _on_local_bootstrap_progress(payload: Dictionary) -> void:
+	if not has_active_session():
+		return
+	if not (payload is Dictionary):
+		return
+	var room_code := str(Dictionary(payload).get("room_code", "")).strip_edges().to_upper()
+	if room_code.is_empty() or room_code != _active_room_code:
+		return
+	var state: Dictionary = Dictionary(payload).duplicate(true)
+	state["priority"] = SESSION_PRIORITY
+	_apply_loading_state(state)
 
 func _needs_resume_full_history_before_ready(room_state: Dictionary) -> bool:
 	if NetClient == null or not NetClient.has_method("get_online_resume_session_snapshot"):

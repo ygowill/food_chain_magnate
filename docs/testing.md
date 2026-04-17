@@ -129,24 +129,22 @@ tools/run_headless_script.sh res://tools/check_compile.gd \
   res://core res://gameplay res://modules
 ```
 
-### 2.2.3 联机恢复房“快加载 + 完整历史”专项回归
+### 2.2.3 联机恢复房“单 full-engine 启动”专项回归
 
-这条链路已经拆成“快启动 runtime + 后台补齐完整历史 + 服务端完整 archive 导出”三部分，建议在改动相关代码后至少回归下面这些用例：
+当前恢复房链路已收敛为“完整 archive snapshot → 本地完整回放 → 预构建 timeline/log cache → 再进入对局”。建议在改动相关代码后至少回归下面这些用例：
 
 ```bash
 # 编译/预加载扫描
 tools/run_headless_script.sh res://tools/check_compile.gd
 
-# 双轨初始化 / anchor / 完整历史尾追加 / 完整导出
+# 恢复房完整 snapshot bootstrap / 单引擎 cache / 完整导出
 tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120
 ```
 
 若只想做定向核验，优先关注 `ui/scenes/tests/all_tests_plan.gd` 中这些注册项：
 
-- `OnlineResumeFastStartBundleTest`
-- `OnlineResumeClientDualEngineBootstrapTest`
-- `OnlineResumeRuntimeAnchorLiveSyncTest`
-- `OnlineResumeFullHistoryTailAppendTest`
+- `OnlineResumeFullSnapshotBootstrapTest`
+- `OnlineResumeSingleFullEngineCacheTest`
 - `OnlineResumeFullArchiveExportTest`
 - `GameOnlineResumeProgressSyncTest`
 - `GameOnlineResyncReconnectFlowTest`
@@ -154,9 +152,9 @@ tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120
 
 其中最后一个 UI 用例专门覆盖：
 
-- 完整历史未 ready 时，Replay 入口禁用
+- 恢复房本地 bootstrap 未完成时，Replay 入口禁用
 - 按钮文案显示“完整历史加载中”
-- 完整历史 ready 后恢复为正常“进入回放”入口
+- bootstrap 完成后恢复为正常“进入回放”入口
 
 **批量运行所有测试**：
 

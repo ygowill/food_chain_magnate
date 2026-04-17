@@ -99,58 +99,38 @@ static func run() -> Result:
 
 	NetContext.set_online_resume_context("ROOM97", "player", "https://platform.example.test")
 	NetContext.mark_online_resume_in_game(true)
-	var fast_harness := _Harness.new(host)
-	fast_harness.use_fast_start_signal = true
-	var fast_controller = ControllerClass.new(
-		host,
-		Callable(fast_harness, "ensure_session"),
-		Callable(fast_harness, "resume_room"),
-		Callable(fast_harness, "connect_to_server"),
-		Callable(fast_harness, "on_game_started"),
-		Callable(fast_harness, "on_failure"),
-		Callable(fast_harness, "on_status")
-	)
-	var fast_started = await fast_controller.attempt_startup_resume_if_needed()
-	if not fast_started:
-		_dispose_controllers([idle_controller, controller, delta_controller, fast_controller])
-		host.queue_free()
-		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "fast-start 恢复路径应判定为启动成功")
-	if fast_harness.game_started_calls != 1:
-		_dispose_controllers([idle_controller, controller, delta_controller, fast_controller])
-		host.queue_free()
-		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "fast-start 恢复路径应触发 on_game_started")
-
-	NetContext.set_online_resume_context("ROOM96", "player", "https://platform.example.test")
-	NetContext.mark_online_resume_in_game(true)
-	var full_history_harness := _Harness.new(host)
-	full_history_harness.use_fast_start_signal = true
-	full_history_harness.fast_start_payload = {
-		"has_full_archive_payload": true,
-		"full_history_source_mode": "archive_payload",
+	var full_snapshot_harness := _Harness.new(host)
+	full_snapshot_harness.use_local_bootstrap_progress = true
+	full_snapshot_harness.local_bootstrap_progress_payload = {
+		"title": "正在恢复联机对局...",
+		"stage": "正在回放恢复存档...",
+		"detail": "正在回放历史 12 / 24（第 3 回合 / 工作时间）",
+		"show_progress": true,
+		"progress_value": 58.0,
+		"progress_max": 100.0,
 	}
-	full_history_harness.use_full_history_ready_signal = true
-	var full_history_controller = ControllerClass.new(
+	var full_snapshot_controller = ControllerClass.new(
 		host,
-		Callable(full_history_harness, "ensure_session"),
-		Callable(full_history_harness, "resume_room"),
-		Callable(full_history_harness, "connect_to_server"),
-		Callable(full_history_harness, "on_game_started"),
-		Callable(full_history_harness, "on_failure"),
-		Callable(full_history_harness, "on_status")
+		Callable(full_snapshot_harness, "ensure_session"),
+		Callable(full_snapshot_harness, "resume_room"),
+		Callable(full_snapshot_harness, "connect_to_server"),
+		Callable(full_snapshot_harness, "on_game_started"),
+		Callable(full_snapshot_harness, "on_failure"),
+		Callable(full_snapshot_harness, "on_status")
 	)
-	var full_history_started = await full_history_controller.attempt_startup_resume_if_needed()
-	if not full_history_started:
-		_dispose_controllers([idle_controller, controller, delta_controller, fast_controller, full_history_controller])
+	var full_snapshot_started = await full_snapshot_controller.attempt_startup_resume_if_needed()
+	if not full_snapshot_started:
+		_dispose_controllers([idle_controller, controller, delta_controller, full_snapshot_controller])
 		host.queue_free()
-		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "带完整历史的 fast-start 恢复路径应判定为启动成功")
-	if full_history_harness.game_started_calls != 1:
-		_dispose_controllers([idle_controller, controller, delta_controller, fast_controller, full_history_controller])
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "single full-engine 恢复路径应判定为启动成功")
+	if full_snapshot_harness.game_started_calls != 1:
+		_dispose_controllers([idle_controller, controller, delta_controller, full_snapshot_controller])
 		host.queue_free()
-		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "带完整历史的 fast-start 恢复路径应触发 on_game_started")
-	if full_history_harness.statuses.find("已完成快启动，正在进入对局（完整历史后台加载）...") < 0:
-		_dispose_controllers([idle_controller, controller, delta_controller, fast_controller, full_history_controller])
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "single full-engine 恢复路径应触发 on_game_started")
+	if full_snapshot_harness.statuses.find("正在回放历史 12 / 24（第 3 回合 / 工作时间）") < 0:
+		_dispose_controllers([idle_controller, controller, delta_controller, full_snapshot_controller])
 		host.queue_free()
-		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "带完整历史的 fast-start 恢复路径应提示后台加载完整历史")
+		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "single full-engine 恢复路径应透传 bootstrap 进度文案")
 
 	NetContext.set_online_resume_context("ROOM101", "player", "https://platform.example.test")
 	NetContext.mark_online_resume_in_game(true)
@@ -167,11 +147,11 @@ static func run() -> Result:
 	)
 	var retry_started = await retry_controller.attempt_startup_resume_if_needed()
 	if not retry_started:
-		_dispose_controllers([idle_controller, controller, delta_controller, fast_controller, full_history_controller, retry_controller])
+		_dispose_controllers([idle_controller, controller, delta_controller, full_snapshot_controller, retry_controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "可重试失败后应最终恢复成功")
 	if retry_harness.resume_calls != 2:
-		_dispose_controllers([idle_controller, controller, delta_controller, fast_controller, full_history_controller, retry_controller])
+		_dispose_controllers([idle_controller, controller, delta_controller, full_snapshot_controller, retry_controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "冷启动可重试失败后应再次调用 resume_room")
 
@@ -191,15 +171,15 @@ static func run() -> Result:
 	)
 	var mismatch_started = await mismatch_controller.attempt_startup_resume_if_needed()
 	if mismatch_started:
-		_dispose_controllers([idle_controller, controller, delta_controller, fast_controller, full_history_controller, retry_controller, mismatch_controller])
+		_dispose_controllers([idle_controller, controller, delta_controller, full_snapshot_controller, retry_controller, mismatch_controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "账号不匹配时不应继续启动恢复")
 	if NetContext.has_online_resume_context():
-		_dispose_controllers([idle_controller, controller, delta_controller, fast_controller, full_history_controller, retry_controller, mismatch_controller])
+		_dispose_controllers([idle_controller, controller, delta_controller, full_snapshot_controller, retry_controller, mismatch_controller])
 		host.queue_free()
 		return _restore_and_fail(prev_resume_state, prev_pending_replay, prev_user_id, "账号不匹配时应清理 resume 上下文")
 
-	_dispose_controllers([idle_controller, controller, delta_controller, fast_controller, full_history_controller, retry_controller, mismatch_controller])
+	_dispose_controllers([idle_controller, controller, delta_controller, full_snapshot_controller, retry_controller, mismatch_controller])
 	host.queue_free()
 	_restore(prev_resume_state, prev_pending_replay, prev_user_id)
 	return Result.success()
@@ -232,9 +212,8 @@ class _Harness:
 	var resume_failures_before_success: int = 0
 	var statuses: Array[String] = []
 	var use_delta_restore_signal: bool = false
-	var use_fast_start_signal: bool = false
-	var fast_start_payload: Dictionary = {}
-	var use_full_history_ready_signal: bool = false
+	var use_local_bootstrap_progress: bool = false
+	var local_bootstrap_progress_payload: Dictionary = {}
 
 	func _init(p_host: Node) -> void:
 		host = p_host
@@ -257,10 +236,9 @@ class _Harness:
 	func connect_to_server(_url: String) -> Result:
 		connect_calls += 1
 		NetClient.call_deferred("emit_signal", "game_started", {})
-		if use_fast_start_signal:
-			NetClient.call_deferred("emit_signal", "resume_fast_start_ready", fast_start_payload.duplicate(true))
-			if use_full_history_ready_signal:
-				NetClient.call_deferred("emit_signal", "resume_full_history_ready", {})
+		if use_local_bootstrap_progress:
+			NetClient.call_deferred("emit_signal", "local_bootstrap_progress", local_bootstrap_progress_payload.duplicate(true))
+			NetClient.call_deferred("emit_signal", "resync_archive_received", {})
 		elif use_delta_restore_signal:
 			NetClient.call_deferred("emit_signal", "resync_delta_applied", {})
 		else:
@@ -273,5 +251,10 @@ class _Harness:
 	func on_failure(message: String) -> void:
 		failure_message = str(message)
 
-	func on_status(message: String) -> void:
+	func on_status(message) -> void:
+		if message is Dictionary:
+			var state: Dictionary = Dictionary(message).duplicate(true)
+			var text := str(state.get("detail", state.get("stage", ""))).strip_edges()
+			statuses.append(text if not text.is_empty() else str(state))
+			return
 		statuses.append(str(message))

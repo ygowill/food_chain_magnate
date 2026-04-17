@@ -142,50 +142,37 @@ step 的基本字段由 helper 构建（`gameplay/replay/step_timeline_build/hel
 
 代码：`ui/scenes/game/timeline/online_resume_full_history_adapter.gd`
 
-这个适配层的目标是：
+当前适配层已经进入**兼容收敛阶段**。新的恢复房启动模型不再长期维护双实例，而是：
 
-- **保持 `runtime_engine` 作为 live active engine**
-- **让 `full_replay_engine` 只承担按需完整历史视图**
+- 常态 live engine 直接使用完整历史 engine
+- `full_replay_engine` 字段保留为兼容命名，但在恢复房单引擎模式下与 live engine 指向同一实例
+- 适配层更多承担：
+  - 复用 prebuilt timeline / entries cache
+  - 保持现有 Replay / History View / seek API 不必一次性全部改名
 
 当前实现要点：
 
 1. 从 `OnlineResumeSessionState` 读取：
-   - `full_replay_step_timeline`
-   - `full_replay_step_timeline_entries`
-   - `full_replay_live_tail_commands`
+  - `full_replay_step_timeline`
+  - `full_replay_step_timeline_entries`
 2. 在 `previous_timeline` 与 `cached_timeline` 之间选择更合适的 baseline
 3. 当 processed command count 一致时，优先复用 prebuilt entries
 4. 当只新增尾部命令时，优先走 incremental append
-5. 把 runtime command index 映射到 full-history step index，用于恢复房下的日志 cursor / seek / replay 显示
+5. 在兼容模式下仍支持命令索引映射；但在单引擎恢复房里，坐标通常已不再需要短链换算
 
-### 当前已确认的问题（历史结论）
+### 当前实现边界（2026-04-17）
 
-最新联机日志表明：把**实时日志视图**也默认建立在 `full_replay_engine + cached timeline / entries` 之上，仍然会造成明显卡顿。
+新的恢复房方案改为：
 
-根因不是服务器慢，而是以下链路仍会在 live `command_applied` 后发生：
+- 启动期一次性完成完整 archive replay
+- 启动期一次性完成 full timeline / entries cache 预构建
+- 进入游戏后，`build_live_history_view(...)` 优先复用这份 prebuilt cache
+- 后续 live 命令只做**单 timeline 增量 append / refresh**
 
-- 完整历史 timeline cache refresh
-- 日志 timeline / entries 再装配
-- `GameLogPanel.load_step_timeline(...)` 或 append path 的大对象比较
-- descriptor 计算与主线程 UI layout
+因此现在的关键边界变成：
 
-因此，这一适配层虽然已经减少了重复 full rebuild，但**默认依赖 full-history 作为 live 日志源**本身仍是热路径风险点。
-
-### P0 第一阶段后的读源边界（当前实现）
-
-当前代码已经收敛为：
-
-- `build_live_history_view(...)`
-  - 只从 `runtime_engine` 构建 live step timeline
-- `build_online_resume_full_history_view_for_command(...)`
-  - 只在用户显式进入 History View / seek 历史时读取 `full_replay_engine`
-- 从完整历史返回最新时
-  - `GameTimelineController` 会重新恢复 runtime live timeline
-
-换句话说：
-
-- `full_replay_engine` 仍保留，用于“完整历史可看”
-- 但它已经不再默认承担“每条 live 命令都要立刻驱动日志 UI”的职责
+- 允许在 bootstrap 冷路径做一次 full build
+- 不允许在 `command_applied` 热路径重新回到“双轨同步维护 + full rebuild”
 
 ## 日志面板如何消费 timeline
 
@@ -244,28 +231,21 @@ step 的基本字段由 helper 构建（`gameplay/replay/step_timeline_build/hel
 - 联机恢复房完整历史查看
 - 实时日志视图（`apply_live_log_timeline_from_engine()`）
 
-恢复房下，live 与 history 的数据源不一定是同一个 engine：
+恢复房当前的常态数据源已经收敛为：
 
-- **live action / authoritative client view**：`runtime_engine`
-- **full history timeline / replay / on-demand history log**：`full_replay_engine` + cached timeline / entries
+- **live action / authoritative client view**：单一 full-history engine
+- **history timeline / replay / on-demand history log**：同一 engine + cached timeline / entries
 
-### P0 演进方向
+也就是说，UI 仍然允许区分“live source”和“history source”，但这个区分现在更多是**交互模式差异**，而不是“双实例历史真相差异”。
 
-后续为根治卡顿，恢复房将进一步收敛为：
+### 当前演进方向
 
-- **实时联机默认只消费 runtime 侧增量**
-  - 实时日志 append
-  - 实时 timeline head / cursor
-  - 当前可操作界面
-- **完整历史 timeline / log 只在按需模式消费**
-  - Replay
-  - History View
-  - 完整历史 seek
+当前阶段的重点已经从“双轨切分”转向：
 
-也就是说：
-
-- `full_replay_engine` 仍然保留，用于“完整历史可看”
-- 但它不再默认承担“每条 live 命令都要立刻驱动日志 UI”的职责
+- 保持恢复房启动后的**单引擎语义**
+- 让 `build_live_history_view(...)` 首次装配优先命中 prebuilt cache
+- 保留 `append_from_existing(...)` / `append_step_timeline(...)` 的单时间线增量能力
+- 避免因“已接受更慢启动”而在启动后再次引入每步 full rebuild
 
 ## 测试
 
@@ -275,15 +255,17 @@ step 的基本字段由 helper 构建（`gameplay/replay/step_timeline_build/hel
 - `core/tests/step_timeline_build_test.gd`
 - `core/tests/step_timeline_incremental_append_test.gd`
 
-恢复房完整历史 / cache / append 相关测试：
+恢复房单引擎 / cache / append 相关测试：
 
+- `core/tests/online_resume_full_snapshot_bootstrap_test.gd`
+- `core/tests/online_resume_single_full_engine_cache_test.gd`
 - `core/tests/net_client_online_resume_cached_timeline_forwarding_test.gd`
-- `core/tests/online_resume_full_history_tail_append_test.gd`
 - `ui/scenes/tests/game_log_panel_step_timeline_append_test.gd`
 
 这些测试覆盖：
 
-- prebuilt timeline 转发
-- prebuilt entries 转发
-- full-history tail append
+- 完整 snapshot bootstrap
+- single full-engine session snapshot
+- prebuilt timeline / entries cache 预构建与复用
+- 启动后单 timeline cache append
 - 日志面板同步 / 异步 append

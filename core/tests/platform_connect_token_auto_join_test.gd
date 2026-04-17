@@ -494,40 +494,24 @@ static func _run_resume_archive_auto_join_scenario() -> Result:
 	var expected_history_size := selected_index + 1
 	if _find_sent_method(mock_net.sent, 30, "rpc_game_started") < 0 or _find_sent_method(mock_net.sent, 31, "rpc_game_started") < 0:
 		return Result.failure("恢复房开局后双方都应收到 rpc_game_started")
-	if _find_sent_method(mock_net.sent, 30, "rpc_resync_snapshot_manifest") >= 0 or _find_sent_method(mock_net.sent, 31, "rpc_resync_snapshot_manifest") >= 0:
-		return Result.failure("恢复房 fast-start 路径不应再混用 snapshot manifest")
-	if _find_sent_method(mock_net.sent, 30, "rpc_resync_snapshot_chunk") >= 0 or _find_sent_method(mock_net.sent, 31, "rpc_resync_snapshot_chunk") >= 0:
-		return Result.failure("恢复房 fast-start 路径不应再混用 snapshot chunk")
+	if _find_sent_method(mock_net.sent, 30, "rpc_resync_snapshot_manifest") < 0 or _find_sent_method(mock_net.sent, 31, "rpc_resync_snapshot_manifest") < 0:
+		return Result.failure("恢复房单 full-engine 启动应下发 snapshot manifest")
+	if _find_sent_method(mock_net.sent, 30, "rpc_resync_snapshot_chunk") < 0 or _find_sent_method(mock_net.sent, 31, "rpc_resync_snapshot_chunk") < 0:
+		return Result.failure("恢复房单 full-engine 启动应下发 snapshot chunk")
 	if _find_sent_method(mock_net.sent, 30, "rpc_resync_archive") >= 0 or _find_sent_method(mock_net.sent, 31, "rpc_resync_archive") >= 0:
 		return Result.failure("恢复房开局主链路不应回退到旧 rpc_resync_archive")
 	var host_game_started := _get_sent_payload(mock_net.sent, 30, "rpc_game_started")
 	var player_game_started := _get_sent_payload(mock_net.sent, 31, "rpc_game_started")
 	if host_game_started.is_empty() or player_game_started.is_empty():
 		return Result.failure("恢复房开局缺少 rpc_game_started payload")
-	var host_bundle: Dictionary = Dictionary(host_game_started.get("resume_fast_start_bundle", {})).duplicate(true)
-	var player_bundle: Dictionary = Dictionary(player_game_started.get("resume_fast_start_bundle", {})).duplicate(true)
-	if host_bundle.is_empty() or player_bundle.is_empty():
-		return Result.failure("恢复房开局应通过 rpc_game_started 下发 resume_fast_start_bundle")
-	var host_runtime_archive: Dictionary = Dictionary(host_bundle.get("runtime_archive", {})).duplicate(true)
-	var player_runtime_archive: Dictionary = Dictionary(player_bundle.get("runtime_archive", {})).duplicate(true)
-	if host_runtime_archive.is_empty() or player_runtime_archive.is_empty():
-		return Result.failure("resume_fast_start_bundle 缺少 runtime_archive")
-	var host_runtime_commands := Array(host_runtime_archive.get("commands", []))
-	var player_runtime_commands := Array(player_runtime_archive.get("commands", []))
-	if host_runtime_commands.size() >= expected_history_size:
-		return Result.failure("host runtime_archive 应比完整历史更短: %d vs %d" % [host_runtime_commands.size(), expected_history_size])
-	if player_runtime_commands.size() >= expected_history_size:
-		return Result.failure("player runtime_archive 应比完整历史更短: %d vs %d" % [player_runtime_commands.size(), expected_history_size])
-	var host_full_archive: Dictionary = Dictionary(host_bundle.get("full_archive_payload", {})).duplicate(true)
-	var player_full_archive: Dictionary = Dictionary(player_bundle.get("full_archive_payload", {})).duplicate(true)
-	if Array(host_full_archive.get("commands", [])).size() != expected_history_size:
-		return Result.failure("host full_archive_payload 历史长度错误")
-	if Array(player_full_archive.get("commands", [])).size() != expected_history_size:
-		return Result.failure("player full_archive_payload 历史长度错误")
-	if str(Dictionary(host_bundle.get("full_archive_meta", {})).get("full_final_hash", "")).strip_edges() != expected_hash:
-		return Result.failure("host full_archive_meta.full_final_hash 错误")
-	if str(Dictionary(player_bundle.get("full_archive_meta", {})).get("full_final_hash", "")).strip_edges() != expected_hash:
-		return Result.failure("player full_archive_meta.full_final_hash 错误")
+	if str(host_game_started.get("resume_bootstrap_mode", "")).strip_edges() != "full_archive_snapshot":
+		return Result.failure("host rpc_game_started 应标记 full_archive_snapshot bootstrap mode")
+	if str(player_game_started.get("resume_bootstrap_mode", "")).strip_edges() != "full_archive_snapshot":
+		return Result.failure("player rpc_game_started 应标记 full_archive_snapshot bootstrap mode")
+	if host_game_started.get("resume_fast_start_bundle", null) is Dictionary and not Dictionary(host_game_started.get("resume_fast_start_bundle", {})).is_empty():
+		return Result.failure("single full-engine 启动不应再内联 resume_fast_start_bundle")
+	if player_game_started.get("resume_fast_start_bundle", null) is Dictionary and not Dictionary(player_game_started.get("resume_fast_start_bundle", {})).is_empty():
+		return Result.failure("single full-engine 启动不应再内联 player resume_fast_start_bundle")
 
 	mock_net.multiplayer.remote_sender_id = 30
 	server.handle_rpc_match_bootstrap_ready({

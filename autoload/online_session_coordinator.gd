@@ -397,6 +397,7 @@ func _connect_resume_wait_signals(wait_state: _ResumeWaitState, on_game_started:
 		"request_rejected": Callable(self, "_on_wait_request_rejected").bind(wait_state),
 		"room_state_updated": Callable(self, "_on_wait_room_state_updated").bind(wait_state),
 		"game_started": Callable(self, "_on_wait_game_started").bind(wait_state, on_game_started, on_status_changed),
+		"local_bootstrap_progress": Callable(self, "_on_wait_local_bootstrap_progress").bind(wait_state, on_status_changed),
 		"resume_fast_start_ready": Callable(self, "_on_wait_resume_fast_start_ready").bind(wait_state, on_status_changed),
 		"resume_full_history_ready": Callable(self, "_on_wait_resume_full_history_ready").bind(wait_state, on_status_changed),
 		"resync_archive_received": Callable(self, "_on_wait_resync_archive_received").bind(wait_state, on_status_changed),
@@ -413,6 +414,8 @@ func _connect_resume_wait_signals(wait_state: _ResumeWaitState, on_game_started:
 		NetClient.room_state_updated.connect(callbacks["room_state_updated"])
 	if not NetClient.game_started.is_connected(callbacks["game_started"]):
 		NetClient.game_started.connect(callbacks["game_started"])
+	if callbacks.has("local_bootstrap_progress") and NetClient.has_signal("local_bootstrap_progress") and not NetClient.local_bootstrap_progress.is_connected(callbacks["local_bootstrap_progress"]):
+		NetClient.local_bootstrap_progress.connect(callbacks["local_bootstrap_progress"])
 	if callbacks.has("resume_fast_start_ready") and NetClient.has_signal("resume_fast_start_ready") and not NetClient.resume_fast_start_ready.is_connected(callbacks["resume_fast_start_ready"]):
 		NetClient.resume_fast_start_ready.connect(callbacks["resume_fast_start_ready"])
 	if callbacks.has("resume_full_history_ready") and NetClient.has_signal("resume_full_history_ready") and not NetClient.resume_full_history_ready.is_connected(callbacks["resume_full_history_ready"]):
@@ -438,6 +441,8 @@ func _disconnect_resume_wait_signals(callbacks: Dictionary) -> void:
 		NetClient.room_state_updated.disconnect(callbacks["room_state_updated"])
 	if callbacks.has("game_started") and NetClient.game_started.is_connected(callbacks["game_started"]):
 		NetClient.game_started.disconnect(callbacks["game_started"])
+	if callbacks.has("local_bootstrap_progress") and NetClient.has_signal("local_bootstrap_progress") and NetClient.local_bootstrap_progress.is_connected(callbacks["local_bootstrap_progress"]):
+		NetClient.local_bootstrap_progress.disconnect(callbacks["local_bootstrap_progress"])
 	if callbacks.has("resume_fast_start_ready") and NetClient.has_signal("resume_fast_start_ready") and NetClient.resume_fast_start_ready.is_connected(callbacks["resume_fast_start_ready"]):
 		NetClient.resume_fast_start_ready.disconnect(callbacks["resume_fast_start_ready"])
 	if callbacks.has("resume_full_history_ready") and NetClient.has_signal("resume_full_history_ready") and NetClient.resume_full_history_ready.is_connected(callbacks["resume_full_history_ready"]):
@@ -493,6 +498,22 @@ func _on_wait_game_started(
 	_emit_status(on_status_changed, "已连接，正在同步对局...")
 	if on_game_started.is_valid():
 		on_game_started.call(payload)
+
+func _on_wait_local_bootstrap_progress(
+	payload: Dictionary,
+	wait_state: _ResumeWaitState,
+	on_status_changed: Callable
+) -> void:
+	if wait_state == null:
+		return
+	if not (payload is Dictionary):
+		return
+	var state: Dictionary = Dictionary(payload).duplicate(true)
+	if not wait_state.target_room_code.is_empty():
+		var room_code := str(state.get("room_code", "")).strip_edges().to_upper()
+		if not room_code.is_empty() and room_code != wait_state.target_room_code:
+			return
+	_emit_status(on_status_changed, state)
 
 func _on_wait_resume_fast_start_ready(
 	payload: Dictionary,
@@ -629,9 +650,9 @@ func _get_timeout_sec(mode: String, options: Dictionary) -> float:
 		return STARTUP_GAME_RESUME_TIMEOUT_SEC
 	return LOBBY_CONNECT_TIMEOUT_SEC
 
-func _emit_status(status_changed: Callable, message: String) -> void:
+func _emit_status(status_changed: Callable, message) -> void:
 	if status_changed.is_valid():
-		status_changed.call(str(message))
+		status_changed.call(message)
 
 func _emit_resume_context_changed() -> void:
 	var state: Dictionary = {}

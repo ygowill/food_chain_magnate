@@ -100,9 +100,17 @@ func _fail(title: String, message: String) -> void:
 	if not OS.has_feature("headless") and _show_error.is_valid():
 		_show_error.call(title, message)
 
-func _set_retry_status(message: String) -> void:
+func _set_retry_status(message) -> void:
+	var text := ""
+	if message is Dictionary:
+		var state: Dictionary = Dictionary(message).duplicate(true)
+		text = str(state.get("detail", state.get("stage", ""))).strip_edges()
+		if text.is_empty():
+			text = str(state)
+	else:
+		text = str(message)
 	if _set_connect_status.is_valid():
-		_set_connect_status.call(str(message))
+		_set_connect_status.call(text)
 	if _set_browse_status.is_valid():
 		_set_browse_status.call("正在恢复房间...")
 	if _refresh_ui.is_valid():

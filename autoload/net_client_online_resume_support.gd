@@ -76,6 +76,13 @@ func get_full_replay_engine():
 	return _session_state.full_replay_engine
 
 func ensure_full_replay_engine_current() -> Result:
+	if bool(_session_state.single_full_engine_mode):
+		var runtime_engine: GameEngine = _session_state.runtime_engine
+		if runtime_engine == null or runtime_engine.get_state() == null:
+			return Result.failure("single_full_engine runtime 未就绪")
+		_session_state.full_replay_engine = runtime_engine
+		_session_state.full_replay_engine_ready = true
+		return Result.success(runtime_engine)
 	var full_engine: GameEngine = _session_state.full_replay_engine
 	var generation := int(_session_state.full_history_generation)
 	var room_code := str(_session_state.full_replay_room_code).strip_edges().to_upper()
@@ -102,11 +109,17 @@ func ensure_full_replay_step_timeline_current(allow_incremental_append: bool = t
 	if not ensure_r.ok:
 		return ensure_r
 	var full_engine: GameEngine = _session_state.full_replay_engine
+	if bool(_session_state.single_full_engine_mode):
+		full_engine = _session_state.runtime_engine
 	if full_engine == null or full_engine.get_state() == null:
 		return Result.failure("full_replay_engine 未就绪")
-	var cache_r := _refresh_full_replay_step_timeline_cache(full_engine, bool(allow_incremental_append))
-	if not cache_r.ok:
-		return cache_r
+	var cached_timeline := _session_state.get_full_replay_step_timeline()
+	var cached_processed := StepTimelineHelpersClass.read_processed_command_count(cached_timeline)
+	var command_count := int(full_engine.command_history.size())
+	if cached_timeline.is_empty() or cached_processed < command_count:
+		var cache_r := _refresh_full_replay_step_timeline_cache(full_engine, bool(allow_incremental_append))
+		if not cache_r.ok:
+			return cache_r
 	return Result.success(_session_state.get_full_replay_step_timeline())
 
 func get_full_replay_step_timeline() -> Dictionary:
@@ -174,6 +187,7 @@ func bind_resume_fast_start_session(
 	_session_state.bind_runtime(runtime_engine, room_code, local_pid)
 	_session_state.runtime_anchor = Dictionary(bundle.get("runtime_anchor", {})).duplicate(true)
 	_session_state.full_archive_meta = Dictionary(bundle.get("full_archive_meta", {})).duplicate(true)
+	_session_state.single_full_engine_mode = false
 	var full_archive_payload: Dictionary = Dictionary(bundle.get("full_archive_payload", {})).duplicate(true)
 	if not full_archive_payload.is_empty():
 		_session_state.full_archive = full_archive_payload
@@ -194,12 +208,72 @@ func mark_runtime_engine_as_full_history(engine) -> void:
 	if _get_online_client_engine_room_code.is_valid():
 		room_code = str(_get_online_client_engine_room_code.call())
 	var local_pid := int(NetContext.local_player_id) if NetContext != null else -1
+	if _is_resume_archive_runtime_context(room_code):
+		var prepare_r := prepare_single_full_engine_runtime(engine, room_code, local_pid, {}, true)
+		if not prepare_r.ok:
+			GameLog.warn("NetClient", "single full-engine runtime refresh failed: %s" % prepare_r.error)
+		return
 	if engine is GameEngine:
 		_session_state.bind_runtime(engine, room_code, local_pid)
 	_session_state.runtime_anchor = {
 		"global_command_start_index": 0,
 		"global_command_end_index": int(engine.current_command_index) if engine is Object else -1,
 	}
+
+func prepare_single_full_engine_runtime(
+	engine: GameEngine,
+	room_code: String,
+	local_pid: int,
+	archive_meta: Dictionary = {},
+	build_timeline_cache: bool = true
+) -> Result:
+	if engine == null or engine.get_state() == null:
+		return Result.failure("single_full_engine runtime 未就绪")
+	var normalized_room_code := str(room_code).strip_edges().to_upper()
+	var span := OnlinePerfTraceClass.begin_span("client.resume_single_full.prepare", {
+		"room_code": normalized_room_code,
+		"build_timeline_cache": bool(build_timeline_cache),
+		"command_count": int(engine.command_history.size()),
+	})
+	_session_state.bind_runtime(engine, normalized_room_code, int(local_pid))
+	_session_state.runtime_anchor = {
+		"global_command_start_index": 0,
+		"global_command_end_index": int(engine.current_command_index),
+	}
+	_session_state.full_replay_engine = engine
+	_session_state.full_replay_engine_ready = true
+	_session_state.full_replay_room_code = normalized_room_code
+	_session_state.full_archive = {}
+	_session_state.full_archive_meta = Dictionary(archive_meta).duplicate(true)
+	_session_state.full_history_source_mode = "single_full_engine"
+	_session_state.single_full_engine_mode = true
+	_session_state.last_full_history_error = ""
+	_session_state.full_replay_live_tail_commands.clear()
+	_session_state.full_replay_live_tail_applied_count = 0
+	if not bool(build_timeline_cache):
+		OnlinePerfTraceClass.end_span(span, {
+			"ok": true,
+			"timeline_cached": bool(_session_state.has_full_replay_step_timeline()),
+			"single_full_engine_mode": true,
+		})
+		return Result.success(_session_state.snapshot())
+	_session_state.set_full_replay_step_timeline({})
+	var cache_r := _refresh_full_replay_step_timeline_cache(engine, false)
+	if not cache_r.ok:
+		_session_state.last_full_history_error = str(cache_r.error)
+		OnlinePerfTraceClass.end_span(span, {
+			"ok": false,
+			"error": str(cache_r.error),
+			"single_full_engine_mode": true,
+		})
+		return cache_r
+	OnlinePerfTraceClass.end_span(span, {
+		"ok": true,
+		"timeline_cached": bool(_session_state.has_full_replay_step_timeline()),
+		"timeline_entry_count": int(_session_state.full_replay_step_timeline_entries.size()),
+		"single_full_engine_mode": true,
+	})
+	return Result.success(_session_state.snapshot())
 
 func map_online_resume_progress_from_engine(engine, checkpoint_id: String = "") -> Dictionary:
 	if engine == null or _session_state.runtime_engine == null:
@@ -453,6 +527,12 @@ func record_online_resume_full_history_entries(entries: Array, origin: String) -
 func record_online_resume_full_history_command(cmd_dict: Dictionary, state_hash: String, origin: String) -> void:
 	if cmd_dict.is_empty():
 		return
+	if bool(_session_state.single_full_engine_mode):
+		_emit_resume_cache_event("resume_cache.live_tail.skipped_single_full_engine", {
+			"origin": str(origin),
+			"command_index": int(cmd_dict.get("index", -1)),
+		})
+		return
 	if _session_state.full_history_source_mode != "archive_payload" and _session_state.full_archive.is_empty():
 		return
 	_session_state.append_full_replay_live_tail_command(cmd_dict, state_hash)
@@ -698,3 +778,16 @@ func _should_abort_match_bootstrap_on_full_history_failure(room_code: String = "
 	if not normalized_room_code.is_empty() and normalized_room_code != expected_room_code:
 		return false
 	return true
+
+func _is_resume_archive_runtime_context(room_code: String = "") -> bool:
+	if NetContext == null:
+		return false
+	var room_state: Dictionary = Dictionary(NetContext.room_state).duplicate(true)
+	if str(room_state.get("room_mode", "")).strip_edges() == "resume_archive":
+		var expected_room_code := str(room_state.get("room_code", "")).strip_edges().to_upper()
+		var normalized_room_code := str(room_code).strip_edges().to_upper()
+		if expected_room_code.is_empty() or normalized_room_code.is_empty() or expected_room_code == normalized_room_code:
+			return true
+	if bool(_session_state.single_full_engine_mode):
+		return true
+	return false
