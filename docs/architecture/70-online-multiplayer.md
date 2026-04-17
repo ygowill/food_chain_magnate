@@ -244,6 +244,29 @@ sequenceDiagram
 - 显式进入完整历史时的 timeline / log 装配成本
 - 通用 `panel_controller.sync` / `map_view` / overlay 刷新成本
 
+### 已确认回归（2026-04-17）
+
+恢复房当前还有一个已确认的功能回归，需要单独追踪：
+
+- **现象**
+  - 加载存档进入联机恢复房后，默认历史 log 看不到完整前缀，只能看到 runtime suffix。
+- **已知证据**
+  - 在房间 `T9QU6H` 中，进入 `game.tscn` 前已经出现：
+    - `full_replay_ready=true`
+    - `timeline_cached=true`
+  - 但进场后首次 live log 仍只有：
+    - `history_size=1`
+    - `timeline_event_count=13`
+    - `timeline_step_count=2`
+- **根因**
+  1. `online_resume_fast_runtime_archive_builder.gd` 构造的 runtime archive 本来就是短链；
+  2. `controller.gd` / `online_resume_history_view_support.gd` 已把默认 live log 读源切到 runtime-only；
+  3. `on_online_resume_full_history_ready()` 当前只同步 replay toggle 状态，不再自动把默认日志回填到 full-history baseline。
+- **修正方向**
+  - 启动时优先回填 cached full-history baseline；
+  - 后续 live 命令继续只走 runtime 增量 append；
+  - 若 full-history 晚到，仅在用户仍停留 latest head 时做一次后台前缀补齐。
+
 ## 补充说明
 
 - 当前已不再走“纯直连大厅”模式；房间创建、加入、恢复都以平台后端返回的 `connect_token` 为入口

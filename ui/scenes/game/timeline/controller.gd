@@ -42,6 +42,7 @@ var _history_step_timeline: Dictionary = {} # {initial_state_dict, steps, events
 var _history_head_step_index: int = -1
 var _history_cursor_step_index: int = -1
 var _history_timeline_source: String = "runtime"
+var _live_history_uses_global_timeline: bool = false
 var _live_history_dirty: bool = true
 var _live_history_refresh_scheduled: bool = false
 var _live_history_last_signature: Dictionary = {}
@@ -100,6 +101,7 @@ func dispose() -> void:
 	_history_head_step_index = -1
 	_history_cursor_step_index = -1
 	_history_timeline_source = "runtime"
+	_live_history_uses_global_timeline = false
 	_live_history_dirty = true
 	_live_history_refresh_scheduled = false
 	_live_history_last_signature.clear()
@@ -272,6 +274,12 @@ func on_online_resume_full_history_ready() -> void:
 	if _replay_mode_active:
 		return
 	_sync_online_resume_replay_entry_state()
+	_live_history_dirty = true
+	if _is_history_cursor_detached_from_live_head():
+		return
+	if not is_instance_valid(_game_log_panel) or not _game_log_panel.visible:
+		return
+	apply_live_log_timeline_from_engine(true)
 
 func _build_live_history_signature(runtime_engine: GameEngine) -> Dictionary:
 	return {
@@ -381,6 +389,7 @@ func apply_live_log_timeline_from_engine(force_rebuild: bool = false) -> void:
 	_history_step_timeline = Dictionary(info.get("timeline", {})).duplicate(true)
 	_history_step_timeline_active = true
 	_history_timeline_source = str(info.get("history_timeline_source", "runtime"))
+	_live_history_uses_global_timeline = bool(info.get("uses_global_timeline", false))
 	_history_head_step_index = int(info.get("head_step_index", -1))
 	_history_cursor_step_index = int(info.get("cursor_step_index", _history_head_step_index))
 	_live_history_last_signature = signature
@@ -631,6 +640,20 @@ func _on_replay_bar_seek_requested(target_index: int) -> void:
 	if not online_seek_r.ok:
 		GameLog.warn("Game", str(online_seek_r.error))
 		return
+	if not _replay_mode_active \
+		and _live_history_uses_global_timeline \
+		and not _is_online_resume_full_history_source_active():
+		if int(target_index) < int(_history_head_step_index):
+			var runtime_engine := _get_runtime_engine()
+			if runtime_engine == null:
+				return
+			var enter_step_index := _enter_history_step_timeline_for_command(int(runtime_engine.current_command_index))
+			if enter_step_index >= -1:
+				_seek_to_history_step(clampi(int(target_index), -1, _history_head_step_index))
+				return
+		if _update_ui.is_valid():
+			_update_ui.call()
+		return
 	# 通过 ReplayBar/日志 seek 进入的“查看历史”一律保持只读（避免 step 快照状态用于分支编辑）。
 	_timeline_edit_mode_active = false
 	var plan: Dictionary = GameTimelineSeekRoutingSupportClass.resolve_seek_plan(
@@ -718,6 +741,7 @@ func _enter_history_step_timeline_for_command(target_command_index: int) -> int:
 	_history_step_timeline = Dictionary(info.get("timeline", {})).duplicate(true)
 	_history_step_timeline_active = true
 	_history_timeline_source = str(info.get("history_timeline_source", "runtime"))
+	_live_history_uses_global_timeline = false
 	_history_head_step_index = int(info.get("head_step_index", -1))
 	_history_cursor_step_index = int(info.get("cursor_step_index", _history_head_step_index))
 	_set_replay_bar_state(_history_head_step_index, _history_cursor_step_index, false)
@@ -727,7 +751,7 @@ func _enter_history_step_timeline_for_command(target_command_index: int) -> int:
 	return int(info.get("target_step_index", -999))
 
 func _history_command_index_to_step_index(command_index: int) -> int:
-	if _is_online_resume_full_history_source_active():
+	if _is_online_resume_full_history_source_active() or _live_history_uses_global_timeline:
 		return OnlineResumeFullHistoryAdapterClass.map_runtime_command_index_to_step_index(
 			int(command_index),
 			_history_step_timeline

@@ -196,7 +196,6 @@ static func run() -> Result:
 		},
 		"resume_fast_start_bundle": bundle,
 	})
-	await tree.process_frame
 
 	var runtime_engine = Globals.current_game_engine
 	if runtime_engine == null or runtime_engine.get_state() == null:
@@ -216,8 +215,8 @@ static func run() -> Result:
 			"fast-start 后 runtime_engine 缺失"
 		)
 
-	var ensure_history_r := NetClient.ensure_online_resume_full_history_current()
-	if not ensure_history_r.ok:
+	var snapshot_before_ready := NetClient.get_online_resume_session_snapshot()
+	if bool(snapshot_before_ready.get("full_replay_ready", false)):
 		return _restore_and_fail(
 			prev_mode,
 			prev_local_player_id,
@@ -231,24 +230,7 @@ static func run() -> Result:
 			prev_engine,
 			prev_is_game_active,
 			prev_event_history,
-			"构建完整历史失败: %s" % ensure_history_r.error
-		)
-	var snapshot := NetClient.get_online_resume_session_snapshot()
-	if not bool(snapshot.get("full_replay_ready", false)):
-		return _restore_and_fail(
-			prev_mode,
-			prev_local_player_id,
-			prev_local_role,
-			prev_server_url,
-			prev_connect_token,
-			prev_room_state,
-			prev_room_list,
-			prev_player_profile,
-			prev_resume_state,
-			prev_engine,
-			prev_is_game_active,
-			prev_event_history,
-			"完整历史应已就绪"
+			"完整历史在 deferred bootstrap 前不应已就绪"
 		)
 
 	var host := Control.new()
@@ -257,7 +239,6 @@ static func run() -> Result:
 	host.add_child(game_log_panel)
 	var action_panel := Control.new()
 	host.add_child(action_panel)
-	await tree.process_frame
 
 	var callbacks := _CallbackHost.new(runtime_engine)
 	var controller := GameTimelineControllerClass.new(
@@ -293,6 +274,152 @@ static func run() -> Result:
 			prev_is_game_active,
 			prev_event_history,
 			"P0 失败：live 日志默认源应为 runtime，实际=%s" % str(controller._history_timeline_source)
+		)
+	if bool(controller._live_history_uses_global_timeline):
+		_cleanup_nodes(controller, host)
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"完整历史未 ready 前不应提前进入 global baseline live 模式"
+		)
+	var runtime_only_entries := game_log_panel.get_step_timeline_entries()
+	if runtime_only_entries.is_empty():
+		_cleanup_nodes(controller, host)
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"完整历史未 ready 前仍应先显示 runtime live 日志"
+		)
+
+	var ensure_history_r := NetClient.ensure_online_resume_full_history_timeline_current(false)
+	if not ensure_history_r.ok:
+		_cleanup_nodes(controller, host)
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"构建完整历史失败: %s" % ensure_history_r.error
+		)
+	var snapshot := NetClient.get_online_resume_session_snapshot()
+	if not bool(snapshot.get("full_replay_ready", false)):
+		_cleanup_nodes(controller, host)
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"完整历史应已就绪"
+		)
+	var cached_history_entries := NetClient.get_online_resume_full_replay_step_timeline_entries()
+	if cached_history_entries.is_empty():
+		_cleanup_nodes(controller, host)
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"完整历史 entries cache 应已就绪"
+		)
+
+	controller.on_online_resume_full_history_ready()
+	if not bool(controller._live_history_uses_global_timeline):
+		_cleanup_nodes(controller, host)
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"恢复房默认 live 日志应复用 full-history baseline"
+		)
+	var displayed_entries := game_log_panel.get_step_timeline_entries()
+	if displayed_entries.size() != cached_history_entries.size():
+		_cleanup_nodes(controller, host)
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"恢复房默认日志应显示完整历史前缀：displayed=%d cached=%d"
+				% [displayed_entries.size(), cached_history_entries.size()]
+		)
+	if displayed_entries.size() < runtime_only_entries.size():
+		_cleanup_nodes(controller, host)
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			prev_event_history,
+			"完整历史回填后日志条目数不应少于 runtime live：runtime=%d merged=%d"
+				% [runtime_only_entries.size(), displayed_entries.size()]
 		)
 
 	var target_runtime_command_index := maxi(0, runtime_engine.command_history.size() - 2)

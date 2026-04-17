@@ -267,6 +267,71 @@ step 的基本字段由 helper 构建（`gameplay/replay/step_timeline_build/hel
 - `full_replay_engine` 仍然保留，用于“完整历史可看”
 - 但它不再默认承担“每条 live 命令都要立刻驱动日志 UI”的职责
 
+## 当前已知限制 / 待修正（2026-04-17）
+
+### 1. fast-start runtime archive 天然是短链 suffix
+
+代码：`core/engine/game_engine/online_resume_fast_runtime_archive_builder.gd`
+
+- `_select_anchor_command_start_index(...)` 默认会把 runtime archive 的起点锚到当前命令附近；
+- 若能找到当前玩家回合起点，则会优先锚到“当前回合起点 + 1”附近；
+- 因此恢复房里的 `runtime_engine.command_history` 设计上只保证“当前可操作短链”，并不是完整历史副本。
+
+这不是 bug，而是恢复房快启动和减小 runtime 体积的前提。
+
+### 2. P0 第一阶段后，live log 默认源已经切到 runtime-only
+
+代码：
+
+- `ui/scenes/game/timeline/controller.gd`
+- `ui/scenes/game/timeline/online_resume_history_view_support.gd`
+
+当前实现：
+
+- `apply_live_log_timeline_from_engine()` 只从 `runtime_engine` 构建 live 日志；
+- `build_live_history_view(...)` 只基于 `runtime_engine`；
+- `build_online_resume_full_history_view_for_command(...)` 只在显式进入 History / Replay 时读取 `full_replay_engine`。
+
+这样做切掉了一个关键热路径问题：**live 命令不再默认背完整历史 timeline / log 的账**。
+
+### 3. 当前已确认的功能回归：恢复房默认日志只剩 runtime suffix
+
+最新样本（房间 `T9QU6H`）中，进入 `game.tscn` 前已经满足：
+
+- `full_replay_ready=true`
+- `timeline_cached=true`
+
+但进场后首次默认 live log 仍只看到短链：
+
+- `history_size=1`
+- `timeline_event_count=13`
+- `timeline_step_count=2`
+
+根因链路是：
+
+1. runtime archive 本来就是短链 suffix；
+2. live log 默认源已经切到 runtime-only；
+3. `on_online_resume_full_history_ready()` 当前只更新 replay toggle availability，
+   不再把默认日志视图回填为 full-history baseline。
+
+因此现在出现了一个组合回归：
+
+> 性能更快了，但恢复房进场后默认可见日志不再自动包含完整历史前缀。
+
+### 4. 推荐修正方向：启动基线回填 + runtime 增量续写
+
+推荐方案不是把 live 热路径重新切回 full-history，而是拆成两层：
+
+1. **首次显示日志时优先回填 full-history baseline**
+   - 若 cached full-history timeline / entries 已 ready，则先把完整历史前缀装入日志面板；
+2. **后续 live 命令继续只走 runtime 增量 append**
+   - 禁止重新把 `full_replay_engine` 接回每条命令的热路径；
+3. **若 full-history 在进场后才 ready**
+   - 仅当用户仍停留 latest head 时，做一次后台前缀补齐；
+4. **补测试**
+   - 恢复房 startup 默认日志应包含历史前缀；
+   - 回填完成后，live append 仍只依赖 runtime 增量路径。
+
 ## 测试
 
 基础时间线构建测试：

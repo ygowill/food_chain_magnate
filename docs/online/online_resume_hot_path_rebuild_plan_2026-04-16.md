@@ -865,3 +865,156 @@ UI 需要拆成两个层次：
 > 之前这些修复并非完全错误，但它们主要是在给错误的默认依赖关系降耗。  
 > 这次日志已经证明：如果 live 日志 / timeline 默认仍然读取 full-history 资产，卡顿就还会回来。  
 > 因此下一步应直接落到 P0：**live 只做 runtime，full-history 只在按需场景启用。**
+
+---
+
+## 14. 新样本补充（2026-04-17，房间 `T9QU6H`）
+
+这批日志说明：P0 第一阶段已经把“秒级卡顿”拆掉，但仍有几类**剩余问题**需要继续追踪。
+
+### 14.1 已确认改善
+
+- 常见单步动作的前台链路已明显下降：
+  - `ui.online_sync.total` 常见约 `21~40ms`
+  - `client.command_applied.ui_settled` 常见约 `68~95ms`
+- `ui.game_log.apply_timeline_state` 已稳定降到 `0.1ms` 量级
+- `map_view` 在常见命令下多数仅 `~1ms`
+
+说明：
+
+> 恢复房“live 默认背 full-history 大账”的主矛盾已经被切掉。  
+> 当前剩余问题主要转向 **通用 UI 热点** 与 **命令粒度 / 后台补账策略**。
+
+### 14.2 新发现的问题（继续追踪）
+
+#### A. 重组阶段命令粒度过细，导致链路排队
+
+同一批重组操作里，客户端会连续发出多条：
+
+- `set_company_structure_direct`
+- `set_company_structure_report`
+
+对应样本中：
+
+- `client_request_to_rx_ms` 依次抬升到 `92ms -> 198ms -> 305ms -> 414ms -> 503ms`
+- 但同批 `server_exec_ms` 仍只有 `~7ms`
+
+结论：
+
+> 这不是服务器执行慢，而是**多条细粒度命令串行排队**。  
+> 后发命令在前面命令完成前只能等待。
+
+建议方向：
+
+- 重组阶段改为本地暂存，最终 `submit_restructuring` 批量提交；或
+- 引入 bulk command / debounce merge，减少一次拖拽操作拆成多条联机命令。
+
+#### B. `apply_live_log` 已移出前台热路径，但后台补账仍偏重
+
+当前典型样本：
+
+- `ui.timeline.apply_live_log` 仍常见 `257~400ms`
+- 其中：
+  - `resume_cache.live_append.done` 常见 `145~170ms`
+  - `ui.game_log.append_step_timeline` 常见 `34~45ms`
+
+结论：
+
+> 虽然它已不再直接拖慢当前按钮响应，但后台补账仍可能持续占用主线程 / CPU，  
+> 进而影响连续操作场景下的整体流畅度。
+
+后续建议：
+
+- `apply_live_log` / `live_append` 需要支持 **latest-only / 丢弃过时 generation**
+- 新命令到达时，不再认真补完所有中间版本 timeline，只保留最新结果
+
+#### C. `panel_controller.sync` 仍存在阶段切换 / 玩家切换尖峰
+
+大多数普通命令已降到 `4~8ms`，但仍有尖峰：
+
+- `choose_fridge_keep` 进入 `Restructuring`：`64.4ms`
+- `skip` 切换到下一玩家：`70.9ms`
+- `submit_restructuring` / `choose_turn_order` 阶段切换：`20~27ms`
+
+结论：
+
+> `ActionPanel` 的重复刷新已经收敛，但 `panel_controller.sync` 内仍存在  
+> **阶段切换 / 玩家切换时的整包同步成本**。
+
+建议方向：
+
+- 继续细拆：
+  - `_working_panels.sync(...)`
+  - `_marketing_panels.sync(...)`
+  - `_placement_overlays.sync(...)`
+  - `_end_panels.sync(...)`
+  - `_sync_modals(...)`
+  - `_sync_action_flow_controls()`
+- 把下一轮优化焦点放到“切阶段 / 切玩家”路径，而不是普通单步路径。
+
+#### D. 进局首帧仍有一次性启动成本
+
+恢复房进局首帧样本：
+
+- `ui.online_sync.map_view = 51.6ms`
+- `ui.online_sync.panel_controller = 48.1ms`
+- `ui.online_sync.total = 101.9ms`
+- `ui.timeline.apply_live_log = 217.5ms`
+
+说明：
+
+> 这更像一次性启动成本，不是每步动作都会发生；  
+> 优先级低于 A/B/C，但仍可继续做首帧预热与 deferred 初始化。
+
+### 14.3 新增回归：恢复房进入后默认历史 log 不可见
+
+这是本轮日志暴露出的**功能回归**。
+
+现象：
+
+- 在房间 `T9QU6H` 中，`resume_cache.startup_full_build.done` 已明确显示：
+  - `full_replay_ready=true`
+  - `timeline_cached=true`
+- 但进入 `game.tscn` 后，首次实时日志构建仍是：
+  - `history_size=1`
+  - `timeline_event_count=13`
+  - `timeline_step_count=2`
+
+这说明当前默认展示的是 **runtime fast-start 短链历史**，而不是完整历史 log。
+
+根因链路：
+
+1. `core/engine/game_engine/online_resume_fast_runtime_archive_builder.gd`
+   - runtime archive 会从“当前玩家回合起点附近”截断，只保留短链 suffix
+2. `ui/scenes/game/timeline/controller.gd`
+   - `apply_live_log_timeline_from_engine()` 现已固定走 runtime-only
+3. `ui/scenes/game/timeline/online_resume_history_view_support.gd`
+   - `build_live_history_view(...)` 只从 `runtime_engine` 构建 live log
+4. `on_online_resume_full_history_ready()`
+   - 现在只同步 replay toggle availability，不再把默认日志回填成 full-history
+
+所以当前行为变成：
+
+> **性能是对了，但恢复房默认可见 log 只剩 runtime suffix，旧历史前缀丢失。**
+
+### 14.4 该回归的修复方向（方案草案）
+
+目标：
+
+- **不把 full-history 再拉回每条 live 命令热路径**
+- 但恢复房进入后，默认仍应能看到完整历史 log
+
+建议采用“**启动基线回填 + runtime 增量续写**”：
+
+1. 若恢复房进入时 `full_replay_step_timeline + entries` 已 ready
+   - 首次显示日志时，先用 **cached full-history baseline** 填满日志面板
+   - cursor/head 定位到 runtime 当前所对应的 global step
+2. 首次回填完成后
+   - 后续 live 命令仍只从 `runtime_engine` 做增量 append
+   - 禁止每条命令重新 `ensure_online_resume_full_history_timeline_current()`
+3. 若完整历史在进入场景后才 ready
+   - 仅在玩家仍停留在 latest head 时，做一次后台“历史前缀回填”
+   - 若玩家已进入历史/回放态，则保持当前视图，不强切
+4. 需要新增回归测试：
+   - 恢复房 startup 且 full-history 已 ready 时，默认日志应包含历史前缀
+   - 回填后后续 live append 不得回退到 full-history 热路径

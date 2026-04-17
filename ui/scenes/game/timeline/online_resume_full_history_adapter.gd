@@ -5,6 +5,8 @@ extends RefCounted
 
 const StepTimelineBuildHelpersClass = preload("res://ui/scenes/game/timeline/step_timeline_build_helpers.gd")
 const StepTimelineHelpersClass = preload("res://gameplay/replay/step_timeline_build/helpers.gd")
+const GameTimelineLogEntriesBuilderClass = preload("res://ui/scenes/game/timeline/log_entries_builder.gd")
+const GameLogEntryUtilsClass = preload("res://ui/components/game_log/game_log_entry_utils.gd")
 const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 
 static func is_applicable() -> bool:
@@ -186,6 +188,104 @@ static func build_history_timeline(
 			set_cached_history_timeline(Dictionary(timeline_val))
 	return build_r
 
+static func build_live_history_timeline_from_cached_baseline(
+	runtime_engine: GameEngine,
+	game_log_panel: Object,
+	read_only: bool = false
+) -> Result:
+	if runtime_engine == null:
+		return Result.failure("runtime_engine 为空")
+	if not is_instance_valid(game_log_panel):
+		return Result.failure("game_log_panel 无效")
+	if not is_ready():
+		return Result.failure("联机完整历史尚未就绪")
+
+	var cached_history_timeline := get_cached_history_timeline()
+	if cached_history_timeline.is_empty():
+		return Result.failure("cached full-history timeline 未就绪")
+
+	var cached_history_entries := get_cached_history_timeline_entries()
+	if cached_history_entries.is_empty():
+		var cached_events_val = cached_history_timeline.get("events", [])
+		var cached_events: Array = cached_events_val if (cached_events_val is Array) else []
+		cached_history_entries = GameTimelineLogEntriesBuilderClass.build(cached_events)
+
+	var snapshot := get_session_snapshot()
+	var runtime_anchor: Dictionary = Dictionary(snapshot.get("runtime_anchor", {})).duplicate(true)
+	var global_command_start_index := int(runtime_anchor.get("global_command_start_index", 0))
+	if global_command_start_index < 0:
+		global_command_start_index = 0
+
+	var replace_step_start_index := _find_first_step_index_at_or_after_command(
+		cached_history_timeline,
+		global_command_start_index
+	)
+
+	var runtime_info_r := StepTimelineBuildHelpersClass.build_step_timeline(runtime_engine, {}, false)
+	if not runtime_info_r.ok:
+		return runtime_info_r
+	if not (runtime_info_r.value is Dictionary):
+		return Result.failure("runtime timeline 构建失败（返回类型错误）")
+
+	var runtime_info: Dictionary = Dictionary(runtime_info_r.value)
+	var runtime_timeline_val = runtime_info.get("timeline", null)
+	if not (runtime_timeline_val is Dictionary):
+		return Result.failure("runtime timeline 构建失败（返回结构错误）")
+	var runtime_timeline: Dictionary = Dictionary(runtime_timeline_val).duplicate(true)
+
+	var rebased_runtime_timeline := _rebase_runtime_timeline_for_live_view(
+		runtime_timeline,
+		global_command_start_index,
+		replace_step_start_index
+	)
+	var merged_timeline := _merge_cached_prefix_with_runtime_timeline(
+		cached_history_timeline,
+		rebased_runtime_timeline,
+		global_command_start_index,
+		replace_step_start_index
+	)
+	var merged_entries := _merge_cached_prefix_with_runtime_entries(
+		cached_history_entries,
+		rebased_runtime_timeline,
+		global_command_start_index
+	)
+
+	var load_r := StepTimelineBuildHelpersClass.load_prebuilt_timeline_with_entries(
+		merged_timeline,
+		merged_entries,
+		game_log_panel,
+		read_only
+	)
+	if not load_r.ok:
+		return load_r
+	if not (load_r.value is Dictionary):
+		return Result.failure("加载 live baseline timeline 失败（返回类型错误）")
+
+	var load_info: Dictionary = Dictionary(load_r.value)
+	var merged_steps_val = merged_timeline.get("steps", [])
+	var merged_steps: Array = merged_steps_val if (merged_steps_val is Array) else []
+	var head_step_index := int(merged_steps.size()) - 1
+	var head_command_index := int(runtime_engine.command_history.size()) - 1
+	var cursor_command_index := int(runtime_engine.current_command_index)
+	var cursor_step_index := head_step_index
+	if cursor_command_index < 0:
+		cursor_step_index = -1
+	elif cursor_command_index >= head_command_index:
+		cursor_step_index = head_step_index
+	else:
+		cursor_step_index = map_runtime_command_index_to_step_index(cursor_command_index, merged_timeline)
+		if cursor_step_index < -1:
+			cursor_step_index = head_step_index
+
+	load_info["timeline"] = merged_timeline.duplicate(true)
+	load_info["entries"] = _duplicate_entry_array(merged_entries)
+	load_info["head_step_index"] = head_step_index
+	load_info["cursor_step_index"] = cursor_step_index
+	load_info["history_timeline_source"] = "runtime"
+	load_info["restore_runtime_display_engine"] = false
+	load_info["uses_global_timeline"] = true
+	return Result.success(load_info).with_warnings(load_r.warnings)
+
 static func select_preferred_baseline_timeline(
 	previous_timeline: Dictionary,
 	cached_timeline: Dictionary,
@@ -268,6 +368,180 @@ static func map_runtime_command_index_to_step_index(runtime_command_index: int, 
 		map_runtime_command_index_to_global(runtime_command_index),
 		timeline
 	)
+
+static func _find_first_step_index_at_or_after_command(timeline: Dictionary, command_index: int) -> int:
+	if timeline.is_empty():
+		return 0
+	var steps_val = timeline.get("steps", null)
+	if not (steps_val is Array):
+		return 0
+	var steps: Array = steps_val
+	var target := maxi(0, int(command_index))
+	for idx in range(steps.size()):
+		var step_val = steps[idx]
+		if not (step_val is Dictionary):
+			continue
+		if int(Dictionary(step_val).get("anchor_command_index", -999999)) >= target:
+			return idx
+	return steps.size()
+
+static func _rebase_runtime_timeline_for_live_view(
+	runtime_timeline: Dictionary,
+	command_offset: int,
+	step_offset: int
+) -> Dictionary:
+	var out: Dictionary = runtime_timeline.duplicate(true)
+	var rebased_steps: Array[Dictionary] = []
+	var steps_val = runtime_timeline.get("steps", [])
+	if steps_val is Array:
+		for step_val in steps_val:
+			if not (step_val is Dictionary):
+				continue
+			var step: Dictionary = Dictionary(step_val).duplicate(true)
+			var anchor_command_index := int(step.get("anchor_command_index", -1))
+			if anchor_command_index >= 0:
+				step["anchor_command_index"] = anchor_command_index + int(command_offset)
+			rebased_steps.append(step)
+	out["steps"] = rebased_steps
+
+	var rebased_events: Array[Dictionary] = []
+	var next_sequence := 0
+	var events_val = runtime_timeline.get("events", [])
+	if events_val is Array:
+		for event_val in events_val:
+			if not (event_val is Dictionary):
+				continue
+			var event_data: Dictionary = Dictionary(event_val).duplicate(true)
+			var command_index := int(event_data.get("command_index", -1))
+			if command_index >= 0:
+				event_data["command_index"] = command_index + int(command_offset)
+			var step_index := int(event_data.get("step_index", -1))
+			if step_index >= 0:
+				event_data["step_index"] = step_index + int(step_offset)
+			var command_step_index := int(event_data.get("command_step_index", -1))
+			if command_step_index >= 0:
+				event_data["command_step_index"] = command_step_index + int(step_offset)
+			event_data["sequence"] = next_sequence
+			rebased_events.append(event_data)
+			next_sequence += 1
+	out["events"] = rebased_events
+	return out
+
+static func _merge_cached_prefix_with_runtime_timeline(
+	cached_history_timeline: Dictionary,
+	rebased_runtime_timeline: Dictionary,
+	global_command_start_index: int,
+	replace_step_start_index: int
+) -> Dictionary:
+	var merged_timeline: Dictionary = {
+		"initial_state_dict": Dictionary(cached_history_timeline.get("initial_state_dict", {})).duplicate(true),
+	}
+
+	var merged_steps: Array[Dictionary] = []
+	var cached_steps_val = cached_history_timeline.get("steps", [])
+	if cached_steps_val is Array:
+		var cached_steps: Array = cached_steps_val
+		var prefix_end := mini(maxi(0, int(replace_step_start_index)), cached_steps.size())
+		for idx in range(prefix_end):
+			var step_val = cached_steps[idx]
+			if not (step_val is Dictionary):
+				continue
+			merged_steps.append(Dictionary(step_val).duplicate(true))
+	var runtime_steps_val = rebased_runtime_timeline.get("steps", [])
+	if runtime_steps_val is Array:
+		for step_val in runtime_steps_val:
+			if not (step_val is Dictionary):
+				continue
+			merged_steps.append(Dictionary(step_val).duplicate(true))
+	merged_timeline["steps"] = merged_steps
+
+	var merged_events: Array[Dictionary] = []
+	var cached_events_val = cached_history_timeline.get("events", [])
+	if cached_events_val is Array:
+		for event_val in cached_events_val:
+			if not (event_val is Dictionary):
+				continue
+			var event_data: Dictionary = Dictionary(event_val)
+			if int(event_data.get("command_index", -1)) >= int(global_command_start_index):
+				continue
+			merged_events.append(event_data.duplicate(true))
+	var next_sequence := 0
+	if not merged_events.is_empty():
+		next_sequence = int(Dictionary(merged_events.back()).get("sequence", -1)) + 1
+	var runtime_events_val = rebased_runtime_timeline.get("events", [])
+	if runtime_events_val is Array:
+		for event_val in runtime_events_val:
+			if not (event_val is Dictionary):
+				continue
+			var event_data: Dictionary = Dictionary(event_val).duplicate(true)
+			if int(event_data.get("command_index", -1)) < int(global_command_start_index):
+				continue
+			event_data["sequence"] = next_sequence
+			merged_events.append(event_data)
+			next_sequence += 1
+	merged_timeline["events"] = merged_events
+
+	var processed_command_count := maxi(
+		_read_processed_command_count_from_events(merged_events),
+		_read_processed_command_count_from_steps(merged_steps)
+	)
+	var last_event_sequence := 0
+	if not merged_events.is_empty():
+		last_event_sequence = int(Dictionary(merged_events.back()).get("sequence", 0))
+	return StepTimelineHelpersClass.attach_build_meta(
+		merged_timeline,
+		processed_command_count,
+		last_event_sequence
+	)
+
+static func _merge_cached_prefix_with_runtime_entries(
+	cached_history_entries: Array[Dictionary],
+	rebased_runtime_timeline: Dictionary,
+	global_command_start_index: int
+) -> Array[Dictionary]:
+	var merged_entries: Array[Dictionary] = []
+	for entry in cached_history_entries:
+		if not (entry is Dictionary):
+			continue
+		if int(GameLogEntryUtilsClass.get_entry_command_index(entry)) >= int(global_command_start_index):
+			continue
+		merged_entries.append(Dictionary(entry).duplicate(true))
+
+	var runtime_events_val = rebased_runtime_timeline.get("events", [])
+	var runtime_events: Array = runtime_events_val if (runtime_events_val is Array) else []
+	for entry in GameTimelineLogEntriesBuilderClass.build(runtime_events):
+		if not (entry is Dictionary):
+			continue
+		if int(GameLogEntryUtilsClass.get_entry_command_index(entry)) < int(global_command_start_index):
+			continue
+		merged_entries.append(Dictionary(entry).duplicate(true))
+	return merged_entries
+
+static func _read_processed_command_count_from_events(events: Array[Dictionary]) -> int:
+	var max_command_index := -1
+	for event_val in events:
+		if not (event_val is Dictionary):
+			continue
+		max_command_index = maxi(max_command_index, int(Dictionary(event_val).get("command_index", -1)))
+	return max_command_index + 1 if max_command_index >= 0 else 0
+
+static func _read_processed_command_count_from_steps(steps: Array[Dictionary]) -> int:
+	var max_command_index := -1
+	for step_val in steps:
+		if not (step_val is Dictionary):
+			continue
+		max_command_index = maxi(max_command_index, int(Dictionary(step_val).get("anchor_command_index", -1)))
+	return max_command_index + 1 if max_command_index >= 0 else 0
+
+static func _duplicate_entry_array(entries: Array) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if not (entries is Array):
+		return out
+	for entry_val in entries:
+		if not (entry_val is Dictionary):
+			continue
+		out.append(Dictionary(entry_val).duplicate(true))
+	return out
 
 static func _emit_resume_cache_event(event: String, fields: Dictionary = {}) -> void:
 	if not OnlinePerfTraceClass.enabled():

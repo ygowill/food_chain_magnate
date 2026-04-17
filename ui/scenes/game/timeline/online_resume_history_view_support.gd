@@ -56,6 +56,15 @@ static func build_live_history_view(
 	if not is_instance_valid(game_log_panel):
 		return Result.failure("game_log_panel 无效")
 
+	if OnlineResumeFullHistoryAdapterClass.is_applicable() and is_full_history_ready():
+		var baseline_r := OnlineResumeFullHistoryAdapterClass.build_live_history_timeline_from_cached_baseline(
+			runtime_engine,
+			game_log_panel,
+			false
+		)
+		if baseline_r.ok:
+			return baseline_r
+
 	var build_r := StepTimelineBuildHelpersClass.build_and_load(
 		runtime_engine,
 		game_log_panel,
@@ -95,6 +104,7 @@ static func build_live_history_view(
 		"cursor_step_index": history_cursor_step_index,
 		"history_timeline_source": "runtime",
 		"restore_runtime_display_engine": false,
+		"uses_global_timeline": false,
 	})
 
 static func build_online_resume_full_history_view_for_command(
