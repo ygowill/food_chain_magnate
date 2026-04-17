@@ -6,7 +6,7 @@
 
 - 客户端双轨模型已部分落地：
   - `runtime_engine` 用于 live 对局
-  - `full_replay_engine` 用于完整历史 / timeline / log / replay
+  - `full_replay_engine` 用于按需完整历史 / History View / Replay
 - `OnlineResumeSessionState` 已实际持有：
   - `full_replay_step_timeline`
   - `full_replay_step_timeline_entries`
@@ -17,6 +17,10 @@
   - incremental append
 - 恢复房进入对局已改为 **快启动优先，完整历史后台加载**，不再默认等待完整历史完全 ready 后才进入游戏
 - live command 热路径中，当前不再强制同步推进完整历史 engine，而是先记录 live tail，再在完整历史查看 / timeline 构建前按需补齐
+- P0 第一阶段已落地：
+  - **实时联机默认只绑定 `runtime_engine`**
+  - **完整历史 timeline / log 只在 Replay / History View 等按需场景启用**
+  - **完整历史 ready 后，不再自动把 live 热路径切到 full-history**
 
 仍未完全闭合的部分：
 
@@ -49,6 +53,10 @@
 - **实现细节有演进**：
   - 当前实际代码更强调“热路径去重”和“后台按需补齐”
   - 而不是严格等待一份一次性完整 cache 全部 ready
+- **最新结论有进一步收敛**：
+  - 双轨本身是对的
+  - “实时日志默认走 full-history”这件事会把完整历史成本重新带回热路径
+  - 当前已先把 live / history 的默认读源边界切开，后续重点转向显式历史查看成本与通用 UI 成本
 - **剩余工作仍存在**：
   - 通用日志 UI / descriptor / layout 成本仍在继续收敛
   - 部分归档 / 导出 / 下载链路的完整收口仍需继续验证
@@ -456,7 +464,8 @@ D 完整版里，锚点只影响客户端快加载，不影响权威历史。
 - 客户端加载 `full_archive_payload`；
 - 构建 `full_replay_engine`；
 - 基于它构建完整 `step_timeline` / `event timeline` / `log entries`；
-- 完成后切换 timeline/log 的数据源到完整历史轨。
+- 完成后开放完整历史视图的数据源；
+- **不要求实时联机日志默认立即切到完整历史轨**。
 
 要求：
 
@@ -576,7 +585,8 @@ D 完整版里，锚点只影响客户端快加载，不影响权威历史。
 
 要求：
 
-- 完整历史 ready 后，log panel 的主干历史必须切换为完整历史源；
+- 完整历史 ready 后，**Replay / History View / 完整历史 seek** 必须切换为完整历史源；
+- 实时联机日志在 P0 下仍默认走 runtime 侧，不能因为完整历史 ready 就自动把 live 热路径切到 full-history；
 - EventBus.history 不再是恢复房历史展示的唯一真相来源；
 - EventBus 仍可用于 live 运行期即时事件，但不能再单独决定“完整历史长什么样”。
 

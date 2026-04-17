@@ -103,6 +103,10 @@ var _timeline_background_running_job: Dictionary = {}
 var _timeline_background_pending_job: Dictionary = {}
 var _timeline_background_generation: int = 0
 var _visible_entry_count_cached: int = -1
+var _timeline_exact_items_by_index: Dictionary = {} # timeline index -> Array[Control]
+var _timeline_first_item_by_index: Dictionary = {} # timeline index -> first visible Control
+var _timeline_phase_header_items: Array[Control] = []
+var _timeline_round_header_items: Array[Control] = []
 
 func _ready() -> void:
 	set_process(false)
@@ -176,7 +180,6 @@ func add_log(log_type: LogType, message: String, details: Dictionary = {}) -> in
 		_rebuild_entries_all()
 		log_added.emit(entry)
 		_rebuild_display()
-		_apply_timeline_state_to_items()
 		_request_scroll_to_bottom()
 		_update_entry_count()
 		return entry_id
@@ -212,7 +215,6 @@ func append_entry(entry: Dictionary) -> void:
 		_extra_entries.append(d)
 		_rebuild_entries_all()
 		_rebuild_display()
-		_apply_timeline_state_to_items()
 		_request_scroll_to_bottom()
 		_update_entry_count()
 		return
@@ -394,7 +396,6 @@ func _apply_background_timeline_job_fallback(job: Dictionary) -> void:
 	_visible_entry_count_cached = -1
 	_rebuild_display()
 	_last_step_timeline_update_mode = "append" if mode == "append" else "rebuild"
-	_apply_timeline_state_to_items()
 	_request_scroll_to_bottom()
 	_update_entry_count()
 
@@ -514,6 +515,7 @@ func _apply_descriptor_rebuild_result(descriptors: Array) -> void:
 	for item in _log_items:
 		if item is Control:
 			_connect_item_hover_signals(item)
+	_rebuild_timeline_item_indexes()
 	OnlinePerfTraceClass.end_span(span, {
 		"descriptor_count": int(descriptors.size()),
 		"log_item_count": int(_log_items.size()),
@@ -545,6 +547,7 @@ func _apply_descriptor_append_result(descriptors: Array, patch_end_step_index: i
 		if item is Control:
 			var ctrl: Control = item
 			_log_items.append(ctrl)
+			_index_log_item(ctrl)
 			_connect_item_hover_signals(ctrl)
 	OnlinePerfTraceClass.end_span(span, {
 		"descriptor_count": int(descriptors.size()),
@@ -553,14 +556,12 @@ func _apply_descriptor_append_result(descriptors: Array, patch_end_step_index: i
 	})
 
 func _patch_last_phase_header_end_step_index(end_step_index: int) -> void:
-	for idx in range(_log_items.size() - 1, -1, -1):
-		var item_val = _log_items[idx]
+	for idx in range(_timeline_phase_header_items.size() - 1, -1, -1):
+		var item_val = _timeline_phase_header_items[idx]
 		if not (item_val is Control):
 			continue
 		var item: Control = item_val
 		if not is_instance_valid(item):
-			continue
-		if str(item.get_meta("_log_pool_kind", "")).strip_edges() != "phase_header":
 			continue
 		item.end_step_index = int(end_step_index)
 		return
@@ -602,7 +603,6 @@ func load_entries(entries: Array[Dictionary]) -> void:
 				_entry_id_counter = maxi(_entry_id_counter, int(f) + 1)
 
 	_rebuild_display()
-	_apply_timeline_state_to_items()
 	_request_scroll_to_bottom()
 	_update_entry_count()
 	_last_step_timeline_update_mode = "flat"
@@ -662,7 +662,6 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 		fold_details_check.button_pressed = _fold_details_enabled
 
 	_rebuild_display()
-	_apply_timeline_state_to_items()
 	_request_scroll_to_bottom()
 	_update_entry_count()
 	_last_step_timeline_update_mode = "rebuild"
@@ -754,8 +753,10 @@ func set_timeline_head(head_index: int) -> void:
 	var h := int(head_index)
 	if h == _timeline_head_index:
 		return
+	var previous_cursor_index := int(_timeline_cursor_index)
+	var previous_head_index := int(_timeline_head_index)
 	_timeline_head_index = h
-	_apply_timeline_state_to_items()
+	_apply_timeline_state_delta(previous_cursor_index, previous_head_index)
 
 func set_timeline_cursor(cursor_index: int) -> void:
 	var c := int(cursor_index)
@@ -763,9 +764,11 @@ func set_timeline_cursor(cursor_index: int) -> void:
 		if _timeline_cursor_index >= _timeline_head_index:
 			_request_scroll_to_bottom()
 		return
+	var previous_cursor_index := int(_timeline_cursor_index)
+	var previous_head_index := int(_timeline_head_index)
 	_timeline_cursor_index = c
 	var should_scroll_to_cursor := _timeline_cursor_index < _timeline_head_index
-	_apply_timeline_state_to_items(should_scroll_to_cursor)
+	_apply_timeline_state_delta(previous_cursor_index, previous_head_index, should_scroll_to_cursor)
 	if not should_scroll_to_cursor:
 		_request_scroll_to_bottom()
 
@@ -776,10 +779,12 @@ func set_timeline_head_cursor(head_index: int, cursor_index: int) -> void:
 		if c >= h:
 			_request_scroll_to_bottom()
 		return
+	var previous_cursor_index := int(_timeline_cursor_index)
+	var previous_head_index := int(_timeline_head_index)
 	_timeline_head_index = h
 	_timeline_cursor_index = c
 	var should_scroll_to_cursor := c < h
-	_apply_timeline_state_to_items(should_scroll_to_cursor)
+	_apply_timeline_state_delta(previous_cursor_index, previous_head_index, should_scroll_to_cursor)
 	if not should_scroll_to_cursor:
 		_request_scroll_to_bottom()
 
@@ -888,7 +893,6 @@ func ensure_display_ready() -> void:
 		"child_count_before": int(log_container.get_child_count()),
 	})
 	_rebuild_display()
-	_apply_timeline_state_to_items()
 	_request_scroll_to_bottom()
 	_update_entry_count()
 	OnlinePerfTraceClass.end_span(span, {
@@ -1184,9 +1188,45 @@ func _add_log_item(entry: Dictionary) -> void:
 		item.entry_double_clicked.connect(_on_entry_double_clicked)
 	_connect_item_hover_signals(item)
 	_log_items.append(item)
+	_index_log_item(item)
 	item.apply_timeline_state(_timeline_cursor_index, _timeline_head_index)
 
 	_request_scroll_to_bottom()
+
+func _clear_timeline_item_indexes() -> void:
+	_timeline_exact_items_by_index.clear()
+	_timeline_first_item_by_index.clear()
+	_timeline_phase_header_items.clear()
+	_timeline_round_header_items.clear()
+
+func _rebuild_timeline_item_indexes() -> void:
+	_clear_timeline_item_indexes()
+	for item_val in _log_items:
+		if item_val is Control:
+			_index_log_item(item_val)
+
+func _index_log_item(item: Control) -> void:
+	if item == null or not is_instance_valid(item):
+		return
+	var kind := str(item.get_meta("_log_pool_kind", "")).strip_edges()
+	var timeline_index := -999999
+	if item.has_method("get_timeline_index"):
+		timeline_index = int(item.call("get_timeline_index"))
+		if timeline_index >= -1 and not _timeline_first_item_by_index.has(timeline_index):
+			_timeline_first_item_by_index[timeline_index] = item
+
+	match kind:
+		"phase_header":
+			_timeline_phase_header_items.append(item)
+		"round_header":
+			_timeline_round_header_items.append(item)
+		_:
+			if timeline_index < -1:
+				return
+			var bucket_val = _timeline_exact_items_by_index.get(timeline_index, [])
+			var bucket: Array = bucket_val if (bucket_val is Array) else []
+			bucket.append(item)
+			_timeline_exact_items_by_index[timeline_index] = bucket
 
 func _acquire_log_item(kind: String):
 	var k := str(kind).strip_edges()
@@ -1250,6 +1290,7 @@ func _apply_scroll_to_bottom_final() -> void:
 	scroll_container.scroll_vertical = int(scroll_container.get_v_scroll_bar().max_value)
 
 func _clear_display() -> void:
+	_clear_timeline_item_indexes()
 	for item in _log_items:
 		if item is Control and is_instance_valid(item):
 			_release_log_item(item)
@@ -1270,7 +1311,6 @@ func _rebuild_display() -> void:
 			if entry_val is Dictionary:
 				_add_log_item(Dictionary(entry_val))
 
-	_apply_timeline_state_to_items()
 	OnlinePerfTraceClass.end_span(span, {
 		"timeline_loaded": bool(_is_step_timeline_loaded()),
 		"entry_count": int(_entries_all.size()),
@@ -1310,6 +1350,7 @@ func _build_unified_timeline_display() -> void:
 	for item in _log_items:
 		if item is Control:
 			_connect_item_hover_signals(item)
+	_rebuild_timeline_item_indexes()
 	OnlinePerfTraceClass.end_span(span, {
 		"log_item_count": int(_log_items.size()),
 		"visible_entry_count": int(_visible_entry_count_cached),
@@ -1332,7 +1373,6 @@ func _on_action_group_fold_toggled(step_index: int, expanded: bool) -> void:
 			_expanded_action_groups.erase(idx)
 
 	_rebuild_display()
-	_apply_timeline_state_to_items()
 	_update_entry_count()
 
 func _update_entry_count() -> void:
@@ -1362,20 +1402,60 @@ func _update_entry_count() -> void:
 	entry_count_label.text = "显示 %d / %d" % [visible, total]
 
 func _apply_timeline_state_to_items(scroll_to_cursor: bool = false) -> void:
+	_apply_timeline_state_to_items_internal(true, _timeline_cursor_index, _timeline_head_index, scroll_to_cursor)
+
+func _apply_timeline_state_delta(previous_cursor_index: int, previous_head_index: int, scroll_to_cursor: bool = false) -> void:
+	_apply_timeline_state_to_items_internal(false, previous_cursor_index, previous_head_index, scroll_to_cursor)
+
+func _apply_timeline_state_to_items_internal(
+	force_full_update: bool,
+	previous_cursor_index: int,
+	previous_head_index: int,
+	scroll_to_cursor: bool = false
+) -> void:
+	var old_cursor_index := int(previous_cursor_index)
+	var old_head_index := int(previous_head_index)
+	var new_cursor_index := int(_timeline_cursor_index)
+	var new_head_index := int(_timeline_head_index)
 	var span := OnlinePerfTraceClass.begin_span("ui.game_log.apply_timeline_state", {
 		"log_item_count": int(_log_items.size()),
 		"scroll_to_cursor": bool(scroll_to_cursor),
+		"force_full_update": bool(force_full_update),
+		"old_cursor_index": int(old_cursor_index),
+		"old_head_index": int(old_head_index),
+		"new_cursor_index": int(new_cursor_index),
+		"new_head_index": int(new_head_index),
 	})
-	for item in _log_items:
-		if not is_instance_valid(item):
-			continue
-		if item.has_method("apply_timeline_state"):
-			item.apply_timeline_state(_timeline_cursor_index, _timeline_head_index)
+	var update_mode := "skip"
+	var updated_item_count := 0
+	if force_full_update or _should_force_full_timeline_state_update():
+		update_mode = "full"
+		updated_item_count = _apply_timeline_state_to_all_items()
+	else:
+		var old_future_mode := old_cursor_index < old_head_index
+		var new_future_mode := new_cursor_index < new_head_index
+		if old_cursor_index != new_cursor_index or old_future_mode != new_future_mode:
+			update_mode = "delta"
+			var dirty_range := _compute_timeline_exact_dirty_range(
+				old_cursor_index,
+				old_head_index,
+				new_cursor_index,
+				new_head_index
+			)
+			if bool(dirty_range.get("dirty", false)):
+				updated_item_count += _apply_timeline_state_to_exact_range(
+					int(dirty_range.get("start_index", 0)),
+					int(dirty_range.get("end_index", -1))
+				)
+			updated_item_count += _apply_timeline_state_to_control_list(_timeline_phase_header_items)
+			updated_item_count += _apply_timeline_state_to_control_list(_timeline_round_header_items)
 
 	if not scroll_to_cursor:
 		OnlinePerfTraceClass.end_span(span, {
 			"log_item_count": int(_log_items.size()),
 			"scroll_to_cursor": false,
+			"update_mode": str(update_mode),
+			"updated_item_count": int(updated_item_count),
 		})
 		return
 	if OS.has_feature("headless"):
@@ -1384,6 +1464,8 @@ func _apply_timeline_state_to_items(scroll_to_cursor: bool = false) -> void:
 			"scroll_to_cursor": true,
 			"skipped_scroll": true,
 			"reason": "headless",
+			"update_mode": str(update_mode),
+			"updated_item_count": int(updated_item_count),
 		})
 		return
 	if scroll_container == null:
@@ -1392,6 +1474,8 @@ func _apply_timeline_state_to_items(scroll_to_cursor: bool = false) -> void:
 			"scroll_to_cursor": true,
 			"skipped_scroll": true,
 			"reason": "scroll_container_missing",
+			"update_mode": str(update_mode),
+			"updated_item_count": int(updated_item_count),
 		})
 		return
 	if not scroll_container.has_method("ensure_control_visible"):
@@ -1400,23 +1484,106 @@ func _apply_timeline_state_to_items(scroll_to_cursor: bool = false) -> void:
 			"scroll_to_cursor": true,
 			"skipped_scroll": true,
 			"reason": "ensure_control_visible_missing",
+			"update_mode": str(update_mode),
+			"updated_item_count": int(updated_item_count),
 		})
 		return
 
 	# 定位到当前 cursor 对应的第一条可见日志（过滤后可能不存在）。
-	for item in _log_items:
+	var cursor_item := _find_first_timeline_item(_timeline_cursor_index)
+	if cursor_item != null and is_instance_valid(cursor_item):
+		scroll_container.call("ensure_control_visible", cursor_item)
+	OnlinePerfTraceClass.end_span(span, {
+		"log_item_count": int(_log_items.size()),
+		"scroll_to_cursor": bool(scroll_to_cursor),
+		"update_mode": str(update_mode),
+		"updated_item_count": int(updated_item_count),
+	})
+
+func _should_force_full_timeline_state_update() -> bool:
+	if _log_items.is_empty():
+		return false
+	return _timeline_exact_items_by_index.is_empty() \
+		and _timeline_phase_header_items.is_empty() \
+		and _timeline_round_header_items.is_empty()
+
+func _compute_timeline_exact_dirty_range(
+	old_cursor_index: int,
+	old_head_index: int,
+	new_cursor_index: int,
+	new_head_index: int
+) -> Dictionary:
+	var old_future_mode := int(old_cursor_index) < int(old_head_index)
+	var new_future_mode := int(new_cursor_index) < int(new_head_index)
+	if int(old_cursor_index) == int(new_cursor_index) and old_future_mode == new_future_mode:
+		return {"dirty": false}
+
+	var start_index := mini(int(old_cursor_index), int(new_cursor_index))
+	var end_index := maxi(int(old_cursor_index), int(new_cursor_index))
+	if old_future_mode != new_future_mode:
+		end_index = maxi(end_index, maxi(int(old_head_index), int(new_head_index)))
+
+	return {
+		"dirty": bool(end_index >= start_index),
+		"start_index": int(start_index),
+		"end_index": int(end_index),
+	}
+
+func _apply_timeline_state_to_all_items() -> int:
+	var updated_item_count := 0
+	for item_val in _log_items:
+		if item_val is Control:
+			updated_item_count += _apply_timeline_state_to_item(item_val)
+	return updated_item_count
+
+func _apply_timeline_state_to_control_list(items: Array[Control]) -> int:
+	var updated_item_count := 0
+	for item_val in items:
+		updated_item_count += _apply_timeline_state_to_item(item_val)
+	return updated_item_count
+
+func _apply_timeline_state_to_exact_range(start_index: int, end_index: int) -> int:
+	if int(end_index) < int(start_index):
+		return 0
+	var updated_item_count := 0
+	for idx in range(int(start_index), int(end_index) + 1):
+		updated_item_count += _apply_timeline_state_to_exact_index(int(idx))
+	return updated_item_count
+
+func _apply_timeline_state_to_exact_index(timeline_index: int) -> int:
+	var bucket_val = _timeline_exact_items_by_index.get(int(timeline_index), [])
+	if not (bucket_val is Array):
+		return 0
+	var updated_item_count := 0
+	for item_val in bucket_val:
+		if item_val is Control:
+			updated_item_count += _apply_timeline_state_to_item(item_val)
+	return updated_item_count
+
+func _apply_timeline_state_to_item(item: Control) -> int:
+	if item == null or not is_instance_valid(item):
+		return 0
+	if not item.has_method("apply_timeline_state"):
+		return 0
+	item.apply_timeline_state(_timeline_cursor_index, _timeline_head_index)
+	return 1
+
+func _find_first_timeline_item(timeline_index: int) -> Control:
+	var cached_item_val = _timeline_first_item_by_index.get(int(timeline_index), null)
+	if cached_item_val is Control and is_instance_valid(cached_item_val):
+		return cached_item_val
+	for item_val in _log_items:
+		if not (item_val is Control):
+			continue
+		var item: Control = item_val
 		if not is_instance_valid(item):
 			continue
 		if not item.has_method("get_timeline_index"):
 			continue
-		if int(item.call("get_timeline_index")) != _timeline_cursor_index:
+		if int(item.call("get_timeline_index")) != int(timeline_index):
 			continue
-		scroll_container.call("ensure_control_visible", item)
-		break
-	OnlinePerfTraceClass.end_span(span, {
-		"log_item_count": int(_log_items.size()),
-		"scroll_to_cursor": bool(scroll_to_cursor),
-	})
+		return item
+	return null
 
 func _connect_item_hover_signals(item: Control) -> void:
 	if item == null or not is_instance_valid(item):
@@ -1458,7 +1625,6 @@ func _on_show_phase_events_toggled(toggled: bool) -> void:
 	_invalidate_background_timeline_jobs()
 	_show_phase_events = bool(toggled)
 	_rebuild_display()
-	_apply_timeline_state_to_items()
 	_update_entry_count()
 
 func _on_fold_details_toggled(toggled: bool) -> void:
@@ -1490,7 +1656,6 @@ func set_fold_details_enabled(enabled: bool, update_checkbox: bool = true) -> vo
 		fold_details_check.button_pressed = _fold_details_enabled
 
 	_rebuild_display()
-	_apply_timeline_state_to_items()
 	_update_entry_count()
 
 func _on_auto_scroll_toggled(toggled: bool) -> void:

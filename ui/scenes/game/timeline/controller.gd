@@ -171,6 +171,18 @@ func _is_online_resume_full_history_ready() -> bool:
 func _is_online_resume_full_history_source_active() -> bool:
 	return _history_timeline_source == "online_resume_full_history" and _is_online_resume_full_history_ready()
 
+func _is_history_cursor_detached_from_live_head() -> bool:
+	if not _history_step_timeline_active or not _history_step_timeline.has("steps"):
+		return false
+	return _history_cursor_step_index < _history_head_step_index
+
+func _should_use_online_resume_full_history_for_history_view() -> bool:
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return false
+	if _replay_mode_active:
+		return false
+	return _is_online_resume_full_history_ready()
+
 func _restore_runtime_display_engine() -> void:
 	var runtime_engine := _get_runtime_engine()
 	if runtime_engine == null:
@@ -241,6 +253,8 @@ func request_live_log_timeline_refresh() -> void:
 	if _replay_mode_active:
 		return
 	_live_history_dirty = true
+	if _is_history_cursor_detached_from_live_head():
+		return
 	if not is_instance_valid(_game_log_panel) or not _game_log_panel.visible:
 		return
 	if _live_history_refresh_scheduled:
@@ -250,37 +264,31 @@ func request_live_log_timeline_refresh() -> void:
 
 func _flush_live_log_timeline_refresh() -> void:
 	_live_history_refresh_scheduled = false
+	if _is_history_cursor_detached_from_live_head():
+		return
 	apply_live_log_timeline_from_engine()
 
 func on_online_resume_full_history_ready() -> void:
 	if _replay_mode_active:
 		return
-	_live_history_dirty = true
-	_live_history_last_signature.clear()
 	_sync_online_resume_replay_entry_state()
-	if is_instance_valid(_game_log_panel) and _game_log_panel.visible:
-		apply_live_log_timeline_from_engine(true)
 
 func _build_live_history_signature(runtime_engine: GameEngine) -> Dictionary:
-	var active_source := "online_resume_full_history" if _is_online_resume_full_history_ready() else "runtime"
-	var timeline_engine: GameEngine = runtime_engine
-	if active_source == "online_resume_full_history":
-		var history_engine := OnlineResumeFullHistoryAdapterClass.get_history_engine()
-		if history_engine != null and is_instance_valid(history_engine):
-			timeline_engine = history_engine
 	return {
 		"engine_id": int(runtime_engine.get_instance_id()),
 		"history_size": int(runtime_engine.command_history.size()),
 		"cursor_command_index": int(runtime_engine.current_command_index),
-		"history_source": active_source,
-		"timeline_engine_id": int(timeline_engine.get_instance_id()) if timeline_engine != null else -1,
-		"timeline_history_size": int(timeline_engine.command_history.size()) if timeline_engine != null else -1,
+		"history_source": "runtime",
+		"timeline_engine_id": int(runtime_engine.get_instance_id()),
+		"timeline_history_size": int(runtime_engine.command_history.size()),
 	}
 
 func _can_reuse_live_history(signature: Dictionary) -> bool:
 	if _live_history_dirty:
 		return false
 	if not _history_step_timeline_active or not _history_step_timeline.has("steps"):
+		return false
+	if _history_timeline_source != "runtime":
 		return false
 	return _live_history_last_signature == signature
 
@@ -672,16 +680,33 @@ func _on_replay_bar_seek_requested(target_index: int) -> void:
 		_update_ui.call()
 
 func _enter_history_step_timeline_for_command(target_command_index: int) -> int:
+	var use_online_full_history := _should_use_online_resume_full_history_for_history_view()
 	if _history_step_timeline_active and _history_step_timeline.has("steps"):
-		return _history_command_index_to_step_index(int(target_command_index))
-	var engine: GameEngine = _get_game_engine.call() if _get_game_engine.is_valid() else null
-	if engine == null:
+		if use_online_full_history and _history_timeline_source == "online_resume_full_history":
+			return _history_command_index_to_step_index(int(target_command_index))
+		if not use_online_full_history and _history_timeline_source == "runtime":
+			return _history_command_index_to_step_index(int(target_command_index))
+	var runtime_engine := _get_runtime_engine()
+	if runtime_engine == null:
 		return -999
-	var enter_r := GameTimelineHistoryStepSupportClass.enter_for_command(
-		engine,
-		_game_log_panel,
-		int(target_command_index)
-	)
+	var enter_r: Result
+	if use_online_full_history:
+		var previous_full_history_timeline: Dictionary = {}
+		if _history_timeline_source == "online_resume_full_history":
+			previous_full_history_timeline = _history_step_timeline
+		enter_r = GameTimelineOnlineResumeHistoryViewSupportClass.build_online_resume_full_history_view_for_command(
+			runtime_engine,
+			_game_log_panel,
+			int(target_command_index),
+			previous_full_history_timeline,
+			true
+		)
+	else:
+		enter_r = GameTimelineHistoryStepSupportClass.enter_for_command(
+			runtime_engine,
+			_game_log_panel,
+			int(target_command_index)
+		)
 	if not enter_r.ok:
 		GameLog.warn("Game", "构建 step 时间线失败（复盘模式将回退到命令时间线）: %s" % enter_r.error)
 		return -999
@@ -692,6 +717,7 @@ func _enter_history_step_timeline_for_command(target_command_index: int) -> int:
 	var info: Dictionary = Dictionary(enter_r.value)
 	_history_step_timeline = Dictionary(info.get("timeline", {})).duplicate(true)
 	_history_step_timeline_active = true
+	_history_timeline_source = str(info.get("history_timeline_source", "runtime"))
 	_history_head_step_index = int(info.get("head_step_index", -1))
 	_history_cursor_step_index = int(info.get("cursor_step_index", _history_head_step_index))
 	_set_replay_bar_state(_history_head_step_index, _history_cursor_step_index, false)
@@ -701,6 +727,11 @@ func _enter_history_step_timeline_for_command(target_command_index: int) -> int:
 	return int(info.get("target_step_index", -999))
 
 func _history_command_index_to_step_index(command_index: int) -> int:
+	if _is_online_resume_full_history_source_active():
+		return OnlineResumeFullHistoryAdapterClass.map_runtime_command_index_to_step_index(
+			int(command_index),
+			_history_step_timeline
+		)
 	return GameTimelineHistoryStepSupportClass.map_command_index_to_step_index(
 		_history_step_timeline,
 		int(command_index)
@@ -708,6 +739,13 @@ func _history_command_index_to_step_index(command_index: int) -> int:
 
 func _seek_to_history_step(target_step_index: int) -> void:
 	var use_online_full_history := _is_online_resume_full_history_source_active()
+	if use_online_full_history and target_step_index >= _history_head_step_index:
+		_restore_runtime_display_engine()
+		_force_full_panel_sync_next_update = true
+		apply_live_log_timeline_from_engine(true)
+		if _update_ui.is_valid():
+			_update_ui.call()
+		return
 	var runtime_engine: GameEngine = _get_game_engine.call() if _get_game_engine.is_valid() else null
 	var engine: GameEngine = GameTimelineHistoryStepSupportClass.resolve_seek_engine(
 		runtime_engine,
@@ -745,9 +783,9 @@ func _seek_to_history_step(target_step_index: int) -> void:
 func _exit_history_step_timeline() -> void:
 	# M4.3：正常对局也使用 step 时间线视图；“退出复盘”仅意味着跳回最新 step。
 	if _is_online_resume_full_history_source_active():
-		_history_cursor_step_index = _history_head_step_index
 		_restore_runtime_display_engine()
 		_force_full_panel_sync_next_update = true
+		apply_live_log_timeline_from_engine(true)
 		if _update_ui.is_valid():
 			_update_ui.call()
 		return

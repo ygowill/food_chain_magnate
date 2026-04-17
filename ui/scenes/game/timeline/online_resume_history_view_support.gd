@@ -4,6 +4,7 @@ extends RefCounted
 
 const StepTimelineBuildHelpersClass = preload("res://ui/scenes/game/timeline/step_timeline_build_helpers.gd")
 const OnlineResumeFullHistoryAdapterClass = preload("res://ui/scenes/game/timeline/online_resume_full_history_adapter.gd")
+const META_REPLAY_TOGGLE_AVAILABILITY_SIGNATURE := "_timeline_replay_toggle_availability_signature"
 
 static func is_full_history_ready() -> bool:
 	return OnlineResumeFullHistoryAdapterClass.is_ready()
@@ -25,6 +26,16 @@ static func sync_replay_entry_state(game_log_panel: Object, replay_mode_active: 
 		available = false
 		inactive_text = "完整历史加载中"
 		disabled_reason = "联机完整历史加载中，请稍后再试"
+	var next_signature := {
+		"available": bool(available),
+		"inactive_text": str(inactive_text),
+		"disabled_reason": str(disabled_reason),
+	}
+	if game_log_panel.has_meta(META_REPLAY_TOGGLE_AVAILABILITY_SIGNATURE):
+		var previous_signature = game_log_panel.get_meta(META_REPLAY_TOGGLE_AVAILABILITY_SIGNATURE)
+		if previous_signature is Dictionary and previous_signature == next_signature:
+			return
+	game_log_panel.set_meta(META_REPLAY_TOGGLE_AVAILABILITY_SIGNATURE, Dictionary(next_signature))
 	game_log_panel.call(
 		"set_replay_toggle_availability",
 		available,
@@ -35,7 +46,7 @@ static func sync_replay_entry_state(game_log_panel: Object, replay_mode_active: 
 static func build_live_history_view(
 	runtime_engine: GameEngine,
 	game_log_panel: Object,
-	previous_history_timeline_source: String,
+	_previous_history_timeline_source: String,
 	previous_history_timeline: Dictionary,
 	allow_incremental_append: bool,
 	command_index_to_last_step_index: Callable
@@ -45,31 +56,13 @@ static func build_live_history_view(
 	if not is_instance_valid(game_log_panel):
 		return Result.failure("game_log_panel 无效")
 
-	var restore_runtime_display_engine := false
-	var next_history_timeline_source := str(previous_history_timeline_source).strip_edges()
-	if OnlineResumeFullHistoryAdapterClass.is_applicable() \
-		and not is_full_history_ready() \
-		and next_history_timeline_source == "online_resume_full_history":
-		restore_runtime_display_engine = true
-		next_history_timeline_source = "runtime"
-
-	var build_r: Result
-	var cursor_step_index := -1
-	if is_full_history_ready():
-		build_r = OnlineResumeFullHistoryAdapterClass.build_history_timeline(
-			game_log_panel,
-			false,
-			previous_history_timeline,
-			allow_incremental_append
-		)
-	else:
-		build_r = StepTimelineBuildHelpersClass.build_and_load(
-			runtime_engine,
-			game_log_panel,
-			false,
-			previous_history_timeline,
-			allow_incremental_append
-		)
+	var build_r := StepTimelineBuildHelpersClass.build_and_load(
+		runtime_engine,
+		game_log_panel,
+		false,
+		previous_history_timeline,
+		allow_incremental_append
+	)
 	if not build_r.ok:
 		return build_r
 	if not (build_r.value is Dictionary):
@@ -81,25 +74,14 @@ static func build_live_history_view(
 		return Result.failure("构建 step 时间线失败（返回结构错误）")
 
 	var timeline: Dictionary = Dictionary(timeline_val)
-	var full_history_source_active := is_full_history_ready()
-	next_history_timeline_source = "online_resume_full_history" if full_history_source_active else "runtime"
-
 	var head_step_index := int(info.get("head_step_index", -1))
 	var head_cmd := runtime_engine.command_history.size() - 1
 	var cursor_cmd := int(runtime_engine.current_command_index)
-	if full_history_source_active:
-		cursor_step_index = OnlineResumeFullHistoryAdapterClass.map_runtime_command_index_to_step_index(
-			cursor_cmd,
-			timeline
-		)
-
 	var history_cursor_step_index := head_step_index
 	if cursor_cmd < 0:
 		history_cursor_step_index = -1
-	elif cursor_cmd >= head_cmd and not full_history_source_active:
+	elif cursor_cmd >= head_cmd:
 		history_cursor_step_index = head_step_index
-	elif full_history_source_active:
-		history_cursor_step_index = head_step_index if cursor_step_index < -1 else cursor_step_index
 	else:
 		history_cursor_step_index = -999
 		if command_index_to_last_step_index.is_valid():
@@ -111,6 +93,56 @@ static func build_live_history_view(
 		"timeline": timeline,
 		"head_step_index": head_step_index,
 		"cursor_step_index": history_cursor_step_index,
-		"history_timeline_source": next_history_timeline_source,
-		"restore_runtime_display_engine": restore_runtime_display_engine,
+		"history_timeline_source": "runtime",
+		"restore_runtime_display_engine": false,
+	})
+
+static func build_online_resume_full_history_view_for_command(
+	runtime_engine: GameEngine,
+	game_log_panel: Object,
+	target_runtime_command_index: int,
+	previous_history_timeline: Dictionary = {},
+	allow_incremental_append: bool = true
+) -> Result:
+	if runtime_engine == null:
+		return Result.failure("runtime_engine 为空")
+	if not is_instance_valid(game_log_panel):
+		return Result.failure("game_log_panel 无效")
+	if not OnlineResumeFullHistoryAdapterClass.is_applicable():
+		return Result.failure("当前不是恢复房完整历史场景")
+	if not is_full_history_ready():
+		return Result.failure("联机完整历史尚未就绪")
+
+	var build_r := OnlineResumeFullHistoryAdapterClass.build_history_timeline(
+		game_log_panel,
+		false,
+		previous_history_timeline,
+		allow_incremental_append
+	)
+	if not build_r.ok:
+		return build_r
+	if not (build_r.value is Dictionary):
+		return Result.failure("构建完整历史 step 时间线失败（返回类型错误）")
+
+	var info: Dictionary = Dictionary(build_r.value)
+	var timeline_val = info.get("timeline", null)
+	if not (timeline_val is Dictionary):
+		return Result.failure("构建完整历史 step 时间线失败（返回结构错误）")
+
+	var timeline: Dictionary = Dictionary(timeline_val)
+	var head_step_index := int(info.get("head_step_index", -1))
+	var target_step_index := OnlineResumeFullHistoryAdapterClass.map_runtime_command_index_to_step_index(
+		int(target_runtime_command_index),
+		timeline
+	)
+	if target_step_index < -1:
+		target_step_index = head_step_index
+
+	return Result.success({
+		"timeline": timeline,
+		"head_step_index": head_step_index,
+		"cursor_step_index": head_step_index,
+		"target_step_index": target_step_index,
+		"history_timeline_source": "online_resume_full_history",
+		"restore_runtime_display_engine": false,
 	})

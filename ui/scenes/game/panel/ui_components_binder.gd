@@ -8,12 +8,20 @@ extends RefCounted
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 var _controller_ref: WeakRef
+var _last_action_panel_map_skin = null
+var _last_action_panel_registry = null
+var _has_action_panel_map_skin: bool = false
+var _has_action_panel_registry: bool = false
 
 func _init(controller) -> void:
 	_controller_ref = weakref(controller)
 
 func dispose() -> void:
 	_controller_ref = null
+	_last_action_panel_map_skin = null
+	_last_action_panel_registry = null
+	_has_action_panel_map_skin = false
+	_has_action_panel_registry = false
 
 func _get_controller():
 	if _controller_ref == null:
@@ -178,11 +186,16 @@ func sync(state: GameState) -> void:
 				scene.action_panel.set_game_state(state)
 			if scene.action_panel.has_method("set_current_player"):
 				scene.action_panel.set_current_player(action_player_id)
-		if scene.action_panel.has_method("set_map_skin"):
-			scene.action_panel.set_map_skin(controller._get_current_map_skin())
-		if scene.action_panel.has_method("set_action_registry") and scene.game_engine != null:
-			var registry = scene.game_engine.get_action_registry() if scene.game_engine.has_method("get_action_registry") else null
-			if registry != null:
+		var current_map_skin = controller._get_current_map_skin()
+		if scene.action_panel.has_method("set_map_skin") and ((not _has_action_panel_map_skin) or current_map_skin != _last_action_panel_map_skin):
+			_has_action_panel_map_skin = true
+			_last_action_panel_map_skin = current_map_skin
+			scene.action_panel.set_map_skin(current_map_skin)
+		if scene.action_panel.has_method("set_action_registry"):
+			var registry = scene.game_engine.get_action_registry() if scene.game_engine != null and scene.game_engine.has_method("get_action_registry") else null
+			if (not _has_action_panel_registry) or registry != _last_action_panel_registry:
+				_has_action_panel_registry = true
+				_last_action_panel_registry = registry
 				scene.action_panel.set_action_registry(registry)
 
 	# 员工手牌区

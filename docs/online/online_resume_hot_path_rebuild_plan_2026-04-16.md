@@ -1,6 +1,6 @@
 # 联机恢复房热路径重构方案（2026-04-16）
 
-状态：**部分实施，持续收敛中**。
+状态：**P0 第一阶段已落地，持续收敛中**。
 
 本文落盘本轮结论，目标不是立即修补某个卡点，而是明确：
 
@@ -66,6 +66,69 @@
   - 测试：
     - `ui/scenes/tests/ui_components_binder_batch_context_test.gd`
 
+- [x] **阶段 3（第三步）：ActionPanel 重复 refresh / 重复 rebuild 收敛**
+  - 进一步排查 `ui.online_sync.panel_controller` 后，确认通用热点之一不是网络或恢复房专属逻辑，而是 `ActionPanel` 在单次 UI sync 内被重复刷新：
+    - `UiComponentsBinder.sync()` 之前会在每次 sync 中重复下发相同的 `map_skin / action_registry`
+    - `ActionPanel.refresh()` 内部原本还会重复触发动作按钮 rebuild
+  - 当前修复：
+    - `UiComponentsBinder` 对 `ActionPanel.map_skin / action_registry` 改为 **首次必同步，后续仅变更时同步**
+    - `ActionPanel.refresh()` 改为单次按钮 rebuild
+    - 当 rendered action ids 不变时，只同步按钮文案 / disabled / tooltip，不再 `free_children + add_child`
+  - 代码：
+    - `ui/scenes/game/panel/ui_components_binder.gd`
+    - `ui/components/action_panel/action_panel.gd`
+    - `ui/components/action_panel/action_panel_actions_controller.gd`
+  - 测试：
+    - `ui/scenes/tests/ui_components_binder_batch_context_test.gd`
+    - `ui/scenes/tests/action_panel_refresh_single_rebuild_test.gd`
+
+- [x] **阶段 3（第四步）：ReplayBar / timeline_ui 重复刷新收敛**
+  - 在继续排查 `ui.online_sync.timeline_ui` 时，先收掉最明确的一条重复 UI 刷新链：
+    - `GameTimelineReplayBarSupport.set_state(...)`
+    - `GameTimelineReplayBarSupport.hide(...)`
+  - 当前修复：
+    - 给 ReplayBar 状态增加 signature cache
+    - 相同的 `head/cursor/read_only/status_extra` 不再重复下发
+    - 重复 hide 不再重复调用 `set_active(false)`
+    - 当仅 cursor/head 变化时，只刷新 timeline，不再重复激活 ReplayBar
+  - 代码：
+    - `ui/scenes/game/timeline/replay_bar_support.gd`
+  - 测试：
+    - `ui/scenes/tests/replay_bar_support_noop_test.gd`
+
+- [x] **阶段 3（第五步）：恢复房 replay toggle availability 重复同步收敛**
+  - `GameTimelineController.sync_timeline_ui()` 每次都会经过：
+    - `_sync_online_resume_replay_entry_state()`
+    - `GameTimelineOnlineResumeHistoryViewSupport.sync_replay_entry_state(...)`
+  - 在恢复房未切换状态时，这条链路之前会反复把同一份 replay toggle availability 下发给 `GameLogPanel`。
+  - 当前修复：
+    - 给 replay toggle availability 增加 signature cache
+    - 相同的 `available / inactive_text / disabled_reason` 不再重复调用 `set_replay_toggle_availability(...)`
+  - 代码：
+    - `ui/scenes/game/timeline/online_resume_history_view_support.gd`
+  - 测试：
+    - `ui/scenes/tests/online_resume_replay_entry_state_noop_test.gd`
+
+- [x] **阶段 3（第六步）：GameLogPanel timeline state 局部更新**
+  - 在继续排查 `ui.online_sync.timeline_ui` 后，确认 `ReplayBar` 之外的另一条通用热点是：
+    - `GameLogPanel._apply_timeline_state_to_items()` 之前每次 `head/cursor` 变化都会全量扫描 `_log_items`
+    - 即使只是 live 命令把 cursor/head 从 `n -> n+1`，也会重刷整列日志
+    - 历史视图停在旧 cursor 时，单独 `head` 前进也会被误判为需要整列刷新
+  - 当前修复：
+    - 给 `GameLogPanel` 增加 timeline item index：
+      - `timeline_index -> exact items`
+      - `timeline_index -> first visible item`
+      - `phase_header / round_header` 小集合缓存
+    - `set_timeline_head / set_timeline_cursor / set_timeline_head_cursor` 改为走 delta 更新：
+      - live 正常推进只刷新受影响的少量 exact items
+      - `head` 单独前进且 cursor 未变时，若 future/past 关系不变，则直接 skip
+    - `scroll_to_cursor` 改为优先复用首个 index 命中项，而不是再次线性扫描全部 `_log_items`
+    - `rebuild_display()` 内部不再额外重复执行一次全量 `apply_timeline_state`
+  - 代码：
+    - `ui/components/game_log/game_log_panel.gd`
+  - 测试：
+    - `ui/scenes/tests/game_log_timeline_local_state_delta_test.gd`
+
 - [x] **阶段 4（第一步）：恢复房完整历史 timeline / entries cache 真正联动**
   - `full_replay_step_timeline_entries` 已进入 `OnlineResumeSessionState`
   - `online_resume_full_history_adapter.gd` 已支持：
@@ -119,10 +182,23 @@
     - 不再通过“显示层去重”掩盖问题
     - append 后日志结构恢复为单份
 
+- [x] **阶段 5（P0 第一阶段）：live/runtime 与 full-history 默认读源解耦**
+  - `apply_live_log_timeline_from_engine()` 已固定为 **runtime-only**
+  - `resume_full_history_ready` 不再自动触发 live log 切源
+  - `History View / 完整历史 seek` 才按需进入 `online_resume_full_history`
+  - 当用户从完整历史返回最新时，日志/timeline 会重新回到 runtime live 视图
+  - 当用户停留在历史 cursor<head 时，live refresh 不再强行接管当前历史视图
+  - 代码：
+    - `ui/scenes/game/timeline/controller.gd`
+    - `ui/scenes/game/timeline/online_resume_history_view_support.gd`
+  - 测试：
+    - `ui/scenes/tests/online_resume_live_runtime_source_p0_test.gd`
+
 ### 仍待继续收敛
 
 - [ ] **阶段 3（剩余部分）**
-  - `panel_controller.sync`
+  - `panel_controller.sync`（剩余：ActionPanel 之外的 dirty-driven 收敛）
+  - `timeline_ui`（剩余：background append/rebuild 后的 phase patch / scroll / descriptor 复用链路继续收敛）
   - `map_view.set_game_state`
   - 其它更细粒度的 dirty-driven UI 收敛
 
@@ -132,12 +208,16 @@
 - 已经取消恢复房进局对完整历史 cache 的 gate；
 - 已经对日志时间线状态同步做了第一步降耗；
 - 已经把 panel binder 中多处重复 refresh 收敛为批量上下文更新；
+- 已经把 `ActionPanel` 的重复 refresh / 重复按钮 rebuild 收敛到“首次同步 + 变更同步 + 相同结构仅按钮状态 sync”；
+- 已经把 `ReplayBar` 的重复 set_state / hide 收敛到 signature 驱动更新；
+- 已经把恢复房 replay toggle availability 的重复同步收敛到 signature 驱动更新；
+- 已经把 `GameLogPanel` 的 `head/cursor` 热路径从“全量扫描全部日志项”收敛到“exact item 局部更新 + 小规模 header 更新”；
 - 已经把恢复房 full-history timeline / entries cache 与增量 append 真实接通；
 - 已经把日志 append async / sync 路径收敛到“只处理新增 entries”；
 - 已经把日志面板里一部分通用 O(n) UI 代价进一步下放到 build / append 时缓存；
 - 但更细粒度的 `map_view` / phase panel / overlay dirty-driven 收敛仍可继续做，以进一步压低 `ui.online_sync.total`。
 
-### 当前判断（2026-04-17）
+### 当前判断（2026-04-17，早期结论）
 
 到这一轮为止，**恢复房专属热点基本已清掉大半**。
 
@@ -151,17 +231,84 @@
 
 > 问题焦点已经从“恢复房专属双轨副作用”逐步转向“通用日志 / 时间线 UI 成本”。
 
+### 补充验证与修正（2026-04-17，晚间）
+
+在进一步拿到用户实测日志（房间 `YVPSEQ`）后，上述“恢复房专属热点基本已清掉大半”的判断需要修正。
+
+关键样本：
+
+- `client_request_to_rx_ms`：约 `90~122ms`
+- `server_exec_ms`：约 `10~30ms`
+- `client_apply_ms`：约 `8~20ms`
+- 但随后仍出现：
+  - `resume_cache.timeline_cache_refresh.done`：约 `710ms`
+  - `ui.game_log.append_step_timeline`：约 `510ms`
+  - `ui.game_log.load_step_timeline`：约 `946ms`
+  - `ui.timeline.apply_live_log`：约 `5159ms`
+
+这说明：
+
+1. **网络和服务器并不是主矛盾**
+   - 动作到达客户端本身不慢；
+   - 权威执行也不慢；
+   - 真正拖慢体验的是客户端收到 `command_applied` 之后的 UI / timeline / log 链路。
+
+2. **之前一系列提交没有真正切断错误依赖链**
+   - 它们显著降低了“恢复房完整历史路径”上的部分成本；
+   - 但 live 对局下的日志 / timeline 刷新，仍然会默认触碰 `full_replay_engine`、`full_replay_step_timeline`、`full_replay_step_timeline_entries` 这一整套完整历史资产；
+   - 因此问题不是“append 还不够快”，而是 **live 热路径仍在背 full-history 的账**。
+
+3. **当前仍存在两个结构性问题（在本次实现前）**
+   - **问题 A：live 日志默认优先走完整历史侧**
+     - `ui/scenes/game/timeline/controller.gd`
+     - `ui/scenes/game/timeline/online_resume_history_view_support.gd`
+     - `ui/scenes/game/timeline/online_resume_full_history_adapter.gd`
+   - **问题 B：即使 cache append 已经算出来，UI 侧仍可能重新走“整份 timeline + 整份 entries”装配**
+     - 导致 `load_step_timeline(...)` 重新比较大量 step / entries；
+     - 导致后台 descriptor 计算和主线程布局成本继续放大。
+
+因此到这一步，新的判断应是：
+
+> 目前的根因仍然是 **恢复房 live UI 对完整历史资产耦合过深**；  
+> 之前的修复并非无效，但它们主要是在给错误的默认依赖关系降耗，而不是把这层依赖本身拿掉。
+
+### 本次实现修正（2026-04-17）
+
+本轮已按 P0 落地下列边界：
+
+- live `apply_live_log` 已不再读取 `online_resume_full_history`
+- `resume_full_history_ready` 已不再自动重建 live 日志
+- 完整历史只在 `History View / seek / Replay` 场景按需接管
+- 从完整历史返回最新时，会主动恢复 runtime live timeline
+
+因此：
+
+- **问题 A 已完成第一阶段根治**
+- 当前剩余主矛盾收敛为 **问题 B：显式历史查看时的 timeline / UI 装配成本** 与 **通用 UI 同步成本**
+
 ### 本次验证
 
 - 编译检查：
   - `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`
+- 定向验证：
+  - `OnlineResumeLiveRuntimeSourceP0Test`
+  - `UiComponentsBinderBatchContextTest`
+  - `ActionPanelRefreshSingleRebuildTest`
+  - `ReplayBarSupportNoopTest`
+  - `GameLogTimelineLocalStateDeltaTest`
 - 必测场景：
   - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`
   - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`
 - 结果：
   - `CheckCompile PASS`
+  - `OnlineResumeLiveRuntimeSourceP0Test PASS`
+  - `UiComponentsBinderBatchContextTest PASS`
+  - `ActionPanelRefreshSingleRebuildTest PASS`
+  - `ReplayBarSupportNoopTest PASS`
+  - `OnlineResumeReplayEntryStateNoopTest PASS`
+  - `GameLogTimelineLocalStateDeltaTest PASS`
   - `GameSmokeTest PASS`
-  - `AllTests PASS (361/361)`
+  - `AllTests PASS (366/366)`
 
 ---
 
@@ -501,8 +648,8 @@ UI 需要拆成两个层次：
 
 优先级：
 
-1. `panel_controller`
-2. `timeline_ui`
+1. `panel_controller`（剩余：ActionPanel 之外）
+2. `timeline_ui`（剩余：ReplayBar 之外）
 3. `map_view`
 
 因为从现有日志看：
@@ -641,6 +788,7 @@ UI 需要拆成两个层次：
 
 - “live 操作只背 live 必要成本”
 - “完整历史只在玩家真正需要时付费”
+- “实时日志 / timeline 默认绑定 runtime 轨，而不是默认绑定 full-history 轨”
 
 ---
 
@@ -649,16 +797,71 @@ UI 需要拆成两个层次：
 修复计划完全完成后，至少要满足：
 
 1. 恢复房进入游戏不再被完整历史 cache gate；
-2. 样本级动作（如 `skip_sub_phase`）不再出现一次操作三次推进；
+2. live `command_applied` 后，默认实时 UI 不再触发完整历史 timeline / log 追平链路；
 3. `resume_cache_sync` 不再出现在 live command 的主要耗时里；
-4. `ui.online_sync.total` 在常见操作下明显低于当前 `64.4ms`；
-5. 不再出现单次 append 1 条命令却触发 `500ms` 级 deferred timeline cache refresh；
+4. `ui.timeline.apply_live_log` 不再出现 `seconds` 级耗时；
+5. `ui.online_sync.total` 在常见操作下稳定压到更低预算；
 6. 若成本被转移到回放/历史查看，必须以冷路径预算单独验证。
 
 ---
 
-## 12. 一句话结论
+## 12. 方案收敛决定（2026-04-17）
 
-> 之前这些修复并非完全错误，但它们主要是在给错误的热路径设计打补丁。  
-> 下一步不该继续“修热路径上的局部热点”，而应把恢复房完整历史、时间线缓存、UI 同步重新分层：  
-> **live 只做 live，history 改成按需或后台。**
+基于最新日志，本轮决定**不再继续沿着 P1 / P2 方向做局部热修**，而是直接采用 **P0：彻底解耦 live 与 full-history**。
+
+这里的“不采用 P1 / P2”指的是：
+
+- 不再把“让当前 full-history live 链路更便宜”作为主目标；
+- 不再把“把 delta 继续往下传、减少整包 rebuild”当成最终方案；
+- 这些工作即使继续做，也只应作为 P0 落地过程中的配套优化，而不是主线。
+
+### 12.1 P0 的核心定义
+
+在恢复房联机模式下：
+
+- **实时联机热路径只依赖 `runtime_engine`**
+  - 主视图
+  - 当前可操作 UI
+  - 实时日志 append
+  - 实时 timeline cursor / head
+- **完整历史资产只在按需场景启用**
+  - Replay
+  - History View
+  - 完整历史 seek / 复盘
+  - 存档导出 / 校验 / 冷路径分析
+
+### 12.2 P0 要求的架构边界
+
+1. `Globals.current_game_engine` 继续只代表 live runtime
+2. `command_applied` 默认只驱动 runtime 侧的 UI 刷新
+3. live log 默认从 runtime delta 直接构建，不默认读取 `full_replay_step_timeline`
+4. `full_replay_engine` / `full_replay_step_timeline` / `full_replay_step_timeline_entries`
+   - 不再是 live 日志默认数据源
+   - 只在用户进入历史/回放时按需接管
+5. 完整历史后台追平失败，不能阻塞 live 操作
+
+### 12.3 为什么这才是根治，而不是继续补丁
+
+因为最新日志已经证明：
+
+- 只要 live 对局默认还会切到 `online_resume_full_history`
+- 只要 live log 仍可能走 `load_step_timeline(full_timeline, full_entries)`
+
+那么哪怕 append、cache、background worker 都做了，仍然会周期性冒出：
+
+- 大量 step / entry 比较
+- descriptor 重建
+- 主线程 Control append / layout
+- 秒级 `apply_live_log`
+
+所以真正的根治不是“让这条链路更快”，而是：
+
+> **让这条链路默认不再属于 live 热路径。**
+
+---
+
+## 13. 一句话结论
+
+> 之前这些修复并非完全错误，但它们主要是在给错误的默认依赖关系降耗。  
+> 这次日志已经证明：如果 live 日志 / timeline 默认仍然读取 full-history 资产，卡顿就还会回来。  
+> 因此下一步应直接落到 P0：**live 只做 runtime，full-history 只在按需场景启用。**

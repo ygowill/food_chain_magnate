@@ -4,6 +4,7 @@ extends RefCounted
 
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const GameLogPanelClass = preload("res://ui/components/game_log/game_log_panel.gd")
+const META_REPLAY_BAR_STATE_SIGNATURE := "_timeline_replay_bar_state_signature"
 
 static func connect_seek_signal(game_log_panel: Object, owner: Object, method_name: String) -> void:
 	var replay_bar = _get_replay_bar(game_log_panel)
@@ -13,6 +14,7 @@ static func connect_seek_signal(game_log_panel: Object, owner: Object, method_na
 		UiSignalHelpersClass.safe_connect(replay_bar, "seek_requested", Callable(owner, method_name))
 	if replay_bar.has_method("set_active"):
 		replay_bar.call("set_active", false)
+	_set_replay_bar_state_signature(replay_bar, {"active": false})
 
 static func disconnect_seek_signal(game_log_panel: Object, owner: Object, method_name: String) -> void:
 	var replay_bar = _get_replay_bar(game_log_panel)
@@ -35,22 +37,40 @@ static func set_state(
 	var replay_bar = _get_replay_bar(game_log_panel)
 	if replay_bar == null:
 		return
+	var extra := ""
+	if bool(replay_mode_active) and replay_step_timeline.has("steps"):
+		extra = build_status_extra(cursor_index, replay_step_timeline)
+	elif bool(history_step_timeline_active) and history_step_timeline.has("steps"):
+		extra = build_status_extra(cursor_index, history_step_timeline)
+
+	var next_signature := {
+		"active": true,
+		"head_index": int(head_index),
+		"cursor_index": int(cursor_index),
+		"read_only": bool(read_only),
+		"status_extra": extra,
+	}
+	var previous_signature = _get_replay_bar_state_signature(replay_bar)
+	if previous_signature == next_signature:
+		return
+	var was_active := bool(previous_signature.get("active", false)) if previous_signature is Dictionary else false
 	if replay_bar.has_method("set_active"):
-		replay_bar.call("set_active", true)
+		if not was_active:
+			replay_bar.call("set_active", true)
 	if replay_bar.has_method("set_timeline"):
-		var extra := ""
-		if bool(replay_mode_active) and replay_step_timeline.has("steps"):
-			extra = build_status_extra(cursor_index, replay_step_timeline)
-		elif bool(history_step_timeline_active) and history_step_timeline.has("steps"):
-			extra = build_status_extra(cursor_index, history_step_timeline)
 		replay_bar.call("set_timeline", int(head_index), int(cursor_index), bool(read_only), extra)
+	_set_replay_bar_state_signature(replay_bar, next_signature)
 
 static func hide(game_log_panel: Object) -> void:
 	var replay_bar = _get_replay_bar(game_log_panel)
 	if replay_bar == null:
 		return
+	var previous_signature = _get_replay_bar_state_signature(replay_bar)
+	if previous_signature is Dictionary and not bool(previous_signature.get("active", false)):
+		return
 	if replay_bar.has_method("set_active"):
 		replay_bar.call("set_active", false)
+	_set_replay_bar_state_signature(replay_bar, {"active": false})
 
 static func build_status_extra(step_index: int, timeline: Dictionary) -> String:
 	if timeline == null or timeline.is_empty():
@@ -88,3 +108,15 @@ static func _get_replay_bar(game_log_panel: Object):
 	if replay_bar == null or not is_instance_valid(replay_bar):
 		return null
 	return replay_bar
+
+static func _get_replay_bar_state_signature(replay_bar: Object) -> Variant:
+	if replay_bar == null or not is_instance_valid(replay_bar):
+		return null
+	if not replay_bar.has_meta(META_REPLAY_BAR_STATE_SIGNATURE):
+		return null
+	return replay_bar.get_meta(META_REPLAY_BAR_STATE_SIGNATURE)
+
+static func _set_replay_bar_state_signature(replay_bar: Object, signature: Dictionary) -> void:
+	if replay_bar == null or not is_instance_valid(replay_bar):
+		return
+	replay_bar.set_meta(META_REPLAY_BAR_STATE_SIGNATURE, Dictionary(signature))

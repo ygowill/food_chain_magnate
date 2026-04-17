@@ -491,6 +491,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.UiComponentsBinderBatchContextTestClass.run(),
 			},
 			{
+				"name": "ReplayBarSupportNoopTest",
+				"fn": func() -> Result: return TestRefs.ReplayBarSupportNoopTestClass.run(),
+			},
+			{
 				"name": "TurnOrderSelectionModalOnlineVisibilityTest",
 				"fn": func() -> Result: return TestRefs.TurnOrderSelectionModalOnlineVisibilityTestClass.run(),
 			},
@@ -505,6 +509,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			{
 				"name": "ActionPanelGlobalDisabledRestoreTest",
 				"fn": func() -> Result: return TestRefs.ActionPanelGlobalDisabledRestoreTestClass.run(),
+			},
+			{
+				"name": "ActionPanelRefreshSingleRebuildTest",
+				"fn": func() -> Result: return await TestRefs.ActionPanelRefreshSingleRebuildTestClass.run(),
 			},
 			{
 				"name": "ActionPanelExternalBlockReasonTest",
@@ -1051,8 +1059,20 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return await TestRefs.GameLogPanelStepTimelineAppendTestClass.run(),
 			},
 			{
+				"name": "GameLogTimelineLocalStateDeltaTest",
+				"fn": func() -> Result: return await TestRefs.GameLogTimelineLocalStateDeltaTestClass.run(),
+			},
+			{
 				"name": "GameLogTimelineRuntimeEventSourceTest",
 				"fn": func() -> Result: return await TestRefs.GameLogTimelineRuntimeEventSourceTestClass.run(),
+			},
+			{
+				"name": "OnlineResumeLiveRuntimeSourceP0Test",
+				"fn": func() -> Result: return await TestRefs.OnlineResumeLiveRuntimeSourceP0TestClass.run(),
+			},
+			{
+				"name": "OnlineResumeReplayEntryStateNoopTest",
+				"fn": func() -> Result: return TestRefs.OnlineResumeReplayEntryStateNoopTestClass.run(),
 			},
 			{
 				"name": "GameTimelineSeekRoutingManualReplayTest",

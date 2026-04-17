@@ -145,7 +145,7 @@ step 的基本字段由 helper 构建（`gameplay/replay/step_timeline_build/hel
 这个适配层的目标是：
 
 - **保持 `runtime_engine` 作为 live active engine**
-- **让 timeline / log / replay 读取 `full_replay_engine`**
+- **让 `full_replay_engine` 只承担按需完整历史视图**
 
 当前实现要点：
 
@@ -157,6 +157,35 @@ step 的基本字段由 helper 构建（`gameplay/replay/step_timeline_build/hel
 3. 当 processed command count 一致时，优先复用 prebuilt entries
 4. 当只新增尾部命令时，优先走 incremental append
 5. 把 runtime command index 映射到 full-history step index，用于恢复房下的日志 cursor / seek / replay 显示
+
+### 当前已确认的问题（历史结论）
+
+最新联机日志表明：把**实时日志视图**也默认建立在 `full_replay_engine + cached timeline / entries` 之上，仍然会造成明显卡顿。
+
+根因不是服务器慢，而是以下链路仍会在 live `command_applied` 后发生：
+
+- 完整历史 timeline cache refresh
+- 日志 timeline / entries 再装配
+- `GameLogPanel.load_step_timeline(...)` 或 append path 的大对象比较
+- descriptor 计算与主线程 UI layout
+
+因此，这一适配层虽然已经减少了重复 full rebuild，但**默认依赖 full-history 作为 live 日志源**本身仍是热路径风险点。
+
+### P0 第一阶段后的读源边界（当前实现）
+
+当前代码已经收敛为：
+
+- `build_live_history_view(...)`
+  - 只从 `runtime_engine` 构建 live step timeline
+- `build_online_resume_full_history_view_for_command(...)`
+  - 只在用户显式进入 History View / seek 历史时读取 `full_replay_engine`
+- 从完整历史返回最新时
+  - `GameTimelineController` 会重新恢复 runtime live timeline
+
+换句话说：
+
+- `full_replay_engine` 仍保留，用于“完整历史可看”
+- 但它已经不再默认承担“每条 live 命令都要立刻驱动日志 UI”的职责
 
 ## 日志面板如何消费 timeline
 
@@ -183,6 +212,24 @@ step 的基本字段由 helper 构建（`gameplay/replay/step_timeline_build/hel
   - item pool 复用
   - visible entry count cache
 
+### 3. timeline state 局部刷新
+
+`GameLogPanel` 当前还会维护一层轻量 UI index，用于把“日志项结构构建”和“cursor/head 状态刷新”拆开：
+
+- `timeline_index -> exact items`
+- `timeline_index -> first visible item`
+- 小规模 `phase_header / round_header` 缓存
+
+这样在常见的 live 场景里：
+
+- `cursor/head: n -> n+1`
+  - 不再全量扫描所有日志项
+  - 只刷新受影响的 exact items 与少量 headers
+- 历史视图停留在旧 cursor 时，若只是 `head` 前进且 future/past 关系未变化
+  - `apply_timeline_state` 可直接 skip
+- `scroll_to_cursor`
+  - 也优先复用 first visible item index，而不是重新线性扫描整列日志
+
 这意味着时间线层与日志 UI 层现在是显式分离的：
 
 - timeline / entries 负责“数据语义”
@@ -200,7 +247,25 @@ step 的基本字段由 helper 构建（`gameplay/replay/step_timeline_build/hel
 恢复房下，live 与 history 的数据源不一定是同一个 engine：
 
 - **live action / authoritative client view**：`runtime_engine`
-- **full history timeline / replay / log**：`full_replay_engine` + cached timeline / entries
+- **full history timeline / replay / on-demand history log**：`full_replay_engine` + cached timeline / entries
+
+### P0 演进方向
+
+后续为根治卡顿，恢复房将进一步收敛为：
+
+- **实时联机默认只消费 runtime 侧增量**
+  - 实时日志 append
+  - 实时 timeline head / cursor
+  - 当前可操作界面
+- **完整历史 timeline / log 只在按需模式消费**
+  - Replay
+  - History View
+  - 完整历史 seek
+
+也就是说：
+
+- `full_replay_engine` 仍然保留，用于“完整历史可看”
+- 但它不再默认承担“每条 live 命令都要立刻驱动日志 UI”的职责
 
 ## 测试
 

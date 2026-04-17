@@ -17,6 +17,7 @@ const AUTO_MANDATORY_ACTION_IDS := {
 }
 
 var _panel = null
+var _rendered_button_ids_snapshot: Array[String] = []
 
 func setup(panel) -> void:
 	_panel = panel
@@ -25,7 +26,7 @@ func set_available_actions(action_ids: Array) -> void:
 	# 测试/调试入口：不依赖 GameState/ActionRegistry 的简化路径
 	if _panel == null or not is_instance_valid(_panel):
 		return
-	_set_visible_actions_from_list(action_ids, [])
+	_set_visible_actions_from_list(action_ids, [], true)
 
 func refresh() -> void:
 	if _panel == null or not is_instance_valid(_panel):
@@ -134,7 +135,7 @@ func refresh() -> void:
 				ordered.append(aidn)
 		visible_ids = ordered
 
-	_set_visible_actions_from_list(visible_ids, visible_executable if has_player_executable_info else [])
+	_set_visible_actions_from_list(visible_ids, visible_executable if has_player_executable_info else [], false)
 
 	# 若能计算“当前玩家可执行动作”，则对不可执行动作做灰显，并写入原因
 	if has_player_executable_info:
@@ -173,6 +174,7 @@ func _clear_actions_cache() -> void:
 	p._guided_action_id = ""
 	p._flow_confirm_end_visible = false
 	p._flow_skip_step_visible = false
+	_rendered_button_ids_snapshot = Array([], TYPE_STRING, "", null)
 	p._sync_guided_action_placeholder()
 	if p.items_container != null and is_instance_valid(p.items_container):
 		UiRebuildHelpersClass.free_children(p.items_container)
@@ -187,16 +189,13 @@ func _sanitize_action_id_list(action_ids: Array) -> Array[String]:
 		out.append(s)
 	return out
 
-func _set_visible_actions_from_list(action_ids: Array, initiatable_ids: Array) -> void:
+func _set_visible_actions_from_list(action_ids: Array, initiatable_ids: Array, rebuild_ui: bool = true) -> void:
 	if _panel == null or not is_instance_valid(_panel):
 		return
 	var p = _panel
 
 	p._visible_action_ids = _sort_action_ids_for_display(_sanitize_action_id_list(action_ids))
 	p._visible_initiatable_action_ids = _sanitize_action_id_list(initiatable_ids)
-	if p.items_container != null and is_instance_valid(p.items_container):
-		UiRebuildHelpersClass.free_children(p.items_container)
-		p.items_container.visible = false
 
 	p._action_enabled.clear()
 	p._action_disabled_reason.clear()
@@ -206,7 +205,8 @@ func _set_visible_actions_from_list(action_ids: Array, initiatable_ids: Array) -
 	_apply_external_block_reasons(p._visible_action_ids)
 	_compute_guided_flow_visibility()
 	p._sync_guided_action_placeholder()
-	_rebuild_action_buttons()
+	if rebuild_ui:
+		_rebuild_action_buttons()
 
 func _compute_guided_flow_visibility() -> void:
 	if _panel == null or not is_instance_valid(_panel):
@@ -358,10 +358,14 @@ func _rebuild_action_buttons() -> void:
 	if p.items_container == null or not is_instance_valid(p.items_container):
 		return
 
-	UiRebuildHelpersClass.free_children(p.items_container)
-
 	var rendered_ids := _get_rendered_action_button_ids()
 	p.items_container.visible = not rendered_ids.is_empty()
+	if rendered_ids == _rendered_button_ids_snapshot:
+		sync_rendered_action_buttons()
+		return
+
+	_rendered_button_ids_snapshot = Array(rendered_ids, TYPE_STRING, "", null)
+	UiRebuildHelpersClass.free_children(p.items_container)
 	for action_id in rendered_ids:
 		var btn := Button.new()
 		btn.name = "ActionButton_%s" % action_id

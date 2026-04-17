@@ -214,6 +214,31 @@ static func run(seed_val: int = 12345) -> Result:
 			prev_local_player_id
 		)
 
+	binder.sync(engine.get_state())
+
+	if player_panel.batch_count != 2 or left_panel.batch_count != 2 or turn_order_display.batch_count != 2:
+		return _finish(
+			Result.failure(
+				"重复 sync 后基础面板仍应更新，实际 player=%d left=%d turn_order=%d"
+					% [player_panel.batch_count, left_panel.batch_count, turn_order_display.batch_count]
+			),
+			engine,
+			prev_mode,
+			prev_local_player_id
+		)
+	if action_panel.batch_count != 2:
+		return _finish(Result.failure("重复 sync 后 ActionPanel display_context 应仍更新，实际=%d" % action_panel.batch_count), engine, prev_mode, prev_local_player_id)
+	if action_panel.map_skin_calls != 1 or action_panel.action_registry_calls != 1:
+		return _finish(
+			Result.failure(
+				"重复 sync 同一 state 时不应重复同步 map_skin / registry，实际 map_skin=%d registry=%d"
+					% [action_panel.map_skin_calls, action_panel.action_registry_calls]
+			),
+			engine,
+			prev_mode,
+			prev_local_player_id
+		)
+
 	return _finish(Result.success({}), engine, prev_mode, prev_local_player_id)
 
 static func _finish(result: Result, engine: GameEngine, prev_mode, prev_local_player_id: int) -> Result:

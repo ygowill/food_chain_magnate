@@ -381,6 +381,8 @@ func clear_context_overlay() -> void:
 	_context_controller.clear_context_overlay()
 
 func set_action_registry(registry) -> void:
+	if _action_registry == registry:
+		return
 	_action_registry = registry
 	if _context_controller != null:
 		_context_controller.set_action_registry(_action_registry)
@@ -546,8 +548,11 @@ func get_action_description(action_id: String) -> String:
 
 func set_globally_disabled(reason: String) -> void:
 	var r := str(reason).strip_edges()
+	var next_disabled := not r.is_empty()
+	if _globally_disabled == next_disabled and _globally_disabled_reason == r:
+		return
 	var was_disabled := _globally_disabled
-	_globally_disabled = not r.is_empty()
+	_globally_disabled = next_disabled
 	_globally_disabled_reason = r
 	_update_title()
 	_apply_global_disabled_state()

@@ -187,17 +187,62 @@ sequenceDiagram
 
 ## timeline / log 的数据源选择
 
-恢复房中，日志与时间线默认优先走完整历史侧：
+截至 `2026-04-17` 的最新实现，恢复房 timeline / log 已开始按 P0 分层：
 
 - `ui/scenes/game/timeline/controller.gd`
 - `ui/scenes/game/timeline/online_resume_history_view_support.gd`
 - `ui/scenes/game/timeline/online_resume_full_history_adapter.gd`
 
-适配层会优先复用：
+- **live 热路径默认走 runtime 侧**
+  - `apply_live_log_timeline_from_engine()` 只读取 `runtime_engine`
+  - `resume_full_history_ready` 不再自动接管 live log
+- **完整历史只在按需场景启用**
+  - Replay
+  - History View
+  - 完整历史 seek / 复盘
+
+完整历史适配层仍会优先复用：
 
 - cached full-history timeline
 - cached full-history timeline entries
 - incremental append
+
+### 已确认的问题（2026-04-17）
+
+最新实测日志表明，这一“live 日志默认优先走完整历史侧”的实现仍会把完整历史成本带回实时联机热路径。
+
+典型现象：
+
+- `client_request_to_rx_ms` 与 `server_exec_ms` 都不高；
+- 但在客户端收到 `command_applied` 之后，仍会出现：
+  - `resume_cache.timeline_cache_refresh.done` 数百毫秒
+  - `ui.game_log.append_step_timeline` 数百毫秒
+  - `ui.game_log.load_step_timeline` 近秒级
+  - `ui.timeline.apply_live_log` 秒级
+
+这说明当前问题的根因不是服务器慢，而是：
+
+> **实时联机 UI 仍然默认依赖 full-history timeline / log 资产。**
+
+### P0 收敛结果（当前）
+
+为彻底解决这一问题，当前架构已先落地 P0 第一阶段：
+
+- **实时联机热路径默认只依赖 `runtime_engine`**
+  - 当前操作 UI
+  - 地图 / 面板 / overlay
+  - 实时日志 append
+  - 实时 timeline head / cursor
+- **完整历史资产只在按需场景接管**
+  - Replay
+  - History View
+  - 完整历史 seek / 复盘
+  - 完整 archive 导出 / 校验
+
+当前仍需继续验证与收敛的部分：
+
+- 显式进入完整历史时的 timeline / log 装配成本
+- 通用 `panel_controller.sync` / `map_view` / overlay 刷新成本
 
 ## 补充说明
 
