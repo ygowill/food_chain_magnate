@@ -1,6 +1,6 @@
 # 联机恢复房热路径重构方案（2026-04-16）
 
-状态：设计确认中，未实施。
+状态：**部分实施，持续收敛中**。
 
 本文落盘本轮结论，目标不是立即修补某个卡点，而是明确：
 
@@ -66,6 +66,59 @@
   - 测试：
     - `ui/scenes/tests/ui_components_binder_batch_context_test.gd`
 
+- [x] **阶段 4（第一步）：恢复房完整历史 timeline / entries cache 真正联动**
+  - `full_replay_step_timeline_entries` 已进入 `OnlineResumeSessionState`
+  - `online_resume_full_history_adapter.gd` 已支持：
+    - prebuilt timeline 复用
+    - prebuilt entries 复用
+    - incremental append
+  - 代码：
+    - `autoload/online_resume_session_state.gd`
+    - `autoload/net_client_online_resume_support.gd`
+    - `autoload/net_client/client.gd`
+    - `autoload/net_client_internal.gd`
+    - `ui/scenes/game/timeline/online_resume_full_history_adapter.gd`
+    - `ui/scenes/game/timeline/step_timeline_build_helpers.gd`
+  - 测试：
+    - `core/tests/net_client_online_resume_cached_timeline_forwarding_test.gd`
+    - `core/tests/online_resume_full_history_tail_append_test.gd`
+
+- [x] **阶段 4（第二步）：日志 append 路径只传新增数据，不再整包搬运**
+  - `GameLogPanel` / background worker 的 append job 改为只传新增 `appended_timeline_entries`
+  - 后台 append 结果应用时尽量走 owned state，减少主线程 deep-copy
+  - 同步 append 也不再把整份历史重新喂给 append builder
+  - 代码：
+    - `ui/components/game_log/game_log_panel.gd`
+    - `ui/components/game_log/game_log_timeline_background_worker.gd`
+
+- [x] **阶段 4（第三步）：日志面板通用降耗**
+  - `visible entry count` 改为在 build / append 时产出并缓存，不再每次 label 更新都全量扫描
+  - `GameLogItem / EventItem / RoundHeader / PhaseHeader / ActionGroupHeader` 的 `apply_timeline_state` 增加 no-op fast path
+  - 追加了更细粒度埋点：
+    - `ui.game_log.append_step_range`
+    - `ui.game_log.build_unified_timeline_display`
+    - `ui.game_log.apply_descriptor_rebuild`
+    - `ui.game_log.apply_descriptor_append`
+    - `ui.game_log.apply_timeline_state`
+    - `ui.game_log.compute_visible_entry_count`
+  - 代码：
+    - `ui/components/game_log/game_log_panel.gd`
+    - `ui/components/game_log/game_log_unified_timeline_builder.gd`
+    - `ui/components/game_log/game_log_item.gd`
+    - `ui/components/game_log/game_log_event_item.gd`
+    - `ui/components/game_log/game_log_action_group_header_item.gd`
+    - `ui/components/game_log/game_log_phase_header_item.gd`
+    - `ui/components/game_log/game_log_round_header_item.gd`
+  - 测试：
+    - `ui/scenes/tests/game_log_panel_step_timeline_append_test.gd`
+
+- [x] **阶段 4（第四步）：恢复房重复日志根因修复**
+  - 根因不是显示层重复渲染，而是 append path 中 timeline entry id / baseline 选择错误导致同一 entry 同时被视为 primary 与 child
+  - 现已修正为 fresh id + 正确 baseline 选择
+  - 结果：
+    - 不再通过“显示层去重”掩盖问题
+    - append 后日志结构恢复为单份
+
 ### 仍待继续收敛
 
 - [ ] **阶段 3（剩余部分）**
@@ -79,7 +132,24 @@
 - 已经取消恢复房进局对完整历史 cache 的 gate；
 - 已经对日志时间线状态同步做了第一步降耗；
 - 已经把 panel binder 中多处重复 refresh 收敛为批量上下文更新；
+- 已经把恢复房 full-history timeline / entries cache 与增量 append 真实接通；
+- 已经把日志 append async / sync 路径收敛到“只处理新增 entries”；
+- 已经把日志面板里一部分通用 O(n) UI 代价进一步下放到 build / append 时缓存；
 - 但更细粒度的 `map_view` / phase panel / overlay dirty-driven 收敛仍可继续做，以进一步压低 `ui.online_sync.total`。
+
+### 当前判断（2026-04-17）
+
+到这一轮为止，**恢复房专属热点基本已清掉大半**。
+
+当前剩余的“还有一点卡”，更大概率来自：
+
+- 通用大时间线 UI descriptor 构建
+- 日志项 append / layout / Container 刷新
+- 某些 `ui.online_sync.*` 的整包刷新
+
+也就是说：
+
+> 问题焦点已经从“恢复房专属双轨副作用”逐步转向“通用日志 / 时间线 UI 成本”。
 
 ### 本次验证
 
@@ -91,7 +161,7 @@
 - 结果：
   - `CheckCompile PASS`
   - `GameSmokeTest PASS`
-  - `AllTests PASS (358/358)`
+  - `AllTests PASS (361/361)`
 
 ---
 

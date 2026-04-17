@@ -1,6 +1,27 @@
 # 联机恢复房：快加载 + 完整历史双轨设计（D 完整版，2026-04-14）
 
-状态：设计中，未实施。
+状态：**部分实施，持续演进中**。
+
+实现更新（2026-04-17）：
+
+- 客户端双轨模型已部分落地：
+  - `runtime_engine` 用于 live 对局
+  - `full_replay_engine` 用于完整历史 / timeline / log / replay
+- `OnlineResumeSessionState` 已实际持有：
+  - `full_replay_step_timeline`
+  - `full_replay_step_timeline_entries`
+  - `full_replay_live_tail_commands`
+- `online_resume_full_history_adapter.gd` 已支持：
+  - cached prebuilt timeline 复用
+  - cached prebuilt entries 复用
+  - incremental append
+- 恢复房进入对局已改为 **快启动优先，完整历史后台加载**，不再默认等待完整历史完全 ready 后才进入游戏
+- live command 热路径中，当前不再强制同步推进完整历史 engine，而是先记录 live tail，再在完整历史查看 / timeline 构建前按需补齐
+
+仍未完全闭合的部分：
+
+- 本文中的部分“理想化接口 / 载荷结构”仍是目标设计，不代表字段名与当前实现 1:1 对应
+- 存档下载 / 导出仍应以服务端完整权威历史为准，这一原则未变
 
 本文用于细化“方案 D 完整版”：
 
@@ -12,6 +33,31 @@
 本文是对现有联机恢复链路的专项设计补充；不替代 `docs/online/online_session_resume_redesign_2026-04-03.md`，而是聚焦“恢复房起局性能 + 完整历史保真 + UI 时间线/日志双源化”。
 
 ---
+
+## 0. 当前实现与本文的关系
+
+本文仍然是恢复房双轨方案的设计主文档，但现在已经不是“纯设计草案”。
+
+更准确地说：
+
+- **总体方向已落地**：
+  - 快启动 runtime
+  - 完整历史双源
+  - 完整历史 timeline cache
+  - 完整历史 entries cache
+  - 增量 append
+- **实现细节有演进**：
+  - 当前实际代码更强调“热路径去重”和“后台按需补齐”
+  - 而不是严格等待一份一次性完整 cache 全部 ready
+- **剩余工作仍存在**：
+  - 通用日志 UI / descriptor / layout 成本仍在继续收敛
+  - 部分归档 / 导出 / 下载链路的完整收口仍需继续验证
+
+相关落地补充请同时对照：
+
+- `docs/online/online_resume_hot_path_rebuild_plan_2026-04-16.md`
+- `docs/architecture/42-gameplay-replay-timelines.md`
+- `docs/architecture/70-online-multiplayer.md`
 
 ## 1. 问题定义
 

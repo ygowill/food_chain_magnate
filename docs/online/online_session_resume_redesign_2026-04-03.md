@@ -1,11 +1,20 @@
 # 联机会话与断线恢复重构设计（2026-04-03）
 
-状态：设计中，未实施。
+状态：**设计文档，部分思路已被后续实现吸收，但本文本身不代表逐条已落地**。
 
-补充说明（2026-04-15）：
+补充说明（2026-04-15 / 2026-04-17）：
 
 - 恢复房“快加载 + 完整历史双轨”已在 `docs/online/online_resume_fastload_full_history_design_2026-04-14.md` 单列设计与实现补充；
 - 当前凡是涉及恢复房启动性能、完整历史回放、完整 archive 导出的问题，应优先对照该补充文档。
+- 恢复房热路径的最近实现收敛，请对照：
+  - `docs/online/online_resume_hot_path_rebuild_plan_2026-04-16.md`
+  - `docs/architecture/70-online-multiplayer.md`
+  - `docs/architecture/42-gameplay-replay-timelines.md`
+
+换句话说：
+
+- 本文更偏向 **会话 / seat / recovery 模型重构背景**
+- 而恢复房 runtime/full-history 双轨、timeline cache、entries cache、incremental append 的当前实现，应优先看上面的新文档
 
 本文目标不是继续修补现有“全量 archive 重连”链路，而是给出一套更稳定、更容易验证的联机会话方案，用来替换当前把 `seat`、`peer`、房间目录、恢复流程耦合在一起的实现。
 
