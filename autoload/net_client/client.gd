@@ -205,7 +205,6 @@ func handle_rpc_game_started(payload: Dictionary) -> void:
 
 	var room_code := _get_expected_online_room_code()
 	var resume_bootstrap_mode := str(payload.get("resume_bootstrap_mode", "")).strip_edges()
-	var resume_fast_start_bundle := _extract_resume_fast_start_bundle(payload)
 	var existing_engine: GameEngine = _try_reuse_existing_online_client_engine(room_code, local_pid)
 	if existing_engine != null:
 		if resume_bootstrap_mode == RESUME_BOOTSTRAP_MODE_FULL_ARCHIVE_SNAPSHOT:
@@ -219,10 +218,6 @@ func handle_rpc_game_started(payload: Dictionary) -> void:
 			if not prepare_existing_r.ok:
 				GameLog.warn("NetClient", "Reuse existing resume engine prepare failed: %s" % prepare_existing_r.error)
 			_emit_resume_full_history_ready()
-		elif not resume_fast_start_bundle.is_empty():
-			_bind_resume_fast_start_session(existing_engine, room_code, local_pid, resume_fast_start_bundle)
-			_schedule_full_replay_engine_bootstrap(room_code)
-			_emit_resume_fast_start_ready()
 		_net.game_started.emit(payload.duplicate(true))
 		_try_apply_pending_resync_delta()
 		return
@@ -241,11 +236,8 @@ func handle_rpc_game_started(payload: Dictionary) -> void:
 			18.0
 		))
 		return
-	elif not resume_fast_start_bundle.is_empty():
-		init_r = _bootstrap_runtime_engine_from_fast_start_bundle(resume_fast_start_bundle, room_code, local_pid)
-	else:
-		_clear_online_resume_dual_engine_state()
-		init_r = _initialize_online_client_engine_from_config(config, room_code, local_pid)
+	_clear_online_resume_dual_engine_state()
+	init_r = _initialize_online_client_engine_from_config(config, room_code, local_pid)
 	if not init_r.ok:
 		GameLog.error(
 			"NetClient",
@@ -256,9 +248,6 @@ func handle_rpc_game_started(payload: Dictionary) -> void:
 		return
 
 	_net.game_started.emit(payload.duplicate(true))
-	if not resume_fast_start_bundle.is_empty():
-		_emit_resume_fast_start_ready()
-		_schedule_full_replay_engine_bootstrap(room_code)
 	_try_apply_pending_resync_delta()
 
 func handle_rpc_command_applied(payload: Dictionary) -> void:
@@ -851,30 +840,6 @@ func map_online_resume_progress_from_engine(engine, checkpoint_id: String = "") 
 func _get_online_resume_session_state():
 	return _online_resume_support.get_session_state()
 
-func _extract_resume_fast_start_bundle(payload: Dictionary) -> Dictionary:
-	return _online_resume_support.extract_resume_fast_start_bundle(payload)
-
-func _bootstrap_runtime_engine_from_fast_start_bundle(
-	bundle: Dictionary,
-	room_code: String,
-	local_pid: int
-) -> Result:
-	return _online_resume_support.bootstrap_runtime_engine_from_fast_start_bundle(bundle, room_code, local_pid)
-
-func _bind_resume_fast_start_session(
-	runtime_engine: GameEngine,
-	room_code: String,
-	local_pid: int,
-	bundle: Dictionary
-) -> void:
-	_online_resume_support.bind_resume_fast_start_session(runtime_engine, room_code, local_pid, bundle)
-
-func _schedule_full_replay_engine_bootstrap(room_code: String, preserve_live_tail: bool = false) -> void:
-	_online_resume_support.schedule_full_replay_engine_bootstrap(room_code, preserve_live_tail)
-
-func _deferred_build_full_replay_engine(room_code: String, generation: int) -> void:
-	_online_resume_support._deferred_build_full_replay_engine(room_code, generation)
-
 func _invalidate_full_replay_engine(reason: String) -> void:
 	_online_resume_support.invalidate_full_replay_engine(reason)
 
@@ -883,13 +848,6 @@ func _clear_online_resume_dual_engine_state() -> void:
 	_pending_resume_full_snapshot_room_code = ""
 	_pending_resume_full_snapshot_local_pid = -1
 	_online_resume_support.clear_online_resume_dual_engine_state()
-
-func _emit_resume_fast_start_ready() -> void:
-	if _net == null or not is_instance_valid(_net):
-		return
-	if not _net_has_signal("resume_fast_start_ready"):
-		return
-	_net.emit_signal("resume_fast_start_ready", _get_online_resume_session_state().snapshot())
 
 func _emit_resume_full_history_ready() -> void:
 	if _net == null or not is_instance_valid(_net):
@@ -1168,15 +1126,6 @@ func _translate_resync_delta_to_runtime(payload: Dictionary) -> Dictionary:
 
 func _record_online_resume_full_history_entries(entries: Array, origin: String) -> void:
 	_online_resume_support.record_online_resume_full_history_entries(entries, origin)
-
-func _record_online_resume_full_history_command(cmd_dict: Dictionary, state_hash: String, origin: String) -> void:
-	_online_resume_support.record_online_resume_full_history_command(cmd_dict, state_hash, origin)
-
-func _replay_full_replay_live_tail(engine: GameEngine, generation: int) -> Result:
-	return _online_resume_support.replay_full_replay_live_tail(engine, generation)
-
-func _apply_full_history_command_to_engine(engine: GameEngine, cmd_dict: Dictionary, expected_state_hash: String) -> Result:
-	return _online_resume_support.apply_full_history_command_to_engine(engine, cmd_dict, expected_state_hash)
 
 func _get_online_client_engine_room_code() -> String:
 	if _net == null or not is_instance_valid(_net) or not (_net is Object):

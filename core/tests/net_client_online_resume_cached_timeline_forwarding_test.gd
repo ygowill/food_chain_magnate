@@ -15,6 +15,8 @@ static func run() -> Result:
 		return Result.failure("NetClient 缺少 get_online_resume_full_replay_step_timeline_entries()")
 	if not NetClient.has_method("set_online_resume_full_replay_step_timeline_entries"):
 		return Result.failure("NetClient 缺少 set_online_resume_full_replay_step_timeline_entries()")
+	if NetClient.has_signal("resume_fast_start_ready"):
+		return Result.failure("NetClient 不应再暴露 resume_fast_start_ready 信号")
 
 	NetClient.clear_online_resume_dual_engine_state()
 

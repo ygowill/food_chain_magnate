@@ -1,5 +1,5 @@
 # 联机恢复房完整历史适配层
-# 目标：保持 runtime_engine 作为 live active engine，同时允许 timeline/log 读取 full_replay_engine。
+# 目标：统一从恢复房历史缓存读取 timeline/log；在单 full-engine 模式下，history engine 可直接等于 runtime_engine。
 class_name OnlineResumeFullHistoryAdapter
 extends RefCounted
 

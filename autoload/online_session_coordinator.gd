@@ -25,8 +25,6 @@ class _ResumeWaitState:
 	var rejection_message: String = ""
 	var room_state_ready: bool = false
 	var game_started_received: bool = false
-	var fast_start_ready: bool = false
-	var full_history_expected: bool = false
 	var full_history_ready: bool = false
 	var archive_received: bool = false
 	var delta_applied: bool = false
@@ -398,7 +396,6 @@ func _connect_resume_wait_signals(wait_state: _ResumeWaitState, on_game_started:
 		"room_state_updated": Callable(self, "_on_wait_room_state_updated").bind(wait_state),
 		"game_started": Callable(self, "_on_wait_game_started").bind(wait_state, on_game_started, on_status_changed),
 		"local_bootstrap_progress": Callable(self, "_on_wait_local_bootstrap_progress").bind(wait_state, on_status_changed),
-		"resume_fast_start_ready": Callable(self, "_on_wait_resume_fast_start_ready").bind(wait_state, on_status_changed),
 		"resume_full_history_ready": Callable(self, "_on_wait_resume_full_history_ready").bind(wait_state, on_status_changed),
 		"resync_archive_received": Callable(self, "_on_wait_resync_archive_received").bind(wait_state, on_status_changed),
 		"resync_delta_applied": Callable(self, "_on_wait_resync_delta_applied").bind(wait_state, on_status_changed),
@@ -416,8 +413,6 @@ func _connect_resume_wait_signals(wait_state: _ResumeWaitState, on_game_started:
 		NetClient.game_started.connect(callbacks["game_started"])
 	if callbacks.has("local_bootstrap_progress") and NetClient.has_signal("local_bootstrap_progress") and not NetClient.local_bootstrap_progress.is_connected(callbacks["local_bootstrap_progress"]):
 		NetClient.local_bootstrap_progress.connect(callbacks["local_bootstrap_progress"])
-	if callbacks.has("resume_fast_start_ready") and NetClient.has_signal("resume_fast_start_ready") and not NetClient.resume_fast_start_ready.is_connected(callbacks["resume_fast_start_ready"]):
-		NetClient.resume_fast_start_ready.connect(callbacks["resume_fast_start_ready"])
 	if callbacks.has("resume_full_history_ready") and NetClient.has_signal("resume_full_history_ready") and not NetClient.resume_full_history_ready.is_connected(callbacks["resume_full_history_ready"]):
 		NetClient.resume_full_history_ready.connect(callbacks["resume_full_history_ready"])
 	if not NetClient.resync_archive_received.is_connected(callbacks["resync_archive_received"]):
@@ -443,8 +438,6 @@ func _disconnect_resume_wait_signals(callbacks: Dictionary) -> void:
 		NetClient.game_started.disconnect(callbacks["game_started"])
 	if callbacks.has("local_bootstrap_progress") and NetClient.has_signal("local_bootstrap_progress") and NetClient.local_bootstrap_progress.is_connected(callbacks["local_bootstrap_progress"]):
 		NetClient.local_bootstrap_progress.disconnect(callbacks["local_bootstrap_progress"])
-	if callbacks.has("resume_fast_start_ready") and NetClient.has_signal("resume_fast_start_ready") and NetClient.resume_fast_start_ready.is_connected(callbacks["resume_fast_start_ready"]):
-		NetClient.resume_fast_start_ready.disconnect(callbacks["resume_fast_start_ready"])
 	if callbacks.has("resume_full_history_ready") and NetClient.has_signal("resume_full_history_ready") and NetClient.resume_full_history_ready.is_connected(callbacks["resume_full_history_ready"]):
 		NetClient.resume_full_history_ready.disconnect(callbacks["resume_full_history_ready"])
 	if callbacks.has("resync_archive_received") and NetClient.resync_archive_received.is_connected(callbacks["resync_archive_received"]):
@@ -515,24 +508,6 @@ func _on_wait_local_bootstrap_progress(
 			return
 	_emit_status(on_status_changed, state)
 
-func _on_wait_resume_fast_start_ready(
-	payload: Dictionary,
-	wait_state: _ResumeWaitState,
-	on_status_changed: Callable
-) -> void:
-	if wait_state == null:
-		return
-	wait_state.fast_start_ready = true
-	var snapshot: Dictionary = Dictionary(payload).duplicate(true) if (payload is Dictionary) else {}
-	var expects_full_history := bool(snapshot.get("has_full_archive_payload", false))
-	if not expects_full_history:
-		expects_full_history = str(snapshot.get("full_history_source_mode", "")).strip_edges() == "archive_payload"
-	wait_state.full_history_expected = bool(expects_full_history)
-	_emit_status(
-		on_status_changed,
-		"已完成快启动，正在进入对局（完整历史后台加载）..." if wait_state.full_history_expected else "已完成快启动，正在进入对局..."
-	)
-
 func _on_wait_resume_full_history_ready(
 	_payload: Dictionary,
 	wait_state: _ResumeWaitState,
@@ -572,7 +547,7 @@ func _on_wait_resync_delta_failed(message: String, wait_state: _ResumeWaitState)
 func _is_startup_game_wait_ready(wait_state: _ResumeWaitState) -> bool:
 	if wait_state == null:
 		return false
-	var transport_ready := wait_state.fast_start_ready or wait_state.archive_received or wait_state.delta_applied
+	var transport_ready := wait_state.archive_received or wait_state.delta_applied
 	if not wait_state.game_started_received or not transport_ready:
 		return false
 	return true

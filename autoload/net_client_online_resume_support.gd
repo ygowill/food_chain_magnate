@@ -1,5 +1,5 @@
-# NetClient：联机恢复房双轨支持（runtime_engine + full_replay_engine）
-# 目标：把 fast-start / full-history / live-tail 的复杂度从 net_client/client.gd 中收口出去。
+# NetClient：联机恢复房完整历史缓存支持
+# 目标：把恢复房 full-history timeline / entries cache 与兼容态收口到独立模块。
 extends RefCounted
 
 const CommandClass = preload("res://core/types/command.gd")
@@ -140,67 +140,6 @@ func set_full_replay_step_timeline_entries(entries: Array) -> void:
 func clear_online_resume_dual_engine_state() -> void:
 	_session_state.reset()
 
-func extract_resume_fast_start_bundle(payload: Dictionary) -> Dictionary:
-	var bundle_val = payload.get("resume_fast_start_bundle", null)
-	if not (bundle_val is Dictionary):
-		return {}
-	var bundle: Dictionary = Dictionary(bundle_val).duplicate(true)
-	var runtime_archive_val = bundle.get("runtime_archive", null)
-	if not (runtime_archive_val is Dictionary):
-		GameLog.warn("NetClient", "RX GameStarted fast-start ignored: runtime_archive type invalid")
-		return {}
-	return bundle
-
-func bootstrap_runtime_engine_from_fast_start_bundle(
-	bundle: Dictionary,
-	room_code: String,
-	local_pid: int
-) -> Result:
-	var runtime_archive: Dictionary = Dictionary(bundle.get("runtime_archive", {})).duplicate(true)
-	if runtime_archive.is_empty():
-		return Result.failure("resume_fast_start_bundle.runtime_archive 缺失")
-	if not _load_archive_for_online_client.is_valid():
-		return Result.failure("load_archive_for_online_client 未绑定")
-	var engine = GameEngineClass.new()
-	var load_r = _load_archive_for_online_client.call(engine, runtime_archive)
-	if not (load_r is Result):
-		return Result.failure("load_archive_for_online_client 返回类型错误")
-	if not load_r.ok:
-		GameLog.error("NetClient", "Online resume fast-start runtime load failed: %s" % load_r.error)
-		return Result.failure(str(load_r.error))
-	if _mark_online_client_engine_ready.is_valid():
-		_mark_online_client_engine_ready.call(engine, room_code, local_pid)
-	bind_resume_fast_start_session(engine, room_code, local_pid, bundle)
-	GameLog.info(
-		"NetClient",
-		"Online client runtime_engine ready via fast-start room=%s commands=%d"
-			% [_safe_text_value(room_code), int(engine.command_history.size())]
-	)
-	return Result.success(engine)
-
-func bind_resume_fast_start_session(
-	runtime_engine: GameEngine,
-	room_code: String,
-	local_pid: int,
-	bundle: Dictionary
-) -> void:
-	_session_state.bind_runtime(runtime_engine, room_code, local_pid)
-	_session_state.runtime_anchor = Dictionary(bundle.get("runtime_anchor", {})).duplicate(true)
-	_session_state.full_archive_meta = Dictionary(bundle.get("full_archive_meta", {})).duplicate(true)
-	_session_state.single_full_engine_mode = false
-	var full_archive_payload: Dictionary = Dictionary(bundle.get("full_archive_payload", {})).duplicate(true)
-	if not full_archive_payload.is_empty():
-		_session_state.full_archive = full_archive_payload
-		_session_state.full_history_source_mode = "archive_payload"
-	else:
-		_session_state.full_archive = {}
-		_session_state.full_history_source_mode = "none"
-		_session_state.full_replay_engine = null
-		_session_state.full_replay_engine_ready = false
-		_session_state.full_replay_room_code = ""
-	if _sync_online_resume_progress.is_valid():
-		_sync_online_resume_progress.call(runtime_engine)
-
 func mark_runtime_engine_as_full_history(engine) -> void:
 	if engine == null:
 		return
@@ -298,65 +237,6 @@ func map_online_resume_progress_from_engine(engine, checkpoint_id: String = "") 
 	if not normalized_checkpoint_id.is_empty():
 		out["checkpoint_id"] = normalized_checkpoint_id
 	return out
-
-func schedule_full_replay_engine_bootstrap(room_code: String, preserve_live_tail: bool = false) -> void:
-	var normalized_room_code := str(room_code).strip_edges().to_upper()
-	if _session_state.runtime_room_code != normalized_room_code:
-		_emit_resume_cache_event("resume_cache.startup_full_build.skipped", {
-			"reason": "runtime_room_mismatch",
-			"requested_room_code": normalized_room_code,
-			"preserve_live_tail": bool(preserve_live_tail),
-		})
-		return
-	if _session_state.full_history_source_mode != "archive_payload" or _session_state.full_archive.is_empty():
-		_emit_resume_cache_event("resume_cache.startup_full_build.skipped", {
-			"reason": "archive_payload_missing",
-			"requested_room_code": normalized_room_code,
-			"preserve_live_tail": bool(preserve_live_tail),
-			"full_history_source_mode": str(_session_state.full_history_source_mode),
-		})
-		return
-	var expected_hash := str(_session_state.full_archive_meta.get("full_final_hash", "")).strip_edges()
-	if _session_state.full_replay_engine_ready \
-		and _session_state.full_replay_engine != null \
-		and _session_state.full_replay_engine.get_state() != null:
-		if _session_state.full_replay_room_code == normalized_room_code:
-			var current_hash := str(_session_state.full_replay_engine.get_state().compute_hash())
-			if expected_hash.is_empty() or current_hash == expected_hash:
-				_emit_resume_cache_event("resume_cache.startup_full_build.skipped", {
-					"reason": "full_replay_engine_current",
-					"requested_room_code": normalized_room_code,
-					"preserve_live_tail": bool(preserve_live_tail),
-					"full_replay_command_count": int(_session_state.full_replay_engine.command_history.size()),
-					"current_hash": current_hash,
-					"expected_hash": expected_hash,
-				})
-				return
-	var generation = _session_state.begin_full_history_build(
-		normalized_room_code,
-		_session_state.full_archive,
-		_session_state.runtime_anchor,
-		_session_state.full_archive_meta,
-		_session_state.full_history_source_mode,
-		bool(preserve_live_tail)
-	)
-	_emit_resume_cache_event("resume_cache.startup_full_build.start", {
-		"room_code": normalized_room_code,
-		"generation": generation,
-		"preserve_live_tail": bool(preserve_live_tail),
-		"runtime_command_count": int(_session_state.runtime_engine.command_history.size()) if _session_state.runtime_engine != null else -1,
-		"full_archive_command_count": int(Array(_session_state.full_archive.get("commands", [])).size()),
-		"live_tail_count": int(_session_state.full_replay_live_tail_commands.size()),
-	})
-	call_deferred("_deferred_build_full_replay_engine", normalized_room_code, generation)
-
-func _deferred_build_full_replay_engine(room_code: String, generation: int) -> void:
-	var normalized_room_code := str(room_code).strip_edges().to_upper()
-	if int(generation) != int(_session_state.full_history_generation):
-		return
-	if _session_state.full_replay_room_code != normalized_room_code:
-		return
-	_build_full_replay_engine_for_generation(normalized_room_code, generation, true, true)
 
 func _build_full_replay_engine_for_generation(
 	room_code: String,
