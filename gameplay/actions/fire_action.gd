@@ -9,7 +9,7 @@ const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
-const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
+const SalaryDiscountUsageClass = preload("res://core/rules/employee_rules/payday_salary_discount_usage.gd")
 const SalaryTokenPaymentClass = preload("res://modules/base_rules/rules/phase/payday/payday_salary_token_payment.gd")
 const StaffStateClass = preload("res://core/state/staff_state.gd")
 
@@ -386,22 +386,11 @@ func _can_fire_busy_marketer(state: GameState, player_id: int, employee_id: Stri
 		return false
 	var milestone_delta_amount: int = int(delta_read.value)
 
-	var used_recruit := 0
-	if state.round_state is Dictionary:
-		var used_recruit_read := RoundStateCountersClass.get_player_count(state.round_state, "recruit_used", player_id)
-		if not used_recruit_read.ok:
-			return false
-		used_recruit = int(used_recruit_read.value)
-
-	var discount_info := _collect_payday_salary_discount_capacity_from_active(player)
-	var discount_recruit_capacity: int = int(discount_info.get("total", 0))
-	var total_recruit_capacity: int = EmployeeRulesClass.get_recruit_limit(player)
-	var non_discount_recruit_capacity: int = total_recruit_capacity - discount_recruit_capacity
-	if non_discount_recruit_capacity < 0:
-		non_discount_recruit_capacity = 0
-	var used_from_discount: int = maxi(0, used_recruit - non_discount_recruit_capacity)
-	used_from_discount = mini(used_from_discount, discount_recruit_capacity)
-	var unused_discount_actions: int = maxi(0, discount_recruit_capacity - used_from_discount)
+	var discount_usage_read := SalaryDiscountUsageClass.collect_for_player(state, player_id, player)
+	if not discount_usage_read.ok:
+		return false
+	var discount_usage: Dictionary = discount_usage_read.value
+	var unused_discount_actions: int = int(discount_usage.get("salary_discount_unused_actions", 0))
 	var discount_amount: int = unused_discount_actions * base_salary_cost
 
 	var paid_employee_count := EmployeeRulesClass.count_paid_employees(player)
@@ -425,40 +414,3 @@ func _can_fire_busy_marketer(state: GameState, player_id: int, employee_id: Stri
 
 	var due_cash_amount := maxi(0, (paid_employee_count - tokens_used) * salary_cost + milestone_delta_amount - discount_amount)
 	return cash < due_cash_amount
-
-static func _collect_payday_salary_discount_capacity_from_active(player: Dictionary) -> Dictionary:
-	# 等价于 PaydaySalaryDiscount.get_salary_discount_recruit_capacity（但这里不依赖 EffectRegistry，避免在 Action 中持有 phase_manager）。
-	var emp_val = player.get("employees", null)
-	if not (emp_val is Array):
-		return {"total": 0, "sources": {}}
-	var employees: Array = emp_val
-
-	var sources: Dictionary = {}
-	var total := 0
-	for v in employees:
-		if not (v is String):
-			continue
-		var emp_id: String = str(v)
-		if emp_id.is_empty():
-			continue
-		var def_val = EmployeeRegistryClass.get_def(emp_id)
-		if def_val == null or not (def_val is EmployeeDef):
-			continue
-		var def: EmployeeDef = def_val
-
-		var has_discount := false
-		for eff_id in def.effect_ids:
-			var s: String = str(eff_id)
-			if s.find(":payday:salary_discount:") >= 0:
-				has_discount = true
-				break
-		if not has_discount:
-			continue
-
-		var cap := int(def.recruit_capacity)
-		if cap <= 0:
-			continue
-		total += cap
-		sources[emp_id] = int(sources.get(emp_id, 0)) + cap
-
-	return {"total": total, "sources": sources}

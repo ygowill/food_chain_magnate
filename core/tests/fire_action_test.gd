@@ -6,6 +6,7 @@ extends RefCounted
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	# 1) Restructuring：不允许解雇（约束对齐 rules.md）
@@ -117,6 +118,9 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var explicit_staff := _test_fire_respects_explicit_staff_id(player_count, seed_val)
 	if not explicit_staff.ok:
 		return explicit_staff
+	var staff_usage_discount := _test_busy_fire_exception_uses_staff_usage_discount(player_count, seed_val)
+	if not staff_usage_discount.ok:
+		return staff_usage_discount
 
 	return Result.success({
 		"player_count": player_count,
@@ -178,6 +182,63 @@ static func _test_fire_defaults_to_smallest_staff_id(player_count: int, seed_val
 	var pool_after := int(state.employee_pool.get("burger_cook", -1))
 	if pool_after != pool_before + 1:
 		return Result.failure("fire 默认移除最小 staff_id 后员工池应回补 1，实际: before=%d after=%d" % [pool_before, pool_after])
+
+	return Result.success()
+
+static func _test_busy_fire_exception_uses_staff_usage_discount(player_count: int, seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val + 909)
+	if not init.ok:
+		return Result.failure("busy staff_usage 折扣测试初始化失败: %s" % init.error)
+
+	var to_payday := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_PAYDAY, 30)
+	if not to_payday.ok:
+		return to_payday
+
+	var state := engine.get_state()
+	var actor := state.get_current_player_id()
+	if actor < 0:
+		return Result.failure("busy staff_usage 折扣测试无法获取当前玩家")
+
+	var player: Dictionary = state.get_player(actor)
+	player["employees"] = []
+	player["reserve_employees"] = []
+	player["busy_marketers"] = []
+	player["cash"] = 4
+	state.players[actor] = player
+
+	var take_manager := StateUpdaterClass.take_from_pool(state, "recruiting_manager", 1)
+	if not take_manager.ok:
+		return Result.failure("busy staff_usage 折扣测试取出 recruiting_manager 失败: %s" % take_manager.error)
+	var add_manager := StateUpdaterClass.add_employee(state, actor, "recruiting_manager", false)
+	if not add_manager.ok:
+		return Result.failure("busy staff_usage 折扣测试添加 recruiting_manager 失败: %s" % add_manager.error)
+	var manager_staff_id := int(Dictionary(add_manager.value).get("staff_id", -1))
+	if manager_staff_id <= 0:
+		return Result.failure("busy staff_usage 折扣测试 recruiting_manager staff_id 无效: %s" % str(add_manager.value))
+	player = state.get_player(actor)
+	var no_salary_ids: Array = Array(player.get("no_salary_employee_ids", []))
+	if not no_salary_ids.has("recruiting_manager"):
+		no_salary_ids.append("recruiting_manager")
+	player["no_salary_employee_ids"] = no_salary_ids
+	state.players[actor] = player
+
+	var take_busy := StateUpdaterClass.take_from_pool(state, "campaign_manager", 1)
+	if not take_busy.ok:
+		return Result.failure("busy staff_usage 折扣测试取出 campaign_manager 失败: %s" % take_busy.error)
+	var add_busy := StateUpdaterClass.add_staff_for_employee(state, actor, "campaign_manager", "busy_marketers")
+	if not add_busy.ok:
+		return Result.failure("busy staff_usage 折扣测试添加忙碌 campaign_manager 失败: %s" % add_busy.error)
+
+	var action = FireAction.new()
+	if action._can_fire_busy_marketer(state, actor, "campaign_manager"):
+		return Result.failure("recruiting_manager 未使用时仍有 $10 折扣，现金 $4 足以支付，不应允许解雇忙碌营销员")
+
+	var use_manager := StaffStateClass.increment_staff_track_usage(state, manager_staff_id, "recruit", 2)
+	if not use_manager.ok:
+		return Result.failure("busy staff_usage 折扣测试标记 recruiting_manager 使用失败: %s" % use_manager.error)
+	if not action._can_fire_busy_marketer(state, actor, "campaign_manager"):
+		return Result.failure("recruiting_manager 两次已用后无剩余折扣，现金 $4 不足以支付 $5，应允许解雇忙碌营销员")
 
 	return Result.success()
 

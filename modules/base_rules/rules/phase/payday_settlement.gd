@@ -7,7 +7,7 @@ const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
-const SalaryDiscountClass = preload("res://modules/base_rules/rules/phase/payday/payday_salary_discount.gd")
+const SalaryDiscountUsageClass = preload("res://core/rules/employee_rules/payday_salary_discount_usage.gd")
 const SalaryTokenPaymentClass = preload("res://modules/base_rules/rules/phase/payday/payday_salary_token_payment.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
@@ -24,8 +24,6 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 	var effect_registry = null
 	if phase_manager != null and phase_manager.has_method("get_effect_registry"):
 		effect_registry = phase_manager.get_effect_registry()
-	if effect_registry == null:
-		return Result.failure("PaydaySettlement: EffectRegistry 未设置")
 
 	var base_due: Array[int] = []
 	var discount: Array[int] = []
@@ -63,19 +61,14 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 			return Result.failure("PaydaySettlement: %s" % used_recruit_read.error)
 		var used_recruit: int = int(used_recruit_read.value)
 
-		var cap_read := SalaryDiscountClass.get_salary_discount_recruit_capacity(state, i, player, effect_registry)
-		if not cap_read.ok:
-			return cap_read
-		warnings.append_array(cap_read.warnings)
-		var discount_recruit_capacity: int = int(cap_read.value)
-		var total_recruit_capacity: int = EmployeeRulesClass.get_recruit_limit(player)
-		var non_discount_recruit_capacity: int = total_recruit_capacity - discount_recruit_capacity
-		if non_discount_recruit_capacity < 0:
-			return Result.failure("PaydaySettlement: 招聘次数计算不一致：total=%d < discount=%d" % [total_recruit_capacity, discount_recruit_capacity])
-
-		var used_from_discount: int = maxi(0, used_recruit - non_discount_recruit_capacity)
-		used_from_discount = mini(used_from_discount, discount_recruit_capacity)
-		var unused_discount_actions: int = maxi(0, discount_recruit_capacity - used_from_discount)
+		var discount_usage_read := SalaryDiscountUsageClass.collect_for_player(state, i, player, effect_registry)
+		if not discount_usage_read.ok:
+			return discount_usage_read
+		warnings.append_array(discount_usage_read.warnings)
+		var discount_usage: Dictionary = discount_usage_read.value
+		var discount_recruit_capacity: int = int(discount_usage.get("salary_discount_recruit_capacity", 0))
+		var used_from_discount: int = int(discount_usage.get("salary_discount_used_actions", 0))
+		var unused_discount_actions: int = int(discount_usage.get("salary_discount_unused_actions", 0))
 		# 注：即使薪水变为 $3，recruiting_manager/hr_director 的折扣仍为每次 $5（更高效）
 		var discount_amount: int = unused_discount_actions * base_salary_cost
 
@@ -154,7 +147,10 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 			"base_due": base_due_amount,
 			"recruit_used": used_recruit,
 			"salary_discount_recruit_capacity": discount_recruit_capacity,
+			"salary_discount_used_from_discount": used_from_discount,
 			"salary_discount_unused_actions": unused_discount_actions,
+			"salary_discount_sources": discount_usage.get("discount_sources", {}),
+			"salary_discount_staff_sources": discount_usage.get("staff_sources", []),
 			"salary_discount": discount_amount,
 			"milestone_delta": milestone_delta_amount,
 			"due": due_amount,

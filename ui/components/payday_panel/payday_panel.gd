@@ -10,12 +10,12 @@ signal right_panel_footer_changed()
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
-const EffectIdsSegmentInvokerClass = preload("res://core/rules/effect_ids_segment_invoker.gd")
 const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
+const SalaryDiscountUsageClass = preload("res://core/rules/employee_rules/payday_salary_discount_usage.gd")
 const UiNodeAccessClass = preload("res://ui/utils/node_access.gd")
 const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
@@ -334,47 +334,18 @@ func _compute_breakdown(player: Dictionary) -> Dictionary:
 				delta_total += v
 				delta_entries.append({"milestone_id": mid, "value": v})
 
-	# 折扣：优先使用 EffectRegistry（支持模块动态 effect）；缺失时退化为静态 EmployeeDef.effect_ids 扫描。
+	# 折扣：按具体员工实例 staff_usage 计算，避免用总招聘次数反推折扣来源。
 	var discount_recruit_capacity := 0
 	var discount_sources: Dictionary = {}
-	if _effect_registry != null and (player.get("employees", null) is Array):
-		var ctx := {"salary_discount_recruit_capacity": 0}
-		for emp_val in Array(player.get("employees", [])):
-			if not (emp_val is String):
-				continue
-			var emp_id := str(emp_val).strip_edges()
-			if emp_id.is_empty():
-				continue
-			var def_val = EmployeeRegistryClass.get_def(emp_id)
-			if def_val == null or not (def_val is EmployeeDef):
-				continue
-			var def: EmployeeDef = def_val
-			var before := int(ctx.get("salary_discount_recruit_capacity", 0))
-			var inv := EffectIdsSegmentInvokerClass.invoke_effect_ids_by_segment(
-				_effect_registry,
-				def.effect_ids,
-				":payday:salary_discount:",
-				[_state, _player_id, ctx, emp_id],
-				"PaydayPanelSalaryDiscount",
-				"EmployeeDef[%s].effect_ids" % emp_id
-			)
-			if not inv.ok:
-				continue
-			var after := int(ctx.get("salary_discount_recruit_capacity", 0))
-			var delta := after - before
-			if delta > 0:
-				discount_sources[emp_id] = int(discount_sources.get(emp_id, 0)) + delta
-		var cap_val = ctx.get("salary_discount_recruit_capacity", 0)
-		if cap_val is int:
-			discount_recruit_capacity = int(cap_val)
-		elif cap_val is float:
-			var f: float = float(cap_val)
-			if f == floor(f):
-				discount_recruit_capacity = int(f)
-	else:
-		var discount_info := _collect_payday_salary_discount_capacity_from_active(player)
-		discount_recruit_capacity = int(discount_info.get("total", 0))
-		discount_sources = discount_info.get("sources", {})
+	var used_from_discount := 0
+	var unused_discount_actions := 0
+	var discount_usage_read := SalaryDiscountUsageClass.collect_for_player(_state, _player_id, player, _effect_registry)
+	if discount_usage_read.ok:
+		var discount_usage: Dictionary = discount_usage_read.value
+		discount_recruit_capacity = int(discount_usage.get("salary_discount_recruit_capacity", 0))
+		used_from_discount = int(discount_usage.get("salary_discount_used_actions", 0))
+		unused_discount_actions = int(discount_usage.get("salary_discount_unused_actions", 0))
+		discount_sources = discount_usage.get("discount_sources", {})
 
 	var used_recruit := 0
 	if _state.round_state is Dictionary and _state.round_state.has("recruit_used"):
@@ -387,12 +358,6 @@ func _compute_breakdown(player: Dictionary) -> Dictionary:
 			if v2 is int:
 				used_recruit = int(v2)
 
-	var total_recruit_capacity: int = EmployeeRulesClass.get_recruit_limit(player)
-	var non_discount_recruit_capacity: int = total_recruit_capacity - discount_recruit_capacity
-	non_discount_recruit_capacity = maxi(0, non_discount_recruit_capacity)
-	var used_from_discount: int = maxi(0, used_recruit - non_discount_recruit_capacity)
-	used_from_discount = mini(used_from_discount, discount_recruit_capacity)
-	var unused_discount_actions: int = maxi(0, discount_recruit_capacity - used_from_discount)
 	var discount_amount: int = unused_discount_actions * base_salary_cost
 
 	var due_total := maxi(0, base_due_amount + delta_total - discount_amount)
@@ -581,42 +546,6 @@ func _can_fire_busy_marketer_now(player: Dictionary, breakdown: Dictionary) -> b
 	var cash: int = int(breakdown.get("cash", 0))
 	var due_cash: int = int(breakdown.get("due_cash", 0))
 	return cash < due_cash
-
-static func _collect_payday_salary_discount_capacity_from_active(player: Dictionary) -> Dictionary:
-	var emp_val = player.get("employees", null)
-	if not (emp_val is Array):
-		return {"total": 0, "sources": {}}
-	var employees: Array = emp_val
-
-	var sources: Dictionary = {}
-	var total := 0
-	for v in employees:
-		if not (v is String):
-			continue
-		var emp_id: String = str(v)
-		if emp_id.is_empty():
-			continue
-		var def_val = EmployeeRegistryClass.get_def(emp_id)
-		if def_val == null or not (def_val is EmployeeDef):
-			continue
-		var def: EmployeeDef = def_val
-
-		var has_discount := false
-		for eff_id in def.effect_ids:
-			var s: String = str(eff_id)
-			if s.find(":payday:salary_discount:") >= 0:
-				has_discount = true
-				break
-		if not has_discount:
-			continue
-
-		var cap := int(def.recruit_capacity)
-		if cap <= 0:
-			continue
-		total += cap
-		sources[emp_id] = int(sources.get(emp_id, 0)) + cap
-
-	return {"total": total, "sources": sources}
 
 static func _count_food_drink_tokens(inventory: Dictionary) -> int:
 	var total := 0

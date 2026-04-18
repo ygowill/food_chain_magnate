@@ -7,6 +7,7 @@ const PaydaySettlementClass = preload("res://modules/base_rules/rules/phase/payd
 const SalaryDiscountClass = preload("res://modules/base_rules/rules/phase/payday/payday_salary_discount.gd")
 const EffectRegistryClass = preload("res://core/rules/effect_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var r_strict := _test_recruit_capacity_strict_parsing()
@@ -16,6 +17,10 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var r_discount := _test_payday_salary_discount_uses_recruit_capacity_and_active_only()
 	if not r_discount.ok:
 		return r_discount
+
+	var r_staff_usage := _test_payday_salary_discount_uses_staff_usage_not_total_recruit_used()
+	if not r_staff_usage.ok:
+		return r_staff_usage
 
 	var r_unknown := _test_payday_salary_discount_fails_fast_on_unknown_active_employee()
 	if not r_unknown.ok:
@@ -222,6 +227,94 @@ static func _test_payday_salary_discount_uses_recruit_capacity_and_active_only()
 		return Result.failure("%s(B) salary_discount_recruit_capacity 类型错误（期望 int）" % NAME)
 	if int(cap_b) != 3:
 		return Result.failure("%s(B) 折扣次数应来自 recruit_capacity=3，实际: %d" % [NAME, int(cap_b)])
+
+	return Result.success()
+
+static func _test_payday_salary_discount_uses_staff_usage_not_total_recruit_used() -> Result:
+	const NAME := "PaydaySalaryDiscountStaffUsage"
+
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, 12345)
+	if not init.ok:
+		return Result.failure("%s 初始化失败: %s" % [NAME, init.error])
+	var state := engine.get_state()
+
+	var take_manager := StateUpdater.take_from_pool(state, "recruiting_manager", 1)
+	if not take_manager.ok:
+		return Result.failure("%s 从员工池取出 recruiting_manager 失败: %s" % [NAME, take_manager.error])
+	var add_manager := StateUpdater.add_employee(state, 0, "recruiting_manager", false)
+	if not add_manager.ok:
+		return Result.failure("%s 添加 recruiting_manager 到 employees 失败: %s" % [NAME, add_manager.error])
+	var manager_staff_id := int(Dictionary(add_manager.value).get("staff_id", -1))
+	if manager_staff_id <= 0:
+		return Result.failure("%s recruiting_manager staff_id 无效: %s" % [NAME, str(add_manager.value)])
+
+	var player: Dictionary = state.get_player(0)
+	var active_ids: Array = Array(player.get("employees_staff_ids", []))
+	if active_ids.is_empty():
+		return Result.failure("%s 缺少 CEO staff_id" % NAME)
+	var ceo_staff_id := int(active_ids[0])
+	if ceo_staff_id <= 0 or ceo_staff_id == manager_staff_id:
+		return Result.failure("%s CEO/recruiting_manager staff_id 异常: %s / %d" % [NAME, str(active_ids), manager_staff_id])
+
+	var ceo_use := StaffStateClass.increment_staff_track_usage(state, ceo_staff_id, "recruit", 1)
+	if not ceo_use.ok:
+		return Result.failure("%s 标记 CEO 招聘使用失败: %s" % [NAME, ceo_use.error])
+	var legacy_total := RoundStateCounters.increment_player_count(state.round_state, "recruit_used", 0, 1)
+	if not legacy_total.ok:
+		return Result.failure("%s 写入 recruit_used 失败: %s" % [NAME, legacy_total.error])
+
+	var cash := StateUpdater.player_receive_from_bank(state, 0, 50)
+	if not cash.ok:
+		return Result.failure("%s 发放测试现金失败: %s" % [NAME, cash.error])
+
+	var apply := PaydaySettlementClass.apply(state, engine.phase_manager)
+	if not apply.ok:
+		return Result.failure("%s PaydaySettlement 失败: %s" % [NAME, apply.error])
+	var details: Array = Array(Dictionary(state.round_state.get("payday", {})).get("details", []))
+	if details.size() < 1 or not (details[0] is Dictionary):
+		return Result.failure("%s payday.details 结构错误" % NAME)
+	var d: Dictionary = details[0]
+	if int(d.get("salary_discount_recruit_capacity", -1)) != 2:
+		return Result.failure("%s recruiting_manager 应提供 2 次折扣容量，实际: %s" % [NAME, str(d)])
+	if int(d.get("salary_discount_unused_actions", -1)) != 2:
+		return Result.failure("%s 只使用 CEO 招聘时，recruiting_manager 2 次折扣应全部未用，实际: %s" % [NAME, str(d)])
+	if int(d.get("salary_discount", -1)) != 10:
+		return Result.failure("%s 未用折扣金额应为 $10，实际: %s" % [NAME, str(d)])
+
+	var engine2 := GameEngine.new()
+	var init2 := engine2.initialize(2, 12346)
+	if not init2.ok:
+		return Result.failure("%s(B) 初始化失败: %s" % [NAME, init2.error])
+	var state2 := engine2.get_state()
+	var take_manager2 := StateUpdater.take_from_pool(state2, "recruiting_manager", 1)
+	if not take_manager2.ok:
+		return Result.failure("%s(B) 从员工池取出 recruiting_manager 失败: %s" % [NAME, take_manager2.error])
+	var add_manager2 := StateUpdater.add_employee(state2, 0, "recruiting_manager", false)
+	if not add_manager2.ok:
+		return Result.failure("%s(B) 添加 recruiting_manager 失败: %s" % [NAME, add_manager2.error])
+	var manager_staff_id2 := int(Dictionary(add_manager2.value).get("staff_id", -1))
+	var manager_use := StaffStateClass.increment_staff_track_usage(state2, manager_staff_id2, "recruit", 1)
+	if not manager_use.ok:
+		return Result.failure("%s(B) 标记 recruiting_manager 招聘使用失败: %s" % [NAME, manager_use.error])
+	var legacy_total2 := RoundStateCounters.increment_player_count(state2.round_state, "recruit_used", 0, 1)
+	if not legacy_total2.ok:
+		return Result.failure("%s(B) 写入 recruit_used 失败: %s" % [NAME, legacy_total2.error])
+	var cash2 := StateUpdater.player_receive_from_bank(state2, 0, 50)
+	if not cash2.ok:
+		return Result.failure("%s(B) 发放测试现金失败: %s" % [NAME, cash2.error])
+
+	var apply2 := PaydaySettlementClass.apply(state2, engine2.phase_manager)
+	if not apply2.ok:
+		return Result.failure("%s(B) PaydaySettlement 失败: %s" % [NAME, apply2.error])
+	var details2: Array = Array(Dictionary(state2.round_state.get("payday", {})).get("details", []))
+	if details2.size() < 1 or not (details2[0] is Dictionary):
+		return Result.failure("%s(B) payday.details 结构错误" % NAME)
+	var d2: Dictionary = details2[0]
+	if int(d2.get("salary_discount_unused_actions", -1)) != 1:
+		return Result.failure("%s(B) 使用 recruiting_manager 一次后应剩 1 次折扣，实际: %s" % [NAME, str(d2)])
+	if int(d2.get("salary_discount", -1)) != 5:
+		return Result.failure("%s(B) 使用 recruiting_manager 一次后折扣金额应为 $5，实际: %s" % [NAME, str(d2)])
 
 	return Result.success()
 

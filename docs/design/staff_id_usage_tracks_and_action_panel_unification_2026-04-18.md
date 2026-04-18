@@ -16,7 +16,7 @@
 
 尚未完成：
 
-- Payday 薪资折扣从 `staff_usage` 完全收口
+- Payday 薪资折扣已从 `staff_usage` 完全收口
 - 其它员工动作面板（采购/营销/房屋/餐厅）统一到同一 staff 驱动框架
 
 ---

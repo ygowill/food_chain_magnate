@@ -3,6 +3,7 @@ class_name FireActionStateAccessTest
 extends RefCounted
 
 const FireActionClass = preload("res://gameplay/actions/fire_action.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var r := _test_find_employee_location_reads_player_arrays()
@@ -17,7 +18,7 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_can_fire_busy_marketer_tolerates_invalid_cash_field(player_count, seed_val)
 	if not r.ok:
 		return r
-	r = _test_can_fire_busy_marketer_tolerates_invalid_recruit_used(player_count, seed_val)
+	r = _test_can_fire_busy_marketer_tolerates_invalid_staff_usage(player_count, seed_val)
 	if not r.ok:
 		return r
 	r = _test_can_fire_busy_marketer_tolerates_invalid_busy_marketer_entries(player_count, seed_val)
@@ -88,25 +89,26 @@ static func _test_can_fire_busy_marketer_tolerates_invalid_cash_field(player_cou
 		return Result.failure("cash 字段损坏时应 fail-soft 返回 false")
 	return Result.success()
 
-static func _test_can_fire_busy_marketer_tolerates_invalid_recruit_used(player_count: int, seed_val: int) -> Result:
+static func _test_can_fire_busy_marketer_tolerates_invalid_staff_usage(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
 	var init := engine.initialize(player_count, seed_val)
 	if not init.ok:
 		return Result.failure("初始化失败: %s" % init.error)
 	var state := engine.get_state()
 	var player := state.players[0]
-	player["employees"] = []
+	player["employees"] = ["recruiting_manager"]
 	player["reserve_employees"] = []
 	player["busy_marketers"] = ["campaign_manager"]
 	player["cash"] = 0
 	state.players[0] = player
-	state.round_state["recruit_used"] = {
-		"0": 1,
-		0: 0,
-	}
+	var sync := StaffStateClass.ensure_state_staff_support(state)
+	if not sync.ok:
+		return Result.failure("同步 staff 支持失败: %s" % sync.error)
+	var manager_staff_id := int(Array(state.players[0].get("employees_staff_ids", []))[0])
+	state.round_state["staff_usage"] = {manager_staff_id: {"recruit": -1}}
 	var action = FireActionClass.new()
 	if action._can_fire_busy_marketer(state, 0, "campaign_manager"):
-		return Result.failure("recruit_used 损坏时应 fail-soft 返回 false")
+		return Result.failure("staff_usage 损坏时应 fail-soft 返回 false")
 	return Result.success()
 
 static func _test_can_fire_busy_marketer_tolerates_invalid_busy_marketer_entries(player_count: int, seed_val: int) -> Result:
