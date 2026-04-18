@@ -227,20 +227,7 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 	# 阶段变化事件（当“全员确认结束”触发自动推进时）
 	if old_state.phase != new_state.phase:
 		if str(old_state.phase) == DefsClass.PHASE_PAYDAY:
-			var report_payday: Dictionary = {}
-			if new_state.round_state is Dictionary:
-				var v2 = Dictionary(new_state.round_state).get("payday", null)
-				if v2 is Dictionary:
-					report_payday = Dictionary(v2).duplicate(true)
-			events.append({
-				"type": EventBus.EventType.PAYDAY_REPORT,
-				"data": {
-					"round": old_state.round_number,
-					"from_phase": str(old_state.phase),
-					"to_phase": str(new_state.phase),
-					"report": report_payday,
-				}
-			})
+			events.append_array(CommandRunnerClass.build_payday_report_events(old_state, new_state))
 
 		# Marketing 结算摘要：在离开 Marketing 时发射（便于 UI 日志从 EventBus.history 恢复）。
 		# issue_tracker #48: per board 1 log entry, with details in event data.

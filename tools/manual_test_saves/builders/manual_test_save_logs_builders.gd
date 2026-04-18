@@ -280,8 +280,8 @@ func _build_logs_payday_details(engine: GameEngine, _c: Dictionary) -> Result:
 		"scenario": [
 			"玩家1：hr_director（在岗）+ campaign_manager（忙碌营销）+ burger_cook（待命，已在 Payday 解雇）。",
 			"玩家1持有里程碑 first_train（总薪资 -$15）与 first_billboard（营销员工免薪）。",
-			"当前停在 Payday，玩家2为当前玩家；日志历史里已经包含一条解雇日志。",
-			"进入后继续点「确认结束」，当轮 Payday 完成时会新增每位玩家的发薪总结，并展示逐员工发薪/免薪/减免来源。",
+			"当前停在 Payday，玩家1为当前玩家；日志历史里已经包含一条解雇日志。",
+			"进入后依次让玩家1、玩家2点击「确认结束」，当轮 Payday 完成时会新增每位玩家的发薪总结，并展示逐员工发薪/免薪/减免来源。",
 		],
 	})
 

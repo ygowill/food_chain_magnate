@@ -62,6 +62,8 @@ static func entry_is_stage_event(entry: Dictionary) -> bool:
 			t = str(Dictionary(details_val).get("event_type", "")).strip_edges()
 	if t.is_empty():
 		return false
+	if t == "payday_report":
+		return false
 	if t.ends_with("_report"):
 		return true
 	return t in ["phase_changed", "sub_phase_changed", "round_started", "round_ended"]
@@ -75,4 +77,3 @@ static func format_details_for_view(details) -> String:
 		if not json.is_empty() and json != "null":
 			return json
 	return var_to_str(details)
-
