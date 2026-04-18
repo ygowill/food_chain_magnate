@@ -36,9 +36,15 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	for i in range(player_count):
 		var player := state.get_player(i)
 		var employees: Array = player.get("employees", [])
+		var employees_staff_ids: Array = player.get("employees_staff_ids", [])
+		var staff_registry: Dictionary = player.get("staff_registry", {})
 
 		if employees.size() != 1:
 			return Result.failure("玩家 %d 初始员工数量应为 1，实际: %d" % [i, employees.size()])
+		if employees_staff_ids.size() != employees.size():
+			return Result.failure("玩家 %d employees_staff_ids 应与 employees 等长，实际: %d vs %d" % [i, employees_staff_ids.size(), employees.size()])
+		if staff_registry.size() != employees.size():
+			return Result.failure("玩家 %d staff_registry 数量应与 employees 一致，实际: %d vs %d" % [i, staff_registry.size(), employees.size()])
 
 		var first_emp = employees[0]
 		var emp_id := ""
@@ -51,6 +57,15 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 
 		if emp_id != "ceo":
 			return Result.failure("玩家 %d 初始员工应为 'ceo'，实际: '%s'" % [i, emp_id])
+
+		var staff_id := int(employees_staff_ids[0])
+		if staff_id <= 0:
+			return Result.failure("玩家 %d 初始 CEO staff_id 应为正整数，实际: %s" % [i, str(employees_staff_ids)])
+		if not staff_registry.has(staff_id):
+			return Result.failure("玩家 %d staff_registry 应包含 CEO 的 staff_id=%d" % [i, staff_id])
+		var staff_record: Dictionary = staff_registry.get(staff_id, {})
+		if str(staff_record.get("employee_type", "")) != "ceo":
+			return Result.failure("玩家 %d CEO staff 记录 employee_type 应为 ceo，实际: %s" % [i, str(staff_record)])
 
 	# 5) 验证 count_paid_employees 返回 0（CEO 不计入）
 	for i in range(player_count):
@@ -70,5 +85,6 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		"player_count": player_count,
 		"seed": seed_val,
 		"ceo_salary": ceo_def.salary,
-		"employee_count": EmployeeRegistryClass.get_count()
+		"employee_count": EmployeeRegistryClass.get_count(),
+		"next_staff_id": state.next_staff_id,
 	})

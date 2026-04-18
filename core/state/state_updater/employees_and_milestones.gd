@@ -2,6 +2,7 @@ extends RefCounted
 
 const Collections = preload("res://core/state/state_updater/collections.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 # === 员工操作 ===
 
@@ -31,9 +32,15 @@ static func add_employee(state: GameState, player_id: int, employee_id: String, 
 		return Result.failure("employee_id 不能为空")
 
 	var target_key := "reserve_employees" if to_reserve else "employees"
-	Collections.append_to_array(state.players[player_id], target_key, employee_id)
-
-	return Result.success({"employee_id": employee_id, "location": target_key})
+	var add_staff_read := StaffStateClass.add_staff_for_employee(state, player_id, employee_id, target_key)
+	if not add_staff_read.ok:
+		return add_staff_read
+	var add_info: Dictionary = add_staff_read.value
+	return Result.success({
+		"employee_id": employee_id,
+		"location": target_key,
+		"staff_id": int(add_info.get("staff_id", -1)),
+	})
 
 # 从员工池取出员工
 static func take_from_pool(state: GameState, employee_type: String, count: int = 1) -> Result:

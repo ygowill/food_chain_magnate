@@ -8,6 +8,7 @@ const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const PoolBuilderClass = preload("res://core/modules/v2/pool_builder.gd")
 const GameConstantsClass = preload("res://core/engine/game_constants.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 const RESTAURANT_LOGO_ASSIGNMENT_PROVIDER_PATH_SETTING = "fcm/restaurant_logo_assignment_provider_path"
 static var restaurant_logo_assignment_provider_path_override: String = ""
@@ -146,13 +147,19 @@ static func apply_initial_state(
 		"mandatory_actions_completed": {},
 		"actions_this_round": [],
 		"action_counts": {},
-		"sub_phase_passed": {}
+		"sub_phase_passed": {},
+		"staff_usage": {},
+		"staff_train_event_counts": {}
 	}
 	for i in range(player_count):
 		state.round_state.mandatory_actions_completed[i] = []
 		state.round_state.sub_phase_passed[i] = false
 
 	state.marketing_instances.clear()
+
+	var staff_sync := StaffStateClass.ensure_state_staff_support(state)
+	if not staff_sync.ok:
+		return staff_sync
 
 	return Result.success(state)
 
@@ -256,8 +263,12 @@ static func _create_player_from_config(id: int, cfg) -> Dictionary:
 		"forfeited": false,
 		"cash": int(cfg.player_starting_cash),
 		"employees": employees,
+		"employees_staff_ids": [],
 		"reserve_employees": [],
+		"reserve_staff_ids": [],
 		"busy_marketers": [],
+		"busy_staff_ids": [],
+		"staff_registry": {},
 		"banned_employee_ids": [],
 		"can_peek_all_reserve_cards": false,
 		"multi_trainer_on_one": false,

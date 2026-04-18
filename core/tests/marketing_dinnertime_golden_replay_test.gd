@@ -42,13 +42,17 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var take_cook := StateUpdaterClass.take_from_pool(state, "burger_cook", 1)
 	if not take_cook.ok:
 		return Result.failure("从员工池取出 burger_cook 失败: %s" % take_cook.error)
-	state.players[0]["employees"].append("burger_cook")
+	var add_cook := StateUpdaterClass.add_employee(state, 0, "burger_cook", false)
+	if not add_cook.ok:
+		return Result.failure("给玩家0 添加 burger_cook 失败: %s" % add_cook.error)
 
 	# 放入一个忙碌营销员 + 一张待结算的 billboard 营销实例（duration=1）
 	var take_marketer := StateUpdaterClass.take_from_pool(state, "marketing_trainee", 1)
 	if not take_marketer.ok:
 		return Result.failure("从员工池取出 marketing_trainee 失败: %s" % take_marketer.error)
-	state.players[0]["busy_marketers"] = ["marketing_trainee"]
+	var add_busy_marketer := StateUpdaterClass.add_staff_for_employee(state, 0, "marketing_trainee", "busy_marketers")
+	if not add_busy_marketer.ok:
+		return Result.failure("给玩家0 添加忙碌 marketing_trainee 失败: %s" % add_busy_marketer.error)
 
 	state.marketing_instances = [{
 		"board_number": 11,

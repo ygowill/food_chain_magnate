@@ -51,6 +51,30 @@ static func require_busy_marketers(player: Dictionary, player_label: String, pre
 		return Result.failure("%s%s.busy_marketers 缺失或类型错误（期望 Array）" % [prefix, player_label])
 	return Result.success(player["busy_marketers"])
 
+static func require_staff_registry(player: Dictionary, player_label: String, prefix_label: String) -> Result:
+	var prefix := _prefix(prefix_label)
+	if not player.has("staff_registry") or not (player["staff_registry"] is Dictionary):
+		return Result.failure("%s%s.staff_registry 缺失或类型错误（期望 Dictionary）" % [prefix, player_label])
+	return Result.success(player["staff_registry"])
+
+static func require_employees_staff_ids(player: Dictionary, player_label: String, prefix_label: String) -> Result:
+	var prefix := _prefix(prefix_label)
+	if not player.has("employees_staff_ids") or not (player["employees_staff_ids"] is Array):
+		return Result.failure("%s%s.employees_staff_ids 缺失或类型错误（期望 Array）" % [prefix, player_label])
+	return Result.success(player["employees_staff_ids"])
+
+static func require_reserve_staff_ids(player: Dictionary, player_label: String, prefix_label: String) -> Result:
+	var prefix := _prefix(prefix_label)
+	if not player.has("reserve_staff_ids") or not (player["reserve_staff_ids"] is Array):
+		return Result.failure("%s%s.reserve_staff_ids 缺失或类型错误（期望 Array）" % [prefix, player_label])
+	return Result.success(player["reserve_staff_ids"])
+
+static func require_busy_staff_ids(player: Dictionary, player_label: String, prefix_label: String) -> Result:
+	var prefix := _prefix(prefix_label)
+	if not player.has("busy_staff_ids") or not (player["busy_staff_ids"] is Array):
+		return Result.failure("%s%s.busy_staff_ids 缺失或类型错误（期望 Array）" % [prefix, player_label])
+	return Result.success(player["busy_staff_ids"])
+
 static func require_company_structure(player: Dictionary, player_label: String, prefix_label: String) -> Result:
 	var prefix := _prefix(prefix_label)
 	if not player.has("company_structure") or not (player["company_structure"] is Dictionary):
@@ -123,6 +147,34 @@ static func require_player_restaurants(state: GameState, player_id: int, prefix_
 		return player_read
 	var player: Dictionary = player_read.value
 	return require_restaurants(player, "player[%d]" % player_id, prefix_label)
+
+static func require_player_staff_registry(state: GameState, player_id: int, prefix_label: String) -> Result:
+	var player_read := require_player(state, player_id, prefix_label)
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
+	return require_staff_registry(player, "player[%d]" % player_id, prefix_label)
+
+static func require_player_employees_staff_ids(state: GameState, player_id: int, prefix_label: String) -> Result:
+	var player_read := require_player(state, player_id, prefix_label)
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
+	return require_employees_staff_ids(player, "player[%d]" % player_id, prefix_label)
+
+static func require_player_reserve_staff_ids(state: GameState, player_id: int, prefix_label: String) -> Result:
+	var player_read := require_player(state, player_id, prefix_label)
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
+	return require_reserve_staff_ids(player, "player[%d]" % player_id, prefix_label)
+
+static func require_player_busy_staff_ids(state: GameState, player_id: int, prefix_label: String) -> Result:
+	var player_read := require_player(state, player_id, prefix_label)
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
+	return require_busy_staff_ids(player, "player[%d]" % player_id, prefix_label)
 
 static func require_player_int_field(state: GameState, player_id: int, field_name: String, prefix_label: String) -> Result:
 	var player_read := require_player(state, player_id, prefix_label)

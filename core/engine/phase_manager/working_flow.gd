@@ -7,6 +7,7 @@ const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_q
 const IntValueParseHelpersClass = preload("res://core/utils/int_value_parse_helpers.gd")
 const RoundStateSubPhasePassedClass = preload("res://core/utils/round_state_sub_phase_passed.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 static func start_new_round(state: GameState) -> void:
 	# 重建回合状态（避免残留旧回合的计数/完成记录）
@@ -19,7 +20,9 @@ static func start_new_round(state: GameState) -> void:
 		"mandatory_actions_completed": mandatory,
 		"actions_this_round": [],
 		"action_counts": {},
-		"sub_phase_passed": passed
+		"sub_phase_passed": passed,
+		"staff_usage": {},
+		"staff_train_event_counts": {}
 	}
 
 static func auto_activate_reserve_employees(state: GameState) -> Result:
@@ -46,6 +49,17 @@ static func auto_activate_reserve_employees(state: GameState) -> Result:
 		active.append_array(reserve)
 		player["employees"] = active
 		player["reserve_employees"] = []
+		var reserve_staff_ids_read := PlayerStateAccessClass.require_reserve_staff_ids(player, "players[%d]" % i, "WorkingFlow.auto_activate_reserve_employees")
+		if not reserve_staff_ids_read.ok:
+			return reserve_staff_ids_read
+		var reserve_staff_ids: Array = reserve_staff_ids_read.value
+		var employees_staff_ids_read := PlayerStateAccessClass.require_employees_staff_ids(player, "players[%d]" % i, "WorkingFlow.auto_activate_reserve_employees")
+		if not employees_staff_ids_read.ok:
+			return employees_staff_ids_read
+		var employees_staff_ids: Array = employees_staff_ids_read.value
+		employees_staff_ids.append_array(reserve_staff_ids)
+		player["employees_staff_ids"] = employees_staff_ids
+		player["reserve_staff_ids"] = []
 		var cap_r := _enforce_company_capacity(player)
 		if not cap_r.ok:
 			return cap_r
@@ -98,6 +112,8 @@ static func reset_working_phase_state(state: GameState) -> void:
 static func reset_working_sub_phase_state(state: GameState) -> void:
 	if state.round_state is Dictionary:
 		state.round_state["action_counts"] = {}
+		state.round_state["staff_usage"] = {}
+		state.round_state["staff_train_event_counts"] = {}
 		# Train 子阶段：记录“培训员 slot 使用情况”（用于 coach/guru 多步培训）也需随子阶段重置。
 		state.round_state["train_slot_usage"] = {}
 		state.round_state["train_slot_usage_instances"] = {}

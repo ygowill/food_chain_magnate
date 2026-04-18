@@ -23,6 +23,8 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 		"production_counts": {0: {"burger_cook": 1}},
 		"procurement_counts": {0: {"beer": 1}},
 		"marketing_used": {0: {"airplane": 1}},
+		"staff_usage": {1: {"recruit": 1}, 2: {"train": 2}},
+		"staff_train_event_counts": {2: 1},
 	}
 
 	var data: Dictionary = state.to_dict()
@@ -48,8 +50,17 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var r5 := _case_reject_negative_recruit_used(data)
 	if not r5.ok:
 		return r5
+	var r6 := _case_reject_bad_staff_usage_key(data)
+	if not r6.ok:
+		return r6
+	var r7 := _case_reject_negative_staff_usage_value(data)
+	if not r7.ok:
+		return r7
+	var r8 := _case_reject_negative_staff_train_event_count(data)
+	if not r8.ok:
+		return r8
 
-	return Result.success({"cases": 5})
+	return Result.success({"cases": 8})
 
 static func _assert_round_state_normalized(round_state: Dictionary) -> Result:
 	for key in ["mandatory_actions_completed", "actions_this_round", "action_counts", "sub_phase_passed"]:
@@ -115,6 +126,8 @@ static func _assert_round_state_normalized(round_state: Dictionary) -> Result:
 		"production_counts",
 		"procurement_counts",
 		"marketing_used",
+		"staff_usage",
+		"staff_train_event_counts",
 	]:
 		if not round_state.has(counter_key):
 			return Result.failure("round_state 缺少字段: %s" % counter_key)
@@ -124,6 +137,28 @@ static func _assert_round_state_normalized(round_state: Dictionary) -> Result:
 		var d: Dictionary = v
 		if d.has("0") or d.has("1"):
 			return Result.failure("round_state.%s 不应包含字符串玩家 key" % counter_key)
+
+	var staff_usage_val = round_state.get("staff_usage", null)
+	if not (staff_usage_val is Dictionary):
+		return Result.failure("staff_usage 类型错误（期望 Dictionary）")
+	var staff_usage: Dictionary = staff_usage_val
+	if staff_usage.has("1") or staff_usage.has("2"):
+		return Result.failure("staff_usage 不应包含字符串 staff_id key")
+	for staff_id in [1, 2]:
+		if not staff_usage.has(staff_id):
+			return Result.failure("staff_usage 缺少 staff_id key: %d" % staff_id)
+		var per_val = staff_usage.get(staff_id, null)
+		if not (per_val is Dictionary):
+			return Result.failure("staff_usage[%d] 类型错误（期望 Dictionary）" % staff_id)
+
+	var train_counts_val = round_state.get("staff_train_event_counts", null)
+	if not (train_counts_val is Dictionary):
+		return Result.failure("staff_train_event_counts 类型错误（期望 Dictionary）")
+	var train_counts: Dictionary = train_counts_val
+	if train_counts.has("2"):
+		return Result.failure("staff_train_event_counts 不应包含字符串 staff_id key")
+	if int(train_counts.get(2, -1)) != 1:
+		return Result.failure("staff_train_event_counts[2] 应为 1，实际: %s" % str(train_counts))
 
 	return Result.success()
 
@@ -181,4 +216,46 @@ static func _case_reject_negative_recruit_used(base: Dictionary) -> Result:
 	var err := str(r.error)
 	if err.find("recruit_used") < 0 or err.find("不能为负数") < 0:
 		return Result.failure("错误信息应包含 recruit_used 与 不能为负数，实际: %s" % err)
+	return Result.success()
+
+static func _case_reject_bad_staff_usage_key(base: Dictionary) -> Result:
+	var d := base.duplicate(true)
+	var rs: Dictionary = d.get("round_state", {})
+	rs["staff_usage"] = {"bad": {"recruit": 1}}
+	d["round_state"] = rs
+
+	var r := GameStateClass.from_dict(d)
+	if r.ok:
+		return Result.failure("staff_usage key 非正整数字符串时应失败，但返回 ok")
+	var err := str(r.error)
+	if err.find("staff_usage") < 0 or err.find("正整数或数字字符串") < 0:
+		return Result.failure("错误信息应包含 staff_usage 与 正整数或数字字符串，实际: %s" % err)
+	return Result.success()
+
+static func _case_reject_negative_staff_usage_value(base: Dictionary) -> Result:
+	var d := base.duplicate(true)
+	var rs: Dictionary = d.get("round_state", {})
+	rs["staff_usage"] = {"1": {"recruit": -1}}
+	d["round_state"] = rs
+
+	var r := GameStateClass.from_dict(d)
+	if r.ok:
+		return Result.failure("staff_usage 出现负数时应失败，但返回 ok")
+	var err := str(r.error)
+	if err.find("staff_usage") < 0 or err.find("不能为负数") < 0:
+		return Result.failure("错误信息应包含 staff_usage 与 不能为负数，实际: %s" % err)
+	return Result.success()
+
+static func _case_reject_negative_staff_train_event_count(base: Dictionary) -> Result:
+	var d := base.duplicate(true)
+	var rs: Dictionary = d.get("round_state", {})
+	rs["staff_train_event_counts"] = {"2": -1}
+	d["round_state"] = rs
+
+	var r := GameStateClass.from_dict(d)
+	if r.ok:
+		return Result.failure("staff_train_event_counts 出现负数时应失败，但返回 ok")
+	var err := str(r.error)
+	if err.find("staff_train_event_counts") < 0 or err.find("不能为负数") < 0:
+		return Result.failure("错误信息应包含 staff_train_event_counts 与 不能为负数，实际: %s" % err)
 	return Result.success()

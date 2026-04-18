@@ -8,6 +8,7 @@ const Collections = preload("res://core/state/state_updater/collections.gd")
 const InventoryOps = preload("res://core/state/state_updater/inventory.gd")
 const PeopleOps = preload("res://core/state/state_updater/employees_and_milestones.gd")
 const BatchOps = preload("res://core/state/state_updater/batch.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 # === 现金操作 ===
 
@@ -78,6 +79,9 @@ static func has_inventory(state: GameState, player_id: int, food_type: String, a
 
 static func add_employee(state: GameState, player_id: int, employee_id: String, to_reserve: bool = false) -> Result:
 	return PeopleOps.add_employee(state, player_id, employee_id, to_reserve)
+
+static func add_staff_for_employee(state: GameState, player_id: int, employee_id: String, zone_key: String) -> Result:
+	return StaffStateClass.add_staff_for_employee(state, player_id, employee_id, zone_key)
 
 static func take_from_pool(state: GameState, employee_type: String, count: int = 1) -> Result:
 	return PeopleOps.take_from_pool(state, employee_type, count)

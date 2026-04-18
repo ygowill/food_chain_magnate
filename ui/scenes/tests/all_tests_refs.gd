@@ -139,6 +139,7 @@ const RoundStateFailFastTestClass = preload("res://core/tests/round_state_fail_f
 const RoundStatePlayerBoolFlagsTestClass = preload("res://core/tests/round_state_player_bool_flags_test.gd")
 const RoundStateOrderOfBusinessTestClass = preload("res://core/tests/round_state_order_of_business_test.gd")
 const RoundStateSubPhasePassedTestClass = preload("res://core/tests/round_state_sub_phase_passed_test.gd")
+const StaffStateTestClass = preload("res://core/tests/staff_state_test.gd")
 const PlayerStateAccessTestClass = preload("res://core/tests/player_state_access_test.gd")
 const MapStateAccessTestClass = preload("res://core/tests/map_state_access_test.gd")
 const BankStateAccessTestClass = preload("res://core/tests/bank_state_access_test.gd")

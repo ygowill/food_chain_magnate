@@ -27,6 +27,7 @@
 ### 想看设计方案
 
 - 总体技术设计：`docs/design.md`
+- 员工 `staff_id` / usage track / 动作面板统一：`docs/design/staff_id_usage_tracks_and_action_panel_unification_2026-04-18.md`
 - UI 重构：`docs/design/ui_redesign.md`
 - UI 视觉升级：`docs/design/ui_visual_upgrade_design.md`
 - 游戏设置页：`docs/design/game_setup_page_redesign.md`
@@ -75,10 +76,11 @@
 1. `docs/architecture/20-ui.md`
 2. `docs/architecture/21-ui-game-scene.md`
 3. `docs/architecture/23-ui-overlay-guidelines.md`
-4. `docs/design/ui_redesign.md`
-5. `docs/plans/ui_remediation_plan.md`
-6. `docs/plans/ui_development_plan.md`
-7. `docs/reports/ui/`
+4. `docs/design/staff_id_usage_tracks_and_action_panel_unification_2026-04-18.md`
+5. `docs/design/ui_redesign.md`
+6. `docs/plans/ui_remediation_plan.md`
+7. `docs/plans/ui_development_plan.md`
+8. `docs/reports/ui/`
 
 ### 路线 C：准备改联机 / 平台
 
@@ -95,8 +97,9 @@
 2. `docs/architecture/31-core-phase-manager.md`
 3. `docs/architecture/32-core-actions-framework.md`
 4. `docs/architecture/33-core-state-model.md`
-5. `docs/architecture/60-modules-v2.md`
-6. `docs/reports/core/`
+5. `docs/design/staff_id_usage_tracks_and_action_panel_unification_2026-04-18.md`
+6. `docs/architecture/60-modules-v2.md`
+7. `docs/reports/core/`
 
 ---
 

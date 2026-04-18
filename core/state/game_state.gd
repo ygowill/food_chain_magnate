@@ -8,6 +8,7 @@ const SCHEMA_VERSION := 3
 
 const SerializationClass = preload("res://core/state/game_state_serialization.gd")
 const FactoryClass = preload("res://core/state/game_state_factory.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 # === 回合与阶段 ===
 var round_number: int = 0
@@ -52,12 +53,17 @@ var milestone_pool: Array[String] = []  # 可获取的里程碑
 # === 营销实例 ===
 var marketing_instances: Array[Dictionary] = []
 
+# === 员工实例 id（运行时唯一） ===
+var next_staff_id: int = 1
+
 # === 回合状态 ===
 var round_state: Dictionary = {
 	"mandatory_actions_completed": {},  # player_id -> [action_ids]
 	"actions_this_round": [],  # 本回合已执行的动作
 	"action_counts": {},  # player_id -> {action_id -> count}（通常按子阶段重置）
-	"sub_phase_passed": {}  # player_id -> true（每次子阶段切换时重置）
+	"sub_phase_passed": {},  # player_id -> true（每次子阶段切换时重置）
+	"staff_usage": {},  # staff_id -> {track_id -> used_units}
+	"staff_train_event_counts": {}  # staff_id -> count
 }
 
 # === 随机种子 ===
@@ -80,6 +86,7 @@ func duplicate_state() -> GameState:
 	copy.employee_pool = employee_pool.duplicate()
 	copy.milestone_pool = Array(milestone_pool, TYPE_STRING, "", null)
 	copy.marketing_instances = Array(_deep_copy_array(marketing_instances), TYPE_DICTIONARY, "", null)
+	copy.next_staff_id = next_staff_id
 	copy.round_state = round_state.duplicate(true)
 	copy.seed = seed
 	return copy
@@ -104,6 +111,9 @@ static func from_dict(data: Dictionary) -> Result:
 	var apply_result = SerializationClass.apply_from_dict(state, data, SCHEMA_VERSION)
 	if not apply_result.ok:
 		return apply_result
+	var staff_sync := StaffStateClass.ensure_state_staff_support(state)
+	if not staff_sync.ok:
+		return staff_sync
 	return Result.success(state).with_warnings(apply_result.warnings)
 
 # === 状态哈希（用于校验点） ===

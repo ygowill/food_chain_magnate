@@ -26,6 +26,7 @@ static func to_dict(state, schema_version: int) -> Dictionary:
 		"employee_pool": state.employee_pool,
 		"milestone_pool": state.milestone_pool,
 		"marketing_instances": state.marketing_instances,
+		"next_staff_id": state.next_staff_id,
 		"round_state": _to_json_safe(state.round_state),
 		"seed": state.seed
 	}
@@ -190,6 +191,12 @@ static func apply_from_dict(state, data: Dictionary, expected_schema_version: in
 			return Result.failure("GameState.marketing_instances[%d] 解码后类型错误（期望 Dictionary）" % i)
 		instances_out.append(decoded_val)
 	state.marketing_instances = instances_out
+
+	var next_staff_id_val = data.get("next_staff_id", 1)
+	var next_staff_id_read := ParseHelpers.parse_non_negative_int(next_staff_id_val, "GameState.next_staff_id")
+	if not next_staff_id_read.ok:
+		return next_staff_id_read
+	state.next_staff_id = maxi(1, int(next_staff_id_read.value))
 
 	var round_state_read := RoundStateParser.parse_round_state(data.get("round_state", null))
 	if not round_state_read.ok:

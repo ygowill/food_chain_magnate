@@ -22,6 +22,7 @@
 
 - `docs/architecture/README.md`
 - `docs/design.md`
+- `docs/design/staff_id_usage_tracks_and_action_panel_unification_2026-04-18.md`
 - `docs/testing.md`
 - `docs/rules.md`
 
@@ -34,6 +35,7 @@
 ### 3. 查看专题文档
 
 - UI / 交互：`docs/design/`
+- 员工实例 / 使用追踪 / 动作面板统一：`docs/design/staff_id_usage_tracks_and_action_panel_unification_2026-04-18.md`
 - 联机 / 平台：`docs/online/`
 - 历史审计与整改：`docs/reports/`
 

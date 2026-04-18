@@ -210,5 +210,70 @@ static func apply(rs: Dictionary, out: Dictionary) -> Result:
 			tel_norm[pid] = per_norm
 		out["train_employee_locks"] = tel_norm
 
+	# staff_usage: {staff_id -> {track_id -> used_units}}
+	if rs.has("staff_usage"):
+		var dict_path := "GameState.round_state.staff_usage"
+		var su_val = rs.get("staff_usage", null)
+		if not (su_val is Dictionary):
+			return Result.failure("%s 类型错误（期望 Dictionary）" % dict_path)
+		var su_all: Dictionary = su_val
+		var su_norm := {}
+		for staff_id_key in su_all.keys():
+			var staff_id_read := _parse_positive_int_key(staff_id_key, dict_path)
+			if not staff_id_read.ok:
+				return staff_id_read
+			var staff_id: int = int(staff_id_read.value)
+
+			var per_val = su_all.get(staff_id_key, null)
+			if not (per_val is Dictionary):
+				return Result.failure("%s[%s] 类型错误（期望 Dictionary）" % [dict_path, str(staff_id_key)])
+			var per: Dictionary = per_val
+			var per_norm := {}
+			for track_key in per.keys():
+				if not (track_key is String):
+					return Result.failure("%s[%s] key 类型错误（期望 String）" % [dict_path, str(staff_id_key)])
+				var track_id: String = str(track_key).strip_edges()
+				if track_id.is_empty():
+					return Result.failure("%s[%s] key 不能为空" % [dict_path, str(staff_id_key)])
+				var used_read := ParseHelpers.parse_non_negative_int(per.get(track_key, null), "%s[%s].%s" % [dict_path, str(staff_id_key), track_id])
+				if not used_read.ok:
+					return used_read
+				per_norm[track_id] = int(used_read.value)
+			su_norm[staff_id] = per_norm
+		out["staff_usage"] = su_norm
+
+	# staff_train_event_counts: {staff_id -> count}
+	if rs.has("staff_train_event_counts"):
+		var dict_path := "GameState.round_state.staff_train_event_counts"
+		var stc_val = rs.get("staff_train_event_counts", null)
+		if not (stc_val is Dictionary):
+			return Result.failure("%s 类型错误（期望 Dictionary）" % dict_path)
+		var stc_all: Dictionary = stc_val
+		var stc_norm := {}
+		for staff_id_key in stc_all.keys():
+			var staff_id_read := _parse_positive_int_key(staff_id_key, dict_path)
+			if not staff_id_read.ok:
+				return staff_id_read
+			var staff_id: int = int(staff_id_read.value)
+			var count_read := ParseHelpers.parse_non_negative_int(stc_all.get(staff_id_key, null), "%s[%s]" % [dict_path, str(staff_id_key)])
+			if not count_read.ok:
+				return count_read
+			stc_norm[staff_id] = int(count_read.value)
+		out["staff_train_event_counts"] = stc_norm
+
 	return Result.success(out)
 
+static func _parse_positive_int_key(key, path: String) -> Result:
+	if key is int:
+		if int(key) <= 0:
+			return Result.failure("%s key 必须 > 0，实际: %d" % [path, int(key)])
+		return Result.success(int(key))
+	if key is String:
+		var s := str(key).strip_edges()
+		if not s.is_valid_int():
+			return Result.failure("%s key 必须为正整数或数字字符串，实际: %s" % [path, str(key)])
+		var parsed := s.to_int()
+		if parsed <= 0:
+			return Result.failure("%s key 必须 > 0，实际: %d" % [path, parsed])
+		return Result.success(parsed)
+	return Result.failure("%s key 类型错误（期望 int/String）" % path)
