@@ -229,6 +229,22 @@ step 的基本字段由 helper 构建（`gameplay/replay/step_timeline_build/hel
 - Web 平台上不能依赖 `wait_to_finish()` 形成伪异步；
 - append 路径必须尽量只提交 delta descriptors / delta items。
 
+### 2.2 descriptor commit 分帧提交
+
+即使 descriptor 已经算完，主线程也不能默认一次性把整份 descriptor 全量转成 Control。
+
+当前实现边界应为：
+
+- descriptor build 负责“产出结构描述”；
+- descriptor commit 负责“按 slice 分帧挂载 UI item”；
+- commit 期间允许日志面板处于“部分已挂载”状态；
+- commit 完成后再统一执行：
+  - timeline state 收尾
+  - entry count 收尾
+  - auto scroll 收尾
+
+这样做的目的不是减少总工作量，而是把自动打开日志 / 大时间线 append 时的一次性主线程峰值拆散到多帧内，避免重新回到 100ms 级卡顿。
+
 ### 3. timeline state 局部刷新
 
 `GameLogPanel` 当前还会维护一层轻量 UI index，用于把“日志项结构构建”和“cursor/head 状态刷新”拆开：

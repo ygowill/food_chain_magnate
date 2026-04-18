@@ -527,6 +527,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.LeftPanelSelectionIsolationTestClass.run(),
 			},
 			{
+				"name": "LeftPanelViewSelectionPersistenceTest",
+				"fn": func() -> Result: return await TestRefs.LeftPanelViewSelectionPersistenceTestClass.run(),
+			},
+			{
 				"name": "LeftPanelBusyMarketersGroupTest",
 				"fn": func() -> Result: return TestRefs.LeftPanelBusyMarketersGroupTestClass.run(),
 			},
@@ -1049,6 +1053,14 @@ static func build_tests(host) -> Array[Dictionary]:
 			{
 				"name": "GameLogPanelStepTimelineAppendTest",
 				"fn": func() -> Result: return await TestRefs.GameLogPanelStepTimelineAppendTestClass.run(),
+			},
+			{
+				"name": "GameLogAutoScrollBehaviorTest",
+				"fn": func() -> Result: return await TestRefs.GameLogAutoScrollBehaviorTestClass.run(),
+			},
+			{
+				"name": "GameLogDescriptorCommitChunkingTest",
+				"fn": func() -> Result: return await TestRefs.GameLogDescriptorCommitChunkingTestClass.run(),
 			},
 			{
 				"name": "GameLogHiddenTimelineStateSkipTest",

@@ -138,14 +138,14 @@ static func run() -> Result:
 	panel.call("load_step_timeline", async_timeline1, async_entries1)
 	var async_loaded := await _wait_until(func() -> bool:
 		var current_entries = panel.call("get_step_timeline_entries")
-		return current_entries is Array and current_entries.size() == async_entries1.size()
+		return current_entries is Array \
+			and current_entries.size() == async_entries1.size() \
+			and not bool(panel.call("has_pending_descriptor_commit")) \
+			and panel.call("get_last_step_timeline_update_mode") == "rebuild"
 	, tree, 180)
 	if not async_loaded:
 		_cleanup(panel)
 		return Result.failure("大时间线首次加载未在限定帧数内完成（后台线程 rebuild）")
-	if panel.call("get_last_step_timeline_update_mode") != "rebuild":
-		_cleanup(panel)
-		return Result.failure("大时间线首次加载完成后应为 rebuild")
 	if str(entry_count_label.text) != "显示 119 / 119":
 		_cleanup(panel)
 		return Result.failure("大时间线首次加载后可见条目数错误，实际=%s" % str(entry_count_label.text))
@@ -162,7 +162,10 @@ static func run() -> Result:
 	panel.call("load_step_timeline", async_timeline2, async_entries2)
 	var async_appended := await _wait_until(func() -> bool:
 		var current_entries = panel.call("get_step_timeline_entries")
-		return current_entries is Array and current_entries.size() == async_entries2.size() and panel.call("get_last_step_timeline_update_mode") == "append"
+		return current_entries is Array \
+			and current_entries.size() == async_entries2.size() \
+			and not bool(panel.call("has_pending_descriptor_commit")) \
+			and panel.call("get_last_step_timeline_update_mode") == "append"
 	, tree, 180)
 	if not async_appended:
 		_cleanup(panel)

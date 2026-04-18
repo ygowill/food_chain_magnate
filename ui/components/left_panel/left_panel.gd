@@ -70,6 +70,7 @@ var _game_state: GameState = null
 var _player_count: int = 0
 var _current_player_id: int = -1
 var _view_player_id: int = -1
+var _follow_external_view_player: bool = true
 
 var _skin = null
 var _skin_modules_key: String = ""
@@ -257,7 +258,7 @@ func set_game_state(state: GameState) -> void:
 func set_display_context(state: GameState, current_player_id: int, view_player_id: int) -> void:
 	_game_state = state
 	_current_player_id = int(current_player_id)
-	_view_player_id = int(view_player_id)
+	_sync_external_view_player(state, view_player_id)
 	_ensure_skin()
 	var next_logo_snapshot := _build_logo_snapshot()
 	if next_logo_snapshot != _logo_snapshot:
@@ -285,6 +286,7 @@ func set_view_player(player_id: int) -> void:
 	if _view_player_id == player_id:
 		return
 	_view_player_id = player_id
+	_follow_external_view_player = false
 	_update_tab_styles()
 	_refresh_restaurant_overview_cards()
 	if _summary_controller != null and is_instance_valid(_summary_controller):
@@ -925,6 +927,15 @@ func _resolve_view_player_id() -> int:
 		view_id = 0
 	view_id = clamp(view_id, 0, maxi(0, _game_state.players.size() - 1))
 	return view_id
+
+func _sync_external_view_player(state: GameState, view_player_id: int) -> void:
+	var player_count := 0
+	if state != null and state.players is Array:
+		player_count = state.players.size()
+	var local_selection_invalid := _view_player_id < 0 or _view_player_id >= player_count
+	if _follow_external_view_player or local_selection_invalid:
+		_view_player_id = int(view_player_id)
+		_follow_external_view_player = true
 
 func _on_player_tab_toggled(pressed: bool, player_id: int) -> void:
 	if not pressed:

@@ -34,6 +34,8 @@ const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 const _POOL_KIND_FLAT_ENTRY := "flat_entry"
 const _BACKGROUND_TIMELINE_MIN_STEPS := 96
 const _BACKGROUND_TIMELINE_MIN_ENTRIES := 192
+const _DESCRIPTOR_COMMIT_REBUILD_SLICE_SIZE := 24
+const _DESCRIPTOR_COMMIT_APPEND_SLICE_SIZE := 32
 
 # 日志类型
 enum LogType {
@@ -108,6 +110,14 @@ var _timeline_exact_items_by_index: Dictionary = {} # timeline index -> Array[Co
 var _timeline_first_item_by_index: Dictionary = {} # timeline index -> first visible Control
 var _timeline_phase_header_items: Array[Control] = []
 var _timeline_round_header_items: Array[Control] = []
+var _descriptor_commit_active: bool = false
+var _descriptor_commit_mode: String = ""
+var _descriptor_commit_descriptors: Array = []
+var _descriptor_commit_next_index: int = 0
+var _descriptor_commit_patch_end_step_index: int = -999
+var _descriptor_commit_added_item_count: int = 0
+var _descriptor_commit_slice_count: int = 0
+var _descriptor_commit_span = null
 
 func _ready() -> void:
 	set_process(false)
@@ -154,12 +164,15 @@ func _ready() -> void:
 
 	if not visibility_changed.is_connected(_on_visibility_changed):
 		visibility_changed.connect(_on_visibility_changed)
+	if not resized.is_connected(_on_resized):
+		resized.connect(_on_resized)
 
 func _exit_tree() -> void:
 	_shutdown_background_timeline_worker()
 
 func _process(_delta: float) -> void:
 	_poll_background_timeline_worker()
+	_poll_descriptor_commit()
 
 func add_log(log_type: LogType, message: String, details: Dictionary = {}) -> int:
 	var entry_id := _entry_id_counter
@@ -236,6 +249,9 @@ func get_last_step_timeline_update_mode() -> String:
 
 func has_step_timeline_loaded() -> bool:
 	return _is_step_timeline_loaded()
+
+func has_pending_descriptor_commit() -> bool:
+	return _descriptor_commit_active
 
 func _duplicate_entry_array(entries: Array) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -322,6 +338,7 @@ func _should_use_background_timeline_job_for_count(timeline: Dictionary, entry_c
 func _invalidate_background_timeline_jobs() -> void:
 	_timeline_background_generation += 1
 	_timeline_background_pending_job.clear()
+	_cancel_pending_descriptor_commit()
 
 func _queue_background_timeline_job(job: Dictionary) -> void:
 	_timeline_background_generation += 1
@@ -352,7 +369,7 @@ func _start_background_timeline_job(job: Dictionary) -> void:
 
 	_timeline_background_running_job = job
 	_timeline_background_thread = thread
-	set_process(true)
+	_update_process_state()
 
 func _should_run_background_timeline_job_on_main_thread() -> bool:
 	return OS.has_feature("web")
@@ -381,7 +398,7 @@ func _flush_main_thread_timeline_job() -> void:
 func _poll_background_timeline_worker() -> void:
 	if _timeline_background_thread == null:
 		if _timeline_background_pending_job.is_empty():
-			set_process(false)
+			_update_process_state()
 		elif _timeline_background_running_job.is_empty():
 			var queued_job := _timeline_background_pending_job
 			_timeline_background_pending_job = {}
@@ -407,7 +424,7 @@ func _poll_background_timeline_worker() -> void:
 		_timeline_background_pending_job = {}
 		_start_background_timeline_job(queued_job)
 	elif _timeline_background_thread == null:
-		set_process(false)
+		_update_process_state()
 
 func _apply_background_timeline_result(job: Dictionary, result: Dictionary) -> void:
 	var descriptor_info_val = result.get("descriptor_info", {})
@@ -426,23 +443,16 @@ func _apply_background_timeline_result(job: Dictionary, result: Dictionary) -> v
 
 	match mode:
 		"append":
-			_apply_descriptor_append_result(
+			_start_descriptor_commit(
+				"append",
 				descriptors_val,
 				int(descriptor_info.get("patch_existing_last_phase_header_end_step_index", -999))
 			)
 		_:
-			_apply_descriptor_rebuild_result(descriptors_val)
-
-	_blank_display_warned = false
-	_prune_expanded_action_groups()
-	if fold_details_check != null:
-		fold_details_check.button_pressed = _fold_details_enabled
-	_last_step_timeline_update_mode = mode if not mode.is_empty() else "rebuild"
-	_apply_timeline_state_to_items()
-	_request_scroll_to_bottom()
-	_update_entry_count()
+			_start_descriptor_commit("rebuild", descriptors_val)
 
 func _apply_background_timeline_job_fallback(job: Dictionary) -> void:
+	_cancel_pending_descriptor_commit()
 	var mode := str(job.get("mode", "")).strip_edges()
 	_apply_background_job_state(job)
 	_visible_entry_count_cached = -1
@@ -607,6 +617,131 @@ func _apply_descriptor_append_result(descriptors: Array, patch_end_step_index: i
 		"log_item_count": int(_log_items.size()),
 	})
 
+func _start_descriptor_commit(mode: String, descriptors: Array, patch_end_step_index: int = -999) -> void:
+	_cancel_pending_descriptor_commit()
+	_descriptor_commit_mode = "append" if str(mode) == "append" else "rebuild"
+	_descriptor_commit_descriptors = descriptors if descriptors is Array else []
+	_descriptor_commit_next_index = 0
+	_descriptor_commit_patch_end_step_index = int(patch_end_step_index)
+	_descriptor_commit_added_item_count = 0
+	_descriptor_commit_slice_count = 0
+	_descriptor_commit_active = true
+
+	var span_name := "ui.game_log.apply_descriptor_append" if _descriptor_commit_mode == "append" else "ui.game_log.apply_descriptor_rebuild"
+	var span_fields := {
+		"descriptor_count": int(_descriptor_commit_descriptors.size()),
+		"chunked": true,
+	}
+	if _descriptor_commit_mode == "append":
+		span_fields["patch_end_step_index"] = int(_descriptor_commit_patch_end_step_index)
+	_descriptor_commit_span = OnlinePerfTraceClass.begin_span(span_name, span_fields)
+
+	if _descriptor_commit_mode == "rebuild":
+		_clear_display()
+	elif _descriptor_commit_patch_end_step_index > -999:
+		_patch_last_phase_header_end_step_index(_descriptor_commit_patch_end_step_index)
+
+	if _descriptor_commit_descriptors.is_empty():
+		_finish_descriptor_commit()
+		return
+	_update_process_state()
+
+func _poll_descriptor_commit() -> void:
+	if not _descriptor_commit_active:
+		return
+	if log_container == null or not is_instance_valid(log_container):
+		_finish_descriptor_commit()
+		return
+	if _descriptor_commit_next_index >= _descriptor_commit_descriptors.size():
+		_finish_descriptor_commit()
+		return
+
+	var slice_size := _DESCRIPTOR_COMMIT_APPEND_SLICE_SIZE if _descriptor_commit_mode == "append" else _DESCRIPTOR_COMMIT_REBUILD_SLICE_SIZE
+	var from_idx := int(_descriptor_commit_next_index)
+	var to_idx := mini(from_idx + slice_size, _descriptor_commit_descriptors.size())
+	var added_items: Array[Control] = []
+	GameLogUnifiedTimelineBuilderClass.append_descriptor_slice(
+		added_items,
+		log_container,
+		_descriptor_commit_descriptors,
+		from_idx,
+		to_idx,
+		_timeline_cursor_index,
+		_timeline_head_index,
+		Callable(self, "_on_timeline_header_clicked"),
+		Callable(self, "_on_entry_clicked"),
+		Callable(self, "_on_entry_double_clicked"),
+		Callable(self, "_on_action_group_fold_toggled"),
+		Callable(self, "_acquire_log_item")
+	)
+	for item in added_items:
+		if item is Control:
+			var ctrl: Control = item
+			_log_items.append(ctrl)
+			_index_log_item(ctrl)
+			_connect_item_hover_signals(ctrl)
+
+	_descriptor_commit_next_index = int(to_idx)
+	_descriptor_commit_added_item_count += int(added_items.size())
+	_descriptor_commit_slice_count += 1
+
+	if _descriptor_commit_next_index >= _descriptor_commit_descriptors.size():
+		_finish_descriptor_commit()
+
+func _finish_descriptor_commit() -> void:
+	if not _descriptor_commit_active:
+		_update_process_state()
+		return
+
+	var mode := _descriptor_commit_mode
+	var descriptor_count := int(_descriptor_commit_descriptors.size())
+	var added_item_count := int(_descriptor_commit_added_item_count)
+	var slice_count := int(_descriptor_commit_slice_count)
+	var span = _descriptor_commit_span
+
+	_descriptor_commit_active = false
+	_descriptor_commit_mode = ""
+	_descriptor_commit_descriptors = []
+	_descriptor_commit_next_index = 0
+	_descriptor_commit_patch_end_step_index = -999
+	_descriptor_commit_added_item_count = 0
+	_descriptor_commit_slice_count = 0
+	_descriptor_commit_span = null
+
+	_blank_display_warned = false
+	_prune_expanded_action_groups()
+	if fold_details_check != null:
+		fold_details_check.button_pressed = _fold_details_enabled
+	_last_step_timeline_update_mode = mode if not mode.is_empty() else "rebuild"
+	_apply_timeline_state_to_items()
+	_request_scroll_to_bottom()
+	_update_entry_count()
+	_update_process_state()
+
+	var span_fields := {
+		"descriptor_count": int(descriptor_count),
+		"log_item_count": int(_log_items.size()),
+		"slice_count": int(slice_count),
+		"chunked": true,
+	}
+	if mode == "append":
+		span_fields["added_item_count"] = int(added_item_count)
+	OnlinePerfTraceClass.end_span(span, span_fields)
+
+func _cancel_pending_descriptor_commit() -> void:
+	_descriptor_commit_active = false
+	_descriptor_commit_mode = ""
+	_descriptor_commit_descriptors = []
+	_descriptor_commit_next_index = 0
+	_descriptor_commit_patch_end_step_index = -999
+	_descriptor_commit_added_item_count = 0
+	_descriptor_commit_slice_count = 0
+	_descriptor_commit_span = null
+	_update_process_state()
+
+func _update_process_state() -> void:
+	set_process(_timeline_background_thread != null or _descriptor_commit_active)
+
 func _patch_last_phase_header_end_step_index(end_step_index: int) -> void:
 	for idx in range(_timeline_phase_header_items.size() - 1, -1, -1):
 		var item_val = _timeline_phase_header_items[idx]
@@ -621,11 +756,12 @@ func _patch_last_phase_header_end_step_index(end_step_index: int) -> void:
 func _shutdown_background_timeline_worker() -> void:
 	_timeline_background_pending_job.clear()
 	_timeline_background_main_thread_scheduled = false
+	_cancel_pending_descriptor_commit()
 	if _timeline_background_thread != null:
 		_timeline_background_thread.wait_to_finish()
 		_timeline_background_thread = null
 	_timeline_background_running_job.clear()
-	set_process(false)
+	_update_process_state()
 
 func load_entries(entries: Array[Dictionary]) -> void:
 	# Flat list mode (legacy/tests). This intentionally clears step timeline view state.
@@ -936,6 +1072,8 @@ func ensure_display_ready() -> void:
 		return
 	if log_container == null or not is_instance_valid(log_container):
 		return
+	if _descriptor_commit_active:
+		return
 
 	# 没有日志数据：不强行塞占位符，保持空面板（但仍显示 EntryCountLabel）。
 	var has_data := (not _entries_all.is_empty()) or _is_step_timeline_loaded()
@@ -983,6 +1121,23 @@ func _on_visibility_changed() -> void:
 		return
 	# 延后一帧：避免 dock/reparent 后 Container 尚未完成 layout 导致的“短暂空白”。
 	call_deferred("ensure_display_ready")
+	if _scroll_to_bottom_requested or _should_keep_scroll_at_bottom():
+		_scroll_to_bottom_requested = true
+		call_deferred("_apply_scroll_to_bottom")
+
+func _on_resized() -> void:
+	if not _should_keep_scroll_at_bottom():
+		return
+	_scroll_to_bottom_requested = true
+	call_deferred("_apply_scroll_to_bottom")
+
+func _should_keep_scroll_at_bottom() -> bool:
+	return _auto_scroll and _timeline_cursor_index >= _timeline_head_index
+
+func _scroll_scroll_container_to_bottom() -> void:
+	if scroll_container == null:
+		return
+	scroll_container.scroll_vertical = int(scroll_container.get_v_scroll_bar().max_value)
 
 func _is_step_timeline_loaded() -> bool:
 	if _step_timeline == null or _step_timeline.is_empty():
@@ -1322,10 +1477,8 @@ func _release_log_item(item: Control) -> void:
 	_log_item_pool[kind] = pool
 
 func _request_scroll_to_bottom() -> void:
-	if not _auto_scroll:
-		return
-	# 时间旅行/回放等“光标不在 head”的情况下，避免新日志把视角强行拉回底部。
-	if _timeline_cursor_index < _timeline_head_index:
+	if not _should_keep_scroll_at_bottom():
+		_scroll_to_bottom_requested = false
 		return
 	if _scroll_to_bottom_requested:
 		return
@@ -1333,21 +1486,33 @@ func _request_scroll_to_bottom() -> void:
 	call_deferred("_apply_scroll_to_bottom")
 
 func _apply_scroll_to_bottom() -> void:
-	_scroll_to_bottom_requested = false
-	if scroll_container == null:
+	if not _scroll_to_bottom_requested:
 		return
-	scroll_container.scroll_vertical = int(scroll_container.get_v_scroll_bar().max_value)
+	if not _should_keep_scroll_at_bottom():
+		_scroll_to_bottom_requested = false
+		return
+	if scroll_container == null:
+		_scroll_to_bottom_requested = false
+		return
+	if not is_visible_in_tree():
+		return
+	_scroll_scroll_container_to_bottom()
 	# 某些布局/重建时序下，ScrollBar 的 max_value 会在下一帧才更新；这里补一次确保落到底部。
 	call_deferred("_apply_scroll_to_bottom_final")
 
 func _apply_scroll_to_bottom_final() -> void:
-	if not _auto_scroll:
+	if not _scroll_to_bottom_requested:
 		return
-	if _timeline_cursor_index < _timeline_head_index:
+	if not _should_keep_scroll_at_bottom():
+		_scroll_to_bottom_requested = false
 		return
 	if scroll_container == null:
+		_scroll_to_bottom_requested = false
 		return
-	scroll_container.scroll_vertical = int(scroll_container.get_v_scroll_bar().max_value)
+	if not is_visible_in_tree():
+		return
+	_scroll_scroll_container_to_bottom()
+	_scroll_to_bottom_requested = false
 
 func _clear_display() -> void:
 	_clear_timeline_item_indexes()
@@ -1720,6 +1885,10 @@ func set_fold_details_enabled(enabled: bool, update_checkbox: bool = true) -> vo
 
 func _on_auto_scroll_toggled(toggled: bool) -> void:
 	_auto_scroll = toggled
+	if _auto_scroll:
+		_request_scroll_to_bottom()
+	else:
+		_scroll_to_bottom_requested = false
 
 func set_replay_toggle_active(active: bool) -> void:
 	if replay_toggle_button == null:

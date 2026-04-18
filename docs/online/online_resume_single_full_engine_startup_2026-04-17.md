@@ -203,6 +203,27 @@
 - 优先改成“仅在线程已结束后非阻塞取结果 + 下一帧提交 UI”；
 - 至少要保证日志自动打开和 live append 时，不再触发浏览器控制台的主线程阻塞警告。
 
+### 5.6 descriptor 结果提交也必须分帧
+
+即使 descriptor 已经在后台算完，如果主线程仍一次性把整份 descriptor 全部转成 Control 并 append：
+
+- `ui.game_log.apply_descriptor_rebuild`
+- `ui.game_log.apply_descriptor_append`
+
+仍然会在“等待态自动打开详细日志”或“大时间线 live append”时形成新的卡顿峰值。
+
+因此实现上还需要补一层约束：
+
+- 后台 worker 只负责产出 descriptor 数据；
+- 主线程提交 descriptor 时，必须采用 slice/chunk 方式分帧挂载；
+- 日志面板在 commit 完成前允许先显示“部分已挂载内容 + 空壳”，不能要求同帧完整可见；
+- commit 结束后再统一：
+  - 刷新 timeline state
+  - 刷新 entry count
+  - 执行 auto scroll 收尾
+
+这一步的目标不是减少总工作量，而是把 1 帧 100ms+ 的尖峰拆成多帧可接受的 5ms~15ms 小块。
+
 ## 6. 兼容与过渡
 
 本轮重构优先收敛**实际运行路径**，并保留部分兼容 API：
