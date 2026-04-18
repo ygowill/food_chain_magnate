@@ -314,6 +314,7 @@ const KimchiStorageModalUiTestClass = preload("res://ui/scenes/tests/kimchi_stor
 const FridgeKeepModalUiTestClass = preload("res://ui/scenes/tests/fridge_keep_modal_ui_test.gd")
 const MilestoneControllerVisibleSyncTestClass = preload("res://ui/scenes/tests/milestone_controller_visible_sync_test.gd")
 const TrainControllerSourceFilterTestClass = preload("res://ui/scenes/tests/train_controller_source_filter_test.gd")
+const WorkingPanelsVisibleSyncTestClass = preload("res://ui/scenes/tests/working_panels_visible_sync_test.gd")
 const MarketingCampaignsTestClass = preload("res://core/tests/marketing_campaigns_test.gd")
 const MassMarketeersV2TestClass = preload("res://core/tests/mass_marketeers_v2_test.gd")
 const KetchupMechanismV2TestClass = preload("res://core/tests/ketchup_mechanism_v2_test.gd")

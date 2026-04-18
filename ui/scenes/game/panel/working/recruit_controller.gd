@@ -42,7 +42,7 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	if state.phase != DefsClass.PHASE_WORKING or state.sub_phase != DefsClass.SUB_PHASE_RECRUIT:
 		recruit_panel.visible = false
 		return
-	if force_full_refresh and recruit_panel.has_method("set_employee_pool"):
+	if recruit_panel.has_method("set_employee_pool"):
 		recruit_panel.set_employee_pool(state.employee_pool)
 	if recruit_panel.has_method("set_recruit_count"):
 		var actor := state.get_current_player_id()
@@ -106,4 +106,3 @@ func _on_recruit_requested(employee_type: String) -> void:
 func _on_cancelled() -> void:
 	if _hide_all.is_valid():
 		_hide_all.call()
-
