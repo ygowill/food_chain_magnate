@@ -153,20 +153,30 @@ func _refresh_context_from_overlay() -> void:
 		clear_context_overlay()
 		return
 
-	if _context_overlay is RestaurantPlacementOverlay:
-		_refresh_restaurant_placement_context(_context_overlay as RestaurantPlacementOverlay)
+	if _context_overlay.has_method("get_action_panel_context_spec"):
+		_refresh_custom_context(_context_overlay)
 		return
-	if _context_overlay is HousePlacementOverlay:
-		_refresh_house_placement_context(_context_overlay as HousePlacementOverlay)
+	if _is_restaurant_placement_overlay(_context_overlay):
+		_refresh_restaurant_placement_context(_context_overlay)
+		return
+	if _is_house_placement_overlay(_context_overlay):
+		_refresh_house_placement_context(_context_overlay)
 		return
 	if PiecePlacementOverlayScript != null and _context_overlay is PiecePlacementOverlayScript:
 		_refresh_piece_placement_context(_context_overlay)
 		return
-	if _context_overlay.has_method("get_action_panel_context_spec"):
-		_refresh_custom_context(_context_overlay)
-		return
 
 	clear_context_overlay()
+
+func _is_restaurant_placement_overlay(overlay: Object) -> bool:
+	if overlay == null or not is_instance_valid(overlay):
+		return false
+	return overlay.has_method("get_available_restaurants") and overlay.has_method("get_selected_restaurant")
+
+func _is_house_placement_overlay(overlay: Object) -> bool:
+	if overlay == null or not is_instance_valid(overlay):
+		return false
+	return overlay.has_method("get_available_house_numbers") and overlay.has_method("get_selected_house_number")
 
 func _set_custom_context_visible(show: bool) -> void:
 	if is_instance_valid(_custom_context_container):
@@ -200,7 +210,7 @@ func _sync_skip_sub_phase_button() -> void:
 	else:
 		_skip_context_button.tooltip_text = ""
 
-func _refresh_restaurant_placement_context(overlay: RestaurantPlacementOverlay) -> void:
+func _refresh_restaurant_placement_context(overlay) -> void:
 	if overlay == null or not is_instance_valid(overlay):
 		clear_context_overlay()
 		return
@@ -208,7 +218,7 @@ func _refresh_restaurant_placement_context(overlay: RestaurantPlacementOverlay) 
 	_context_syncing = true
 	_show_context_panel()
 
-	var mode := overlay.get_mode()
+	var mode: String = str(overlay.get_mode()).strip_edges()
 	_context_title_label.text = "放置餐厅" if mode != "move_restaurant" else "移动餐厅"
 	_context_hint_label.text = overlay.get_hint_text()
 
@@ -238,7 +248,7 @@ func _refresh_restaurant_placement_context(overlay: RestaurantPlacementOverlay) 
 
 	_context_syncing = false
 
-func _refresh_house_placement_context(overlay: HousePlacementOverlay) -> void:
+func _refresh_house_placement_context(overlay) -> void:
 	if overlay == null or not is_instance_valid(overlay):
 		clear_context_overlay()
 		return
@@ -246,7 +256,7 @@ func _refresh_house_placement_context(overlay: HousePlacementOverlay) -> void:
 	_context_syncing = true
 	_show_context_panel()
 
-	var mode := overlay.get_mode()
+	var mode: String = str(overlay.get_mode()).strip_edges()
 	_context_title_label.text = "添加花园" if mode == "add_garden" else "放置房屋"
 	_context_hint_label.text = overlay.get_hint_text()
 
