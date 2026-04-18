@@ -49,6 +49,20 @@ static func append_phase_transition_events(
 	var old_phase_name := str(old_state.phase)
 	var new_phase_name := str(new_state.phase)
 
+	var phase_report_events: Array[Dictionary] = []
+	if not before_phase_events.is_empty():
+		var kept_before_phase_events: Array[Dictionary] = []
+		for before_ev_val in before_phase_events:
+			if not (before_ev_val is Dictionary):
+				continue
+			var before_ev: Dictionary = before_ev_val
+			var before_type := str(before_ev.get("type", "")).strip_edges()
+			if before_type.ends_with("_report"):
+				phase_report_events.append(before_ev)
+			else:
+				kept_before_phase_events.append(before_ev)
+		before_phase_events = kept_before_phase_events
+
 	if not before_phase_events.is_empty():
 		StepTimelineHelpersClass.append_events(out_events, before_phase_events, command_index, old_step_index, old_phase_name, seq)
 		seq = _sync_seq(out_events, seq)
@@ -107,6 +121,13 @@ static func append_phase_transition_events(
 		seq = _sync_seq(out_events, seq)
 	if not milestone_events_old.is_empty():
 		StepTimelineHelpersClass.append_events(out_events, StepTimelineHelpersClass.override_events_phase_fields(milestone_events_old, old_state), command_index, old_step_index, old_phase_name, seq)
+		seq = _sync_seq(out_events, seq)
+
+	if not phase_report_events.is_empty():
+		# 报告事件（例如 PAYDAY_REPORT）语义仍归属旧阶段，但应挂到触发阶段推进的当前命令 step。
+		# 这样实时日志增量 append 能在玩家点击“确认结束”后立刻显示报告，
+		# 避免把新报告 backfill 到已渲染过的旧 step。
+		StepTimelineHelpersClass.append_events(out_events, phase_report_events, command_index, new_step_index, old_phase_name, seq)
 		seq = _sync_seq(out_events, seq)
 
 	if not after_phase_events.is_empty():
