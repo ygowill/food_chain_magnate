@@ -424,7 +424,7 @@ func apply_live_log_timeline_from_engine(force_rebuild: bool = false) -> void:
 	var info: Dictionary = build_r.value
 	if bool(info.get("restore_runtime_display_engine", false)):
 		_restore_runtime_display_engine()
-	_history_step_timeline = Dictionary(info.get("timeline", {})).duplicate(true)
+	_history_step_timeline = Dictionary(info.get("timeline", {})).duplicate(false)
 	_history_step_timeline_active = true
 	_history_timeline_source = str(info.get("history_timeline_source", "runtime"))
 	_history_head_step_index = int(info.get("head_step_index", -1))

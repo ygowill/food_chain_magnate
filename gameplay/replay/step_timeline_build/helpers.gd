@@ -138,6 +138,17 @@ static func attach_build_meta(timeline: Dictionary, processed_command_count: int
 	}
 	return out
 
+static func attach_build_meta_owned(timeline: Dictionary, processed_command_count: int, last_event_sequence: int) -> Dictionary:
+	# Incremental append already owns the top-level timeline/steps/events arrays it returns.
+	# Avoid deep-copying every historical step.state_dict on each live append; those historical
+	# snapshots are immutable for the returned timeline and are expensive on long restored games.
+	var out: Dictionary = timeline.duplicate(false) if (timeline is Dictionary) else {}
+	out["_build_meta"] = {
+		"processed_command_count": int(processed_command_count),
+		"last_event_sequence": int(last_event_sequence),
+	}
+	return out
+
 static func read_build_meta(timeline: Dictionary) -> Dictionary:
 	if timeline == null or not (timeline is Dictionary):
 		return {}

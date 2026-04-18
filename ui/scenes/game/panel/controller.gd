@@ -47,6 +47,8 @@ var _popup_layout_controller = null
 
 var _view_player_id: int = -1
 var _last_guided_action_id: String = ""
+var _action_panel_context_bound: bool = false
+var _last_action_panel_context_overlay = null
 
 func _init(scene, map_controller, overlay_controller, execute_command: Callable, refresh_ui: Callable) -> void:
 	_scene = scene
@@ -262,6 +264,8 @@ func dispose() -> void:
 	if _popup_layout_controller != null and _popup_layout_controller.has_method("dispose"):
 		_popup_layout_controller.dispose()
 	_popup_layout_controller = null
+	_action_panel_context_bound = false
+	_last_action_panel_context_overlay = null
 
 	_scene = null
 	_map_controller = null
@@ -346,7 +350,7 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	if _end_panels != null:
 		_end_panels.sync(state, force_full_refresh)
 	_sync_modals(state)
-	_sync_action_panel_context()
+	_sync_action_panel_context(force_full_refresh)
 	_sync_action_flow_controls()
 	_hide_open_guided_action_panels_if_not_initiatable(state)
 	_auto_open_guided_action_ui(state)
@@ -406,7 +410,7 @@ func _sync_reserve_cards_overview_access(state: GameState) -> void:
 	if not can_open and _views_controller != null and _views_controller.has_method("hide_reserve_cards_full_screen_view"):
 		_views_controller.hide_reserve_cards_full_screen_view()
 
-func _sync_action_panel_context() -> void:
+func _sync_action_panel_context(force_refresh: bool = false) -> void:
 	if _scene == null:
 		return
 	if not is_instance_valid(_scene.action_panel):
@@ -424,12 +428,23 @@ func _sync_action_panel_context() -> void:
 			elif is_instance_valid(_placement_overlays.piece_placement_overlay) and _placement_overlays.piece_placement_overlay.visible:
 				overlay = _placement_overlays.piece_placement_overlay
 
-	if overlay != null and is_instance_valid(overlay):
+	var next_overlay = overlay if (overlay != null and is_instance_valid(overlay)) else null
+	if not bool(force_refresh):
+		if next_overlay != null and _action_panel_context_bound and next_overlay == _last_action_panel_context_overlay:
+			return
+		if next_overlay == null and not _action_panel_context_bound:
+			return
+
+	if next_overlay != null:
 		if _scene.action_panel.has_method("bind_context_overlay"):
-			_scene.action_panel.call("bind_context_overlay", overlay)
+			_scene.action_panel.call("bind_context_overlay", next_overlay)
+		_action_panel_context_bound = true
+		_last_action_panel_context_overlay = next_overlay
 	else:
 		if _scene.action_panel.has_method("clear_context_overlay"):
 			_scene.action_panel.call("clear_context_overlay")
+		_action_panel_context_bound = false
+		_last_action_panel_context_overlay = null
 
 func _sync_action_flow_controls() -> void:
 	if _scene == null:

@@ -38,7 +38,7 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 	var last_event_sequence := StepTimelineHelpersClass.read_last_event_sequence(timeline)
 
 	if processed_command_count == total_command_count:
-		timeline = StepTimelineHelpersClass.attach_build_meta(timeline, total_command_count, last_event_sequence)
+		timeline = StepTimelineHelpersClass.attach_build_meta_owned(timeline, total_command_count, last_event_sequence)
 		return Result.success({
 			"timeline": timeline,
 			"head_step_index": int(steps.size()) - 1,
@@ -263,7 +263,7 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 
 	timeline["steps"] = steps
 	timeline["events"] = events_out
-	timeline = StepTimelineHelpersClass.attach_build_meta(timeline, total_command_count, seq)
+	timeline = StepTimelineHelpersClass.attach_build_meta_owned(timeline, total_command_count, seq)
 
 	return Result.success({
 		"timeline": timeline,

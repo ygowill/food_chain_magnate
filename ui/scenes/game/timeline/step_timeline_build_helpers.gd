@@ -26,7 +26,7 @@ static func build_step_timeline(
 		if append_r.ok and append_r.value is Dictionary:
 			var append_info: Dictionary = Dictionary(append_r.value)
 			if bool(append_info.get("append_applied", false)):
-				var append_timeline: Dictionary = Dictionary(append_info.get("timeline", {})).duplicate(true)
+				var append_timeline: Dictionary = Dictionary(append_info.get("timeline", {})).duplicate(false)
 				var appended_events_val = append_info.get("appended_events", [])
 				var appended_events: Array = appended_events_val if (appended_events_val is Array) else []
 				var appended_entries := GameTimelineLogEntriesBuilderClass.build(appended_events)
@@ -227,7 +227,7 @@ static func load_timeline_info(
 			game_log_panel.call("load_step_timeline", Dictionary(timeline_val), entries, bool(read_only))
 		else:
 			game_log_panel.call("load_entries", entries)
-	return Result.success(info.duplicate(true))
+	return Result.success(info.duplicate(false))
 
 static func _combine_entries_for_append(game_log_panel: Object, appended_entries: Array[Dictionary]) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []

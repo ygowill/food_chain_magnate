@@ -60,6 +60,7 @@ var _guided_action_id: String = ""
 var _flow_confirm_end_visible: bool = false
 var _flow_skip_step_visible: bool = false
 var _external_action_block_reason_provider: Callable = Callable()
+var _last_disabled_refresh_signature: Dictionary = {}
 
 # 不在 UI 中展示的内部动作
 const BASE_HIDDEN_ACTION_IDS := {
@@ -402,7 +403,7 @@ func set_map_skin(skin) -> void:
 func set_game_state(state: GameState) -> void:
 	_game_state = state
 	_update_title()
-	refresh()
+	_refresh_or_sync_disabled_state()
 
 func set_display_context(state: GameState, player_id: int) -> void:
 	_game_state = state
@@ -412,7 +413,7 @@ func set_display_context(state: GameState, player_id: int) -> void:
 	else:
 		_current_player_id = int(player_id)
 	_update_title()
-	refresh()
+	_refresh_or_sync_disabled_state()
 
 func set_current_player(player_id: int) -> void:
 	# 联机模式：行动面板始终以“本地玩家”为上下文（避免显示他人的可用动作导致误导/无法继续）。
@@ -421,7 +422,39 @@ func set_current_player(player_id: int) -> void:
 	else:
 		_current_player_id = player_id
 	_update_title()
+	_refresh_or_sync_disabled_state()
+
+func _refresh_or_sync_disabled_state() -> void:
+	# 回放/历史/联机等待态下 ActionPanel 已全局禁用。此时每次 UI sync 只需更新标题和禁用态，
+	# 不应再跑 ActionRegistry 可用动作计算，否则远端连续命令会在 panel_controller.sync 中反复耗时。
+	if _globally_disabled:
+		var disabled_signature := _build_disabled_refresh_signature()
+		if disabled_signature != _last_disabled_refresh_signature:
+			_last_disabled_refresh_signature = disabled_signature
+			refresh()
+		else:
+			_apply_global_disabled_state()
+		return
+	_last_disabled_refresh_signature.clear()
 	refresh()
+
+func _build_disabled_refresh_signature() -> Dictionary:
+	var base := {
+		"disabled_reason": str(_globally_disabled_reason),
+		"phase": str(_game_state.phase) if _game_state != null else "",
+		"sub_phase": str(_game_state.sub_phase) if _game_state != null else "",
+		"round": int(_game_state.round_number) if _game_state != null else -1,
+		"current_player_id": int(_game_state.get_current_player_id()) if _game_state != null else -1,
+		"action_player_id": int(_current_player_id),
+		"player_count": int(_game_state.players.size()) if _game_state != null and (_game_state.players is Array) else 0,
+		"action_registry_id": int(_action_registry.get_instance_id()) if _action_registry is Object else -1,
+	}
+	if _globally_disabled_reason == "联机：等待其他玩家操作":
+		return base
+	return {
+		"base": base,
+		"state_id": int(_game_state.get_instance_id()) if _game_state != null else -1,
+	}
 
 func _update_title() -> void:
 	if not is_instance_valid(title_label):
@@ -554,6 +587,8 @@ func set_globally_disabled(reason: String) -> void:
 	var was_disabled := _globally_disabled
 	_globally_disabled = next_disabled
 	_globally_disabled_reason = r
+	if was_disabled != _globally_disabled:
+		_last_disabled_refresh_signature.clear()
 	_update_title()
 	_apply_global_disabled_state()
 	# 重要：当从“全局禁用”恢复为可操作时，需要主动刷新一次以恢复各按钮的 enabled 状态。

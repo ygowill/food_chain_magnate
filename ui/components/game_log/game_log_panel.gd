@@ -887,7 +887,7 @@ func append_step_timeline(timeline: Dictionary, appended_entries: Array[Dictiona
 		OnlinePerfTraceClass.end_span(span, {"ok": false, "reason": "timeline_invalid"})
 		return false
 
-	var next_timeline: Dictionary = timeline.duplicate(true)
+	var next_timeline: Dictionary = timeline.duplicate(false)
 	var normalized_appended_entries := _duplicate_entry_array_with_fresh_ids(appended_entries)
 	var next_entries_count := _timeline_entries.size() + normalized_appended_entries.size() + _extra_entries.size()
 	if _should_use_background_timeline_job_for_count(next_timeline, next_entries_count):

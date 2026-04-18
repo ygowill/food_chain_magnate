@@ -57,6 +57,7 @@ static func run(seed_val: int = 12345) -> Result:
 	if not (base_r.value is Dictionary):
 		return Result.failure("build_full(base).value type error (expected Dictionary)")
 	var base_timeline: Dictionary = Dictionary(base_r.value).duplicate(true)
+	var base_timeline_before_append: Dictionary = base_timeline.duplicate(true)
 	var base_processed_count := StepTimelineHelpersClass.read_processed_command_count(base_timeline)
 	if base_processed_count != int(engine.command_history.size()):
 		return Result.failure(
@@ -75,6 +76,8 @@ static func run(seed_val: int = 12345) -> Result:
 		return Result.failure("append_from_existing failed: %s" % append_r.error)
 	if not (append_r.value is Dictionary):
 		return Result.failure("append_from_existing.value type error (expected Dictionary)")
+	if base_timeline != base_timeline_before_append:
+		return Result.failure("append_from_existing must not mutate the baseline timeline")
 	var append_info: Dictionary = Dictionary(append_r.value)
 	if not bool(append_info.get("append_applied", false)):
 		return Result.failure("append_from_existing should append for tail growth")

@@ -15,6 +15,9 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 var _confirm_end_disabled_reason: String = ""
 var _skip_step_disabled_reason: String = ""
+var _last_flow_config_signature: Dictionary = {}
+var _has_applied_flow_config_signature: bool = false
+var _flow_config_apply_count: int = 0
 
 func _ready() -> void:
 	_build_ui()
@@ -50,6 +53,12 @@ func apply_flow_config(config: Dictionary) -> void:
 	var ce: Dictionary = Dictionary(config.get("confirm_end", {}))
 	var ss: Dictionary = Dictionary(config.get("skip_step", {}))
 	var rw: Dictionary = Dictionary(config.get("rewind", {}))
+	var signature := _build_flow_config_signature(ce, ss, rw)
+	var controls_ready := is_instance_valid(confirm_end_button) \
+		and is_instance_valid(skip_step_button) \
+		and is_instance_valid(rewind_button)
+	if controls_ready and _has_applied_flow_config_signature and signature == _last_flow_config_signature:
+		return
 
 	if is_instance_valid(confirm_end_button):
 		confirm_end_button.visible = bool(ce.get("visible", false))
@@ -73,6 +82,34 @@ func apply_flow_config(config: Dictionary) -> void:
 
 	if is_instance_valid(rewind_button):
 		rewind_button.disabled = not bool(rw.get("enabled", true))
+	if controls_ready:
+		_last_flow_config_signature = signature
+		_has_applied_flow_config_signature = true
+		_flow_config_apply_count += 1
+
+func _build_flow_config_signature(ce: Dictionary, ss: Dictionary, rw: Dictionary) -> Dictionary:
+	var confirm_reason := str(ce.get("disabled_reason", "")).strip_edges()
+	var skip_reason := str(ss.get("disabled_reason", "")).strip_edges()
+	return {
+		"confirm_end": {
+			"visible": bool(ce.get("visible", false)),
+			"text": str(ce.get("text", "确认结束")),
+			"enabled": bool(ce.get("enabled", true)),
+			"disabled_reason": confirm_reason,
+		},
+		"skip_step": {
+			"visible": bool(ss.get("visible", false)),
+			"text": str(ss.get("text", "跳过")),
+			"enabled": bool(ss.get("enabled", true)),
+			"disabled_reason": skip_reason,
+		},
+		"rewind": {
+			"enabled": bool(rw.get("enabled", true)),
+		},
+	}
+
+func get_flow_config_apply_count() -> int:
+	return int(_flow_config_apply_count)
 
 func _on_confirm_end_pressed() -> void:
 	action_requested.emit("skip", {})
@@ -98,4 +135,3 @@ func _on_skip_step_mouse_entered() -> void:
 func _on_skip_step_mouse_exited() -> void:
 	if skip_step_button != null and is_instance_valid(skip_step_button) and (not skip_step_button.disabled):
 		skip_step_button.tooltip_text = ""
-

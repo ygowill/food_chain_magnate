@@ -196,10 +196,37 @@
   - 测试：
     - `ui/scenes/tests/online_resume_live_runtime_source_p0_test.gd`
 
+- [x] **阶段 5（补充）：panel_controller 热路径 no-op 收敛 + live append 深拷贝收敛**
+  - 在继续排查 `ui.online_sync.panel_controller` 与 `ui.timeline.apply_live_log` 后，确认还有两条稳定热点：
+    - ActionPanel 在“全局禁用/联机等待”态下，`set_display_context()` 仍会每次重跑 `ActionRegistry` 刷新
+    - runtime live append 虽已走增量 timeline，但 append 结果在多处仍对整份 timeline 做 deep-copy，长历史下会放大主线程与 overall span
+  - 当前修复：
+    - `ActionPanel` 在全局禁用态增加 signature-driven fast path：
+      - 联机等待他人操作时，相同 phase/round/current_player 不再重复 refresh 动作列表
+      - 仅保留标题/disabled 状态同步
+    - `ActionFlowControls.apply_flow_config()` 增加 signature cache，相同按钮配置不再重复写 visible/text/disabled/tooltip
+    - `GamePanelController._sync_action_panel_context()` 记忆当前 context overlay，相同 overlay 不再每帧重复 bind/clear
+    - `StepTimelineBuild.append_from_existing()` / live timeline helper / resume cache 改为在 append 热路径优先复用 owned timeline，避免对历史 `steps[*].state_dict` 反复 deep-copy
+  - 代码：
+    - `ui/components/action_panel/action_panel.gd`
+    - `ui/components/action_flow_controls/action_flow_controls.gd`
+    - `ui/scenes/game/panel/controller.gd`
+    - `gameplay/replay/step_timeline_build/build_append_impl.gd`
+    - `gameplay/replay/step_timeline_build/helpers.gd`
+    - `ui/scenes/game/timeline/step_timeline_build_helpers.gd`
+    - `ui/scenes/game/timeline/controller.gd`
+    - `ui/components/game_log/game_log_panel.gd`
+    - `autoload/net_client_online_resume_support.gd`
+  - 测试：
+    - `ui/scenes/tests/action_flow_controls_noop_test.gd`
+    - `core/tests/step_timeline_incremental_append_test.gd`
+    - `tools/run_headless_test.sh res://ui/scenes/tests/game_smoke_test.tscn GameSmokeTest 60`
+    - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180`
+
 ### 仍待继续收敛
 
 - [ ] **阶段 3（剩余部分）**
-  - `panel_controller.sync`（剩余：ActionPanel 之外的 dirty-driven 收敛）
+  - `panel_controller.sync`（剩余：Restructuring modal / reserve overview / 其它非 ActionPanel 子路径的 dirty-driven 收敛）
   - `timeline_ui`（剩余：background append/rebuild 后的 phase patch / scroll / descriptor 复用链路继续收敛）
   - `map_view.set_game_state`
   - 其它更细粒度的 dirty-driven UI 收敛

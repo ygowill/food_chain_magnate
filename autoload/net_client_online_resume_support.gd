@@ -444,7 +444,7 @@ func _refresh_full_replay_step_timeline_cache(engine: GameEngine, allow_incremen
 			var append_info: Dictionary = Dictionary(append_r.value)
 			var append_timeline_val = append_info.get("timeline", null)
 			if append_timeline_val is Dictionary:
-				var append_timeline: Dictionary = Dictionary(append_timeline_val).duplicate(true)
+				var append_timeline: Dictionary = Dictionary(append_timeline_val).duplicate(false)
 				var next_entries: Array[Dictionary] = []
 				var append_applied := bool(append_info.get("append_applied", false))
 				var cached_entries_ready := _session_state.has_full_replay_step_timeline_entries()

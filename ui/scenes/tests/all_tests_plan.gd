@@ -507,6 +507,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return await TestRefs.ActionPanelRefreshSingleRebuildTestClass.run(),
 			},
 			{
+				"name": "ActionFlowControlsNoopTest",
+				"fn": func() -> Result: return await TestRefs.ActionFlowControlsNoopTestClass.run(),
+			},
+			{
 				"name": "ActionPanelExternalBlockReasonTest",
 				"fn": func() -> Result: return await TestRefs.ActionPanelExternalBlockReasonTestClass.run(),
 			},
