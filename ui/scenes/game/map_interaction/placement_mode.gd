@@ -143,6 +143,11 @@ func on_house_highlight_requested(action_id: String, rotation: int) -> void:
 	var state = engine.get_state()
 	if state == null:
 		return
+
+	if action_id == "add_garden":
+		_highlight_add_garden_houses(state)
+		return
+
 	if action_id != "place_house":
 		_controller._house_valid_anchors.clear()
 		if is_instance_valid(_controller._map_canvas) and _controller._map_canvas.has_method("clear_cell_highlights"):
@@ -159,7 +164,6 @@ func on_house_highlight_requested(action_id: String, rotation: int) -> void:
 	if map_origin_val is Vector2i:
 		map_origin = map_origin_val
 
-	var actor: int = state.get_current_player_id()
 	var piece_registry: Dictionary = engine.game_data.pieces if engine.game_data != null else {}
 	if not piece_registry.has("house_with_garden") or not (piece_registry["house_with_garden"] is PieceDef):
 		piece_registry["house_with_garden"] = PieceDefClass.create_house_with_garden()
@@ -191,11 +195,160 @@ func on_house_highlight_requested(action_id: String, rotation: int) -> void:
 	if is_instance_valid(_controller._map_canvas) and _controller._map_canvas.has_method("set_cell_highlights"):
 		_controller._map_canvas.call("set_cell_highlights", anchors)
 
+func _highlight_add_garden_houses(state) -> void:
+	_controller._house_valid_anchors.clear()
+	var highlights: Array[Vector2i] = []
+	if state == null or not (state.map is Dictionary):
+		if is_instance_valid(_controller._map_canvas) and _controller._map_canvas.has_method("clear_cell_highlights"):
+			_controller._map_canvas.call("clear_cell_highlights")
+		return
+	var houses_val = state.map.get("houses", null)
+	if not (houses_val is Dictionary):
+		if is_instance_valid(_controller._map_canvas) and _controller._map_canvas.has_method("clear_cell_highlights"):
+			_controller._map_canvas.call("clear_cell_highlights")
+		return
+	var houses: Dictionary = houses_val
+	for hid_val in houses.keys():
+		var hid := str(hid_val).strip_edges()
+		if hid.is_empty():
+			continue
+		var house_val = houses.get(hid_val, null)
+		if not (house_val is Dictionary):
+			continue
+		var house: Dictionary = house_val
+		if bool(house.get("has_garden", false)):
+			continue
+		var cells_val = house.get("cells", null)
+		if not (cells_val is Array):
+			continue
+		for p in Array(cells_val):
+			if p is Vector2i:
+				var cell := Vector2i(p)
+				_controller._house_valid_anchors[cell] = true
+				highlights.append(cell)
+	if is_instance_valid(_controller._map_canvas) and _controller._map_canvas.has_method("set_cell_highlights"):
+		_controller._map_canvas.call("set_cell_highlights", highlights)
+
 func on_house_preview_cleared() -> void:
 	if _controller == null:
 		return
 	if is_instance_valid(_controller._map_canvas) and _controller._map_canvas.has_method("clear_structure_preview"):
 		_controller._map_canvas.call("clear_structure_preview")
+	if is_instance_valid(_controller.house_placement_overlay) and _controller.house_placement_overlay.has_method("set_validation"):
+		_controller.house_placement_overlay.set_validation(true, "")
+
+func on_house_garden_preview_cleared() -> void:
+	if _controller == null:
+		return
+	if is_instance_valid(_controller._map_canvas) and _controller._map_canvas.has_method("clear_structure_preview"):
+		_controller._map_canvas.call("clear_structure_preview")
+	if is_instance_valid(_controller.house_placement_overlay) and _controller.house_placement_overlay.has_method("set_validation"):
+		_controller.house_placement_overlay.set_validation(true, "")
+
+func on_house_garden_preview_requested(house_id: String, direction: String) -> void:
+	if _controller == null:
+		return
+	if _controller._scene == null:
+		return
+	var engine = _controller._scene.game_engine
+	if engine == null:
+		return
+	var state = engine.get_state()
+	if state == null:
+		return
+	if not (state.map is Dictionary):
+		return
+	var hid := str(house_id).strip_edges()
+	var d := str(direction).strip_edges().to_upper()
+	if hid.is_empty():
+		on_house_garden_preview_cleared()
+		return
+
+	var houses_val = state.map.get("houses", null)
+	if not (houses_val is Dictionary):
+		on_house_garden_preview_cleared()
+		return
+	var houses: Dictionary = houses_val
+	var house_val = houses.get(hid, null)
+	if not (house_val is Dictionary):
+		on_house_garden_preview_cleared()
+		return
+	var house: Dictionary = house_val
+	var garden_cells := _compute_garden_cells_for_house(house, d)
+	var merged_cells := _extract_house_cells(house)
+	merged_cells.append_array(garden_cells)
+
+	var valid := true
+	var message := ""
+	if is_instance_valid(_controller.house_placement_overlay) and _controller.house_placement_overlay.has_method("get_direction_status"):
+		var status_val = _controller.house_placement_overlay.call("get_direction_status", d)
+		if status_val is Dictionary:
+			var status: Dictionary = status_val
+			valid = bool(status.get("valid", true))
+			message = str(status.get("message", "")).strip_edges()
+
+	var actor: int = state.get_current_player_id()
+	var cmd_params := {"house_id": hid, "direction": d}
+	if is_instance_valid(_controller.house_placement_overlay) and _controller.house_placement_overlay.has_method("get_selected_employee"):
+		var employee_type := str(_controller.house_placement_overlay.get_selected_employee()).strip_edges()
+		if not employee_type.is_empty():
+			cmd_params["employee_type"] = employee_type
+	var cmd := Command.create("add_garden", actor, cmd_params)
+	cmd.phase = state.phase
+	cmd.sub_phase = state.sub_phase
+	var executor = engine.get_action_registry().get_executor("add_garden")
+	if executor != null:
+		var ex_r: Result = executor.validate(state, cmd)
+		if not ex_r.ok:
+			valid = false
+			message = ex_r.error
+
+	if is_instance_valid(_controller._map_canvas) and _controller._map_canvas.has_method("set_structure_preview"):
+		_controller._map_canvas.call("set_structure_preview", merged_cells, valid, {
+			"highlight_fill": Color(0.2, 0.9, 0.35, 0.20) if valid else Color(0.95, 0.25, 0.25, 0.20),
+			"highlight_border": Color(0.2, 0.9, 0.35, 0.82) if valid else Color(0.95, 0.25, 0.25, 0.82),
+			"highlight_border_width": 2.0,
+		})
+	if is_instance_valid(_controller.house_placement_overlay) and _controller.house_placement_overlay.has_method("set_validation"):
+		_controller.house_placement_overlay.set_validation(valid, message)
+
+func _extract_house_cells(house: Dictionary) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var cells_val = house.get("cells", null)
+	if cells_val is Array:
+		for p in Array(cells_val):
+			if p is Vector2i:
+				out.append(Vector2i(p))
+	return out
+
+func _compute_garden_cells_for_house(house: Dictionary, direction: String) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var house_cells := _extract_house_cells(house)
+	if house_cells.is_empty():
+		return out
+	var min_x := 2147483647
+	var min_y := 2147483647
+	var max_x := -2147483648
+	var max_y := -2147483648
+	for p in house_cells:
+		min_x = min(min_x, p.x)
+		min_y = min(min_y, p.y)
+		max_x = max(max_x, p.x)
+		max_y = max(max_y, p.y)
+	match direction:
+		"N":
+			for x in range(min_x, max_x + 1):
+				out.append(Vector2i(x, min_y - 1))
+		"S":
+			for x in range(min_x, max_x + 1):
+				out.append(Vector2i(x, max_y + 1))
+		"W":
+			for y in range(min_y, max_y + 1):
+				out.append(Vector2i(min_x - 1, y))
+		_:
+			for y in range(min_y, max_y + 1):
+				out.append(Vector2i(max_x + 1, y))
+	return out
 
 func on_restaurant_preview_requested(mode: String, position: Vector2i, rotation: int, restaurant_id: String) -> void:
 	if _controller == null:
@@ -338,8 +491,8 @@ func on_house_preview_requested(action_id: String, position: Vector2i, rotation:
 			"anchor": position,
 			"rotation": rotation,
 		})
-
-	# HousePlacementOverlay 目前没有 validation UI（只做预览与确认）
+	if is_instance_valid(_controller.house_placement_overlay) and _controller.house_placement_overlay.has_method("set_validation"):
+		_controller.house_placement_overlay.set_validation(valid, message)
 
 func on_piece_highlight_requested(action_id: String, rotation: int, piece_id: String) -> void:
 	if _controller == null:

@@ -413,6 +413,10 @@ func show_house_placement(action_id: String, params: Dictionary) -> void:
 			house_placement_overlay.preview_requested.connect(Callable(_map_controller, "on_house_preview_requested"))
 		if house_placement_overlay.has_signal("preview_cleared") and _map_controller != null:
 			house_placement_overlay.preview_cleared.connect(Callable(_map_controller, "on_house_preview_cleared"))
+		if house_placement_overlay.has_signal("garden_preview_requested") and _map_controller != null:
+			house_placement_overlay.garden_preview_requested.connect(Callable(_map_controller, "on_house_garden_preview_requested"))
+		if house_placement_overlay.has_signal("garden_preview_cleared") and _map_controller != null:
+			house_placement_overlay.garden_preview_cleared.connect(Callable(_map_controller, "on_house_garden_preview_cleared"))
 		if house_placement_overlay.has_signal("highlight_requested") and _map_controller != null:
 			house_placement_overlay.highlight_requested.connect(Callable(_map_controller, "on_house_highlight_requested"))
 		_scene.add_child(house_placement_overlay)
@@ -441,6 +445,8 @@ func show_house_placement(action_id: String, params: Dictionary) -> void:
 			house_placement_overlay.set_selected_employee(str(params.employee_type))
 	if _map_controller != null:
 		_map_controller.on_house_preview_cleared()
+		if _map_controller.has_method("on_house_garden_preview_cleared"):
+			_map_controller.on_house_garden_preview_cleared()
 
 func _sync_module_overlays(state: GameState, force_full_refresh: bool = false) -> void:
 	_ensure_module_overlay_controllers_loaded()
@@ -542,6 +548,9 @@ func _on_house_placement_confirmed(position: Vector2i, rotation: int, house_numb
 			_map_controller.clear_selection()
 		if _overlay_controller != null:
 			_overlay_controller.hide_all_overlays()
+	else:
+		if is_instance_valid(house_placement_overlay) and house_placement_overlay.has_method("set_validation"):
+			house_placement_overlay.set_validation(false, result.error)
 
 func _on_garden_confirmed(house_id: String, direction: String) -> void:
 	if _scene == null or _scene.game_engine == null:
@@ -568,6 +577,9 @@ func _on_garden_confirmed(house_id: String, direction: String) -> void:
 			_map_controller.clear_selection()
 		if _overlay_controller != null:
 			_overlay_controller.hide_all_overlays()
+	else:
+		if is_instance_valid(house_placement_overlay) and house_placement_overlay.has_method("set_validation"):
+			house_placement_overlay.set_validation(false, result.error)
 
 func _on_piece_placement_confirmed(position: Vector2i, rotation: int, piece_id: String) -> void:
 	if _scene == null or _scene.game_engine == null:

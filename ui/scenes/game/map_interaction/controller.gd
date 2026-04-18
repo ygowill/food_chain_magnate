@@ -430,6 +430,11 @@ func _on_map_cell_selected(world_pos: Vector2i) -> void:
 			if action_id == "place_house":
 				if _house_valid_anchors.is_empty() or not _house_valid_anchors.has(world_pos):
 					return
+			elif action_id == "add_garden":
+				if _house_valid_anchors.is_empty() or not _house_valid_anchors.has(world_pos):
+					if is_instance_valid(house_placement_overlay) and house_placement_overlay.visible and house_placement_overlay.has_method("set_validation"):
+						house_placement_overlay.set_validation(false, "请选择高亮的可添加花园房屋")
+					return
 			if is_instance_valid(house_placement_overlay) and house_placement_overlay.visible and house_placement_overlay.has_method("set_selected_position"):
 				house_placement_overlay.set_selected_position(world_pos)
 				_maybe_auto_confirm_placement(house_placement_overlay)
@@ -685,6 +690,10 @@ func on_house_preview_cleared() -> void:
 	if _placement_mode != null:
 		_placement_mode.on_house_preview_cleared()
 
+func on_house_garden_preview_cleared() -> void:
+	if _placement_mode != null and _placement_mode.has_method("on_house_garden_preview_cleared"):
+		_placement_mode.on_house_garden_preview_cleared()
+
 func on_restaurant_preview_requested(mode: String, position: Vector2i, rotation: int, restaurant_id: String) -> void:
 	if _placement_mode != null:
 		_placement_mode.on_restaurant_preview_requested(mode, position, rotation, restaurant_id)
@@ -692,6 +701,10 @@ func on_restaurant_preview_requested(mode: String, position: Vector2i, rotation:
 func on_house_preview_requested(action_id: String, position: Vector2i, rotation: int) -> void:
 	if _placement_mode != null:
 		_placement_mode.on_house_preview_requested(action_id, position, rotation)
+
+func on_house_garden_preview_requested(house_id: String, direction: String) -> void:
+	if _placement_mode != null and _placement_mode.has_method("on_house_garden_preview_requested"):
+		_placement_mode.on_house_garden_preview_requested(house_id, direction)
 
 func on_piece_highlight_requested(action_id: String, rotation: int, piece_id: String) -> void:
 	if _placement_mode != null:
