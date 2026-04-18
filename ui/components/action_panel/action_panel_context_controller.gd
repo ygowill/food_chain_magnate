@@ -406,7 +406,11 @@ func _refresh_custom_context(overlay: Node) -> void:
 		elif spec.has("confirm_disabled"):
 			disabled = bool(spec.get("confirm_disabled", false))
 		_confirm_context_button.disabled = disabled
-	_sync_skip_sub_phase_button()
+	if bool(spec.get("show_skip_step", true)):
+		_sync_skip_sub_phase_button()
+	elif is_instance_valid(_skip_context_button):
+		_skip_context_button.visible = false
+		_skip_context_button.tooltip_text = ""
 
 	_context_syncing = false
 

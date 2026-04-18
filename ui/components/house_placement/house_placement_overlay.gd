@@ -121,6 +121,7 @@ func get_action_panel_context_spec() -> Dictionary:
 		"hint": "",
 		"show_chrome": false,
 		"show_confirm": false,
+		"show_skip_step": false,
 		"confirm_text": "",
 		"cancel_text": "取消",
 		"custom_scene": ActionPanelHouseContextScenePath,

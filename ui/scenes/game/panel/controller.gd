@@ -486,10 +486,7 @@ func _sync_action_flow_controls() -> void:
 func _should_hide_action_flow_controls_skip_step() -> bool:
 	# 当“跳过子阶段”已在动作面板 UI 内展示时，隐藏 ActionFlowControls 的同款按钮，避免重复/层级感。
 	# - 右侧 dock 的 guided action 面板：跳过在 FooterRow（左），确认在 FooterRow（右）
-	# - 放置类 overlay：跳过在 ActionPanel ContextPanel（左），确认在 ContextPanel（右）
 	if _is_skip_sub_phase_shown_in_right_panel_footer():
-		return true
-	if _has_active_context_overlay():
 		return true
 
 	var active_docked := _get_active_right_panel_docked_panel()

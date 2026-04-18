@@ -233,7 +233,7 @@ func _get_skip_sub_phase_display_name() -> String:
 		DefsClass.SUB_PHASE_GET_DRINKS:
 			return "跳过采购饮料"
 		DefsClass.SUB_PHASE_PLACE_HOUSES:
-			return "跳过放置房屋"
+			return "跳过放置房屋/花园"
 		DefsClass.SUB_PHASE_PLACE_RESTAURANTS:
 			return "跳过放置餐厅"
 		_:
