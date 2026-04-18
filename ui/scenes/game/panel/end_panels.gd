@@ -19,6 +19,7 @@ var _execute_command: Callable
 var _hide_all: Callable
 var _center_popup: Callable
 var _refresh_ui: Callable
+var _deps: Dictionary = {}
 
 var _last_bank_total: int = 0
 var _last_bank_broke_count: int = 0
@@ -28,14 +29,44 @@ var game_over_panel = null
 var bank_break_panel = null
 
 var _game_over_replay_save_path: String = ""
+var _online_game_over_leave_pending: bool = false
 
-func _init(scene, overlay_controller, execute_command: Callable, hide_all: Callable, center_popup: Callable, refresh_ui: Callable) -> void:
+func _init(
+	scene,
+	overlay_controller,
+	execute_command: Callable,
+	hide_all: Callable,
+	center_popup: Callable,
+	refresh_ui: Callable,
+	deps: Dictionary = {}
+) -> void:
 	_scene = scene
 	_overlay_controller = overlay_controller
 	_execute_command = execute_command
 	_hide_all = hide_all
 	_center_popup = center_popup
 	_refresh_ui = refresh_ui
+	_deps = deps.duplicate(false)
+
+func dispose() -> void:
+	_disconnect_online_game_over_leave_signals()
+	_online_game_over_leave_pending = false
+	_deps = {}
+
+func _get_net_client():
+	if _deps.has("net_client"):
+		return _deps.get("net_client", null)
+	return NetClient
+
+func _get_scene_manager():
+	if _deps.has("scene_manager"):
+		return _deps.get("scene_manager", null)
+	return SceneManager
+
+func _get_globals():
+	if _deps.has("globals"):
+		return _deps.get("globals", null)
+	return Globals
 
 func hide() -> void:
 	if is_instance_valid(payday_panel):
@@ -133,9 +164,6 @@ func _sync_payday_panel(state: GameState, force_full_refresh: bool = false) -> v
 		return
 	if state.phase != DefsClass.PHASE_PAYDAY:
 		payday_panel.visible = false
-		return
-
-	if not force_full_refresh:
 		return
 
 	var current_player_id := _resolve_payday_player_id(state)
@@ -410,14 +438,71 @@ func _on_pay_confirmed() -> void:
 
 func _on_game_over_return() -> void:
 	if _is_online_game_over_return_to_lobby():
-		if NetClient != null and NetClient.has_method("request_leave_room"):
-			NetClient.request_leave_room()
-		Globals.reset_game_config()
-		SceneManager.goto_online_lobby()
+		_begin_online_game_over_leave_to_lobby()
 		return
 	GameMenuDebugControllerClass.cleanup_online_state_before_quit()
-	Globals.reset_game_config()
-	SceneManager.goto_main_menu()
+	var globals = _get_globals()
+	if globals != null and globals.has_method("reset_game_config"):
+		globals.reset_game_config()
+	var scene_manager = _get_scene_manager()
+	if scene_manager != null and scene_manager.has_method("goto_main_menu"):
+		scene_manager.goto_main_menu()
+
+func _begin_online_game_over_leave_to_lobby() -> void:
+	if _online_game_over_leave_pending:
+		return
+	_online_game_over_leave_pending = true
+	_connect_online_game_over_leave_signals()
+	var scene_manager = _get_scene_manager()
+	if scene_manager != null and scene_manager.has_method("show_loading"):
+		scene_manager.show_loading("正在返回房间列表...")
+	var net_client = _get_net_client()
+	if net_client != null and net_client.has_method("request_leave_room"):
+		net_client.request_leave_room()
+		if _online_game_over_leave_pending and _is_online_game_over_room_cleared(NetContext.room_state if NetContext != null else {}):
+			_complete_online_game_over_leave_to_lobby()
+		return
+	_complete_online_game_over_leave_to_lobby()
+
+func _connect_online_game_over_leave_signals() -> void:
+	var net_client = _get_net_client()
+	if net_client == null or not net_client.has_signal("room_state_updated"):
+		return
+	var room_state_cb := Callable(self, "_on_online_game_over_leave_room_state_updated")
+	if not net_client.room_state_updated.is_connected(room_state_cb):
+		net_client.room_state_updated.connect(room_state_cb)
+
+func _disconnect_online_game_over_leave_signals() -> void:
+	var net_client = _get_net_client()
+	if net_client == null or not net_client.has_signal("room_state_updated"):
+		return
+	var room_state_cb := Callable(self, "_on_online_game_over_leave_room_state_updated")
+	if net_client.room_state_updated.is_connected(room_state_cb):
+		net_client.room_state_updated.disconnect(room_state_cb)
+
+func _on_online_game_over_leave_room_state_updated(room_state: Dictionary) -> void:
+	if not _online_game_over_leave_pending:
+		return
+	if not _is_online_game_over_room_cleared(room_state):
+		return
+	_complete_online_game_over_leave_to_lobby()
+
+func _is_online_game_over_room_cleared(room_state: Dictionary) -> bool:
+	return str(room_state.get("room_code", "")).strip_edges().is_empty()
+
+func _complete_online_game_over_leave_to_lobby() -> void:
+	if not _online_game_over_leave_pending:
+		return
+	_online_game_over_leave_pending = false
+	_disconnect_online_game_over_leave_signals()
+	var globals = _get_globals()
+	if globals != null and globals.has_method("reset_game_config"):
+		globals.reset_game_config()
+	var scene_manager = _get_scene_manager()
+	if scene_manager != null and scene_manager.has_method("hide_loading"):
+		scene_manager.hide_loading()
+	if scene_manager != null and scene_manager.has_method("goto_online_lobby"):
+		scene_manager.goto_online_lobby()
 
 func _is_online_game_over_return_to_lobby() -> bool:
 	return NetContext != null and int(NetContext.mode) == int(NetContext.Mode.ONLINE_CLIENT)

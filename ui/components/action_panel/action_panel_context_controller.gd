@@ -2,6 +2,7 @@
 extends RefCounted
 
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
+const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const PiecePlacementOverlayScript = preload("res://ui/components/piece_placement/piece_placement_overlay.gd")
 const PiecePickerButtonClass = preload("res://ui/components/action_panel/piece_picker_button.gd")
 
@@ -181,6 +182,23 @@ func _set_custom_context_visible(show: bool) -> void:
 	if is_instance_valid(_custom_context_container):
 		_custom_context_container.visible = show
 
+func _set_standard_context_chrome() -> void:
+	if is_instance_valid(_context_panel):
+		UiStylesClass.apply_panel_poster_alt(_context_panel)
+	if is_instance_valid(_context_title_label):
+		_context_title_label.visible = true
+	if is_instance_valid(_context_hint_label):
+		_context_hint_label.visible = true
+	if is_instance_valid(_confirm_context_button):
+		_confirm_context_button.visible = true
+
+func _set_custom_context_chrome(show_chrome: bool) -> void:
+	if is_instance_valid(_context_panel):
+		if show_chrome:
+			UiStylesClass.apply_panel_poster_alt(_context_panel)
+		else:
+			_context_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+
 func _sync_skip_sub_phase_button() -> void:
 	if not is_instance_valid(_skip_context_button):
 		return
@@ -216,6 +234,7 @@ func _refresh_restaurant_placement_context(overlay) -> void:
 
 	_context_syncing = true
 	_show_context_panel()
+	_set_standard_context_chrome()
 
 	var mode: String = str(overlay.get_mode()).strip_edges()
 	_context_title_label.text = "放置餐厅" if mode != "move_restaurant" else "移动餐厅"
@@ -254,6 +273,7 @@ func _refresh_house_placement_context(overlay) -> void:
 
 	_context_syncing = true
 	_show_context_panel()
+	_set_standard_context_chrome()
 
 	var mode: String = str(overlay.get_mode()).strip_edges()
 	_context_title_label.text = "添加花园" if mode == "add_garden" else "放置房屋"
@@ -294,6 +314,7 @@ func _refresh_piece_placement_context(overlay) -> void:
 
 	_context_syncing = true
 	_show_context_panel()
+	_set_standard_context_chrome()
 
 	var mode := str(overlay.get_mode()).strip_edges()
 	var title := _get_executor_display_name(mode)
@@ -344,15 +365,21 @@ func _refresh_custom_context(overlay: Node) -> void:
 	_context_syncing = true
 	_show_context_panel()
 
-	var title := str(spec.get("title", "")).strip_edges()
-	_context_title_label.text = title if not title.is_empty() else "当前操作"
+	var show_chrome := bool(spec.get("show_chrome", true))
+	_set_custom_context_chrome(show_chrome)
+	if is_instance_valid(_context_title_label):
+		_context_title_label.visible = show_chrome
+		var title := str(spec.get("title", "")).strip_edges()
+		_context_title_label.text = title if not title.is_empty() else "当前操作"
 
 	var hint := ""
 	if spec.has("hint"):
 		hint = str(spec.get("hint", ""))
 	elif overlay.has_method("get_hint_text"):
 		hint = str(overlay.call("get_hint_text"))
-	_context_hint_label.text = hint
+	if is_instance_valid(_context_hint_label):
+		_context_hint_label.visible = show_chrome and not hint.strip_edges().is_empty()
+		_context_hint_label.text = hint
 
 	_restaurant_row.visible = false
 	_employee_row.visible = false
@@ -370,6 +397,7 @@ func _refresh_custom_context(overlay: Node) -> void:
 		_cancel_context_button.visible = false
 		_cancel_context_button.text = str(spec.get("cancel_text", "取消"))
 	if is_instance_valid(_confirm_context_button):
+		_confirm_context_button.visible = bool(spec.get("show_confirm", true))
 		_confirm_context_button.text = str(spec.get("confirm_text", "确认"))
 		var disabled := false
 		if overlay.has_method("can_confirm"):
@@ -377,7 +405,11 @@ func _refresh_custom_context(overlay: Node) -> void:
 		elif spec.has("confirm_disabled"):
 			disabled = bool(spec.get("confirm_disabled", false))
 		_confirm_context_button.disabled = disabled
-	_sync_skip_sub_phase_button()
+	if bool(spec.get("show_skip_step", true)):
+		_sync_skip_sub_phase_button()
+	elif is_instance_valid(_skip_context_button):
+		_skip_context_button.visible = false
+		_skip_context_button.tooltip_text = ""
 
 	_context_syncing = false
 

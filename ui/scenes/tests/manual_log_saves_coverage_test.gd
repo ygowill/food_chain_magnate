@@ -31,6 +31,12 @@ const CASES: Array[Dictionary] = [
 		],
 	},
 	{
+		"path": "res://testdata/saves/manual_cases/logs/event_log_payday_details.json",
+		"required_types": [
+			EventBus.EventType.EMPLOYEE_FIRED,
+		],
+	},
+	{
 		"path": "res://testdata/saves/manual_cases/logs/event_log_build_and_move.json",
 		"required_types": [
 			EventBus.EventType.HOUSE_PLACED,
@@ -107,6 +113,13 @@ static func run() -> Result:
 					continue
 				if not seen.has(rid):
 					return Result.failure("expected COMMAND_EXECUTED for %s after loading: %s" % [rid, res_path])
+
+		# The Payday manual case starts before settlement; complete it and ensure the live/timeline
+		# log projection shows the detailed PAYDAY_REPORT entries by default.
+		if res_path.ends_with("event_log_payday_details.json"):
+			var payday_verify := _verify_payday_details_after_interaction(engine, res_path)
+			if not payday_verify.ok:
+				return payday_verify
 
 		# Ensure ordering for the dinnertime settlement: sold logs first, cash changes after.
 		if res_path.ends_with("event_log_dinnertime_sale.json"):
@@ -226,6 +239,111 @@ static func run() -> Result:
 
 	# Avoid polluting subsequent tests with history from a replay-loaded archive.
 	_clear_event_history()
+
+	return Result.success({})
+
+static func _verify_payday_details_after_interaction(engine: GameEngine, res_path: String) -> Result:
+	if engine == null:
+		return Result.failure("payday details verification: engine is null (%s)" % res_path)
+
+	var safety := 0
+	while str(engine.get_state().phase) == "Payday":
+		safety += 1
+		if safety > engine.get_state().players.size() + 4:
+			return Result.failure("payday details verification exceeded skip safety limit: %s" % res_path)
+		var actor := int(engine.get_state().get_current_player_id())
+		var sk := engine.execute_command(Command.create("skip", actor))
+		if not sk.ok:
+			return Result.failure("payday details verification skip failed: %s (%s)" % [sk.error, res_path])
+
+	var payday_events: Array = EventBus.get_history_by_type(EventBus.EventType.PAYDAY_REPORT)
+	if payday_events.is_empty():
+		return Result.failure("expected PAYDAY_REPORT after completing payday save interaction: %s" % res_path)
+
+	var enriched := false
+	for ev_val in payday_events:
+		if not (ev_val is Dictionary):
+			continue
+		var ev: Dictionary = ev_val
+		var data_val = ev.get("data", null)
+		if not (data_val is Dictionary):
+			continue
+		var data: Dictionary = data_val
+		var report_val = data.get("report", null)
+		if not (report_val is Dictionary):
+			continue
+		var report: Dictionary = report_val
+		var details_val = report.get("details", null)
+		if not (details_val is Array):
+			continue
+		for item_val in Array(details_val):
+			if not (item_val is Dictionary):
+				continue
+			var item: Dictionary = item_val
+			if int(item.get("player_id", -1)) != 0:
+				continue
+			var employees_val = item.get("employees", null)
+			if not (employees_val is Array) or Array(employees_val).is_empty():
+				continue
+			var discount_sources_val = item.get("salary_discount_sources", null)
+			var milestone_adjustments_val = item.get("milestone_salary_adjustments", null)
+			if not (discount_sources_val is Array) or Array(discount_sources_val).is_empty():
+				return Result.failure("PAYDAY_REPORT missing salary_discount_sources for player 1: %s" % res_path)
+			if not (milestone_adjustments_val is Array) or Array(milestone_adjustments_val).is_empty():
+				return Result.failure("PAYDAY_REPORT missing milestone_salary_adjustments for player 1: %s" % res_path)
+			enriched = true
+			break
+		if enriched:
+			break
+	if not enriched:
+		return Result.failure("PAYDAY_REPORT should include enriched per-employee payday details for player 1: %s" % res_path)
+
+	var timeline_r: Result = StepTimelineBuildClass.build_full(engine)
+	if not timeline_r.ok:
+		return Result.failure("step_timeline build failed for payday details save: %s (%s)" % [timeline_r.error, res_path])
+	if not (timeline_r.value is Dictionary):
+		return Result.failure("step_timeline build returned non-Dictionary for payday details save: %s" % res_path)
+	var timeline: Dictionary = timeline_r.value
+	var events_val = timeline.get("events", null)
+	if not (events_val is Array):
+		return Result.failure("step_timeline.events missing/invalid for payday details save: %s" % res_path)
+
+	var entries: Array[Dictionary] = GameTimelineLogEntriesBuilderClass.build(Array(events_val))
+	var payday_entry_count := 0
+	var text := ""
+	for entry_val in entries:
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
+		if str(entry.get("event_type", "")).strip_edges() != EventBus.EventType.PAYDAY_REPORT:
+			continue
+		payday_entry_count += 1
+		if bool(entry.get("is_stage_event", true)):
+			return Result.failure("PAYDAY_REPORT entries must be visible by default, not stage events: %s" % res_path)
+		text += str(entry.get("message", "")) + "\n"
+
+	if payday_entry_count < 2:
+		return Result.failure("expected per-player PAYDAY_REPORT log entries in timeline, got %d: %s" % [payday_entry_count, res_path])
+	if not text.contains("发薪日"):
+		return Result.failure("payday log text missing 发薪日: %s" % res_path)
+	if not text.contains("薪资人员："):
+		return Result.failure("payday log text missing 薪资人员 section: %s" % res_path)
+	if not text.contains("薪资基数："):
+		return Result.failure("payday log text missing 薪资基数 section: %s" % res_path)
+	if not text.contains("减免："):
+		return Result.failure("payday log text missing 减免 section: %s" % res_path)
+	if not text.contains("最终支付："):
+		return Result.failure("payday log text missing 最终支付 section: %s" % res_path)
+	if not (text.contains("人力资源总监") or text.contains("hr_director")):
+		return Result.failure("payday log text missing hr_director detail: %s" % res_path)
+	if not (text.contains("营销经理") or text.contains("campaign_manager")):
+		return Result.failure("payday log text missing campaign_manager detail: %s" % res_path)
+	if not text.contains("招聘折扣"):
+		return Result.failure("payday log text missing salary discount detail: %s" % res_path)
+	if not text.contains("里程碑调整"):
+		return Result.failure("payday log text missing milestone adjustment detail: %s" % res_path)
+	if not text.contains("免薪"):
+		return Result.failure("payday log text missing waived salary detail in reduction summary: %s" % res_path)
 
 	return Result.success({})
 

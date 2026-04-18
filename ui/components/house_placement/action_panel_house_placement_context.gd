@@ -3,18 +3,21 @@ extends VBoxContainer
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const EmployeePickerClass = preload("res://ui/components/employee_picker/employee_picker.gd")
 
+const ROTATE_CCW_ICON: Texture2D = preload("res://assets/ui/icons/kenney/board/arrow_counterclockwise.png")
+const ROTATE_CW_ICON: Texture2D = preload("res://assets/ui/icons/kenney/board/arrow_clockwise.png")
+
 var _overlay: Node = null
 var _syncing: bool = false
 
 var _mode_row: HBoxContainer = null
 var _place_house_button: Button = null
 var _add_garden_button: Button = null
-var _hint_panel: PanelContainer = null
-var _hint_label: Label = null
 var _employee_row: VBoxContainer = null
 var _employee_picker = null
 var _house_section: VBoxContainer = null
 var _garden_section: VBoxContainer = null
+var _house_hint_label: Label = null
+var _garden_hint_label: Label = null
 var _house_numbers_flow: HFlowContainer = null
 var _rotate_left_button: Button = null
 var _rotation_value_label: Label = null
@@ -24,6 +27,7 @@ var _garden_house_label: Label = null
 var _garden_effect_label: Label = null
 var _garden_direction_buttons: Dictionary = {}
 var _garden_summary_label: Label = null
+var _confirm_button: Button = null
 
 func _ready() -> void:
 	_build_ui()
@@ -38,15 +42,16 @@ func sync_from_overlay() -> void:
 	_build_ui()
 	_syncing = true
 	var mode := _get_overlay_mode()
+	_sync_employee_buttons()
 	_sync_mode_buttons(mode)
 	_sync_hint()
-	_sync_employee_buttons()
 	_house_section.visible = (mode == "place_house")
 	_garden_section.visible = (mode == "add_garden")
 	if mode == "place_house":
 		_sync_house_section()
 	else:
 		_sync_garden_section()
+	_sync_confirm_button(mode)
 	_syncing = false
 
 func _build_ui() -> void:
@@ -55,6 +60,25 @@ func _build_ui() -> void:
 
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_theme_constant_override("separation", 8)
+
+	_employee_row = VBoxContainer.new()
+	_employee_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_employee_row.add_theme_constant_override("separation", 6)
+	add_child(_employee_row)
+
+	var employee_label := Label.new()
+	employee_label.text = "选择员工"
+	UiStylesClass.apply_label_dark(employee_label)
+	_employee_row.add_child(employee_label)
+
+	_employee_picker = EmployeePickerClass.new()
+	_employee_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_employee_picker.add_theme_constant_override("h_separation", 10)
+	_employee_picker.add_theme_constant_override("v_separation", 10)
+	_employee_picker.set("card_display_scale", 1.25)
+	_employee_row.add_child(_employee_picker)
+	if _employee_picker.has_signal("employee_selected"):
+		_employee_picker.employee_selected.connect(_on_employee_picker_selected)
 
 	_mode_row = HBoxContainer.new()
 	_mode_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -79,39 +103,6 @@ func _build_ui() -> void:
 	_mode_row.add_child(_add_garden_button)
 	_add_garden_button.pressed.connect(_on_add_garden_pressed)
 
-	_hint_panel = PanelContainer.new()
-	_hint_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	UiStylesClass.apply_panel_poster_alt(_hint_panel)
-	add_child(_hint_panel)
-
-	var hint_margin := MarginContainer.new()
-	hint_margin.add_theme_constant_override("margin_left", 8)
-	hint_margin.add_theme_constant_override("margin_top", 6)
-	hint_margin.add_theme_constant_override("margin_right", 8)
-	hint_margin.add_theme_constant_override("margin_bottom", 6)
-	_hint_panel.add_child(hint_margin)
-
-	_hint_label = Label.new()
-	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	UiStylesClass.apply_label_hint_dark(_hint_label)
-	hint_margin.add_child(_hint_label)
-
-	_employee_row = VBoxContainer.new()
-	_employee_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_employee_row.add_theme_constant_override("separation", 4)
-	add_child(_employee_row)
-
-	var employee_label := Label.new()
-	employee_label.text = "员工"
-	UiStylesClass.apply_label_dark(employee_label)
-	_employee_row.add_child(employee_label)
-
-	_employee_picker = EmployeePickerClass.new()
-	_employee_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_employee_row.add_child(_employee_picker)
-	if _employee_picker.has_signal("employee_selected"):
-		_employee_picker.employee_selected.connect(_on_employee_picker_selected)
-
 	_house_section = VBoxContainer.new()
 	_house_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_house_section.add_theme_constant_override("separation", 6)
@@ -124,7 +115,16 @@ func _build_ui() -> void:
 	add_child(_garden_section)
 	_build_garden_section()
 
+	_confirm_button = Button.new()
+	_confirm_button.custom_minimum_size = Vector2(0, 36)
+	_confirm_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_button_secondary(_confirm_button)
+	add_child(_confirm_button)
+	_confirm_button.pressed.connect(_on_confirm_pressed)
+
 func _build_house_section() -> void:
+	_house_hint_label = _add_mode_hint(_house_section)
+
 	var number_label := Label.new()
 	number_label.text = "房屋编号"
 	UiStylesClass.apply_label_dark(number_label)
@@ -147,10 +147,11 @@ func _build_house_section() -> void:
 	_house_section.add_child(rotation_row)
 
 	_rotate_left_button = Button.new()
-	_rotate_left_button.text = "↺"
+	_rotate_left_button.text = ""
 	_rotate_left_button.tooltip_text = "向左旋转"
 	_rotate_left_button.custom_minimum_size = Vector2(44, 34)
 	UiStylesClass.apply_button_secondary(_rotate_left_button)
+	_add_button_icon(_rotate_left_button, ROTATE_CCW_ICON)
 	rotation_row.add_child(_rotate_left_button)
 	_rotate_left_button.pressed.connect(_on_rotate_left_pressed)
 
@@ -163,10 +164,11 @@ func _build_house_section() -> void:
 	rotation_row.add_child(_rotation_value_label)
 
 	_rotate_right_button = Button.new()
-	_rotate_right_button.text = "↻"
+	_rotate_right_button.text = ""
 	_rotate_right_button.tooltip_text = "向右旋转"
 	_rotate_right_button.custom_minimum_size = Vector2(44, 34)
 	UiStylesClass.apply_button_secondary(_rotate_right_button)
+	_add_button_icon(_rotate_right_button, ROTATE_CW_ICON)
 	rotation_row.add_child(_rotate_right_button)
 	_rotate_right_button.pressed.connect(_on_rotate_right_pressed)
 
@@ -176,6 +178,8 @@ func _build_house_section() -> void:
 	_house_section.add_child(_house_summary_label)
 
 func _build_garden_section() -> void:
+	_garden_hint_label = _add_mode_hint(_garden_section)
+
 	var target_label := Label.new()
 	target_label.text = "目标房屋"
 	UiStylesClass.apply_label_dark(target_label)
@@ -217,12 +221,52 @@ func _build_garden_section() -> void:
 	UiStylesClass.apply_label_hint_dark(_garden_summary_label)
 	_garden_section.add_child(_garden_summary_label)
 
+func _add_mode_hint(parent: VBoxContainer) -> Label:
+	var hint_panel := PanelContainer.new()
+	hint_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiStylesClass.apply_panel_poster_alt(hint_panel)
+	parent.add_child(hint_panel)
+
+	var hint_margin := MarginContainer.new()
+	hint_margin.add_theme_constant_override("margin_left", 8)
+	hint_margin.add_theme_constant_override("margin_top", 6)
+	hint_margin.add_theme_constant_override("margin_right", 8)
+	hint_margin.add_theme_constant_override("margin_bottom", 6)
+	hint_panel.add_child(hint_margin)
+
+	var hint_label := Label.new()
+	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	UiStylesClass.apply_label_hint_dark(hint_label)
+	hint_margin.add_child(hint_label)
+	return hint_label
+
+func _add_button_icon(button: Button, texture: Texture2D) -> void:
+	if button == null:
+		return
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(center)
+
+	var icon := TextureRect.new()
+	icon.custom_minimum_size = Vector2(16, 16)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture = texture
+	icon.modulate = Color(0.07, 0.07, 0.07, 1)
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center.add_child(icon)
+
 func _sync_mode_buttons(mode: String) -> void:
 	_place_house_button.set_pressed_no_signal(mode == "place_house")
 	_add_garden_button.set_pressed_no_signal(mode == "add_garden")
 
 func _sync_hint() -> void:
-	_hint_label.text = str(_safe_call("get_hint_text", ""))
+	var text := str(_safe_call("get_hint_text", ""))
+	if _house_hint_label != null:
+		_house_hint_label.text = text
+	if _garden_hint_label != null:
+		_garden_hint_label.text = text
 
 func _sync_employee_buttons() -> void:
 	var items_val = _safe_call("get_available_employee_items", [])
@@ -309,6 +353,12 @@ func _sync_garden_section() -> void:
 		else:
 			_garden_summary_label.text = "方向 %s 不可用：%s" % [selected_direction, str(status.get("message", ""))]
 
+func _sync_confirm_button(mode: String) -> void:
+	if _confirm_button == null:
+		return
+	_confirm_button.text = "确认添加花园" if mode == "add_garden" else "确认放置"
+	_confirm_button.disabled = not bool(_safe_call("can_confirm", false))
+
 func _get_direction_status(direction: String) -> Dictionary:
 	var val = _safe_call("get_direction_status", {"valid": true, "message": ""}, [direction])
 	return Dictionary(val) if val is Dictionary else {"valid": true, "message": ""}
@@ -368,6 +418,13 @@ func _on_employee_picker_selected(_employee_type: String) -> void:
 	if key.is_empty():
 		return
 	_safe_call("set_selected_employee_key", null, [key])
+
+func _on_confirm_pressed() -> void:
+	if _syncing:
+		return
+	if _confirm_button != null and _confirm_button.disabled:
+		return
+	_safe_call("request_confirm", null)
 
 func _direction_label(direction: String) -> String:
 	match str(direction).strip_edges():

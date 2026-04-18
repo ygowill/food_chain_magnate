@@ -4,8 +4,15 @@ extends RefCounted
 const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
 const StepTimelineHelpersClass = preload("res://gameplay/replay/step_timeline_build/helpers.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func run(seed_val: int = 12345) -> Result:
+	var payday_r := _test_payday_report_appends_on_triggering_skip(seed_val + 17)
+	if not payday_r.ok:
+		return payday_r
+
 	var engine := GameEngine.new()
 	var init := engine.initialize(2, seed_val)
 	if not init.ok:
@@ -121,3 +128,122 @@ static func run(seed_val: int = 12345) -> Result:
 		"appended_steps": int(appended_steps.size()),
 		"appended_events": int(appended_events.size()),
 	})
+
+static func _test_payday_report_appends_on_triggering_skip(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("payday append: init failed: %s" % init.error)
+
+	var to_payday := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_PAYDAY, 200)
+	if not to_payday.ok:
+		return Result.failure("payday append: advance_until_phase failed: %s" % to_payday.error)
+
+	var state := engine.get_state()
+	if state.bank is Dictionary:
+		state.bank["broke_count"] = maxi(2, int(state.bank.get("broke_count", 0)))
+	for pid in range(state.players.size()):
+		var give := StateUpdaterClass.player_receive_from_bank(state, pid, 1000)
+		if not give.ok:
+			return Result.failure("payday append: give cash to player %d failed: %s" % [pid, give.error])
+
+	var first_actor := int(engine.get_state().get_current_player_id())
+	var first_skip := engine.execute_command(Command.create(ActionIdsClass.SKIP, first_actor))
+	if not first_skip.ok:
+		return Result.failure("payday append: first skip failed: %s" % first_skip.error)
+	if str(engine.get_state().phase) != DefsClass.PHASE_PAYDAY:
+		return Result.failure("payday append: first skip should stay in Payday, got: %s" % str(engine.get_state().phase))
+
+	var base_r: Result = StepTimelineBuildClass.build_full(engine)
+	if not base_r.ok:
+		return Result.failure("payday append: build_full(base) failed: %s" % base_r.error)
+	if not (base_r.value is Dictionary):
+		return Result.failure("payday append: build_full(base).value type error (expected Dictionary)")
+	var base_timeline: Dictionary = Dictionary(base_r.value).duplicate(true)
+	var base_step_count := _read_array_size(base_timeline.get("steps", []))
+	var base_event_count := _read_array_size(base_timeline.get("events", []))
+	var base_processed_count := StepTimelineHelpersClass.read_processed_command_count(base_timeline)
+	if base_processed_count != int(engine.command_history.size()):
+		return Result.failure(
+			"payday append: base processed_command_count mismatch: %d vs %d"
+				% [base_processed_count, int(engine.command_history.size())]
+		)
+
+	var triggering_command_index := int(engine.command_history.size())
+	var final_actor := int(engine.get_state().get_current_player_id())
+	var final_skip := engine.execute_command(Command.create(ActionIdsClass.SKIP, final_actor))
+	if not final_skip.ok:
+		return Result.failure("payday append: final skip failed: %s" % final_skip.error)
+	if str(engine.get_state().phase) == DefsClass.PHASE_PAYDAY:
+		return Result.failure("payday append: final skip should leave Payday")
+
+	var append_r: Result = StepTimelineBuildClass.append_from_existing(engine, base_timeline)
+	if not append_r.ok:
+		return Result.failure("payday append: append_from_existing failed: %s" % append_r.error)
+	if not (append_r.value is Dictionary):
+		return Result.failure("payday append: append_from_existing.value type error (expected Dictionary)")
+	var append_info: Dictionary = append_r.value
+	if not bool(append_info.get("append_applied", false)):
+		return Result.failure("payday append: append_from_existing should append for final skip")
+
+	var appended_events_val = append_info.get("appended_events", null)
+	if not (appended_events_val is Array):
+		return Result.failure("payday append: appended_events type error (expected Array)")
+	var appended_events: Array = appended_events_val
+
+	var appended_reports: Array[Dictionary] = []
+	var appended_phase_changed: Dictionary = {}
+	for ev_val in appended_events:
+		if not (ev_val is Dictionary):
+			continue
+		var ev: Dictionary = ev_val
+		var event_type := str(ev.get("type", "")).strip_edges()
+		if event_type == EventBus.EventType.PAYDAY_REPORT:
+			appended_reports.append(ev)
+		elif event_type == EventBus.EventType.PHASE_CHANGED and appended_phase_changed.is_empty():
+			appended_phase_changed = ev
+
+	if appended_reports.is_empty():
+		return Result.failure("payday append: appended_events should include PAYDAY_REPORT")
+	if appended_phase_changed.is_empty():
+		return Result.failure("payday append: appended_events should include PHASE_CHANGED")
+
+	var report: Dictionary = appended_reports[0]
+	var report_step := int(report.get("step_index", -999999))
+	var report_cmd := int(report.get("command_index", -999999))
+	var report_segment := str(report.get("phase_segment", "")).strip_edges()
+	if report_cmd != triggering_command_index:
+		return Result.failure("payday append: PAYDAY_REPORT command_index should be final skip command %d, got %d" % [triggering_command_index, report_cmd])
+	if report_step < base_step_count:
+		return Result.failure("payday append: PAYDAY_REPORT should be in appended step range (step=%d base_steps=%d)" % [report_step, base_step_count])
+	if report_segment != DefsClass.PHASE_PAYDAY:
+		return Result.failure("payday append: PAYDAY_REPORT phase_segment should stay Payday, got: %s" % report_segment)
+
+	var phase_step := int(appended_phase_changed.get("step_index", -999999))
+	var phase_segment := str(appended_phase_changed.get("phase_segment", "")).strip_edges()
+	if phase_step != report_step:
+		return Result.failure("payday append: PAYDAY_REPORT should share the triggering command step with PHASE_CHANGED (report=%d phase=%d)" % [report_step, phase_step])
+	if phase_segment != DefsClass.PHASE_MARKETING:
+		return Result.failure("payday append: PHASE_CHANGED segment should be Marketing, got: %s" % phase_segment)
+
+	var append_timeline: Dictionary = Dictionary(append_info.get("timeline", {})).duplicate(true)
+	var full_r: Result = StepTimelineBuildClass.build_full(engine)
+	if not full_r.ok:
+		return Result.failure("payday append: build_full(final) failed: %s" % full_r.error)
+	if not (full_r.value is Dictionary):
+		return Result.failure("payday append: build_full(final).value type error (expected Dictionary)")
+	if append_timeline != Dictionary(full_r.value):
+		return Result.failure("payday append: incremental append timeline does not match full rebuild")
+
+	var final_event_count := _read_array_size(append_timeline.get("events", []))
+	if final_event_count <= base_event_count:
+		return Result.failure("payday append: final events should grow after append")
+
+	return Result.success({
+		"base_steps": base_step_count,
+		"report_step": report_step,
+		"command_index": report_cmd,
+	})
+
+static func _read_array_size(value) -> int:
+	return Array(value).size() if (value is Array) else 0

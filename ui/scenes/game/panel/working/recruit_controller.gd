@@ -42,7 +42,7 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	if state.phase != DefsClass.PHASE_WORKING or state.sub_phase != DefsClass.SUB_PHASE_RECRUIT:
 		recruit_panel.visible = false
 		return
-	if force_full_refresh and recruit_panel.has_method("set_employee_pool"):
+	if recruit_panel.has_method("set_employee_pool"):
 		recruit_panel.set_employee_pool(state.employee_pool)
 	if recruit_panel.has_method("set_recruiters"):
 		recruit_panel.set_recruiters(_build_recruiters(state, state.get_current_player_id()))

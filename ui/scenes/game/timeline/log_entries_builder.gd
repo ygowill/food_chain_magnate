@@ -25,7 +25,7 @@ static func build(events: Array) -> Array[Dictionary]:
 			or event_type == EventBus.EventType.ROUND_ENDED
 			or event_type == EventBus.EventType.PLAYER_TURN_STARTED
 			or event_type == EventBus.EventType.PLAYER_TURN_ENDED
-			or event_type.ends_with("_report")
+			or (event_type.ends_with("_report") and event_type != EventBus.EventType.PAYDAY_REPORT)
 		)
 		var cmd_index := int(ev.get("command_index", -1))
 		var step_index := int(ev.get("step_index", cmd_index))

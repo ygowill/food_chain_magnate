@@ -287,6 +287,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.GameMenuDebugControllerOnlineQuitTestClass.run(),
 		},
 		{
+			"name": "GameOverOnlineReturnFlowTest",
+			"fn": func() -> Result: return TestRefs.GameOverOnlineReturnFlowTestClass.run(),
+		},
+		{
 			"name": "GameMenuDebugControllerOnlineSurrenderQuitTest",
 			"fn": func() -> Result: return await TestRefs.GameMenuDebugControllerOnlineSurrenderQuitTestClass.run(),
 		},
@@ -1309,6 +1313,10 @@ static func build_tests(host) -> Array[Dictionary]:
 						{
 							"name": "RecruitTrainStaffPickerUiTest",
 							"fn": func() -> Result: return await TestRefs.RecruitTrainStaffPickerUiTestClass.run(),
+						},
+						{
+							"name": "WorkingPanelsVisibleSyncTest",
+							"fn": func() -> Result: return TestRefs.WorkingPanelsVisibleSyncTestClass.run(12345),
 						},
 						{
 							"name": "KimchiV2Test",

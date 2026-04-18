@@ -36,8 +36,7 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 		train_panel.visible = false
 		return
 
-	if force_full_refresh:
-		_refresh_for_state(state)
+	_refresh_for_state(state)
 
 func show() -> void:
 	if _scene == null or _scene.game_engine == null:
