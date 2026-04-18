@@ -5,6 +5,7 @@ func get_registry() -> Dictionary:
 		"logs_event_review": Callable(self, "_build_logs_event_review"),
 		"logs_employee_recruit_train": Callable(self, "_build_logs_employee_recruit_train"),
 		"logs_employee_fire": Callable(self, "_build_logs_employee_fire"),
+		"logs_payday_details": Callable(self, "_build_logs_payday_details"),
 		"logs_build_and_move": Callable(self, "_build_logs_build_and_move"),
 		"logs_produce_and_cleanup": Callable(self, "_build_logs_produce_and_cleanup"),
 		"logs_dinnertime_sale": Callable(self, "_build_logs_dinnertime_sale"),
@@ -228,6 +229,61 @@ func _build_logs_employee_fire(engine: GameEngine, _c: Dictionary) -> Result:
 		return Result.failure("fire failed: %s" % fire.error)
 
 	return Result.success()
+
+func _build_logs_payday_details(engine: GameEngine, _c: Dictionary) -> Result:
+	var adv := _advance_to_phase(engine, "Payday")
+	if not adv.ok:
+		return adv
+
+	var state := engine.get_state()
+	_force_turn_order(state)
+	var actor := state.get_current_player_id()
+	if actor < 0:
+		return Result.failure("cannot resolve current player")
+
+	for employee_id in ["hr_director", "burger_cook", "campaign_manager"]:
+		var take := StateUpdater.take_from_pool(state, employee_id, 1)
+		if not take.ok:
+			return Result.failure("take_from_pool(%s) failed: %s" % [employee_id, take.error])
+
+	var add_hr := StateUpdater.add_employee(state, actor, "hr_director", false)
+	if not add_hr.ok:
+		return Result.failure("add_employee(hr_director) failed: %s" % add_hr.error)
+	var add_burger := StateUpdater.add_employee(state, actor, "burger_cook", true)
+	if not add_burger.ok:
+		return Result.failure("add_employee(burger_cook) failed: %s" % add_burger.error)
+
+	var player := state.get_player(actor)
+	var busy_marketers: Array = Array(player.get("busy_marketers", []))
+	busy_marketers.append("campaign_manager")
+	player["busy_marketers"] = busy_marketers
+	player["milestones"] = ["first_train", "first_billboard"]
+	state.players[actor] = player
+
+	var next_actor := 1 if actor == 0 else 0
+	var give_cash := engine.execute_command(Command.create_system("debug_give_money", {"player_id": next_actor, "amount": 50}))
+	if not give_cash.ok:
+		return Result.failure("debug_give_money failed: %s" % give_cash.error)
+
+	_freeze_engine_as_initial(engine)
+
+	# 让首位玩家在已冻结的 Payday 初始面上先解雇一名待命员工，
+	# 然后由另一位玩家继续确认结束，用于手工同时复核“解雇日志 + 发薪明细日志”。
+	var fire := engine.execute_command(Command.create("fire", actor, {
+		"employee_id": "burger_cook",
+		"location": "reserve",
+	}))
+	if not fire.ok:
+		return Result.failure("fire failed: %s" % fire.error)
+
+	return Result.success({
+		"scenario": [
+			"玩家1：hr_director（在岗）+ campaign_manager（忙碌营销）+ burger_cook（待命，已在 Payday 解雇）。",
+			"玩家1持有里程碑 first_train（总薪资 -$15）与 first_billboard（营销员工免薪）。",
+			"当前停在 Payday，玩家2为当前玩家；日志历史里已经包含一条解雇日志。",
+			"进入后继续点「确认结束」，当轮 Payday 完成时会新增每位玩家的发薪总结，并展示逐员工发薪/免薪/减免来源。",
+		],
+	})
 
 func _build_logs_build_and_move(engine: GameEngine, _c: Dictionary) -> Result:
 	var adv := _advance_to_working_sub_phase(engine, "PlaceHouses")
