@@ -67,7 +67,19 @@ func _init(scene, map_controller, overlay_controller, execute_command: Callable,
 	_working_panels = WorkingPanelsClass.new(_scene, _map_controller, _execute_command, hide_all, center_popup, _overlay_controller)
 	_marketing_panels = MarketingPanelsClass.new(_scene, _map_controller, _overlay_controller, _execute_command, hide_all, center_popup)
 	_placement_overlays = PlacementOverlaysClass.new(_scene, _map_controller, _overlay_controller, _execute_command, hide_all)
-	_end_panels = EndPanelsClass.new(_scene, _overlay_controller, _execute_command, hide_all, center_popup, _refresh_ui)
+	_end_panels = EndPanelsClass.new(
+		_scene,
+		_overlay_controller,
+		_execute_command,
+		hide_all,
+		center_popup,
+		_refresh_ui,
+		{
+			"net_client": NetClient,
+			"scene_manager": SceneManager,
+			"globals": Globals,
+		}
+	)
 	_restructuring_controller = RestructuringControllerClass.new(
 		_scene,
 		_execute_command,
@@ -247,6 +259,8 @@ func dispose() -> void:
 	if _placement_overlays != null and _placement_overlays.has_method("dispose"):
 		_placement_overlays.dispose()
 	_placement_overlays = null
+	if _end_panels != null and _end_panels.has_method("dispose"):
+		_end_panels.dispose()
 	_end_panels = null
 
 	if _restructuring_controller != null and _restructuring_controller.has_method("dispose"):

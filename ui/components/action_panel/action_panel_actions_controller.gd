@@ -15,6 +15,10 @@ const AUTO_MANDATORY_ACTION_IDS := {
 	ActionIdsClass.SET_DISCOUNT: true,
 	ActionIdsClass.SET_LUXURY_PRICE: true,
 }
+const HOUSE_PLACEMENT_ACTION_IDS := {
+	"place_house": true,
+	"add_garden": true,
+}
 
 var _panel = null
 var _rendered_button_ids_snapshot: Array[String] = []
@@ -276,6 +280,8 @@ func _compute_guided_flow_visibility() -> void:
 func _get_preferred_guided_action_id(candidates: Array) -> String:
 	if candidates.has("place_restaurant") and candidates.has("move_restaurant"):
 		return "place_restaurant"
+	if candidates.has("place_house") and candidates.has("add_garden"):
+		return "place_house"
 	return ""
 
 func _get_fallback_actions(phase: String, sub_phase: String) -> Array[String]:
@@ -345,6 +351,8 @@ func _get_rendered_action_button_ids() -> Array[String]:
 		if aid.is_empty():
 			continue
 		if aid == ActionIdsClass.SKIP or aid == ActionIdsClass.SKIP_SUB_PHASE:
+			continue
+		if HOUSE_PLACEMENT_ACTION_IDS.has(guided) and HOUSE_PLACEMENT_ACTION_IDS.has(aid):
 			continue
 		if not guided.is_empty() and aid == guided:
 			continue

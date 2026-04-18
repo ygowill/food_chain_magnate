@@ -69,6 +69,7 @@ const OnlineClientDisconnectPreserveContextTestClass = preload("res://core/tests
 const OnlineClientGameStartedReconnectTestClass = preload("res://core/tests/online_client_game_started_reconnect_test.gd")
 const OnlineClientConfigBootstrapOverridesTestClass = preload("res://core/tests/online_client_config_bootstrap_overrides_test.gd")
 const GameMenuDebugControllerOnlineQuitTestClass = preload("res://core/tests/game_menu_debug_controller_online_quit_test.gd")
+const GameOverOnlineReturnFlowTestClass = preload("res://core/tests/game_over_online_return_flow_test.gd")
 const GameMenuDebugControllerOnlineSurrenderQuitTestClass = preload("res://core/tests/game_menu_debug_controller_online_surrender_quit_test.gd")
 const GameMenuControllerOnlineForfeitConfirmTestClass = preload("res://core/tests/game_menu_controller_online_forfeit_confirm_test.gd")
 const OnlineRoomManagerTestClass = preload("res://core/tests/online_room_manager_test.gd")
