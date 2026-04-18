@@ -81,6 +81,32 @@ static func get_cases() -> Array[Dictionary]:
 
 	cases.append(_case({
 		"kind": "logs",
+		"id": "event_log_payday_details",
+		"title": "日志回放验证（Payday 发薪明细）",
+		"enabled_modules": [],
+		"freeze_as_initial": false,
+		"builder": "logs_payday_details",
+		"purpose": "用于手工复核 Payday 日志细节：单独的解雇日志、逐员工发薪/免薪、招聘折扣来源、里程碑薪资修正。",
+		"steps": [
+			"载入后打开日志视图。",
+			"先确认已经存在一条「解雇 ...」日志。",
+			"点击「确认结束」完成当前 Payday。",
+			"确认出现每位玩家的 Payday 总结日志。",
+			"确认日志文本中包含逐员工明细、免薪原因、招聘折扣来源、里程碑薪资修正。",
+		],
+		"expected": [
+			"解雇日志与最终发薪日志分开显示。",
+			"玩家1的发薪日志应包含 hr_director 在岗发薪、campaign_manager 忙碌营销免薪，以及 first_train / first_billboard 带来的减免信息。",
+		],
+		"related_tests": [
+			"core/tests/payday_salary_test.gd",
+			"core/tests/payday_report_event_test.gd",
+			"core/tests/fire_action_test.gd",
+		],
+	}))
+
+	cases.append(_case({
+		"kind": "logs",
 		"id": "event_log_build_and_move",
 		"title": "日志回放验证（建房 + 花园 + 开店 + 搬店）",
 		"enabled_modules": [],

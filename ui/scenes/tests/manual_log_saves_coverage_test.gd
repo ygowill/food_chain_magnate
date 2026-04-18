@@ -31,6 +31,12 @@ const CASES: Array[Dictionary] = [
 		],
 	},
 	{
+		"path": "res://testdata/saves/manual_cases/logs/event_log_payday_details.json",
+		"required_types": [
+			EventBus.EventType.EMPLOYEE_FIRED,
+		],
+	},
+	{
 		"path": "res://testdata/saves/manual_cases/logs/event_log_build_and_move.json",
 		"required_types": [
 			EventBus.EventType.HOUSE_PLACED,

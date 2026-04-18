@@ -34,8 +34,10 @@ func format_payday_report(data: Dictionary) -> Array[Dictionary]:
 		var due := int(item.get("due", 0))
 		var paid_cash := int(item.get("paid", 0))
 		var unpaid := int(item.get("unpaid", 0))
+		var base_due := int(item.get("base_due", 0))
 		var discount := int(item.get("salary_discount", 0))
 		var delta := int(item.get("milestone_delta", 0))
+		var salary_cost := int(item.get("salary_cost", item.get("base_salary_cost", 0)))
 
 		var token_total := 0
 		var paid_tokens_val = item.get("paid_with_tokens", null)
@@ -46,17 +48,32 @@ func format_payday_report(data: Dictionary) -> Array[Dictionary]:
 
 		var extra_parts: Array[String] = []
 		if discount > 0:
-			extra_parts.append("折扣-$%d" % discount)
+			var discount_detail := _format_payday_discount_detail(item)
+			if discount_detail.is_empty():
+				extra_parts.append("招聘折扣-$%d" % discount)
+			else:
+				extra_parts.append("招聘折扣-$%d（%s）" % [discount, discount_detail])
 		if delta != 0:
-			extra_parts.append("里程碑%+d" % delta)
+			var ms_detail := _format_payday_milestone_delta_detail(item)
+			if ms_detail.is_empty():
+				extra_parts.append("里程碑%+d" % delta)
+			else:
+				extra_parts.append("里程碑%+d（%s）" % [delta, ms_detail])
 
+		var employee_text := _format_payday_paid_employees(item, salary_cost)
 		var text := "发薪日"
 		if due == 0 and paid_cash == 0 and unpaid == 0 and token_total == 0:
 			text += "：无需支付"
+			if not employee_text.is_empty():
+				text += "；需发薪员工：" + employee_text
 			if not extra_parts.is_empty():
 				text += "（%s）" % "，".join(extra_parts)
 		else:
 			text += "：应付$%d" % due
+			if base_due != due:
+				text += "（原始薪资$%d）" % base_due
+			if not employee_text.is_empty():
+				text += "；员工：" + employee_text
 
 			var pay_parts: Array[String] = []
 			if paid_cash > 0:
@@ -77,6 +94,116 @@ func format_payday_report(data: Dictionary) -> Array[Dictionary]:
 		out.append(_formatter._player(player_id, text, d))
 
 	return out
+
+func _format_payday_paid_employees(item: Dictionary, fallback_salary_cost: int) -> String:
+	var employees_val = item.get("employees", null)
+	if not (employees_val is Array):
+		return ""
+	var employees: Array = employees_val
+
+	var paid_parts: Array[String] = []
+	var waived_parts: Array[String] = []
+	for emp_val in employees:
+		if not (emp_val is Dictionary):
+			continue
+		var emp: Dictionary = emp_val
+		var employee_id := str(emp.get("employee_id", "")).strip_edges()
+		var name := str(emp.get("name", "")).strip_edges()
+		if name.is_empty():
+			name = str(_formatter._employee_name(employee_id)).strip_edges()
+		if name.is_empty():
+			name = employee_id
+		if name.is_empty():
+			continue
+		var location := str(_formatter._format_employee_location(str(emp.get("location", "")).strip_edges())).strip_edges()
+		var display_name := name
+		if not location.is_empty():
+			display_name = "%s/%s" % [name, location]
+
+		if bool(emp.get("requires_salary", false)):
+			var cost := int(emp.get("salary_cost", fallback_salary_cost))
+			paid_parts.append("%s $%d" % [display_name, cost])
+		else:
+			var reason := _format_payday_waived_reasons(emp)
+			if reason.is_empty():
+				waived_parts.append("%s 免薪" % display_name)
+			else:
+				waived_parts.append("%s 免薪（%s）" % [display_name, reason])
+
+	var parts: Array[String] = []
+	if not paid_parts.is_empty():
+		parts.append("发薪 " + "、".join(paid_parts))
+	if not waived_parts.is_empty():
+		parts.append("免薪 " + "、".join(waived_parts))
+	return "；".join(parts)
+
+func _format_payday_waived_reasons(emp: Dictionary) -> String:
+	var reasons_val = emp.get("salary_waived_reasons", null)
+	if not (reasons_val is Array):
+		return ""
+	var labels: Array[String] = []
+	var seen := {}
+	for reason_val in reasons_val:
+		if not (reason_val is Dictionary):
+			continue
+		var reason: Dictionary = reason_val
+		var label := str(reason.get("label", "")).strip_edges()
+		var mid := str(reason.get("milestone_id", "")).strip_edges()
+		var mname := str(reason.get("milestone_name", "")).strip_edges()
+		if not mname.is_empty():
+			label = "%s：%s" % [label, mname] if not label.is_empty() else mname
+		elif not mid.is_empty():
+			label = "%s：%s" % [label, mid] if not label.is_empty() else mid
+		if label.is_empty():
+			continue
+		if seen.has(label):
+			continue
+		seen[label] = true
+		labels.append(label)
+	return "，".join(labels)
+
+func _format_payday_discount_detail(item: Dictionary) -> String:
+	var sources_val = item.get("salary_discount_sources", null)
+	if not (sources_val is Array):
+		return ""
+	var parts: Array[String] = []
+	for source_val in sources_val:
+		if not (source_val is Dictionary):
+			continue
+		var source: Dictionary = source_val
+		var unused := int(source.get("unused_actions", 0))
+		if unused <= 0:
+			continue
+		var employee_id := str(source.get("employee_id", "")).strip_edges()
+		var name := str(source.get("name", "")).strip_edges()
+		if name.is_empty():
+			name = str(_formatter._employee_name(employee_id)).strip_edges()
+		if name.is_empty():
+			name = employee_id
+		if name.is_empty():
+			continue
+		parts.append("%s 未用招聘x%d" % [name, unused])
+	return "，".join(parts)
+
+func _format_payday_milestone_delta_detail(item: Dictionary) -> String:
+	var entries_val = item.get("milestone_salary_adjustments", null)
+	if not (entries_val is Array):
+		return ""
+	var parts: Array[String] = []
+	for entry_val in entries_val:
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
+		var amount := int(entry.get("amount", 0))
+		if amount == 0:
+			continue
+		var name := str(entry.get("milestone_name", "")).strip_edges()
+		if name.is_empty():
+			name = str(entry.get("milestone_id", "")).strip_edges()
+		if name.is_empty():
+			name = "里程碑"
+		parts.append("%s%+d" % [name, amount])
+	return "，".join(parts)
 
 func format_dinnertime_report(data: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
