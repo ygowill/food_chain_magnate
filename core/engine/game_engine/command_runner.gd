@@ -242,6 +242,14 @@ static func build_phase_change_events(old_state: GameState, new_state: GameState
 		return []
 	return provider.build_phase_change_events(old_state, new_state)
 
+static func build_payday_report_events(old_state: GameState, new_state: GameState) -> Array[Dictionary]:
+	var provider = _get_event_build_provider()
+	if provider == null:
+		return []
+	if not provider.has_method("build_payday_report_events"):
+		return []
+	return provider.build_payday_report_events(old_state, new_state)
+
 static func build_food_sold_events_from_dinnertime_report(dinnertime_state: GameState, report: Dictionary) -> Array[Dictionary]:
 	var provider = _get_event_build_provider()
 	if provider == null:

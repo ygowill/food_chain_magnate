@@ -52,6 +52,9 @@ static func build_phase_change_events(old_state: GameState, new_state: GameState
 
 	return events
 
+static func build_payday_report_events(old_state: GameState, new_state: GameState) -> Array[Dictionary]:
+	return PaydayEventsClass.build_payday_report_events(old_state, new_state)
+
 static func build_food_sold_events_from_dinnertime_report(dinnertime_state: GameState, report: Dictionary) -> Array[Dictionary]:
 	return DinnertimeEventsClass.build_food_sold_events_from_dinnertime_report(dinnertime_state, report)
 
