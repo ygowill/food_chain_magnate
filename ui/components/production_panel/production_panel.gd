@@ -3,9 +3,9 @@
 class_name ProductionPanel
 extends "res://ui/components/common/right_panel_embeddable_panel.gd"
 
-signal production_requested(employee_type: String, production_type: String)
+signal production_requested(employee_type: String, production_type: String, staff_id: int)
 signal cancelled()
-signal producer_changed(employee_type: String, production_type: String)
+signal producer_changed(employee_type: String, production_type: String, staff_id: int)
 signal drinks_clear_requested()
 signal drinks_undo_requested()
 signal drinks_restaurant_changed(restaurant_id: String)
@@ -30,12 +30,15 @@ const DrinksControllerClass = preload("res://ui/components/production_panel/prod
 
 var _production_type: String = "food"  # food | drinks
 var _available_producers: Array[String] = []
+var _producer_items: Array[Dictionary] = []
+var _producer_by_key: Dictionary = {}
 var _current_inventory: Dictionary = {}
 
 var _employee_picker = null
 var _info_label: Label = null
 var _selected_employee_type: String = ""
 var _selected_employee_key: String = ""
+var _selected_staff_id: int = -1
 var _has_any_enabled_employee: bool = false
 
 var _usage_token: String = ""
@@ -104,7 +107,9 @@ func set_usage_token(token: String) -> void:
 	_usage_token = t
 	_used_employee_keys_by_mode["food"] = {}
 	_used_employee_keys_by_mode["drinks"] = {}
+	_selected_employee_type = ""
 	_selected_employee_key = ""
+	_selected_staff_id = -1
 
 func set_used_employee_counts(used_counts_by_employee_id: Dictionary) -> void:
 	# 用于“载入/回放/时间线回退”等场景：根据 GameState.round_state 中的计数来同步禁用态，
@@ -147,7 +152,17 @@ func set_used_employee_counts(used_counts_by_employee_id: Dictionary) -> void:
 	_update_info()
 
 func set_available_producers(producers: Array[String]) -> void:
+	_producer_items.clear()
 	_available_producers = producers.duplicate()
+	_rebuild()
+
+func set_producer_items(items: Array) -> void:
+	_available_producers.clear()
+	_producer_items.clear()
+	for item_val in items:
+		if not (item_val is Dictionary):
+			continue
+		_producer_items.append(Dictionary(item_val).duplicate(true))
 	_rebuild()
 
 func set_current_inventory(inventory: Dictionary) -> void:
@@ -174,6 +189,9 @@ func get_selected_drink_type() -> String:
 
 func get_selected_food_type() -> String:
 	return _selected_food_type
+
+func get_selected_staff_id() -> int:
+	return _selected_staff_id
 
 func set_drinks_procure_restaurants(restaurants: Array[Dictionary], selected_restaurant_id: String = "", require_selection: bool = false) -> void:
 	var prev_selected := _drinks_selected_restaurant_id
@@ -375,80 +393,138 @@ func _rebuild_employee_options() -> void:
 		return
 
 	var prev_type := _selected_employee_type
-
-	var counts: Dictionary = {}
-	for v in _available_producers:
-		var emp_id := str(v)
-		if emp_id.is_empty():
-			continue
-		counts[emp_id] = int(counts.get(emp_id, 0)) + 1
-
-	var ids: Array[String] = []
-	for k in counts.keys():
-		ids.append(str(k))
-	ids.sort()
-
-	var used_set: Dictionary = {}
-	if _used_employee_keys_by_mode.has(_production_type) and (_used_employee_keys_by_mode[_production_type] is Dictionary):
-		used_set = _used_employee_keys_by_mode[_production_type]
+	var prev_staff_id := _selected_staff_id
 
 	var items: Array[Dictionary] = []
+	_producer_by_key.clear()
 	_has_any_enabled_employee = false
-	for emp_id2 in ids:
-		var count: int = int(counts.get(emp_id2, 0))
-		for idx in range(1, count + 1):
-			var key := "%s#%d" % [emp_id2, idx]
-			var enabled := not used_set.has(key)
+
+	if not _producer_items.is_empty():
+		for provider_val in _producer_items:
+			if not (provider_val is Dictionary):
+				continue
+			var provider: Dictionary = provider_val
+			var emp_id := str(provider.get("employee_type", provider.get("id", ""))).strip_edges()
+			if emp_id.is_empty():
+				continue
+			var staff_id := int(provider.get("staff_id", -1))
+			var key := "staff:%d" % staff_id if staff_id > 0 else "%s#legacy_provider_%d" % [emp_id, items.size() + 1]
+			var capacity := int(provider.get("capacity", provider.get("cap_per_instance", 0)))
+			var remaining := int(provider.get("remaining", 0))
+			var enabled := remaining > 0
 			if enabled:
 				_has_any_enabled_employee = true
+			_producer_by_key[key] = provider.duplicate(true)
 			items.append({
-				"id": emp_id2,
+				"id": emp_id,
 				"key": key,
-				"employee_def": _get_employee_def_for_card(emp_id2),
-				"badge_text": "",
+				"employee_def": _get_employee_def_for_card(emp_id),
+				"badge_text": "%d/%d" % [maxi(0, remaining), maxi(0, capacity)],
+				"tag_text": "可用" if enabled else "已用",
 				"enabled": enabled,
 			})
-
-	# 尽量保持原来的 employee_type 选择；若该类型已无可用实例，则清空选择（由玩家重新选择其它员工）。
-	var selected_key := ""
-	if not _selected_employee_type.is_empty():
-		if not _selected_employee_key.is_empty() and not used_set.has(_selected_employee_key):
-			selected_key = _selected_employee_key
-		else:
-			var count2: int = int(counts.get(_selected_employee_type, 0))
-			for idx2 in range(1, count2 + 1):
-				var k2 := "%s#%d" % [_selected_employee_type, idx2]
-				if not used_set.has(k2):
-					selected_key = k2
-					break
 	else:
-		for it_val in items:
-			if not (it_val is Dictionary):
+		var counts: Dictionary = {}
+		for v in _available_producers:
+			var emp_id2 := str(v)
+			if emp_id2.is_empty():
 				continue
-			var it: Dictionary = it_val
-			if bool(it.get("enabled", false)):
-				selected_key = str(it.get("key", "")).strip_edges()
-				break
+			counts[emp_id2] = int(counts.get(emp_id2, 0)) + 1
 
+		var ids: Array[String] = []
+		for k in counts.keys():
+			ids.append(str(k))
+		ids.sort()
+
+		var used_set: Dictionary = {}
+		if _used_employee_keys_by_mode.has(_production_type) and (_used_employee_keys_by_mode[_production_type] is Dictionary):
+			used_set = _used_employee_keys_by_mode[_production_type]
+
+		for emp_id3 in ids:
+			var count: int = int(counts.get(emp_id3, 0))
+			for idx in range(1, count + 1):
+				var key2 := "%s#%d" % [emp_id3, idx]
+				var enabled2 := not used_set.has(key2)
+				if enabled2:
+					_has_any_enabled_employee = true
+				_producer_by_key[key2] = {
+					"staff_id": -idx,
+					"employee_type": emp_id3,
+					"capacity": 1,
+					"used": 0 if enabled2 else 1,
+					"remaining": 1 if enabled2 else 0,
+				}
+				items.append({
+					"id": emp_id3,
+					"key": key2,
+					"employee_def": _get_employee_def_for_card(emp_id3),
+					"badge_text": "",
+					"enabled": enabled2,
+				})
+
+	var selected_key := _resolve_preferred_selected_key(items)
 	_employee_picker.set_items(items, selected_key)
 
-	_selected_employee_type = ""
-	_selected_employee_key = ""
-	if _employee_picker.has_method("get_selected_employee_id"):
-		_selected_employee_type = str(_employee_picker.call("get_selected_employee_id")).strip_edges()
-	if _employee_picker.has_method("get_selected_key"):
-		_selected_employee_key = str(_employee_picker.call("get_selected_key")).strip_edges()
+	_refresh_selected_employee_from_picker()
 
-	if prev_type != _selected_employee_type:
+	if prev_type != _selected_employee_type or prev_staff_id != _selected_staff_id:
 		_selected_changed()
 
-func _apply_selected_employee(employee_type: String) -> void:
-	_selected_employee_type = str(employee_type).strip_edges()
+func _resolve_preferred_selected_key(items: Array[Dictionary]) -> String:
+	if not _selected_employee_key.is_empty():
+		var selected_provider: Dictionary = Dictionary(_producer_by_key.get(_selected_employee_key, {}))
+		if not selected_provider.is_empty() and int(selected_provider.get("remaining", 0)) > 0:
+			return _selected_employee_key
 
-func _on_employee_selected(employee_type: String) -> void:
-	_apply_selected_employee(employee_type)
+	if _selected_staff_id > 0:
+		var key := "staff:%d" % _selected_staff_id
+		var selected_provider2: Dictionary = Dictionary(_producer_by_key.get(key, {}))
+		if not selected_provider2.is_empty() and int(selected_provider2.get("remaining", 0)) > 0:
+			return key
+
+	if not _selected_employee_type.is_empty():
+		for item_val in items:
+			if not (item_val is Dictionary):
+				continue
+			var item: Dictionary = item_val
+			if str(item.get("id", "")).strip_edges() != _selected_employee_type:
+				continue
+			if bool(item.get("enabled", false)):
+				return str(item.get("key", "")).strip_edges()
+
+	for item_val2 in items:
+		if not (item_val2 is Dictionary):
+			continue
+		var item2: Dictionary = item_val2
+		if bool(item2.get("enabled", false)):
+			return str(item2.get("key", "")).strip_edges()
+
+	return ""
+
+func _refresh_selected_employee_from_picker() -> void:
+	_selected_employee_type = ""
+	_selected_employee_key = ""
+	_selected_staff_id = -1
+	if _employee_picker != null and _employee_picker.has_method("get_selected_employee_id"):
+		_selected_employee_type = str(_employee_picker.call("get_selected_employee_id")).strip_edges()
 	if _employee_picker != null and _employee_picker.has_method("get_selected_key"):
 		_selected_employee_key = str(_employee_picker.call("get_selected_key")).strip_edges()
+	var provider: Dictionary = Dictionary(_producer_by_key.get(_selected_employee_key, {}))
+	if not provider.is_empty():
+		_selected_staff_id = int(provider.get("staff_id", -1))
+
+func _apply_selected_employee(employee_type: String, staff_id: int = -1) -> void:
+	_selected_employee_type = str(employee_type).strip_edges()
+	_selected_staff_id = int(staff_id)
+
+func _on_employee_selected(employee_type: String) -> void:
+	var selected_key := ""
+	if _employee_picker != null and _employee_picker.has_method("get_selected_key"):
+		selected_key = str(_employee_picker.call("get_selected_key")).strip_edges()
+	var provider: Dictionary = Dictionary(_producer_by_key.get(selected_key, {}))
+	var staff_id := int(provider.get("staff_id", -1))
+	_selected_employee_key = selected_key
+	_apply_selected_employee(employee_type, staff_id)
 	_selected_changed()
 	_ensure_food_controller()
 	if _food_controller != null and is_instance_valid(_food_controller):
@@ -473,7 +549,7 @@ func _get_employee_def_for_card(employee_type: String) -> Dictionary:
 	return {"id": emp_id, "name": emp_id}
 
 func _selected_changed() -> void:
-	producer_changed.emit(_selected_employee_type, _production_type)
+	producer_changed.emit(_selected_employee_type, _production_type, _selected_staff_id)
 
 func _update_confirm_state() -> void:
 	if confirm_btn == null:
@@ -586,13 +662,16 @@ func _on_confirm_pressed() -> void:
 		return
 	if _selected_employee_type.is_empty():
 		return
-	production_requested.emit(_selected_employee_type, _production_type)
+	production_requested.emit(_selected_employee_type, _production_type, _selected_staff_id)
 
 func mark_selected_employee_used() -> void:
+	if not _producer_items.is_empty():
+		return
 	if _employee_picker == null:
 		return
 
 	var prev_type := _selected_employee_type
+	var prev_staff_id := _selected_staff_id
 	var key := _selected_employee_key
 	if key.is_empty() and _employee_picker.has_method("get_selected_key"):
 		key = str(_employee_picker.call("get_selected_key")).strip_edges()
@@ -607,7 +686,7 @@ func mark_selected_employee_used() -> void:
 
 	# 重新生成 items，以刷新 enabled/灰显，并尽量选中同类型的下一个可用实例。
 	_rebuild_employee_options()
-	if prev_type != _selected_employee_type:
+	if prev_type != _selected_employee_type or prev_staff_id != _selected_staff_id:
 		_ensure_food_controller()
 		if _food_controller != null and is_instance_valid(_food_controller):
 			_food_controller.rebuild_food_type_options()

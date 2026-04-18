@@ -13,11 +13,19 @@
 - `train` 动作记录培训员 `staff_usage[trainer_staff_id]["train"]`
 - `RecruitPanel` 改为“上方选招聘员工实例、下方看可招目标”
 - `TrainPanel` 改为“上方选来源员工实例、下方看可达目标”
+- `produce_food` / `procure_drinks` 动作支持显式 `staff_id`，并写入
+	- `round_state.staff_usage[staff_id]["produce_food"]`
+	- `round_state.staff_usage[staff_id]["procure_drinks"]`
+- `ProductionPanel` 改为优先使用 staff provider 列表：
+	- 上方选具体生产/采购员工实例
+	- 下方显示该实例当前可执行的生产/采购参数区
+- `production_controller` 改为从 `EmployeeRules.get_food_producers_for_working` /
+  `get_drinks_procurers_for_working` 读取真实实例数据，而不是本地按 `employee_type` 重建伪实例
 
 尚未完成：
 
 - Payday 薪资折扣已从 `staff_usage` 完全收口
-- 其它员工动作面板（采购/营销/房屋/餐厅）统一到同一 staff 驱动框架
+- 其它员工动作面板（营销/房屋/餐厅）统一到同一 staff 驱动框架
 
 ---
 

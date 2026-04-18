@@ -7,6 +7,7 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const DrinksProcurementClass = preload("res://core/rules/drinks_procurement.gd")
 const CellsClass = preload("res://core/map/map_runtime/cells.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
@@ -140,6 +141,8 @@ static func _run_once(player_count: int, seed_val: int) -> Result:
 		return Result.failure("找不到任何玩家能在卡车范围内采购饮料")
 
 	state.current_player_index = road_player_id
+	state.turn_order = [road_player_id]
+	state.current_player_index = 0
 	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
 
 	# 13) 测试卡车司机（road range = 3）
@@ -199,14 +202,140 @@ static func _run_once(player_count: int, seed_val: int) -> Result:
 	state = engine.get_state()
 	var final_drinks: int = _sum_drinks(state.players[road_player_id].get("inventory", {}))
 
+	var staff_resolution := _test_staff_id_resolution_for_procure(player_count, seed_val + 1000)
+	if not staff_resolution.ok:
+		return staff_resolution
+
 	return Result.success({
 		"player_count": player_count,
 		"seed": seed_val,
 		"drink_sources_count": drink_sources.size(),
 		"final_drink_inventory": final_drinks,
 		"zeppelin_tested_player": air_player_id,
-		"truck_tested_player": road_player_id
+		"truck_tested_player": road_player_id,
+		"staff_id_resolution_checked": true,
 	})
+
+static func _test_staff_id_resolution_for_procure(player_count: int, seed_val: int) -> Result:
+	EmployeeRegistryClass.reset()
+
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val)
+	if not init.ok:
+		return Result.failure("staff_id 采购测试初始化失败: %s" % init.error)
+
+	var place_result := _place_initial_restaurants(engine)
+	if not place_result.ok:
+		return Result.failure("staff_id 采购测试放置餐厅失败: %s" % place_result.error)
+
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 30)
+	if not to_working.ok:
+		return Result.failure("staff_id 采购测试推进到 Working 失败: %s" % to_working.error)
+
+	var state := engine.get_state()
+	var road_player_id := _find_player_with_road_reachable_source(state, 3)
+	if road_player_id < 0:
+		return Result.failure("staff_id 采购测试找不到卡车可达玩家")
+
+	state.turn_order = [road_player_id]
+	state.current_player_index = 0
+	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
+
+	for i in range(2):
+		var take := StateUpdater.take_from_pool(state, "truck_driver", 1)
+		if not take.ok:
+			return Result.failure("staff_id 采购测试取出 truck_driver 失败: %s" % take.error)
+		var add := StateUpdater.add_employee(state, road_player_id, "truck_driver", false)
+		if not add.ok:
+			return Result.failure("staff_id 采购测试添加 truck_driver 失败: %s" % add.error)
+
+	var ids_read := StaffStateClass.find_staff_ids_by_employee_type(state, road_player_id, "truck_driver", ["employees"])
+	if not ids_read.ok:
+		return Result.failure("staff_id 采购测试读取 truck_driver staff_ids 失败: %s" % ids_read.error)
+	var ids: Array = ids_read.value
+	if ids.size() < 2:
+		return Result.failure("staff_id 采购测试需要 2 个 truck_driver staff_id，实际: %s" % str(ids))
+	var first_staff_id := int(ids[0])
+	var second_staff_id := int(ids[1])
+
+	var road_pick := _pick_road_target_and_route_for_player(state, road_player_id, 3)
+	if road_pick.is_empty():
+		return Result.failure("staff_id 采购测试找不到卡车可达路线")
+	var restaurant_id := str(road_pick.get("restaurant_id", ""))
+	var route_vec: Array = road_pick.get("route", [])
+	var source_pos: Vector2i = road_pick.get("source_pos", Vector2i(-1, -1))
+	if restaurant_id.is_empty() or route_vec.is_empty() or source_pos == Vector2i(-1, -1):
+		return Result.failure("staff_id 采购测试路线信息不完整: %s" % str(road_pick))
+
+	var explicit := engine.execute_command(Command.create("procure_drinks", road_player_id, {
+		"employee_type": "truck_driver",
+		"staff_id": second_staff_id,
+		"restaurant_id": restaurant_id,
+		"route": DrinksProcurementClass.serialize_route(route_vec),
+		"selected_sources": DrinksProcurementClass.serialize_route([source_pos]),
+	}))
+	if not explicit.ok:
+		return Result.failure("显式 staff_id 采购应成功，但失败: %s" % explicit.error)
+	var drinks_events: Array = EventBus.get_history_by_type(EventBus.EventType.DRINKS_PROCURED)
+	if drinks_events.is_empty():
+		return Result.failure("显式 staff_id 采购后应生成 DRINKS_PROCURED 事件")
+	var explicit_event_val = drinks_events[drinks_events.size() - 1]
+	if not (explicit_event_val is Dictionary):
+		return Result.failure("DRINKS_PROCURED 事件类型错误（期望 Dictionary）")
+	var explicit_event: Dictionary = explicit_event_val
+	var explicit_data_val = explicit_event.get("data", null)
+	if not (explicit_data_val is Dictionary):
+		return Result.failure("DRINKS_PROCURED 事件缺少 data")
+	var explicit_data: Dictionary = explicit_data_val
+	if int(explicit_data.get("staff_id", -1)) != second_staff_id:
+		return Result.failure("显式 staff_id 采购事件应记录第二个员工 staff_id=%d，实际: %s" % [second_staff_id, str(explicit_data)])
+
+	state = engine.get_state()
+	var second_used_read := StaffStateClass.get_staff_track_used(state, second_staff_id, "procure_drinks")
+	if not second_used_read.ok:
+		return Result.failure("读取第二个 staff 采购 usage 失败: %s" % second_used_read.error)
+	var first_used_read := StaffStateClass.get_staff_track_used(state, first_staff_id, "procure_drinks")
+	if not first_used_read.ok:
+		return Result.failure("读取第一个 staff 采购 usage 失败: %s" % first_used_read.error)
+	if int(second_used_read.value) != 1 or int(first_used_read.value) != 0:
+		return Result.failure("显式 staff_id 采购应只消耗第二个员工，实际 first=%s second=%s" % [str(first_used_read.value), str(second_used_read.value)])
+
+	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
+	state.turn_order = [road_player_id]
+	state.current_player_index = 0
+	var implicit := engine.execute_command(Command.create("procure_drinks", road_player_id, {
+		"employee_type": "truck_driver",
+		"restaurant_id": restaurant_id,
+		"route": DrinksProcurementClass.serialize_route(route_vec),
+		"selected_sources": DrinksProcurementClass.serialize_route([source_pos]),
+	}))
+	if not implicit.ok:
+		return Result.failure("默认 staff_id 采购应成功，但失败: %s" % implicit.error)
+	drinks_events = EventBus.get_history_by_type(EventBus.EventType.DRINKS_PROCURED)
+	if drinks_events.is_empty():
+		return Result.failure("默认 staff_id 采购后应生成 DRINKS_PROCURED 事件")
+	var implicit_event_val = drinks_events[drinks_events.size() - 1]
+	if not (implicit_event_val is Dictionary):
+		return Result.failure("DRINKS_PROCURED 事件类型错误（期望 Dictionary）")
+	var implicit_event: Dictionary = implicit_event_val
+	var implicit_data_val = implicit_event.get("data", null)
+	if not (implicit_data_val is Dictionary):
+		return Result.failure("DRINKS_PROCURED 事件缺少 data")
+	var implicit_data: Dictionary = implicit_data_val
+	if int(implicit_data.get("staff_id", -1)) != first_staff_id:
+		return Result.failure("默认 staff_id 采购应回退到最小可用 staff_id=%d，实际事件: %s" % [first_staff_id, str(implicit_data)])
+
+	state = engine.get_state()
+	second_used_read = StaffStateClass.get_staff_track_used(state, second_staff_id, "procure_drinks")
+	if not second_used_read.ok:
+		return Result.failure("再次读取第二个 staff 采购 usage 失败: %s" % second_used_read.error)
+	first_used_read = StaffStateClass.get_staff_track_used(state, first_staff_id, "procure_drinks")
+	if not first_used_read.ok:
+		return Result.failure("再次读取第一个 staff 采购 usage 失败: %s" % first_used_read.error)
+	if int(second_used_read.value) != 1 or int(first_used_read.value) != 1:
+		return Result.failure("默认 staff_id 采购后应两个员工各消耗 1 次，实际 first=%s second=%s" % [str(first_used_read.value), str(second_used_read.value)])
+
+	return Result.success()
 
 static func _place_initial_restaurants(engine: GameEngine) -> Result:
 	var ensured_road_player: int = -1

@@ -11,6 +11,7 @@ const ActionCounts = preload("res://core/rules/employee_rules/action_counts.gd")
 const ImmediateTrainPending = preload("res://core/rules/employee_rules/immediate_train_pending.gd")
 const TrainSlotUsage = preload("res://core/rules/employee_rules/train_slot_usage.gd")
 const RecruitUsageProviders = preload("res://core/rules/employee_rules/recruit_usage_providers.gd")
+const WorkingStaffActionProviders = preload("res://core/rules/employee_rules/working_staff_action_providers.gd")
 
 static func is_entry_level(employee_id: String) -> bool:
 	return Counts.is_entry_level(employee_id)
@@ -62,6 +63,24 @@ static func get_recruit_providers_for_working(state: GameState, player_id: int) 
 
 static func try_resolve_recruit_provider(state: GameState, player_id: int, explicit_staff_id: int = -1) -> Result:
 	return RecruitUsageProviders.try_resolve_recruit_provider(state, player_id, explicit_staff_id)
+
+static func try_get_food_producers_for_working(state: GameState, player_id: int) -> Result:
+	return WorkingStaffActionProviders.try_get_food_producers_for_working(state, player_id)
+
+static func get_food_producers_for_working(state: GameState, player_id: int) -> Array[Dictionary]:
+	return WorkingStaffActionProviders.get_food_producers_for_working(state, player_id)
+
+static func try_resolve_food_producer(state: GameState, player_id: int, employee_type: String, explicit_staff_id: int = -1) -> Result:
+	return WorkingStaffActionProviders.try_resolve_food_producer(state, player_id, employee_type, explicit_staff_id)
+
+static func try_get_drinks_procurers_for_working(state: GameState, player_id: int) -> Result:
+	return WorkingStaffActionProviders.try_get_drinks_procurers_for_working(state, player_id)
+
+static func get_drinks_procurers_for_working(state: GameState, player_id: int) -> Array[Dictionary]:
+	return WorkingStaffActionProviders.get_drinks_procurers_for_working(state, player_id)
+
+static func try_resolve_drinks_procurer(state: GameState, player_id: int, employee_type: String, explicit_staff_id: int = -1) -> Result:
+	return WorkingStaffActionProviders.try_resolve_drinks_procurer(state, player_id, employee_type, explicit_staff_id)
 
 static func get_train_limit(player: Dictionary) -> int:
 	return Limits.get_train_limit(player)

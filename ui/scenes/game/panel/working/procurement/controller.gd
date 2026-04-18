@@ -22,6 +22,7 @@ var _restaurant_choice_controller = null
 var production_panel = null
 
 var _procure_selected_employee_type: String = ""
+var _procure_selected_staff_id: int = -1
 var _procure_selected_sources: Array[Vector2i] = []
 var _procure_selected_tiles: Array[Vector2i] = []
 var _procure_air_start_restaurant_id: String = "" # only for air procure (zeppelin): chosen by first tile selection
@@ -79,6 +80,7 @@ func clear_procure_restaurant_choice_ui_and_overlays() -> void:
 func reset_procurement_selection_state(clear_employee: bool = true) -> void:
 	if clear_employee:
 		_procure_selected_employee_type = ""
+		_procure_selected_staff_id = -1
 	_procure_selected_sources.clear()
 	_procure_selected_tiles.clear()
 	_procure_air_start_restaurant_id = ""
@@ -89,7 +91,7 @@ func reset_procurement_selection_state(clear_employee: bool = true) -> void:
 	_procure_route.clear()
 	_procure_error = ""
 
-func on_drinks_producer_changed(state: GameState, employee_type: String) -> void:
+func on_drinks_producer_changed(state: GameState, employee_type: String, staff_id: int = -1) -> void:
 	if state == null:
 		return
 	if state.phase != DefsClass.PHASE_WORKING or state.sub_phase != DefsClass.SUB_PHASE_GET_DRINKS:
@@ -108,6 +110,7 @@ func on_drinks_producer_changed(state: GameState, employee_type: String) -> void
 		return
 
 	_procure_selected_employee_type = employee_type
+	_procure_selected_staff_id = int(staff_id)
 
 	# 跑腿伙计：不需要选点/路线
 	if employee_type == "errand_boy":

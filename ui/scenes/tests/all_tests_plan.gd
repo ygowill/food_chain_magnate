@@ -1116,7 +1116,11 @@ static func build_tests(host) -> Array[Dictionary]:
 				},
 				{
 					"name": "ProductionPanelUsedCountsSyncTest",
-					"fn": func() -> Result: return TestRefs.ProductionPanelUsedCountsSyncTestClass.run(),
+					"fn": func() -> Result: return await TestRefs.ProductionPanelUsedCountsSyncTestClass.run(),
+				},
+				{
+					"name": "ProductionProcureStaffPickerUiTest",
+					"fn": func() -> Result: return await TestRefs.ProductionProcureStaffPickerUiTestClass.run(),
 				},
 					{
 						"name": "ManualLogSaveTest",

@@ -4,6 +4,7 @@ class_name ProduceFoodTest
 extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
@@ -170,6 +171,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if pizza_after_trainee != 4: # 3 + 1
 		return Result.failure("见习厨师生产后披萨库存应为 4，实际: %d" % pizza_after_trainee)
 
+	var staff_resolution := _test_staff_id_resolution_for_duplicate_producers(player_count, seed_val + 1000)
+	if not staff_resolution.ok:
+		return staff_resolution
+
 	return Result.success({
 		"player_count": player_count,
 		"seed": seed_val,
@@ -178,5 +183,105 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		"burger_cooks_tested": 2,
 		"burger_chef_tested": 1,
 		"pizza_cook_tested": 1,
-		"kitchen_trainees_tested": 2
+		"kitchen_trainees_tested": 2,
+		"staff_id_resolution_checked": true,
 	})
+
+static func _test_staff_id_resolution_for_duplicate_producers(player_count: int, seed_val: int) -> Result:
+	EmployeeRegistryClass.reset()
+
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val)
+	if not init.ok:
+		return Result.failure("staff_id 生产测试初始化失败: %s" % init.error)
+
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 30)
+	if not to_working.ok:
+		return Result.failure("staff_id 生产测试推进到 Working 失败: %s" % to_working.error)
+
+	var state := engine.get_state()
+	var actor := state.get_current_player_id()
+	state.turn_order = [actor]
+	state.current_player_index = 0
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
+
+	for i in range(2):
+		var take := StateUpdater.take_from_pool(state, "burger_cook", 1)
+		if not take.ok:
+			return Result.failure("staff_id 生产测试取出 burger_cook 失败: %s" % take.error)
+		var add := StateUpdater.add_employee(state, actor, "burger_cook", false)
+		if not add.ok:
+			return Result.failure("staff_id 生产测试添加 burger_cook 失败: %s" % add.error)
+
+	var ids_read := StaffStateClass.find_staff_ids_by_employee_type(state, actor, "burger_cook", ["employees"])
+	if not ids_read.ok:
+		return Result.failure("staff_id 生产测试读取 burger_cook staff_ids 失败: %s" % ids_read.error)
+	var ids: Array = ids_read.value
+	if ids.size() < 2:
+		return Result.failure("staff_id 生产测试需要 2 个 burger_cook staff_id，实际: %s" % str(ids))
+	var first_staff_id := int(ids[0])
+	var second_staff_id := int(ids[1])
+
+	var explicit := engine.execute_command(Command.create("produce_food", actor, {
+		"employee_type": "burger_cook",
+		"staff_id": second_staff_id,
+	}))
+	if not explicit.ok:
+		return Result.failure("显式 staff_id 生产应成功，但失败: %s" % explicit.error)
+	var food_events: Array = EventBus.get_history_by_type(EventBus.EventType.FOOD_PRODUCED)
+	if food_events.is_empty():
+		return Result.failure("显式 staff_id 生产后应生成 FOOD_PRODUCED 事件")
+	var explicit_event_val = food_events[food_events.size() - 1]
+	if not (explicit_event_val is Dictionary):
+		return Result.failure("FOOD_PRODUCED 事件类型错误（期望 Dictionary）")
+	var explicit_event: Dictionary = explicit_event_val
+	var explicit_data_val = explicit_event.get("data", null)
+	if not (explicit_data_val is Dictionary):
+		return Result.failure("FOOD_PRODUCED 事件缺少 data")
+	var explicit_data: Dictionary = explicit_data_val
+	if int(explicit_data.get("staff_id", -1)) != second_staff_id:
+		return Result.failure("显式 staff_id 生产事件应记录第二个员工 staff_id=%d，实际: %s" % [second_staff_id, str(explicit_data)])
+
+	state = engine.get_state()
+	var second_used_read := StaffStateClass.get_staff_track_used(state, second_staff_id, "produce_food")
+	if not second_used_read.ok:
+		return Result.failure("读取第二个 staff 生产 usage 失败: %s" % second_used_read.error)
+	var first_used_read := StaffStateClass.get_staff_track_used(state, first_staff_id, "produce_food")
+	if not first_used_read.ok:
+		return Result.failure("读取第一个 staff 生产 usage 失败: %s" % first_used_read.error)
+	if int(second_used_read.value) != 1 or int(first_used_read.value) != 0:
+		return Result.failure("显式 staff_id 生产应只消耗第二个员工，实际 first=%s second=%s" % [str(first_used_read.value), str(second_used_read.value)])
+
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
+	state.turn_order = [actor]
+	state.current_player_index = 0
+	var implicit := engine.execute_command(Command.create("produce_food", actor, {
+		"employee_type": "burger_cook",
+	}))
+	if not implicit.ok:
+		return Result.failure("默认 staff_id 生产应成功，但失败: %s" % implicit.error)
+	food_events = EventBus.get_history_by_type(EventBus.EventType.FOOD_PRODUCED)
+	if food_events.is_empty():
+		return Result.failure("默认 staff_id 生产后应生成 FOOD_PRODUCED 事件")
+	var implicit_event_val = food_events[food_events.size() - 1]
+	if not (implicit_event_val is Dictionary):
+		return Result.failure("FOOD_PRODUCED 事件类型错误（期望 Dictionary）")
+	var implicit_event: Dictionary = implicit_event_val
+	var implicit_data_val = implicit_event.get("data", null)
+	if not (implicit_data_val is Dictionary):
+		return Result.failure("FOOD_PRODUCED 事件缺少 data")
+	var implicit_data: Dictionary = implicit_data_val
+	if int(implicit_data.get("staff_id", -1)) != first_staff_id:
+		return Result.failure("默认 staff_id 生产应回退到最小可用 staff_id=%d，实际事件: %s" % [first_staff_id, str(implicit_data)])
+
+	state = engine.get_state()
+	second_used_read = StaffStateClass.get_staff_track_used(state, second_staff_id, "produce_food")
+	if not second_used_read.ok:
+		return Result.failure("再次读取第二个 staff 生产 usage 失败: %s" % second_used_read.error)
+	first_used_read = StaffStateClass.get_staff_track_used(state, first_staff_id, "produce_food")
+	if not first_used_read.ok:
+		return Result.failure("再次读取第一个 staff 生产 usage 失败: %s" % first_used_read.error)
+	if int(second_used_read.value) != 1 or int(first_used_read.value) != 1:
+		return Result.failure("默认 staff_id 生产后应两个员工各消耗 1 次，实际 first=%s second=%s" % [str(first_used_read.value), str(second_used_read.value)])
+
+	return Result.success()

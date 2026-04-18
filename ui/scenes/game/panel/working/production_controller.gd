@@ -7,7 +7,6 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const DrinksProcurementClass = preload("res://core/rules/drinks_procurement.gd")
-const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const DrinksProcurementControllerClass = preload("res://ui/scenes/game/panel/working/procurement/controller.gd")
@@ -99,56 +98,10 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 			if production_panel.has_method("set_drinks_procurement_state"):
 				production_panel.set_drinks_procurement_state(0, false, "")
 
-		if production_panel.has_method("set_available_producers"):
-			var producers: Array[String] = []
-			var current_player_id := int(state.get_current_player_id())
-			if EmployeeRegistryClass.is_loaded():
-				for e in Array(current_player.get("employees", [])):
-					if not (e is String):
-						continue
-					var emp_id := str(e)
-					if emp_id.is_empty():
-						continue
-					var def_val = EmployeeRegistryClass.get_def(emp_id)
-					if def_val == null or not (def_val is EmployeeDef):
-						continue
-					var def: EmployeeDef = def_val
-					if production_type == "food" and def.can_produce():
-						var mult := maxi(1, EmployeeRulesClass.get_working_employee_multiplier(state, current_player_id, emp_id))
-						for i in range(mult):
-							producers.append(emp_id)
-					elif production_type == "drinks" and def.can_procure():
-						var mult := maxi(1, EmployeeRulesClass.get_working_employee_multiplier(state, current_player_id, emp_id))
-						for i in range(mult):
-							producers.append(emp_id)
-			else:
-				for e in Array(current_player.get("employees", [])):
-					var emp_id := str(e)
-					if emp_id.is_empty():
-						continue
-					var mult := maxi(1, EmployeeRulesClass.get_working_employee_multiplier(state, current_player_id, emp_id))
-					for i in range(mult):
-						producers.append(emp_id)
-			production_panel.set_available_producers(producers)
-
-			# 同步“已使用员工”禁用态：时间线跳转后必须以 round_state 为准。
-			if production_panel.has_method("set_used_employee_counts") and (state.round_state is Dictionary):
-				var counter_key := "production_counts" if production_type == "food" else "procurement_counts"
-				var used_counts: Dictionary = {}
-				var seen := {}
-				for emp_val in producers:
-					var emp_id := str(emp_val).strip_edges()
-					if emp_id.is_empty():
-						continue
-					if seen.has(emp_id):
-						continue
-					seen[emp_id] = true
-					var used_r := RoundStateCountersClass.get_player_key_count(state.round_state, counter_key, int(state.get_current_player_id()), emp_id)
-					if used_r.ok:
-						var used := int(used_r.value)
-						if used > 0:
-							used_counts[emp_id] = used
-				production_panel.set_used_employee_counts(used_counts)
+		if production_panel.has_method("set_producer_items"):
+			production_panel.set_producer_items(_build_producer_items(state, production_type))
+		elif production_panel.has_method("set_available_producers"):
+			production_panel.set_available_producers(_build_legacy_producers(state, production_type))
 
 		if production_panel.has_method("set_current_inventory"):
 			production_panel.set_current_inventory(current_player.get("inventory", {}))
@@ -222,56 +175,10 @@ func show(production_type: String) -> void:
 		if _procure_controller != null:
 			_procure_controller.reset_procurement_selection_state()
 
-	if production_panel.has_method("set_available_producers"):
-		var producers: Array[String] = []
-		var current_player_id := int(state.get_current_player_id())
-		if EmployeeRegistryClass.is_loaded():
-			for e in Array(current_player.get("employees", [])):
-				if not (e is String):
-					continue
-				var emp_id := str(e)
-				if emp_id.is_empty():
-					continue
-				var def_val = EmployeeRegistryClass.get_def(emp_id)
-				if def_val == null or not (def_val is EmployeeDef):
-					continue
-				var def: EmployeeDef = def_val
-				if production_type == "food" and def.can_produce():
-					var mult := maxi(1, EmployeeRulesClass.get_working_employee_multiplier(state, current_player_id, emp_id))
-					for i in range(mult):
-						producers.append(emp_id)
-				elif production_type == "drinks" and def.can_procure():
-					var mult := maxi(1, EmployeeRulesClass.get_working_employee_multiplier(state, current_player_id, emp_id))
-					for i in range(mult):
-						producers.append(emp_id)
-		else:
-			for e in Array(current_player.get("employees", [])):
-				var emp_id := str(e)
-				if emp_id.is_empty():
-					continue
-				var mult := maxi(1, EmployeeRulesClass.get_working_employee_multiplier(state, current_player_id, emp_id))
-				for i in range(mult):
-					producers.append(emp_id)
-		production_panel.set_available_producers(producers)
-
-		# 同步“已使用员工”禁用态：避免时间线回退/载入后残留旧 UI 缓存，导致员工错误变灰。
-		if production_panel.has_method("set_used_employee_counts") and state != null and (state.round_state is Dictionary):
-			var counter_key := "production_counts" if production_type == "food" else "procurement_counts"
-			var used_counts: Dictionary = {}
-			var seen := {}
-			for emp_val in producers:
-				var emp_id := str(emp_val).strip_edges()
-				if emp_id.is_empty():
-					continue
-				if seen.has(emp_id):
-					continue
-				seen[emp_id] = true
-				var used_r := RoundStateCountersClass.get_player_key_count(state.round_state, counter_key, int(state.get_current_player_id()), emp_id)
-				if used_r.ok:
-					var used := int(used_r.value)
-					if used > 0:
-						used_counts[emp_id] = used
-			production_panel.set_used_employee_counts(used_counts)
+	if production_panel.has_method("set_producer_items"):
+		production_panel.set_producer_items(_build_producer_items(state, production_type))
+	elif production_panel.has_method("set_available_producers"):
+		production_panel.set_available_producers(_build_legacy_producers(state, production_type))
 
 	if production_panel.has_method("set_current_inventory"):
 		production_panel.set_current_inventory(current_player.get("inventory", {}))
@@ -295,7 +202,29 @@ func _get_all_drink_types() -> Array[String]:
 			out.append(pid)
 	return out
 
-func _on_production_requested(employee_type: String, product_type: String) -> void:
+func _build_producer_items(state: GameState, production_type: String) -> Array[Dictionary]:
+	if state == null:
+		return []
+	var player_id := int(state.get_current_player_id())
+	if production_type == "food":
+		return EmployeeRulesClass.get_food_producers_for_working(state, player_id)
+	return EmployeeRulesClass.get_drinks_procurers_for_working(state, player_id)
+
+func _build_legacy_producers(state: GameState, production_type: String) -> Array[String]:
+	var out: Array[String] = []
+	for provider_val in _build_producer_items(state, production_type):
+		if not (provider_val is Dictionary):
+			continue
+		var provider: Dictionary = provider_val
+		var emp_id := str(provider.get("employee_type", provider.get("id", ""))).strip_edges()
+		if emp_id.is_empty():
+			continue
+		var capacity := maxi(1, int(provider.get("capacity", 1)))
+		for i in range(capacity):
+			out.append(emp_id)
+	return out
+
+func _on_production_requested(employee_type: String, product_type: String, staff_id: int = -1) -> void:
 	if _scene == null or _scene.game_engine == null:
 		return
 	if not _execute_command.is_valid():
@@ -303,6 +232,8 @@ func _on_production_requested(employee_type: String, product_type: String) -> vo
 	var current_player_id = _scene.game_engine.get_state().get_current_player_id()
 	var action_id := "produce_food" if product_type == "food" else "procure_drinks"
 	var params := {"employee_type": employee_type}
+	if staff_id > 0:
+		params["staff_id"] = staff_id
 	if product_type == "food":
 		var food_type := ""
 		if is_instance_valid(production_panel) and production_panel.has_method("get_selected_food_type"):
@@ -339,16 +270,15 @@ func _on_production_requested(employee_type: String, product_type: String) -> vo
 			if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procurement_state"):
 				production_panel.set_drinks_procurement_state(0, false, "")
 
-		if is_instance_valid(production_panel) and production_panel.has_method("mark_selected_employee_used"):
-			production_panel.call("mark_selected_employee_used")
-
 		if is_instance_valid(production_panel):
 			var state = _scene.game_engine.get_state()
 			var current_player: Dictionary = state.get_current_player()
+			if production_panel.has_method("set_producer_items"):
+				production_panel.set_producer_items(_build_producer_items(state, product_type))
 			if production_panel.has_method("set_current_inventory"):
 				production_panel.set_current_inventory(current_player.get("inventory", {}))
 
-func _on_producer_changed(employee_type: String, product_type: String) -> void:
+func _on_producer_changed(employee_type: String, product_type: String, staff_id: int = -1) -> void:
 	if _scene == null or _scene.game_engine == null:
 		return
 	if product_type != "drinks":
@@ -361,7 +291,7 @@ func _on_producer_changed(employee_type: String, product_type: String) -> void:
 	if _procure_controller == null:
 		return
 	var state: GameState = _scene.game_engine.get_state()
-	_procure_controller.on_drinks_producer_changed(state, employee_type)
+	_procure_controller.on_drinks_producer_changed(state, employee_type, staff_id)
 
 func _on_drinks_clear_requested() -> void:
 	if _procure_controller != null:

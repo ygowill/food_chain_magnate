@@ -1,72 +1,65 @@
-# ProductionPanel used-state sync regression test
-# 目标：当面板内部缓存的“已使用员工”状态残留时，set_used_employee_counts 必须能覆盖为基于计数的结果。
 class_name ProductionPanelUsedCountsSyncTest
 extends RefCounted
 
 const ProductionPanelScene = preload("res://ui/components/production_panel/production_panel.tscn")
 
 static func run() -> Result:
-	if ProductionPanelScene == null:
-		return Result.failure("预加载 production_panel.tscn 失败（PackedScene 为空）")
+	var r := await _case_provider_items_override_legacy_used_cache()
+	if not r.ok:
+		return r
+	return Result.success({})
+
+static func _case_provider_items_override_legacy_used_cache() -> Result:
+	var tree = Engine.get_main_loop()
+	if not (tree is SceneTree):
+		return Result.failure("MainLoop 不是 SceneTree（无法运行 ProductionPanel UI 测试）")
+	var st: SceneTree = tree
+	var host := st.current_scene
+	if host == null or not is_instance_valid(host):
+		return Result.failure("current_scene 为空（无法挂载 ProductionPanel）")
 
 	var panel = ProductionPanelScene.instantiate()
-	if panel == null or not is_instance_valid(panel):
-		return Result.failure("实例化 ProductionPanel 失败（instantiate 为空）")
-
-	# drinks：先制造“残留禁用态”，再用空计数覆盖，应全部清空
-	if panel.has_method("set_production_type"):
-		panel.set_production_type("drinks")
-	panel.set("_used_employee_keys_by_mode", {
-		"food": {"burger_cook#1": true},
-		"drinks": {"zeppelin_pilot#1": true, "zeppelin_pilot#2": true},
-	})
-	if panel.has_method("set_used_employee_counts"):
-		panel.set_used_employee_counts({})
-	else:
-		_safe_free(panel)
-		return Result.failure("ProductionPanel 缺少 set_used_employee_counts")
-
-	var used_after = panel.get("_used_employee_keys_by_mode")
-	if not (used_after is Dictionary):
-		_safe_free(panel)
-		return Result.failure("_used_employee_keys_by_mode 类型错误（期望 Dictionary）")
-	var used_map: Dictionary = used_after
-	var drinks_val = used_map.get("drinks", null)
-	if not (drinks_val is Dictionary):
-		_safe_free(panel)
-		return Result.failure("_used_employee_keys_by_mode.drinks 类型错误（期望 Dictionary）")
-	if not (drinks_val as Dictionary).is_empty():
-		_safe_free(panel)
-		return Result.failure("drinks 用空计数覆盖后应清空，但实际=%s" % str(drinks_val))
-
-	# food 不应被 drinks 覆盖影响
-	var food_val = used_map.get("food", null)
-	if not (food_val is Dictionary):
-		_safe_free(panel)
-		return Result.failure("_used_employee_keys_by_mode.food 类型错误（期望 Dictionary）")
-	if (food_val as Dictionary).is_empty():
-		_safe_free(panel)
-		return Result.failure("food 不应被 drinks 覆盖清空（期望保留），但为空")
-
-	# food：写入计数后应生成对应 key（employee_id#idx）
+	host.add_child(panel)
 	panel.set_production_type("food")
-	panel.set_used_employee_counts({"burger_cook": 2})
+	panel._used_employee_keys_by_mode = {
+		"food": {"burger_cook#1": true, "burger_cook#2": true},
+		"drinks": {},
+	}
+	await st.process_frame
 
-	used_after = panel.get("_used_employee_keys_by_mode")
-	used_map = used_after if (used_after is Dictionary) else {}
-	food_val = used_map.get("food", null)
-	if not (food_val is Dictionary):
+	panel.set_producer_items([
+		{"staff_id": 11, "employee_type": "burger_cook", "capacity": 1, "used": 0, "remaining": 1},
+		{"staff_id": 12, "employee_type": "burger_cook", "capacity": 1, "used": 1, "remaining": 0},
+	])
+	await st.process_frame
+
+	var picker = panel.get("_employee_picker")
+	if picker == null or not is_instance_valid(picker):
 		_safe_free(panel)
-		return Result.failure("_used_employee_keys_by_mode.food 类型错误（期望 Dictionary）")
-	var food_used: Dictionary = food_val
-	if not food_used.has("burger_cook#1") or not food_used.has("burger_cook#2") or food_used.has("burger_cook#3"):
+		return Result.failure("ProductionPanel 未创建 employee picker")
+
+	if picker.get_child_count() != 2:
 		_safe_free(panel)
-		return Result.failure("food key 生成不符合预期: %s" % str(food_used.keys()))
+		return Result.failure("ProductionPanel 应为 provider items 渲染 2 个实例，实际: %d" % picker.get_child_count())
+
+	if int(panel.get_selected_staff_id()) != 11:
+		_safe_free(panel)
+		return Result.failure("ProductionPanel 应默认选中剩余次数 > 0 的 staff_id=11，实际: %s" % str(panel.get_selected_staff_id()))
+
+	if not picker.has_method("set_selected"):
+		_safe_free(panel)
+		return Result.failure("EmployeePicker 缺少 set_selected")
+	picker.set_selected("staff:12")
+	panel._on_employee_selected("burger_cook")
+	if int(panel.get_selected_staff_id()) != 12:
+		_safe_free(panel)
+		return Result.failure("ProductionPanel 选择第二个实例后应保留 staff_id=12，实际: %s" % str(panel.get_selected_staff_id()))
 
 	_safe_free(panel)
 	return Result.success()
 
-static func _safe_free(node: Node) -> void:
-	if node != null and is_instance_valid(node):
-		node.free()
-
+static func _safe_free(node) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if node is Node:
+		(node as Node).queue_free()
