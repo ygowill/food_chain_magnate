@@ -10,6 +10,7 @@ const Limits = preload("res://core/rules/employee_rules/limits.gd")
 const ActionCounts = preload("res://core/rules/employee_rules/action_counts.gd")
 const ImmediateTrainPending = preload("res://core/rules/employee_rules/immediate_train_pending.gd")
 const TrainSlotUsage = preload("res://core/rules/employee_rules/train_slot_usage.gd")
+const TrainStaffActionProviders = preload("res://core/rules/employee_rules/train_staff_action_providers.gd")
 const RecruitUsageProviders = preload("res://core/rules/employee_rules/recruit_usage_providers.gd")
 const WorkingStaffActionProviders = preload("res://core/rules/employee_rules/working_staff_action_providers.gd")
 const PlacementStaffActionProviders = preload("res://core/rules/employee_rules/placement_staff_action_providers.gd")
@@ -136,6 +137,15 @@ static func try_get_train_limit_for_working(state: GameState, player_id: int) ->
 
 static func get_train_limit_for_working(state: GameState, player_id: int) -> int:
 	return Limits.get_train_limit_for_working(state, player_id)
+
+static func try_get_trainers_for_working(state: GameState, player_id: int) -> Result:
+	return TrainStaffActionProviders.try_get_trainers_for_working(state, player_id)
+
+static func get_trainers_for_working(state: GameState, player_id: int) -> Array[Dictionary]:
+	return TrainStaffActionProviders.get_trainers_for_working(state, player_id)
+
+static func try_resolve_trainer_for_working(state: GameState, player_id: int, trainer_staff_id: int) -> Result:
+	return TrainStaffActionProviders.try_resolve_trainer_for_working(state, player_id, trainer_staff_id)
 
 static func count_paid_employees(player: Dictionary) -> int:
 	return Salary.count_paid_employees(player)

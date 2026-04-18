@@ -128,7 +128,7 @@ static func _test_train_controller_visible_sync(seed_val: int) -> Result:
 
 	controller.sync(state, true)
 	var initial_pool_calls := panel.set_employee_pool_calls
-	var initial_sources_calls := panel.set_trainable_sources_calls
+	var initial_sources_calls := panel.set_source_items_calls
 	var initial_count_calls := panel.set_train_count_calls
 
 	var exec_train := engine.execute_command(Command.create("train", 0, {
@@ -151,9 +151,9 @@ static func _test_train_controller_visible_sync(seed_val: int) -> Result:
 	if panel.set_employee_pool_calls <= initial_pool_calls:
 		engine.dispose()
 		return Result.failure("TrainPanel 可见时，普通 sync 应刷新 employee_pool")
-	if panel.set_trainable_sources_calls <= initial_sources_calls:
+	if panel.set_source_items_calls <= initial_sources_calls:
 		engine.dispose()
-		return Result.failure("TrainPanel 可见时，普通 sync 应刷新 trainable_sources")
+		return Result.failure("TrainPanel 可见时，普通 sync 应刷新 source_items")
 	if panel.set_train_count_calls <= initial_count_calls:
 		engine.dispose()
 		return Result.failure("TrainPanel 可见时，普通 sync 应刷新 train 次数")
@@ -163,9 +163,9 @@ static func _test_train_controller_visible_sync(seed_val: int) -> Result:
 			str(panel.last_pool.get("campaign_manager", null)),
 			str(state.employee_pool.get("campaign_manager", null)),
 		])
-	if panel.last_sources.has("campaign_manager"):
+	if _source_items_have_employee_type(panel.last_source_items, "campaign_manager"):
 		engine.dispose()
-		return Result.failure("TrainPanel 普通 sync 后不应继续展示刚培训出的 campaign_manager 来源: %s" % str(panel.last_sources))
+		return Result.failure("TrainPanel 普通 sync 后不应继续展示刚培训出的 campaign_manager 来源: %s" % str(panel.last_source_items))
 	var expected_counts: Dictionary = controller._compute_train_counts(state, 0)
 	if panel.last_train_remaining != int(expected_counts.get("remaining", -1)):
 		engine.dispose()
@@ -176,6 +176,18 @@ static func _test_train_controller_visible_sync(seed_val: int) -> Result:
 
 	engine.dispose()
 	return Result.success({})
+
+static func _source_items_have_employee_type(items: Array, employee_type: String) -> bool:
+	var expected := str(employee_type).strip_edges()
+	if expected.is_empty():
+		return false
+	for item_val in items:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		if str(item.get("employee_type", "")).strip_edges() == expected:
+			return true
+	return false
 
 static func _test_payday_panel_visible_sync(seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -273,10 +285,10 @@ class _MockTrainPanel:
 
 	var visible: bool = true
 	var set_employee_pool_calls: int = 0
-	var set_trainable_sources_calls: int = 0
+	var set_source_items_calls: int = 0
 	var set_train_count_calls: int = 0
 	var last_pool: Dictionary = {}
-	var last_sources: Dictionary = {}
+	var last_source_items: Array = []
 	var last_train_remaining: int = -1
 	var last_train_total: int = -1
 
@@ -284,26 +296,29 @@ class _MockTrainPanel:
 		set_employee_pool_calls += 1
 		last_pool = pool.duplicate(true)
 
-	func set_trainable_employees(_employees: Array[String]) -> void:
+	func set_trainer_items(_items: Array[Dictionary], _section_label_text: String = "") -> void:
 		pass
 
-	func set_source_requires_same_color(_map: Dictionary) -> void:
+	func set_source_items(items: Array[Dictionary], _section_label_text: String = "") -> void:
+		set_source_items_calls += 1
+		last_source_items = items.duplicate(true)
+
+	func set_target_items(_items: Array[Dictionary], _section_label_text: String = "") -> void:
 		pass
 
-	func set_source_badges(_map: Dictionary) -> void:
-		pass
+	func get_selected_trainer_staff_id() -> int:
+		return -1
 
-	func set_trainable_sources(sources: Dictionary, _section_label_text: String = "") -> void:
-		set_trainable_sources_calls += 1
-		last_sources = sources.duplicate(true)
+	func get_selected_source_staff_id() -> int:
+		return -1
+
+	func get_selected_source_employee_type() -> String:
+		return ""
 
 	func set_train_count(remaining: int, total: int) -> void:
 		set_train_count_calls += 1
 		last_train_remaining = remaining
 		last_train_total = total
-
-	func set_max_steps_one_employee(_max_steps: int) -> void:
-		pass
 
 
 class _MockPaydayPanel:

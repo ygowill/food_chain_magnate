@@ -70,8 +70,10 @@ func _refresh_for_state(state: GameState) -> void:
 
 	if train_panel.has_method("set_employee_pool"):
 		train_panel.set_employee_pool(state.employee_pool)
+	if train_panel.has_method("set_trainer_items"):
+		train_panel.set_trainer_items(_build_trainer_items(state, actor_id), "培训员（点击选择）")
 
-	if train_panel.has_method("set_trainable_employees"):
+	if train_panel.has_method("set_source_items"):
 		var pending_total := int(EmployeeRulesClass.get_immediate_train_pending_total(state, actor_id))
 		var source_items: Array[Dictionary] = []
 		var section_text := "待命区员工（点击选择）"
@@ -84,28 +86,24 @@ func _refresh_for_state(state: GameState) -> void:
 			var can_train_from_active := bool(current_player.get("train_from_active_same_color", false))
 			if can_train_from_active:
 				section_text = "待命/在岗员工（点击选择；在岗同色培训：目标需同色）"
-		source_items = _filter_source_items_with_valid_targets(state, actor_id, source_items)
-		if train_panel.has_method("set_trainable_source_items"):
-			train_panel.set_trainable_source_items(source_items, section_text)
-		elif train_panel.has_method("set_trainable_sources"):
-			train_panel.set_trainable_sources({}, section_text)
-		else:
-			var reserve: Array[String] = []
-			for item_val in source_items:
-				if not (item_val is Dictionary):
-					continue
-				var item: Dictionary = item_val
-				var emp_id := str(item.get("employee_type", ""))
-				if not emp_id.is_empty():
-					reserve.append(emp_id)
-			train_panel.set_trainable_employees(reserve)
+		if train_panel.has_method("get_selected_trainer_staff_id"):
+			var trainer_staff_id := int(train_panel.get_selected_trainer_staff_id())
+			source_items = _filter_source_items_for_trainer(state, actor_id, trainer_staff_id, source_items)
+		train_panel.set_source_items(source_items, section_text)
+
+	if train_panel.has_method("set_target_items"):
+		var target_items: Array[Dictionary] = []
+		var target_text := "培训目标"
+		if train_panel.has_method("get_selected_trainer_staff_id") and train_panel.has_method("get_selected_source_staff_id") and train_panel.has_method("get_selected_source_employee_type"):
+			var trainer_staff_id2 := int(train_panel.get_selected_trainer_staff_id())
+			var source_staff_id := int(train_panel.get_selected_source_staff_id())
+			var source_employee_type := str(train_panel.get_selected_source_employee_type()).strip_edges()
+			target_items = _build_target_items_for_selection(state, actor_id, trainer_staff_id2, source_staff_id, source_employee_type)
+		train_panel.set_target_items(target_items, target_text)
 
 	if train_panel.has_method("set_train_count"):
 		var counts := _compute_train_counts(state, actor_id)
 		train_panel.set_train_count(int(counts.remaining), int(counts.total))
-	if train_panel.has_method("set_max_steps_one_employee"):
-		var max_steps := int(EmployeeRulesClass.get_max_train_steps_for_single_employee_for_working(state, actor_id))
-		train_panel.set_max_steps_one_employee(max_steps)
 
 func _compute_train_counts(state: GameState, player_id: int) -> Dictionary:
 	if state == null:
@@ -113,6 +111,11 @@ func _compute_train_counts(state: GameState, player_id: int) -> Dictionary:
 	var total: int = EmployeeRulesClass.get_train_limit_for_working(state, player_id)
 	var used: int = EmployeeRulesClass.get_action_count(state, player_id, "train")
 	return {"remaining": maxi(0, total - used), "total": total}
+
+func _build_trainer_items(state: GameState, actor_id: int) -> Array[Dictionary]:
+	if state == null:
+		return []
+	return EmployeeRulesClass.get_trainers_for_working(state, actor_id)
 
 func _build_trainable_source_items_from_staff(state: GameState, actor_id: int) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -207,43 +210,78 @@ func _build_immediate_train_pending_source_items(state: GameState, player_id: in
 			})
 	return items
 
-func _filter_source_items_with_valid_targets(state: GameState, actor_id: int, source_items: Array[Dictionary]) -> Array[Dictionary]:
+func _filter_source_items_for_trainer(state: GameState, actor_id: int, trainer_staff_id: int, source_items: Array[Dictionary]) -> Array[Dictionary]:
 	var filtered: Array[Dictionary] = []
 	for item_val in source_items:
 		if not (item_val is Dictionary):
 			continue
 		var item: Dictionary = item_val
-		if _source_item_has_valid_train_target(state, actor_id, item):
+		if _source_item_has_valid_train_target(state, actor_id, trainer_staff_id, item):
 			filtered.append(item)
 	return filtered
 
-func _source_item_has_valid_train_target(state: GameState, actor_id: int, item: Dictionary) -> bool:
+func _source_item_has_valid_train_target(state: GameState, actor_id: int, trainer_staff_id: int, item: Dictionary) -> bool:
 	var from_employee := str(item.get("employee_type", "")).strip_edges()
 	var source_staff_id := int(item.get("staff_id", -1))
-	if state == null or from_employee.is_empty():
+	if state == null or trainer_staff_id <= 0 or from_employee.is_empty():
 		return false
+	return not _build_target_items_for_selection(state, actor_id, trainer_staff_id, source_staff_id, from_employee).is_empty()
 
-	var max_steps := int(EmployeeRulesClass.get_max_train_steps_for_single_employee_for_working(state, actor_id))
-	if max_steps <= 0:
-		return false
+func _build_target_items_for_selection(
+	state: GameState,
+	actor_id: int,
+	trainer_staff_id: int,
+	source_staff_id: int,
+	from_employee: String
+) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if state == null or trainer_staff_id <= 0 or from_employee.is_empty():
+		return out
 
-	var targets := _collect_reachable_train_targets(from_employee, max_steps)
-	if targets.is_empty():
-		return false
+	var trainer_read := EmployeeRulesClass.try_resolve_trainer_for_working(state, actor_id, trainer_staff_id)
+	if not trainer_read.ok:
+		return out
+	var trainer: Dictionary = trainer_read.value
+	var trainer_remaining := int(trainer.get("remaining", 0))
+	if trainer_remaining <= 0:
+		return out
+
+	var reachable := _collect_reachable_train_targets(from_employee, trainer_remaining)
+	if reachable.is_empty():
+		return out
 
 	var action := TrainActionClass.new()
-	for target in targets:
+	for target in reachable:
 		var params := {
+			"trainer_staff_id": trainer_staff_id,
 			"from_employee": from_employee,
 			"to_employee": target,
 		}
 		if source_staff_id > 0:
-			params["staff_id"] = source_staff_id
+			params["source_staff_id"] = source_staff_id
 		var validate_result := action.validate(state, Command.create("train", actor_id, params))
-		if validate_result.ok:
-			return true
+		if not validate_result.ok:
+			continue
+		var steps_required := TrainActionClass._compute_train_steps_within_limit(from_employee, target, trainer_remaining)
+		if steps_required <= 0:
+			continue
+		out.append({
+			"id": target,
+			"key": target,
+			"employee_type": target,
+			"steps_required": steps_required,
+			"pool_count": int(state.employee_pool.get(target, 0)),
+			"enabled": true,
+		})
 
-	return false
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var sa := int(a.get("steps_required", 0))
+		var sb := int(b.get("steps_required", 0))
+		if sa != sb:
+			return sa < sb
+		return str(a.get("employee_type", "")) < str(b.get("employee_type", ""))
+	)
+	return out
 
 func _collect_reachable_train_targets(from_employee: String, max_steps: int) -> Array[String]:
 	var targets: Array[String] = []
@@ -276,7 +314,6 @@ func _collect_reachable_train_targets(from_employee: String, max_steps: int) -> 
 			var ndist := dist + 1
 			if ndist > max_steps:
 				continue
-
 			visited[nxt] = ndist
 			queue.append(nxt)
 			targets.append(nxt)
@@ -323,7 +360,7 @@ func _read_immediate_train_pending_sources(state: GameState, player_id: int) -> 
 
 	return sources
 
-func _on_train_requested(from_employee: String, to_employee: String, staff_id: int) -> void:
+func _on_train_requested(trainer_staff_id: int, source_staff_id: int, from_employee: String, to_employee: String) -> void:
 	if _scene == null or _scene.game_engine == null:
 		return
 	if not _execute_command.is_valid():
@@ -331,9 +368,10 @@ func _on_train_requested(from_employee: String, to_employee: String, staff_id: i
 	var was_visible: bool = is_instance_valid(train_panel) and bool(train_panel.visible)
 	var current_player_id = _scene.game_engine.get_state().get_current_player_id()
 	var result: Result = _execute_command.call(Command.create("train", current_player_id, {
+		"trainer_staff_id": trainer_staff_id,
 		"from_employee": from_employee,
 		"to_employee": to_employee,
-		"staff_id": staff_id
+		"source_staff_id": source_staff_id
 	}))
 
 	if result.ok:

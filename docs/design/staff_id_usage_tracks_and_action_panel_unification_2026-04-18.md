@@ -12,7 +12,7 @@
 - `recruit` 动作支持显式 `staff_id`，并写入 `round_state.staff_usage[staff_id]["recruit"]`
 - `train` 动作记录培训员 `staff_usage[trainer_staff_id]["train"]`
 - `RecruitPanel` 改为“上方选招聘员工实例、下方看可招目标”
-- `TrainPanel` 改为“上方选来源员工实例、下方看可达目标”
+- `TrainPanel` 旧实现已接入 `staff_id`，但交互仍错误地以“被培训员工 source”作为第一选择项
 - Payday 薪资折扣已从 `staff_usage[staff_id]["recruit"]` 完全收口
 - `produce_food` / `procure_drinks` 动作支持显式 `staff_id`，并写入
 	- `round_state.staff_usage[staff_id]["produce_food"]`
@@ -34,6 +34,7 @@
 
 当前仍未完成：
 
+- 将培训面板修正为“培训员实例 → 被培训员工实例 → 目标员工”的三段式结构
 - 将更多员工驱动面板进一步收口到相同的 provider + picker state helper（如后续需要，可继续扩展到 recruit / train / production 的内部状态层）
 
 ---
@@ -470,20 +471,75 @@ management_trainee -> new_business_developer -> junior_vice_president
 
 ## 9.3 培训面板
 
-### 顶部
+### 顶部：培训员实例
 
-显示可用 trainer staff 列表（不显示原始 `staff_id`）。
+显示当前可用的 **trainer / coach / guru 等培训员实例**（不显示原始 `staff_id`）。
 
-### 中部
+- 这是当前 Train 子阶段真正“发挥作用”的员工卡
+- 角标显示该实例的 `remaining / capacity`
+- 同类型多个培训员必须拆成多个实例项
 
-显示当前 trainer 的：
+### 中部：可被培训的员工实例
 
-- 剩余训练额度
-- 可训练的目标员工
-- 每个目标员工在当前额度内“最终可达的目标类型”
-- 对应 `steps_used`
+基于**当前选中的培训员实例**，只显示它当前还能合法培训的员工实例：
 
-> 当前 UI 中已具备“显示被培训员工在最大允许培训次数内的培训选择”的基础思路，可优先复用，只需要把它收口到“当前选中 trainer staff”的上下文中。
+- 默认来源是待命区员工
+- 若存在相关能力/里程碑，可额外包含在岗同色培训来源
+- 若存在 `immediate_train_pending`，则中部也应显示这些待清账来源（允许以伪实例项表示）
+- 同类型多个来源员工必须拆成多个实例项
+
+> 这一步的本质是“作用对象选择”，而不是直接展示最终目标。
+
+### 底部：目标员工
+
+基于：
+
+- 当前选中的培训员实例
+- 当前选中的被培训员工实例
+
+显示该组合下**最终可达的目标员工**：
+
+- 每个目标项显示 `steps_used`
+- 只显示在当前培训员剩余额度内可达的目标
+- 只显示通过当前规则验证的目标（例如锁定培训员、里程碑限制、同色培训限制、员工池可用性等）
+
+### 命令参数语义
+
+培训命令需要显式区分：
+
+- `trainer_staff_id`
+- `source_staff_id`
+- `to_employee`
+
+其中：
+
+- `trainer_staff_id` 表示提供培训额度的员工实例
+- `source_staff_id` 表示被培训的员工实例
+- `to_employee` 表示最终目标岗位
+
+旧版把 `staff_id` 兼作来源员工 id 的做法会导致 UI 与规则语义错位，应逐步兼容后淘汰。
+
+### 实施说明（2026-04-19 补充）
+
+培训链路的最小正确实现应遵循：
+
+1. 规则层先产出 **trainer 实例 provider**
+	- 每项包含 `staff_id / employee_type / capacity / used / remaining / instance_idx`
+2. UI 先选 trainer 实例
+3. controller 再基于当前 trainer 过滤 source staff
+4. 再基于 trainer + source 过滤最终 target
+5. `train_action` 显式接收：
+	- `trainer_staff_id`
+	- `source_staff_id`
+	- `to_employee`
+
+其中：
+
+- `trainer_staff_id` 决定当前动作消耗哪张培训员卡
+- `source_staff_id` 决定哪名员工被培训
+- `to_employee` 决定最终岗位
+
+现有 `trainer_id / trainer_instance_idx` 仍可作为 round_state / replay / 锁定逻辑的兼容字段保留，但 UI 与命令输入不再应依赖“自动推导培训员”。
 
 ## 9.4 招聘面板
 

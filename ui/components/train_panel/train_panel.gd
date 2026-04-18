@@ -1,354 +1,348 @@
 # 培训面板组件
-# 上方选择被培训员工实例，下方显示其可达目标。
+# 上方选择培训员实例，中间选择被培训员工实例，下方显示最终可达目标。
 class_name TrainPanel
 extends "res://ui/components/common/right_panel_embeddable_panel.gd"
 
-signal train_requested(from_employee: String, to_employee: String, staff_id: int)
+signal train_requested(trainer_staff_id: int, source_staff_id: int, from_employee: String, to_employee: String)
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 @onready var counter_label: Label = $MarginContainer/VBoxContainer/CounterRow/CounterLabel
-@onready var trainable_section_label: Label = $MarginContainer/VBoxContainer/TrainableSection/SectionLabel
-@onready var trainable_container: HFlowContainer = $MarginContainer/VBoxContainer/TrainableSection/TrainableContainer
-@onready var path_container: HFlowContainer = $MarginContainer/VBoxContainer/PathSection/ScrollContainer/PathContainer
+@onready var trainer_section_label: Label = $MarginContainer/VBoxContainer/TrainerSection/SectionLabel
+@onready var trainer_container: HFlowContainer = $MarginContainer/VBoxContainer/TrainerSection/TrainerContainer
+@onready var source_section_label: Label = $MarginContainer/VBoxContainer/SourceSection/SectionLabel
+@onready var source_container: HFlowContainer = $MarginContainer/VBoxContainer/SourceSection/SourceContainer
+@onready var target_section_label: Label = $MarginContainer/VBoxContainer/TargetSection/SectionLabel
+@onready var target_container: HFlowContainer = $MarginContainer/VBoxContainer/TargetSection/ScrollContainer/TargetContainer
 @onready var confirm_btn: Button = $MarginContainer/VBoxContainer/ConfirmButton
 
-var _employee_pool: Dictionary = {}  # employee_type -> count
+var _employee_pool: Dictionary = {}
 var _employee_registry = null
-var _trainable_sources: Array[Dictionary] = []  # [{staff_id, employee_type, zone_key, tag_text}]
 var _train_remaining: int = 0
 var _train_total: int = 0
-var _max_steps_one_employee: int = 1
 
-var _source_by_key: Dictionary = {}  # picker key -> source info
+var _trainer_items: Array[Dictionary] = []
+var _trainer_by_key: Dictionary = {}
+var _selected_trainer_key: String = ""
+var _selected_trainer_staff_id: int = -1
+var _selected_trainer_employee_type: String = ""
+var _selected_trainer_remaining: int = 0
+
+var _source_items: Array[Dictionary] = []
+var _source_by_key: Dictionary = {}
 var _selected_source_key: String = ""
 var _selected_source_staff_id: int = -1
-var _selected_source: String = ""
-var _selected_target: String = ""
-var _selected_steps_required: int = 0
-
+var _selected_source_employee_type: String = ""
 var _selected_requires_same_color: bool = false
-var _steps_by_target: Dictionary = {}  # target_type -> steps_required
+
+var _target_items: Array[Dictionary] = []
+var _target_by_key: Dictionary = {}
+var _selected_target_key: String = ""
+var _selected_target_employee_type: String = ""
+var _selected_steps_required: int = 0
 
 func _get_confirm_button() -> Button:
 	return confirm_btn
 
 func _apply_embedding(embedded: bool) -> void:
-	# TrainPanel 的确认按钮不在 ButtonRow 内：嵌入 RightPanel 后由右侧 footer 承担确认动作。
 	if confirm_btn != null:
 		confirm_btn.visible = not embedded
 
 func _get_relayout_delay_frames() -> int:
-	# HFlowContainer(选卡) 在首次嵌入/首次显示时可能未拿到稳定宽度导致不换行。
 	return 2
 
 func _on_panel_ready() -> void:
 	UiStylesClass.apply_button_primary(confirm_btn)
-	if trainable_container != null and is_instance_valid(trainable_container):
-		if trainable_container.has_signal("employee_selected"):
-			trainable_container.employee_selected.connect(_on_source_selected)
-	if path_container != null and is_instance_valid(path_container):
-		if path_container.has_signal("employee_selected"):
-			path_container.employee_selected.connect(_on_target_selected)
+	if trainer_container != null and trainer_container.has_signal("employee_selected"):
+		trainer_container.employee_selected.connect(_on_trainer_selected)
+	if source_container != null and source_container.has_signal("employee_selected"):
+		source_container.employee_selected.connect(_on_source_selected)
+	if target_container != null and target_container.has_signal("employee_selected"):
+		target_container.employee_selected.connect(_on_target_selected)
 
 func _on_relayout() -> void:
-	if trainable_container != null and is_instance_valid(trainable_container):
-		trainable_container.queue_sort()
-	if path_container != null and is_instance_valid(path_container):
-		path_container.queue_sort()
+	if trainer_container != null and is_instance_valid(trainer_container):
+		trainer_container.queue_sort()
+	if source_container != null and is_instance_valid(source_container):
+		source_container.queue_sort()
+	if target_container != null and is_instance_valid(target_container):
+		target_container.queue_sort()
 
 func set_employee_registry(registry) -> void:
 	_employee_registry = registry
+	_refresh_all()
 
 func set_employee_pool(pool: Dictionary) -> void:
 	_employee_pool = pool.duplicate(true)
-	_update_states()
-
-func set_trainable_employees(employees: Array[String]) -> void:
-	var sources: Array[Dictionary] = []
-	for emp_type_val in employees:
-		var emp_type := str(emp_type_val).strip_edges()
-		if emp_type.is_empty():
-			continue
-		sources.append({
-			"staff_id": -1,
-			"employee_type": emp_type,
-			"zone_key": "reserve_employees",
-		})
-	set_trainable_source_items(sources)
-
-func set_trainable_sources(_sources: Dictionary, section_label_text: String = "") -> void:
-	if trainable_section_label != null and not section_label_text.is_empty():
-		trainable_section_label.text = section_label_text
-	_update_states()
-
-func set_trainable_source_items(sources: Array[Dictionary], section_label_text: String = "") -> void:
-	_trainable_sources = sources.duplicate(true)
-	_update_states()
-	if trainable_section_label != null and not section_label_text.is_empty():
-		trainable_section_label.text = section_label_text
-	_update_states()
+	_refresh_targets()
+	_update_confirm_state()
 
 func set_train_count(remaining: int, total: int) -> void:
 	_train_remaining = remaining
 	_train_total = total
 	_update_counter()
-	_update_states()
+	_refresh_trainers()
+	_refresh_sources()
+	_refresh_targets()
+	_update_confirm_state()
 
-func set_max_steps_one_employee(max_steps: int) -> void:
-	_max_steps_one_employee = maxi(0, max_steps)
-	_update_states()
+func set_trainer_items(items: Array[Dictionary], section_label_text: String = "") -> void:
+	_trainer_items = items.duplicate(true)
+	if trainer_section_label != null and not section_label_text.is_empty():
+		trainer_section_label.text = section_label_text
+	_refresh_trainers()
+	_refresh_sources()
+	_refresh_targets()
+	_update_confirm_state()
+
+func set_source_items(items: Array[Dictionary], section_label_text: String = "") -> void:
+	_source_items = items.duplicate(true)
+	if source_section_label != null and not section_label_text.is_empty():
+		source_section_label.text = section_label_text
+	_refresh_sources()
+	_refresh_targets()
+	_update_confirm_state()
+
+func set_target_items(items: Array[Dictionary], section_label_text: String = "") -> void:
+	_target_items = items.duplicate(true)
+	if target_section_label != null and not section_label_text.is_empty():
+		target_section_label.text = section_label_text
+	_refresh_targets()
+	_update_confirm_state()
+
+func get_selected_trainer_staff_id() -> int:
+	return _selected_trainer_staff_id
+
+func get_selected_source_staff_id() -> int:
+	return _selected_source_staff_id
+
+func get_selected_source_employee_type() -> String:
+	return _selected_source_employee_type
 
 func refresh() -> void:
 	_update_counter()
-	_update_states()
+	_refresh_all()
 	_request_relayout()
+
+func clear_selection() -> void:
+	_selected_trainer_key = ""
+	_selected_trainer_staff_id = -1
+	_selected_trainer_employee_type = ""
+	_selected_trainer_remaining = 0
+	_selected_source_key = ""
+	_selected_source_staff_id = -1
+	_selected_source_employee_type = ""
+	_selected_requires_same_color = false
+	_selected_target_key = ""
+	_selected_target_employee_type = ""
+	_selected_steps_required = 0
+	_refresh_all()
+	_update_confirm_state()
+
+func _refresh_all() -> void:
+	_refresh_trainers()
+	_refresh_sources()
+	_refresh_targets()
+	_update_confirm_state()
 
 func _get_employee_def(employee_type: String) -> Dictionary:
 	if _employee_registry != null and _employee_registry.has_method("get_employee"):
 		var emp = _employee_registry.get_employee(employee_type)
 		if emp != null and emp.has_method("to_dict"):
 			return emp.to_dict()
-
 	if EmployeeRegistryClass.is_loaded():
 		var def_val = EmployeeRegistryClass.get_def(employee_type)
 		if def_val != null and def_val.has_method("to_dict"):
 			return def_val.to_dict()
-
 	return {"id": employee_type, "name": employee_type}
 
 func _update_counter() -> void:
 	if counter_label != null:
 		counter_label.text = "培训次数: %d / %d" % [_train_remaining, _train_total]
 
-func _update_states() -> void:
-	var can_train := _train_remaining > 0
-
-	# 若剩余次数为 0，则清空选择，避免出现“已选但无法确认”的误导。
-	if not can_train:
-		_clear_selection(true)
-
-	_refresh_trainable_picker()
-	_refresh_target_picker()
-
-	if confirm_btn != null:
-		var ok := can_train and not _selected_source.is_empty() and not _selected_target.is_empty()
-		ok = ok and _selected_steps_required > 0 and _selected_steps_required <= _train_remaining
-		confirm_btn.disabled = not ok
-	right_panel_footer_changed.emit()
-
-func _refresh_trainable_picker() -> void:
-	if trainable_container == null:
+func _refresh_trainers() -> void:
+	if trainer_container == null:
 		return
+	_trainer_by_key.clear()
 
-	var can_train := _train_remaining > 0
-
-	# 若来源不再可用（例如模式切换/数量变更），清空选择与路径。
-	if not _selected_source_key.is_empty() and not _source_by_key.has(_selected_source_key):
-		_clear_selection(true)
-
-	_source_by_key.clear()
 	var items: Array[Dictionary] = []
-	for source_val in _trainable_sources:
-		if not (source_val is Dictionary):
+	for item_val in _trainer_items:
+		if not (item_val is Dictionary):
 			continue
-		var source: Dictionary = source_val
-		var staff_id := int(source.get("staff_id", -1))
-		var emp_type := str(source.get("employee_type", "")).strip_edges()
-		if emp_type.is_empty():
+		var item: Dictionary = item_val
+		var staff_id := int(item.get("staff_id", -1))
+		var emp_type := str(item.get("employee_type", item.get("id", ""))).strip_edges()
+		if staff_id <= 0 or emp_type.is_empty():
 			continue
-		var key := "staff:%d" % staff_id if staff_id > 0 else "%s#legacy" % emp_type
-		_source_by_key[key] = source.duplicate(true)
-		var emp_def := _get_employee_def(emp_type)
-		var tag_text := str(source.get("tag_text", "")).strip_edges()
+		var key := "staff:%d" % staff_id
+		_trainer_by_key[key] = item.duplicate(true)
 		items.append({
 			"id": emp_type,
 			"key": key,
-			"employee_def": emp_def,
-			"badge_text": str(int(source.get("badge_count", 1))),
-			"tag_text": tag_text,
-			"enabled": can_train and bool(source.get("enabled", true)),
+			"employee_def": _get_employee_def(emp_type),
+			"badge_text": "%d/%d" % [maxi(0, int(item.get("remaining", 0))), maxi(0, int(item.get("capacity", item.get("cap_per_instance", 0))))],
+			"tag_text": "可用" if int(item.get("remaining", 0)) > 0 else "已用",
+			"enabled": _train_remaining > 0 and int(item.get("remaining", 0)) > 0,
+		})
+
+	if not _selected_trainer_key.is_empty():
+		var selected_info: Dictionary = Dictionary(_trainer_by_key.get(_selected_trainer_key, {}))
+		if selected_info.is_empty() or int(selected_info.get("remaining", 0)) <= 0:
+			_clear_trainer_selection()
+
+	if trainer_container.has_method("set_items"):
+		trainer_container.set_items(items, _selected_trainer_key)
+
+func _refresh_sources() -> void:
+	if source_container == null:
+		return
+	_source_by_key.clear()
+
+	var items: Array[Dictionary] = []
+	var can_choose := _train_remaining > 0 and _selected_trainer_staff_id > 0
+	for item_val in _source_items:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		var staff_id := int(item.get("staff_id", -1))
+		var emp_type := str(item.get("employee_type", item.get("id", ""))).strip_edges()
+		if emp_type.is_empty():
+			continue
+		var key := "staff:%d" % staff_id if staff_id > 0 else str(item.get("key", "%s#pending" % emp_type))
+		_source_by_key[key] = item.duplicate(true)
+		items.append({
+			"id": emp_type,
+			"key": key,
+			"employee_def": _get_employee_def(emp_type),
+			"badge_text": str(int(item.get("badge_count", 1))),
+			"tag_text": str(item.get("tag_text", "")).strip_edges(),
+			"enabled": can_choose and bool(item.get("enabled", true)),
 		})
 
 	if not _selected_source_key.is_empty():
 		var selected_info: Dictionary = Dictionary(_source_by_key.get(_selected_source_key, {}))
-		if selected_info.is_empty():
-			_clear_selection(true)
+		if selected_info.is_empty() or not can_choose:
+			_clear_source_selection()
 
-	if trainable_container.has_method("set_items"):
-		trainable_container.set_items(items, _selected_source_key)
-	_request_relayout()
+	if source_container.has_method("set_items"):
+		source_container.set_items(items, _selected_source_key)
 
-func _refresh_target_picker() -> void:
-	if path_container == null:
+func _refresh_targets() -> void:
+	if target_container == null:
 		return
-
-	_recompute_steps_by_target()
-
-	# 无来源时：清空并提示
-	if _selected_source.is_empty():
-		if path_container.has_method("clear"):
-			path_container.clear()
-		var label := Label.new()
-		label.text = "请选择培训来源"
-		label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
-		path_container.add_child(label)
-		_selected_target = ""
-		_selected_steps_required = 0
-		return
-
-	if _steps_by_target.is_empty():
-		if path_container.has_method("clear"):
-			path_container.clear()
-		var label2 := Label.new()
-		label2.text = "无可培训目标"
-		label2.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
-		path_container.add_child(label2)
-		_selected_target = ""
-		_selected_steps_required = 0
-		return
-
-	# 校验当前目标是否仍可用
-	if not _selected_target.is_empty():
-		var steps_required: int = int(_steps_by_target.get(_selected_target, 0))
-		var pool_count: int = int(_employee_pool.get(_selected_target, 0))
-		if steps_required <= 0 or steps_required > _train_remaining or pool_count <= 0:
-			_selected_target = ""
-			_selected_steps_required = 0
-
-	# 创建培训目标列表（按步数、再按 id 排序）
-	var targets: Array[String] = []
-	for k in _steps_by_target.keys():
-		if not (k is String):
-			continue
-		var tid := str(k)
-		if tid.is_empty():
-			continue
-		targets.append(tid)
-	targets.sort_custom(func(a: String, b: String) -> bool:
-		var sa := int(_steps_by_target.get(a, 0))
-		var sb := int(_steps_by_target.get(b, 0))
-		if sa != sb:
-			return sa < sb
-		return a < b
-	)
+	_target_by_key.clear()
 
 	var items: Array[Dictionary] = []
-	for target_type in targets:
-		var target_def := _get_employee_def(target_type)
-		var pool_count: int = int(_employee_pool.get(target_type, 0))
-		var steps_required: int = int(_steps_by_target.get(target_type, 1))
-		var enabled := _train_remaining > 0 and pool_count > 0 and steps_required > 0 and steps_required <= _train_remaining
-
+	var can_choose := _train_remaining > 0 and _selected_trainer_staff_id > 0 and _selected_source_staff_id != 0 and not _selected_source_employee_type.is_empty()
+	for item_val in _target_items:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		var emp_type := str(item.get("employee_type", item.get("id", ""))).strip_edges()
+		if emp_type.is_empty():
+			continue
+		var key := str(item.get("key", emp_type)).strip_edges()
+		if key.is_empty():
+			key = emp_type
+		_target_by_key[key] = item.duplicate(true)
 		items.append({
-			"id": target_type,
-			"employee_def": target_def,
-			"badge_text": str(pool_count), # 数量角标（库存）
-			"tag_text": "%d步" % steps_required,
-			"enabled": enabled,
+			"id": emp_type,
+			"key": key,
+			"employee_def": _get_employee_def(emp_type),
+			"badge_text": str(int(item.get("pool_count", _employee_pool.get(emp_type, 0)))),
+			"tag_text": "%d步" % int(item.get("steps_required", 0)),
+			"enabled": can_choose and bool(item.get("enabled", true)),
 		})
 
-	if path_container.has_method("set_items"):
-		path_container.set_items(items, _selected_target)
+	if not _selected_target_key.is_empty():
+		var selected_info: Dictionary = Dictionary(_target_by_key.get(_selected_target_key, {}))
+		if selected_info.is_empty() or not can_choose:
+			_clear_target_selection()
 
-	_selected_steps_required = int(_steps_by_target.get(_selected_target, 0)) if not _selected_target.is_empty() else 0
-	_request_relayout()
+	if target_container.has_method("set_items"):
+		target_container.set_items(items, _selected_target_key)
 
-func _recompute_steps_by_target() -> void:
-	_steps_by_target.clear()
-
-	if _selected_source.is_empty():
+func _update_confirm_state() -> void:
+	if confirm_btn == null:
 		return
+	var ok := true
+	ok = ok and _train_remaining > 0
+	ok = ok and _selected_trainer_staff_id > 0
+	ok = ok and not _selected_source_employee_type.is_empty()
+	ok = ok and not _selected_target_employee_type.is_empty()
+	ok = ok and _selected_steps_required > 0
+	ok = ok and _selected_steps_required <= _selected_trainer_remaining
+	confirm_btn.disabled = not ok
+	right_panel_footer_changed.emit()
 
-	var emp_def := _get_employee_def(_selected_source)
-	var from_role := str(emp_def.get("role", ""))
-	var max_steps := maxi(0, _max_steps_one_employee)
-
-	# BFS：计算在 max_steps 内可达的最终目标（最短步数）
-	var visited := {}
-	visited[_selected_source] = 0
-	var queue: Array[String] = [_selected_source]
-	var qi := 0
-
-	while qi < queue.size():
-		var cur := queue[qi]
-		qi += 1
-		var dist := int(visited.get(cur, 0))
-		if dist >= max_steps:
-			continue
-
-		var cur_def := _get_employee_def(cur)
-		var cur_train_to: Array = Array(cur_def.get("train_to", []))
-		for nxt_val in cur_train_to:
-			var nxt := str(nxt_val)
-			if nxt.is_empty():
-				continue
-			if visited.has(nxt):
-				continue
-			var ndist := dist + 1
-			if ndist > max_steps:
-				continue
-
-			# 在岗同色培训：路径中的每一步都保持同色
-			if _selected_requires_same_color and not from_role.is_empty():
-				var nxt_def := _get_employee_def(nxt)
-				var to_role := str(nxt_def.get("role", ""))
-				if not to_role.is_empty() and to_role != from_role:
-					continue
-
-			visited[nxt] = ndist
-			queue.append(nxt)
-
-			# 记录为可选目标（最短步数）
-			if not _steps_by_target.has(nxt):
-				_steps_by_target[nxt] = ndist
+func _on_trainer_selected(_employee_type: String) -> void:
+	var key := ""
+	if trainer_container != null and trainer_container.has_method("get_selected_key"):
+		key = str(trainer_container.get_selected_key()).strip_edges()
+	var info: Dictionary = Dictionary(_trainer_by_key.get(key, {}))
+	if info.is_empty():
+		_clear_trainer_selection()
+	else:
+		_selected_trainer_key = key
+		_selected_trainer_staff_id = int(info.get("staff_id", -1))
+		_selected_trainer_employee_type = str(info.get("employee_type", info.get("id", ""))).strip_edges()
+		_selected_trainer_remaining = int(info.get("remaining", 0))
+	_clear_source_selection()
+	_clear_target_selection()
+	_update_confirm_state()
 
 func _on_source_selected(employee_type: String) -> void:
 	var key := ""
-	if trainable_container != null and trainable_container.has_method("get_selected_key"):
-		key = str(trainable_container.get_selected_key()).strip_edges()
-	var source: Dictionary = Dictionary(_source_by_key.get(key, {}))
-	if source.is_empty():
+	if source_container != null and source_container.has_method("get_selected_key"):
+		key = str(source_container.get_selected_key()).strip_edges()
+	var info: Dictionary = Dictionary(_source_by_key.get(key, {}))
+	if info.is_empty():
 		_selected_source_key = ""
 		_selected_source_staff_id = -1
-		_selected_source = str(employee_type).strip_edges()
+		_selected_source_employee_type = str(employee_type).strip_edges()
 		_selected_requires_same_color = false
 	else:
 		_selected_source_key = key
-		_selected_source_staff_id = int(source.get("staff_id", -1))
-		_selected_source = str(source.get("employee_type", employee_type)).strip_edges()
-		_selected_requires_same_color = bool(source.get("requires_same_color", false))
-	_selected_target = ""
-	_selected_steps_required = 0
+		_selected_source_staff_id = int(info.get("staff_id", -1))
+		_selected_source_employee_type = str(info.get("employee_type", employee_type)).strip_edges()
+		_selected_requires_same_color = bool(info.get("requires_same_color", false))
+	_clear_target_selection()
+	_update_confirm_state()
 
-	_update_states()
-
-func _on_target_selected(target_type: String) -> void:
-	_selected_target = str(target_type).strip_edges()
-	_update_states()
+func _on_target_selected(employee_type: String) -> void:
+	var key := ""
+	if target_container != null and target_container.has_method("get_selected_key"):
+		key = str(target_container.get_selected_key()).strip_edges()
+	var info: Dictionary = Dictionary(_target_by_key.get(key, {}))
+	_selected_target_key = key
+	_selected_target_employee_type = str(employee_type).strip_edges()
+	_selected_steps_required = int(info.get("steps_required", 0))
+	_update_confirm_state()
 
 func _on_confirm_pressed() -> void:
 	if confirm_btn != null and confirm_btn.disabled:
 		return
-	if _selected_source.is_empty() or _selected_target.is_empty():
+	if _selected_trainer_staff_id <= 0 or _selected_source_employee_type.is_empty() or _selected_target_employee_type.is_empty():
 		return
-	if _train_remaining <= 0:
-		return
-	if _selected_steps_required <= 0 or _selected_steps_required > _train_remaining:
-		return
+	train_requested.emit(_selected_trainer_staff_id, _selected_source_staff_id, _selected_source_employee_type, _selected_target_employee_type)
+	_clear_source_selection()
+	_clear_target_selection()
+	_update_confirm_state()
 
-	train_requested.emit(_selected_source, _selected_target, _selected_source_staff_id)
-	_clear_selection(true)
-	_update_states()
+func _clear_trainer_selection() -> void:
+	_selected_trainer_key = ""
+	_selected_trainer_staff_id = -1
+	_selected_trainer_employee_type = ""
+	_selected_trainer_remaining = 0
 
-func _clear_selection(clear_source: bool) -> void:
-	if clear_source:
-		_selected_source_key = ""
-		_selected_source_staff_id = -1
-		_selected_source = ""
-	_selected_target = ""
+func _clear_source_selection() -> void:
+	_selected_source_key = ""
+	_selected_source_staff_id = -1
+	_selected_source_employee_type = ""
+	_selected_requires_same_color = false
+
+func _clear_target_selection() -> void:
+	_selected_target_key = ""
+	_selected_target_employee_type = ""
 	_selected_steps_required = 0
-	_steps_by_target.clear()
-	if clear_source:
-		_selected_requires_same_color = false

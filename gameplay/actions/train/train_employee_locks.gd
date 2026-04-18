@@ -170,7 +170,9 @@ static func plan_training(
 	multi_trainer_on_one: bool,
 	reserve: Array,
 	init_if_missing: bool,
-	to_employee: String = ""
+	to_employee: String = "",
+	preferred_trainer_id: String = "",
+	preferred_instance_idx: int = -1
 ) -> Result:
 	if from_employee.is_empty():
 		return Result.failure("train_locks: from_employee 不能为空")
@@ -221,14 +223,20 @@ static func plan_training(
 		var locked_trainer_id: String = str(token.get("trainer_id", ""))
 		var locked_instance_idx: int = int(token.get("instance_idx", 0))
 
-		var preferred_trainer_id := ""
-		var preferred_instance_idx := -1
-		if not multi_trainer_on_one and not locked_trainer_id.is_empty():
-			preferred_trainer_id = locked_trainer_id
-			preferred_instance_idx = locked_instance_idx
+		var token_preferred_trainer_id := ""
+		var token_preferred_instance_idx := -1
+		if not preferred_trainer_id.is_empty():
+			if not multi_trainer_on_one and not locked_trainer_id.is_empty():
+				if locked_trainer_id != preferred_trainer_id or locked_instance_idx != preferred_instance_idx:
+					continue
+			token_preferred_trainer_id = preferred_trainer_id
+			token_preferred_instance_idx = preferred_instance_idx
+		elif not multi_trainer_on_one and not locked_trainer_id.is_empty():
+			token_preferred_trainer_id = locked_trainer_id
+			token_preferred_instance_idx = locked_instance_idx
 
 		var can := EmployeeRulesClass.can_allocate_train_slots_for_working(
-			state, player_id, steps_needed, preferred_trainer_id, preferred_instance_idx
+			state, player_id, steps_needed, token_preferred_trainer_id, token_preferred_instance_idx
 		)
 		if not can.ok:
 			continue
@@ -244,7 +252,11 @@ static func plan_training(
 		elif cap_per_instance < best_cap:
 			better = true
 		elif cap_per_instance == best_cap:
-			if trainer_id < best_trainer_id:
+			if not preferred_trainer_id.is_empty() and i < best_token_idx:
+				better = true
+			elif not preferred_trainer_id.is_empty():
+				better = false
+			elif trainer_id < best_trainer_id:
 				better = true
 			elif trainer_id == best_trainer_id:
 				if instance_idx < best_instance_idx:

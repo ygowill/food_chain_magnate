@@ -2,6 +2,7 @@ class_name TrainControllerSourceFilterTest
 extends RefCounted
 
 const ControllerClass = preload("res://ui/scenes/game/panel/working/train_controller.gd")
+const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const Support = preload("res://core/tests/milestone_system/milestone_system_test_support.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
@@ -33,7 +34,11 @@ static func _test_newly_trained_employee_filtered_without_milestone(seed_val: in
 		engine.dispose()
 		return Result.failure("首轮培训后，来源列表中应包含 campaign_manager 以复现 UI 过滤场景")
 
-	var filtered: Array = controller._filter_source_items_with_valid_targets(state, 0, source_items)
+	var trainer_staff_id := _read_first_trainer_staff_id(state, 0)
+	if trainer_staff_id <= 0:
+		engine.dispose()
+		return Result.failure("未找到可用 trainer_staff_id")
+	var filtered: Array = controller._filter_source_items_for_trainer(state, 0, trainer_staff_id, source_items)
 	if _has_source_employee_type(filtered, "campaign_manager"):
 		engine.dispose()
 		return Result.failure("默认规则下，已在本子阶段培训过的 campaign_manager 不应继续出现在培训来源中: %s" % str(filtered))
@@ -53,7 +58,11 @@ static func _test_chain_train_source_kept_with_milestone(seed_val: int) -> Resul
 
 	var controller = ControllerClass.new(null, Callable(), Callable(), Callable())
 	var source_items: Array = controller._build_trainable_source_items_from_staff(state, 0)
-	var filtered: Array = controller._filter_source_items_with_valid_targets(state, 0, source_items)
+	var trainer_staff_id := _read_first_trainer_staff_id(state, 0)
+	if trainer_staff_id <= 0:
+		engine.dispose()
+		return Result.failure("未找到可用 trainer_staff_id")
+	var filtered: Array = controller._filter_source_items_for_trainer(state, 0, trainer_staff_id, source_items)
 	if not _has_source_employee_type(filtered, "campaign_manager"):
 		engine.dispose()
 		return Result.failure("multi_trainer_on_one 生效时，campaign_manager 应保留在培训来源中: %s" % str(filtered))
@@ -105,6 +114,22 @@ static func _build_chain_train_state(seed_val: int, allow_chain_train: bool) -> 
 		"engine": engine,
 		"state": engine.get_state(),
 	})
+
+static func _read_first_trainer_staff_id(state: GameState, player_id: int) -> int:
+	var trainers := EmployeeRulesClass.get_trainers_for_working(state, player_id)
+	for trainer_val in trainers:
+		if not (trainer_val is Dictionary):
+			continue
+		var trainer: Dictionary = trainer_val
+		if int(trainer.get("remaining", 0)) <= 0:
+			continue
+		return int(trainer.get("staff_id", -1))
+	if trainers.is_empty():
+		return -1
+	var first_val = trainers[0]
+	if not (first_val is Dictionary):
+		return -1
+	return int(Dictionary(first_val).get("staff_id", -1))
 
 static func _has_source_employee_type(source_items: Array, employee_type: String) -> bool:
 	var emp_id := str(employee_type).strip_edges()

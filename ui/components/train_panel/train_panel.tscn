@@ -51,17 +51,17 @@ theme_override_font_sizes/font_size = 14
 theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 1)
 text = "培训次数: 0 / 0"
 
-[node name="TrainableSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+[node name="TrainerSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="SectionLabel" type="Label" parent="MarginContainer/VBoxContainer/TrainableSection"]
+[node name="SectionLabel" type="Label" parent="MarginContainer/VBoxContainer/TrainerSection"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 1)
-text = "待命区员工（点击选择）"
+text = "培训员（点击选择）"
 
-[node name="TrainableContainer" type="HFlowContainer" parent="MarginContainer/VBoxContainer/TrainableSection"]
+[node name="TrainerContainer" type="HFlowContainer" parent="MarginContainer/VBoxContainer/TrainerSection"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/h_separation = 8
@@ -69,24 +69,42 @@ theme_override_constants/v_separation = 8
 script = ExtResource("2_employee_picker")
 card_display_scale = 1.25
 
-[node name="PathSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+[node name="SourceSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SectionLabel" type="Label" parent="MarginContainer/VBoxContainer/SourceSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 1)
+text = "被培训员工"
+
+[node name="SourceContainer" type="HFlowContainer" parent="MarginContainer/VBoxContainer/SourceSection"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+script = ExtResource("2_employee_picker")
+card_display_scale = 1.25
+
+[node name="TargetSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 6
 
-[node name="SectionLabel" type="Label" parent="MarginContainer/VBoxContainer/PathSection"]
+[node name="SectionLabel" type="Label" parent="MarginContainer/VBoxContainer/TargetSection"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 1)
 text = "培训目标"
 
-[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/VBoxContainer/PathSection"]
+[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/VBoxContainer/TargetSection"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 horizontal_scroll_mode = 1
 
-[node name="PathContainer" type="HFlowContainer" parent="MarginContainer/VBoxContainer/PathSection/ScrollContainer"]
+[node name="TargetContainer" type="HFlowContainer" parent="MarginContainer/VBoxContainer/TargetSection/ScrollContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/h_separation = 8
