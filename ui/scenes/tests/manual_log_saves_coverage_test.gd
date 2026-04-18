@@ -326,14 +326,24 @@ static func _verify_payday_details_after_interaction(engine: GameEngine, res_pat
 		return Result.failure("expected per-player PAYDAY_REPORT log entries in timeline, got %d: %s" % [payday_entry_count, res_path])
 	if not text.contains("发薪日"):
 		return Result.failure("payday log text missing 发薪日: %s" % res_path)
+	if not text.contains("薪资人员："):
+		return Result.failure("payday log text missing 薪资人员 section: %s" % res_path)
+	if not text.contains("薪资基数："):
+		return Result.failure("payday log text missing 薪资基数 section: %s" % res_path)
+	if not text.contains("减免："):
+		return Result.failure("payday log text missing 减免 section: %s" % res_path)
+	if not text.contains("最终支付："):
+		return Result.failure("payday log text missing 最终支付 section: %s" % res_path)
 	if not (text.contains("人力资源总监") or text.contains("hr_director")):
 		return Result.failure("payday log text missing hr_director detail: %s" % res_path)
 	if not (text.contains("营销经理") or text.contains("campaign_manager")):
 		return Result.failure("payday log text missing campaign_manager detail: %s" % res_path)
 	if not text.contains("招聘折扣"):
 		return Result.failure("payday log text missing salary discount detail: %s" % res_path)
-	if not text.contains("里程碑"):
+	if not text.contains("里程碑调整"):
 		return Result.failure("payday log text missing milestone adjustment detail: %s" % res_path)
+	if not text.contains("免薪"):
+		return Result.failure("payday log text missing waived salary detail in reduction summary: %s" % res_path)
 
 	return Result.success({})
 
