@@ -5,6 +5,8 @@ func get_registry() -> Dictionary:
 		"employee_produce_food_fixed": Callable(self, "_build_employee_produce_food_fixed"),
 		"employee_kitchen_trainee_get_food": Callable(self, "_build_employee_kitchen_trainee_get_food"),
 		"employee_restructuring_showcase": Callable(self, "_build_employee_restructuring_showcase"),
+		"employee_train_panel_refresh": Callable(self, "_build_employee_train_panel_refresh"),
+		"employee_payday_fire_panel_refresh": Callable(self, "_build_employee_payday_fire_panel_refresh"),
 		"employee_waitress_tips": Callable(self, "_build_employee_waitress_tips"),
 		"employee_cfo_bonus_on_tips": Callable(self, "_build_employee_cfo_bonus_on_tips"),
 		"employee_kimchi_master_cleanup": Callable(self, "_build_employee_kimchi_master_cleanup"),
@@ -82,6 +84,82 @@ func _build_employee_restructuring_showcase(engine: GameEngine, c: Dictionary) -
 		return ensure
 
 	return Result.success()
+
+func _build_employee_train_panel_refresh(engine: GameEngine, _c: Dictionary) -> Result:
+	var adv := _advance_to_working_sub_phase(engine, "Train")
+	if not adv.ok:
+		return adv
+
+	var state := engine.get_state()
+	var actor := state.get_current_player_id()
+	if actor < 0:
+		return Result.failure("cannot resolve current player")
+
+	var ensure_trainers := _ensure_employee(state, actor, "trainer", false, 2)
+	if not ensure_trainers.ok:
+		return ensure_trainers
+
+	var ensure_marketing_trainee := _ensure_employee(state, actor, "marketing_trainee", true, 1)
+	if not ensure_marketing_trainee.ok:
+		return ensure_marketing_trainee
+
+	var ensure_management_trainee := _ensure_employee(state, actor, "management_trainee", true, 1)
+	if not ensure_management_trainee.ok:
+		return ensure_management_trainee
+
+	if not (state.employee_pool is Dictionary) or int(state.employee_pool.get("campaign_manager", 0)) <= 0:
+		return Result.failure("employee_pool has no campaign_manager (required for training)")
+
+	return Result.success({
+		"scenario": [
+			"玩家 0 有 2 张 trainer，第一次培训后 Train 子阶段仍会停留在当前面板，便于观察可用员工列表是否即时刷新。",
+			"待命区同时放入 marketing_trainee 与 management_trainee；推荐先培训前者，这样刷新后应只剩 management_trainee 可继续培训。",
+			"training 成功后，新得到的 campaign_manager 本回合不应立刻再次作为培训来源出现，否则就会错误允许同一员工继续被重复培训。",
+		],
+		"suggested_command": {
+			"action_id": "train",
+			"actor": actor,
+			"params": {
+				"from_employee": "marketing_trainee",
+				"to_employee": "campaign_manager",
+			},
+		},
+	})
+
+func _build_employee_payday_fire_panel_refresh(engine: GameEngine, _c: Dictionary) -> Result:
+	var adv := _advance_to_phase(engine, "Payday")
+	if not adv.ok:
+		return adv
+
+	var state := engine.get_state()
+	var actor := state.get_current_player_id()
+	if actor < 0:
+		return Result.failure("cannot resolve current player")
+
+	var ensure_active_waitress := _ensure_employee(state, actor, "waitress", false, 1)
+	if not ensure_active_waitress.ok:
+		return ensure_active_waitress
+
+	var ensure_reserve_trainer := _ensure_employee(state, actor, "trainer", true, 1)
+	if not ensure_reserve_trainer.ok:
+		return ensure_reserve_trainer
+
+	state.players[actor]["cash"] = 42
+
+	return Result.success({
+		"scenario": [
+			"Payday 面板同时存在一名在岗 waitress 与一名待命 trainer，解雇后仍保留至少一个列表项，便于确认面板是即时刷新而不是整面板关闭/重开。",
+			"waitress 需要薪水、trainer 不需要薪水，因此解雇 waitress 后，员工列表和薪资汇总都会立刻变化，适合人工复核。",
+		],
+		"suggested_command": {
+			"action_id": "fire",
+			"actor": actor,
+			"params": {
+				"employee_id": "waitress",
+				"location": "active",
+			},
+		},
+	})
 
 func _build_employee_waitress_tips(engine: GameEngine, _c: Dictionary) -> Result:
 	# 目标：验证 waitress 在晚餐阶段提供固定小费（默认 $3），无需依赖售卖发生。

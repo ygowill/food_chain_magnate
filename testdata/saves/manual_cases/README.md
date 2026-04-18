@@ -29,7 +29,7 @@ godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- 
 
 - `new_milestones` 与 `base_milestones` 冲突，因此对应里程碑存档会在生成时自动 `exclude_modules=["base_milestones"]`（见 manifest）。
 
-## 员工（50）
+## 员工（52）
 
 - `barista_trainee`: `employees/barista_trainee.json` + `employees/barista_trainee.md`
 - `barista`: `employees/barista.json` + `employees/barista.md`
@@ -46,6 +46,7 @@ godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- 
 - `errand_boy`: `employees/errand_boy.json` + `employees/errand_boy.md`
 - `executive_vice_president`: `employees/executive_vice_president.json` + `employees/executive_vice_president.md`
 - `fry_chef`: `employees/fry_chef.json` + `employees/fry_chef.md`
+- `fire_panel_refresh`: `employees/fire_panel_refresh.json` + `employees/fire_panel_refresh.md`
 - `gourmet_food_critic`: `employees/gourmet_food_critic.json` + `employees/gourmet_food_critic.md`
 - `guru`: `employees/guru.json` + `employees/guru.md`
 - `hr_director`: `employees/hr_director.json` + `employees/hr_director.md`
@@ -77,6 +78,7 @@ godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- 
 - `sushi_chef`: `employees/sushi_chef.json` + `employees/sushi_chef.md`
 - `sushi_cook`: `employees/sushi_cook.json` + `employees/sushi_cook.md`
 - `trainer`: `employees/trainer.json` + `employees/trainer.md`
+- `train_panel_refresh`: `employees/train_panel_refresh.json` + `employees/train_panel_refresh.md`
 - `truck_driver`: `employees/truck_driver.json` + `employees/truck_driver.md`
 - `vice_president`: `employees/vice_president.json` + `employees/vice_president.md`
 - `waitress`: `employees/waitress.json` + `employees/waitress.md`
