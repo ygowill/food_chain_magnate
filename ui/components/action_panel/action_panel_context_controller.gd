@@ -2,7 +2,6 @@
 extends RefCounted
 
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
-const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const PiecePlacementOverlayScript = preload("res://ui/components/piece_placement/piece_placement_overlay.gd")
 const PiecePickerButtonClass = preload("res://ui/components/action_panel/piece_picker_button.gd")
 
@@ -531,43 +530,12 @@ func _on_piece_button_pressed(piece_id: String) -> void:
 		return
 	_call_context_overlay_method("set_selected_piece", [pid])
 
-func _rebuild_employee_option(employee_ids: Array[String], selected_employee_id: String) -> void:
-	if not is_instance_valid(_employee_option):
-		return
-	var ids: Array[String] = []
-	var seen := {}
-	for v in employee_ids:
-		var s := str(v).strip_edges()
-		if s.is_empty():
-			continue
-		if not seen.has(s):
-			ids.append(s)
-		seen[s] = int(seen.get(s, 0)) + 1
-	ids.sort()
-
-	var items: Array[Dictionary] = []
-	for emp_id in ids:
-		items.append({
-			"id": emp_id,
-			"employee_def": _get_employee_def_for_card(emp_id),
-			"badge_text": "",
-			"enabled": true,
-		})
-
-	var selected := str(selected_employee_id).strip_edges()
-	if selected.is_empty() and not ids.is_empty():
-		selected = str(ids[0])
-	_employee_option.set_items(items, selected)
-
 func _overlay_has_employee_items(overlay) -> bool:
 	if overlay == null or not is_instance_valid(overlay):
 		return false
 	if overlay.has_method("get_available_employee_items"):
 		var items_val = overlay.call("get_available_employee_items")
 		return items_val is Array and not Array(items_val).is_empty()
-	if overlay.has_method("get_available_employees"):
-		var ids_val = overlay.call("get_available_employees")
-		return ids_val is Array and not Array(ids_val).is_empty()
 	return false
 
 func _rebuild_employee_picker_for_overlay(overlay) -> void:
@@ -584,9 +552,6 @@ func _rebuild_employee_picker_for_overlay(overlay) -> void:
 		if overlay.has_method("get_selected_employee_key"):
 			selected_key = str(overlay.call("get_selected_employee_key")).strip_edges()
 		_employee_option.set_items(items, selected_key)
-		return
-	if overlay != null and is_instance_valid(overlay) and overlay.has_method("get_available_employees") and overlay.has_method("get_selected_employee"):
-		_rebuild_employee_option(overlay.get_available_employees(), overlay.get_selected_employee())
 		return
 	_employee_option.clear()
 
@@ -683,17 +648,6 @@ func _on_employee_option_selected(employee_type: String) -> void:
 			_call_context_overlay_method("set_selected_employee_key", [key])
 			return
 	_call_context_overlay_method("set_selected_employee", [emp_id])
-
-func _get_employee_def_for_card(employee_type: String) -> Dictionary:
-	var emp_id := str(employee_type).strip_edges()
-	if emp_id.is_empty():
-		return {"id": emp_id, "name": emp_id}
-	if not EmployeeRegistryClass.is_loaded():
-		return {"id": emp_id, "name": emp_id}
-	var def_val = EmployeeRegistryClass.get_def(emp_id)
-	if def_val != null and def_val.has_method("to_dict"):
-		return def_val.to_dict()
-	return {"id": emp_id, "name": emp_id}
 
 func _on_rotate_left_pressed() -> void:
 	if _context_syncing:

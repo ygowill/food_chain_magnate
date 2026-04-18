@@ -4,7 +4,6 @@ extends RefCounted
 const RestaurantPlacementScene = preload("res://ui/components/restaurant_placement/restaurant_placement_overlay.tscn")
 const HousePlacementScene = preload("res://ui/components/house_placement/house_placement_overlay.tscn")
 const PiecePlacementScene = preload("res://ui/components/piece_placement/piece_placement_overlay.tscn")
-const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
@@ -629,37 +628,6 @@ func _on_overlay_cancelled() -> void:
 		_map_controller.clear_selection()
 	if _overlay_controller != null:
 		_overlay_controller.hide_all_overlays()
-
-func _get_active_employee_types_with_usage_tag(state: GameState, player_id: int, usage_tag: String) -> Array[String]:
-	if state == null or usage_tag.is_empty():
-		return []
-	if not EmployeeRegistryClass.is_loaded():
-		return []
-	var player := state.get_player(player_id)
-	if player.is_empty():
-		return []
-	var employees_val = player.get("employees", [])
-	if not (employees_val is Array):
-		return []
-	var seen := {}
-	for emp_val in employees_val:
-		if not (emp_val is String):
-			continue
-		var emp_id := str(emp_val).strip_edges()
-		if emp_id.is_empty():
-			continue
-		var def_val = EmployeeRegistryClass.get_def(emp_id)
-		if def_val == null or not (def_val is EmployeeDef):
-			continue
-		var def: EmployeeDef = def_val
-		if not def.has_usage_tag(usage_tag):
-			continue
-		seen[emp_id] = true
-	var ids: Array[String] = []
-	for key in seen.keys():
-		ids.append(str(key))
-	ids.sort()
-	return ids
 
 func _build_house_garden_employee_items(state: GameState, player_id: int, action_id: String) -> Array[Dictionary]:
 	var all_items := EmployeeRulesClass.get_house_garden_placers_for_working(state, player_id)

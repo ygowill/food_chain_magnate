@@ -1,6 +1,6 @@
 # `staff_id`、usage track 与员工动作面板统一方案（2026-04-18）
 
-> 状态：**部分已实施（2026-04-18）**  
+> 状态：**部分已实施（2026-04-19）**
 > 目的：统一员工运行时身份、员工使用追踪与员工驱动动作面板；本方案**不引入 `card_id`**，也**不追踪物理卡溯源**。
 
 ## 实施进展（2026-04-18）
@@ -23,11 +23,18 @@
 - `production_controller` 改为从 `EmployeeRules.get_food_producers_for_working` /
   `get_drinks_procurers_for_working` 读取真实实例数据，而不是本地按 `employee_type` 重建伪实例
 
-尚未完成：
+本轮新增落地（2026-04-19）：
 
 - 营销面板统一到 staff 驱动框架
 - 房屋 / 花园面板统一到 staff 驱动框架
 - 餐厅面板统一到 staff 驱动框架
+- `ActionPanelContextController` 已移除 placement overlay 的旧 `employee_type`-only picker fallback
+- 房屋 / 餐厅 overlay 的 staff picker 状态已收敛到公共 `StaffPickerState`
+- `placement_overlays.gd` 已删除统一后不再使用的旧 helper / import
+
+当前仍未完成：
+
+- 将更多员工驱动面板进一步收口到相同的 provider + picker state helper（如后续需要，可继续扩展到 recruit / train / production 的内部状态层）
 
 ---
 
