@@ -130,7 +130,9 @@ func show_game_log_panel_in_right_panel() -> void:
 	# 自动打开日志（例如联机等待他人操作）仍需要尽快刷新时间线，
 	# 但这里不要在 UI 热路径里同步重建；改为 dock 完成后 deferred 请求刷新。
 	if is_instance_valid(_timeline_controller):
-		if _timeline_controller.has_method("request_live_log_timeline_refresh"):
+		if _timeline_controller.has_method("request_live_log_timeline_refresh_deferred"):
+			_timeline_controller.call("request_live_log_timeline_refresh_deferred")
+		elif _timeline_controller.has_method("request_live_log_timeline_refresh"):
 			_timeline_controller.call("request_live_log_timeline_refresh")
 		elif _timeline_controller.has_method("apply_live_log_timeline_from_engine"):
 			_timeline_controller.call_deferred("apply_live_log_timeline_from_engine")

@@ -9,13 +9,15 @@ class _BatchPanel:
 	var batch_count: int = 0
 	var head_count: int = 0
 	var cursor_count: int = 0
+	var last_update_visible_items: bool = true
 	var last_head: int = -999
 	var last_cursor: int = -999
 
-	func set_timeline_head_cursor(head_index: int, cursor_index: int) -> void:
+	func set_timeline_head_cursor(head_index: int, cursor_index: int, update_visible_items: bool = true) -> void:
 		batch_count += 1
 		last_head = int(head_index)
 		last_cursor = int(cursor_index)
+		last_update_visible_items = bool(update_visible_items)
 
 	func set_timeline_head(head_index: int) -> void:
 		head_count += 1
@@ -68,6 +70,8 @@ static func run() -> Result:
 			"批量接口参数错误，实际 head=%d cursor=%d"
 				% [batch_panel.last_head, batch_panel.last_cursor]
 		)
+	if not batch_panel.last_update_visible_items:
+		return Result.failure("默认 sync_ui 应按可见态刷新 timeline items")
 
 	var legacy_panel := _LegacyPanel.new()
 	GameTimelineUiStateSupportClass.sync_ui(

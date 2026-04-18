@@ -55,6 +55,24 @@
 - 首次 `apply_live_log_timeline_from_engine()` 应优先复用 prebuilt timeline / entries cache
 - 后续 live 命令继续走 **单 timeline 增量 append**，而不是 full rebuild
 
+#### 2026-04-18 性能补充
+
+基于真实联机恢复房日志，当前卡顿已不再主要来自网络或 `GameEngine.execute_command()`，而主要来自：
+
+- `ui.timeline.build_info_from_timeline`
+- `ui.game_log.load_step_timeline`
+- `ui.game_log.append_step_timeline`
+- `ui.timeline.apply_live_log`
+- `ui.online_sync.timeline_ui`
+- `ui.online_sync.panel_controller`
+
+已确认的现象：
+
+- 启动期 `client.resume_single_full.prepare` 约 2.7s，属于已接受的冷启动成本；
+- 进入游戏后第一次显示详细日志时，仍可能触发一次 700ms~900ms 级别的 live log 挂载；
+- 对局进行中，命令应用本体通常只有 3ms~5ms，但日志/时间线 UI 更新仍可把整帧拉高到 25ms~40ms；
+- Web 日志中已出现 `Blocking on the main thread is very dangerous`，说明当前“后台日志 descriptor job”在结果回收阶段仍会阻塞主线程。
+
 ### 2.4 历史查看
 
 虽然常态只有一个 full engine，但历史查看仍保留只读语义：
@@ -147,6 +165,39 @@
 - `ensure_online_resume_full_history_timeline_current(true)` 应基于现有 cached timeline 做 append / refresh
 - 禁止重新回到“双轨同步推进 full_replay_engine”的旧模式
 
+### 5.3 等待态自动打开日志，但必须采用“轻量显示 + 分帧挂载”
+
+用户明确要求保留：
+
+- 当进入“等待其他玩家操作”状态时，自动打开详细日志。
+
+因此新的实现约束不是“取消自动打开”，而是：
+
+1. 自动打开日志时，先把右侧日志壳体显示出来；
+2. 同一帧内只做轻量 state 同步；
+3. 详细 timeline / descriptor / items 改为 deferred 或后台结果提交；
+4. 若日志结果尚未准备好，允许短暂显示空壳或旧内容，但不能把主线程卡住。
+
+### 5.4 日志隐藏态要退出热路径
+
+在详细日志面板不可见时：
+
+- 允许继续维护 `_history_step_timeline` / cached timeline / cached entries；
+- 但 `sync_timeline_ui(...)` 不应再把整套 `GameLogPanel` items 逐项做 timeline state 更新；
+- `set_timeline_head_cursor(...)` 这类 UI 方法在隐藏态应降级为“仅更新内部 index / cursor/head 状态，不更新 item”。
+
+目标是把当前每条联机命令都要承担的 `ui.online_sync.timeline_ui` 18ms~23ms 先打下来。
+
+### 5.5 Web 下的 descriptor 后台任务必须避免主线程阻塞回收
+
+当前 `GameLogPanel` 已使用后台 descriptor worker，但结果回收阶段仍通过 `wait_to_finish()` 阻塞主线程。
+
+后续实现要求：
+
+- Web 平台下避免 `wait_to_finish()` 直接阻塞当前帧；
+- 优先改成“仅在线程已结束后非阻塞取结果 + 下一帧提交 UI”；
+- 至少要保证日志自动打开和 live append 时，不再触发浏览器控制台的主线程阻塞警告。
+
 ## 6. 兼容与过渡
 
 本轮重构优先收敛**实际运行路径**，并保留部分兼容 API：
@@ -173,6 +224,9 @@
 - `record_online_resume_runtime_command_applied()` 不再积累 live tail
 - cached timeline 能在单引擎模式下继续增量追平
 - 恢复房 bootstrap gate 只有在 full engine + timeline cache 完成后才放行
+- 等待态自动打开日志时，只请求 deferred timeline refresh，不做同步 heavy rebuild
+- 日志隐藏态更新 cursor/head 时，不应触发全量 item timeline state 刷新
+- 大时间线在 append / rebuild 场景下仍可后台完成，并正确提交 UI
 
 ## 8. 参考
 

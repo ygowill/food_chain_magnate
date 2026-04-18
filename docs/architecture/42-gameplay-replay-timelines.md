@@ -174,6 +174,22 @@ step 的基本字段由 helper 构建（`gameplay/replay/step_timeline_build/hel
 - 允许在 bootstrap 冷路径做一次 full build
 - 不允许在 `command_applied` 热路径重新回到“双轨同步维护 + full rebuild”
 
+### 当前性能边界补充（2026-04-18）
+
+基于最新恢复房日志，当前时间线链路需要额外遵守两条边界：
+
+1. **日志隐藏态不是热路径参与者**
+   - 当 `GameLogPanel` 不可见时，允许内部只维护最新 `head/cursor` 与 dirty 标记；
+   - 不允许继续把所有 timeline items 做一遍 `apply_timeline_state(...)`。
+
+2. **自动打开日志必须是分阶段挂载**
+   - 等待态仍允许自动打开详细日志；
+   - 但打开行为只能触发：
+     - 轻量 dock / visible 切换
+     - deferred timeline refresh 请求
+     - 分帧或后台 descriptor 提交
+   - 不能在“打开日志”这一帧同步吃下完整 timeline / descriptor / item rebuild。
+
 ## 日志面板如何消费 timeline
 
 代码：
@@ -196,8 +212,18 @@ step 的基本字段由 helper 构建（`gameplay/replay/step_timeline_build/hel
   - 只传 **新增 timeline entries**
   - descriptor append
   - 后台 append job
-  - item pool 复用
-  - visible entry count cache
+- item pool 复用
+- visible entry count cache
+
+### 2.1 后台 job 的新约束
+
+虽然 `GameLogPanel` 当前支持后台 descriptor rebuild / append，但后台能力只有在**不阻塞主线程回收**时才成立。
+
+因此新的实现要求是：
+
+- worker 结果提交要与主线程 UI 提交解耦；
+- Web 平台上不能依赖 `wait_to_finish()` 形成伪异步；
+- append 路径必须尽量只提交 delta descriptors / delta items。
 
 ### 3. timeline state 局部刷新
 
@@ -216,6 +242,11 @@ step 的基本字段由 helper 构建（`gameplay/replay/step_timeline_build/hel
   - `apply_timeline_state` 可直接 skip
 - `scroll_to_cursor`
   - 也优先复用 first visible item index，而不是重新线性扫描整列日志
+
+进一步要求：
+
+- 当日志面板不可见时，允许完全跳过这层局部刷新；
+- 等面板重新显示时，再把最新 `cursor/head` 一次性补齐。
 
 这意味着时间线层与日志 UI 层现在是显式分离的：
 
@@ -246,6 +277,7 @@ step 的基本字段由 helper 构建（`gameplay/replay/step_timeline_build/hel
 - 让 `build_live_history_view(...)` 首次装配优先命中 prebuilt cache
 - 保留 `append_from_existing(...)` / `append_step_timeline(...)` 的单时间线增量能力
 - 避免因“已接受更慢启动”而在启动后再次引入每步 full rebuild
+- 避免“已经预构建 cache，但打开日志仍同步重做 descriptor / UI item”的伪复用
 
 ## 测试
 
@@ -261,6 +293,9 @@ step 的基本字段由 helper 构建（`gameplay/replay/step_timeline_build/hel
 - `core/tests/online_resume_single_full_engine_cache_test.gd`
 - `core/tests/net_client_online_resume_cached_timeline_forwarding_test.gd`
 - `ui/scenes/tests/game_log_panel_step_timeline_append_test.gd`
+- `ui/scenes/tests/game_log_dock_controller_timeline_sync_test.gd`
+- `ui/scenes/tests/game_log_timeline_local_state_delta_test.gd`
+- `ui/scenes/tests/timeline_ui_state_support_batch_update_test.gd`
 
 这些测试覆盖：
 
@@ -269,3 +304,5 @@ step 的基本字段由 helper 构建（`gameplay/replay/step_timeline_build/hel
 - prebuilt timeline / entries cache 预构建与复用
 - 启动后单 timeline cache append
 - 日志面板同步 / 异步 append
+- 自动打开日志时的 deferred refresh
+- 日志面板隐藏态跳过 timeline item 状态刷新

@@ -226,6 +226,21 @@ FCM_ONLINE_PERF=1
 - **定位日志面板卡顿**
   - 优先看 `ui.game_log.*`
 
+进一步判断建议：
+
+- 若 `client.command_applied.apply_done` 只有 3ms~5ms，但 `client.command_applied.ui_update` 有 25ms~40ms：
+  - 优先排查 `ui.online_sync.timeline_ui`
+  - 再看 `ui.online_sync.panel_controller`
+- 若自动打开日志或阶段切换时出现 700ms~900ms 级峰值：
+  - 重点看：
+    - `ui.timeline.build_info_from_timeline`
+    - `ui.game_log.load_step_timeline`
+    - `ui.game_log.append_step_timeline`
+    - `ui.timeline.apply_live_log`
+- 若浏览器控制台出现：
+  - `Blocking on the main thread is very dangerous`
+  - 说明当前后台 job 的结果回收仍在阻塞主线程，优先检查 `GameLogPanel` 的 worker 回收链路。
+
 ### 说明
 
 - `OnlinePerfTrace` 只负责结构化输出，不依赖 `GameLog`

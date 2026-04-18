@@ -101,6 +101,7 @@ var _timeline_background_worker = null
 var _timeline_background_thread: Thread = null
 var _timeline_background_running_job: Dictionary = {}
 var _timeline_background_pending_job: Dictionary = {}
+var _timeline_background_main_thread_scheduled: bool = false
 var _timeline_background_generation: int = 0
 var _visible_entry_count_cached: int = -1
 var _timeline_exact_items_by_index: Dictionary = {} # timeline index -> Array[Control]
@@ -254,6 +255,30 @@ func _duplicate_entry_array_with_fresh_ids(entries: Array) -> Array[Dictionary]:
 		out.append(entry)
 	return out
 
+func _adopt_entry_array_preserving_ids(entries: Array) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var next_entry_id := int(_entry_id_counter)
+	for entry_val in entries:
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = Dictionary(entry_val).duplicate(false)
+		var has_valid_id := false
+		var id_val = entry.get("id", null)
+		if id_val is int:
+			next_entry_id = maxi(next_entry_id, int(id_val) + 1)
+			has_valid_id = true
+		elif id_val is float:
+			var id_float := float(id_val)
+			if id_float == floor(id_float):
+				next_entry_id = maxi(next_entry_id, int(id_float) + 1)
+				has_valid_id = true
+		if not has_valid_id:
+			entry["id"] = next_entry_id
+			next_entry_id += 1
+		out.append(entry)
+	_entry_id_counter = maxi(int(_entry_id_counter), int(next_entry_id))
+	return out
+
 func _build_entries_all_for_state(timeline_entries: Array[Dictionary], extra_entries: Array[Dictionary]) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for entry in timeline_entries:
@@ -302,6 +327,12 @@ func _queue_background_timeline_job(job: Dictionary) -> void:
 	_timeline_background_generation += 1
 	var next_job: Dictionary = job.duplicate(false)
 	next_job["generation"] = int(_timeline_background_generation)
+	if _should_run_background_timeline_job_on_main_thread():
+		_timeline_background_pending_job = next_job
+		if not _timeline_background_main_thread_scheduled:
+			_timeline_background_main_thread_scheduled = true
+			call_deferred("_flush_main_thread_timeline_job")
+		return
 	if _timeline_background_thread != null:
 		_timeline_background_pending_job = next_job
 		return
@@ -323,6 +354,30 @@ func _start_background_timeline_job(job: Dictionary) -> void:
 	_timeline_background_thread = thread
 	set_process(true)
 
+func _should_run_background_timeline_job_on_main_thread() -> bool:
+	return OS.has_feature("web")
+
+func _flush_main_thread_timeline_job() -> void:
+	_timeline_background_main_thread_scheduled = false
+	if _timeline_background_pending_job.is_empty():
+		return
+	var job := _timeline_background_pending_job
+	_timeline_background_pending_job = {}
+	var result = _timeline_background_worker.execute(job)
+	var finished_generation := int(job.get("generation", -1))
+	if finished_generation != int(_timeline_background_generation):
+		if not _timeline_background_pending_job.is_empty() and not _timeline_background_main_thread_scheduled:
+			_timeline_background_main_thread_scheduled = true
+			call_deferred("_flush_main_thread_timeline_job")
+		return
+	if result is Dictionary:
+		_apply_background_timeline_result(job, Dictionary(result))
+	else:
+		_apply_background_timeline_job_fallback(job)
+	if not _timeline_background_pending_job.is_empty() and not _timeline_background_main_thread_scheduled:
+		_timeline_background_main_thread_scheduled = true
+		call_deferred("_flush_main_thread_timeline_job")
+
 func _poll_background_timeline_worker() -> void:
 	if _timeline_background_thread == null:
 		if _timeline_background_pending_job.is_empty():
@@ -334,13 +389,10 @@ func _poll_background_timeline_worker() -> void:
 		return
 	if _timeline_background_thread.is_alive():
 		return
-
-	var finished_thread := _timeline_background_thread
 	var finished_job := _timeline_background_running_job
+	var result = _timeline_background_thread.wait_to_finish()
 	_timeline_background_thread = null
 	_timeline_background_running_job = {}
-
-	var result = finished_thread.wait_to_finish()
 	var has_newer_job := not _timeline_background_pending_job.is_empty()
 	var finished_generation := int(finished_job.get("generation", -1))
 	var should_apply := (not has_newer_job) and finished_generation == int(_timeline_background_generation)
@@ -568,6 +620,7 @@ func _patch_last_phase_header_end_step_index(end_step_index: int) -> void:
 
 func _shutdown_background_timeline_worker() -> void:
 	_timeline_background_pending_job.clear()
+	_timeline_background_main_thread_scheduled = false
 	if _timeline_background_thread != null:
 		_timeline_background_thread.wait_to_finish()
 		_timeline_background_thread = null
@@ -627,7 +680,11 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 			return
 
 	next_timeline = timeline.duplicate(true) if (timeline is Dictionary) else {}
-	var next_timeline_entries: Array[Dictionary] = _duplicate_entry_array_with_fresh_ids(entries)
+	var next_timeline_entries: Array[Dictionary] = []
+	if not _is_step_timeline_loaded() and _timeline_entries.is_empty() and _extra_entries.is_empty():
+		next_timeline_entries = _adopt_entry_array_preserving_ids(entries)
+	else:
+		next_timeline_entries = _duplicate_entry_array_with_fresh_ids(entries)
 
 	var next_extra_entries: Array[Dictionary] = []
 	if not bool(reset_extra_entries):
@@ -749,34 +806,36 @@ func set_expand_enabled(_enabled: bool) -> void:
 	# 保留接口兼容 FullLogWindow，当前日志面板已移除“全屏”按钮。
 	pass
 
-func set_timeline_head(head_index: int) -> void:
+func set_timeline_head(head_index: int, update_visible_items: bool = true) -> void:
 	var h := int(head_index)
 	if h == _timeline_head_index:
 		return
 	var previous_cursor_index := int(_timeline_cursor_index)
 	var previous_head_index := int(_timeline_head_index)
 	_timeline_head_index = h
-	_apply_timeline_state_delta(previous_cursor_index, previous_head_index)
+	if bool(update_visible_items):
+		_apply_timeline_state_delta(previous_cursor_index, previous_head_index)
 
-func set_timeline_cursor(cursor_index: int) -> void:
+func set_timeline_cursor(cursor_index: int, update_visible_items: bool = true) -> void:
 	var c := int(cursor_index)
 	if c == _timeline_cursor_index:
-		if _timeline_cursor_index >= _timeline_head_index:
+		if bool(update_visible_items) and _timeline_cursor_index >= _timeline_head_index:
 			_request_scroll_to_bottom()
 		return
 	var previous_cursor_index := int(_timeline_cursor_index)
 	var previous_head_index := int(_timeline_head_index)
 	_timeline_cursor_index = c
 	var should_scroll_to_cursor := _timeline_cursor_index < _timeline_head_index
-	_apply_timeline_state_delta(previous_cursor_index, previous_head_index, should_scroll_to_cursor)
-	if not should_scroll_to_cursor:
+	if bool(update_visible_items):
+		_apply_timeline_state_delta(previous_cursor_index, previous_head_index, should_scroll_to_cursor)
+	if bool(update_visible_items) and not should_scroll_to_cursor:
 		_request_scroll_to_bottom()
 
-func set_timeline_head_cursor(head_index: int, cursor_index: int) -> void:
+func set_timeline_head_cursor(head_index: int, cursor_index: int, update_visible_items: bool = true) -> void:
 	var h := int(head_index)
 	var c := int(cursor_index)
 	if h == _timeline_head_index and c == _timeline_cursor_index:
-		if c >= h:
+		if bool(update_visible_items) and c >= h:
 			_request_scroll_to_bottom()
 		return
 	var previous_cursor_index := int(_timeline_cursor_index)
@@ -784,8 +843,9 @@ func set_timeline_head_cursor(head_index: int, cursor_index: int) -> void:
 	_timeline_head_index = h
 	_timeline_cursor_index = c
 	var should_scroll_to_cursor := c < h
-	_apply_timeline_state_delta(previous_cursor_index, previous_head_index, should_scroll_to_cursor)
-	if not should_scroll_to_cursor:
+	if bool(update_visible_items):
+		_apply_timeline_state_delta(previous_cursor_index, previous_head_index, should_scroll_to_cursor)
+	if bool(update_visible_items) and not should_scroll_to_cursor:
 		_request_scroll_to_bottom()
 
 func set_entry_command_index(entry_id: int, command_index: int) -> void:

@@ -133,7 +133,7 @@ static func build_info_from_prebuilt_entries(timeline: Dictionary, entries: Arra
 		for entry_val in entries:
 			if not (entry_val is Dictionary):
 				continue
-			normalized_entries.append(Dictionary(entry_val).duplicate(true))
+			normalized_entries.append(Dictionary(entry_val).duplicate(false))
 
 	var steps_val = timeline.get("steps", [])
 	var steps: Array = steps_val if (steps_val is Array) else []

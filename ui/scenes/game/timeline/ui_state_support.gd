@@ -17,9 +17,10 @@ static func sync_ui(
 	set_replay_bar_state: Callable,
 	hide_replay_bar: Callable
 ) -> void:
+	var log_panel_visible := _is_log_panel_visible_for_timeline_updates(game_log_panel)
 	if is_instance_valid(game_log_panel):
 		if game_log_panel.has_method("set_timeline_head_cursor"):
-			game_log_panel.call("set_timeline_head_cursor", int(head_index), int(cursor_index))
+			game_log_panel.call("set_timeline_head_cursor", int(head_index), int(cursor_index), bool(log_panel_visible))
 		else:
 			game_log_panel.call("set_timeline_head", int(head_index))
 			game_log_panel.call("set_timeline_cursor", int(cursor_index))
@@ -49,6 +50,15 @@ static func sync_ui(
 				get_online_resync_in_progress
 			)
 		)
+
+static func _is_log_panel_visible_for_timeline_updates(game_log_panel: Object) -> bool:
+	if game_log_panel == null or not is_instance_valid(game_log_panel):
+		return false
+	if game_log_panel is CanvasItem:
+		return bool((game_log_panel as CanvasItem).is_visible_in_tree())
+	if game_log_panel.has_method("is_visible_in_tree"):
+		return bool(game_log_panel.call("is_visible_in_tree"))
+	return true
 
 static func resolve_action_panel_disable_reason(
 	head_index: int,

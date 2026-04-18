@@ -262,6 +262,15 @@ func request_live_log_timeline_refresh() -> void:
 	_live_history_refresh_scheduled = true
 	call_deferred("_flush_live_log_timeline_refresh")
 
+func request_live_log_timeline_refresh_deferred() -> void:
+	if _replay_mode_active:
+		return
+	_live_history_dirty = true
+	if _live_history_refresh_scheduled:
+		return
+	_live_history_refresh_scheduled = true
+	call_deferred("_flush_live_log_timeline_refresh")
+
 func _flush_live_log_timeline_refresh() -> void:
 	_live_history_refresh_scheduled = false
 	if _is_history_cursor_detached_from_live_head():
@@ -283,6 +292,15 @@ func _build_live_history_signature(runtime_engine: GameEngine) -> Dictionary:
 		"timeline_history_size": int(runtime_engine.command_history.size()),
 	}
 
+func _is_log_panel_visible() -> bool:
+	if _game_log_panel == null or not is_instance_valid(_game_log_panel):
+		return false
+	if _game_log_panel is CanvasItem:
+		return bool((_game_log_panel as CanvasItem).is_visible_in_tree())
+	if _game_log_panel.has_method("is_visible_in_tree"):
+		return bool(_game_log_panel.call("is_visible_in_tree"))
+	return bool(_game_log_panel.visible)
+
 func _can_reuse_live_history(signature: Dictionary) -> bool:
 	if _live_history_dirty:
 		return false
@@ -295,11 +313,17 @@ func _can_reuse_live_history(signature: Dictionary) -> bool:
 func _sync_live_log_timeline_state_to_panel() -> void:
 	if not is_instance_valid(_game_log_panel):
 		return
+	var update_visible_items := _is_log_panel_visible()
 	if _game_log_panel.has_method("set_timeline_head_cursor"):
-		_game_log_panel.call("set_timeline_head_cursor", _history_head_step_index, _history_cursor_step_index)
+		_game_log_panel.call(
+			"set_timeline_head_cursor",
+			_history_head_step_index,
+			_history_cursor_step_index,
+			update_visible_items
+		)
 		return
-	_game_log_panel.call("set_timeline_head", _history_head_step_index)
-	_game_log_panel.call("set_timeline_cursor", _history_cursor_step_index)
+	_game_log_panel.call("set_timeline_head", _history_head_step_index, update_visible_items)
+	_game_log_panel.call("set_timeline_cursor", _history_cursor_step_index, update_visible_items)
 
 func apply_live_log_timeline_from_engine(force_rebuild: bool = false) -> void:
 	# M4.3：正常对局（实时）也使用 step_timeline 来渲染日志结构。
