@@ -5,6 +5,7 @@ extends RefCounted
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 
 static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var engine := GameEngine.new()
@@ -81,11 +82,55 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	if rr3.ok:
 		return Result.failure("仅 1 名招聘员时不应允许第三次招聘（应为 2 次）")
 
+	var provider_track := _test_recruit_explicit_staff_id_consumes_selected_provider(player_count, seed)
+	if not provider_track.ok:
+		return provider_track
+
 	return Result.success({
 		"player_count": player_count,
 		"seed": seed,
 		"tested_player": first_actor
 	})
+
+static func _test_recruit_explicit_staff_id_consumes_selected_provider(player_count: int, seed: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed + 77)
+	if not init.ok:
+		return Result.failure("explicit recruit staff 初始化失败: %s" % init.error)
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 30)
+	if not to_working.ok:
+		return to_working
+	var state := engine.get_state()
+	var actor := state.get_current_player_id()
+
+	var take := StateUpdaterClass.take_from_pool(state, "recruiting_girl", 1)
+	if not take.ok:
+		return Result.failure("explicit recruit staff 取出 recruiting_girl 失败: %s" % take.error)
+	var add := StateUpdaterClass.add_employee(state, actor, "recruiting_girl", false)
+	if not add.ok:
+		return Result.failure("explicit recruit staff 添加 recruiting_girl 失败: %s" % add.error)
+	var staff_id := int(Dictionary(add.value).get("staff_id", -1))
+	if staff_id <= 0:
+		return Result.failure("explicit recruit staff staff_id 无效: %s" % str(add.value))
+
+	var recruit := engine.execute_command(Command.create("recruit", actor, {
+		"employee_type": "waitress",
+		"staff_id": staff_id,
+	}))
+	if not recruit.ok:
+		return Result.failure("显式指定招聘员工的 recruit 应成功: %s" % recruit.error)
+
+	state = engine.get_state()
+	var staff_usage: Dictionary = Dictionary(state.round_state.get("staff_usage", {}))
+	var ceo_staff_id := int(Array(state.get_player(actor).get("employees_staff_ids", []))[0])
+	var recruiter_usage: Dictionary = Dictionary(staff_usage.get(staff_id, {}))
+	if int(recruiter_usage.get("recruit", 0)) != 1:
+		return Result.failure("显式 recruit 后 recruiting_girl staff_usage[%d].recruit 应为 1，实际: %s" % [staff_id, str(staff_usage)])
+	if ceo_staff_id != staff_id:
+		var ceo_usage: Dictionary = Dictionary(staff_usage.get(ceo_staff_id, {}))
+		if int(ceo_usage.get("recruit", 0)) != 0:
+			return Result.failure("显式 recruit 后 CEO 不应被记为已使用，实际: %s" % str(staff_usage))
+	return Result.success()
 
 static func _complete_order_of_business(engine: GameEngine) -> Result:
 	var state := engine.get_state()

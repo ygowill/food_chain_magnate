@@ -58,6 +58,88 @@ static func _compute_train_steps_within_limit(from_employee: String, to_employee
 
 	return -1
 
+func _read_optional_source_staff_id(command: Command) -> Result:
+	if not command.params.has("staff_id") and not command.params.has("source_staff_id"):
+		return Result.success(-1)
+	var key := "staff_id" if command.params.has("staff_id") else "source_staff_id"
+	var staff_id_result := require_int_param(command, key)
+	if not staff_id_result.ok:
+		return staff_id_result
+	var staff_id := int(staff_id_result.value)
+	if staff_id <= 0:
+		return Result.failure("%s 必须 > 0，实际: %d" % [key, staff_id])
+	return Result.success(staff_id)
+
+func _resolve_train_source_staff_id(
+	state: GameState,
+	player_id: int,
+	from_employee: String,
+	explicit_staff_id: int,
+	source_zone_keys: Array[String],
+	multi_trainer_on_one: bool
+) -> Result:
+	if state == null:
+		return Result.failure("train: state 为空")
+	if from_employee.is_empty():
+		return Result.failure("train: from_employee 不能为空")
+	if source_zone_keys.is_empty():
+		return Result.failure("train: source_zone_keys 不能为空")
+
+	var candidates: Array[int] = []
+	if explicit_staff_id > 0:
+		var emp_read := StaffStateClass.get_staff_employee_type(state, player_id, explicit_staff_id)
+		if not emp_read.ok:
+			return emp_read
+		var actual_employee := str(emp_read.value).strip_edges()
+		if actual_employee != from_employee:
+			return Result.failure("staff_id=%d 与 from_employee=%s 不匹配（实际: %s）" % [explicit_staff_id, from_employee, actual_employee])
+		var zone_read := StaffStateClass.get_staff_zone(state, player_id, explicit_staff_id)
+		if not zone_read.ok:
+			return zone_read
+		var actual_zone := str(zone_read.value).strip_edges()
+		if actual_zone.is_empty():
+			return Result.failure("train: staff_id=%d 不在可培训区域" % explicit_staff_id)
+		if source_zone_keys.find(actual_zone) < 0:
+			return Result.failure("train: staff_id=%d 不在允许的培训来源区域: %s" % [explicit_staff_id, actual_zone])
+		candidates.append(explicit_staff_id)
+	else:
+		var ids_read := StaffStateClass.find_staff_ids_by_employee_type(state, player_id, from_employee, source_zone_keys)
+		if not ids_read.ok:
+			return ids_read
+		for staff_id_val in ids_read.value:
+			var staff_id := int(staff_id_val)
+			if staff_id > 0:
+				candidates.append(staff_id)
+		candidates.sort()
+
+	for staff_id in candidates:
+		return Result.success(staff_id)
+
+	if explicit_staff_id > 0:
+		return Result.failure("本回合该员工已经被培训过: staff_id=%d" % explicit_staff_id)
+	return Result.failure("本回合没有可继续培训的员工: %s" % from_employee)
+
+func _resolve_trainer_staff_id_for_allocation(
+	state: GameState,
+	player_id: int,
+	trainer_employee_type: String,
+	instance_idx: int
+) -> Result:
+	var trainer_id := str(trainer_employee_type).strip_edges()
+	if trainer_id.is_empty():
+		return Result.failure("train: trainer_id 为空")
+	var ids_read := StaffStateClass.find_staff_ids_by_employee_type(state, player_id, trainer_id, ["employees"])
+	if not ids_read.ok:
+		return ids_read
+	var ids: Array = ids_read.value
+	if ids.is_empty():
+		return Result.failure("train: 找不到培训员 staff_id: %s" % trainer_id)
+	var idx := int(instance_idx)
+	if idx < 0:
+		return Result.failure("train: trainer_instance_idx 无效: %d" % idx)
+	var mapped_idx := idx % ids.size()
+	return Result.success(int(ids[mapped_idx]))
+
 func _init() -> void:
 	action_id = "train"
 	display_name = "培训"
@@ -141,6 +223,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not used_read.ok:
 		return used_read
 	var used := int(used_read.value)
+	var requested_source_staff_read := _read_optional_source_staff_id(command)
+	if not requested_source_staff_read.ok:
+		return requested_source_staff_read
+	var requested_source_staff_id := int(requested_source_staff_read.value)
 
 	# 仅允许培训“待命”员工
 	var reserve_read := TrainEmployeeLocksClass._require_player_string_array(player, "reserve_employees", "train: player.reserve_employees")
@@ -159,6 +245,11 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var has_pending := pending_count > 0
 	var has_active := EmployeeRulesClass.count_active(player, from_employee) > 0
 	var can_train_from_active := bool(player.get("train_from_active_same_color", false))
+	var source_zone_keys: Array[String] = []
+	if has_reserve:
+		source_zone_keys.append("reserve_employees")
+	elif can_train_from_active and has_active:
+		source_zone_keys.append("employees")
 
 	# 若存在“缺货预支”待培训员工，则必须优先清账（避免占用培训次数导致无法离开 Train 子阶段）
 	if pending_total > 0 and not has_pending:
@@ -186,6 +277,17 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not (multi_val is bool):
 		return Result.failure("train: player.multi_trainer_on_one 类型错误（期望 bool）")
 	var multi: bool = bool(multi_val)
+	if not has_pending:
+		var source_staff_read := _resolve_train_source_staff_id(
+			state,
+			command.actor,
+			from_employee,
+			requested_source_staff_id,
+			source_zone_keys,
+			multi
+		)
+		if not source_staff_read.ok:
+			return source_staff_read
 	var lock_check := TrainEmployeeLocksClass.plan_training(
 		state, command.actor, from_employee, steps_required, multi, reserve, false, to_employee
 	)
@@ -239,6 +341,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return to_result
 	var from_employee: String = from_result.value
 	var to_employee: String = to_result.value
+	var requested_source_staff_read := _read_optional_source_staff_id(command)
+	if not requested_source_staff_read.ok:
+		return requested_source_staff_read
+	var requested_source_staff_id := int(requested_source_staff_read.value)
 
 	var player_val = state.players[player_id]
 	if not (player_val is Dictionary):
@@ -283,11 +389,13 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 			source_zone_key = "employees"
 		if source_zone_key.is_empty():
 			return Result.failure("待命区/在岗区不存在员工: %s" % from_employee)
-		var source_staff_read := StaffStateClass.find_smallest_staff_id_by_employee_type(
+		var source_staff_read := _resolve_train_source_staff_id(
 			state,
 			player_id,
 			from_employee,
-			[source_zone_key]
+			requested_source_staff_id,
+			[source_zone_key],
+			multi
 		)
 		if not source_staff_read.ok:
 			return source_staff_read
@@ -320,6 +428,15 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var alloc_info: Dictionary = alloc.value if (alloc.value is Dictionary) else {}
 	var trainer_id := str(alloc_info.get("trainer_id", "")).strip_edges()
 	var trainer_instance_idx := int(alloc_info.get("instance_idx", -1))
+	var trainer_staff_id := -1
+	if not trainer_id.is_empty():
+		var trainer_staff_read := _resolve_trainer_staff_id_for_allocation(state, player_id, trainer_id, trainer_instance_idx)
+		if not trainer_staff_read.ok:
+			return trainer_staff_read
+		trainer_staff_id = int(trainer_staff_read.value)
+		var trainer_usage := StaffStateClass.increment_staff_track_usage(state, trainer_staff_id, "train", steps_required)
+		if not trainer_usage.ok:
+			return trainer_usage
 	var target_staff_id := -1
 
 	var target_to_reserve := true
@@ -387,6 +504,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"target_staff_id": target_staff_id,
 		"trainer_id": trainer_id,
 		"trainer_instance_idx": trainer_instance_idx,
+		"trainer_staff_id": trainer_staff_id,
 	})
 	state.round_state["train_events"] = train_events
 

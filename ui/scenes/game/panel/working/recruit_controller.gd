@@ -44,6 +44,8 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 		return
 	if force_full_refresh and recruit_panel.has_method("set_employee_pool"):
 		recruit_panel.set_employee_pool(state.employee_pool)
+	if recruit_panel.has_method("set_recruiters"):
+		recruit_panel.set_recruiters(_build_recruiters(state, state.get_current_player_id()))
 	if recruit_panel.has_method("set_recruit_count"):
 		var actor := state.get_current_player_id()
 		var counts := _compute_recruit_counts(state, actor)
@@ -69,6 +71,8 @@ func show() -> void:
 
 	if recruit_panel.has_method("set_employee_pool"):
 		recruit_panel.set_employee_pool(state.employee_pool)
+	if recruit_panel.has_method("set_recruiters"):
+		recruit_panel.set_recruiters(_build_recruiters(state, state.get_current_player_id()))
 
 	if recruit_panel.has_method("set_recruit_count"):
 		var actor = state.get_current_player_id()
@@ -89,21 +93,30 @@ func _compute_recruit_counts(state: GameState, player_id: int) -> Dictionary:
 	var used: int = EmployeeRulesClass.get_action_count(state, player_id, "recruit")
 	return {"remaining": maxi(0, total - used), "total": total}
 
-func _on_recruit_requested(employee_type: String) -> void:
+func _build_recruiters(state: GameState, player_id: int) -> Array[Dictionary]:
+	if state == null:
+		return []
+	return EmployeeRulesClass.get_recruit_providers_for_working(state, player_id)
+
+func _on_recruit_requested(employee_type: String, staff_id: int) -> void:
 	if _scene == null or _scene.game_engine == null:
 		return
 	if not _execute_command.is_valid():
 		return
 	var current_player_id = _scene.game_engine.get_state().get_current_player_id()
-	var result: Result = _execute_command.call(Command.create("recruit", current_player_id, {"employee_type": employee_type}))
+	var result: Result = _execute_command.call(Command.create("recruit", current_player_id, {
+		"employee_type": employee_type,
+		"staff_id": staff_id,
+	}))
 
 	if result.ok:
 		var state = _scene.game_engine.get_state()
 		if is_instance_valid(recruit_panel) and recruit_panel.has_method("set_employee_pool"):
 			recruit_panel.set_employee_pool(state.employee_pool)
+		if is_instance_valid(recruit_panel) and recruit_panel.has_method("set_recruiters"):
+			recruit_panel.set_recruiters(_build_recruiters(state, state.get_current_player_id()))
 		sync(state)
 
 func _on_cancelled() -> void:
 	if _hide_all.is_valid():
 		_hide_all.call()
-

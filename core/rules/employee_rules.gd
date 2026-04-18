@@ -10,6 +10,7 @@ const Limits = preload("res://core/rules/employee_rules/limits.gd")
 const ActionCounts = preload("res://core/rules/employee_rules/action_counts.gd")
 const ImmediateTrainPending = preload("res://core/rules/employee_rules/immediate_train_pending.gd")
 const TrainSlotUsage = preload("res://core/rules/employee_rules/train_slot_usage.gd")
+const RecruitUsageProviders = preload("res://core/rules/employee_rules/recruit_usage_providers.gd")
 
 static func is_entry_level(employee_id: String) -> bool:
 	return Counts.is_entry_level(employee_id)
@@ -52,6 +53,15 @@ static func try_get_recruit_limit_for_working(state: GameState, player_id: int) 
 
 static func get_recruit_limit_for_working(state: GameState, player_id: int) -> int:
 	return Limits.get_recruit_limit_for_working(state, player_id)
+
+static func try_get_recruit_providers_for_working(state: GameState, player_id: int) -> Result:
+	return RecruitUsageProviders.try_get_recruit_providers_for_working(state, player_id)
+
+static func get_recruit_providers_for_working(state: GameState, player_id: int) -> Array[Dictionary]:
+	return RecruitUsageProviders.get_recruit_providers_for_working(state, player_id)
+
+static func try_resolve_recruit_provider(state: GameState, player_id: int, explicit_staff_id: int = -1) -> Result:
+	return RecruitUsageProviders.try_resolve_recruit_provider(state, player_id, explicit_staff_id)
 
 static func get_train_limit(player: Dictionary) -> int:
 	return Limits.get_train_limit(player)

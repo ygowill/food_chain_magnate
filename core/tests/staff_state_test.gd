@@ -18,7 +18,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_roundtrip_preserves_staff_registry_and_round_state(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 4})
+	r = _test_track_usage_helpers(player_count, seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 5})
 
 static func _make_engine(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -185,4 +188,46 @@ static func _test_roundtrip_preserves_staff_registry_and_round_state(player_coun
 		return Result.failure("roundtrip 后 staff_registry 缺少新增 staff 记录")
 	if int(restored.next_staff_id) <= max(active_staff_id, reserve_staff_id):
 		return Result.failure("roundtrip 后 next_staff_id 应大于现有最大 staff_id，实际: %d" % int(restored.next_staff_id))
+	return Result.success()
+
+static func _test_track_usage_helpers(player_count: int, seed_val: int) -> Result:
+	var engine_read := _make_engine(player_count, seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var state := engine.get_state()
+
+	var take := StateUpdaterClass.take_from_pool(state, "trainer", 1)
+	if not take.ok:
+		return Result.failure("track usage take trainer 失败: %s" % take.error)
+	var add := StateUpdaterClass.add_employee(state, 0, "trainer", false)
+	if not add.ok:
+		return Result.failure("track usage add trainer 失败: %s" % add.error)
+	var staff_id := int(Dictionary(add.value).get("staff_id", -1))
+	if staff_id <= 0:
+		return Result.failure("track usage 应返回有效 staff_id，实际: %s" % str(add.value))
+
+	var used_before := StaffStateClass.get_staff_track_used(state, staff_id, "train")
+	if not used_before.ok:
+		return Result.failure("get_staff_track_used(before) 失败: %s" % used_before.error)
+	if int(used_before.value) != 0:
+		return Result.failure("初始 train 轨道使用次数应为 0，实际: %s" % str(used_before.value))
+
+	var inc := StaffStateClass.increment_staff_track_usage(state, staff_id, "train", 2)
+	if not inc.ok:
+		return Result.failure("increment_staff_track_usage 失败: %s" % inc.error)
+	if int(inc.value) != 2:
+		return Result.failure("increment_staff_track_usage 后应为 2，实际: %s" % str(inc.value))
+
+	var used_after := StaffStateClass.get_staff_track_used(state, staff_id, "train")
+	if not used_after.ok:
+		return Result.failure("get_staff_track_used(after) 失败: %s" % used_after.error)
+	if int(used_after.value) != 2:
+		return Result.failure("train 轨道使用次数应为 2，实际: %s" % str(used_after.value))
+
+	var event_before := StaffStateClass.get_staff_train_event_count(state, staff_id)
+	if not event_before.ok:
+		return Result.failure("get_staff_train_event_count(before) 失败: %s" % event_before.error)
+	if int(event_before.value) != 0:
+		return Result.failure("初始培训事件次数应为 0，实际: %s" % str(event_before.value))
 	return Result.success()

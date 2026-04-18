@@ -10,6 +10,7 @@ const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 static func _compute_min_steps_to_any_in_stock_target(
 	from_employee: String,
@@ -86,6 +87,9 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 		return false
 	var used := int(used_read.value)
 	if used >= limit:
+		return false
+	var provider_read := EmployeeRulesClass.try_resolve_recruit_provider(state, player_id)
+	if not provider_read.ok:
 		return false
 
 	var player := state.get_player(player_id)
@@ -189,6 +193,18 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if used >= limit:
 		return Result.failure("本子阶段招聘次数已用完: %d/%d" % [used, limit])
 
+	var staff_id := -1
+	if command.params.has("staff_id"):
+		var staff_id_result := require_int_param(command, "staff_id")
+		if not staff_id_result.ok:
+			return staff_id_result
+		staff_id = int(staff_id_result.value)
+		if staff_id <= 0:
+			return Result.failure("staff_id 必须 > 0，实际: %d" % staff_id)
+	var provider_read := EmployeeRulesClass.try_resolve_recruit_provider(state, command.actor, staff_id)
+	if not provider_read.ok:
+		return provider_read
+
 	# 公司结构校验（唯一员工约束等）
 	var validator = CompanyStructureValidatorClass.new()
 	var validation: Result = validator.validate(state, command.actor, {
@@ -210,6 +226,23 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var action_count_read := EmployeeRulesClass.try_get_action_count(state, player_id, action_id)
 	if not action_count_read.ok:
 		return action_count_read
+
+	var staff_id := -1
+	if command.params.has("staff_id"):
+		var staff_id_result := require_int_param(command, "staff_id")
+		if not staff_id_result.ok:
+			return staff_id_result
+		staff_id = int(staff_id_result.value)
+		if staff_id <= 0:
+			return Result.failure("staff_id 必须 > 0，实际: %d" % staff_id)
+	var provider_read := EmployeeRulesClass.try_resolve_recruit_provider(state, player_id, staff_id)
+	if not provider_read.ok:
+		return provider_read
+	var provider: Dictionary = provider_read.value
+	var recruiter_staff_id := int(provider.get("staff_id", -1))
+	var recruiter_employee_type := str(provider.get("employee_type", "")).strip_edges()
+	if recruiter_staff_id <= 0 or recruiter_employee_type.is_empty():
+		return Result.failure("recruit: 招聘员工解析结果无效: %s" % str(provider))
 
 	var on_credit := int(state.employee_pool.get(employee_type, 0)) <= 0
 	if on_credit:
@@ -246,65 +279,17 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		if not ms.ok:
 			warnings.append("里程碑触发失败(Recruit): %s" % ms.error)
 
-	# 使用员工：按“招聘次数/容量”推导哪些招聘员必然被使用，并对每次推导出的使用调用一次 UseEmployee。
-	var player_now := state.get_player(player_id)
-	var total_cap := EmployeeRulesClass.get_recruit_limit_for_working(state, player_id)
-	var seen := {}
-	var candidates: Array[String] = []
-	for emp_val in Array(player_now.get("employees", [])):
-		if not (emp_val is String):
-			continue
-		var emp_id: String = str(emp_val)
-		if emp_id.is_empty():
-			continue
-		if seen.has(emp_id):
-			continue
-		seen[emp_id] = true
-		var def_val = EmployeeRegistryClass.get_def(emp_id)
-		if def_val == null or not (def_val is EmployeeDef):
-			continue
-		var def: EmployeeDef = def_val
-		if int(def.recruit_capacity) <= 0:
-			continue
-		if not def.has_usage_tag("use:recruit"):
-			continue
-		candidates.append(emp_id)
-	candidates.sort()
-
-	for emp_id in candidates:
-		var def_val = EmployeeRegistryClass.get_def(emp_id)
-		if def_val == null or not (def_val is EmployeeDef):
-			continue
-		var def: EmployeeDef = def_val
-		var active_count := EmployeeRulesClass.count_active(player_now, emp_id)
-		if active_count <= 0:
-			continue
-		var mult := EmployeeRulesClass.get_working_employee_multiplier(state, player_id, emp_id)
-		var cap := active_count * int(def.recruit_capacity) * mult
-		if cap <= 0:
-			continue
-		var cap_without := total_cap - cap
-		var inferred := mini(cap, maxi(0, recruit_used_now - cap_without))
-
-		var prev_read := RoundStateCountersClass.get_player_key_count(state.round_state, "inferred_use_employee_recruit", player_id, emp_id)
-		if not prev_read.ok:
-			return prev_read
-		var prev: int = int(prev_read.value)
-		var delta := inferred - prev
-		if delta <= 0:
-			continue
-
-		var inc := RoundStateCountersClass.increment_player_key_count(state.round_state, "inferred_use_employee_recruit", player_id, emp_id, delta)
-		if not inc.ok:
-			return inc
-
-		for _k in range(delta):
-			EmployeeUsageHelperClass.append_use_employee_warning(warnings, state, player_id, emp_id)
+	var use_staff := StaffStateClass.increment_staff_track_usage(state, recruiter_staff_id, "recruit", 1)
+	if not use_staff.ok:
+		return use_staff
+	EmployeeUsageHelperClass.append_use_employee_warning(warnings, state, player_id, recruiter_employee_type)
 
 	var result := Result.success({
 		"employee_type": employee_type,
 		"player_id": player_id,
-		"on_credit": on_credit
+		"on_credit": on_credit,
+		"recruiter_staff_id": recruiter_staff_id,
+		"recruiter_employee_type": recruiter_employee_type
 	}).with_warnings(warnings)
 	if on_credit:
 		result.with_warning("缺货预支：必须在 Train 子阶段紧接培训")
@@ -319,6 +304,15 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 	if employee_type.is_empty():
 		return events
 	var on_credit := int(old_state.employee_pool.get(employee_type, 0)) <= 0
+	var recruiter_staff_id := -1
+	var provider_read := EmployeeRulesClass.try_resolve_recruit_provider(
+		old_state,
+		command.actor,
+		int(command.params.get("staff_id", -1))
+	)
+	if provider_read.ok:
+		var provider: Dictionary = provider_read.value
+		recruiter_staff_id = int(provider.get("staff_id", -1))
 
 	events.append({
 		"type": EventBus.EventType.EMPLOYEE_RECRUITED,
@@ -326,7 +320,8 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 			"player_id": command.actor,
 			"employee_type": employee_type,
 			"to_reserve": true,
-			"on_credit": on_credit
+			"on_credit": on_credit,
+			"recruiter_staff_id": recruiter_staff_id
 		}
 	})
 

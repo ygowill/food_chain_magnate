@@ -114,6 +114,9 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var smallest_staff := _test_fire_defaults_to_smallest_staff_id(player_count, seed_val)
 	if not smallest_staff.ok:
 		return smallest_staff
+	var explicit_staff := _test_fire_respects_explicit_staff_id(player_count, seed_val)
+	if not explicit_staff.ok:
+		return explicit_staff
 
 	return Result.success({
 		"player_count": player_count,
@@ -232,3 +235,47 @@ static func _restore_net_context(prev_mode, prev_local_player_id: int) -> void:
 		return
 	NetContext.mode = prev_mode
 	NetContext.local_player_id = prev_local_player_id
+
+static func _test_fire_respects_explicit_staff_id(player_count: int, seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val + 404)
+	if not init.ok:
+		return Result.failure("explicit fire 测试初始化失败: %s" % init.error)
+
+	var to_payday := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_PAYDAY, 30)
+	if not to_payday.ok:
+		return to_payday
+
+	var state := engine.get_state()
+	var actor := state.get_current_player_id()
+	for _i in range(2):
+		var take := StateUpdaterClass.take_from_pool(state, "burger_cook", 1)
+		if not take.ok:
+			return Result.failure("explicit fire 测试取出 burger_cook 失败: %s" % take.error)
+	var add_a := StateUpdaterClass.add_employee(state, actor, "burger_cook", true)
+	if not add_a.ok:
+		return Result.failure("explicit fire 测试添加第一张 burger_cook 失败: %s" % add_a.error)
+	var add_b := StateUpdaterClass.add_employee(state, actor, "burger_cook", true)
+	if not add_b.ok:
+		return Result.failure("explicit fire 测试添加第二张 burger_cook 失败: %s" % add_b.error)
+	var staff_a := int(Dictionary(add_a.value).get("staff_id", -1))
+	var staff_b := int(Dictionary(add_b.value).get("staff_id", -1))
+	if staff_a <= 0 or staff_b <= 0 or staff_a == staff_b:
+		return Result.failure("explicit fire 测试 staff_id 无效: %s / %s" % [str(add_a.value), str(add_b.value)])
+	var target_remove := maxi(staff_a, staff_b)
+	var target_keep := mini(staff_a, staff_b)
+
+	var fire := engine.execute_command(Command.create("fire", actor, {
+		"employee_id": "burger_cook",
+		"staff_id": target_remove,
+	}))
+	if not fire.ok:
+		return Result.failure("explicit fire 测试执行失败: %s" % fire.error)
+
+	state = engine.get_state()
+	var registry: Dictionary = Dictionary(state.get_player(actor).get("staff_registry", {}))
+	if registry.has(target_remove):
+		return Result.failure("显式 fire 应移除 staff_id=%d，实际 registry=%s" % [target_remove, str(registry)])
+	if not registry.has(target_keep):
+		return Result.failure("显式 fire 不应移除 staff_id=%d，实际 registry=%s" % [target_keep, str(registry)])
+	return Result.success()

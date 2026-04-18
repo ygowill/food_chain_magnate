@@ -8,6 +8,7 @@ const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const TrainActionClass = preload("res://gameplay/actions/train_action.gd")
 const TrainPanelScene = preload("res://ui/components/train_panel/train_panel.tscn")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 var _scene = null
 var _execute_command: Callable = Callable()
@@ -73,54 +74,31 @@ func _refresh_for_state(state: GameState) -> void:
 
 	if train_panel.has_method("set_trainable_employees"):
 		var pending_total := int(EmployeeRulesClass.get_immediate_train_pending_total(state, actor_id))
-		var sources := {}
-		var requires_same_color := {}
+		var source_items: Array[Dictionary] = []
 		var section_text := "待命区员工（点击选择）"
-		var badges := {}
 
 		if pending_total > 0:
-			sources = _read_immediate_train_pending_sources(state, actor_id)
+			source_items = _build_immediate_train_pending_source_items(state, actor_id)
 			section_text = "缺货预支待培训（必须先清账）"
-			for emp_id in sources.keys():
-				badges[str(emp_id)] = "预支"
 		else:
-			var reserve_counts := _build_employee_type_counts(Array(current_player.get("reserve_employees", [])))
-			sources = reserve_counts.duplicate(true)
+			source_items = _build_trainable_source_items_from_staff(state, actor_id)
 			var can_train_from_active := bool(current_player.get("train_from_active_same_color", false))
 			if can_train_from_active:
 				section_text = "待命/在岗员工（点击选择；在岗同色培训：目标需同色）"
-				var active_counts := _build_employee_type_counts(Array(current_player.get("employees", [])))
-				for emp_id in active_counts.keys():
-					sources[str(emp_id)] = int(sources.get(emp_id, 0)) + int(active_counts.get(emp_id, 0))
-				for emp_id in sources.keys():
-					var active_count: int = int(active_counts.get(emp_id, 0))
-					var reserve_count: int = int(reserve_counts.get(emp_id, 0))
-					if active_count > 0 and reserve_count <= 0:
-						requires_same_color[str(emp_id)] = true
-
-		sources = _filter_sources_with_valid_targets(state, actor_id, sources)
-		var filtered_requires_same_color := {}
-		for emp_id in requires_same_color.keys():
-			if sources.has(emp_id):
-				filtered_requires_same_color[str(emp_id)] = bool(requires_same_color.get(emp_id, false))
-		requires_same_color = filtered_requires_same_color
-		var filtered_badges := {}
-		for emp_id in badges.keys():
-			if sources.has(emp_id):
-				filtered_badges[str(emp_id)] = str(badges.get(emp_id, ""))
-		badges = filtered_badges
-
-		if train_panel.has_method("set_source_requires_same_color"):
-			train_panel.set_source_requires_same_color(requires_same_color)
-		if train_panel.has_method("set_source_badges"):
-			train_panel.set_source_badges(badges)
-		if train_panel.has_method("set_trainable_sources"):
-			train_panel.set_trainable_sources(sources, section_text)
+		source_items = _filter_source_items_with_valid_targets(state, actor_id, source_items)
+		if train_panel.has_method("set_trainable_source_items"):
+			train_panel.set_trainable_source_items(source_items, section_text)
+		elif train_panel.has_method("set_trainable_sources"):
+			train_panel.set_trainable_sources({}, section_text)
 		else:
 			var reserve: Array[String] = []
-			for emp_id in sources.keys():
-				reserve.append(str(emp_id))
-			reserve.sort()
+			for item_val in source_items:
+				if not (item_val is Dictionary):
+					continue
+				var item: Dictionary = item_val
+				var emp_id := str(item.get("employee_type", ""))
+				if not emp_id.is_empty():
+					reserve.append(emp_id)
 			train_panel.set_trainable_employees(reserve)
 
 	if train_panel.has_method("set_train_count"):
@@ -137,37 +115,112 @@ func _compute_train_counts(state: GameState, player_id: int) -> Dictionary:
 	var used: int = EmployeeRulesClass.get_action_count(state, player_id, "train")
 	return {"remaining": maxi(0, total - used), "total": total}
 
-func _build_employee_type_counts(values: Array) -> Dictionary:
-	var counts := {}
-	for v in values:
-		if not (v is String):
-			continue
-		var emp_id: String = str(v)
-		if emp_id.is_empty():
-			continue
-		counts[emp_id] = int(counts.get(emp_id, 0)) + 1
-	return counts
-
-func _filter_sources_with_valid_targets(state: GameState, actor_id: int, sources: Dictionary) -> Dictionary:
-	var filtered := {}
+func _build_trainable_source_items_from_staff(state: GameState, actor_id: int) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
 	if state == null:
-		return filtered
+		return out
+	var sync_read := StaffStateClass.ensure_state_staff_support(state)
+	if not sync_read.ok:
+		return out
+	var player: Dictionary = state.get_player(actor_id)
+	var can_train_from_active := bool(player.get("train_from_active_same_color", false))
+	var reserve_ids: Array = Array(player.get("reserve_staff_ids", []))
+	var active_ids: Array = Array(player.get("employees_staff_ids", []))
+	var registry: Dictionary = Dictionary(player.get("staff_registry", {}))
 
+	for staff_id_val in reserve_ids:
+		var item := _build_train_source_item_from_registry_entry(registry, int(staff_id_val), "reserve_employees", false, "")
+		if not item.is_empty():
+			out.append(item)
+	if can_train_from_active:
+		for staff_id_val2 in active_ids:
+			var staff_id := int(staff_id_val2)
+			var emp_type := _read_employee_type_from_registry(registry, staff_id)
+			if emp_type.is_empty():
+				continue
+			var reserve_ids_read := StaffStateClass.find_staff_ids_by_employee_type(state, actor_id, emp_type, ["reserve_employees"])
+			var reserve_has_same_type := reserve_ids_read.ok and not Array(reserve_ids_read.value).is_empty()
+			var tag_text := "在岗" if not reserve_has_same_type else ""
+			var item2 := _build_train_source_item_from_registry_entry(registry, staff_id, "employees", true, tag_text)
+			if not item2.is_empty():
+				out.append(item2)
+
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("staff_id", 0)) < int(b.get("staff_id", 0))
+	)
+	return out
+
+func _build_train_source_item_from_registry_entry(
+	registry: Dictionary,
+	staff_id: int,
+	zone_key: String,
+	requires_same_color: bool,
+	tag_text: String
+) -> Dictionary:
+	if staff_id <= 0:
+		return {}
+	if not registry.has(staff_id):
+		return {}
+	var record_val = registry.get(staff_id, null)
+	if not (record_val is Dictionary):
+		return {}
+	var record: Dictionary = record_val
+	var emp_type := str(record.get("employee_type", "")).strip_edges()
+	if emp_type.is_empty():
+		return {}
+	return {
+		"staff_id": staff_id,
+		"employee_type": emp_type,
+		"zone_key": zone_key,
+		"requires_same_color": requires_same_color,
+		"tag_text": tag_text,
+		"badge_count": 1,
+		"enabled": true,
+	}
+
+func _read_employee_type_from_registry(registry: Dictionary, staff_id: int) -> String:
+	if staff_id <= 0 or not registry.has(staff_id):
+		return ""
+	var record_val = registry.get(staff_id, null)
+	if not (record_val is Dictionary):
+		return ""
+	return str(Dictionary(record_val).get("employee_type", "")).strip_edges()
+
+func _build_immediate_train_pending_source_items(state: GameState, player_id: int) -> Array[Dictionary]:
+	var items: Array[Dictionary] = []
+	var sources := _read_immediate_train_pending_sources(state, player_id)
 	for key in sources.keys():
 		if not (key is String):
 			continue
-		var emp_id: String = str(key)
+		var emp_id := str(key).strip_edges()
 		if emp_id.is_empty():
 			continue
-		var count: int = int(sources.get(key, 0))
-		if count <= 0:
-			continue
-		if _source_has_valid_train_target(state, actor_id, emp_id):
-			filtered[emp_id] = count
+		var count := int(sources.get(key, 0))
+		for i in range(count):
+			items.append({
+				"staff_id": -(i + 1 + items.size()),
+				"employee_type": emp_id,
+				"zone_key": "pending",
+				"requires_same_color": false,
+				"tag_text": "预支",
+				"badge_count": 1,
+				"enabled": true,
+			})
+	return items
 
+func _filter_source_items_with_valid_targets(state: GameState, actor_id: int, source_items: Array[Dictionary]) -> Array[Dictionary]:
+	var filtered: Array[Dictionary] = []
+	for item_val in source_items:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		if _source_item_has_valid_train_target(state, actor_id, item):
+			filtered.append(item)
 	return filtered
 
-func _source_has_valid_train_target(state: GameState, actor_id: int, from_employee: String) -> bool:
+func _source_item_has_valid_train_target(state: GameState, actor_id: int, item: Dictionary) -> bool:
+	var from_employee := str(item.get("employee_type", "")).strip_edges()
+	var source_staff_id := int(item.get("staff_id", -1))
 	if state == null or from_employee.is_empty():
 		return false
 
@@ -181,10 +234,13 @@ func _source_has_valid_train_target(state: GameState, actor_id: int, from_employ
 
 	var action := TrainActionClass.new()
 	for target in targets:
-		var validate_result := action.validate(state, Command.create("train", actor_id, {
+		var params := {
 			"from_employee": from_employee,
-			"to_employee": target
-		}))
+			"to_employee": target,
+		}
+		if source_staff_id > 0:
+			params["staff_id"] = source_staff_id
+		var validate_result := action.validate(state, Command.create("train", actor_id, params))
 		if validate_result.ok:
 			return true
 
@@ -268,7 +324,7 @@ func _read_immediate_train_pending_sources(state: GameState, player_id: int) -> 
 
 	return sources
 
-func _on_train_requested(from_employee: String, to_employee: String) -> void:
+func _on_train_requested(from_employee: String, to_employee: String, staff_id: int) -> void:
 	if _scene == null or _scene.game_engine == null:
 		return
 	if not _execute_command.is_valid():
@@ -277,7 +333,8 @@ func _on_train_requested(from_employee: String, to_employee: String) -> void:
 	var current_player_id = _scene.game_engine.get_state().get_current_player_id()
 	var result: Result = _execute_command.call(Command.create("train", current_player_id, {
 		"from_employee": from_employee,
-		"to_employee": to_employee
+		"to_employee": to_employee,
+		"staff_id": staff_id
 	}))
 
 	if result.ok:

@@ -1299,6 +1299,10 @@ static func build_tests(host) -> Array[Dictionary]:
 							"fn": func() -> Result: return TestRefs.TrainControllerSourceFilterTestClass.run(12345),
 						},
 						{
+							"name": "RecruitTrainStaffPickerUiTest",
+							"fn": func() -> Result: return await TestRefs.RecruitTrainStaffPickerUiTestClass.run(),
+						},
+						{
 							"name": "KimchiV2Test",
 							"fn": func() -> Result: return TestRefs.KimchiV2TestClass.run(2, 12345),
 						},

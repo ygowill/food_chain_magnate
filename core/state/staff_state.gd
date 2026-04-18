@@ -480,6 +480,90 @@ static func change_staff_employee_type(state: GameState, player_id: int, staff_i
 		"new_employee_type": target_type,
 	})
 
+static func get_staff_track_used(state: GameState, staff_id: int, track_id: String) -> Result:
+	if state == null:
+		return Result.failure("StaffState.get_staff_track_used: state 为空")
+	if staff_id <= 0:
+		return Result.failure("StaffState.get_staff_track_used: staff_id 必须 > 0，实际: %d" % staff_id)
+	var track := str(track_id).strip_edges()
+	if track.is_empty():
+		return Result.failure("StaffState.get_staff_track_used: track_id 不能为空")
+	var sync_read := ensure_state_staff_support(state)
+	if not sync_read.ok:
+		return sync_read
+	var round_state_read := _ensure_round_state_staff_fields(state.round_state)
+	if not round_state_read.ok:
+		return round_state_read
+	var usage_val = state.round_state.get(STAFF_USAGE_KEY, null)
+	if not (usage_val is Dictionary):
+		return Result.failure("round_state.%s 类型错误（期望 Dictionary）" % STAFF_USAGE_KEY)
+	var usage: Dictionary = usage_val
+	var per_val = usage.get(staff_id, {})
+	if per_val == null:
+		return Result.success(0)
+	if not (per_val is Dictionary):
+		return Result.failure("round_state.%s[%d] 类型错误（期望 Dictionary）" % [STAFF_USAGE_KEY, staff_id])
+	var per: Dictionary = per_val
+	var used := int(per.get(track, 0))
+	if used < 0:
+		return Result.failure("round_state.%s[%d].%s 不能为负数: %d" % [STAFF_USAGE_KEY, staff_id, track, used])
+	return Result.success(used)
+
+static func increment_staff_track_usage(state: GameState, staff_id: int, track_id: String, amount: int = 1) -> Result:
+	if state == null:
+		return Result.failure("StaffState.increment_staff_track_usage: state 为空")
+	if staff_id <= 0:
+		return Result.failure("StaffState.increment_staff_track_usage: staff_id 必须 > 0，实际: %d" % staff_id)
+	var track := str(track_id).strip_edges()
+	if track.is_empty():
+		return Result.failure("StaffState.increment_staff_track_usage: track_id 不能为空")
+	if amount <= 0:
+		return Result.failure("StaffState.increment_staff_track_usage: amount 必须 > 0，实际: %d" % amount)
+	var sync_read := ensure_state_staff_support(state)
+	if not sync_read.ok:
+		return sync_read
+	var round_state_read := _ensure_round_state_staff_fields(state.round_state)
+	if not round_state_read.ok:
+		return round_state_read
+	var usage_val = state.round_state.get(STAFF_USAGE_KEY, null)
+	if not (usage_val is Dictionary):
+		return Result.failure("round_state.%s 类型错误（期望 Dictionary）" % STAFF_USAGE_KEY)
+	var usage: Dictionary = usage_val
+	var per_val = usage.get(staff_id, {})
+	if per_val == null:
+		per_val = {}
+	if not (per_val is Dictionary):
+		return Result.failure("round_state.%s[%d] 类型错误（期望 Dictionary）" % [STAFF_USAGE_KEY, staff_id])
+	var per: Dictionary = per_val
+	var current := int(per.get(track, 0))
+	if current < 0:
+		return Result.failure("round_state.%s[%d].%s 不能为负数: %d" % [STAFF_USAGE_KEY, staff_id, track, current])
+	var updated := current + amount
+	per[track] = updated
+	usage[staff_id] = per
+	state.round_state[STAFF_USAGE_KEY] = usage
+	return Result.success(updated)
+
+static func get_staff_train_event_count(state: GameState, staff_id: int) -> Result:
+	if state == null:
+		return Result.failure("StaffState.get_staff_train_event_count: state 为空")
+	if staff_id <= 0:
+		return Result.failure("StaffState.get_staff_train_event_count: staff_id 必须 > 0，实际: %d" % staff_id)
+	var sync_read := ensure_state_staff_support(state)
+	if not sync_read.ok:
+		return sync_read
+	var round_state_read := _ensure_round_state_staff_fields(state.round_state)
+	if not round_state_read.ok:
+		return round_state_read
+	var counts_val = state.round_state.get(STAFF_TRAIN_EVENT_COUNTS_KEY, null)
+	if not (counts_val is Dictionary):
+		return Result.failure("round_state.%s 类型错误（期望 Dictionary）" % STAFF_TRAIN_EVENT_COUNTS_KEY)
+	var counts: Dictionary = counts_val
+	var current := int(counts.get(staff_id, 0))
+	if current < 0:
+		return Result.failure("round_state.%s[%d] 不能为负数: %d" % [STAFF_TRAIN_EVENT_COUNTS_KEY, staff_id, current])
+	return Result.success(current)
+
 static func increment_staff_train_event_count(state: GameState, staff_id: int, amount: int = 1) -> Result:
 	if state == null:
 		return Result.failure("StaffState.increment_staff_train_event_count: state 为空")

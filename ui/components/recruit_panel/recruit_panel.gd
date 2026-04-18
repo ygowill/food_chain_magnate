@@ -1,9 +1,9 @@
 # 招聘面板组件
-# 显示可招聘的入门级员工，支持招聘操作
+# 上方选择招聘员工卡，下方显示该员工当前可执行的招聘目标。
 class_name RecruitPanel
 extends "res://ui/components/common/right_panel_embeddable_panel.gd"
 
-signal recruit_requested(employee_type: String)
+signal recruit_requested(employee_type: String, staff_id: int)
 signal cancelled()
 
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
@@ -12,14 +12,19 @@ const UiRebuildHelpersClass = preload("res://ui/utils/rebuild_helpers.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 @onready var counter_label: Label = $MarginContainer/VBoxContainer/CounterRow/CounterLabel
+@onready var recruiter_container: HFlowContainer = $MarginContainer/VBoxContainer/RecruiterSection/RecruiterContainer
 @onready var items_container: HFlowContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ItemsContainer
 @onready var cancel_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/CancelButton
 @onready var confirm_btn: Button = $MarginContainer/VBoxContainer/ButtonRow/ConfirmButton
 
 var _employee_pool: Dictionary = {}  # employee_type -> count
+var _recruiters: Array[Dictionary] = []  # [{staff_id, employee_type, capacity, used, remaining}]
+var _recruiter_by_key: Dictionary = {}  # picker key -> recruiter info
 var _employee_registry = null
 var _recruit_remaining: int = 0
 var _recruit_total: int = 0
+var _selected_recruiter_key: String = ""
+var _selected_recruiter_staff_id: int = -1
 var _selected_employee_type: String = ""
 
 func _get_confirm_button() -> Button:
@@ -34,12 +39,17 @@ func _get_relayout_delay_frames() -> int:
 	return 2
 
 func _on_relayout() -> void:
+	if recruiter_container != null and is_instance_valid(recruiter_container):
+		recruiter_container.queue_sort()
 	if items_container != null and is_instance_valid(items_container):
 		items_container.queue_sort()
 
 func _on_panel_ready() -> void:
 	UiStylesClass.apply_button_primary(confirm_btn)
 	UiStylesClass.apply_button_secondary(cancel_btn)
+	if recruiter_container != null and is_instance_valid(recruiter_container):
+		if recruiter_container.has_signal("employee_selected"):
+			recruiter_container.employee_selected.connect(_on_recruiter_selected)
 	if items_container != null and is_instance_valid(items_container):
 		if items_container.has_signal("employee_selected"):
 			items_container.employee_selected.connect(_on_card_selected)
@@ -50,6 +60,12 @@ func set_employee_registry(registry) -> void:
 
 func set_employee_pool(pool: Dictionary) -> void:
 	_employee_pool = pool.duplicate()
+	_refresh_picker()
+	_update_confirm_state()
+	_request_relayout()
+
+func set_recruiters(recruiters: Array[Dictionary]) -> void:
+	_recruiters = recruiters.duplicate(true)
 	_refresh_picker()
 	_update_confirm_state()
 	_request_relayout()
@@ -68,18 +84,67 @@ func refresh() -> void:
 	_request_relayout()
 
 func clear_selection() -> void:
+	_selected_recruiter_key = ""
+	_selected_recruiter_staff_id = -1
 	_selected_employee_type = ""
 	_refresh_picker()
 	_update_confirm_state()
 
 func _refresh_picker() -> void:
+	_refresh_recruiter_picker()
+	_refresh_target_picker()
+
+func _refresh_recruiter_picker() -> void:
+	if recruiter_container == null:
+		return
+
+	_recruiter_by_key.clear()
+	var can_recruit := _recruit_remaining > 0
+	if not can_recruit:
+		_selected_recruiter_key = ""
+		_selected_recruiter_staff_id = -1
+
+	var items: Array[Dictionary] = []
+	for recruiter_val in _recruiters:
+		if not (recruiter_val is Dictionary):
+			continue
+		var recruiter: Dictionary = recruiter_val
+		var staff_id := int(recruiter.get("staff_id", -1))
+		var emp_type := str(recruiter.get("employee_type", recruiter.get("id", ""))).strip_edges()
+		if staff_id <= 0 or emp_type.is_empty():
+			continue
+		var key := "staff:%d" % staff_id
+		var remaining := int(recruiter.get("remaining", 0))
+		var capacity := int(recruiter.get("capacity", recruiter.get("cap_per_instance", 0)))
+		_recruiter_by_key[key] = recruiter.duplicate(true)
+		items.append({
+			"id": emp_type,
+			"key": key,
+			"employee_def": _get_employee_def(emp_type),
+			"badge_text": "%d/%d" % [maxi(0, remaining), maxi(0, capacity)],
+			"tag_text": "可用" if remaining > 0 else "已用",
+			"enabled": can_recruit and remaining > 0,
+		})
+
+	if not _selected_recruiter_key.is_empty():
+		var selected_info: Dictionary = Dictionary(_recruiter_by_key.get(_selected_recruiter_key, {}))
+		if selected_info.is_empty() or int(selected_info.get("remaining", 0)) <= 0:
+			_selected_recruiter_key = ""
+			_selected_recruiter_staff_id = -1
+
+	if recruiter_container.has_method("set_items"):
+		recruiter_container.set_items(items, _selected_recruiter_key)
+	right_panel_footer_changed.emit()
+	_request_relayout()
+
+func _refresh_target_picker() -> void:
 	if items_container == null:
 		return
 
 	# 获取入门级员工列表
 	var entry_level_ids := _get_entry_level_employee_ids()
 
-	var can_recruit := _recruit_remaining > 0
+	var can_recruit := _recruit_remaining > 0 and _selected_recruiter_staff_id > 0
 	if not can_recruit:
 		_selected_employee_type = ""
 	elif not _selected_employee_type.is_empty():
@@ -163,6 +228,23 @@ func _update_counter() -> void:
 
 func _on_card_selected(employee_type: String) -> void:
 	_selected_employee_type = employee_type
+	_refresh_target_picker()
+	_update_confirm_state()
+
+func _on_recruiter_selected(_employee_type: String) -> void:
+	if recruiter_container == null:
+		return
+	var key := ""
+	if recruiter_container.has_method("get_selected_key"):
+		key = str(recruiter_container.get_selected_key()).strip_edges()
+	if key.is_empty():
+		return
+	if not _recruiter_by_key.has(key):
+		return
+	var recruiter: Dictionary = Dictionary(_recruiter_by_key.get(key, {}))
+	_selected_recruiter_key = key
+	_selected_recruiter_staff_id = int(recruiter.get("staff_id", -1))
+	_selected_employee_type = ""
 	_refresh_picker()
 	_update_confirm_state()
 
@@ -172,10 +254,13 @@ func _update_confirm_state() -> void:
 
 	var ok := true
 	ok = ok and _recruit_remaining > 0
+	ok = ok and _selected_recruiter_staff_id > 0
 	ok = ok and not _selected_employee_type.is_empty()
 	if ok:
 		var selected_count: int = int(_employee_pool.get(_selected_employee_type, 0))
 		ok = ok and selected_count > 0
+		var recruiter: Dictionary = Dictionary(_recruiter_by_key.get(_selected_recruiter_key, {}))
+		ok = ok and int(recruiter.get("remaining", 0)) > 0
 
 	confirm_btn.disabled = not ok
 	right_panel_footer_changed.emit()
@@ -185,10 +270,13 @@ func _on_confirm_pressed() -> void:
 		return
 	if _selected_employee_type.is_empty():
 		return
+	if _selected_recruiter_staff_id <= 0:
+		return
 
 	var emp_type := _selected_employee_type
+	var staff_id := _selected_recruiter_staff_id
 	clear_selection()
-	recruit_requested.emit(emp_type)
+	recruit_requested.emit(emp_type, staff_id)
 
 func _on_cancel_pressed() -> void:
 	clear_selection()

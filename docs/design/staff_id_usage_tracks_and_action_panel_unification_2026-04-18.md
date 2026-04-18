@@ -1,7 +1,23 @@
 # `staff_id`、usage track 与员工动作面板统一方案（2026-04-18）
 
-> 状态：**设计方案 / 未实施**  
+> 状态：**部分已实施（2026-04-18）**  
 > 目的：统一员工运行时身份、员工使用追踪与员工驱动动作面板；本方案**不引入 `card_id`**，也**不追踪物理卡溯源**。
+
+## 实施进展（2026-04-18）
+
+已落地：
+
+- `staff_id` 基础兼容层
+- `fire` / `train` 动作保留并使用 `staff_id`
+- `recruit` 动作支持显式 `staff_id`，并写入 `round_state.staff_usage[staff_id]["recruit"]`
+- `train` 动作记录培训员 `staff_usage[trainer_staff_id]["train"]`
+- `RecruitPanel` 改为“上方选招聘员工实例、下方看可招目标”
+- `TrainPanel` 改为“上方选来源员工实例、下方看可达目标”
+
+尚未完成：
+
+- Payday 薪资折扣从 `staff_usage` 完全收口
+- 其它员工动作面板（采购/营销/房屋/餐厅）统一到同一 staff 驱动框架
 
 ---
 
