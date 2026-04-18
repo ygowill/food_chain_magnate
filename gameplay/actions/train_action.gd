@@ -11,6 +11,7 @@ const TrainCompanyValidationClass = preload("res://gameplay/actions/train/train_
 const TrainEmployeeUsageClass = preload("res://gameplay/actions/train/train_employee_usage.gd")
 const TrainEmployeeLocksClass = preload("res://gameplay/actions/train/train_employee_locks.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 static func _compute_train_steps_within_limit(from_employee: String, to_employee: String, max_steps: int) -> int:
 	# 规则：培训必须沿 employee_def.train_to 的路径逐步进行。
@@ -273,6 +274,24 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var has_reserve := reserve.find(from_employee) >= 0
 	var has_active := EmployeeRulesClass.count_active(player, from_employee) > 0
 	var can_train_from_active := bool(player.get("train_from_active_same_color", false))
+	var source_zone_key := ""
+	var source_staff_id := -1
+	if not use_pending:
+		if has_reserve:
+			source_zone_key = "reserve_employees"
+		elif can_train_from_active and has_active:
+			source_zone_key = "employees"
+		if source_zone_key.is_empty():
+			return Result.failure("待命区/在岗区不存在员工: %s" % from_employee)
+		var source_staff_read := StaffStateClass.find_smallest_staff_id_by_employee_type(
+			state,
+			player_id,
+			from_employee,
+			[source_zone_key]
+		)
+		if not source_staff_read.ok:
+			return source_staff_read
+		source_staff_id = int(source_staff_read.value)
 
 	var from_used_before := false
 	if can_train_from_active and has_active and not has_reserve and not use_pending:
@@ -301,6 +320,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var alloc_info: Dictionary = alloc.value if (alloc.value is Dictionary) else {}
 	var trainer_id := str(alloc_info.get("trainer_id", "")).strip_edges()
 	var trainer_instance_idx := int(alloc_info.get("instance_idx", -1))
+	var target_staff_id := -1
 
 	var target_to_reserve := true
 	if can_train_from_active and has_active and not has_reserve and not use_pending:
@@ -313,16 +333,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		if not bool(consumed_read.value):
 			return Result.failure("缺货预支待清账员工不存在: %s" % from_employee)
 	else:
-		# 优先从待命区移除；否则允许从在岗移除（FIRST LEMONADE SOLD）
-		var removed := StateUpdater.remove_from_array(state.players[player_id], "reserve_employees", from_employee)
-		if not removed:
-			if can_train_from_active:
-				removed = StateUpdater.remove_from_array(state.players[player_id], "employees", from_employee)
-		if not removed:
-			return Result.failure("待命区/在岗区不存在员工: %s" % from_employee)
-
 		# 原卡回供应区（简化：假设培训会归还原卡）
-		StateUpdater.return_to_pool(state, from_employee, 1)
+		var return_result := StateUpdater.return_to_pool(state, from_employee, 1)
+		if not return_result.ok:
+			return return_result
 
 	# 取出目标员工
 	var take_result := StateUpdater.take_from_pool(state, to_employee, 1)
@@ -330,9 +344,21 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return take_result
 
 	# 培训后的员工：默认进待命；FIRST LEMONADE SOLD 且旧员工未使用时可直接在岗
-	var add_result := StateUpdater.add_employee(state, player_id, to_employee, target_to_reserve)
-	if not add_result.ok:
-		return add_result
+	if use_pending:
+		var add_result := StateUpdater.add_employee(state, player_id, to_employee, target_to_reserve)
+		if not add_result.ok:
+			return add_result
+		target_staff_id = int(Dictionary(add_result.value).get("staff_id", -1))
+	else:
+		var change_result := StaffStateClass.change_staff_employee_type(state, player_id, source_staff_id, to_employee)
+		if not change_result.ok:
+			return change_result
+		target_staff_id = source_staff_id
+		var target_zone_key := "reserve_employees" if target_to_reserve else "employees"
+		if source_zone_key != target_zone_key:
+			var move_result := StaffStateClass.move_staff_to_zone(state, player_id, source_staff_id, target_zone_key)
+			if not move_result.ok:
+				return move_result
 
 	# 同步“培训锁 token”：培训成功后，将 token 从 from_employee 移动到 to_employee，并在需要时锁定到具体培训员实例。
 	var lock_apply := TrainEmployeeLocksClass.apply_move_token_and_lock(
@@ -340,6 +366,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	)
 	if not lock_apply.ok:
 		return lock_apply
+	if target_staff_id > 0:
+		var train_event_count := StaffStateClass.increment_staff_train_event_count(state, target_staff_id, 1)
+		if not train_event_count.ok:
+			return train_event_count
 
 	for _i in range(steps_required):
 		var inc_action := EmployeeRulesClass.try_increment_action_count(state, player_id, action_id)
@@ -353,6 +383,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"to_employee": to_employee,
 		"from_pending": use_pending,
 		"steps": steps_required,
+		"source_staff_id": source_staff_id,
+		"target_staff_id": target_staff_id,
 		"trainer_id": trainer_id,
 		"trainer_instance_idx": trainer_instance_idx,
 	})
@@ -438,6 +470,8 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 				"to_employee": to_employee,
 				"from_pending": bool(item.get("from_pending", false)),
 				"steps": maxi(1, int(item.get("steps", 1))),
+				"source_staff_id": int(item.get("source_staff_id", -1)),
+				"target_staff_id": int(item.get("target_staff_id", -1)),
 				"trainer_id": str(item.get("trainer_id", "")).strip_edges(),
 				"trainer_instance_idx": int(item.get("trainer_instance_idx", -1)),
 			}

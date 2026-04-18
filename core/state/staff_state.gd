@@ -177,6 +177,20 @@ static func find_staff_ids_by_employee_type(
 		out.sort()
 	return Result.success(out)
 
+static func find_smallest_staff_id_by_employee_type(
+	state: GameState,
+	player_id: int,
+	employee_type: String,
+	zone_keys: Array[String] = []
+) -> Result:
+	var ids_read := find_staff_ids_by_employee_type(state, player_id, employee_type, zone_keys)
+	if not ids_read.ok:
+		return ids_read
+	var ids: Array = ids_read.value
+	if ids.is_empty():
+		return Result.failure("StaffState.find_smallest_staff_id_by_employee_type: 玩家 %d 不存在员工: %s" % [player_id, employee_type])
+	return Result.success(int(ids[0]))
+
 static func get_staff_record(state: GameState, player_id: int, staff_id: int) -> Result:
 	if staff_id <= 0:
 		return Result.failure("StaffState.get_staff_record: staff_id 必须 > 0，实际: %d" % staff_id)
@@ -227,6 +241,101 @@ static func get_staff_zone(state: GameState, player_id: int, staff_id: int) -> R
 		if ids.find(staff_id) >= 0:
 			return Result.success(zone_key)
 	return Result.success("")
+
+static func move_staff_to_zone(state: GameState, player_id: int, staff_id: int, to_zone_key: String) -> Result:
+	if state == null:
+		return Result.failure("StaffState.move_staff_to_zone: state 为空")
+	var sync_read := ensure_state_staff_support(state)
+	if not sync_read.ok:
+		return sync_read
+	var player_read := PlayerStateAccessClass.require_player(state, player_id, "StaffState.move_staff_to_zone")
+	if not player_read.ok:
+		return player_read
+	var player: Dictionary = player_read.value
+	var registry_read := _require_staff_registry(player, "StaffState.move_staff_to_zone")
+	if not registry_read.ok:
+		return registry_read
+	var registry: Dictionary = registry_read.value
+	if not registry.has(staff_id):
+		return Result.failure("StaffState.move_staff_to_zone: staff_id 不存在: %d" % staff_id)
+
+	var target_zone := str(to_zone_key).strip_edges()
+	var target_staff_zone_key := _staff_zone_key(target_zone)
+	if target_staff_zone_key.is_empty():
+		return Result.failure("StaffState.move_staff_to_zone: 未知目标 zone_key: %s" % target_zone)
+
+	var current_zone_read := get_staff_zone(state, player_id, staff_id)
+	if not current_zone_read.ok:
+		return current_zone_read
+	var current_zone := str(current_zone_read.value).strip_edges()
+	if current_zone.is_empty():
+		return Result.failure("StaffState.move_staff_to_zone: 无法定位 staff_id=%d 所在区域" % staff_id)
+	if current_zone == target_zone:
+		return Result.success({
+			"staff_id": staff_id,
+			"from_zone_key": current_zone,
+			"to_zone_key": target_zone,
+		})
+
+	var current_staff_zone_key := _staff_zone_key(current_zone)
+	if current_staff_zone_key.is_empty():
+		return Result.failure("StaffState.move_staff_to_zone: 未知当前 zone_key: %s" % current_zone)
+
+	var record_val = registry.get(staff_id, null)
+	if not (record_val is Dictionary):
+		return Result.failure("StaffState.move_staff_to_zone: player.staff_registry[%d] 类型错误（期望 Dictionary）" % staff_id)
+	var record: Dictionary = record_val
+	var employee_type := str(record.get("employee_type", "")).strip_edges()
+	if employee_type.is_empty():
+		return Result.failure("StaffState.move_staff_to_zone: staff_id=%d 缺少 employee_type" % staff_id)
+
+	var current_ids_read := _require_staff_id_array(player.get(current_staff_zone_key, []), "player.%s" % current_staff_zone_key)
+	if not current_ids_read.ok:
+		return current_ids_read
+	var current_ids: Array = current_ids_read.value
+	var current_idx := current_ids.find(staff_id)
+	if current_idx < 0:
+		return Result.failure("StaffState.move_staff_to_zone: %s 中不存在 staff_id=%d" % [current_staff_zone_key, staff_id])
+
+	var current_legacy_read := _require_legacy_zone_array(player, current_zone, "StaffState.move_staff_to_zone")
+	if not current_legacy_read.ok:
+		return current_legacy_read
+	var current_legacy: Array = current_legacy_read.value
+
+	var target_ids_read := _require_staff_id_array(player.get(target_staff_zone_key, []), "player.%s" % target_staff_zone_key)
+	if not target_ids_read.ok:
+		return target_ids_read
+	var target_ids: Array = target_ids_read.value
+	var target_legacy_read := _require_legacy_zone_array(player, target_zone, "StaffState.move_staff_to_zone")
+	if not target_legacy_read.ok:
+		return target_legacy_read
+	var target_legacy: Array = target_legacy_read.value
+
+	current_ids.remove_at(current_idx)
+	if current_idx >= 0 and current_idx < current_legacy.size():
+		current_legacy.remove_at(current_idx)
+	else:
+		var fallback_idx := current_legacy.find(employee_type)
+		if fallback_idx < 0:
+			return Result.failure("StaffState.move_staff_to_zone: %s 中找不到对应员工类型: %s" % [current_zone, employee_type])
+		current_legacy.remove_at(fallback_idx)
+
+	target_ids.append(staff_id)
+	target_legacy.append(employee_type)
+
+	player[current_staff_zone_key] = current_ids
+	player[current_zone] = current_legacy
+	player[target_staff_zone_key] = target_ids
+	player[target_zone] = target_legacy
+	player[STAFF_REGISTRY_KEY] = registry
+	state.players[player_id] = player
+
+	return Result.success({
+		"staff_id": staff_id,
+		"employee_type": employee_type,
+		"from_zone_key": current_zone,
+		"to_zone_key": target_zone,
+	})
 
 static func remove_staff_from_player(state: GameState, player_id: int, staff_id: int, zone_key: String = "") -> Result:
 	if state == null:
@@ -370,6 +479,31 @@ static func change_staff_employee_type(state: GameState, player_id: int, staff_i
 		"old_employee_type": old_type,
 		"new_employee_type": target_type,
 	})
+
+static func increment_staff_train_event_count(state: GameState, staff_id: int, amount: int = 1) -> Result:
+	if state == null:
+		return Result.failure("StaffState.increment_staff_train_event_count: state 为空")
+	if staff_id <= 0:
+		return Result.failure("StaffState.increment_staff_train_event_count: staff_id 必须 > 0，实际: %d" % staff_id)
+	if amount <= 0:
+		return Result.failure("StaffState.increment_staff_train_event_count: amount 必须 > 0，实际: %d" % amount)
+	var sync_read := ensure_state_staff_support(state)
+	if not sync_read.ok:
+		return sync_read
+	var round_state_read := _ensure_round_state_staff_fields(state.round_state)
+	if not round_state_read.ok:
+		return round_state_read
+	var counts_val = state.round_state.get(STAFF_TRAIN_EVENT_COUNTS_KEY, null)
+	if not (counts_val is Dictionary):
+		return Result.failure("round_state.%s 类型错误（期望 Dictionary）" % STAFF_TRAIN_EVENT_COUNTS_KEY)
+	var counts: Dictionary = counts_val
+	var current := int(counts.get(staff_id, 0))
+	if current < 0:
+		return Result.failure("round_state.%s[%d] 不能为负数: %d" % [STAFF_TRAIN_EVENT_COUNTS_KEY, staff_id, current])
+	var updated := current + amount
+	counts[staff_id] = updated
+	state.round_state[STAFF_TRAIN_EVENT_COUNTS_KEY] = counts
+	return Result.success(updated)
 
 static func _ensure_player_staff_support(
 	state: GameState,

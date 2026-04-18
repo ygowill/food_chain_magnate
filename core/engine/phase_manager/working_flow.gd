@@ -112,8 +112,6 @@ static func reset_working_phase_state(state: GameState) -> void:
 static func reset_working_sub_phase_state(state: GameState) -> void:
 	if state.round_state is Dictionary:
 		state.round_state["action_counts"] = {}
-		state.round_state["staff_usage"] = {}
-		state.round_state["staff_train_event_counts"] = {}
 		# Train 子阶段：记录“培训员 slot 使用情况”（用于 coach/guru 多步培训）也需随子阶段重置。
 		state.round_state["train_slot_usage"] = {}
 		state.round_state["train_slot_usage_instances"] = {}

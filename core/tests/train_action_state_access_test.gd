@@ -88,6 +88,9 @@ static func _test_valid_reserve_employees_still_allows_train(player_count: int, 
 	var add_trainee := StateUpdaterClass.add_employee(state, 0, "marketing_trainee", true)
 	if not add_trainee.ok:
 		return Result.failure("添加 marketing_trainee 到 reserve 失败: %s" % add_trainee.error)
+	var trainee_staff_id := int(Dictionary(add_trainee.value).get("staff_id", -1))
+	if trainee_staff_id <= 0:
+		return Result.failure("添加 marketing_trainee 应返回有效 staff_id，实际: %s" % str(add_trainee.value))
 	var train := engine.execute_command(Command.create("train", 0, {
 		"from_employee": "marketing_trainee",
 		"to_employee": "campaign_manager",
@@ -97,6 +100,18 @@ static func _test_valid_reserve_employees_still_allows_train(player_count: int, 
 	state = engine.get_state()
 	if not Array(state.players[0].get("reserve_employees", [])).has("campaign_manager"):
 		return Result.failure("训练后 campaign_manager 应进入 reserve_employees")
+	var reserve_staff_ids: Array = Array(state.players[0].get("reserve_staff_ids", []))
+	if reserve_staff_ids.find(trainee_staff_id) < 0:
+		return Result.failure("训练后应保留原 trainee staff_id=%d，实际 reserve_staff_ids=%s" % [trainee_staff_id, str(reserve_staff_ids)])
+	var registry: Dictionary = Dictionary(state.players[0].get("staff_registry", {}))
+	if not registry.has(trainee_staff_id):
+		return Result.failure("训练后 staff_registry 应保留原 trainee staff_id=%d" % trainee_staff_id)
+	var record: Dictionary = Dictionary(registry.get(trainee_staff_id, {}))
+	if str(record.get("employee_type", "")) != "campaign_manager":
+		return Result.failure("训练后原 staff_id=%d 的 employee_type 应变为 campaign_manager，实际: %s" % [trainee_staff_id, str(record)])
+	var train_counts: Dictionary = Dictionary(state.round_state.get("staff_train_event_counts", {}))
+	if int(train_counts.get(trainee_staff_id, 0)) != 1:
+		return Result.failure("训练后 staff_train_event_counts[%d] 应为 1，实际: %s" % [trainee_staff_id, str(train_counts)])
 	return Result.success()
 
 static func _test_same_role_color_fails_fast_on_unknown_target_employee() -> Result:

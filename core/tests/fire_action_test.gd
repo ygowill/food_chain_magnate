@@ -5,6 +5,7 @@ extends RefCounted
 
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	# 1) Restructuring：不允许解雇（约束对齐 rules.md）
@@ -110,6 +111,9 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var online_parallel := _test_online_parallel_payday_fire(seed_val)
 	if not online_parallel.ok:
 		return online_parallel
+	var smallest_staff := _test_fire_defaults_to_smallest_staff_id(player_count, seed_val)
+	if not smallest_staff.ok:
+		return smallest_staff
 
 	return Result.success({
 		"player_count": player_count,
@@ -119,6 +123,60 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		"fire_in_restructuring_error": fire_in_restructuring.error,
 		"fire_busy_denied_error": fire_busy_denied.error
 	})
+
+static func _test_fire_defaults_to_smallest_staff_id(player_count: int, seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val + 303)
+	if not init.ok:
+		return Result.failure("smallest staff 测试初始化失败: %s" % init.error)
+
+	var to_payday := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_PAYDAY, 30)
+	if not to_payday.ok:
+		return to_payday
+
+	var state := engine.get_state()
+	var actor := state.get_current_player_id()
+	if actor < 0:
+		return Result.failure("smallest staff 测试无法获取当前玩家")
+
+	for _i in range(2):
+		var take := StateUpdaterClass.take_from_pool(state, "burger_cook", 1)
+		if not take.ok:
+			return Result.failure("smallest staff 测试取出 burger_cook 失败: %s" % take.error)
+	var add_a := StateUpdaterClass.add_employee(state, actor, "burger_cook", true)
+	if not add_a.ok:
+		return Result.failure("smallest staff 测试添加第一张 burger_cook 失败: %s" % add_a.error)
+	var add_b := StateUpdaterClass.add_employee(state, actor, "burger_cook", true)
+	if not add_b.ok:
+		return Result.failure("smallest staff 测试添加第二张 burger_cook 失败: %s" % add_b.error)
+	var staff_a := int(Dictionary(add_a.value).get("staff_id", -1))
+	var staff_b := int(Dictionary(add_b.value).get("staff_id", -1))
+	if staff_a <= 0 or staff_b <= 0:
+		return Result.failure("smallest staff 测试 staff_id 无效: %s / %s" % [str(add_a.value), str(add_b.value)])
+	var expected_removed := mini(staff_a, staff_b)
+	var expected_remaining := maxi(staff_a, staff_b)
+	var pool_before := int(state.employee_pool.get("burger_cook", -1))
+
+	var fire := engine.execute_command(Command.create("fire", actor, {"employee_id": "burger_cook"}))
+	if not fire.ok:
+		return Result.failure("smallest staff 测试 fire 失败: %s" % fire.error)
+
+	state = engine.get_state()
+	var registry: Dictionary = Dictionary(state.get_player(actor).get("staff_registry", {}))
+	if registry.has(expected_removed):
+		return Result.failure("fire 默认应移除最小 staff_id=%d，实际仍存在: %s" % [expected_removed, str(registry)])
+	if not registry.has(expected_remaining):
+		return Result.failure("fire 默认应保留较大 staff_id=%d，实际 registry=%s" % [expected_remaining, str(registry)])
+	var reserve_staff_ids: Array = Array(state.get_player(actor).get("reserve_staff_ids", []))
+	if reserve_staff_ids.find(expected_removed) >= 0:
+		return Result.failure("fire 默认不应保留被移除的 staff_id=%d，实际 reserve_staff_ids=%s" % [expected_removed, str(reserve_staff_ids)])
+	if reserve_staff_ids.find(expected_remaining) < 0:
+		return Result.failure("fire 默认应保留较大 staff_id=%d，实际 reserve_staff_ids=%s" % [expected_remaining, str(reserve_staff_ids)])
+	var pool_after := int(state.employee_pool.get("burger_cook", -1))
+	if pool_after != pool_before + 1:
+		return Result.failure("fire 默认移除最小 staff_id 后员工池应回补 1，实际: before=%d after=%d" % [pool_before, pool_after])
+
+	return Result.success()
 
 static func _test_online_parallel_payday_fire(seed_val: int) -> Result:
 	if NetContext == null:
