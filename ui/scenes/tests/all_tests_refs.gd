@@ -263,6 +263,7 @@ const LogRestoreAfterLoadTestClass = preload("res://ui/scenes/tests/log_restore_
 const GameLogPanelReplayToggleAvailabilityTestClass = preload("res://ui/scenes/tests/game_log_panel_replay_toggle_availability_test.gd")
 const GameLogPanelStepTimelineAppendTestClass = preload("res://ui/scenes/tests/game_log_panel_step_timeline_append_test.gd")
 const GameLogHiddenTimelineStateSkipTestClass = preload("res://ui/scenes/tests/game_log_hidden_timeline_state_skip_test.gd")
+const LiveLogRefreshDebounceTestClass = preload("res://ui/scenes/tests/live_log_refresh_debounce_test.gd")
 const GameLogTimelineLocalStateDeltaTestClass = preload("res://ui/scenes/tests/game_log_timeline_local_state_delta_test.gd")
 const GameLogTimelineRuntimeEventSourceTestClass = preload("res://ui/scenes/tests/game_log_timeline_runtime_event_source_test.gd")
 const OnlineResumeReplayEntryStateNoopTestClass = preload("res://ui/scenes/tests/online_resume_replay_entry_state_noop_test.gd")

@@ -167,6 +167,8 @@ func execute_command(command: Command) -> Result:
 			if was_in_history:
 				if _timeline_controller.has_method("apply_live_log_timeline_from_engine"):
 					_timeline_controller.call("apply_live_log_timeline_from_engine", true)
+			elif _timeline_controller.has_method("request_live_log_timeline_refresh_deferred"):
+				_timeline_controller.call("request_live_log_timeline_refresh_deferred")
 			elif _timeline_controller.has_method("request_live_log_timeline_refresh"):
 				_timeline_controller.call("request_live_log_timeline_refresh")
 			elif _timeline_controller.has_method("mark_live_log_timeline_dirty"):

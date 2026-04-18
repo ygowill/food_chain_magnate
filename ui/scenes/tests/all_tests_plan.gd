@@ -1055,6 +1055,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return await TestRefs.GameLogHiddenTimelineStateSkipTestClass.run(),
 			},
 			{
+				"name": "LiveLogRefreshDebounceTest",
+				"fn": func() -> Result: return await TestRefs.LiveLogRefreshDebounceTestClass.run(),
+			},
+			{
 				"name": "GameLogTimelineLocalStateDeltaTest",
 				"fn": func() -> Result: return await TestRefs.GameLogTimelineLocalStateDeltaTestClass.run(),
 			},

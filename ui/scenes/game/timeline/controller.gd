@@ -13,6 +13,7 @@ const GameTimelineSeekRoutingSupportClass = preload("res://ui/scenes/game/timeli
 const GameTimelineUiStateSupportClass = preload("res://ui/scenes/game/timeline/ui_state_support.gd")
 const GameTimelineReplaySessionSupportClass = preload("res://ui/scenes/game/timeline/replay_session_support.gd")
 const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
+const LIVE_HISTORY_REFRESH_DEBOUNCE_SEC := 0.12
 
 var _host: Control = null
 var _game_log_panel: Control = null
@@ -44,6 +45,7 @@ var _history_cursor_step_index: int = -1
 var _history_timeline_source: String = "runtime"
 var _live_history_dirty: bool = true
 var _live_history_refresh_scheduled: bool = false
+var _live_history_refresh_due_mono_usec: int = 0
 var _live_history_last_signature: Dictionary = {}
 
 # 时间线编辑模式：允许在 cursor<head 时继续执行命令（将丢弃未来时间线并产生新分支）。
@@ -102,6 +104,7 @@ func dispose() -> void:
 	_history_timeline_source = "runtime"
 	_live_history_dirty = true
 	_live_history_refresh_scheduled = false
+	_live_history_refresh_due_mono_usec = 0
 	_live_history_last_signature.clear()
 
 func initialize() -> void:
@@ -257,23 +260,42 @@ func request_live_log_timeline_refresh() -> void:
 		return
 	if not is_instance_valid(_game_log_panel) or not _game_log_panel.visible:
 		return
-	if _live_history_refresh_scheduled:
-		return
-	_live_history_refresh_scheduled = true
-	call_deferred("_flush_live_log_timeline_refresh")
+	_schedule_live_log_timeline_refresh(LIVE_HISTORY_REFRESH_DEBOUNCE_SEC)
 
 func request_live_log_timeline_refresh_deferred() -> void:
 	if _replay_mode_active:
 		return
 	_live_history_dirty = true
+	if _is_history_cursor_detached_from_live_head():
+		return
+	if not _is_log_panel_visible():
+		return
+	_schedule_live_log_timeline_refresh(0.0)
+
+func _schedule_live_log_timeline_refresh(delay_sec: float) -> void:
+	_live_history_refresh_due_mono_usec = OnlinePerfTraceClass.now_mono_usec() + int(maxf(0.0, float(delay_sec)) * 1000000.0)
 	if _live_history_refresh_scheduled:
 		return
 	_live_history_refresh_scheduled = true
-	call_deferred("_flush_live_log_timeline_refresh")
+	call_deferred("_wait_and_flush_live_log_timeline_refresh")
+
+func _wait_and_flush_live_log_timeline_refresh() -> void:
+	while _live_history_refresh_scheduled:
+		if _host == null or not is_instance_valid(_host):
+			_live_history_refresh_scheduled = false
+			return
+		var remaining_usec := int(_live_history_refresh_due_mono_usec) - int(OnlinePerfTraceClass.now_mono_usec())
+		if remaining_usec > 0:
+			await _host.get_tree().create_timer(float(remaining_usec) / 1000000.0).timeout
+			continue
+		_flush_live_log_timeline_refresh()
+		return
 
 func _flush_live_log_timeline_refresh() -> void:
 	_live_history_refresh_scheduled = false
 	if _is_history_cursor_detached_from_live_head():
+		return
+	if not _is_log_panel_visible():
 		return
 	apply_live_log_timeline_from_engine()
 

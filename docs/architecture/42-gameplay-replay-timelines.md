@@ -187,8 +187,12 @@ step 的基本字段由 helper 构建（`gameplay/replay/step_timeline_build/hel
    - 但打开行为只能触发：
      - 轻量 dock / visible 切换
      - deferred timeline refresh 请求
-     - 分帧或后台 descriptor 提交
+   - 分帧或后台 descriptor 提交
    - 不能在“打开日志”这一帧同步吃下完整 timeline / descriptor / item rebuild。
+
+3. **live append 允许短窗口合帧**
+   - 若多条联机命令在极短时间内连续到达，允许把多次 `request_live_log_timeline_refresh()` 合并成一次真正的 timeline append；
+   - 时间线最新状态始终以 engine 为准，但日志 UI 挂载可以做短窗口 debounce。
 
 ## 日志面板如何消费 timeline
 
