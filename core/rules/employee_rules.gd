@@ -12,6 +12,8 @@ const ImmediateTrainPending = preload("res://core/rules/employee_rules/immediate
 const TrainSlotUsage = preload("res://core/rules/employee_rules/train_slot_usage.gd")
 const RecruitUsageProviders = preload("res://core/rules/employee_rules/recruit_usage_providers.gd")
 const WorkingStaffActionProviders = preload("res://core/rules/employee_rules/working_staff_action_providers.gd")
+const PlacementStaffActionProviders = preload("res://core/rules/employee_rules/placement_staff_action_providers.gd")
+const MarketingStaffActionProviders = preload("res://core/rules/employee_rules/marketing_staff_action_providers.gd")
 
 static func is_entry_level(employee_id: String) -> bool:
 	return Counts.is_entry_level(employee_id)
@@ -81,6 +83,50 @@ static func get_drinks_procurers_for_working(state: GameState, player_id: int) -
 
 static func try_resolve_drinks_procurer(state: GameState, player_id: int, employee_type: String, explicit_staff_id: int = -1) -> Result:
 	return WorkingStaffActionProviders.try_resolve_drinks_procurer(state, player_id, employee_type, explicit_staff_id)
+
+static func try_get_house_garden_placers_for_working(state: GameState, player_id: int) -> Result:
+	return PlacementStaffActionProviders.try_get_house_garden_placers_for_working(state, player_id)
+
+static func get_house_garden_placers_for_working(state: GameState, player_id: int) -> Array[Dictionary]:
+	return PlacementStaffActionProviders.get_house_garden_placers_for_working(state, player_id)
+
+static func try_resolve_house_garden_placer(
+	state: GameState,
+	player_id: int,
+	action_id: String,
+	employee_type: String = "",
+	explicit_staff_id: int = -1
+) -> Result:
+	return PlacementStaffActionProviders.try_resolve_house_garden_placer(state, player_id, action_id, employee_type, explicit_staff_id)
+
+static func try_get_restaurant_placers_for_working(state: GameState, player_id: int) -> Result:
+	return PlacementStaffActionProviders.try_get_restaurant_placers_for_working(state, player_id)
+
+static func get_restaurant_placers_for_working(state: GameState, player_id: int) -> Array[Dictionary]:
+	return PlacementStaffActionProviders.get_restaurant_placers_for_working(state, player_id)
+
+static func try_resolve_restaurant_placer(
+	state: GameState,
+	player_id: int,
+	action_id: String,
+	employee_type: String = "",
+	explicit_staff_id: int = -1
+) -> Result:
+	return PlacementStaffActionProviders.try_resolve_restaurant_placer(state, player_id, action_id, employee_type, explicit_staff_id)
+
+static func try_get_marketers_for_working(state: GameState, player_id: int) -> Result:
+	return MarketingStaffActionProviders.try_get_marketers_for_working(state, player_id)
+
+static func get_marketers_for_working(state: GameState, player_id: int) -> Array[Dictionary]:
+	return MarketingStaffActionProviders.get_marketers_for_working(state, player_id)
+
+static func try_resolve_marketer(
+	state: GameState,
+	player_id: int,
+	employee_type: String = "",
+	explicit_staff_id: int = -1
+) -> Result:
+	return MarketingStaffActionProviders.try_resolve_marketer(state, player_id, employee_type, explicit_staff_id)
 
 static func get_train_limit(player: Dictionary) -> int:
 	return Limits.get_train_limit(player)

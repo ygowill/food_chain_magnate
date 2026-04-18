@@ -4,6 +4,7 @@ extends RefCounted
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 static func expire_marketing_instance(state: GameState, inst: Dictionary) -> Result:
 	if state == null:
@@ -23,6 +24,7 @@ static func expire_marketing_instance(state: GameState, inst: Dictionary) -> Res
 	var board_number: int = int(inst["board_number"])
 	var owner: int = int(inst["owner"])
 	var employee_type: String = str(inst["employee_type"])
+	var staff_id := int(inst.get("staff_id", -1))
 	var link_id := ""
 	if inst.has("link_id") and (inst["link_id"] is String):
 		link_id = str(inst["link_id"])
@@ -77,6 +79,11 @@ static func expire_marketing_instance(state: GameState, inst: Dictionary) -> Res
 	var reserve_read := PlayerStateAccessClass.require_reserve_employees(player, "player[%d]" % owner, "MarketingSettlement")
 	if not reserve_read.ok:
 		return reserve_read
+
+	if staff_id > 0:
+		var move_read := StaffStateClass.move_staff_to_zone(state, owner, staff_id, "reserve_employees")
+		if move_read.ok:
+			return Result.success()
 
 	var removed := StateUpdaterClass.remove_from_array(player, "busy_marketers", employee_type)
 	if removed:

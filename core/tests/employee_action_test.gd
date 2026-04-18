@@ -6,6 +6,7 @@ const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var engine := GameEngine.new()
@@ -85,6 +86,9 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var provider_track := _test_recruit_explicit_staff_id_consumes_selected_provider(player_count, seed)
 	if not provider_track.ok:
 		return provider_track
+	var placement_track := _test_house_garden_explicit_staff_id_shares_track(player_count, seed)
+	if not placement_track.ok:
+		return placement_track
 
 	return Result.success({
 		"player_count": player_count,
@@ -130,6 +134,128 @@ static func _test_recruit_explicit_staff_id_consumes_selected_provider(player_co
 		var ceo_usage: Dictionary = Dictionary(staff_usage.get(ceo_staff_id, {}))
 		if int(ceo_usage.get("recruit", 0)) != 0:
 			return Result.failure("显式 recruit 后 CEO 不应被记为已使用，实际: %s" % str(staff_usage))
+	return Result.success()
+
+static func _test_house_garden_explicit_staff_id_shares_track(player_count: int, seed: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed + 177)
+	if not init.ok:
+		return Result.failure("house/garden explicit staff 初始化失败: %s" % init.error)
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 30)
+	if not to_working.ok:
+		return to_working
+	var state := engine.get_state()
+	var actor := state.get_current_player_id()
+	state.sub_phase = DefsClass.SUB_PHASE_PLACE_HOUSES
+
+	var take := StateUpdaterClass.take_from_pool(state, "new_business_developer", 2)
+	if not take.ok:
+		return Result.failure("house/garden explicit staff 取出 new_business_developer 失败: %s" % take.error)
+	for _i in range(2):
+		var add := StateUpdaterClass.add_employee(state, actor, "new_business_developer", false)
+		if not add.ok:
+			return Result.failure("house/garden explicit staff 添加 new_business_developer 失败: %s" % add.error)
+
+	var ids_read := StaffStateClass.find_staff_ids_by_employee_type(state, actor, "new_business_developer", ["employees"])
+	if not ids_read.ok:
+		return Result.failure("house/garden explicit staff 读取 staff_ids 失败: %s" % ids_read.error)
+	var ids: Array = ids_read.value
+	if ids.size() < 2:
+		return Result.failure("house/garden explicit staff 需要 2 个 new_business_developer staff_id，实际: %s" % str(ids))
+	var first_staff_id := int(ids[0])
+	var second_staff_id := int(ids[1])
+
+	var house_exec = engine.action_registry.get_executor("place_house")
+	if house_exec == null:
+		return Result.failure("缺少 place_house 执行器")
+	var house_number := 1
+	var supply_val = state.map.get("house_number_supply_remaining", null)
+	if supply_val is Array and not Array(supply_val).is_empty():
+		house_number = int(Array(supply_val)[0])
+	var house_cmd = null
+	var grid: Vector2i = state.map.get("grid_size", Vector2i.ZERO)
+	for y in range(grid.y):
+		for x in range(grid.x):
+			for rot in [0, 90, 180, 270]:
+				var cmd := Command.create("place_house", actor, {
+					"position": [x, y],
+					"rotation": rot,
+					"house_number": house_number,
+					"employee_type": "new_business_developer",
+					"staff_id": second_staff_id,
+				})
+				if house_exec.validate(state, cmd).ok:
+					house_cmd = cmd
+					break
+			if house_cmd != null:
+				break
+		if house_cmd != null:
+			break
+	if house_cmd == null:
+		return Result.failure("house/garden explicit staff 找不到合法放置点")
+
+	var house_result := engine.execute_command(house_cmd)
+	if not house_result.ok:
+		return Result.failure("显式第二个拓展经理放置房屋失败: %s" % house_result.error)
+
+	state = engine.get_state()
+	var second_used_read := StaffStateClass.get_staff_track_used(state, second_staff_id, "place_house_or_garden")
+	if not second_used_read.ok:
+		return Result.failure("读取第二个拓展经理 usage 失败: %s" % second_used_read.error)
+	var first_used_read := StaffStateClass.get_staff_track_used(state, first_staff_id, "place_house_or_garden")
+	if not first_used_read.ok:
+		return Result.failure("读取第一个拓展经理 usage 失败: %s" % first_used_read.error)
+	if int(second_used_read.value) != 1 or int(first_used_read.value) != 0:
+		return Result.failure("显式放置房屋应只消耗第二个拓展经理，实际 first=%s second=%s" % [str(first_used_read.value), str(second_used_read.value)])
+
+	var houses_val = state.map.get("houses", null)
+	if not (houses_val is Dictionary):
+		return Result.failure("map.houses 类型错误")
+	var houses: Dictionary = houses_val
+	var target_house_id := ""
+	for hid in houses.keys():
+		var hid_str := str(hid).strip_edges()
+		if hid_str == str(house_number):
+			continue
+		var h_val = houses.get(hid, null)
+		if not (h_val is Dictionary):
+			continue
+		var house: Dictionary = h_val
+		if bool(house.get("has_garden", false)):
+			continue
+		target_house_id = hid_str
+		break
+	if target_house_id.is_empty():
+		return Result.failure("house/garden explicit staff 找不到可添加花园的房屋")
+
+	var garden_exec = engine.action_registry.get_executor("add_garden")
+	if garden_exec == null:
+		return Result.failure("缺少 add_garden 执行器")
+	var garden_cmd = null
+	for d in ["N", "E", "S", "W"]:
+		var cmd2 := Command.create("add_garden", actor, {
+			"house_id": target_house_id,
+			"direction": d,
+			"employee_type": "new_business_developer",
+			"staff_id": first_staff_id,
+		})
+		if garden_exec.validate(state, cmd2).ok:
+			garden_cmd = cmd2
+			break
+	if garden_cmd == null:
+		return Result.failure("house/garden explicit staff 找不到合法花园方向")
+
+	var garden_result := engine.execute_command(garden_cmd)
+	if not garden_result.ok:
+		return Result.failure("显式第一个拓展经理添加花园失败: %s" % garden_result.error)
+
+	state = engine.get_state()
+	second_used_read = StaffStateClass.get_staff_track_used(state, second_staff_id, "place_house_or_garden")
+	first_used_read = StaffStateClass.get_staff_track_used(state, first_staff_id, "place_house_or_garden")
+	if not second_used_read.ok or not first_used_read.ok:
+		return Result.failure("读取花园后的拓展经理 usage 失败: %s / %s" % [str(first_used_read), str(second_used_read)])
+	if int(first_used_read.value) != 1 or int(second_used_read.value) != 1:
+		return Result.failure("放置房屋/添加花园应共享 place_house_or_garden track，实际 first=%s second=%s" % [str(first_used_read.value), str(second_used_read.value)])
 	return Result.success()
 
 static func _complete_order_of_business(engine: GameEngine) -> Result:

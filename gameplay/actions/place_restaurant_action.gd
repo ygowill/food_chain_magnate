@@ -13,6 +13,7 @@ const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
 const PlayerStateAccessClass = preload("res://core/state/player_state_access.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 const ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY := "opening_soon_restaurants"
 
@@ -101,6 +102,19 @@ func _parse_params(command: Command) -> Result:
 		"rotation": rotation,
 	})
 
+func _read_optional_staff_id(command: Command) -> Result:
+	if command == null:
+		return Result.failure("command 为空")
+	if not command.params.has("staff_id"):
+		return Result.success(-1)
+	var staff_id_result := require_int_param(command, "staff_id")
+	if not staff_id_result.ok:
+		return staff_id_result
+	var staff_id := int(staff_id_result.value)
+	if staff_id <= 0:
+		return Result.failure("staff_id 必须 > 0，实际: %d" % staff_id)
+	return Result.success(staff_id)
+
 func _validate_specific(state: GameState, command: Command) -> Result:
 	# 检查是否是当前玩家的回合
 	var current_player_id := state.get_current_player_id()
@@ -112,6 +126,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not employee_type_result.ok:
 		return employee_type_result
 	employee_type = employee_type_result.value
+	var requested_staff_read := _read_optional_staff_id(command)
+	if not requested_staff_read.ok:
+		return requested_staff_read
+	var requested_staff_id := int(requested_staff_read.value)
 
 	# 规则：Working/PlaceRestaurants 需要在岗的本地经理或区域经理（docs/rules.md 子阶段 6）
 	var is_initial := state.phase == DefsClass.PHASE_SETUP
@@ -143,6 +161,16 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		var used_total := used_place + used_move
 		if used_total >= eligible:
 			return Result.failure("本地/大区经理本子阶段已用完: %d/%d" % [used_total, eligible])
+
+		var provider_read := EmployeeRulesClass.try_resolve_restaurant_placer(
+			state,
+			command.actor,
+			action_id,
+			employee_type,
+			requested_staff_id
+		)
+		if not provider_read.ok:
+			return provider_read
 
 	# 检查必需参数
 	var params_result := _parse_params(command)
@@ -188,7 +216,28 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if not employee_type_result.ok:
 		return employee_type_result
 	employee_type = employee_type_result.value
-	if employee_type.is_empty() and state.phase == DefsClass.PHASE_WORKING:
+	var requested_staff_read := _read_optional_staff_id(command)
+	if not requested_staff_read.ok:
+		return requested_staff_read
+	var requested_staff_id := int(requested_staff_read.value)
+	var placer_staff_id := -1
+	if state.phase == DefsClass.PHASE_WORKING:
+		var provider_read := EmployeeRulesClass.try_resolve_restaurant_placer(
+			state,
+			command.actor,
+			action_id,
+			employee_type,
+			requested_staff_id
+		)
+		if not provider_read.ok:
+			return provider_read
+		var provider: Dictionary = provider_read.value
+		placer_staff_id = int(provider.get("staff_id", -1))
+		if employee_type.is_empty():
+			employee_type = str(provider.get("employee_type", provider.get("id", ""))).strip_edges()
+		if placer_staff_id <= 0 or employee_type.is_empty():
+			return Result.failure("place_restaurant: 餐厅员工解析结果无效: %s" % str(provider))
+	elif employee_type.is_empty():
 		var candidates := EmployeeUsageHelperClass.get_active_employee_types_for_usage_tag(
 			state, command.actor, "use:place_restaurant"
 		)
@@ -290,14 +339,21 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		var inc_action := EmployeeRulesClass.try_increment_action_count(state, player_id, action_id)
 		if not inc_action.ok:
 			return inc_action
+		var use_staff := StaffStateClass.increment_staff_track_usage(state, placer_staff_id, "place_or_move_restaurant", 1)
+		if not use_staff.ok:
+			return use_staff
 
-	var result := Result.success({
+	var result_payload := {
 		"restaurant_id": restaurant_id,
 		"player_id": player_id,
 		"position": world_anchor,
 		"rotation": rotation,
 		"opening_soon": opening_soon,
-	})
+		"employee_type": employee_type,
+	}
+	if placer_staff_id > 0:
+		result_payload["staff_id"] = placer_staff_id
+	var result := Result.success(result_payload)
 
 	# 里程碑触发（模块化）：首次在 Working 阶段放置新餐厅
 	if state.phase == DefsClass.PHASE_WORKING:
@@ -313,11 +369,29 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 func _generate_specific_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 	var employee_type := ""
+	var staff_id := -1
 	if command.params.has("employee_type"):
 		var employee_type_result := require_string_param(command, "employee_type")
 		if not employee_type_result.ok:
 			return events
 		employee_type = str(employee_type_result.value).strip_edges()
+	if command.params.has("staff_id"):
+		var staff_id_result := require_int_param(command, "staff_id")
+		if staff_id_result.ok:
+			staff_id = int(staff_id_result.value)
+	if old_state != null and old_state.phase == DefsClass.PHASE_WORKING:
+		var provider_read := EmployeeRulesClass.try_resolve_restaurant_placer(
+			old_state,
+			command.actor,
+			action_id,
+			employee_type,
+			staff_id
+		)
+		if provider_read.ok and provider_read.value is Dictionary:
+			var provider: Dictionary = provider_read.value
+			staff_id = int(provider.get("staff_id", staff_id))
+			if employee_type.is_empty():
+				employee_type = str(provider.get("employee_type", provider.get("id", ""))).strip_edges()
 	if employee_type.is_empty() and old_state != null and old_state.phase == DefsClass.PHASE_WORKING:
 		var candidates := EmployeeUsageHelperClass.get_active_employee_types_for_usage_tag(
 			old_state, command.actor, "use:place_restaurant"
@@ -398,6 +472,10 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 			"opening_soon": opening_soon,
 		}
 	})
+	if staff_id > 0:
+		var data: Dictionary = events[0].get("data", {})
+		data["staff_id"] = staff_id
+		events[0]["data"] = data
 
 	return events
 

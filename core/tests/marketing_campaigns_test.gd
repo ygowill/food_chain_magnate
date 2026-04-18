@@ -14,6 +14,7 @@ const EffectRegistryClass = preload("res://core/rules/effect_registry.gd")
 const PhaseManagerClass = preload("res://core/engine/phase_manager.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	EmployeeRegistryClass.reset()
@@ -43,11 +44,14 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var r6 := _test_requires_salary_fails_closed_on_invalid_marketing_milestones()
 	if not r6.ok:
 		return r6
+	var r7 := _test_initiate_marketing_records_selected_staff_id(player_count, seed_val)
+	if not r7.ok:
+		return r7
 
 	return Result.success({
 		"player_count": player_count,
 		"seed": seed_val,
-		"cases": 6,
+		"cases": 7,
 	})
 
 static func _test_billboard_mailbox_and_expiry(player_count: int, seed_val: int) -> Result:
@@ -805,3 +809,72 @@ class FirstRadioDemandAmountHandler:
 		var current: int = int(ctx["demand_amount"])
 		ctx["demand_amount"] = maxi(current, 2)
 		return Result.success()
+
+static func _test_initiate_marketing_records_selected_staff_id(player_count: int, seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val + 808)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+	var state := engine.get_state()
+	_force_turn_order(state, player_count)
+	var actor := state.get_current_player_id()
+	var map_result := _build_test_map(actor)
+	if not map_result.ok:
+		return map_result
+	state.map = map_result.value
+	RoadGraphCacheClass.invalidate_road_graph(state)
+	state.players[actor]["restaurants"] = ["rest_0"]
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_MARKETING
+
+	var take1 := StateUpdaterClass.take_from_pool(state, "marketing_trainee", 1)
+	if not take1.ok:
+		return Result.failure("取出 marketing_trainee 失败: %s" % take1.error)
+	var add1 := StateUpdaterClass.add_employee(state, actor, "marketing_trainee", false)
+	if not add1.ok:
+		return Result.failure("添加第一个 marketing_trainee 失败: %s" % add1.error)
+	var take2 := StateUpdaterClass.take_from_pool(state, "marketing_trainee", 1)
+	if not take2.ok:
+		return Result.failure("取出第二个 marketing_trainee 失败: %s" % take2.error)
+	var add2 := StateUpdaterClass.add_employee(state, actor, "marketing_trainee", false)
+	if not add2.ok:
+		return Result.failure("添加第二个 marketing_trainee 失败: %s" % add2.error)
+	var first_staff_id := int(Dictionary(add1.value).get("staff_id", -1))
+	var second_staff_id := int(Dictionary(add2.value).get("staff_id", -1))
+	if first_staff_id <= 0 or second_staff_id <= 0:
+		return Result.failure("marketing_trainee staff_id 无效: %s / %s" % [str(add1.value), str(add2.value)])
+
+	var cmd := Command.create("initiate_marketing", actor, {
+		"employee_type": "marketing_trainee",
+		"staff_id": second_staff_id,
+		"board_number": 11,
+		"product": "burger",
+		"duration": 1,
+		"position": [0, 2],
+	})
+	var result := engine.execute_command(cmd)
+	if not result.ok:
+		return Result.failure("显式 staff_id 发起营销失败: %s" % result.error)
+	state = engine.get_state()
+	var instances: Array = state.marketing_instances
+	if instances.is_empty():
+		return Result.failure("营销实例为空")
+	var instance: Dictionary = Dictionary(instances[0])
+	if int(instance.get("staff_id", -1)) != second_staff_id:
+		return Result.failure("marketing_instances[0].staff_id 应记录第二个员工 staff_id=%d，实际: %s" % [second_staff_id, str(instance)])
+	var second_used := StaffStateClass.get_staff_track_used(state, second_staff_id, "initiate_marketing")
+	var first_used := StaffStateClass.get_staff_track_used(state, first_staff_id, "initiate_marketing")
+	if not second_used.ok or not first_used.ok:
+		return Result.failure("读取营销 staff_usage 失败: %s / %s" % [str(first_used), str(second_used)])
+	if int(second_used.value) != 1 or int(first_used.value) != 0:
+		return Result.failure("显式 staff_id 营销应只消耗第二个员工，实际 first=%s second=%s" % [str(first_used.value), str(second_used.value)])
+	var events := EventBus.get_history_by_type(EventBus.EventType.MARKETING_PLACED)
+	if events.is_empty():
+		return Result.failure("应生成 MARKETING_PLACED 事件")
+	var event_data_val = Dictionary(events[-1]).get("data", null)
+	if not (event_data_val is Dictionary):
+		return Result.failure("MARKETING_PLACED 缺少 data")
+	var event_data: Dictionary = event_data_val
+	if int(event_data.get("staff_id", -1)) != second_staff_id:
+		return Result.failure("MARKETING_PLACED 事件应包含 staff_id=%d，实际: %s" % [second_staff_id, str(event_data)])
+	return Result.success()

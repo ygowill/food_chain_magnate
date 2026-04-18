@@ -3,7 +3,7 @@
 class_name MarketingPanel
 extends "res://ui/components/common/right_panel_embeddable_panel.gd"
 
-signal marketing_requested(employee_type: String, board_number: int, position: Vector2i, product: String, duration: int, rotation: int, axis: String)
+signal marketing_requested(employee_type: String, board_number: int, position: Vector2i, product: String, duration: int, rotation: int, axis: String, staff_id: int)
 signal cancelled()
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
@@ -52,13 +52,14 @@ const MARKETING_TYPE_NAME_OVERRIDES: Dictionary = {
 }
 
 # 外部数据
-var _available_marketers: Array[Dictionary] = []  # [{id, type, max_duration}]
+var _available_marketers: Array[Dictionary] = []  # [{staff_id, employee_type, marketing_types, max_duration, capacity, used, remaining}]
 var _available_boards_by_type: Dictionary = {}  # type_id -> Array[int]
 
 # 当前选择
 var _selected_type: String = ""
 var _selected_target: Vector2i = Vector2i(-1, -1)
 var _selected_employee_type: String = ""
+var _selected_staff_id: int = -1
 var _selected_board_number: int = 0
 var _selected_product: String = ""
 var _selected_duration: int = 1
@@ -66,7 +67,7 @@ var _selected_rotation: int = 0
 var _selected_axis: String = ""
 
 var _type_buttons: Dictionary = {}  # type_id -> marketing_type_button instance
-var _marketer_max_duration_by_id: Dictionary = {}  # employee_type -> max_duration
+var _marketer_info_by_key: Dictionary = {}  # picker key -> marketer info
 
 var _map_callback: Callable  # 用于请求地图选择
 var _icon_cache = MarketingPanelIconCacheClass.new()
@@ -137,11 +138,12 @@ func clear_selection() -> void:
 	_selected_type = ""
 	_selected_target = Vector2i(-1, -1)
 	_selected_employee_type = ""
+	_selected_staff_id = -1
 	_selected_board_number = 0
 	_selected_duration = 1
 	_selected_rotation = 0
 	_selected_axis = ""
-	_marketer_max_duration_by_id.clear()
+	_marketer_info_by_key.clear()
 	clear_error()
 
 	for btn in _type_buttons.values():
@@ -205,6 +207,7 @@ func _on_type_selected(type_id: String) -> void:
 	_selected_type = type_id
 	_selected_target = Vector2i(-1, -1)
 	_selected_employee_type = ""
+	_selected_staff_id = -1
 	_selected_board_number = 0
 	_selected_duration = 1
 	_selected_axis = ""
@@ -225,8 +228,10 @@ func _on_type_selected(type_id: String) -> void:
 	_request_map_selection_refresh()
 
 func _rebuild_marketer_options() -> void:
+	var previous_staff_id := _selected_staff_id
 	_selected_employee_type = ""
-	_marketer_max_duration_by_id.clear()
+	_marketer_info_by_key.clear()
+	_selected_staff_id = -1
 
 	if marketer_option == null:
 		return
@@ -236,55 +241,74 @@ func _rebuild_marketer_options() -> void:
 		_clear_duration_buttons()
 		return
 
-	var instance_count_by_emp: Dictionary = {}
-	for marketer in _available_marketers:
-		if str(marketer.get("type", "")) != _selected_type:
-			continue
-		var emp_id: String = str(marketer.get("id", ""))
-		if emp_id.is_empty():
-			continue
-		instance_count_by_emp[emp_id] = int(instance_count_by_emp.get(emp_id, 0)) + 1
-
-		var md := int(marketer.get("max_duration", 1))
-		if not _marketer_max_duration_by_id.has(emp_id):
-			_marketer_max_duration_by_id[emp_id] = md
-		else:
-			_marketer_max_duration_by_id[emp_id] = maxi(int(_marketer_max_duration_by_id[emp_id]), md)
-
-	var ids: Array[String] = []
-	for k in instance_count_by_emp.keys():
-		ids.append(str(k))
-	ids.sort()
-
 	var items: Array[Dictionary] = []
-	var first_item_key := ""
-	var first_employee_id := ""
-	for emp_id in ids:
-		var count: int = int(instance_count_by_emp.get(emp_id, 0))
-		for idx in range(count):
-			var item_key := "%s#%d" % [emp_id, idx + 1]
-			items.append({
-				"id": emp_id,
-				"key": item_key,
-				"employee_def": _get_employee_def_for_card(emp_id),
-				"badge_text": "",
-				"enabled": true,
-			})
-			if first_item_key.is_empty():
-				first_item_key = item_key
-				first_employee_id = emp_id
+	var selected_key := ""
+	var first_enabled_key := ""
+	var first_key := ""
+	for marketer_val in _available_marketers:
+		if not (marketer_val is Dictionary):
+			continue
+		var marketer: Dictionary = marketer_val
+		var staff_id := int(marketer.get("staff_id", -1))
+		var emp_id := str(marketer.get("employee_type", marketer.get("id", ""))).strip_edges()
+		if staff_id <= 0 or emp_id.is_empty():
+			continue
+		var type_id := str(marketer.get("type", "")).strip_edges()
+		var supports_type := (type_id == _selected_type)
+		if not supports_type:
+			var marketing_types_val = marketer.get("marketing_types", [])
+			if marketing_types_val is Array:
+				for t_val in Array(marketing_types_val):
+					if str(t_val).strip_edges() == _selected_type:
+						supports_type = true
+						break
+		if not supports_type:
+			continue
+		var key := "staff:%d" % staff_id
+		var remaining := int(marketer.get("remaining", 0))
+		var capacity := int(marketer.get("capacity", 0))
+		var enabled := remaining > 0
+		var info := marketer.duplicate(true)
+		info["key"] = key
+		_marketer_info_by_key[key] = info
+		items.append({
+			"id": emp_id,
+			"key": key,
+			"employee_def": _get_employee_def_for_card(emp_id),
+			"badge_text": "%d/%d" % [maxi(0, remaining), maxi(0, capacity)],
+			"tag_text": "可用" if enabled else "已用",
+			"enabled": enabled,
+		})
+		if first_key.is_empty():
+			first_key = key
+		if enabled and first_enabled_key.is_empty():
+			first_enabled_key = key
+		if previous_staff_id > 0 and previous_staff_id == staff_id:
+			selected_key = key
+
+	if selected_key.is_empty():
+		selected_key = first_enabled_key if not first_enabled_key.is_empty() else first_key
 
 	if not items.is_empty():
-		marketer_option.set_items(items, first_item_key)
-		_apply_selected_marketer(first_employee_id)
+		marketer_option.set_items(items, selected_key)
+		_apply_selected_marketer_by_key(selected_key)
 	else:
 		marketer_option.clear()
 		_clear_duration_buttons()
 
-func _apply_selected_marketer(employee_type: String) -> void:
-	_selected_employee_type = str(employee_type).strip_edges()
+func _apply_selected_marketer_by_key(item_key: String) -> void:
+	var key := str(item_key).strip_edges()
+	var info: Dictionary = Dictionary(_marketer_info_by_key.get(key, {}))
+	if info.is_empty():
+		_selected_employee_type = ""
+		_selected_staff_id = -1
+		_clear_duration_buttons()
+		return
 
-	var max_duration := int(_marketer_max_duration_by_id.get(_selected_employee_type, 1))
+	_selected_employee_type = str(info.get("employee_type", info.get("id", ""))).strip_edges()
+	_selected_staff_id = int(info.get("staff_id", -1))
+
+	var max_duration := int(info.get("max_duration", 1))
 	if max_duration <= 0:
 		max_duration = 1
 
@@ -579,7 +603,14 @@ func _rebuild_product_buttons() -> void:
 		_on_product_button_pressed(to_select)
 
 func _on_marketer_selected(employee_type: String) -> void:
-	_apply_selected_marketer(employee_type)
+	if marketer_option == null:
+		return
+	var key := ""
+	if marketer_option.has_method("get_selected_key"):
+		key = str(marketer_option.get_selected_key()).strip_edges()
+	if key.is_empty():
+		return
+	_apply_selected_marketer_by_key(key)
 	_selected_target = Vector2i(-1, -1)
 	_selected_axis = ""
 	_update_target_display()
@@ -747,7 +778,8 @@ func _on_confirm_pressed() -> void:
 		_selected_product,
 		_selected_duration,
 		_selected_rotation,
-		_selected_axis
+		_selected_axis,
+		_selected_staff_id
 	)
 
 func _on_cancel_pressed() -> void:

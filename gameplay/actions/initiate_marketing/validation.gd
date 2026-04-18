@@ -23,6 +23,14 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 	if not employee_type_result.ok:
 		return employee_type_result
 	var employee_type: String = employee_type_result.value
+	var requested_staff_id := -1
+	if command.params.has("staff_id"):
+		var staff_id_result := action.require_int_param(command, "staff_id")
+		if not staff_id_result.ok:
+			return staff_id_result
+		requested_staff_id = int(staff_id_result.value)
+		if requested_staff_id <= 0:
+			return Result.failure("staff_id 必须 > 0，实际: %d" % requested_staff_id)
 
 	var board_number_result := action.require_int_param(command, "board_number")
 	if not board_number_result.ok:
@@ -103,6 +111,10 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 	var extra_busy_uses := _count_reusable_marketing_uses_from_busy_groups_this_round(state, command.actor, employee_type, mult)
 	if active_count <= 0 and extra_busy_uses <= 0:
 		return Result.failure("你没有可用的 %s" % employee_type)
+
+	var provider_read := EmployeeRulesClass.try_resolve_marketer(state, command.actor, employee_type, requested_staff_id)
+	if not provider_read.ok:
+		return provider_read
 
 	# === 放置校验：占地/边界/阻塞/道路/边缘/重叠 ===
 	var base_size: Vector2i = board_spec.get("footprint_size", Vector2i.ONE)

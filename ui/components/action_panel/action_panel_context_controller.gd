@@ -231,8 +231,8 @@ func _refresh_restaurant_placement_context(overlay) -> void:
 	_set_custom_context_visible(false)
 
 	_sync_rotation_controls(overlay.get_selected_rotation())
-	_rebuild_employee_option(overlay.get_available_employees(), overlay.get_selected_employee())
-	_employee_row.visible = not overlay.get_available_employees().is_empty()
+	_rebuild_employee_picker_for_overlay(overlay)
+	_employee_row.visible = _overlay_has_employee_items(overlay)
 
 	if mode == "move_restaurant":
 		_rebuild_restaurant_option(
@@ -268,8 +268,8 @@ func _refresh_house_placement_context(overlay) -> void:
 	_direction_row.visible = (mode == "add_garden")
 	_set_custom_context_visible(false)
 
-	_rebuild_employee_option(overlay.get_available_employees(), overlay.get_selected_employee())
-	_employee_row.visible = not overlay.get_available_employees().is_empty()
+	_rebuild_employee_picker_for_overlay(overlay)
+	_employee_row.visible = _overlay_has_employee_items(overlay)
 
 	if mode == "place_house":
 		_sync_rotation_controls(overlay.get_selected_rotation())
@@ -559,6 +559,37 @@ func _rebuild_employee_option(employee_ids: Array[String], selected_employee_id:
 		selected = str(ids[0])
 	_employee_option.set_items(items, selected)
 
+func _overlay_has_employee_items(overlay) -> bool:
+	if overlay == null or not is_instance_valid(overlay):
+		return false
+	if overlay.has_method("get_available_employee_items"):
+		var items_val = overlay.call("get_available_employee_items")
+		return items_val is Array and not Array(items_val).is_empty()
+	if overlay.has_method("get_available_employees"):
+		var ids_val = overlay.call("get_available_employees")
+		return ids_val is Array and not Array(ids_val).is_empty()
+	return false
+
+func _rebuild_employee_picker_for_overlay(overlay) -> void:
+	if not is_instance_valid(_employee_option):
+		return
+	if overlay != null and is_instance_valid(overlay) and overlay.has_method("get_available_employee_items"):
+		var items_val = overlay.call("get_available_employee_items")
+		var items: Array[Dictionary] = []
+		if items_val is Array:
+			for item_val in Array(items_val):
+				if item_val is Dictionary:
+					items.append(Dictionary(item_val))
+		var selected_key := ""
+		if overlay.has_method("get_selected_employee_key"):
+			selected_key = str(overlay.call("get_selected_employee_key")).strip_edges()
+		_employee_option.set_items(items, selected_key)
+		return
+	if overlay != null and is_instance_valid(overlay) and overlay.has_method("get_available_employees") and overlay.has_method("get_selected_employee"):
+		_rebuild_employee_option(overlay.get_available_employees(), overlay.get_selected_employee())
+		return
+	_employee_option.clear()
+
 func _select_option_by_metadata_int(option: OptionButton, desired: int) -> void:
 	if option == null or not is_instance_valid(option):
 		return
@@ -644,6 +675,13 @@ func _on_employee_option_selected(employee_type: String) -> void:
 	if _context_syncing:
 		return
 	var emp_id := str(employee_type).strip_edges()
+	if _context_overlay != null and is_instance_valid(_context_overlay) and _context_overlay.has_method("set_selected_employee_key"):
+		var key := ""
+		if _employee_option != null and is_instance_valid(_employee_option) and _employee_option.has_method("get_selected_key"):
+			key = str(_employee_option.call("get_selected_key")).strip_edges()
+		if not key.is_empty():
+			_call_context_overlay_method("set_selected_employee_key", [key])
+			return
 	_call_context_overlay_method("set_selected_employee", [emp_id])
 
 func _get_employee_def_for_card(employee_type: String) -> Dictionary:

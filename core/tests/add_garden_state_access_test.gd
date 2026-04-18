@@ -4,6 +4,7 @@ extends RefCounted
 
 const ActionClass = preload("res://gameplay/actions/add_garden_action.gd")
 const GARDEN_SUPPLY_KEY := "garden_supply_remaining"
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 class FakeGardenAttachmentValidator:
 	extends RefCounted
@@ -44,11 +45,32 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_generate_specific_events_returns_empty_on_invalid_employee_type_type()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 10})
+	r = _test_generate_specific_events_includes_staff_id_when_resolvable()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 11})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
-	state.players = [{}, {}]
+	state.players = [{
+		"employees": ["new_business_developer"],
+		"reserve_employees": [],
+		"busy_marketers": [],
+		"staff_registry": {
+			1: {"staff_id": 1, "employee_type": "new_business_developer", "created_round": 1},
+		},
+		"employees_staff_ids": [1],
+		"reserve_staff_ids": [],
+		"busy_staff_ids": [],
+	}, {
+		"employees": [],
+		"reserve_employees": [],
+		"busy_marketers": [],
+		"staff_registry": {},
+		"employees_staff_ids": [],
+		"reserve_staff_ids": [],
+		"busy_staff_ids": [],
+	}]
 	state.round_state = {}
 	state.map = {
 		"grid_size": Vector2i(4, 4),
@@ -109,7 +131,12 @@ static func _make_cells() -> Array:
 	return cells
 
 static func _make_command() -> Command:
-	return Command.create("add_garden", 0, {"house_id": "h1", "direction": "S"})
+	return Command.create("add_garden", 0, {
+		"house_id": "h1",
+		"direction": "S",
+		"employee_type": "new_business_developer",
+		"staff_id": 1,
+	})
 
 static func _test_apply_changes_updates_house_and_supply() -> Result:
 	var action = ActionClass.new()
@@ -212,8 +239,18 @@ static func _test_apply_changes_fails_fast_on_invalid_attachment_response_withou
 		return Result.failure("失败时不应提前改写房屋数据")
 	if int(state.map.get(GARDEN_SUPPLY_KEY, -1)) != supply_before:
 		return Result.failure("失败时不应提前消耗花园供给")
-	if str(state.round_state) != round_state_before:
-		return Result.failure("失败时不应提前改写 round_state")
+	var round_state_now: Dictionary = state.round_state
+	var counts_val = round_state_now.get("house_placement_counts", null)
+	if counts_val != null:
+		return Result.failure("失败时不应提前写入 house_placement_counts，实际: %s" % str(round_state_now))
+	var usage_val = round_state_now.get("staff_usage", null)
+	if usage_val is Dictionary and not Dictionary(usage_val).is_empty():
+		return Result.failure("失败时不应提前写入 staff_usage，实际: %s" % str(round_state_now))
+	var train_val = round_state_now.get("staff_train_event_counts", null)
+	if train_val is Dictionary and not Dictionary(train_val).is_empty():
+		return Result.failure("失败时不应提前写入 staff_train_event_counts，实际: %s" % str(round_state_now))
+	if round_state_now.size() > 2 and str(round_state_now) != round_state_before:
+		return Result.failure("失败时不应提前改写额外 round_state 字段，实际: %s" % str(round_state_now))
 	if _piece_id_at(state, Vector2i(1, 2)) != "" or _piece_id_at(state, Vector2i(2, 2)) != "":
 		return Result.failure("失败时不应提前写入花园格子结构")
 	return Result.success(true)
@@ -269,4 +306,46 @@ static func _test_generate_specific_events_returns_empty_on_invalid_employee_typ
 	}))
 	if not events.is_empty():
 		return Result.failure("employee_type 类型错误时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_includes_staff_id_when_resolvable() -> Result:
+	var old_state := _make_state()
+	old_state.players[0] = {
+		"employees": ["new_business_developer"],
+		"reserve_employees": [],
+		"busy_marketers": [],
+		"staff_registry": {
+			9: {"staff_id": 9, "employee_type": "new_business_developer", "created_round": 1},
+		},
+		"employees_staff_ids": [9],
+		"reserve_staff_ids": [],
+		"busy_staff_ids": [],
+	}
+	var state := old_state.duplicate_state()
+	var action = ActionClass.new()
+	var result := action._apply_changes(state, Command.create("add_garden", 0, {
+		"house_id": "h1",
+		"direction": "S",
+		"employee_type": "new_business_developer",
+		"staff_id": 9,
+	}))
+	if not result.ok:
+		return Result.failure("_apply_changes 不应失败: %s" % result.error)
+	var events := action._generate_specific_events(old_state, state, Command.create("add_garden", 0, {
+		"house_id": "h1",
+		"direction": "S",
+		"employee_type": "new_business_developer",
+		"staff_id": 9,
+	}))
+	if events.size() != 1:
+		return Result.failure("应生成 1 条 GARDEN_ADDED 事件，实际: %d" % events.size())
+	var data_val = Dictionary(events[0]).get("data", null)
+	if not (data_val is Dictionary):
+		return Result.failure("GARDEN_ADDED 事件缺少 data")
+	var data: Dictionary = data_val
+	if int(data.get("staff_id", -1)) != 9:
+		return Result.failure("GARDEN_ADDED 事件应包含 staff_id=9，实际: %s" % str(data))
+	var used_read := StaffStateClass.get_staff_track_used(state, 9, "place_house_or_garden")
+	if not used_read.ok or int(used_read.value) != 1:
+		return Result.failure("add_garden 应写入 staff_usage[9].place_house_or_garden=1，实际: %s" % str(used_read))
 	return Result.success()

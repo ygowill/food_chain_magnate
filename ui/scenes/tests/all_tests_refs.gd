@@ -276,6 +276,7 @@ const GameTimelineSeekRoutingManualReplayTestClass = preload("res://ui/scenes/te
 const CreateRoomResumeLogHistoryBuilderTestClass = preload("res://ui/scenes/tests/create_room_resume_log_history_builder_test.gd")
 const ProductionPanelUsedCountsSyncTestClass = preload("res://ui/scenes/tests/production_panel_used_counts_sync_test.gd")
 const ProductionProcureStaffPickerUiTestClass = preload("res://ui/scenes/tests/production_procure_staff_picker_ui_test.gd")
+const PlacementStaffPickerUiTestClass = preload("res://ui/scenes/tests/placement_staff_picker_ui_test.gd")
 const ManualLogSaveTestClass = preload("res://core/tests/manual_log_save_test.gd")
 const ManualLogSavesCoverageTestClass = preload("res://ui/scenes/tests/manual_log_saves_coverage_test.gd")
 const EventHistoryRewindTestClass = preload("res://core/tests/event_history_rewind_test.gd")

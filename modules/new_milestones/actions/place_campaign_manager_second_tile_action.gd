@@ -239,6 +239,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 
 	var player_id: int = command.actor
 	var link_id: String = str(info["link_id"])
+	var staff_id := int(info.get("staff_id", -1))
 	var mk_type: String = str(info["type"])
 	var product: String = str(info["product"])
 	var remaining_duration: int = int(info["remaining_duration"])
@@ -263,6 +264,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"type": mk_type,
 		"owner": player_id,
 		"employee_type": "campaign_manager",
+		"staff_id": staff_id,
 		"product": product,
 		"world_pos": world_pos,
 		"rotation": rotation,

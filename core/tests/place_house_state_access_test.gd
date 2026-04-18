@@ -6,6 +6,7 @@ const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const PlaceHouseActionClass = preload("res://gameplay/actions/place_house_action.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 class FakePlacementValidator:
 	extends RefCounted
@@ -37,7 +38,10 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_generate_specific_events_returns_empty_on_invalid_anchor_pos()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 6})
+	r = _test_generate_specific_events_includes_staff_id_when_resolvable(seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 7})
 
 static func _test_apply_changes_fails_fast_on_invalid_house_placement_counts_without_partial_mutation(seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -259,4 +263,50 @@ static func _test_generate_specific_events_returns_empty_on_invalid_anchor_pos()
 	var events := action._generate_specific_events(old_state, new_state, Command.create("place_house", 0, {"employee_type": "new_business_developer"}))
 	if not events.is_empty():
 		return Result.failure("anchor_pos 损坏时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_includes_staff_id_when_resolvable(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val + 701)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+	var to_working := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 30)
+	if not to_working.ok:
+		return to_working
+	var state := engine.get_state()
+	state.sub_phase = DefsClass.SUB_PHASE_PLACE_HOUSES
+	var actor := state.get_current_player_id()
+	var take := StateUpdaterClass.take_from_pool(state, "new_business_developer", 1)
+	if not take.ok:
+		return Result.failure("取出 new_business_developer 失败: %s" % take.error)
+	var add := StateUpdaterClass.add_employee(state, actor, "new_business_developer", false)
+	if not add.ok:
+		return Result.failure("添加 new_business_developer 失败: %s" % add.error)
+	var staff_id := int(Dictionary(add.value).get("staff_id", -1))
+	if staff_id <= 0:
+		return Result.failure("new_business_developer staff_id 无效: %s" % str(add.value))
+	var house_number := _pick_house_number(state)
+	var cmd := _find_first_valid_house_placement(engine, actor, house_number)
+	if cmd == null:
+		return Result.failure("找不到合法房屋放置点")
+	cmd.params["staff_id"] = staff_id
+	cmd.params["employee_type"] = "new_business_developer"
+	var action = PlaceHouseActionClass.new()
+	var old_state := engine.get_state().duplicate_state()
+	var result := engine.execute_command(cmd)
+	if not result.ok:
+		return Result.failure("place_house 执行失败: %s" % result.error)
+	var new_state := engine.get_state()
+	var events := action._generate_specific_events(old_state, new_state, cmd)
+	if events.size() != 1:
+		return Result.failure("应生成 1 条 HOUSE_PLACED 事件，实际: %d" % events.size())
+	var data_val = Dictionary(events[0]).get("data", null)
+	if not (data_val is Dictionary):
+		return Result.failure("HOUSE_PLACED 事件缺少 data")
+	var data: Dictionary = data_val
+	if int(data.get("staff_id", -1)) != staff_id:
+		return Result.failure("HOUSE_PLACED 事件应包含 staff_id=%d，实际: %s" % [staff_id, str(data)])
+	var used_read := StaffStateClass.get_staff_track_used(new_state, staff_id, "place_house_or_garden")
+	if not used_read.ok or int(used_read.value) != 1:
+		return Result.failure("place_house 应写入 staff_usage[%d].place_house_or_garden=1，实际: %s" % [staff_id, str(used_read)])
 	return Result.success()

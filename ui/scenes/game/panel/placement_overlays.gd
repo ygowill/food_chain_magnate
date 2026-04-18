@@ -5,6 +5,7 @@ const RestaurantPlacementScene = preload("res://ui/components/restaurant_placeme
 const HousePlacementScene = preload("res://ui/components/house_placement/house_placement_overlay.tscn")
 const PiecePlacementScene = preload("res://ui/components/piece_placement/piece_placement_overlay.tscn")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 var _scene = null
@@ -124,9 +125,9 @@ func _sync_restaurant_placement_overlay(state: GameState, force_full_refresh: bo
 		if restaurant_placement_overlay.has_method("get_mode"):
 			action_id = str(restaurant_placement_overlay.get_mode())
 
-		var prev_employee := ""
-		if restaurant_placement_overlay.has_method("get_selected_employee"):
-			prev_employee = str(restaurant_placement_overlay.get_selected_employee()).strip_edges()
+		var prev_employee_key := ""
+		if restaurant_placement_overlay.has_method("get_selected_employee_key"):
+			prev_employee_key = str(restaurant_placement_overlay.get_selected_employee_key()).strip_edges()
 		var prev_restaurant := ""
 		if restaurant_placement_overlay.has_method("get_selected_restaurant"):
 			prev_restaurant = str(restaurant_placement_overlay.get_selected_restaurant()).strip_edges()
@@ -148,15 +149,12 @@ func _sync_restaurant_placement_overlay(state: GameState, force_full_refresh: bo
 			if restaurant_placement_overlay.has_method("set_selected_restaurant") and not prev_restaurant.is_empty():
 				restaurant_placement_overlay.set_selected_restaurant(prev_restaurant)
 
-		if restaurant_placement_overlay.has_method("set_available_employees"):
-			var usage_tag := ""
-			if state.phase == DefsClass.PHASE_WORKING:
-				usage_tag = "use:move_restaurant" if action_id == "move_restaurant" else "use:place_restaurant"
-			restaurant_placement_overlay.set_available_employees(
-				_get_active_employee_types_with_usage_tag(state, current_player_id, usage_tag)
+		if restaurant_placement_overlay.has_method("set_available_employee_items"):
+			restaurant_placement_overlay.set_available_employee_items(
+				_build_restaurant_employee_items(state, current_player_id, action_id)
 			)
-			if restaurant_placement_overlay.has_method("set_selected_employee") and not prev_employee.is_empty():
-				restaurant_placement_overlay.set_selected_employee(prev_employee)
+			if restaurant_placement_overlay.has_method("set_selected_employee_key") and not prev_employee_key.is_empty():
+				restaurant_placement_overlay.set_selected_employee_key(prev_employee_key)
 
 		if restaurant_placement_overlay.has_method("get_selected_rotation") and restaurant_placement_overlay.has_method("set_selected_rotation"):
 			var r := int(restaurant_placement_overlay.get_selected_rotation())
@@ -181,9 +179,9 @@ func _sync_house_placement_overlay(state: GameState, force_full_refresh: bool = 
 		if house_placement_overlay.has_method("get_mode"):
 			action_id = str(house_placement_overlay.get_mode())
 
-		var prev_employee := ""
-		if house_placement_overlay.has_method("get_selected_employee"):
-			prev_employee = str(house_placement_overlay.get_selected_employee()).strip_edges()
+		var prev_employee_key := ""
+		if house_placement_overlay.has_method("get_selected_employee_key"):
+			prev_employee_key = str(house_placement_overlay.get_selected_employee_key()).strip_edges()
 
 		if _map_controller != null:
 			_map_controller.begin_selection("house_placement", {"action_id": action_id})
@@ -193,15 +191,12 @@ func _sync_house_placement_overlay(state: GameState, force_full_refresh: bool = 
 		if house_placement_overlay.has_method("set_map_data"):
 			house_placement_overlay.set_map_data(state.map)
 
-		if house_placement_overlay.has_method("set_available_employees"):
-			var usage_tag := ""
-			if state.phase == DefsClass.PHASE_WORKING:
-				usage_tag = "use:add_garden" if action_id == "add_garden" else "use:place_house"
-			house_placement_overlay.set_available_employees(
-				_get_active_employee_types_with_usage_tag(state, current_player_id, usage_tag)
+		if house_placement_overlay.has_method("set_available_employee_items"):
+			house_placement_overlay.set_available_employee_items(
+				_build_house_garden_employee_items(state, current_player_id, action_id)
 			)
-			if house_placement_overlay.has_method("set_selected_employee") and not prev_employee.is_empty():
-				house_placement_overlay.set_selected_employee(prev_employee)
+			if house_placement_overlay.has_method("set_selected_employee_key") and not prev_employee_key.is_empty():
+				house_placement_overlay.set_selected_employee_key(prev_employee_key)
 
 		if house_placement_overlay.has_method("get_selected_rotation") and house_placement_overlay.has_method("set_selected_rotation"):
 			var r := int(house_placement_overlay.get_selected_rotation())
@@ -382,14 +377,13 @@ func show_restaurant_placement(action_id: String, params: Dictionary) -> void:
 		if params.has("restaurant_id") and restaurant_placement_overlay.has_method("set_selected_restaurant"):
 			restaurant_placement_overlay.set_selected_restaurant(str(params.restaurant_id))
 
-	if restaurant_placement_overlay.has_method("set_available_employees"):
-		var usage_tag := ""
-		if state.phase == DefsClass.PHASE_WORKING:
-			usage_tag = "use:move_restaurant" if action_id == "move_restaurant" else "use:place_restaurant"
-		restaurant_placement_overlay.set_available_employees(
-			_get_active_employee_types_with_usage_tag(state, current_player_id, usage_tag)
+	if restaurant_placement_overlay.has_method("set_available_employee_items"):
+		restaurant_placement_overlay.set_available_employee_items(
+			_build_restaurant_employee_items(state, current_player_id, action_id)
 		)
-		if params.has("employee_type") and restaurant_placement_overlay.has_method("set_selected_employee"):
+		if params.has("staff_id") and restaurant_placement_overlay.has_method("set_selected_employee_key"):
+			restaurant_placement_overlay.set_selected_employee_key("staff:%d" % int(params.staff_id))
+		elif params.has("employee_type") and restaurant_placement_overlay.has_method("set_selected_employee"):
 			restaurant_placement_overlay.set_selected_employee(str(params.employee_type))
 
 	if _map_controller != null:
@@ -434,14 +428,13 @@ func show_house_placement(action_id: String, params: Dictionary) -> void:
 		house_placement_overlay.set_mode(action_id)
 	if house_placement_overlay.has_method("set_map_data"):
 		house_placement_overlay.set_map_data(state.map)
-	if house_placement_overlay.has_method("set_available_employees"):
-		var usage_tag := ""
-		if state.phase == DefsClass.PHASE_WORKING:
-			usage_tag = "use:add_garden" if action_id == "add_garden" else "use:place_house"
-		house_placement_overlay.set_available_employees(
-			_get_active_employee_types_with_usage_tag(state, state.get_current_player_id(), usage_tag)
+	if house_placement_overlay.has_method("set_available_employee_items"):
+		house_placement_overlay.set_available_employee_items(
+			_build_house_garden_employee_items(state, state.get_current_player_id(), action_id)
 		)
-		if params.has("employee_type") and house_placement_overlay.has_method("set_selected_employee"):
+		if params.has("staff_id") and house_placement_overlay.has_method("set_selected_employee_key"):
+			house_placement_overlay.set_selected_employee_key("staff:%d" % int(params.staff_id))
+		elif params.has("employee_type") and house_placement_overlay.has_method("set_selected_employee"):
 			house_placement_overlay.set_selected_employee(str(params.employee_type))
 	if _map_controller != null:
 		_map_controller.on_house_preview_cleared()
@@ -511,6 +504,10 @@ func _on_restaurant_placement_confirmed(position: Vector2i, rotation: int, resta
 		var employee_type := str(restaurant_placement_overlay.get_selected_employee()).strip_edges()
 		if not employee_type.is_empty():
 			command_params["employee_type"] = employee_type
+	if is_instance_valid(restaurant_placement_overlay) and restaurant_placement_overlay.has_method("get_selected_staff_id"):
+		var staff_id := int(restaurant_placement_overlay.get_selected_staff_id())
+		if staff_id > 0:
+			command_params["staff_id"] = staff_id
 
 	var result: Result = _execute_command.call(Command.create(action_id, current_player_id, command_params))
 	if result.ok:
@@ -540,6 +537,10 @@ func _on_house_placement_confirmed(position: Vector2i, rotation: int, house_numb
 		var employee_type := str(house_placement_overlay.get_selected_employee()).strip_edges()
 		if not employee_type.is_empty():
 			command_params["employee_type"] = employee_type
+	if is_instance_valid(house_placement_overlay) and house_placement_overlay.has_method("get_selected_staff_id"):
+		var staff_id := int(house_placement_overlay.get_selected_staff_id())
+		if staff_id > 0:
+			command_params["staff_id"] = staff_id
 	var result: Result = _execute_command.call(Command.create("place_house", current_player_id, command_params))
 	if result.ok:
 		if is_instance_valid(house_placement_overlay):
@@ -569,6 +570,10 @@ func _on_garden_confirmed(house_id: String, direction: String) -> void:
 		var employee_type := str(house_placement_overlay.get_selected_employee()).strip_edges()
 		if not employee_type.is_empty():
 			command_params["employee_type"] = employee_type
+	if is_instance_valid(house_placement_overlay) and house_placement_overlay.has_method("get_selected_staff_id"):
+		var staff_id := int(house_placement_overlay.get_selected_staff_id())
+		if staff_id > 0:
+			command_params["staff_id"] = staff_id
 	var result: Result = _execute_command.call(Command.create("add_garden", current_player_id, command_params))
 	if result.ok:
 		if is_instance_valid(house_placement_overlay):
@@ -655,3 +660,33 @@ func _get_active_employee_types_with_usage_tag(state: GameState, player_id: int,
 		ids.append(str(key))
 	ids.sort()
 	return ids
+
+func _build_house_garden_employee_items(state: GameState, player_id: int, action_id: String) -> Array[Dictionary]:
+	var all_items := EmployeeRulesClass.get_house_garden_placers_for_working(state, player_id)
+	var out: Array[Dictionary] = []
+	var capability := "can_add_garden" if str(action_id).strip_edges() == "add_garden" else "can_place_house"
+	for item_val in all_items:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = Dictionary(item_val).duplicate(true)
+		if not bool(item.get(capability, false)):
+			continue
+		if int(item.get("remaining", 0)) <= 0:
+			continue
+		out.append(item)
+	return out
+
+func _build_restaurant_employee_items(state: GameState, player_id: int, action_id: String) -> Array[Dictionary]:
+	var all_items := EmployeeRulesClass.get_restaurant_placers_for_working(state, player_id)
+	var out: Array[Dictionary] = []
+	var capability := "can_move_restaurant" if str(action_id).strip_edges() == "move_restaurant" else "can_place_restaurant"
+	for item_val in all_items:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = Dictionary(item_val).duplicate(true)
+		if not bool(item.get(capability, false)):
+			continue
+		if int(item.get("remaining", 0)) <= 0:
+			continue
+		out.append(item)
+	return out

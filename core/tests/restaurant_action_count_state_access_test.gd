@@ -6,6 +6,7 @@ const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var r := _test_place_can_initiate_fails_closed_on_invalid_action_counts(player_count, seed_val)
@@ -26,7 +27,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_move_apply_fails_fast_on_invalid_action_counts_without_partial_mutation(player_count, seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 6})
+	r = _test_place_move_share_staff_usage_track(player_count, seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 7})
 
 static func _build_place_restaurant_working_engine(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -260,6 +264,64 @@ static func _test_move_apply_fails_fast_on_invalid_action_counts_without_partial
 		return Result.failure("失败时不应提前改写 map")
 	if str(state.round_state) != round_state_before:
 		return Result.failure("失败时不应提前改写 round_state")
+	return Result.success()
+
+static func _test_place_move_share_staff_usage_track(player_count: int, seed_val: int) -> Result:
+	var built := _build_move_restaurant_working_engine(player_count, seed_val + 404)
+	if not built.ok:
+		return built
+	var engine: GameEngine = built.value
+	var state := engine.get_state()
+	var actor := state.get_current_player_id()
+	var regional_ids_read := StaffStateClass.find_staff_ids_by_employee_type(state, actor, "regional_manager", ["employees"])
+	if not regional_ids_read.ok:
+		return Result.failure("读取 regional_manager staff_ids 失败: %s" % regional_ids_read.error)
+	var regional_ids: Array = regional_ids_read.value
+	if regional_ids.is_empty():
+		return Result.failure("regional_manager staff_ids 为空")
+	var regional_staff_id := int(regional_ids[0])
+	var local_ids_read := StaffStateClass.find_staff_ids_by_employee_type(state, actor, "local_manager", ["employees"])
+	if not local_ids_read.ok:
+		return Result.failure("读取 local_manager staff_ids 失败: %s" % local_ids_read.error)
+	var local_ids: Array = local_ids_read.value
+	if local_ids.is_empty():
+		return Result.failure("local_manager staff_ids 为空")
+	var local_staff_id := int(local_ids[0])
+
+	var place_cmd := _find_first_valid_place(engine, actor, {"employee_type": "local_manager", "staff_id": local_staff_id})
+	if place_cmd == null:
+		return Result.failure("找不到 local_manager 合法放置点")
+	var place_result := engine.execute_command(place_cmd)
+	if not place_result.ok:
+		return Result.failure("local_manager 放置餐厅失败: %s" % place_result.error)
+	state = engine.get_state()
+	var used_after_place := StaffStateClass.get_staff_track_used(state, local_staff_id, "place_or_move_restaurant")
+	if not used_after_place.ok or int(used_after_place.value) != 1:
+		return Result.failure("place_restaurant 后 local_manager 的共享 track 应为 1，实际: %s" % str(used_after_place))
+
+	var restaurants: Array = Array(state.players[actor].get("restaurants", []))
+	if restaurants.is_empty():
+		return Result.failure("玩家没有可移动餐厅")
+	var rest_id := str(restaurants[0])
+	var rest_val = state.map.get("restaurants", {}).get(rest_id, {})
+	if not (rest_val is Dictionary):
+		return Result.failure("map.restaurants[%s] 类型错误" % rest_id)
+	var rest: Dictionary = rest_val
+	var move_cmd := _find_first_valid_move(engine, actor, rest_id, Vector2i(rest.get("anchor_pos", Vector2i.ZERO)), int(rest.get("rotation", 0)))
+	if move_cmd == null:
+		return Result.failure("找不到合法 move_restaurant 位置")
+	move_cmd.params["employee_type"] = "regional_manager"
+	move_cmd.params["staff_id"] = regional_staff_id
+	var move_result := engine.execute_command(move_cmd)
+	if not move_result.ok:
+		return Result.failure("regional_manager 移动餐厅失败: %s" % move_result.error)
+	state = engine.get_state()
+	var used_after_move := StaffStateClass.get_staff_track_used(state, regional_staff_id, "place_or_move_restaurant")
+	if not used_after_move.ok or int(used_after_move.value) != 1:
+		return Result.failure("move_restaurant 后 regional_manager 的共享 track 应为 1，实际: %s" % str(used_after_move))
+	used_after_place = StaffStateClass.get_staff_track_used(state, local_staff_id, "place_or_move_restaurant")
+	if not used_after_place.ok or int(used_after_place.value) != 1:
+		return Result.failure("place/move 应共享 track_id=place_or_move_restaurant，local_manager 实际: %s" % str(used_after_place))
 	return Result.success()
 
 static func _place_initial_restaurants(engine: GameEngine) -> Result:

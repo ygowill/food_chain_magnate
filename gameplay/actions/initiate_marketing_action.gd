@@ -166,6 +166,15 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 	var employee_type: String = str(employee_type_result.value).strip_edges()
 	if employee_type.is_empty():
 		return events
+	var staff_id := -1
+	if command.params.has("staff_id"):
+		var staff_id_result := require_int_param(command, "staff_id")
+		if staff_id_result.ok:
+			staff_id = int(staff_id_result.value)
+	if _old_state != null:
+		var provider_read := EmployeeRulesClass.try_resolve_marketer(_old_state, command.actor, employee_type, staff_id)
+		if provider_read.ok and provider_read.value is Dictionary:
+			staff_id = int(Dictionary(provider_read.value).get("staff_id", staff_id))
 
 	var board_number_result := require_int_param(command, "board_number")
 	if not board_number_result.ok:
@@ -244,6 +253,10 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 			"position": p,
 		}
 	})
+	if staff_id > 0:
+		var data: Dictionary = events[0].get("data", {})
+		data["staff_id"] = staff_id
+		events[0]["data"] = data
 	return events
 
 # === 内部：放置/距离校验 ===

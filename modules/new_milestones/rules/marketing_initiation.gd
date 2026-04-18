@@ -171,6 +171,7 @@ func _on_marketing_initiated_campaign_manager(state: GameState, command: Command
 	pending[int(command.actor)] = {
 		"link_id": link_id,
 		"employee_type": employee_type,
+		"staff_id": int(marketing_instance.get("staff_id", -1)),
 		"type": mk_type,
 		"product": product,
 		"remaining_duration": duration,

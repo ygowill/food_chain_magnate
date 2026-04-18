@@ -13,6 +13,7 @@ const RoundStateCountersClass = preload("res://core/utils/round_state_counters.g
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 const HOUSE_PIECE_ID := "house_with_garden"
 const HOUSE_NUMBER_SUPPLY_KEY := "house_number_supply_remaining"
@@ -99,6 +100,19 @@ func _parse_params(command: Command) -> Result:
 		"house_number": house_number,
 	})
 
+func _read_optional_staff_id(command: Command) -> Result:
+	if command == null:
+		return Result.failure("command 为空")
+	if not command.params.has("staff_id"):
+		return Result.success(-1)
+	var staff_id_result := require_int_param(command, "staff_id")
+	if not staff_id_result.ok:
+		return staff_id_result
+	var staff_id := int(staff_id_result.value)
+	if staff_id <= 0:
+		return Result.failure("staff_id 必须 > 0，实际: %d" % staff_id)
+	return Result.success(staff_id)
+
 func _validate_specific(state: GameState, command: Command) -> Result:
 	# 检查必需参数
 	var params_result := _parse_params(command)
@@ -119,6 +133,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not employee_type_result.ok:
 		return employee_type_result
 	employee_type = employee_type_result.value
+	var requested_staff_read := _read_optional_staff_id(command)
+	if not requested_staff_read.ok:
+		return requested_staff_read
+	var requested_staff_id := int(requested_staff_read.value)
 
 	# 规则：仅允许从“剩余编号池”中选择（用完即无）
 	var remaining_numbers := _get_remaining_house_numbers(state.map)
@@ -143,6 +161,16 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var used := int(used_result.value)
 	if used >= capacity:
 		return Result.failure("放置房屋/花园本子阶段已用完: %d/%d" % [used, capacity])
+
+	var provider_read := EmployeeRulesClass.try_resolve_house_garden_placer(
+		state,
+		command.actor,
+		action_id,
+		employee_type,
+		requested_staff_id
+	)
+	if not provider_read.ok:
+		return provider_read
 
 	# 构建地图上下文
 	var map_ctx_read := MapContextBuilderClass.build_context_result(state, action_id)
@@ -180,6 +208,29 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var rotation: int = int(params["rotation"])
 	var house_number: int = int(params["house_number"])
 	var player_id: int = command.actor
+	var employee_type := ""
+	var employee_type_result := optional_string_param(command, "employee_type", "")
+	if not employee_type_result.ok:
+		return employee_type_result
+	employee_type = employee_type_result.value
+	var requested_staff_read := _read_optional_staff_id(command)
+	if not requested_staff_read.ok:
+		return requested_staff_read
+	var requested_staff_id := int(requested_staff_read.value)
+	var provider_read := EmployeeRulesClass.try_resolve_house_garden_placer(
+		state,
+		player_id,
+		action_id,
+		employee_type,
+		requested_staff_id
+	)
+	if not provider_read.ok:
+		return provider_read
+	var provider: Dictionary = provider_read.value
+	var placer_staff_id := int(provider.get("staff_id", -1))
+	var placer_employee_type := str(provider.get("employee_type", employee_type)).strip_edges()
+	if placer_staff_id <= 0 or placer_employee_type.is_empty():
+		return Result.failure("place_house: 放置员工解析结果无效: %s" % str(provider))
 
 	# 构建地图上下文和建筑件注册表
 	var map_ctx_read := MapContextBuilderClass.build_context_result(state, action_id)
@@ -257,6 +308,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	)
 	if not inc_result.ok:
 		return inc_result
+	var use_staff := StaffStateClass.increment_staff_track_usage(state, placer_staff_id, "place_house_or_garden", 1)
+	if not use_staff.ok:
+		return use_staff
 
 	var ms := MilestoneSystemClass.process_event(state, "HouseBuilt", {"player_id": player_id})
 
@@ -265,7 +319,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"house_number": house_number,
 		"player_id": player_id,
 		"position": world_anchor,
-		"rotation": rotation
+		"rotation": rotation,
+		"staff_id": placer_staff_id,
+		"employee_type": placer_employee_type,
 	})
 	if not ms.ok:
 		result.with_warning("里程碑触发失败(HouseBuilt): %s" % ms.error)
@@ -274,12 +330,30 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 func _generate_specific_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 	var employee_type := ""
+	var staff_id := -1
 	if command.params.has("employee_type"):
 		var employee_type_result := require_string_param(command, "employee_type")
 		if not employee_type_result.ok:
 			return events
 		employee_type = str(employee_type_result.value).strip_edges()
-	if employee_type.is_empty():
+	if command.params.has("staff_id"):
+		var staff_id_result := require_int_param(command, "staff_id")
+		if staff_id_result.ok:
+			staff_id = int(staff_id_result.value)
+	if old_state != null:
+		var provider_read := EmployeeRulesClass.try_resolve_house_garden_placer(
+			old_state,
+			command.actor,
+			action_id,
+			employee_type,
+			staff_id
+		)
+		if provider_read.ok and provider_read.value is Dictionary:
+			var provider: Dictionary = provider_read.value
+			staff_id = int(provider.get("staff_id", staff_id))
+			if employee_type.is_empty():
+				employee_type = str(provider.get("employee_type", provider.get("id", ""))).strip_edges()
+	if employee_type.is_empty() and old_state != null:
 		var candidates := EmployeeUsageHelperClass.get_active_employee_types_for_usage_tag(
 			old_state, command.actor, "use:place_house"
 		)
@@ -333,6 +407,10 @@ func _generate_specific_events(old_state: GameState, new_state: GameState, comma
 			"employee_type": employee_type,
 		}
 	})
+	if staff_id > 0:
+		var data: Dictionary = events[0].get("data", {})
+		data["staff_id"] = staff_id
+		events[0]["data"] = data
 
 	return events
 

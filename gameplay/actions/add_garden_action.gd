@@ -12,6 +12,7 @@ const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_helper.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 const GARDEN_SUPPLY_KEY := "garden_supply_remaining"
 const DEFAULT_GARDEN_SUPPLY := 8
@@ -29,6 +30,19 @@ func _init(piece_registry: Dictionary = {}, garden_attachment_validator = null) 
 	allowed_sub_phases = [DefsClass.SUB_PHASE_PLACE_HOUSES]
 	_piece_registry = piece_registry
 	_garden_attachment_validator = garden_attachment_validator if garden_attachment_validator != null else GardenAttachmentClass
+
+func _read_optional_staff_id(command: Command) -> Result:
+	if command == null:
+		return Result.failure("command 为空")
+	if not command.params.has("staff_id"):
+		return Result.success(-1)
+	var staff_id_result := require_int_param(command, "staff_id")
+	if not staff_id_result.ok:
+		return staff_id_result
+	var staff_id := int(staff_id_result.value)
+	if staff_id <= 0:
+		return Result.failure("staff_id 必须 > 0，实际: %d" % staff_id)
+	return Result.success(staff_id)
 
 func can_initiate(state: GameState, player_id: int) -> bool:
 	if state == null:
@@ -104,6 +118,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not employee_type_result.ok:
 		return employee_type_result
 	employee_type = employee_type_result.value
+	var requested_staff_read := _read_optional_staff_id(command)
+	if not requested_staff_read.ok:
+		return requested_staff_read
+	var requested_staff_id := int(requested_staff_read.value)
 
 	# 规则：PlaceHouses 子阶段需要“可添加花园”的在岗员工（数据驱动：员工 usage_tags）
 	var player := state.get_player(command.actor)
@@ -123,6 +141,16 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var used := int(used_result.value)
 	if used >= capacity:
 		return Result.failure("放置房屋/花园本子阶段已用完: %d/%d" % [used, capacity])
+
+	var provider_read := EmployeeRulesClass.try_resolve_house_garden_placer(
+		state,
+		command.actor,
+		action_id,
+		employee_type,
+		requested_staff_id
+	)
+	if not provider_read.ok:
+		return provider_read
 
 	# 全局花园板件数量限制（只限制 add_garden）
 	if _get_garden_supply_remaining(state.map) <= 0:
@@ -208,6 +236,29 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if not direction_result.ok:
 		return direction_result
 	var direction: String = direction_result.value
+	var employee_type := ""
+	var employee_type_result := optional_string_param(command, "employee_type", "")
+	if not employee_type_result.ok:
+		return employee_type_result
+	employee_type = employee_type_result.value
+	var requested_staff_read := _read_optional_staff_id(command)
+	if not requested_staff_read.ok:
+		return requested_staff_read
+	var requested_staff_id := int(requested_staff_read.value)
+	var provider_read := EmployeeRulesClass.try_resolve_house_garden_placer(
+		state,
+		player_id,
+		action_id,
+		employee_type,
+		requested_staff_id
+	)
+	if not provider_read.ok:
+		return provider_read
+	var provider: Dictionary = provider_read.value
+	var placer_staff_id := int(provider.get("staff_id", -1))
+	var placer_employee_type := str(provider.get("employee_type", employee_type)).strip_edges()
+	if placer_staff_id <= 0 or placer_employee_type.is_empty():
+		return Result.failure("add_garden: 放置员工解析结果无效: %s" % str(provider))
 
 	var map_ctx_read := MapContextBuilderClass.build_context_result(state, action_id)
 	if not map_ctx_read.ok:
@@ -280,6 +331,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	)
 	if not inc_result.ok:
 		return inc_result
+	var use_staff := StaffStateClass.increment_staff_track_usage(state, placer_staff_id, "place_house_or_garden", 1)
+	if not use_staff.ok:
+		return use_staff
 
 	state.map[GARDEN_SUPPLY_KEY] = maxi(0, supply_before - 1)
 
@@ -288,6 +342,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"house_id": house_id,
 		"direction": direction,
 		"garden_cells": garden_cells,
+		"staff_id": placer_staff_id,
+		"employee_type": placer_employee_type,
 	})
 
 func _generate_specific_events(_old_state: GameState, _new_state: GameState, command: Command) -> Array[Dictionary]:
@@ -303,11 +359,29 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 	if house_id.is_empty() or direction.is_empty():
 		return []
 	var employee_type := ""
+	var staff_id := -1
 	if command.params.has("employee_type"):
 		var employee_type_result := require_string_param(command, "employee_type")
 		if not employee_type_result.ok:
 			return []
 		employee_type = str(employee_type_result.value).strip_edges()
+	if command.params.has("staff_id"):
+		var staff_id_result := require_int_param(command, "staff_id")
+		if staff_id_result.ok:
+			staff_id = int(staff_id_result.value)
+	if _old_state != null:
+		var provider_read := EmployeeRulesClass.try_resolve_house_garden_placer(
+			_old_state,
+			command.actor,
+			action_id,
+			employee_type,
+			staff_id
+		)
+		if provider_read.ok and provider_read.value is Dictionary:
+			var provider: Dictionary = provider_read.value
+			staff_id = int(provider.get("staff_id", staff_id))
+			if employee_type.is_empty():
+				employee_type = str(provider.get("employee_type", provider.get("id", ""))).strip_edges()
 	if employee_type.is_empty():
 		var candidates := EmployeeUsageHelperClass.get_active_employee_types_for_usage_tag(
 			_old_state, command.actor, "use:add_garden"
@@ -342,6 +416,8 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 		data["house_number"] = house_number
 	if position.size() >= 2:
 		data["position"] = position
+	if staff_id > 0:
+		data["staff_id"] = staff_id
 	return [{
 		"type": EventBus.EventType.GARDEN_ADDED,
 		"data": data

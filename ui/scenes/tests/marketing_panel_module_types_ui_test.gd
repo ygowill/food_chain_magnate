@@ -22,7 +22,7 @@ static func _case_module_type_visible() -> Result:
 	panel.type_container = container
 
 	panel.set_available_marketers([
-		{"id": "gourmet_food_critic", "type": "gourmet_guide", "max_duration": 3},
+		{"staff_id": 1, "employee_type": "gourmet_food_critic", "type": "gourmet_guide", "marketing_types": ["gourmet_guide"], "max_duration": 3, "capacity": 1, "used": 0, "remaining": 1},
 	])
 	panel.set_available_boards({"gourmet_guide": [17, 18]})
 
@@ -60,8 +60,8 @@ static func _case_duplicate_marketers_render_multiple_items() -> Result:
 	panel.marketer_option = picker
 
 	panel.set_available_marketers([
-		{"id": "marketing_trainee", "type": "billboard", "max_duration": 1},
-		{"id": "marketing_trainee", "type": "billboard", "max_duration": 1},
+		{"staff_id": 11, "employee_type": "marketing_trainee", "type": "billboard", "marketing_types": ["billboard"], "max_duration": 1, "capacity": 1, "used": 0, "remaining": 1},
+		{"staff_id": 12, "employee_type": "marketing_trainee", "type": "billboard", "marketing_types": ["billboard"], "max_duration": 1, "capacity": 1, "used": 0, "remaining": 1},
 	])
 	panel.set_available_boards({"billboard": [11, 13]})
 
@@ -73,6 +73,17 @@ static func _case_duplicate_marketers_render_multiple_items() -> Result:
 	if item_count != 2:
 		_safe_free(panel)
 		return Result.failure("MarketingPanel should render 2 marketer items for duplicate marketers, got: %d" % item_count)
+	if int(panel._selected_staff_id) != 11:
+		_safe_free(panel)
+		return Result.failure("MarketingPanel 应默认选中最小可用 staff_id=11，实际: %s" % str(panel._selected_staff_id))
+	if not picker.has_method("set_selected"):
+		_safe_free(panel)
+		return Result.failure("EmployeePicker 缺少 set_selected")
+	picker.set_selected("staff:12")
+	panel._on_marketer_selected("marketing_trainee")
+	if int(panel._selected_staff_id) != 12:
+		_safe_free(panel)
+		return Result.failure("MarketingPanel 切换实例后应保留 staff_id=12，实际: %s" % str(panel._selected_staff_id))
 
 	_safe_free(panel)
 	return Result.success({})

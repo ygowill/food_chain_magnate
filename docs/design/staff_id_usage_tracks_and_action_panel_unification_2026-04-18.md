@@ -13,6 +13,7 @@
 - `train` 动作记录培训员 `staff_usage[trainer_staff_id]["train"]`
 - `RecruitPanel` 改为“上方选招聘员工实例、下方看可招目标”
 - `TrainPanel` 改为“上方选来源员工实例、下方看可达目标”
+- Payday 薪资折扣已从 `staff_usage[staff_id]["recruit"]` 完全收口
 - `produce_food` / `procure_drinks` 动作支持显式 `staff_id`，并写入
 	- `round_state.staff_usage[staff_id]["produce_food"]`
 	- `round_state.staff_usage[staff_id]["procure_drinks"]`
@@ -24,8 +25,9 @@
 
 尚未完成：
 
-- Payday 薪资折扣已从 `staff_usage` 完全收口
-- 其它员工动作面板（营销/房屋/餐厅）统一到同一 staff 驱动框架
+- 营销面板统一到 staff 驱动框架
+- 房屋 / 花园面板统一到 staff 驱动框架
+- 餐厅面板统一到 staff 驱动框架
 
 ---
 

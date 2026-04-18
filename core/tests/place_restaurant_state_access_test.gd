@@ -6,6 +6,7 @@ const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const PlaceRestaurantActionClass = preload("res://gameplay/actions/place_restaurant_action.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 class FakePlacementValidator:
 	extends RefCounted
@@ -43,7 +44,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_generate_specific_events_returns_empty_on_opening_soon_missing_anchor_pos()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 8})
+	r = _test_generate_specific_events_includes_staff_id_when_resolvable(player_count, seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 9})
 
 static func _build_place_restaurant_working_engine(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -217,6 +221,42 @@ static func _test_generate_specific_events_returns_empty_on_opening_soon_missing
 	var events := action._generate_specific_events(old_state, new_state, Command.create("place_restaurant", 0, {"employee_type": "regional_manager"}))
 	if not events.is_empty():
 		return Result.failure("opening_soon 缺少 anchor_pos 时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_includes_staff_id_when_resolvable(player_count: int, seed_val: int) -> Result:
+	var built := _build_place_restaurant_working_engine(player_count, seed_val + 909)
+	if not built.ok:
+		return built
+	var engine: GameEngine = built.value
+	var state := engine.get_state()
+	var actor := state.get_current_player_id()
+	var ids_read := StaffStateClass.find_staff_ids_by_employee_type(state, actor, "regional_manager", ["employees"])
+	if not ids_read.ok:
+		return Result.failure("读取 regional_manager staff_id 失败: %s" % ids_read.error)
+	var ids: Array = ids_read.value
+	if ids.is_empty():
+		return Result.failure("regional_manager staff_ids 为空")
+	var staff_id := int(ids[0])
+	var cmd := _find_first_valid_restaurant_placement(engine, actor, {
+		"employee_type": "regional_manager",
+		"staff_id": staff_id,
+	})
+	if cmd == null:
+		return Result.failure("找不到合法的餐厅放置点")
+	var old_state := engine.get_state().duplicate_state()
+	var exec := engine.execute_command(cmd)
+	if not exec.ok:
+		return Result.failure("place_restaurant 执行失败: %s" % exec.error)
+	var action = PlaceRestaurantActionClass.new()
+	var events := action._generate_specific_events(old_state, engine.get_state(), cmd)
+	if events.size() != 1:
+		return Result.failure("应生成 1 条 RESTAURANT_PLACED 事件，实际: %d" % events.size())
+	var data_val = Dictionary(events[0]).get("data", null)
+	if not (data_val is Dictionary):
+		return Result.failure("RESTAURANT_PLACED 缺少 data")
+	var data: Dictionary = data_val
+	if int(data.get("staff_id", -1)) != staff_id:
+		return Result.failure("RESTAURANT_PLACED 事件应包含 staff_id=%d，实际: %s" % [staff_id, str(data)])
 	return Result.success()
 
 static func _find_first_valid_restaurant_placement(engine: GameEngine, actor: int, extra_params: Dictionary = {}) -> Command:

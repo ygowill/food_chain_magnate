@@ -11,6 +11,7 @@ const EmployeeUsageHelperClass = preload("res://gameplay/actions/employee_usage_
 const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 static func apply(action: ActionExecutor, state: GameState, command: Command) -> Result:
 	var player_id: int = command.actor
@@ -18,6 +19,14 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 	if not employee_type_result.ok:
 		return employee_type_result
 	var employee_type: String = employee_type_result.value
+	var requested_staff_id := -1
+	if command.params.has("staff_id"):
+		var staff_id_result := action.require_int_param(command, "staff_id")
+		if not staff_id_result.ok:
+			return staff_id_result
+		requested_staff_id = int(staff_id_result.value)
+		if requested_staff_id <= 0:
+			return Result.failure("staff_id 必须 > 0，实际: %d" % requested_staff_id)
 
 	var board_number_result := action.require_int_param(command, "board_number")
 	if not board_number_result.ok:
@@ -58,6 +67,14 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 		return employee_read
 	var employee_meta: Dictionary = employee_read.value
 	var emp_def = employee_meta.get("definition", null)
+	var provider_read := EmployeeRulesClass.try_resolve_marketer(state, player_id, employee_type, requested_staff_id)
+	if not provider_read.ok:
+		return provider_read
+	var provider: Dictionary = provider_read.value
+	var marketer_staff_id := int(provider.get("staff_id", -1))
+	var marketer_employee_type := str(provider.get("employee_type", employee_type)).strip_edges()
+	if marketer_staff_id <= 0 or marketer_employee_type.is_empty():
+		return Result.failure("initiate_marketing: 营销员工解析结果无效: %s" % str(provider))
 	var max_duration := int(employee_meta.get("max_duration", 0))
 	var duration_read := MarketingRulesClass.require_marketing_duration(action, command, max_duration)
 	if not duration_read.ok:
@@ -110,34 +127,37 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 	var consume_active := true
 	var link_id := ""
 	if mult > 1:
-		link_id = _choose_reusable_marketing_link_id_this_round(state, player_id, employee_type, mult)
+		link_id = _choose_reusable_marketing_link_id_this_round(state, player_id, marketer_staff_id, mult)
 		if not link_id.is_empty():
 			consume_active = false
 		else:
 			# 新建一组“同一张营销员卡”的 link_id（用于到期释放判定；避免多个活动提前释放营销员）。
-			link_id = "working_multiplier:marketing:%d:%d:%s:%d" % [state.round_number, player_id, employee_type, board_number]
+			link_id = "working_multiplier:marketing:%d:%d:%d:%d" % [state.round_number, player_id, marketer_staff_id, board_number]
 
 	if consume_active:
-		var removed := StateUpdater.remove_from_array(state.players[player_id], "employees", employee_type)
-		if not removed:
-			return Result.failure("你没有激活的 %s" % employee_type)
-		StateUpdater.append_to_array(state.players[player_id], "busy_marketers", employee_type)
+		var move_result := StaffStateClass.move_staff_to_zone(state, player_id, marketer_staff_id, "busy_marketers")
+		if not move_result.ok:
+			return move_result
 	else:
 		# 使用“本回合刚变忙碌”的营销员的额外次数（例如夜班经理带来的第二次工作）。
-		var busy_val = state.players[player_id].get("busy_marketers", [])
-		var busy_now: Array = busy_val if busy_val is Array else []
-		if not busy_now.has(employee_type):
-			return Result.failure("该营销员不在忙碌区，无法追加发起营销: %s" % employee_type)
+		var zone_read := StaffStateClass.get_staff_zone(state, player_id, marketer_staff_id)
+		if not zone_read.ok:
+			return zone_read
+		if str(zone_read.value).strip_edges() != "busy_marketers":
+			return Result.failure("该营销员不在忙碌区，无法追加发起营销: %s" % marketer_employee_type)
 
 	var inc_result := RoundStateCountersClass.increment_player_key_count(
-		state.round_state, "marketing_used", player_id, employee_type, 1
+		state.round_state, "marketing_used", player_id, marketer_employee_type, 1
 	)
 	if not inc_result.ok:
 		return inc_result
+	var use_staff := StaffStateClass.increment_staff_track_usage(state, marketer_staff_id, "initiate_marketing", 1)
+	if not use_staff.ok:
+		return use_staff
 	var warnings: Array[String] = []
 
 	# 使用员工：用于“first_marketeer_used”等里程碑
-	EmployeeUsageHelperClass.append_use_employee_warning(warnings, state, player_id, employee_type)
+	EmployeeUsageHelperClass.append_use_employee_warning(warnings, state, player_id, marketer_employee_type)
 
 	# 飞机轴与 tile 索引
 	var axis := ""
@@ -160,7 +180,8 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 		"board_number": board_number,
 		"type": marketing_type,
 		"owner": player_id,
-		"employee_type": employee_type,
+		"employee_type": marketer_employee_type,
+		"staff_id": marketer_staff_id,
 		"product": product,
 		"world_pos": world_pos,
 		"rotation": rotation,
@@ -198,7 +219,7 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 	var ms := MilestoneSystemClass.process_event(state, "InitiateMarketing", {
 		"player_id": player_id,
 		"type": marketing_type,
-		"employee_type": employee_type,
+		"employee_type": marketer_employee_type,
 		"employee_is_marketeer": _is_employee_marketeer(emp_def),
 	})
 
@@ -208,7 +229,8 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 
 	var result := Result.success({
 		"player_id": player_id,
-		"employee_type": employee_type,
+		"employee_type": marketer_employee_type,
+		"staff_id": marketer_staff_id,
 		"board_number": board_number,
 		"type": marketing_type,
 		"product": product,
@@ -223,7 +245,7 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 	result.with_warnings(warnings)
 	return result
 
-static func _choose_reusable_marketing_link_id_this_round(state: GameState, player_id: int, employee_type: String, mult: int) -> String:
+static func _choose_reusable_marketing_link_id_this_round(state: GameState, player_id: int, staff_id: int, mult: int) -> String:
 	if state == null:
 		return ""
 	if mult <= 1:
@@ -238,7 +260,7 @@ static func _choose_reusable_marketing_link_id_this_round(state: GameState, play
 		var inst: Dictionary = inst_val
 		if int(inst.get("owner", -1)) != player_id:
 			continue
-		if str(inst.get("employee_type", "")).strip_edges() != employee_type:
+		if int(inst.get("staff_id", -1)) != staff_id:
 			continue
 		if int(inst.get("created_round", -1)) != state.round_number:
 			continue

@@ -100,21 +100,25 @@ func _build_refresh_context(state: GameState) -> Dictionary:
 			"token": "",
 		}
 
-	var current_player: Dictionary = state.get_current_player()
-	marketer_entries = _build_marketing_marketer_entries(state, state.get_current_player_id(), current_player)
+	marketer_entries = _build_marketing_marketer_entries(state, state.get_current_player_id(), state.get_current_player())
 	boards_by_type = _build_available_marketing_boards_by_type(state)
 
-	var has_marketer := not marketer_entries.is_empty()
+	var has_marketer := false
 	var has_board := false
 	var marketer_tokens: Array[String] = []
 	for entry_val in marketer_entries:
 		if not (entry_val is Dictionary):
 			continue
 		var entry: Dictionary = entry_val
-		marketer_tokens.append("%s|%s|%d" % [
-			str(entry.get("id", "")).strip_edges(),
+		var remaining := int(entry.get("remaining", 0))
+		if remaining > 0:
+			has_marketer = true
+		marketer_tokens.append("%d|%s|%s|%d|%d" % [
+			int(entry.get("staff_id", -1)),
+			str(entry.get("employee_type", entry.get("id", ""))).strip_edges(),
 			str(entry.get("type", "")).strip_edges(),
 			int(entry.get("max_duration", 0)),
+			remaining,
 		])
 	marketer_tokens.sort()
 
@@ -184,110 +188,22 @@ func _build_marketing_marketer_entries(state: GameState, current_player_id: int,
 	var out: Array[Dictionary] = []
 	if state == null or current_player.is_empty():
 		return out
-	if not EmployeeRegistryClass.is_loaded():
-		return out
-
-	var employees_val = current_player.get("employees", null)
-	if not (employees_val is Array):
-		return out
-	var employees: Array = employees_val
-
-	var active_counts: Dictionary = {}
-	for e in employees:
-		if not (e is String):
+	for provider_val in EmployeeRulesClass.get_marketers_for_working(state, current_player_id):
+		if not (provider_val is Dictionary):
 			continue
-		var emp_id := str(e)
-		if emp_id.is_empty():
+		var provider: Dictionary = provider_val
+		var marketing_types_val = provider.get("marketing_types", [])
+		if not (marketing_types_val is Array):
 			continue
-		active_counts[emp_id] = int(active_counts.get(emp_id, 0)) + 1
-
-	# 额外次数：某些效果（如夜班经理）允许“本回合刚变忙碌”的营销员再发起一次营销。
-	# 约束：仅统计 created_round == state.round_number 的营销实例，避免把跨回合的忙碌营销员误判为可用。
-	var extra_uses_by_employee: Dictionary = {}
-	if state.marketing_instances is Array:
-		var groups_by_emp: Dictionary = {}  # employee_type -> { link_id -> count }
-		for inst_val in state.marketing_instances:
-			if not (inst_val is Dictionary):
-				continue
-			var inst: Dictionary = inst_val
-			if int(inst.get("owner", -1)) != current_player_id:
-				continue
-			if int(inst.get("created_round", -1)) != state.round_number:
-				continue
-			var emp_id2 := str(inst.get("employee_type", "")).strip_edges()
-			if emp_id2.is_empty():
-				continue
-			var link_id := str(inst.get("link_id", "")).strip_edges()
-			if link_id.is_empty():
-				continue
-			if not groups_by_emp.has(emp_id2):
-				groups_by_emp[emp_id2] = {}
-			var per: Dictionary = groups_by_emp[emp_id2]
-			per[link_id] = int(per.get(link_id, 0)) + 1
-			groups_by_emp[emp_id2] = per
-
-		for emp_id3_val in groups_by_emp.keys():
-			var emp_id3 := str(emp_id3_val)
-			if emp_id3.is_empty():
-				continue
-			var mult := maxi(1, EmployeeRulesClass.get_working_employee_multiplier(state, current_player_id, emp_id3))
-			if mult <= 1:
-				continue
-			var per2: Dictionary = groups_by_emp[emp_id3]
-			var extra := 0
-			for k in per2.keys():
-				extra += maxi(0, mult - int(per2.get(k, 0)))
-			if extra > 0:
-				extra_uses_by_employee[emp_id3] = extra
-
-	var all_ids: Dictionary = {}
-	for k in active_counts.keys():
-		all_ids[str(k)] = true
-	for k2 in extra_uses_by_employee.keys():
-		all_ids[str(k2)] = true
-
-	var ids: Array[String] = []
-	for k3 in all_ids.keys():
-		ids.append(str(k3))
-	ids.sort()
-
-	for emp_id4 in ids:
-		var emp_id3 := str(emp_id4)
-		var available_count := int(active_counts.get(emp_id3, 0)) + int(extra_uses_by_employee.get(emp_id3, 0))
-		if available_count <= 0:
-			continue
-
-		var def_val = EmployeeRegistryClass.get_def(emp_id3)
-		if def_val == null or not (def_val is EmployeeDef):
-			continue
-		var def: EmployeeDef = def_val
-
-		var max_duration := int(def.marketing_max_duration)
-		if max_duration <= 0:
-			continue
-
-		var marketing_types: Array[String] = []
-		var type_set: Dictionary = {}
-		for tag in def.usage_tags:
-			var t := str(tag)
-			if not t.begins_with("use:marketing:"):
-				continue
-			var type_id := t.substr("use:marketing:".length())
+		for type_val in Array(marketing_types_val):
+			var type_id := str(type_val).strip_edges()
 			if type_id.is_empty():
 				continue
-			type_set[type_id] = true
-		for k in type_set.keys():
-			marketing_types.append(str(k))
-		marketing_types.sort()
-
-		for mt in marketing_types:
-			for i in range(available_count):
-				out.append({
-					"id": emp_id3,
-					"type": mt,
-					"max_duration": max_duration,
-				})
-
+			if int(provider.get("remaining", 0)) <= 0:
+				continue
+			var entry := provider.duplicate(true)
+			entry["type"] = type_id
+			out.append(entry)
 	return out
 
 func _build_available_marketing_boards_by_type(state: GameState) -> Dictionary:
@@ -348,7 +264,7 @@ func _build_available_marketing_boards_by_type(state: GameState) -> Dictionary:
 
 	return out
 
-func _on_marketing_requested(employee_type: String, board_number: int, position: Vector2i, product: String, duration: int, rotation: int, axis: String) -> void:
+func _on_marketing_requested(employee_type: String, board_number: int, position: Vector2i, product: String, duration: int, rotation: int, axis: String, staff_id: int = -1) -> void:
 	if _scene == null or _scene.game_engine == null:
 		return
 	if not _execute_command.is_valid():
@@ -365,6 +281,8 @@ func _on_marketing_requested(employee_type: String, board_number: int, position:
 		params["rotation"] = rotation
 	if not axis.is_empty():
 		params["axis"] = axis
+	if staff_id > 0:
+		params["staff_id"] = staff_id
 	var result: Result = _execute_command.call(Command.create("initiate_marketing", current_player_id, params))
 
 	if result.ok:
@@ -394,6 +312,7 @@ func _on_marketing_requested(employee_type: String, board_number: int, position:
 				"action_id": "initiate_marketing",
 				"player_id": current_player_id,
 				"employee_type": employee_type,
+				"staff_id": staff_id,
 				"board_number": board_number,
 				"product": product,
 				"position": [position.x, position.y],

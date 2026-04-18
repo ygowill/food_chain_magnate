@@ -30,8 +30,11 @@ var _selected_rotation: int = 0
 var _selected_house_id: String = ""
 var _selected_direction: String = "E"
 var _selected_house_number: int = -1
-var _available_employees: Array[String] = []
+var _employee_items: Array[Dictionary] = []
+var _employee_info_by_key: Dictionary = {}
 var _selected_employee_type: String = ""
+var _selected_employee_key: String = ""
+var _selected_staff_id: int = -1
 
 var _map_data: Dictionary = {}
 var _house_id_by_cell: Dictionary = {}  # Vector2i -> house_id
@@ -74,11 +77,29 @@ func get_selected_house_id() -> String:
 func get_selected_house_number() -> int:
 	return _selected_house_number
 
+func get_available_employee_items() -> Array[Dictionary]:
+	return _employee_items.duplicate(true)
+
 func get_available_employees() -> Array[String]:
-	return _available_employees.duplicate()
+	var out: Array[String] = []
+	for item_val in _employee_items:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		var emp_id := str(item.get("employee_type", item.get("id", ""))).strip_edges()
+		if emp_id.is_empty():
+			continue
+		out.append(emp_id)
+	return out
 
 func get_selected_employee() -> String:
 	return _selected_employee_type
+
+func get_selected_employee_key() -> String:
+	return _selected_employee_key
+
+func get_selected_staff_id() -> int:
+	return _selected_staff_id
 
 func get_available_house_numbers() -> Array[int]:
 	var out: Array[int] = []
@@ -153,36 +174,94 @@ func set_map_data(map_data: Dictionary) -> void:
 	_update_ui()
 	ui_state_changed.emit()
 
+func set_available_employee_items(items: Array[Dictionary]) -> void:
+	_employee_items.clear()
+	_employee_info_by_key.clear()
+	var previous_staff_id := _selected_staff_id
+	var first_enabled_key := ""
+	var first_key := ""
+	for item_val in items:
+		if not (item_val is Dictionary):
+			continue
+		var source: Dictionary = item_val
+		var staff_id := int(source.get("staff_id", -1))
+		var emp_id := str(source.get("employee_type", source.get("id", ""))).strip_edges()
+		if staff_id <= 0 or emp_id.is_empty():
+			continue
+		var key := "staff:%d" % staff_id
+		var remaining := int(source.get("remaining", 0))
+		var capacity := int(source.get("capacity", 0))
+		var enabled := remaining > 0
+		var item := {
+			"id": emp_id,
+			"key": key,
+			"employee_type": emp_id,
+			"staff_id": staff_id,
+			"badge_text": "%d/%d" % [maxi(0, remaining), maxi(0, capacity)],
+			"tag_text": "可用" if enabled else "已用",
+			"enabled": enabled,
+			"can_place_house": bool(source.get("can_place_house", false)),
+			"can_add_garden": bool(source.get("can_add_garden", false)),
+		}
+		_employee_items.append(item)
+		_employee_info_by_key[key] = item
+		if first_key.is_empty():
+			first_key = key
+		if enabled and first_enabled_key.is_empty():
+			first_enabled_key = key
+		if previous_staff_id > 0 and previous_staff_id == staff_id:
+			_selected_employee_key = key
+
+	if _employee_items.is_empty():
+		_selected_employee_type = ""
+		_selected_employee_key = ""
+		_selected_staff_id = -1
+	elif _selected_employee_key.is_empty() or not _employee_info_by_key.has(_selected_employee_key):
+		var fallback_key := first_enabled_key if not first_enabled_key.is_empty() else first_key
+		_apply_selected_employee_key(fallback_key)
+	else:
+		_apply_selected_employee_key(_selected_employee_key)
+
+	_update_ui()
+	ui_state_changed.emit()
+
 func set_available_employees(employee_types: Array[String]) -> void:
-	var ids: Array[String] = []
-	var seen := {}
+	var items: Array[Dictionary] = []
+	var seq := 1
 	for emp_val in employee_types:
 		var s := str(emp_val).strip_edges()
 		if s.is_empty():
 			continue
-		if seen.has(s):
-			continue
-		seen[s] = true
-		ids.append(s)
-	ids.sort()
-	_available_employees = ids
+		items.append({
+			"id": s,
+			"employee_type": s,
+			"staff_id": seq,
+			"key": "legacy:%d" % seq,
+			"badge_text": "",
+			"tag_text": "",
+			"enabled": true,
+		})
+		seq += 1
+	set_available_employee_items(items)
 
-	if _available_employees.is_empty():
-		_selected_employee_type = ""
-	elif _selected_employee_type.is_empty() or not _available_employees.has(_selected_employee_type):
-		_selected_employee_type = _available_employees[0]
-
+func set_selected_employee_key(employee_key: String) -> void:
+	_apply_selected_employee_key(str(employee_key).strip_edges())
 	_update_ui()
 	ui_state_changed.emit()
 
 func set_selected_employee(employee_type: String) -> void:
 	var emp_id := str(employee_type).strip_edges()
-	if emp_id.is_empty():
-		_selected_employee_type = "" if _available_employees.is_empty() else _available_employees[0]
-	elif not _available_employees.is_empty() and not _available_employees.has(emp_id):
-		_selected_employee_type = _available_employees[0]
-	else:
-		_selected_employee_type = emp_id
+	var matched_key := ""
+	for key in _employee_info_by_key.keys():
+		var info: Dictionary = Dictionary(_employee_info_by_key.get(key, {}))
+		if str(info.get("employee_type", "")).strip_edges() != emp_id:
+			continue
+		if bool(info.get("enabled", true)):
+			matched_key = str(key)
+			break
+		if matched_key.is_empty():
+			matched_key = str(key)
+	_apply_selected_employee_key(matched_key)
 
 	_validation_ok = true
 	_validation_message = ""
@@ -268,7 +347,12 @@ func clear_selection() -> void:
 	_selected_house_id = ""
 	_selected_direction = "E"
 	_selected_house_number = -1
-	_selected_employee_type = "" if _available_employees.is_empty() else _available_employees[0]
+	if _employee_items.is_empty():
+		_selected_employee_type = ""
+		_selected_employee_key = ""
+		_selected_staff_id = -1
+	else:
+		_apply_selected_employee_key(_selected_employee_key)
 	_validation_ok = true
 	_validation_message = ""
 	_garden_direction_validity.clear()
@@ -317,6 +401,18 @@ func _normalize_direction(direction: String) -> String:
 	if d != "N" and d != "E" and d != "S" and d != "W":
 		d = "E"
 	return d
+
+func _apply_selected_employee_key(employee_key: String) -> void:
+	var key := str(employee_key).strip_edges()
+	if key.is_empty() or not _employee_info_by_key.has(key):
+		_selected_employee_key = ""
+		_selected_employee_type = ""
+		_selected_staff_id = -1
+		return
+	var info: Dictionary = Dictionary(_employee_info_by_key.get(key, {}))
+	_selected_employee_key = key
+	_selected_employee_type = str(info.get("employee_type", info.get("id", ""))).strip_edges()
+	_selected_staff_id = int(info.get("staff_id", -1))
 
 func _update_ui() -> void:
 	_update_hint()

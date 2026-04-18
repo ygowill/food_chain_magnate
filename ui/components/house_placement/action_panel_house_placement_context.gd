@@ -1,6 +1,7 @@
 extends VBoxContainer
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const EmployeePickerClass = preload("res://ui/components/employee_picker/employee_picker.gd")
 
 var _overlay: Node = null
 var _syncing: bool = false
@@ -11,7 +12,7 @@ var _add_garden_button: Button = null
 var _hint_panel: PanelContainer = null
 var _hint_label: Label = null
 var _employee_row: VBoxContainer = null
-var _employee_flow: HFlowContainer = null
+var _employee_picker = null
 var _house_section: VBoxContainer = null
 var _garden_section: VBoxContainer = null
 var _house_numbers_flow: HFlowContainer = null
@@ -105,11 +106,11 @@ func _build_ui() -> void:
 	UiStylesClass.apply_label_dark(employee_label)
 	_employee_row.add_child(employee_label)
 
-	_employee_flow = HFlowContainer.new()
-	_employee_flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_employee_flow.add_theme_constant_override("h_separation", 6)
-	_employee_flow.add_theme_constant_override("v_separation", 6)
-	_employee_row.add_child(_employee_flow)
+	_employee_picker = EmployeePickerClass.new()
+	_employee_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_employee_row.add_child(_employee_picker)
+	if _employee_picker.has_signal("employee_selected"):
+		_employee_picker.employee_selected.connect(_on_employee_picker_selected)
 
 	_house_section = VBoxContainer.new()
 	_house_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -224,28 +225,20 @@ func _sync_hint() -> void:
 	_hint_label.text = str(_safe_call("get_hint_text", ""))
 
 func _sync_employee_buttons() -> void:
-	for child in _employee_flow.get_children():
-		child.queue_free()
-	var employees: Array[String] = []
-	var val = _safe_call("get_available_employees", [])
-	if val is Array:
-		for e in Array(val):
-			var s := str(e).strip_edges()
-			if not s.is_empty():
-				employees.append(s)
-	_employee_row.visible = not employees.is_empty()
-	if employees.is_empty():
+	var items_val = _safe_call("get_available_employee_items", [])
+	var items: Array[Dictionary] = []
+	if items_val is Array:
+		for item_val in Array(items_val):
+			if item_val is Dictionary:
+				items.append(Dictionary(item_val))
+	_employee_row.visible = not items.is_empty()
+	if not is_instance_valid(_employee_picker):
 		return
-	var selected := str(_safe_call("get_selected_employee", "")).strip_edges()
-	for emp_id in employees:
-		var btn := Button.new()
-		btn.text = emp_id
-		btn.toggle_mode = true
-		btn.custom_minimum_size = Vector2(96, 32)
-		btn.set_pressed_no_signal(emp_id == selected)
-		UiStylesClass.apply_button_secondary(btn)
-		btn.pressed.connect(_on_employee_pressed.bind(emp_id))
-		_employee_flow.add_child(btn)
+	if items.is_empty():
+		_employee_picker.clear()
+		return
+	var selected_key := str(_safe_call("get_selected_employee_key", "")).strip_edges()
+	_employee_picker.set_items(items, selected_key)
 
 func _sync_house_section() -> void:
 	_rebuild_house_number_buttons()
@@ -364,10 +357,17 @@ func _on_direction_pressed(direction: String) -> void:
 		return
 	_safe_call("set_selected_direction", null, [direction])
 
-func _on_employee_pressed(employee_type: String) -> void:
+func _on_employee_picker_selected(_employee_type: String) -> void:
 	if _syncing:
 		return
-	_safe_call("set_selected_employee", null, [employee_type])
+	if not is_instance_valid(_employee_picker):
+		return
+	var key := ""
+	if _employee_picker.has_method("get_selected_key"):
+		key = str(_employee_picker.get_selected_key()).strip_edges()
+	if key.is_empty():
+		return
+	_safe_call("set_selected_employee_key", null, [key])
 
 func _direction_label(direction: String) -> String:
 	match str(direction).strip_edges():
