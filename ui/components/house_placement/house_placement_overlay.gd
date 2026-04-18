@@ -117,9 +117,11 @@ func get_direction_status(direction: String) -> Dictionary:
 
 func get_action_panel_context_spec() -> Dictionary:
 	return {
-		"title": "新业务拓展经理",
+		"title": "",
 		"hint": "",
-		"confirm_text": "确认添加花园" if _mode == "add_garden" else "确认放置",
+		"show_chrome": false,
+		"show_confirm": false,
+		"confirm_text": "",
 		"cancel_text": "取消",
 		"custom_scene": ActionPanelHouseContextScenePath,
 	}
