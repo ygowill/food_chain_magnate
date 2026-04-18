@@ -77,7 +77,7 @@ var HELP_DATABASE: Dictionary = {
 	# 游戏机制
 	"mechanic_turn_order": {
 		"title": "回合顺序",
-		"content": "回合顺序决定了工作阶段的行动顺序。选择靠后的位置可能错过某些机会，但在晚餐时间处理顾客时会有优势。"
+		"content": "回合顺序决定了工作阶段的行动顺序。顺位越靠前，越容易抢先完成关键动作；在晚餐时间遇到平局时，也由本回合顺位更靠前的玩家获胜。"
 	},
 	"mechanic_marketing": {
 		"title": "营销机制",

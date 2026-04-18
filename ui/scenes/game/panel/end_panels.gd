@@ -166,9 +166,6 @@ func _sync_payday_panel(state: GameState, force_full_refresh: bool = false) -> v
 		payday_panel.visible = false
 		return
 
-	if not force_full_refresh:
-		return
-
 	var current_player_id := _resolve_payday_player_id(state)
 	var current_player := _get_payday_player_snapshot(state)
 	var effect_registry = null

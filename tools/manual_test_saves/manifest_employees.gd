@@ -76,6 +76,8 @@ static func get_cases() -> Array[Dictionary]:
 	cases.append(_employee_train_once("trainer", "management_trainee", "new_business_developer"))
 	cases.append(_employee_train_once("coach", "management_trainee", "new_business_developer"))
 	cases.append(_employee_train_once("guru", "management_trainee", "new_business_developer"))
+	cases.append(_employee_train_panel_refresh())
+	cases.append(_employee_fire_panel_refresh())
 
 	# === 员工：经理链（以“可被培训”作为主要复核点）===
 	cases.append(_employee_train_from("management_trainee", "trainer", "junior_vice_president"))
@@ -431,6 +433,57 @@ static func _employee_train_once(trainer_type: String, from_employee: String, to
 		],
 		"related_tests": [
 			"core/tests/milestone_system_test.gd",
+		],
+	})
+
+static func _employee_train_panel_refresh() -> Dictionary:
+	return _case({
+		"kind": "employee",
+		"id": "train_panel_refresh",
+		"title": "培训面板刷新（双 trainer）",
+		"enabled_modules": [],
+		"builder": "employee_train_panel_refresh",
+		"purpose": "验证 Train 面板在执行一次培训后，会立刻刷新可继续培训的员工列表，并且刚被培训过的员工不会在同回合再次出现在来源列表中。",
+		"steps": [
+			"载入后应处于 Working/Train，且玩家 0 在岗包含 trainer x2；reserve_employees 至少包含 marketing_trainee 与 management_trainee。",
+			"先打开培训面板，确认可选来源列表里有 marketing_trainee 与 management_trainee。",
+			"执行一次培训：将 marketing_trainee 培训为 campaign_manager。",
+			"不要切换面板，直接观察当前培训面板中的可选来源列表。",
+		],
+		"expected": [
+			"培训后仍停留在 Working/Train，因为还有 1 次培训额度且 management_trainee 仍可培训。",
+			"面板应立即移除 marketing_trainee，不需要手动关闭重开。",
+			"新得到的 campaign_manager 不应在本回合立刻出现在来源列表里，因此不能继续把同一名员工再培训到 brand_manager。",
+			"此时可继续培训的来源应只剩 management_trainee。",
+		],
+		"related_tests": [
+			"core/tests/train_state_access_test.gd",
+			"ui/scenes/tests/working_panels_visible_sync_test.gd",
+		],
+	})
+
+static func _employee_fire_panel_refresh() -> Dictionary:
+	return _case({
+		"kind": "employee",
+		"id": "fire_panel_refresh",
+		"title": "发薪日解雇面板刷新",
+		"enabled_modules": [],
+		"builder": "employee_payday_fire_panel_refresh",
+		"purpose": "验证 Payday 面板在执行解雇后，会立刻刷新员工列表与薪资汇总，不再显示已解雇员工。",
+		"steps": [
+			"载入后应处于 Payday，且玩家 0 员工列表中至少有一名在岗 waitress 与一名待命 trainer。",
+			"打开发薪日面板，先确认 waitress 显示为在岗员工，trainer 显示为待命员工。",
+			"在面板中勾选并解雇 waitress。",
+			"不要关闭面板，直接观察当前列表与汇总。",
+		],
+		"expected": [
+			"waitress 会立刻从面板列表中消失，不需要重新打开 Payday 面板。",
+			"trainer 仍然保留在待命列表中。",
+			"薪资汇总会同步下降；若只剩 trainer，则应不再需要为 waitress 支付薪水。",
+		],
+		"related_tests": [
+			"core/tests/fire_action_test.gd",
+			"ui/scenes/tests/working_panels_visible_sync_test.gd",
 		],
 	})
 
