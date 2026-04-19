@@ -632,7 +632,7 @@ static func build_tests(host) -> Array[Dictionary]:
 		},
 			{
 				"name": "PlacementStaffPickerUiTest",
-				"fn": func() -> Result: return TestRefs.PlacementStaffPickerUiTestClass.run(),
+				"fn": func() -> Result: return await TestRefs.PlacementStaffPickerUiTestClass.run(),
 			},
 			{
 				"name": "EmployeePickerRebuildCleanupTest",

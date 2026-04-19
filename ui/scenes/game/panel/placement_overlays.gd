@@ -542,12 +542,7 @@ func _on_house_placement_confirmed(position: Vector2i, rotation: int, house_numb
 			command_params["staff_id"] = staff_id
 	var result: Result = _execute_command.call(Command.create("place_house", current_player_id, command_params))
 	if result.ok:
-		if is_instance_valid(house_placement_overlay):
-			house_placement_overlay.visible = false
-		if _map_controller != null:
-			_map_controller.clear_selection()
-		if _overlay_controller != null:
-			_overlay_controller.hide_all_overlays()
+		_after_house_garden_command_success(current_player_id)
 	else:
 		if is_instance_valid(house_placement_overlay) and house_placement_overlay.has_method("set_validation"):
 			house_placement_overlay.set_validation(false, result.error)
@@ -575,12 +570,7 @@ func _on_garden_confirmed(house_id: String, direction: String) -> void:
 			command_params["staff_id"] = staff_id
 	var result: Result = _execute_command.call(Command.create("add_garden", current_player_id, command_params))
 	if result.ok:
-		if is_instance_valid(house_placement_overlay):
-			house_placement_overlay.visible = false
-		if _map_controller != null:
-			_map_controller.clear_selection()
-		if _overlay_controller != null:
-			_overlay_controller.hide_all_overlays()
+		_after_house_garden_command_success(current_player_id)
 	else:
 		if is_instance_valid(house_placement_overlay) and house_placement_overlay.has_method("set_validation"):
 			house_placement_overlay.set_validation(false, result.error)
@@ -629,6 +619,98 @@ func _on_overlay_cancelled() -> void:
 	if _overlay_controller != null:
 		_overlay_controller.hide_all_overlays()
 
+func _after_house_garden_command_success(actor_id: int) -> void:
+	var state_after: GameState = _scene.game_engine.get_state() if (_scene != null and _scene.game_engine != null) else null
+	if state_after == null:
+		_close_house_garden_overlay_and_refresh()
+		return
+
+	var same_place_houses_turn := (
+		state_after.phase == DefsClass.PHASE_WORKING
+		and state_after.sub_phase == DefsClass.SUB_PHASE_PLACE_HOUSES
+		and int(state_after.get_current_player_id()) == int(actor_id)
+	)
+	if same_place_houses_turn:
+		_sync_house_placement_overlay(state_after, true)
+		_select_first_enabled_house_garden_staff_if_needed()
+		if is_instance_valid(house_placement_overlay) and house_placement_overlay.has_method("clear_selection"):
+			house_placement_overlay.clear_selection()
+		return
+
+	_close_house_garden_overlay_and_refresh()
+
+func _close_house_garden_overlay_and_refresh() -> void:
+	if is_instance_valid(house_placement_overlay):
+		house_placement_overlay.visible = false
+	if _map_controller != null:
+		_map_controller.clear_selection()
+	if _overlay_controller != null:
+		_overlay_controller.hide_all_overlays()
+	_request_scene_ui_refresh_deferred()
+
+func _select_first_enabled_house_garden_staff_if_needed() -> void:
+	if not is_instance_valid(house_placement_overlay):
+		return
+	if not house_placement_overlay.has_method("get_selected_employee_key"):
+		return
+	if not house_placement_overlay.has_method("set_selected_employee_key"):
+		return
+
+	var current_key := str(house_placement_overlay.get_selected_employee_key()).strip_edges()
+	if current_key.is_empty() or _employee_item_key_enabled(house_placement_overlay, current_key):
+		return
+
+	var fallback_key := _find_first_enabled_employee_key(house_placement_overlay)
+	if fallback_key.is_empty():
+		return
+	house_placement_overlay.set_selected_employee_key(fallback_key)
+
+func _find_first_enabled_employee_key(overlay) -> String:
+	if overlay == null or not is_instance_valid(overlay):
+		return ""
+	if not overlay.has_method("get_available_employee_items"):
+		return ""
+	var items_val = overlay.call("get_available_employee_items")
+	if not (items_val is Array):
+		return ""
+	for item_val in Array(items_val):
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		if not bool(item.get("enabled", true)):
+			continue
+		var key := str(item.get("key", "")).strip_edges()
+		if key.is_empty():
+			continue
+		return key
+	return ""
+
+func _employee_item_key_enabled(overlay, employee_key: String) -> bool:
+	if overlay == null or not is_instance_valid(overlay):
+		return false
+	if not overlay.has_method("get_available_employee_items"):
+		return false
+	var key := str(employee_key).strip_edges()
+	if key.is_empty():
+		return false
+	var items_val = overlay.call("get_available_employee_items")
+	if not (items_val is Array):
+		return false
+	for item_val in Array(items_val):
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		if str(item.get("key", "")).strip_edges() != key:
+			continue
+		return bool(item.get("enabled", true))
+	return false
+
+func _request_scene_ui_refresh_deferred() -> void:
+	if _scene == null or not is_instance_valid(_scene):
+		return
+	if _scene.has_method("_update_ui"):
+		_scene.call_deferred("_update_ui")
+
 func _build_house_garden_employee_items(state: GameState, player_id: int, action_id: String) -> Array[Dictionary]:
 	var all_items := EmployeeRulesClass.get_house_garden_placers_for_working(state, player_id)
 	var out: Array[Dictionary] = []
@@ -638,8 +720,6 @@ func _build_house_garden_employee_items(state: GameState, player_id: int, action
 			continue
 		var item: Dictionary = Dictionary(item_val).duplicate(true)
 		if not bool(item.get(capability, false)):
-			continue
-		if int(item.get("remaining", 0)) <= 0:
 			continue
 		out.append(item)
 	return out
