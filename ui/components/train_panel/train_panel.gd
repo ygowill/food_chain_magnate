@@ -4,6 +4,7 @@ class_name TrainPanel
 extends "res://ui/components/common/right_panel_embeddable_panel.gd"
 
 signal train_requested(trainer_staff_id: int, source_staff_id: int, from_employee: String, to_employee: String)
+signal selection_changed()
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
@@ -291,6 +292,7 @@ func _on_trainer_selected(_employee_type: String) -> void:
 	_clear_source_selection()
 	_clear_target_selection()
 	_update_confirm_state()
+	selection_changed.emit()
 
 func _on_source_selected(employee_type: String) -> void:
 	var key := ""
@@ -309,6 +311,7 @@ func _on_source_selected(employee_type: String) -> void:
 		_selected_requires_same_color = bool(info.get("requires_same_color", false))
 	_clear_target_selection()
 	_update_confirm_state()
+	selection_changed.emit()
 
 func _on_target_selected(employee_type: String) -> void:
 	var key := ""

@@ -163,9 +163,9 @@ static func _test_train_controller_visible_sync(seed_val: int) -> Result:
 			str(panel.last_pool.get("campaign_manager", null)),
 			str(state.employee_pool.get("campaign_manager", null)),
 		])
-	if _source_items_have_employee_type(panel.last_source_items, "campaign_manager"):
+	if not _source_items_have_employee_type(panel.last_source_items, "campaign_manager"):
 		engine.dispose()
-		return Result.failure("TrainPanel 普通 sync 后不应继续展示刚培训出的 campaign_manager 来源: %s" % str(panel.last_source_items))
+		return Result.failure("TrainPanel 在未选择培训员时，应继续显示刚培训出的待命 campaign_manager 来源: %s" % str(panel.last_source_items))
 	var expected_counts: Dictionary = controller._compute_train_counts(state, 0)
 	if panel.last_train_remaining != int(expected_counts.get("remaining", -1)):
 		engine.dispose()

@@ -50,6 +50,8 @@ func show() -> void:
 		train_panel.set_meta("popup_layout", "dock_right")
 		train_panel.set_meta("popup_title", "培训")
 		train_panel.train_requested.connect(_on_train_requested)
+		if train_panel.has_signal("selection_changed"):
+			train_panel.selection_changed.connect(_on_panel_selection_changed)
 		_scene.add_child(train_panel)
 
 	var state = _scene.game_engine.get_state()
@@ -88,7 +90,8 @@ func _refresh_for_state(state: GameState) -> void:
 				section_text = "待命/在岗员工（点击选择；在岗同色培训：目标需同色）"
 		if train_panel.has_method("get_selected_trainer_staff_id"):
 			var trainer_staff_id := int(train_panel.get_selected_trainer_staff_id())
-			source_items = _filter_source_items_for_trainer(state, actor_id, trainer_staff_id, source_items)
+			if trainer_staff_id > 0:
+				source_items = _filter_source_items_for_trainer(state, actor_id, trainer_staff_id, source_items)
 		train_panel.set_source_items(source_items, section_text)
 
 	if train_panel.has_method("set_target_items"):
@@ -211,6 +214,8 @@ func _build_immediate_train_pending_source_items(state: GameState, player_id: in
 	return items
 
 func _filter_source_items_for_trainer(state: GameState, actor_id: int, trainer_staff_id: int, source_items: Array[Dictionary]) -> Array[Dictionary]:
+	if trainer_staff_id <= 0:
+		return source_items.duplicate(true)
 	var filtered: Array[Dictionary] = []
 	for item_val in source_items:
 		if not (item_val is Dictionary):
@@ -382,3 +387,9 @@ func _on_train_requested(trainer_staff_id: int, source_staff_id: int, from_emplo
 			_refresh_for_state(state)
 			if was_visible and is_instance_valid(train_panel) and train_panel.visible and train_panel.has_method("refresh"):
 				train_panel.refresh()
+
+func _on_panel_selection_changed() -> void:
+	if _scene == null or _scene.game_engine == null:
+		return
+	var state: GameState = _scene.game_engine.get_state()
+	_refresh_for_state(state)

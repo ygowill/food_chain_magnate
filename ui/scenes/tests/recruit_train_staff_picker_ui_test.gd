@@ -11,6 +11,9 @@ static func run() -> Result:
 	r = await _case_train_panel_keeps_duplicate_trainers_by_staff_key()
 	if not r.ok:
 		return r
+	r = await _case_train_panel_emits_selection_changed_on_trainer_and_source()
+	if not r.ok:
+		return r
 	r = await _case_train_panel_keeps_duplicate_sources_by_staff_key()
 	if not r.ok:
 		return r
@@ -79,6 +82,49 @@ static func _case_train_panel_keeps_duplicate_trainers_by_staff_key() -> Result:
 	if int(panel.get_selected_trainer_staff_id()) != 12:
 		_safe_free(panel)
 		return Result.failure("TrainPanel 选择第二个 trainer staff 后应保留 staff_id=12，实际: %s" % str(panel.get_selected_trainer_staff_id()))
+
+	_safe_free(panel)
+	return Result.success()
+
+static func _case_train_panel_emits_selection_changed_on_trainer_and_source() -> Result:
+	var tree = Engine.get_main_loop()
+	if not (tree is SceneTree):
+		return Result.failure("MainLoop 不是 SceneTree（无法运行 TrainPanel UI 测试）")
+	var st: SceneTree = tree
+	var host := st.current_scene
+	if host == null or not is_instance_valid(host):
+		return Result.failure("current_scene 为空（无法挂载 TrainPanel）")
+	var panel = TrainPanelScene.instantiate()
+	host.add_child(panel)
+	await st.process_frame
+
+	var trainer_picker = panel.trainer_container
+	var source_picker = panel.source_container
+	var selection_changed_hits := []
+	panel.selection_changed.connect(func() -> void:
+		selection_changed_hits.append(true)
+	)
+
+	var trainer_items: Array[Dictionary] = [
+		{"staff_id": 31, "employee_type": "trainer", "capacity": 1, "used": 0, "remaining": 1, "instance_idx": 0},
+	]
+	var source_items: Array[Dictionary] = [
+		{"staff_id": 21, "employee_type": "marketing_trainee", "zone_key": "reserve_employees", "requires_same_color": false, "tag_text": "", "badge_count": 1, "enabled": true},
+	]
+
+	panel.set_train_count(2, 2)
+	panel.set_trainer_items(trainer_items, "培训员（点击选择）")
+	panel.set_source_items(source_items, "待命区员工（点击选择）")
+	await st.process_frame
+
+	trainer_picker.set_selected("staff:31")
+	panel._on_trainer_selected("trainer")
+	source_picker.set_selected("staff:21")
+	panel._on_source_selected("marketing_trainee")
+
+	if selection_changed_hits.size() != 2:
+		_safe_free(panel)
+		return Result.failure("TrainPanel 在培训员/来源选择变化时都应发出 selection_changed，实际次数: %d" % selection_changed_hits.size())
 
 	_safe_free(panel)
 	return Result.success()

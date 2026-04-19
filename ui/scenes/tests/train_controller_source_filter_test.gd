@@ -8,6 +8,14 @@ const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(seed_val: int = 12345) -> Result:
+	var r_without_trainer := _test_unselected_trainer_keeps_recruited_source_visible(seed_val)
+	if not r_without_trainer.ok:
+		return r_without_trainer
+
+	var r_recruit_then_train := _test_recruited_employee_visible_after_recruit_then_train(seed_val)
+	if not r_recruit_then_train.ok:
+		return r_recruit_then_train
+
 	var r_without_milestone := _test_newly_trained_employee_filtered_without_milestone(seed_val)
 	if not r_without_milestone.ok:
 		return r_without_milestone
@@ -16,7 +24,95 @@ static func run(seed_val: int = 12345) -> Result:
 	if not r_with_milestone.ok:
 		return r_with_milestone
 
-	return Result.success({"cases": 2})
+	return Result.success({"cases": 4})
+
+static func _test_unselected_trainer_keeps_recruited_source_visible(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val + 17)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := engine.get_state()
+	Support._force_turn_order(state)
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
+
+	var take_trainer := StateUpdaterClass.take_from_pool(state, "trainer", 1)
+	if not take_trainer.ok:
+		engine.dispose()
+		return Result.failure("从员工池取出 trainer 失败: %s" % take_trainer.error)
+	var add_trainer := StateUpdaterClass.add_employee(state, 0, "trainer", false)
+	if not add_trainer.ok:
+		engine.dispose()
+		return Result.failure("添加 trainer 失败: %s" % add_trainer.error)
+	var take_from := StateUpdaterClass.take_from_pool(state, "marketing_trainee", 1)
+	if not take_from.ok:
+		engine.dispose()
+		return Result.failure("从员工池取出 marketing_trainee 失败: %s" % take_from.error)
+	var add_from := StateUpdaterClass.add_employee(state, 0, "marketing_trainee", true)
+	if not add_from.ok:
+		engine.dispose()
+		return Result.failure("添加 marketing_trainee 到待命区失败: %s" % add_from.error)
+
+	var controller = ControllerClass.new(null, Callable(), Callable(), Callable())
+	var source_items: Array = controller._build_trainable_source_items_from_staff(state, 0)
+	var unfiltered: Array = controller._filter_source_items_for_trainer(state, 0, -1, source_items)
+	if not _has_source_employee_type(unfiltered, "marketing_trainee"):
+		engine.dispose()
+		return Result.failure("未选择培训员时，待命/刚招聘员工仍应显示在培训来源中: %s" % str(unfiltered))
+
+	engine.dispose()
+	return Result.success(unfiltered)
+
+static func _test_recruited_employee_visible_after_recruit_then_train(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val + 29)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := engine.get_state()
+	Support._force_turn_order(state)
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_RECRUIT
+
+	var take_trainer := StateUpdaterClass.take_from_pool(state, "trainer", 1)
+	if not take_trainer.ok:
+		engine.dispose()
+		return Result.failure("从员工池取出 trainer 失败: %s" % take_trainer.error)
+	var add_trainer := StateUpdaterClass.add_employee(state, 0, "trainer", false)
+	if not add_trainer.ok:
+		engine.dispose()
+		return Result.failure("添加 trainer 失败: %s" % add_trainer.error)
+
+	var recruit := engine.execute_command(Command.create("recruit", 0, {
+		"employee_type": "marketing_trainee",
+	}))
+	if not recruit.ok:
+		engine.dispose()
+		return Result.failure("recruit(marketing_trainee) 失败: %s" % recruit.error)
+
+	state = engine.get_state()
+	if state.sub_phase != DefsClass.SUB_PHASE_TRAIN:
+		engine.dispose()
+		return Result.failure("招聘后应进入 Train 子阶段，实际: %s" % str(state.sub_phase))
+
+	var controller = ControllerClass.new(null, Callable(), Callable(), Callable())
+	var source_items: Array = controller._build_trainable_source_items_from_staff(state, 0)
+	if not _has_source_employee_type(source_items, "marketing_trainee"):
+		engine.dispose()
+		return Result.failure("刚招聘的 marketing_trainee 应出现在培训来源中: %s" % str(source_items))
+
+	var trainer_staff_id := _read_first_trainer_staff_id(state, 0)
+	if trainer_staff_id <= 0:
+		engine.dispose()
+		return Result.failure("未找到可用 trainer_staff_id")
+	var filtered: Array = controller._filter_source_items_for_trainer(state, 0, trainer_staff_id, source_items)
+	if not _has_source_employee_type(filtered, "marketing_trainee"):
+		engine.dispose()
+		return Result.failure("选中培训员后，刚招聘的 marketing_trainee 仍应保留在培训来源中: %s" % str(filtered))
+
+	engine.dispose()
+	return Result.success(filtered)
 
 static func _test_newly_trained_employee_filtered_without_milestone(seed_val: int) -> Result:
 	var setup_r := _build_chain_train_state(seed_val, false)
