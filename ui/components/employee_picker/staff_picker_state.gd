@@ -89,9 +89,21 @@ func get_selected_staff_id() -> int:
 
 func apply_selected_key(employee_key: String) -> void:
 	var key := str(employee_key).strip_edges()
-	if key.is_empty() or not _info_by_key.has(key):
+	if key.is_empty():
 		clear_selection()
 		return
+	if not _info_by_key.has(key):
+		var fallback_key := ""
+		if not _selected_employee_key.is_empty() and _info_by_key.has(_selected_employee_key):
+			fallback_key = _selected_employee_key
+		if fallback_key.is_empty():
+			fallback_key = _find_first_enabled_key()
+		if fallback_key.is_empty():
+			fallback_key = _find_first_key()
+		if fallback_key.is_empty():
+			clear_selection()
+			return
+		key = fallback_key
 	var info: Dictionary = Dictionary(_info_by_key.get(key, {}))
 	_selected_employee_key = key
 	_selected_employee_type = str(info.get("employee_type", info.get("id", ""))).strip_edges()
@@ -121,3 +133,29 @@ func clear_selection() -> void:
 	_selected_employee_key = ""
 	_selected_employee_type = ""
 	_selected_staff_id = -1
+
+func _find_first_enabled_key() -> String:
+	for item_val in _items:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		if not bool(item.get("enabled", true)):
+			continue
+		var key := str(item.get("key", "")).strip_edges()
+		if key.is_empty():
+			continue
+		if _info_by_key.has(key):
+			return key
+	return ""
+
+func _find_first_key() -> String:
+	for item_val in _items:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		var key := str(item.get("key", "")).strip_edges()
+		if key.is_empty():
+			continue
+		if _info_by_key.has(key):
+			return key
+	return ""

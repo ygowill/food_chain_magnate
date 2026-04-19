@@ -15,6 +15,9 @@ static func run() -> Result:
 	r = _case_house_overlay_keeps_selected_staff_id()
 	if not r.ok:
 		return r
+	r = _case_house_overlay_falls_back_when_selected_staff_disappears()
+	if not r.ok:
+		return r
 	r = _case_restaurant_overlay_defaults_to_enabled_staff()
 	if not r.ok:
 		return r
@@ -65,6 +68,29 @@ static func _case_house_overlay_keeps_selected_staff_id() -> Result:
 	if int(overlay.get_selected_staff_id()) != 101:
 		overlay.free()
 		return Result.failure("house overlay 切换后应保留 staff_id=101，实际: %s" % str(overlay.get_selected_staff_id()))
+	overlay.free()
+	return Result.success()
+
+static func _case_house_overlay_falls_back_when_selected_staff_disappears() -> Result:
+	var overlay := HouseOverlayClass.new()
+	overlay.set_available_employee_items([
+		{"staff_id": 101, "employee_type": "new_business_developer", "capacity": 1, "used": 0, "remaining": 1, "can_place_house": true, "can_add_garden": true},
+		{"staff_id": 102, "employee_type": "new_business_developer", "capacity": 1, "used": 0, "remaining": 1, "can_place_house": true, "can_add_garden": true},
+	])
+	overlay.set_selected_employee_key("staff:101")
+	if int(overlay.get_selected_staff_id()) != 101:
+		overlay.free()
+		return Result.failure("house overlay 初始应选中 staff_id=101，实际: %s" % str(overlay.get_selected_staff_id()))
+	overlay.set_available_employee_items([
+		{"staff_id": 102, "employee_type": "new_business_developer", "capacity": 1, "used": 0, "remaining": 1, "can_place_house": true, "can_add_garden": true},
+	])
+	if int(overlay.get_selected_staff_id()) != 102:
+		overlay.free()
+		return Result.failure("house overlay 旧 staff_id 消失后应回退到剩余 staff_id=102，实际: %s" % str(overlay.get_selected_staff_id()))
+	overlay.set_selected_employee_key("staff:101")
+	if int(overlay.get_selected_staff_id()) != 102:
+		overlay.free()
+		return Result.failure("house overlay 收到失效 key 时不应清空，实际应保持/回退到 staff_id=102，实际: %s" % str(overlay.get_selected_staff_id()))
 	overlay.free()
 	return Result.success()
 

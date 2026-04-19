@@ -152,7 +152,7 @@ func _sync_restaurant_placement_overlay(state: GameState, force_full_refresh: bo
 			restaurant_placement_overlay.set_available_employee_items(
 				_build_restaurant_employee_items(state, current_player_id, action_id)
 			)
-			if restaurant_placement_overlay.has_method("set_selected_employee_key") and not prev_employee_key.is_empty():
+			if restaurant_placement_overlay.has_method("set_selected_employee_key") and not prev_employee_key.is_empty() and _employee_items_contain_key(restaurant_placement_overlay, prev_employee_key):
 				restaurant_placement_overlay.set_selected_employee_key(prev_employee_key)
 
 		if restaurant_placement_overlay.has_method("get_selected_rotation") and restaurant_placement_overlay.has_method("set_selected_rotation"):
@@ -194,7 +194,7 @@ func _sync_house_placement_overlay(state: GameState, force_full_refresh: bool = 
 			house_placement_overlay.set_available_employee_items(
 				_build_house_garden_employee_items(state, current_player_id, action_id)
 			)
-			if house_placement_overlay.has_method("set_selected_employee_key") and not prev_employee_key.is_empty():
+			if house_placement_overlay.has_method("set_selected_employee_key") and not prev_employee_key.is_empty() and _employee_items_contain_key(house_placement_overlay, prev_employee_key):
 				house_placement_overlay.set_selected_employee_key(prev_employee_key)
 
 		if house_placement_overlay.has_method("get_selected_rotation") and house_placement_overlay.has_method("set_selected_rotation"):
@@ -658,3 +658,22 @@ func _build_restaurant_employee_items(state: GameState, player_id: int, action_i
 			continue
 		out.append(item)
 	return out
+
+func _employee_items_contain_key(overlay, employee_key: String) -> bool:
+	if overlay == null or not is_instance_valid(overlay):
+		return false
+	if not overlay.has_method("get_available_employee_items"):
+		return false
+	var key := str(employee_key).strip_edges()
+	if key.is_empty():
+		return false
+	var items_val = overlay.call("get_available_employee_items")
+	if not (items_val is Array):
+		return false
+	for item_val in Array(items_val):
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		if str(item.get("key", "")).strip_edges() == key:
+			return true
+	return false

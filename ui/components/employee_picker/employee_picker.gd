@@ -20,6 +20,7 @@ var _item_keys_in_order: Array[String] = []
 func clear() -> void:
 	for child in get_children():
 		if is_instance_valid(child):
+			remove_child(child)
 			child.queue_free()
 	_items_by_key.clear()
 	_item_keys_in_order.clear()

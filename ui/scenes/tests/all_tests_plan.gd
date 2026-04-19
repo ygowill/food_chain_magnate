@@ -630,10 +630,14 @@ static func build_tests(host) -> Array[Dictionary]:
 			"name": "MoveRestaurantRulesTest",
 			"fn": func() -> Result: return TestRefs.MoveRestaurantRulesTestClass.run(2, 12345),
 		},
-		{
-			"name": "PlacementStaffPickerUiTest",
-			"fn": func() -> Result: return TestRefs.PlacementStaffPickerUiTestClass.run(),
-		},
+			{
+				"name": "PlacementStaffPickerUiTest",
+				"fn": func() -> Result: return TestRefs.PlacementStaffPickerUiTestClass.run(),
+			},
+			{
+				"name": "EmployeePickerRebuildCleanupTest",
+				"fn": func() -> Result: return await TestRefs.EmployeePickerRebuildCleanupTestClass.run(),
+			},
 		{
 			"name": "FailFastParsingTest",
 			"fn": func() -> Result: return TestRefs.FailFastParsingTestClass.run(2, 12345),
