@@ -280,6 +280,7 @@ const ProductionProcureStaffPickerUiTestClass = preload("res://ui/scenes/tests/p
 const PlacementStaffPickerUiTestClass = preload("res://ui/scenes/tests/placement_staff_picker_ui_test.gd")
 const EmployeePickerRebuildCleanupTestClass = preload("res://ui/scenes/tests/employee_picker_rebuild_cleanup_test.gd")
 const ManualLogSaveTestClass = preload("res://core/tests/manual_log_save_test.gd")
+const ManualMultiTrainersSaveTestClass = preload("res://core/tests/manual_multi_trainers_save_test.gd")
 const ManualLogSavesCoverageTestClass = preload("res://ui/scenes/tests/manual_log_saves_coverage_test.gd")
 const EventHistoryRewindTestClass = preload("res://core/tests/event_history_rewind_test.gd")
 const RewindTurnStartFallbackTestClass = preload("res://core/tests/rewind_turn_start_fallback_test.gd")

@@ -13,6 +13,9 @@ static func run() -> Result:
 	var r2 := _case_duplicate_marketers_render_multiple_items()
 	if not r2.ok:
 		return r2
+	var r3 := _case_marketer_badge_rules_hide_single_use_and_tags()
+	if not r3.ok:
+		return r3
 	return Result.success({})
 
 static func _case_module_type_visible() -> Result:
@@ -84,6 +87,43 @@ static func _case_duplicate_marketers_render_multiple_items() -> Result:
 	if int(panel._selected_staff_id) != 12:
 		_safe_free(panel)
 		return Result.failure("MarketingPanel 切换实例后应保留 staff_id=12，实际: %s" % str(panel._selected_staff_id))
+
+	_safe_free(panel)
+	return Result.success({})
+
+static func _case_marketer_badge_rules_hide_single_use_and_tags() -> Result:
+	var panel := MarketingPanelClass.new()
+	var type_container := HFlowContainer.new()
+	var picker := EmployeePickerClass.new()
+	panel.add_child(type_container)
+	panel.add_child(picker)
+	panel.type_container = type_container
+	panel.marketer_option = picker
+
+	panel.set_available_marketers([
+		{"staff_id": 21, "employee_type": "marketing_trainee", "type": "billboard", "marketing_types": ["billboard"], "max_duration": 1, "capacity": 1, "used": 0, "remaining": 1},
+		{"staff_id": 22, "employee_type": "campaign_manager", "type": "billboard", "marketing_types": ["billboard"], "max_duration": 3, "capacity": 3, "used": 1, "remaining": 2},
+	])
+	panel.set_available_boards({"billboard": [11, 13]})
+
+	if picker.get_child_count() != 2:
+		_safe_free(panel)
+		return Result.failure("MarketingPanel 应渲染 2 个 marketer item，实际: %d" % picker.get_child_count())
+
+	var single_item = picker.get_child(0)
+	var multi_item = picker.get_child(1)
+	if str(single_item.get("badge_text")) != "":
+		_safe_free(panel)
+		return Result.failure("单次 marketer 不应显示 1/1 badge，实际: %s" % str(single_item.get("badge_text")))
+	if str(single_item.get("tag_text")) != "":
+		_safe_free(panel)
+		return Result.failure("MarketingPanel 单次 marketer 不应显示 可用/已用 tag，实际: %s" % str(single_item.get("tag_text")))
+	if str(multi_item.get("badge_text")) != "2/3":
+		_safe_free(panel)
+		return Result.failure("多次 marketer 应显示 2/3 badge，实际: %s" % str(multi_item.get("badge_text")))
+	if str(multi_item.get("tag_text")) != "":
+		_safe_free(panel)
+		return Result.failure("MarketingPanel 多次 marketer 不应显示 可用/已用 tag，实际: %s" % str(multi_item.get("tag_text")))
 
 	_safe_free(panel)
 	return Result.success({})

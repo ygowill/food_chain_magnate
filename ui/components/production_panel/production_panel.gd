@@ -79,6 +79,12 @@ var _skin = null
 var _food_controller = null
 var _drinks_controller = null
 
+static func _format_staff_usage_badge(remaining: int, capacity: int) -> String:
+	var safe_capacity := maxi(0, capacity)
+	if safe_capacity <= 1:
+		return ""
+	return "%d/%d" % [maxi(0, remaining), safe_capacity]
+
 func _get_confirm_button() -> Button:
 	return confirm_btn
 
@@ -419,8 +425,8 @@ func _rebuild_employee_options() -> void:
 				"id": emp_id,
 				"key": key,
 				"employee_def": _get_employee_def_for_card(emp_id),
-				"badge_text": "%d/%d" % [maxi(0, remaining), maxi(0, capacity)],
-				"tag_text": "可用" if enabled else "已用",
+				"badge_text": _format_staff_usage_badge(remaining, capacity),
+				"tag_text": "",
 				"enabled": enabled,
 			})
 	else:

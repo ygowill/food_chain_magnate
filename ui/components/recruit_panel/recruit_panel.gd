@@ -27,6 +27,12 @@ var _selected_recruiter_key: String = ""
 var _selected_recruiter_staff_id: int = -1
 var _selected_employee_type: String = ""
 
+static func _format_staff_usage_badge(remaining: int, capacity: int) -> String:
+	var safe_capacity := maxi(0, capacity)
+	if safe_capacity <= 1:
+		return ""
+	return "%d/%d" % [maxi(0, remaining), safe_capacity]
+
 func _get_confirm_button() -> Button:
 	return confirm_btn
 
@@ -121,8 +127,8 @@ func _refresh_recruiter_picker() -> void:
 			"id": emp_type,
 			"key": key,
 			"employee_def": _get_employee_def(emp_type),
-			"badge_text": "%d/%d" % [maxi(0, remaining), maxi(0, capacity)],
-			"tag_text": "可用" if remaining > 0 else "已用",
+			"badge_text": _format_staff_usage_badge(remaining, capacity),
+			"tag_text": "",
 			"enabled": can_recruit and remaining > 0,
 		})
 

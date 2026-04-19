@@ -1139,6 +1139,10 @@ static func build_tests(host) -> Array[Dictionary]:
 						"fn": func() -> Result: return TestRefs.ManualLogSaveTestClass.run(),
 					},
 					{
+						"name": "ManualMultiTrainersSaveTest",
+						"fn": func() -> Result: return TestRefs.ManualMultiTrainersSaveTestClass.run(),
+					},
+					{
 						"name": "ManualLogSavesCoverageTest",
 						"fn": func() -> Result: return TestRefs.ManualLogSavesCoverageTestClass.run(),
 					},

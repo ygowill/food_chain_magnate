@@ -76,6 +76,7 @@ static func get_cases() -> Array[Dictionary]:
 	cases.append(_employee_train_once("trainer", "management_trainee", "new_business_developer"))
 	cases.append(_employee_train_once("coach", "management_trainee", "new_business_developer"))
 	cases.append(_employee_train_once("guru", "management_trainee", "new_business_developer"))
+	cases.append(_employee_multi_trainers())
 	cases.append(_employee_train_panel_refresh())
 	cases.append(_employee_fire_panel_refresh())
 
@@ -405,6 +406,34 @@ static func _employee_recruit_capacity(emp_id: String) -> Dictionary:
 		],
 		"related_tests": [
 			"core/tests/employee_action_test.gd",
+		],
+	})
+
+static func _employee_multi_trainers() -> Dictionary:
+	return _case({
+		"kind": "employee",
+		"id": "multi_trainers",
+		"title": "多个训练员工综合测试（multi_trainers）",
+		"enabled_modules": [],
+		"builder": "employee_multi_trainers",
+		"purpose": "在单个存档中同时验证多个相同训练员、不同训练员、无里程碑时禁止多名训练员连续训练同一员工，以及 coach/guru 的多级培训能力。",
+		"steps": [
+			"载入后应处于 Working/Train，玩家 0 在岗包含 2 名 trainer、2 名 coach、1 名 guru。",
+			"待命区应包含 3 名 marketing_trainee、2 名 management_trainee、2 名 kitchen_trainee。",
+			"选择一名 trainer，将某个 marketing_trainee 培训为 campaign_manager；随后尝试选择另一名 trainer 继续将同一个 staff_id 培训为 brand_manager，应失败。",
+			"选择 coach，将另一个 marketing_trainee 一次性培训为 brand_manager，应成功并消耗 2 次培训容量。",
+			"选择 guru，将一个 management_trainee 一次性培训为 senior_vice_president，应成功并消耗 3 次培训容量。",
+		],
+		"expected": [
+			"多个相同 trainer 应显示为多个可选择实例，每个实例各 1 次培训容量。",
+			"无 multi_trainer_on_one 时，同一名员工被某一训练员培训后，不能换另一名训练员继续训练。",
+			"coach 单实例剩余容量为 2，可完成 2 步培训。",
+			"guru 单实例剩余容量为 3，可完成 3 步培训。",
+		],
+		"related_tests": [
+			"core/tests/manual_multi_trainers_save_test.gd",
+			"core/tests/milestone_system/milestone_system_train_rules_test.gd",
+			"core/tests/train_action_state_access_test.gd",
 		],
 	})
 

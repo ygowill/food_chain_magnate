@@ -80,6 +80,12 @@ var _board_button_by_number: Dictionary = {} # int -> MarketingBoardButton
 var _product_button_by_id: Dictionary = {} # String -> Button
 var _duration_button_by_value: Dictionary = {} # int -> Button
 
+static func _format_staff_usage_badge(remaining: int, capacity: int) -> String:
+	var safe_capacity := maxi(0, capacity)
+	if safe_capacity <= 1:
+		return ""
+	return "%d/%d" % [maxi(0, remaining), safe_capacity]
+
 func set_visual_modules(modules: Array[String]) -> void:
 	_icon_cache.set_visual_modules(modules)
 	_rebuild_type_buttons()
@@ -275,8 +281,8 @@ func _rebuild_marketer_options() -> void:
 			"id": emp_id,
 			"key": key,
 			"employee_def": _get_employee_def_for_card(emp_id),
-			"badge_text": "%d/%d" % [maxi(0, remaining), maxi(0, capacity)],
-			"tag_text": "可用" if enabled else "已用",
+			"badge_text": _format_staff_usage_badge(remaining, capacity),
+			"tag_text": "",
 			"enabled": enabled,
 		})
 		if first_key.is_empty():

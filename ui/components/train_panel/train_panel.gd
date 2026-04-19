@@ -10,12 +10,14 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 @onready var counter_label: Label = $MarginContainer/VBoxContainer/CounterRow/CounterLabel
-@onready var trainer_section_label: Label = $MarginContainer/VBoxContainer/TrainerSection/SectionLabel
-@onready var trainer_container: HFlowContainer = $MarginContainer/VBoxContainer/TrainerSection/TrainerContainer
-@onready var source_section_label: Label = $MarginContainer/VBoxContainer/SourceSection/SectionLabel
-@onready var source_container: HFlowContainer = $MarginContainer/VBoxContainer/SourceSection/SourceContainer
-@onready var target_section_label: Label = $MarginContainer/VBoxContainer/TargetSection/SectionLabel
-@onready var target_container: HFlowContainer = $MarginContainer/VBoxContainer/TargetSection/ScrollContainer/TargetContainer
+@onready var content_scroll: ScrollContainer = $MarginContainer/VBoxContainer/ScrollContainer
+@onready var trainer_section_label: Label = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TrainerSection/SectionLabel
+@onready var trainer_container: HFlowContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TrainerSection/TrainerContainer
+@onready var source_section_label: Label = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/SourceSection/SectionLabel
+@onready var source_container: HFlowContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/SourceSection/SourceContainer
+@onready var target_section: Control = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TargetSection
+@onready var target_section_label: Label = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TargetSection/SectionLabel
+@onready var target_container: HFlowContainer = $MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TargetSection/TargetContainer
 @onready var confirm_btn: Button = $MarginContainer/VBoxContainer/ConfirmButton
 
 var _employee_pool: Dictionary = {}
@@ -42,6 +44,13 @@ var _target_by_key: Dictionary = {}
 var _selected_target_key: String = ""
 var _selected_target_employee_type: String = ""
 var _selected_steps_required: int = 0
+var _last_target_scroll_context: String = ""
+
+static func _format_staff_usage_badge(remaining: int, capacity: int) -> String:
+	var safe_capacity := maxi(0, capacity)
+	if safe_capacity <= 1:
+		return ""
+	return "%d/%d" % [maxi(0, remaining), safe_capacity]
 
 func _get_confirm_button() -> Button:
 	return confirm_btn
@@ -61,6 +70,9 @@ func _on_panel_ready() -> void:
 		source_container.employee_selected.connect(_on_source_selected)
 	if target_container != null and target_container.has_signal("employee_selected"):
 		target_container.employee_selected.connect(_on_target_selected)
+	_update_counter()
+	_refresh_all()
+	_update_confirm_state()
 
 func _on_relayout() -> void:
 	if trainer_container != null and is_instance_valid(trainer_container):
@@ -182,8 +194,11 @@ func _refresh_trainers() -> void:
 			"id": emp_type,
 			"key": key,
 			"employee_def": _get_employee_def(emp_type),
-			"badge_text": "%d/%d" % [maxi(0, int(item.get("remaining", 0))), maxi(0, int(item.get("capacity", item.get("cap_per_instance", 0))))],
-			"tag_text": "可用" if int(item.get("remaining", 0)) > 0 else "已用",
+			"badge_text": _format_staff_usage_badge(
+				int(item.get("remaining", 0)),
+				int(item.get("capacity", item.get("cap_per_instance", 0)))
+			),
+			"tag_text": "",
 			"enabled": _train_remaining > 0 and int(item.get("remaining", 0)) > 0,
 		})
 
@@ -216,7 +231,7 @@ func _refresh_sources() -> void:
 			"id": emp_type,
 			"key": key,
 			"employee_def": _get_employee_def(emp_type),
-			"badge_text": str(int(item.get("badge_count", 1))),
+			"badge_text": "",
 			"tag_text": str(item.get("tag_text", "")).strip_edges(),
 			"enabled": can_choose and bool(item.get("enabled", true)),
 		})
@@ -263,6 +278,8 @@ func _refresh_targets() -> void:
 
 	if target_container.has_method("set_items"):
 		target_container.set_items(items, _selected_target_key)
+	if can_choose and not items.is_empty():
+		_request_scroll_to_targets(items)
 
 func _update_confirm_state() -> void:
 	if confirm_btn == null:
@@ -310,6 +327,7 @@ func _on_source_selected(employee_type: String) -> void:
 		_selected_source_employee_type = str(info.get("employee_type", employee_type)).strip_edges()
 		_selected_requires_same_color = bool(info.get("requires_same_color", false))
 	_clear_target_selection()
+	_last_target_scroll_context = ""
 	_update_confirm_state()
 	selection_changed.emit()
 
@@ -338,14 +356,52 @@ func _clear_trainer_selection() -> void:
 	_selected_trainer_staff_id = -1
 	_selected_trainer_employee_type = ""
 	_selected_trainer_remaining = 0
+	_last_target_scroll_context = ""
 
 func _clear_source_selection() -> void:
 	_selected_source_key = ""
 	_selected_source_staff_id = -1
 	_selected_source_employee_type = ""
 	_selected_requires_same_color = false
+	_last_target_scroll_context = ""
 
 func _clear_target_selection() -> void:
 	_selected_target_key = ""
 	_selected_target_employee_type = ""
 	_selected_steps_required = 0
+
+func _request_scroll_to_targets(items: Array[Dictionary]) -> void:
+	if content_scroll == null or target_section == null:
+		return
+	var keys: Array[String] = []
+	for item_val in items:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		var key := str(item.get("key", item.get("employee_type", item.get("id", "")))).strip_edges()
+		if key.is_empty():
+			continue
+		keys.append(key)
+	keys.sort()
+	var context := "%s|%s|%s" % [_selected_trainer_key, _selected_source_key, ",".join(keys)]
+	if context == _last_target_scroll_context:
+		return
+	_last_target_scroll_context = context
+	call_deferred("_scroll_to_target_section_deferred", context)
+
+func _scroll_to_target_section_deferred(context: String) -> void:
+	if context != _last_target_scroll_context:
+		return
+	if not is_inside_tree():
+		return
+	for _i in range(2):
+		await get_tree().process_frame
+		if context != _last_target_scroll_context:
+			return
+		if not is_inside_tree():
+			return
+	if content_scroll == null or not is_instance_valid(content_scroll):
+		return
+	if target_section == null or not is_instance_valid(target_section):
+		return
+	content_scroll.ensure_control_visible(target_section)

@@ -20,6 +20,7 @@ func get_registry() -> Dictionary:
 		"employee_mandatory_action": Callable(self, "_build_employee_mandatory_action"),
 		"employee_recruit_capacity": Callable(self, "_build_employee_recruit_capacity"),
 		"employee_train_once": Callable(self, "_build_employee_train_once"),
+		"employee_multi_trainers": Callable(self, "_build_employee_multi_trainers"),
 		"employee_rural_marketeer_giant_billboard": Callable(self, "_build_employee_rural_marketeer_giant_billboard"),
 		"employee_night_shift_manager_double_action": Callable(self, "_build_employee_night_shift_manager_double_action"),
 
@@ -115,6 +116,56 @@ func _build_employee_train_panel_refresh(engine: GameEngine, _c: Dictionary) -> 
 			"玩家 0 有 2 张 trainer，第一次培训后 Train 子阶段仍会停留在当前面板，便于观察可用员工列表是否即时刷新。",
 			"待命区同时放入 marketing_trainee 与 management_trainee；推荐先培训前者，这样刷新后应只剩 management_trainee 可继续培训。",
 			"training 成功后，新得到的 campaign_manager 本回合不应立刻再次作为培训来源出现，否则就会错误允许同一员工继续被重复培训。",
+		],
+		"suggested_command": {
+			"action_id": "train",
+			"actor": actor,
+			"params": {
+				"from_employee": "marketing_trainee",
+				"to_employee": "campaign_manager",
+			},
+		},
+	})
+
+func _build_employee_multi_trainers(engine: GameEngine, _c: Dictionary) -> Result:
+	var adv := _advance_to_working_sub_phase(engine, "Train")
+	if not adv.ok:
+		return adv
+
+	var state := engine.get_state()
+	var actor := state.get_current_player_id()
+	if actor < 0:
+		return Result.failure("cannot resolve current player")
+
+	var active_trainers := {
+		"trainer": 2,
+		"coach": 2,
+		"guru": 1,
+	}
+	for employee_type in active_trainers.keys():
+		var ensure_active := _ensure_employee(state, actor, str(employee_type), false, int(active_trainers[employee_type]))
+		if not ensure_active.ok:
+			return ensure_active
+
+	var reserve_sources := {
+		"marketing_trainee": 3,
+		"management_trainee": 2,
+		"kitchen_trainee": 2,
+	}
+	for employee_type2 in reserve_sources.keys():
+		var ensure_reserve := _ensure_employee(state, actor, str(employee_type2), true, int(reserve_sources[employee_type2]))
+		if not ensure_reserve.ok:
+			return ensure_reserve
+
+	state.players[actor]["multi_trainer_on_one"] = false
+	_reset_sub_phase_passed(state)
+
+	return Result.success({
+		"scenario": [
+			"玩家 0 在岗同时拥有 2 名 trainer、2 名 coach、1 名 guru，用于比较同类多实例与不同训练员的剩余次数。",
+			"待命区放入 3 名 marketing_trainee、2 名 management_trainee、2 名 kitchen_trainee，便于连续测试不同培训链。",
+			"存档起点没有 multi_trainer_on_one 里程碑：先用一名 trainer 培训 marketing_trainee -> campaign_manager，再尝试换另一名 trainer 继续培训同一 staff_id 到 brand_manager，应被拒绝。",
+			"coach 可一次将 marketing_trainee 提升两级到 brand_manager；guru 可一次将 management_trainee 提升三级到 senior_vice_president。",
 		],
 		"suggested_command": {
 			"action_id": "train",

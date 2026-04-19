@@ -29,7 +29,7 @@ godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- 
 
 - `new_milestones` 与 `base_milestones` 冲突，因此对应里程碑存档会在生成时自动 `exclude_modules=["base_milestones"]`（见 manifest）。
 
-## 员工（52）
+## 员工（53）
 
 - `barista_trainee`: `employees/barista_trainee.json` + `employees/barista_trainee.md`
 - `barista`: `employees/barista.json` + `employees/barista.md`
@@ -59,6 +59,7 @@ godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- 
 - `luxury_manager`: `employees/luxury_manager.json` + `employees/luxury_manager.md`
 - `management_trainee`: `employees/management_trainee.json` + `employees/management_trainee.md`
 - `marketing_trainee`: `employees/marketing_trainee.json` + `employees/marketing_trainee.md`
+- `multi_trainers`: `employees/multi_trainers.json` + `employees/multi_trainers.md`
 - `mass_marketeer`: `employees/mass_marketeer.json` + `employees/mass_marketeer.md`
 - `movie_star_b`: `employees/movie_star_b.json` + `employees/movie_star_b.md`
 - `movie_star_c`: `employees/movie_star_c.json` + `employees/movie_star_c.md`

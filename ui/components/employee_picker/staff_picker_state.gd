@@ -11,6 +11,12 @@ var _selected_employee_type: String = ""
 var _selected_employee_key: String = ""
 var _selected_staff_id: int = -1
 
+static func _format_staff_usage_badge(remaining: int, capacity: int) -> String:
+	var safe_capacity := maxi(0, capacity)
+	if safe_capacity <= 1:
+		return ""
+	return "%d/%d" % [maxi(0, remaining), safe_capacity]
+
 func _init(capability_keys: Array = []) -> void:
 	set_capability_keys(capability_keys)
 
@@ -48,8 +54,8 @@ func set_items(items: Array[Dictionary]) -> void:
 			"key": key,
 			"employee_type": emp_id,
 			"staff_id": staff_id,
-			"badge_text": "%d/%d" % [maxi(0, remaining), maxi(0, capacity)],
-			"tag_text": "可用" if enabled else "已用",
+			"badge_text": _format_staff_usage_badge(remaining, capacity),
+			"tag_text": "",
 			"enabled": enabled,
 		}
 		for capability_key in _capability_keys:

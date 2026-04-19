@@ -72,6 +72,10 @@ func show_train_panel() -> void:
 		return
 	_train_controller.show()
 	train_panel = _train_controller.train_panel
+	if _scene != null and _scene.game_engine != null:
+		var state: GameState = _scene.game_engine.get_state()
+		if state != null:
+			_train_controller.sync(state, true)
 
 func _sync_train_panel(state: GameState, force_full_refresh: bool = false) -> void:
 	if _train_controller != null:
