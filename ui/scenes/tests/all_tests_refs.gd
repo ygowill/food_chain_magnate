@@ -371,6 +371,7 @@ const ConfirmDinnertimeStateAccessTestClass = preload("res://core/tests/confirm_
 const ConfirmMarketingPendingPhaseActionsKeyTestClass = preload("res://core/tests/confirm_marketing_pending_phase_actions_key_test.gd")
 const ConfirmMarketingAvailabilityTestClass = preload("res://core/tests/confirm_marketing_availability_test.gd")
 const MarketingAnimationOrdersBuilderTestClass = preload("res://ui/scenes/tests/marketing_animation_orders_builder_test.gd")
+const ManualMarketingReviewSaveTestClass = preload("res://core/tests/manual_marketing_review_save_test.gd")
 const OnlineDinnertimeConfirmEnforcedTestClass = preload("res://core/tests/online_dinnertime_confirm_enforced_test.gd")
 const OnlinePhaseInteractionDinnertimeTestClass = preload("res://core/tests/online_phase_interaction_dinnertime_test.gd")
 const DinnertimeSkippedRequiredTestClass = preload("res://core/tests/dinnertime_skipped_required_test.gd")

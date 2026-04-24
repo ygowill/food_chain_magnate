@@ -1507,6 +1507,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.MarketingAnimationOrdersBuilderTestClass.run(),
 			},
 			{
+				"name": "ManualMarketingReviewSaveTest",
+				"fn": func() -> Result: return TestRefs.ManualMarketingReviewSaveTestClass.run(),
+			},
+			{
 				"name": "ConfirmDinnertimeStateAccessTest",
 				"fn": func() -> Result: return TestRefs.ConfirmDinnertimeStateAccessTestClass.run(2, 12345),
 			},

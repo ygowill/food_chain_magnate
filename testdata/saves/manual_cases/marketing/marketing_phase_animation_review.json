@@ -1,15 +1,15 @@
 {
 	"checkpoints": [
 		{
-			"hash": "e1f7fc9ce1611b19a111704f41c07442",
+			"hash": "0d7d3c44679cd21774f62094bac09e48",
 			"index": 0,
 			"rng_calls": 29
 		}
 	],
 	"commands": [],
-	"created_at": "2026-04-25T00:36:54",
+	"created_at": "2026-04-25T01:00:53",
 	"current_index": -1,
-	"final_hash": "e1f7fc9ce1611b19a111704f41c07442",
+	"final_hash": "0d7d3c44679cd21774f62094bac09e48",
 	"game_version": "0.4.2",
 	"initial_state": {
 		"bank": {
@@ -25,7 +25,7 @@
 			"brand_manager": 5,
 			"burger_chef": 1,
 			"burger_cook": 6,
-			"campaign_manager": 5,
+			"campaign_manager": 4,
 			"cart_operator": 6,
 			"cfo": 1,
 			"coach": 6,
@@ -39,7 +39,7 @@
 			"local_manager": 6,
 			"luxury_manager": 1,
 			"management_trainee": 18,
-			"marketing_trainee": 10,
+			"marketing_trainee": 11,
 			"new_business_developer": 6,
 			"pizza_chef": 1,
 			"pizza_cook": 6,
@@ -74,10 +74,10 @@
 						"road_segments": [],
 						"structure": {
 							"anchor_cell": true,
-							"dynamic": true,
+							"dynamic": false,
 							"has_garden": false,
-							"house_id": "house_left",
-							"house_number": 1,
+							"house_id": "2",
+							"house_number": 2.0,
 							"owner": -1,
 							"parent_anchor": [
 								0,
@@ -86,7 +86,7 @@
 							"piece_id": "house",
 							"rotation": 0
 						},
-						"terrain_type": "empty",
+						"terrain_type": null,
 						"tile_origin": [
 							0,
 							0
@@ -98,10 +98,10 @@
 						"road_segments": [],
 						"structure": {
 							"anchor_cell": false,
-							"dynamic": true,
+							"dynamic": false,
 							"has_garden": false,
-							"house_id": "house_left",
-							"house_number": 1,
+							"house_id": "2",
+							"house_number": 2.0,
 							"owner": -1,
 							"parent_anchor": [
 								0,
@@ -110,20 +110,7 @@
 							"piece_id": "house",
 							"rotation": 0
 						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
+						"terrain_type": null,
 						"tile_origin": [
 							0,
 							0
@@ -134,264 +121,7 @@
 						"drink_source": null,
 						"road_segments": [
 							{
-								"dirs": [
-									"S"
-								]
-							}
-						],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-							"anchor_cell": true,
-							"dynamic": true,
-							"has_garden": false,
-							"house_id": "house_right_capped",
-							"house_number": 2,
-							"owner": -1,
-							"parent_anchor": [
-								4,
-								0
-							],
-							"piece_id": "house",
-							"rotation": 0
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-							"anchor_cell": false,
-							"dynamic": true,
-							"has_garden": false,
-							"house_id": "house_right_capped",
-							"house_number": 2,
-							"owner": -1,
-							"parent_anchor": [
-								4,
-								0
-							],
-							"piece_id": "house",
-							"rotation": 0
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-							"anchor_cell": true,
-							"dynamic": true,
-							"has_garden": false,
-							"house_id": "radio_outside",
-							"house_number": 7,
-							"owner": -1,
-							"parent_anchor": [
-								12,
-								0
-							],
-							"piece_id": "house",
-							"rotation": 0
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					}
-				],
-				[
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-							"anchor_cell": false,
-							"dynamic": true,
-							"has_garden": false,
-							"house_id": "house_left",
-							"house_number": 1,
-							"owner": -1,
-							"parent_anchor": [
-								0,
-								0
-							],
-							"piece_id": "house",
-							"rotation": 0
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-							"anchor_cell": false,
-							"dynamic": true,
-							"has_garden": false,
-							"house_id": "house_left",
-							"house_number": 1,
-							"owner": -1,
-							"parent_anchor": [
-								0,
-								0
-							],
-							"piece_id": "house",
-							"rotation": 0
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [
-							{
+								"bridge": false,
 								"dirs": [
 									"N",
 									"S"
@@ -401,587 +131,12 @@
 						"structure": {
 
 						},
-						"terrain_type": "empty",
+						"terrain_type": null,
 						"tile_origin": [
 							0,
 							0
 						]
 					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-							"anchor_cell": false,
-							"dynamic": true,
-							"has_garden": false,
-							"house_id": "house_right_capped",
-							"house_number": 2,
-							"owner": -1,
-							"parent_anchor": [
-								4,
-								0
-							],
-							"piece_id": "house",
-							"rotation": 0
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-							"anchor_cell": false,
-							"dynamic": true,
-							"has_garden": false,
-							"house_id": "house_right_capped",
-							"house_number": 2,
-							"owner": -1,
-							"parent_anchor": [
-								4,
-								0
-							],
-							"piece_id": "house",
-							"rotation": 0
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					}
-				],
-				[
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [
-							{
-								"dirs": [
-									"N",
-									"S"
-								]
-							}
-						],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					}
-				],
-				[
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [
-							{
-								"dirs": [
-									"N",
-									"S"
-								]
-							}
-						],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					}
-				],
-				[
 					{
 						"blocked": false,
 						"drink_source": null,
@@ -991,2096 +146,17 @@
 							"dynamic": true,
 							"owner": 0,
 							"parent_anchor": [
-								0,
-								4
-							],
-							"piece_id": "restaurant",
-							"restaurant_id": "rest_0",
-							"rotation": 0
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-							"anchor_cell": false,
-							"dynamic": true,
-							"owner": 0,
-							"parent_anchor": [
-								0,
-								4
-							],
-							"piece_id": "restaurant",
-							"restaurant_id": "rest_0",
-							"rotation": 0
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [
-							{
-								"dirs": [
-									"N",
-									"S"
-								]
-							}
-						],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							0
-						]
-					}
-				],
-				[
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-							"anchor_cell": false,
-							"dynamic": true,
-							"owner": 0,
-							"parent_anchor": [
-								0,
-								4
-							],
-							"piece_id": "restaurant",
-							"restaurant_id": "rest_0",
-							"rotation": 0
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-							"anchor_cell": false,
-							"dynamic": true,
-							"owner": 0,
-							"parent_anchor": [
-								0,
-								4
-							],
-							"piece_id": "restaurant",
-							"restaurant_id": "rest_0",
-							"rotation": 0
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [
-							{
-								"dirs": [
-									"N",
-									"S"
-								]
-							}
-						],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-							"anchor_cell": true,
-							"dynamic": true,
-							"has_garden": false,
-							"house_id": "radio_mid",
-							"house_number": 3,
-							"owner": -1,
-							"parent_anchor": [
-								8,
-								5
-							],
-							"piece_id": "house",
-							"rotation": 0
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					}
-				],
-				[
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [
-							{
-								"dirs": [
-									"N",
-									"S"
-								]
-							}
-						],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					}
-				],
-				[
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [
-							{
-								"dirs": [
-									"N",
-									"S"
-								]
-							}
-						],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					}
-				],
-				[
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [
-							{
-								"dirs": [
-									"N",
-									"S"
-								]
-							}
-						],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					}
-				],
-				[
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [
-							{
-								"dirs": [
-									"N",
-									"S"
-								]
-							}
-						],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							5
-						]
-					}
-				],
-				[
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-							"anchor_cell": true,
-							"dynamic": true,
-							"has_garden": false,
-							"house_id": "airplane_west",
-							"house_number": 4,
-							"owner": -1,
-							"parent_anchor": [
-								0,
-								10
-							],
-							"piece_id": "house",
-							"rotation": 0
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [
-							{
-								"dirs": [
-									"N",
-									"S"
-								]
-							}
-						],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-							"anchor_cell": true,
-							"dynamic": true,
-							"has_garden": false,
-							"house_id": "airplane_mid",
-							"house_number": 5,
-							"owner": -1,
-							"parent_anchor": [
-								5,
-								10
-							],
-							"piece_id": "house",
-							"rotation": 0
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-							"anchor_cell": true,
-							"dynamic": true,
-							"has_garden": false,
-							"house_id": "airplane_east",
-							"house_number": 6,
-							"owner": -1,
-							"parent_anchor": [
-								10,
-								10
-							],
-							"piece_id": "house",
-							"rotation": 0
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					}
-				],
-				[
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [
-							{
-								"dirs": [
-									"N",
-									"S"
-								]
-							}
-						],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					}
-				],
-				[
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [
-							{
-								"dirs": [
-									"N",
-									"S"
-								]
-							}
-						],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					}
-				],
-				[
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [
-							{
-								"dirs": [
-									"N",
-									"S"
-								]
-							}
-						],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-							"anchor_cell": true,
-							"dynamic": true,
-							"owner": 1,
-							"parent_anchor": [
-								12,
-								13
+								3,
+								0
 							],
 							"piece_id": "restaurant",
 							"restaurant_id": "rest_1",
 							"rotation": 0
 						},
-						"terrain_type": "empty",
+						"terrain_type": null,
 						"tile_origin": [
-							10,
-							10
+							0,
+							0
 						]
 					},
 					{
@@ -3090,73 +166,19 @@
 						"structure": {
 							"anchor_cell": false,
 							"dynamic": true,
-							"owner": 1,
+							"owner": 0,
 							"parent_anchor": [
-								12,
-								13
+								3,
+								0
 							],
 							"piece_id": "restaurant",
 							"restaurant_id": "rest_1",
 							"rotation": 0
 						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					}
-				],
-				[
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
+						"terrain_type": null,
 						"tile_origin": [
 							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							0,
-							10
+							0
 						]
 					},
 					{
@@ -3164,7 +186,51 @@
 						"drink_source": null,
 						"road_segments": [
 							{
+								"bridge": false,
 								"dirs": [
+									"S",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
 									"N"
 								]
 							}
@@ -3172,10 +238,10 @@
 						"structure": {
 
 						},
-						"terrain_type": "empty",
+						"terrain_type": null,
 						"tile_origin": [
-							0,
-							10
+							1,
+							0
 						]
 					},
 					{
@@ -3183,103 +249,21 @@
 						"drink_source": null,
 						"road_segments": [],
 						"structure": {
-
+							"anchor_cell": true,
+							"dynamic": true,
+							"owner": 1,
+							"parent_anchor": [
+								8,
+								0
+							],
+							"piece_id": "restaurant",
+							"restaurant_id": "rest_2",
+							"rotation": 0
 						},
-						"terrain_type": "empty",
+						"terrain_type": null,
 						"tile_origin": [
-							0,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							5,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
-						]
-					},
-					{
-						"blocked": false,
-						"drink_source": null,
-						"road_segments": [],
-						"structure": {
-
-						},
-						"terrain_type": "empty",
-						"tile_origin": [
-							10,
-							10
+							1,
+							0
 						]
 					},
 					{
@@ -3291,17 +275,254 @@
 							"dynamic": true,
 							"owner": 1,
 							"parent_anchor": [
-								12,
-								13
+								8,
+								0
+							],
+							"piece_id": "restaurant",
+							"restaurant_id": "rest_2",
+							"rotation": 0
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					}
+				],
+				[
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": false,
+							"dynamic": false,
+							"has_garden": false,
+							"house_id": "2",
+							"house_number": 2.0,
+							"owner": -1,
+							"parent_anchor": [
+								0,
+								0
+							],
+							"piece_id": "house",
+							"rotation": 0
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": false,
+							"dynamic": false,
+							"has_garden": false,
+							"house_id": "2",
+							"house_number": 2.0,
+							"owner": -1,
+							"parent_anchor": [
+								0,
+								0
+							],
+							"piece_id": "house",
+							"rotation": 0
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"N",
+									"S"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": false,
+							"dynamic": true,
+							"owner": 0,
+							"parent_anchor": [
+								3,
+								0
 							],
 							"piece_id": "restaurant",
 							"restaurant_id": "rest_1",
 							"rotation": 0
 						},
-						"terrain_type": "empty",
+						"terrain_type": null,
 						"tile_origin": [
-							10,
-							10
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": false,
+							"dynamic": true,
+							"owner": 0,
+							"parent_anchor": [
+								3,
+								0
+							],
+							"piece_id": "restaurant",
+							"restaurant_id": "rest_1",
+							"rotation": 0
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": {
+							"type": "lemonade"
+						},
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
 						]
 					},
 					{
@@ -3313,17 +534,39 @@
 							"dynamic": true,
 							"owner": 1,
 							"parent_anchor": [
-								12,
-								13
+								8,
+								0
 							],
 							"piece_id": "restaurant",
-							"restaurant_id": "rest_1",
+							"restaurant_id": "rest_2",
 							"rotation": 0
 						},
-						"terrain_type": "empty",
+						"terrain_type": null,
 						"tile_origin": [
-							10,
-							10
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": false,
+							"dynamic": true,
+							"owner": 1,
+							"parent_anchor": [
+								8,
+								0
+							],
+							"piece_id": "restaurant",
+							"restaurant_id": "rest_2",
+							"rotation": 0
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
 						]
 					},
 					{
@@ -3333,40 +576,3547 @@
 						"structure": {
 
 						},
-						"terrain_type": "empty",
+						"terrain_type": null,
 						"tile_origin": [
-							10,
-							10
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": {
+							"type": "soda"
+						},
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					}
+				],
+				[
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"E",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"E",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"N",
+									"E",
+									"S",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"E",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"E",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": true,
+							"dynamic": true,
+							"has_garden": false,
+							"house_id": "manual_marketing_review_house",
+							"house_number": 16,
+							"owner": -1,
+							"parent_anchor": [
+								8,
+								2
+							],
+							"piece_id": "house",
+							"rotation": 0
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"E",
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"E",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"E",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					}
+				],
+				[
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"N",
+									"S"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": {
+							"type": "soda"
+						},
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					}
+				],
+				[
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"N",
+									"S"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							0
+						]
+					}
+				],
+				[
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					}
+				],
+				[
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": {
+							"type": "lemonade"
+						},
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					}
+				],
+				[
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"W",
+									"N",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"E",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"E",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": true,
+								"dirs": [
+									"S",
+									"N"
+								]
+							},
+							{
+								"bridge": false,
+								"dirs": [
+									"E",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"E",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"E",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					}
+				],
+				[
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": {
+							"type": "soda"
+						},
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": false,
+							"dynamic": false,
+							"has_garden": false,
+							"house_id": "12",
+							"house_number": 12.0,
+							"owner": -1,
+							"parent_anchor": [
+								9,
+								9
+							],
+							"piece_id": "house",
+							"rotation": 180
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": false,
+							"dynamic": false,
+							"has_garden": false,
+							"house_id": "12",
+							"house_number": 12.0,
+							"owner": -1,
+							"parent_anchor": [
+								9,
+								9
+							],
+							"piece_id": "house",
+							"rotation": 180
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					}
+				],
+				[
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": false,
+							"dynamic": false,
+							"has_garden": false,
+							"house_id": "12",
+							"house_number": 12.0,
+							"owner": -1,
+							"parent_anchor": [
+								9,
+								9
+							],
+							"piece_id": "house",
+							"rotation": 180
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": true,
+							"dynamic": false,
+							"has_garden": false,
+							"house_id": "12",
+							"house_number": 12.0,
+							"owner": -1,
+							"parent_anchor": [
+								9,
+								9
+							],
+							"piece_id": "house",
+							"rotation": 180
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							1
+						]
+					}
+				],
+				[
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"E",
+									"S"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"E",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"N",
+									"E",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"E",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"S"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"N",
+									"S"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					}
+				],
+				[
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"N",
+									"S"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": true,
+							"dynamic": false,
+							"has_garden": false,
+							"house_id": "5",
+							"house_number": 5.0,
+							"owner": -1,
+							"parent_anchor": [
+								7,
+								11
+							],
+							"piece_id": "house",
+							"rotation": 0
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": false,
+							"dynamic": false,
+							"has_garden": false,
+							"house_id": "5",
+							"house_number": 5.0,
+							"owner": -1,
+							"parent_anchor": [
+								7,
+								11
+							],
+							"piece_id": "house",
+							"rotation": 0
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"N",
+									"S"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"N",
+									"S"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					}
+				],
+				[
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"W",
+									"N",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"N",
+									"S",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": false,
+							"dynamic": false,
+							"has_garden": false,
+							"house_id": "5",
+							"house_number": 5.0,
+							"owner": -1,
+							"parent_anchor": [
+								7,
+								11
+							],
+							"piece_id": "house",
+							"rotation": 0
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": false,
+							"dynamic": false,
+							"has_garden": false,
+							"house_id": "5",
+							"house_number": 5.0,
+							"owner": -1,
+							"parent_anchor": [
+								7,
+								11
+							],
+							"piece_id": "house",
+							"rotation": 0
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"N",
+									"E",
+									"S"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"N",
+									"W",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"W",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					}
+				],
+				[
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": false,
+							"dynamic": false,
+							"has_garden": false,
+							"house_id": "4",
+							"house_number": 4.0,
+							"owner": -1,
+							"parent_anchor": [
+								1,
+								14
+							],
+							"piece_id": "house",
+							"rotation": 180
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": false,
+							"dynamic": false,
+							"has_garden": false,
+							"house_id": "4",
+							"house_number": 4.0,
+							"owner": -1,
+							"parent_anchor": [
+								1,
+								14
+							],
+							"piece_id": "house",
+							"rotation": 180
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"N",
+									"S"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"N",
+									"S"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": true,
+							"dynamic": false,
+							"has_garden": false,
+							"house_id": "15",
+							"house_number": 15.0,
+							"owner": -1,
+							"parent_anchor": [
+								13,
+								13
+							],
+							"piece_id": "house",
+							"rotation": 0
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": false,
+							"dynamic": false,
+							"has_garden": false,
+							"house_id": "15",
+							"house_number": 15.0,
+							"owner": -1,
+							"parent_anchor": [
+								13,
+								13
+							],
+							"piece_id": "house",
+							"rotation": 0
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					}
+				],
+				[
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": false,
+							"dynamic": false,
+							"has_garden": false,
+							"house_id": "4",
+							"house_number": 4.0,
+							"owner": -1,
+							"parent_anchor": [
+								1,
+								14
+							],
+							"piece_id": "house",
+							"rotation": 180
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": true,
+							"dynamic": false,
+							"has_garden": false,
+							"house_id": "4",
+							"house_number": 4.0,
+							"owner": -1,
+							"parent_anchor": [
+								1,
+								14
+							],
+							"piece_id": "house",
+							"rotation": 180
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"N"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							0,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"N",
+									"E"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"E",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"S",
+									"E",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"E",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [
+							{
+								"bridge": false,
+								"dirs": [
+									"N",
+									"W"
+								]
+							}
+						],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							1,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": false,
+							"dynamic": false,
+							"has_garden": false,
+							"house_id": "15",
+							"house_number": 15.0,
+							"owner": -1,
+							"parent_anchor": [
+								13,
+								13
+							],
+							"piece_id": "house",
+							"rotation": 0
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
+						]
+					},
+					{
+						"blocked": false,
+						"drink_source": null,
+						"road_segments": [],
+						"structure": {
+							"anchor_cell": false,
+							"dynamic": false,
+							"has_garden": false,
+							"house_id": "15",
+							"house_number": 15.0,
+							"owner": -1,
+							"parent_anchor": [
+								13,
+								13
+							],
+							"piece_id": "house",
+							"rotation": 0
+						},
+						"terrain_type": null,
+						"tile_origin": [
+							2,
+							2
 						]
 					}
 				]
 			],
-			"coffee_shops": {
+			"drink_sources": [
+				{
+					"tile_id": "tile_m",
+					"type": "lemonade",
+					"world_pos": [
+						6,
+						1
+					]
+				},
+				{
+					"tile_id": "tile_m",
+					"type": "soda",
+					"world_pos": [
+						8,
+						3
+					]
+				},
+				{
+					"tile_id": "tile_q",
+					"type": "soda",
+					"world_pos": [
+						11,
+						1
+					]
+				},
+				{
+					"tile_id": "tile_r",
+					"type": "soda",
+					"world_pos": [
+						3,
+						8
+					]
+				},
+				{
+					"tile_id": "tile_l",
+					"type": "lemonade",
+					"world_pos": [
+						13,
+						6
+					]
+				}
+			],
+			"external_cells": {
 
 			},
-			"drink_sources": [],
+			"external_tile_placements": [],
+			"garden_supply_remaining": 8,
 			"grid_size": [
 				15,
 				15
 			],
+			"house_number_supply_remaining": [
+				1,
+				3,
+				6,
+				9,
+				11,
+				14,
+				17,
+				19
+			],
 			"houses": {
-				"airplane_east": {
+				"12": {
 					"anchor_pos": [
-						10,
-						10
+						9,
+						9
 					],
 					"cells": [
 						[
-							10,
-							10
+							9,
+							9
+						],
+						[
+							8,
+							9
+						],
+						[
+							9,
+							8
+						],
+						[
+							8,
+							8
 						]
 					],
 					"demands": [
 						{
-							"board_number": 4,
+							"board_number": 1,
 							"from_player": 0,
-							"product": "beer",
-							"type": "airplane"
+							"product": "soda",
+							"type": "radio"
+						},
+						{
+							"board_number": 1,
+							"from_player": 0,
+							"product": "soda",
+							"type": "radio"
 						},
 						{
 							"board_number": 7,
@@ -3376,71 +4126,42 @@
 						}
 					],
 					"has_garden": false,
-					"house_id": "airplane_east",
-					"house_number": 6,
+					"house_id": "12",
+					"house_number": 12.0,
 					"is_apartment": false,
-					"owner": -1,
-					"printed": false
+					"printed": true
 				},
-				"airplane_mid": {
+				"15": {
 					"anchor_pos": [
-						5,
-						10
+						13,
+						13
 					],
 					"cells": [
 						[
-							5,
-							10
-						]
-					],
-					"demands": [
-						{
-							"board_number": 4,
-							"from_player": 0,
-							"product": "beer",
-							"type": "airplane"
-						},
-						{
-							"board_number": 7,
-							"from_player": 0,
-							"product": "pizza",
-							"type": "mailbox"
-						}
-					],
-					"has_garden": false,
-					"house_id": "airplane_mid",
-					"house_number": 5,
-					"is_apartment": false,
-					"owner": -1,
-					"printed": false
-				},
-				"airplane_west": {
-					"anchor_pos": [
-						0,
-						10
-					],
-					"cells": [
+							13,
+							13
+						],
 						[
-							0,
-							10
+							14,
+							13
+						],
+						[
+							13,
+							14
+						],
+						[
+							14,
+							14
 						]
 					],
-					"demands": [
-						{
-							"board_number": 4,
-							"from_player": 0,
-							"product": "beer",
-							"type": "airplane"
-						}
-					],
+					"demands": [],
 					"has_garden": false,
-					"house_id": "airplane_west",
-					"house_number": 4,
+					"house_id": "15",
+					"house_number": 15.0,
 					"is_apartment": false,
-					"owner": -1,
-					"printed": false
+					"printed": true
 				},
-				"house_left": {
+				"2": {
 					"anchor_pos": [
 						0,
 						0
@@ -3465,11 +4186,90 @@
 					],
 					"demands": [
 						{
-							"board_number": 1,
+							"board_number": 4,
 							"from_player": 0,
-							"product": "soda",
-							"type": "radio"
-						},
+							"product": "beer",
+							"type": "airplane"
+						}
+					],
+					"has_garden": false,
+					"house_id": "2",
+					"house_number": 2.0,
+					"is_apartment": false,
+					"printed": true
+				},
+				"4": {
+					"anchor_pos": [
+						1,
+						14
+					],
+					"cells": [
+						[
+							1,
+							14
+						],
+						[
+							0,
+							14
+						],
+						[
+							1,
+							13
+						],
+						[
+							0,
+							13
+						]
+					],
+					"demands": [],
+					"has_garden": false,
+					"house_id": "4",
+					"house_number": 4.0,
+					"is_apartment": false,
+					"printed": true
+				},
+				"5": {
+					"anchor_pos": [
+						7,
+						11
+					],
+					"cells": [
+						[
+							7,
+							11
+						],
+						[
+							8,
+							11
+						],
+						[
+							7,
+							12
+						],
+						[
+							8,
+							12
+						]
+					],
+					"demands": [],
+					"has_garden": false,
+					"house_id": "5",
+					"house_number": 5.0,
+					"is_apartment": false,
+					"printed": true
+				},
+				"manual_marketing_review_house": {
+					"anchor_pos": [
+						8,
+						2
+					],
+					"cells": [
+						[
+							8,
+							2
+						]
+					],
+					"demands": [
 						{
 							"board_number": 1,
 							"from_player": 0,
@@ -3477,129 +4277,21 @@
 							"type": "radio"
 						},
 						{
-							"board_number": 11,
+							"board_number": 1,
+							"from_player": 0,
+							"product": "soda",
+							"type": "radio"
+						},
+						{
+							"board_number": 14,
 							"from_player": 0,
 							"product": "burger",
 							"type": "billboard"
 						}
 					],
 					"has_garden": false,
-					"house_id": "house_left",
-					"house_number": 1,
-					"is_apartment": false,
-					"owner": -1,
-					"printed": false
-				},
-				"house_right_capped": {
-					"anchor_pos": [
-						4,
-						0
-					],
-					"cells": [
-						[
-							4,
-							0
-						],
-						[
-							5,
-							0
-						],
-						[
-							4,
-							1
-						],
-						[
-							5,
-							1
-						]
-					],
-					"demands": [
-						{
-							"board_number": 0,
-							"from_player": -1,
-							"product": "pizza",
-							"type": "seed"
-						},
-						{
-							"board_number": 0,
-							"from_player": -1,
-							"product": "pizza",
-							"type": "seed"
-						},
-						{
-							"board_number": 0,
-							"from_player": -1,
-							"product": "pizza",
-							"type": "seed"
-						}
-					],
-					"has_garden": false,
-					"house_id": "house_right_capped",
-					"house_number": 2,
-					"is_apartment": false,
-					"owner": -1,
-					"printed": false
-				},
-				"radio_mid": {
-					"anchor_pos": [
-						8,
-						5
-					],
-					"cells": [
-						[
-							8,
-							5
-						]
-					],
-					"demands": [
-						{
-							"board_number": 1,
-							"from_player": 0,
-							"product": "soda",
-							"type": "radio"
-						},
-						{
-							"board_number": 1,
-							"from_player": 0,
-							"product": "soda",
-							"type": "radio"
-						},
-						{
-							"board_number": 7,
-							"from_player": 0,
-							"product": "pizza",
-							"type": "mailbox"
-						}
-					],
-					"has_garden": false,
-					"house_id": "radio_mid",
-					"house_number": 3,
-					"is_apartment": false,
-					"owner": -1,
-					"printed": false
-				},
-				"radio_outside": {
-					"anchor_pos": [
-						12,
-						0
-					],
-					"cells": [
-						[
-							12,
-							0
-						]
-					],
-					"demands": [
-						{
-							"board_number": 7,
-							"from_player": 0,
-							"product": "pizza",
-							"type": "mailbox"
-						}
-					],
-					"has_garden": false,
-					"house_id": "radio_outside",
-					"house_number": 7,
+					"house_id": "manual_marketing_review_house",
+					"house_number": 16,
 					"is_apartment": false,
 					"owner": -1,
 					"printed": false
@@ -3619,102 +4311,226 @@
 					],
 					"owner": 0,
 					"product": "soda",
-					"remaining_duration": 1,
+					"remaining_duration": 2,
 					"rotation": 0,
 					"tile_index": -1,
 					"type": "radio",
 					"world_pos": [
-						2,
-						4
+						11,
+						0
 					]
 				},
-				"11": {
+				"14": {
 					"axis": "",
-					"board_number": 11,
+					"board_number": 14,
 					"footprint_size": [
-						3,
-						2
+						2,
+						1
 					],
 					"owner": 0,
 					"product": "burger",
-					"remaining_duration": 1,
-					"rotation": 0,
+					"remaining_duration": 2,
+					"rotation": 90,
 					"tile_index": -1,
 					"type": "billboard",
 					"world_pos": [
-						0,
+						7,
+						1
+					]
+				},
+				"4": {
+					"axis": "row",
+					"board_number": 4,
+					"footprint_size": [
+						1,
 						2
+					],
+					"owner": 0,
+					"product": "beer",
+					"remaining_duration": 2,
+					"rotation": 0,
+					"tile_index": 0,
+					"type": "airplane",
+					"world_pos": [
+						0,
+						0
+					]
+				},
+				"7": {
+					"axis": "",
+					"board_number": 7,
+					"footprint_size": [
+						2,
+						2
+					],
+					"owner": 0,
+					"product": "pizza",
+					"remaining_duration": 2,
+					"rotation": 0,
+					"tile_index": -1,
+					"type": "mailbox",
+					"world_pos": [
+						10,
+						8
 					]
 				}
 			},
-			"next_coffee_shop_id": 1,
-			"next_house_number": 8,
-			"next_restaurant_id": 2,
+			"next_house_number": 17,
+			"next_restaurant_id": 3,
 			"restaurants": {
-				"rest_0": {
-					"anchor_pos": [
-						0,
-						4
-					],
-					"cells": [
-						[
-							0,
-							4
-						],
-						[
-							1,
-							4
-						],
-						[
-							0,
-							5
-						],
-						[
-							1,
-							5
-						]
-					],
-					"entrance_pos": [
-						2,
-						4
-					],
-					"owner": 0,
-					"restaurant_id": "rest_0"
-				},
 				"rest_1": {
 					"anchor_pos": [
-						12,
-						13
+						3,
+						0
 					],
 					"cells": [
 						[
-							12,
-							13
+							3,
+							0
 						],
 						[
-							13,
-							13
+							4,
+							0
 						],
 						[
-							12,
-							14
+							3,
+							1
 						],
 						[
-							13,
-							14
+							4,
+							1
 						]
 					],
 					"entrance_pos": [
-						12,
-						13
+						3,
+						0
+					],
+					"owner": 0,
+					"restaurant_id": "rest_1",
+					"rotation": 0
+				},
+				"rest_2": {
+					"anchor_pos": [
+						8,
+						0
+					],
+					"cells": [
+						[
+							8,
+							0
+						],
+						[
+							9,
+							0
+						],
+						[
+							8,
+							1
+						],
+						[
+							9,
+							1
+						]
+					],
+					"entrance_pos": [
+						8,
+						0
 					],
 					"owner": 1,
-					"restaurant_id": "rest_1"
+					"restaurant_id": "rest_2",
+					"rotation": 0
 				}
 			},
 			"tile_grid_size": [
 				3,
 				3
+			],
+			"tile_placements": [
+				{
+					"board_pos": [
+						0,
+						0
+					],
+					"rotation": 0,
+					"tile_id": "tile_a"
+				},
+				{
+					"board_pos": [
+						1,
+						0
+					],
+					"rotation": 270,
+					"tile_id": "tile_m"
+				},
+				{
+					"board_pos": [
+						2,
+						0
+					],
+					"rotation": 90,
+					"tile_id": "tile_q"
+				},
+				{
+					"board_pos": [
+						0,
+						1
+					],
+					"rotation": 180,
+					"tile_id": "tile_r"
+				},
+				{
+					"board_pos": [
+						1,
+						1
+					],
+					"rotation": 180,
+					"tile_id": "tile_g"
+				},
+				{
+					"board_pos": [
+						2,
+						1
+					],
+					"rotation": 270,
+					"tile_id": "tile_l"
+				},
+				{
+					"board_pos": [
+						0,
+						2
+					],
+					"rotation": 180,
+					"tile_id": "tile_b"
+				},
+				{
+					"board_pos": [
+						1,
+						2
+					],
+					"rotation": 0,
+					"tile_id": "tile_c"
+				},
+				{
+					"board_pos": [
+						2,
+						2
+					],
+					"rotation": 0,
+					"tile_id": "tile_i"
+				}
+			],
+			"tile_supply_remaining": [
+				"tile_d",
+				"tile_e",
+				"tile_f",
+				"tile_h",
+				"tile_j",
+				"tile_k",
+				"tile_n",
+				"tile_o",
+				"tile_p",
+				"tile_s",
+				"tile_t"
 			]
 		},
 		"marketing_instances": [
@@ -3726,27 +4542,57 @@
 				"footprint_size": "(1, 1)",
 				"owner": 0,
 				"product": "soda",
-				"remaining_duration": 1,
+				"remaining_duration": 2,
 				"rotation": 0,
 				"staff_id": 3,
 				"tile_index": -1,
 				"type": "radio",
-				"world_pos": "(2, 4)"
+				"world_pos": "(11, 0)"
+			},
+			{
+				"axis": "row",
+				"board_number": 4,
+				"created_round": 1,
+				"employee_type": "brand_manager",
+				"footprint_size": "(1, 2)",
+				"owner": 0,
+				"product": "beer",
+				"remaining_duration": 2,
+				"rotation": 0,
+				"staff_id": 4,
+				"tile_index": 0,
+				"type": "airplane",
+				"world_pos": "(0, 0)"
 			},
 			{
 				"axis": "",
-				"board_number": 11,
+				"board_number": 7,
 				"created_round": 1,
-				"employee_type": "marketing_trainee",
-				"footprint_size": "(3, 2)",
+				"employee_type": "campaign_manager",
+				"footprint_size": "(2, 2)",
+				"owner": 0,
+				"product": "pizza",
+				"remaining_duration": 2,
+				"rotation": 0,
+				"staff_id": 5,
+				"tile_index": -1,
+				"type": "mailbox",
+				"world_pos": "(10, 8)"
+			},
+			{
+				"axis": "",
+				"board_number": 14,
+				"created_round": 1,
+				"employee_type": "campaign_manager",
+				"footprint_size": "(2, 1)",
 				"owner": 0,
 				"product": "burger",
-				"remaining_duration": 1,
-				"rotation": 0,
+				"remaining_duration": 2,
+				"rotation": 90,
 				"staff_id": 6,
 				"tile_index": -1,
 				"type": "billboard",
-				"world_pos": "(0, 2)"
+				"world_pos": "(7, 1)"
 			}
 		],
 		"milestone_pool": [
@@ -3786,10 +4632,14 @@
 				"banned_employee_ids": [],
 				"busy_marketers": [
 					"brand_director",
-					"marketing_trainee"
+					"brand_manager",
+					"campaign_manager",
+					"campaign_manager"
 				],
 				"busy_staff_ids": [
 					3,
+					4,
+					5,
 					6
 				],
 				"can_peek_all_reserve_cards": false,
@@ -3842,17 +4692,11 @@
 						"type": 20
 					}
 				],
-				"reserve_employees": [
-					"brand_manager",
-					"campaign_manager"
-				],
-				"reserve_staff_ids": [
-					4,
-					5
-				],
+				"reserve_employees": [],
+				"reserve_staff_ids": [],
 				"restaurant_logo_id": 4,
 				"restaurants": [
-					"rest_0"
+					"rest_1"
 				],
 				"staff_registry": {
 					"1": {
@@ -3877,7 +4721,7 @@
 					},
 					"6": {
 						"created_round": 1,
-						"employee_type": "marketing_trainee",
+						"employee_type": "campaign_manager",
 						"staff_id": 6
 					}
 				}
@@ -3933,7 +4777,7 @@
 				"reserve_staff_ids": [],
 				"restaurant_logo_id": 0,
 				"restaurants": [
-					"rest_1"
+					"rest_2"
 				],
 				"staff_registry": {
 					"2": {
@@ -3955,29 +4799,17 @@
 				"1": []
 			},
 			"marketing": {
-				"expired": [
-					{
-						"board_number": 4,
-						"employee_type": "brand_manager",
-						"owner": 0
-					},
-					{
-						"board_number": 7,
-						"employee_type": "campaign_manager",
-						"owner": 0
-					}
-				],
+				"expired": [],
 				"processed": [
 					{
 						"affected_houses": [
-							"house_left",
-							"house_right_capped",
-							"radio_mid"
+							"12",
+							"manual_marketing_review_house"
 						],
 						"board_number": 1,
 						"demands_added": 4,
-						"duration_after": 1,
-						"duration_before": 2,
+						"duration_after": 2,
+						"duration_before": 3,
 						"employee_type": "brand_director",
 						"expired": false,
 						"owner": 0,
@@ -3985,71 +4817,65 @@
 						"rounds": 1,
 						"type": "radio",
 						"world_pos": [
-							2,
-							4
+							11,
+							0
 						]
 					},
 					{
 						"affected_houses": [
-							"airplane_west",
-							"airplane_mid",
-							"airplane_east"
+							"2"
 						],
 						"board_number": 4,
-						"demands_added": 3,
-						"duration_after": 0,
-						"duration_before": 1,
+						"demands_added": 1,
+						"duration_after": 2,
+						"duration_before": 3,
 						"employee_type": "brand_manager",
-						"expired": true,
+						"expired": false,
 						"owner": 0,
 						"product": "beer",
 						"rounds": 1,
 						"type": "airplane",
 						"world_pos": [
 							0,
-							10
+							0
 						]
 					},
 					{
 						"affected_houses": [
-							"house_right_capped",
-							"radio_mid",
-							"airplane_mid",
-							"airplane_east",
-							"radio_outside"
+							"12"
 						],
 						"board_number": 7,
-						"demands_added": 4,
-						"duration_after": 0,
-						"duration_before": 1,
+						"demands_added": 1,
+						"duration_after": 2,
+						"duration_before": 3,
 						"employee_type": "campaign_manager",
-						"expired": true,
+						"expired": false,
 						"owner": 0,
 						"product": "pizza",
 						"rounds": 1,
 						"type": "mailbox",
 						"world_pos": [
-							4,
-							2
+							10,
+							8
 						]
 					},
 					{
 						"affected_houses": [
-							"house_left"
+							"manual_marketing_review_house"
 						],
-						"board_number": 11,
+						"board_number": 14,
 						"demands_added": 1,
-						"duration_after": 1,
-						"duration_before": 2,
-						"employee_type": "marketing_trainee",
+						"duration_after": 2,
+						"duration_before": 3,
+						"employee_type": "campaign_manager",
 						"expired": false,
 						"owner": 0,
 						"product": "burger",
 						"rounds": 1,
 						"type": "billboard",
 						"world_pos": [
-							0,
-							2
+							7,
+							1
 						]
 					}
 				],
@@ -4057,9 +4883,8 @@
 				"timeline_events": [
 					{
 						"affected_houses": [
-							"house_left",
-							"house_right_capped",
-							"radio_mid"
+							"12",
+							"manual_marketing_review_house"
 						],
 						"axis": "",
 						"board_number": 1,
@@ -4079,8 +4904,8 @@
 						"round_index": 0,
 						"type": "radio",
 						"world_pos": [
-							2,
-							4
+							11,
+							0
 						]
 					},
 					{
@@ -4091,36 +4916,16 @@
 						"demand_after": 2,
 						"demand_before": 0,
 						"has_garden": false,
-						"house_id": "house_left",
-						"house_number": 1,
+						"house_id": "12",
+						"house_number": 12.0,
 						"kind": "house_demand",
 						"owner": 0,
 						"product": "soda",
 						"round_index": 0,
 						"type": "radio",
 						"world_pos": [
-							2,
-							4
-						]
-					},
-					{
-						"amount_added": 0,
-						"amount_requested": 2,
-						"board_number": 1,
-						"cap": 3,
-						"demand_after": 3,
-						"demand_before": 3,
-						"has_garden": false,
-						"house_id": "house_right_capped",
-						"house_number": 2,
-						"kind": "house_demand",
-						"owner": 0,
-						"product": "soda",
-						"round_index": 0,
-						"type": "radio",
-						"world_pos": [
-							2,
-							4
+							11,
+							0
 						]
 					},
 					{
@@ -4131,23 +4936,21 @@
 						"demand_after": 2,
 						"demand_before": 0,
 						"has_garden": false,
-						"house_id": "radio_mid",
-						"house_number": 3,
+						"house_id": "manual_marketing_review_house",
+						"house_number": 16,
 						"kind": "house_demand",
 						"owner": 0,
 						"product": "soda",
 						"round_index": 0,
 						"type": "radio",
 						"world_pos": [
-							2,
-							4
+							11,
+							0
 						]
 					},
 					{
 						"affected_houses": [
-							"airplane_west",
-							"airplane_mid",
-							"airplane_east"
+							"2"
 						],
 						"axis": "row",
 						"board_number": 4,
@@ -4168,7 +4971,7 @@
 						"type": "airplane",
 						"world_pos": [
 							0,
-							10
+							0
 						]
 					},
 					{
@@ -4179,8 +4982,8 @@
 						"demand_after": 1,
 						"demand_before": 0,
 						"has_garden": false,
-						"house_id": "airplane_west",
-						"house_number": 4,
+						"house_id": "2",
+						"house_number": 2.0,
 						"kind": "house_demand",
 						"owner": 0,
 						"product": "beer",
@@ -4188,56 +4991,12 @@
 						"type": "airplane",
 						"world_pos": [
 							0,
-							10
-						]
-					},
-					{
-						"amount_added": 1,
-						"amount_requested": 1,
-						"board_number": 4,
-						"cap": 3,
-						"demand_after": 1,
-						"demand_before": 0,
-						"has_garden": false,
-						"house_id": "airplane_mid",
-						"house_number": 5,
-						"kind": "house_demand",
-						"owner": 0,
-						"product": "beer",
-						"round_index": 0,
-						"type": "airplane",
-						"world_pos": [
-							0,
-							10
-						]
-					},
-					{
-						"amount_added": 1,
-						"amount_requested": 1,
-						"board_number": 4,
-						"cap": 3,
-						"demand_after": 1,
-						"demand_before": 0,
-						"has_garden": false,
-						"house_id": "airplane_east",
-						"house_number": 6,
-						"kind": "house_demand",
-						"owner": 0,
-						"product": "beer",
-						"round_index": 0,
-						"type": "airplane",
-						"world_pos": [
-							0,
-							10
+							0
 						]
 					},
 					{
 						"affected_houses": [
-							"house_right_capped",
-							"radio_mid",
-							"airplane_mid",
-							"airplane_east",
-							"radio_outside"
+							"12"
 						],
 						"axis": "",
 						"board_number": 7,
@@ -4257,28 +5016,8 @@
 						"round_index": 0,
 						"type": "mailbox",
 						"world_pos": [
-							4,
-							2
-						]
-					},
-					{
-						"amount_added": 0,
-						"amount_requested": 1,
-						"board_number": 7,
-						"cap": 3,
-						"demand_after": 3,
-						"demand_before": 3,
-						"has_garden": false,
-						"house_id": "house_right_capped",
-						"house_number": 2,
-						"kind": "house_demand",
-						"owner": 0,
-						"product": "pizza",
-						"round_index": 0,
-						"type": "mailbox",
-						"world_pos": [
-							4,
-							2
+							10,
+							8
 						]
 					},
 					{
@@ -4289,89 +5028,29 @@
 						"demand_after": 3,
 						"demand_before": 2,
 						"has_garden": false,
-						"house_id": "radio_mid",
-						"house_number": 3,
+						"house_id": "12",
+						"house_number": 12.0,
 						"kind": "house_demand",
 						"owner": 0,
 						"product": "pizza",
 						"round_index": 0,
 						"type": "mailbox",
 						"world_pos": [
-							4,
-							2
-						]
-					},
-					{
-						"amount_added": 1,
-						"amount_requested": 1,
-						"board_number": 7,
-						"cap": 3,
-						"demand_after": 2,
-						"demand_before": 1,
-						"has_garden": false,
-						"house_id": "airplane_mid",
-						"house_number": 5,
-						"kind": "house_demand",
-						"owner": 0,
-						"product": "pizza",
-						"round_index": 0,
-						"type": "mailbox",
-						"world_pos": [
-							4,
-							2
-						]
-					},
-					{
-						"amount_added": 1,
-						"amount_requested": 1,
-						"board_number": 7,
-						"cap": 3,
-						"demand_after": 2,
-						"demand_before": 1,
-						"has_garden": false,
-						"house_id": "airplane_east",
-						"house_number": 6,
-						"kind": "house_demand",
-						"owner": 0,
-						"product": "pizza",
-						"round_index": 0,
-						"type": "mailbox",
-						"world_pos": [
-							4,
-							2
-						]
-					},
-					{
-						"amount_added": 1,
-						"amount_requested": 1,
-						"board_number": 7,
-						"cap": 3,
-						"demand_after": 1,
-						"demand_before": 0,
-						"has_garden": false,
-						"house_id": "radio_outside",
-						"house_number": 7,
-						"kind": "house_demand",
-						"owner": 0,
-						"product": "pizza",
-						"round_index": 0,
-						"type": "mailbox",
-						"world_pos": [
-							4,
-							2
+							10,
+							8
 						]
 					},
 					{
 						"affected_houses": [
-							"house_left"
+							"manual_marketing_review_house"
 						],
 						"axis": "",
-						"board_number": 11,
+						"board_number": 14,
 						"demand_amount": 1,
-						"employee_type": "marketing_trainee",
+						"employee_type": "campaign_manager",
 						"footprint_size": [
-							3,
-							2
+							2,
+							1
 						],
 						"kind": "campaign_start",
 						"owner": 0,
@@ -4379,39 +5058,39 @@
 						"products": [
 							"burger"
 						],
-						"rotation": 0,
+						"rotation": 90,
 						"round_index": 0,
 						"type": "billboard",
 						"world_pos": [
-							0,
-							2
+							7,
+							1
 						]
 					},
 					{
 						"amount_added": 1,
 						"amount_requested": 1,
-						"board_number": 11,
+						"board_number": 14,
 						"cap": 3,
 						"demand_after": 3,
 						"demand_before": 2,
 						"has_garden": false,
-						"house_id": "house_left",
-						"house_number": 1,
+						"house_id": "manual_marketing_review_house",
+						"house_number": 16,
 						"kind": "house_demand",
 						"owner": 0,
 						"product": "burger",
 						"round_index": 0,
 						"type": "billboard",
 						"world_pos": [
-							0,
-							2
+							7,
+							1
 						]
 					},
 					{
 						"axis": "",
 						"board_number": 1,
-						"duration_after": 1,
-						"duration_before": 2,
+						"duration_after": 2,
+						"duration_before": 3,
 						"employee_type": "brand_director",
 						"expired": false,
 						"footprint_size": [
@@ -4424,17 +5103,17 @@
 						"rotation": 0,
 						"type": "radio",
 						"world_pos": [
-							2,
-							4
+							11,
+							0
 						]
 					},
 					{
 						"axis": "row",
 						"board_number": 4,
-						"duration_after": 0,
-						"duration_before": 1,
+						"duration_after": 2,
+						"duration_before": 3,
 						"employee_type": "brand_manager",
-						"expired": true,
+						"expired": false,
 						"footprint_size": [
 							1,
 							2
@@ -4446,16 +5125,16 @@
 						"type": "airplane",
 						"world_pos": [
 							0,
-							10
+							0
 						]
 					},
 					{
 						"axis": "",
 						"board_number": 7,
-						"duration_after": 0,
-						"duration_before": 1,
+						"duration_after": 2,
+						"duration_before": 3,
 						"employee_type": "campaign_manager",
-						"expired": true,
+						"expired": false,
 						"footprint_size": [
 							2,
 							2
@@ -4466,29 +5145,29 @@
 						"rotation": 0,
 						"type": "mailbox",
 						"world_pos": [
-							4,
-							2
+							10,
+							8
 						]
 					},
 					{
 						"axis": "",
-						"board_number": 11,
-						"duration_after": 1,
-						"duration_before": 2,
-						"employee_type": "marketing_trainee",
+						"board_number": 14,
+						"duration_after": 2,
+						"duration_before": 3,
+						"employee_type": "campaign_manager",
 						"expired": false,
 						"footprint_size": [
-							3,
-							2
+							2,
+							1
 						],
 						"kind": "duration_tick",
 						"owner": 0,
 						"product": "burger",
-						"rotation": 0,
+						"rotation": 90,
 						"type": "billboard",
 						"world_pos": [
-							0,
-							2
+							7,
+							1
 						]
 					}
 				]
@@ -4497,8 +5176,7 @@
 				"0": {
 					"brand_director": 1,
 					"brand_manager": 1,
-					"campaign_manager": 1,
-					"marketing_trainee": 1
+					"campaign_manager": 2
 				}
 			},
 			"milestones_auto_awarded": [
@@ -4527,7 +5205,7 @@
 				{
 					"context": {
 						"employee_is_marketeer": true,
-						"employee_type": "marketing_trainee",
+						"employee_type": "campaign_manager",
 						"player_id": 0,
 						"type": "billboard"
 					},
