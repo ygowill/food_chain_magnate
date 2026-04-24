@@ -409,6 +409,12 @@ static func _draw_house_demands(canvas, cell_size: int) -> void:
 			# Garden houses can have more demands; allow spilling tokens into the garden area for visibility.
 			demand_area_rect = structure_rect
 
+		var hidden_counts := {}
+		if canvas != null and canvas.has_method("get_hidden_demand_counts_for_house"):
+			var hidden_val = canvas.call("get_hidden_demand_counts_for_house", house_id)
+			if hidden_val is Dictionary:
+				hidden_counts = hidden_val
+
 		var product_ids: Array[String] = []
 		for d_val in demands:
 			if not (d_val is Dictionary):
@@ -416,6 +422,10 @@ static func _draw_house_demands(canvas, cell_size: int) -> void:
 			var d: Dictionary = d_val
 			var product_id: String = str(d.get("product", ""))
 			if product_id.is_empty():
+				continue
+			var hidden_left := int(hidden_counts.get(product_id, 0))
+			if hidden_left > 0:
+				hidden_counts[product_id] = hidden_left - 1
 				continue
 			product_ids.append(product_id)
 		if product_ids.is_empty():

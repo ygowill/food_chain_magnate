@@ -3,6 +3,7 @@ class_name MarketingAnimationOrdersBuilderTest
 extends RefCounted
 
 const BuilderClass = preload("res://ui/scenes/game/marketing/orders_builder.gd")
+const MarketingAnimationControllerClass = preload("res://ui/scenes/game/marketing/controller.gd")
 
 static func run() -> Result:
 	var timeline_r := _case_builds_orders_from_timeline()
@@ -11,7 +12,10 @@ static func run() -> Result:
 	var fallback_r := _case_builds_orders_from_processed_fallback()
 	if not fallback_r.ok:
 		return fallback_r
-	return Result.success({"cases": 2})
+	var mask_r := _case_builds_hidden_demand_mask_and_reveals()
+	if not mask_r.ok:
+		return mask_r
+	return Result.success({"cases": 3})
 
 static func _case_builds_orders_from_timeline() -> Result:
 	var data := {
@@ -113,4 +117,50 @@ static func _case_builds_orders_from_processed_fallback() -> Result:
 	var house_events: Array = house_events_val
 	if house_events.size() != 2:
 		return Result.failure("processed fallback 应为 affected_houses 构建 house_events，实际: %d" % house_events.size())
+	return Result.success()
+
+static func _case_builds_hidden_demand_mask_and_reveals() -> Result:
+	var orders: Array = [
+		{
+			"product": "soda",
+			"house_events": [
+				{"house_id": "h1", "product": "soda", "amount_added": 2},
+				{"house_id": "h2", "product": "burger", "amount_added": 1},
+				{"house_id": "h1", "product": "burger", "amount_added": 1},
+			],
+		},
+	]
+	var hidden := MarketingAnimationControllerClass.build_initial_hidden_demand_counts(orders)
+	var h1_val = hidden.get("h1", null)
+	if not (h1_val is Dictionary):
+		return Result.failure("h1 hidden counts missing")
+	var h1: Dictionary = h1_val
+	if int(h1.get("soda", 0)) != 2 or int(h1.get("burger", 0)) != 1:
+		return Result.failure("h1 hidden counts wrong: %s" % str(h1))
+	var h2_val = hidden.get("h2", null)
+	if not (h2_val is Dictionary) or int((h2_val as Dictionary).get("burger", 0)) != 1:
+		return Result.failure("h2 hidden counts wrong: %s" % str(h2_val))
+
+	hidden = MarketingAnimationControllerClass.reveal_hidden_demand_counts_for_event(
+		hidden,
+		{"house_id": "h1", "product": "soda", "amount_added": 1}
+	)
+	h1 = hidden.get("h1", {})
+	if int(h1.get("soda", 0)) != 1 or int(h1.get("burger", 0)) != 1:
+		return Result.failure("first reveal should leave one soda and one burger hidden: %s" % str(h1))
+
+	hidden = MarketingAnimationControllerClass.reveal_hidden_demand_counts_for_event(
+		hidden,
+		{"house_id": "h1", "product": "soda", "amount_added": 1}
+	)
+	h1 = hidden.get("h1", {})
+	if h1.has("soda") or int(h1.get("burger", 0)) != 1:
+		return Result.failure("second reveal should clear soda only: %s" % str(h1))
+
+	hidden = MarketingAnimationControllerClass.reveal_hidden_demand_counts_for_event(
+		hidden,
+		{"house_id": "h1", "product": "burger", "amount_added": 1}
+	)
+	if hidden.has("h1"):
+		return Result.failure("all h1 hidden counts should be cleared: %s" % str(hidden.get("h1", null)))
 	return Result.success()

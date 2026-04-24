@@ -21,6 +21,28 @@ const TOKEN_FLY_SEC := 0.42
 const HOUSE_PULSE_SEC := 0.20
 const ORDER_GAP_SEC := 0.14
 const DURATION_HOLD_SEC := 0.36
+const RADIO_WAVE_SEC := 0.62
+const AIRPLANE_FLY_SEC := 0.72
+
+class RadioWaveNode:
+	extends Control
+
+	var wave_color: Color = Color(0.32, 0.62, 1.0, 0.55)
+	var radius_ratio: float = 0.10
+	var line_width: float = 3.0
+
+	func set_radius_ratio(value: float) -> void:
+		radius_ratio = clampf(float(value), 0.0, 1.0)
+		queue_redraw()
+
+	func _draw() -> void:
+		var s := minf(size.x, size.y)
+		if s <= 1.0:
+			return
+		var radius := s * 0.5 * radius_ratio
+		if radius <= 1.0:
+			return
+		draw_arc(size * 0.5, radius, 0.0, TAU, 96, wave_color, line_width, true)
 
 enum State { IDLE, PLAYING, DONE }
 
@@ -36,6 +58,60 @@ var _control_bar: Control = null
 var _skin = null
 var _speed: float = 1.0
 var _active_tweens: Array[Tween] = []
+var _hidden_demand_counts_by_house: Dictionary = {}
+
+static func build_initial_hidden_demand_counts(orders: Array) -> Dictionary:
+	var hidden := {}
+	for order_val in orders:
+		if not (order_val is Dictionary):
+			continue
+		var order: Dictionary = order_val
+		var fallback_product := str(order.get("product", "")).strip_edges()
+		var house_events_val = order.get("house_events", [])
+		if not (house_events_val is Array):
+			continue
+		for evt_val in house_events_val:
+			if not (evt_val is Dictionary):
+				continue
+			var evt: Dictionary = evt_val
+			var amount_added := int(evt.get("amount_added", 0))
+			if amount_added <= 0:
+				continue
+			var house_id := str(evt.get("house_id", "")).strip_edges()
+			if house_id.is_empty():
+				continue
+			var product_id := str(evt.get("product", fallback_product)).strip_edges()
+			if product_id.is_empty():
+				continue
+			var house_counts: Dictionary = hidden.get(house_id, {})
+			house_counts[product_id] = int(house_counts.get(product_id, 0)) + amount_added
+			hidden[house_id] = house_counts
+	return hidden
+
+static func reveal_hidden_demand_counts_for_event(hidden_counts: Dictionary, event: Dictionary, fallback_product: String = "") -> Dictionary:
+	var house_id := str(event.get("house_id", "")).strip_edges()
+	if house_id.is_empty():
+		return hidden_counts
+	var product_id := str(event.get("product", fallback_product)).strip_edges()
+	if product_id.is_empty():
+		return hidden_counts
+	var amount_added := int(event.get("amount_added", 0))
+	if amount_added <= 0:
+		return hidden_counts
+	var house_counts_val = hidden_counts.get(house_id, null)
+	if not (house_counts_val is Dictionary):
+		return hidden_counts
+	var house_counts: Dictionary = house_counts_val
+	var remaining := maxi(0, int(house_counts.get(product_id, 0)) - amount_added)
+	if remaining <= 0:
+		house_counts.erase(product_id)
+	else:
+		house_counts[product_id] = remaining
+	if house_counts.is_empty():
+		hidden_counts.erase(house_id)
+	else:
+		hidden_counts[house_id] = house_counts
+	return hidden_counts
 
 func start(
 	marketing_data: Dictionary,
@@ -55,6 +131,7 @@ func start(
 	_create_anim_layer()
 	_create_map_anim_layer()
 	_create_control_bar()
+	_apply_initial_demand_mask()
 	_state = State.PLAYING
 	_update_control_bar()
 
@@ -69,6 +146,7 @@ func skip_all() -> void:
 
 func dispose() -> void:
 	_kill_all_tweens()
+	_clear_demand_mask()
 	if is_instance_valid(_control_bar):
 		_control_bar.queue_free()
 	_control_bar = null
@@ -166,23 +244,33 @@ func _play_campaign_range_effect(order: Dictionary, board_rect: Rect2) -> void:
 		_map_anim_layer.add_child(h)
 		nodes.append(h)
 
-	var sweep := _create_campaign_sweep(order, board_rect)
+	var effect := _create_campaign_effect(order, board_rect, unique_houses)
+	var sweep: Control = effect.get("node", null)
+	var effect_tweens: Array = effect.get("tweens", [])
+	var custom_effect := bool(effect.get("custom", false))
 	var tw := _map_anim_layer.create_tween().set_parallel(true)
 	_active_tweens.append(tw)
 	for n in nodes:
 		tw.tween_property(n, "modulate:a", 1.0, 0.16 / _speed)
 		tw.tween_property(n, "modulate:a", 0.0, 0.28 / _speed).set_delay(0.16 / _speed)
-	if is_instance_valid(sweep):
+	if is_instance_valid(sweep) and not custom_effect:
 		tw.tween_property(sweep, "modulate:a", 0.0, 0.44 / _speed).set_delay(0.05 / _speed)
 	tw.chain().tween_callback(func():
 		for n2 in nodes:
 			if is_instance_valid(n2):
 				n2.queue_free()
-		if is_instance_valid(sweep):
+		if is_instance_valid(sweep) and not custom_effect:
 			sweep.queue_free()
 		_active_tweens.erase(tw)
 	)
 	await tw.finished
+	for effect_tw_val in effect_tweens:
+		if effect_tw_val is Tween:
+			var effect_tw: Tween = effect_tw_val
+			if is_instance_valid(effect_tw) and effect_tw.is_running():
+				await effect_tw.finished
+	if is_instance_valid(sweep):
+		sweep.queue_free()
 
 func _play_house_demand_event(order: Dictionary, event: Dictionary, board_rect: Rect2) -> void:
 	var house_id := str(event.get("house_id", "")).strip_edges()
@@ -197,9 +285,14 @@ func _play_house_demand_event(order: Dictionary, event: Dictionary, board_rect: 
 		await _show_capped_marker(house_rect)
 		return
 
+	var product_id := str(event.get("product", order.get("product", "")))
 	var count := mini(amount_added, TOKEN_MAX_PER_HOUSE_EVENT)
 	for i in range(count):
-		await _fly_product_token(str(event.get("product", order.get("product", ""))), board_rect, house_rect, i, count)
+		await _fly_product_token(product_id, board_rect, house_rect, i, count)
+		_reveal_house_demand_amount(order, event, 1)
+	var unshown_count := amount_added - count
+	if unshown_count > 0:
+		_reveal_house_demand_amount(order, event, unshown_count)
 	await _pulse_house(house_rect)
 
 func _play_duration_event(order: Dictionary, board_rect: Rect2) -> void:
@@ -352,6 +445,202 @@ func _show_capped_marker(house_rect: Rect2) -> void:
 	)
 	await tw.finished
 
+func _create_campaign_effect(order: Dictionary, board_rect: Rect2, unique_houses: Array[String]) -> Dictionary:
+	var marketing_type := str(order.get("type", ""))
+	match marketing_type:
+		"radio":
+			return _create_radio_wave_effect(order, board_rect, unique_houses)
+		"airplane":
+			return _create_airplane_flight_effect(order, board_rect)
+		_:
+			return {
+				"node": _create_campaign_sweep(order, board_rect),
+				"tweens": [],
+				"custom": false,
+			}
+
+func _create_radio_wave_effect(_order: Dictionary, board_rect: Rect2, unique_houses: Array[String]) -> Dictionary:
+	if not is_instance_valid(_map_anim_layer):
+		return {}
+	var bounds := board_rect
+	for house_id in unique_houses:
+		var house_rect := _compute_house_rect(str(house_id))
+		if house_rect.size == Vector2.ZERO:
+			continue
+		bounds = bounds.merge(house_rect)
+	var center := board_rect.position + board_rect.size * 0.5
+	var max_distance := 0.0
+	for corner in [
+		bounds.position,
+		bounds.position + Vector2(bounds.size.x, 0.0),
+		bounds.position + Vector2(0.0, bounds.size.y),
+		bounds.position + bounds.size,
+	]:
+		max_distance = maxf(max_distance, center.distance_to(corner))
+	var wave_size := maxf(max_distance * 2.2, _get_cell_size() * 3.2)
+	var parent := Control.new()
+	parent.name = "MarketingRadioWaveEffect"
+	parent.position = center - Vector2(wave_size, wave_size) * 0.5
+	parent.size = Vector2(wave_size, wave_size)
+	parent.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_map_anim_layer.add_child(parent)
+
+	var tweens: Array = []
+	for i in range(3):
+		var wave := RadioWaveNode.new()
+		wave.name = "MarketingRadioWave"
+		wave.set_anchors_preset(Control.PRESET_FULL_RECT)
+		wave.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		wave.wave_color = _color_for_marketing_type("radio", 0.62)
+		wave.line_width = maxf(2.0, _get_cell_size() * 0.07)
+		wave.modulate.a = 0.0
+		parent.add_child(wave)
+		var tw := wave.create_tween().set_parallel(true)
+		_active_tweens.append(tw)
+		tweens.append(tw)
+		var delay := (0.10 * float(i)) / _speed
+		tw.tween_method(Callable(wave, "set_radius_ratio"), 0.08, 0.96, RADIO_WAVE_SEC / _speed).set_delay(delay).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+		tw.tween_property(wave, "modulate:a", 1.0, 0.10 / _speed).set_delay(delay)
+		tw.tween_property(wave, "modulate:a", 0.0, 0.30 / _speed).set_delay(delay + (RADIO_WAVE_SEC * 0.62) / _speed)
+		tw.chain().tween_callback(func():
+			_active_tweens.erase(tw)
+		)
+	return {
+		"node": parent,
+		"tweens": tweens,
+		"custom": true,
+	}
+
+func _create_airplane_flight_effect(order: Dictionary, board_rect: Rect2) -> Dictionary:
+	if not is_instance_valid(_map_anim_layer):
+		return {}
+	var path := _compute_airplane_flight_path(order, board_rect)
+	var start_center: Vector2 = path.get("start", board_rect.position + board_rect.size * 0.5)
+	var end_center: Vector2 = path.get("end", board_rect.position + board_rect.size * 0.5)
+	var axis := str(path.get("axis", "row"))
+	var dir: Vector2 = end_center - start_center
+
+	var parent := Control.new()
+	parent.name = "MarketingAirplaneFlightEffect"
+	parent.position = Vector2.ZERO
+	parent.size = _map_anim_layer.size
+	parent.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_map_anim_layer.add_child(parent)
+
+	var cs := maxf(_get_cell_size(), 1.0)
+	var trail := ColorRect.new()
+	trail.name = "MarketingAirplaneTrail"
+	trail.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	trail.color = _color_for_marketing_type("airplane", 0.20)
+	trail.modulate.a = 0.0
+	if axis == "col":
+		var y0 := minf(start_center.y, end_center.y)
+		var y1 := maxf(start_center.y, end_center.y)
+		trail.position = Vector2(start_center.x - cs * 0.30, y0)
+		trail.size = Vector2(cs * 0.60, y1 - y0)
+	else:
+		var x0 := minf(start_center.x, end_center.x)
+		var x1 := maxf(start_center.x, end_center.x)
+		trail.position = Vector2(x0, start_center.y - cs * 0.30)
+		trail.size = Vector2(x1 - x0, cs * 0.60)
+	parent.add_child(trail)
+
+	var plane_size := Vector2(cs * 0.95, cs * 0.95)
+	var plane: Control = _create_airplane_visual(plane_size, dir)
+	plane.position = start_center - plane_size * 0.5
+	plane.modulate.a = 0.0
+	parent.add_child(plane)
+
+	var tw := parent.create_tween().set_parallel(true)
+	_active_tweens.append(tw)
+	tw.tween_property(trail, "modulate:a", 1.0, 0.10 / _speed)
+	tw.tween_property(trail, "modulate:a", 0.0, 0.28 / _speed).set_delay((AIRPLANE_FLY_SEC * 0.64) / _speed)
+	tw.tween_property(plane, "modulate:a", 1.0, 0.08 / _speed)
+	tw.tween_property(plane, "position", end_center - plane_size * 0.5, AIRPLANE_FLY_SEC / _speed).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(plane, "modulate:a", 0.0, 0.16 / _speed).set_delay((AIRPLANE_FLY_SEC * 0.78) / _speed)
+	tw.chain().tween_callback(func():
+		_active_tweens.erase(tw)
+	)
+	return {
+		"node": parent,
+		"tweens": [tw],
+		"custom": true,
+	}
+
+func _create_airplane_visual(plane_size: Vector2, dir: Vector2) -> Control:
+	var tex: Texture2D = null
+	if _skin != null:
+		tex = _skin.get_marketing_texture("airplane")
+	var node: Control
+	if tex != null:
+		var icon := TextureRect.new()
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.texture = tex
+		node = icon
+	else:
+		var label := Label.new()
+		label.text = "AIR"
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.add_theme_font_size_override("font_size", maxi(10, int(plane_size.y * 0.36)))
+		label.add_theme_color_override("font_color", Color(0.08, 0.12, 0.18, 1))
+		node = label
+	node.name = "MarketingAirplane"
+	node.size = plane_size
+	node.pivot_offset = plane_size * 0.5
+	node.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if absf(dir.y) > absf(dir.x):
+		node.rotation = PI * 0.5 if dir.y >= 0.0 else -PI * 0.5
+	elif dir.x < 0.0:
+		node.rotation = PI
+	return node
+
+func _compute_airplane_flight_path(order: Dictionary, board_rect: Rect2) -> Dictionary:
+	var axis := str(order.get("axis", "")).strip_edges()
+	if axis != "row" and axis != "col":
+		axis = "row" if board_rect.size.x >= board_rect.size.y else "col"
+	var world_pos := _read_vector2i(order.get("world_pos", [0, 0]), Vector2i.ZERO)
+	var minp := _get_map_world_min()
+	var maxp := _get_map_world_max()
+	var start_world := world_pos
+	var end_world := world_pos
+	if axis == "col":
+		var x := clampi(world_pos.x, minp.x, maxp.x)
+		var from_bottom := world_pos.y > int(floor(float(minp.y + maxp.y) * 0.5))
+		start_world = Vector2i(x, maxp.y if from_bottom else minp.y)
+		end_world = Vector2i(x, minp.y if from_bottom else maxp.y)
+	else:
+		var y := clampi(world_pos.y, minp.y, maxp.y)
+		var from_right := world_pos.x > int(floor(float(minp.x + maxp.x) * 0.5))
+		start_world = Vector2i(maxp.x if from_right else minp.x, y)
+		end_world = Vector2i(minp.x if from_right else maxp.x, y)
+	return {
+		"axis": axis,
+		"start": _world_cell_center(start_world),
+		"end": _world_cell_center(end_world),
+	}
+
+func _world_cell_center(world_pos: Vector2i) -> Vector2:
+	var view_pos := world_pos - _get_world_origin()
+	var cs := maxf(_get_cell_size(), 1.0)
+	return Vector2(view_pos) * cs + Vector2(cs, cs) * 0.5
+
+func _get_map_world_min() -> Vector2i:
+	if _game_state == null or not (_game_state.map is Dictionary):
+		return Vector2i.ZERO
+	var origin: Vector2i = _game_state.map.get("map_origin", Vector2i.ZERO)
+	return -origin
+
+func _get_map_world_max() -> Vector2i:
+	if _game_state == null or not (_game_state.map is Dictionary):
+		return Vector2i.ZERO
+	var grid_size: Vector2i = _game_state.map.get("grid_size", Vector2i.ZERO)
+	var origin: Vector2i = _game_state.map.get("map_origin", Vector2i.ZERO)
+	if grid_size.x <= 0 or grid_size.y <= 0:
+		return Vector2i.ZERO
+	return Vector2i(grid_size.x - origin.x - 1, grid_size.y - origin.y - 1)
+
 func _create_campaign_sweep(order: Dictionary, board_rect: Rect2) -> Control:
 	if not is_instance_valid(_map_anim_layer):
 		return null
@@ -448,6 +737,41 @@ func _unique_house_ids_from_order(order: Dictionary) -> Array[String]:
 			out.append(hid2)
 	return out
 
+func _apply_initial_demand_mask() -> void:
+	_hidden_demand_counts_by_house = build_initial_hidden_demand_counts(_orders)
+	_sync_demand_mask_to_canvas()
+
+func _reveal_house_demand_event(order: Dictionary, event: Dictionary) -> void:
+	_reveal_house_demand_amount(order, event, int(event.get("amount_added", 0)))
+
+func _reveal_house_demand_amount(order: Dictionary, event: Dictionary, amount: int) -> void:
+	if _hidden_demand_counts_by_house.is_empty():
+		return
+	if amount <= 0:
+		return
+	var reveal_event := event.duplicate(true)
+	reveal_event["amount_added"] = amount
+	_hidden_demand_counts_by_house = reveal_hidden_demand_counts_for_event(
+		_hidden_demand_counts_by_house,
+		reveal_event,
+		str(order.get("product", "")).strip_edges()
+	)
+	_sync_demand_mask_to_canvas()
+
+func _sync_demand_mask_to_canvas() -> void:
+	if _map_canvas == null or not is_instance_valid(_map_canvas):
+		return
+	if not _map_canvas.has_method("set_hidden_demand_counts_by_house"):
+		return
+	_map_canvas.call("set_hidden_demand_counts_by_house", _hidden_demand_counts_by_house)
+
+func _clear_demand_mask() -> void:
+	_hidden_demand_counts_by_house.clear()
+	if _map_canvas == null or not is_instance_valid(_map_canvas):
+		return
+	if _map_canvas.has_method("clear_hidden_demand_counts_by_house"):
+		_map_canvas.call("clear_hidden_demand_counts_by_house")
+
 func _create_anim_layer() -> void:
 	if _scene == null:
 		return
@@ -523,6 +847,7 @@ func _finish() -> void:
 		return
 	_state = State.DONE
 	_kill_all_tweens()
+	_clear_demand_mask()
 	if is_instance_valid(_control_bar):
 		_control_bar.queue_free()
 	_control_bar = null

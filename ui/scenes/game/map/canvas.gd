@@ -43,6 +43,7 @@ var _hover_pos: Vector2i = Vector2i(-1, -1) # world_pos
 
 var _marketing_by_pos: Dictionary = {}  # Vector2i -> placement dict
 var _structures_by_anchor: Dictionary = {} # Vector2i -> {piece_id, owner, rotation, min:Vector2i, max:Vector2i}
+var _hidden_demand_counts_by_house: Dictionary = {} # house_id -> {product_id -> hidden_count}
 
 var _structure_preview_cells: Array[Vector2i] = []
 var _structure_preview_valid: bool = true
@@ -204,6 +205,7 @@ func clear() -> void:
 	_ui_outside_margin_applied = 0
 	_marketing_by_pos.clear()
 	_structures_by_anchor.clear()
+	_hidden_demand_counts_by_house.clear()
 	_selected_pos = Vector2i(-1, -1)
 	_hover_pos = Vector2i(-1, -1)
 	_structure_preview_cells.clear()
@@ -225,6 +227,45 @@ func clear() -> void:
 	_intro_reveal_token += 1
 	custom_minimum_size = Vector2.ZERO
 	queue_redraw()
+
+func set_hidden_demand_counts_by_house(counts: Dictionary) -> void:
+	_hidden_demand_counts_by_house.clear()
+	for house_id_val in counts.keys():
+		var house_id := str(house_id_val).strip_edges()
+		if house_id.is_empty():
+			continue
+		var product_counts_val = counts.get(house_id_val, null)
+		if not (product_counts_val is Dictionary):
+			continue
+		var product_counts: Dictionary = product_counts_val
+		var normalized := {}
+		for product_val in product_counts.keys():
+			var product_id := str(product_val).strip_edges()
+			if product_id.is_empty():
+				continue
+			var count := int(product_counts.get(product_val, 0))
+			if count <= 0:
+				continue
+			normalized[product_id] = count
+		if normalized.is_empty():
+			continue
+		_hidden_demand_counts_by_house[house_id] = normalized
+	queue_redraw()
+
+func clear_hidden_demand_counts_by_house() -> void:
+	if _hidden_demand_counts_by_house.is_empty():
+		return
+	_hidden_demand_counts_by_house.clear()
+	queue_redraw()
+
+func get_hidden_demand_counts_for_house(house_id: String) -> Dictionary:
+	var hid := str(house_id).strip_edges()
+	if hid.is_empty():
+		return {}
+	var val = _hidden_demand_counts_by_house.get(hid, null)
+	if val is Dictionary:
+		return (val as Dictionary).duplicate(true)
+	return {}
 
 func get_cell_size() -> int:
 	return maxi(1, int(round(float(BASE_CELL_SIZE) * _zoom)))
