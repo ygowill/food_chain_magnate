@@ -10,6 +10,7 @@ const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const BankStateAccessClass = preload("res://core/state/bank_state_access.gd")
 const ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY := "online_dinnertime_confirmed_players"
+const ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY := "online_marketing_confirmed_players"
 
 func _init() -> void:
 	action_id = "forfeit_player"
@@ -44,6 +45,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var confirmed_update := _plan_online_dinnertime_confirmed_players_after_forfeit(state, player_id)
 	if not confirmed_update.ok:
 		return confirmed_update
+	var marketing_confirmed_update := _plan_online_marketing_confirmed_players_after_forfeit(state, player_id)
+	if not marketing_confirmed_update.ok:
+		return marketing_confirmed_update
 
 	player["forfeited"] = true
 
@@ -62,6 +66,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		state.round_state["pending_phase_actions"] = pending_update.value
 	if confirmed_update.value != null:
 		state.round_state[ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY] = confirmed_update.value
+	if marketing_confirmed_update.value != null:
+		state.round_state[ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY] = marketing_confirmed_update.value
 	_maybe_finish_game_if_last_active_player_remains(state, player_id)
 	return Result.success({"player_id": player_id})
 
@@ -284,6 +290,20 @@ static func _plan_online_dinnertime_confirmed_players_after_forfeit(state: GameS
 	var confirmed_val = rs.get(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, null)
 	if not (confirmed_val is Array):
 		return Result.failure("forfeit_player: round_state.%s 类型错误（期望 Array）" % ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY)
+	var confirmed: Array = Array(confirmed_val).duplicate(true)
+	if player_id >= 0 and player_id < confirmed.size():
+		confirmed[player_id] = true
+	return Result.success(confirmed)
+
+static func _plan_online_marketing_confirmed_players_after_forfeit(state: GameState, player_id: int) -> Result:
+	if state == null or not (state.round_state is Dictionary):
+		return Result.success(null)
+	var rs: Dictionary = state.round_state
+	if not rs.has(ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY):
+		return Result.success(null)
+	var confirmed_val = rs.get(ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY, null)
+	if not (confirmed_val is Array):
+		return Result.failure("forfeit_player: round_state.%s 类型错误（期望 Array）" % ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY)
 	var confirmed: Array = Array(confirmed_val).duplicate(true)
 	if player_id >= 0 and player_id < confirmed.size():
 		confirmed[player_id] = true

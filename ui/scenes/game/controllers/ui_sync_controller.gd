@@ -209,6 +209,8 @@ func update_ui(do_profile: bool) -> void:
 			_overlay_controller.call("sync_demand_indicator", state)
 		if _overlay_controller.has_method("sync_dinnertime_overlay"):
 			_overlay_controller.call("sync_dinnertime_overlay", state, head_index == cursor_index)
+		if _overlay_controller.has_method("sync_marketing_overlay"):
+			_overlay_controller.call("sync_marketing_overlay", state, head_index == cursor_index)
 		if do_profile:
 			PerfTraceClass.end_span(span_overlays)
 		OnlinePerfTraceClass.end_span(online_span_overlays, {

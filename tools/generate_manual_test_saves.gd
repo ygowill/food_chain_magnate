@@ -30,6 +30,7 @@ const BUILDER_SCRIPT_PATHS: Array[String] = [
 	"res://tools/manual_test_saves/builders/manual_test_save_employee_placement_builders.gd",
 	"res://tools/manual_test_saves/builders/manual_test_save_logs_builders.gd",
 	"res://tools/manual_test_saves/builders/manual_test_save_milestone_builders.gd",
+	"res://tools/manual_test_saves/builders/manual_test_save_marketing_builders.gd",
 ]
 
 var _builder_registry: Dictionary = {}
@@ -215,6 +216,8 @@ func _kind_to_dir(kind: String) -> String:
 			return "milestones"
 		"logs":
 			return "logs"
+		"marketing":
+			return "marketing"
 		_:
 			return ""
 

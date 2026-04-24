@@ -136,14 +136,17 @@ func _take_action_id_for_request(request_id: String) -> String:
 func _should_ignore_request_rejected(action_id: String, code: String, message: String) -> bool:
 	if str(code).strip_edges() != "action_failed":
 		return false
-	if str(action_id).strip_edges() != "confirm_dinnertime":
+	var aid := str(action_id).strip_edges()
+	if aid != "confirm_dinnertime" and aid != "confirm_marketing":
 		return false
 	var msg := str(message).strip_edges()
-	if msg == "当前不在晚餐阶段":
+	if msg == "当前不在晚餐阶段" or msg == "当前不在营销阶段":
 		return true
-	if msg == "当前无需确认晚餐结算":
+	if msg == "当前无需确认晚餐结算" or msg == "当前无需确认营销结算":
 		return true
 	if msg.begins_with("玩家") and msg.find("无需确认晚餐结算") != -1:
+		return true
+	if msg.begins_with("玩家") and msg.find("无需确认营销结算") != -1:
 		return true
 	return false
 

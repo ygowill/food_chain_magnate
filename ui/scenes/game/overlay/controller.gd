@@ -20,6 +20,7 @@ const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const UiZClass = preload("res://ui/utils/ui_z.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const DinnertimeAnimControllerClass = preload("res://ui/scenes/game/dinnertime/controller.gd")
+const MarketingAnimControllerClass = preload("res://ui/scenes/game/marketing/controller.gd")
 const CommandClass = preload("res://core/types/command.gd")
 
 const TOAST_DESIRED_WIDTH := 520.0
@@ -27,6 +28,7 @@ const TOAST_MIN_MARGIN := 12.0
 const TOAST_OFFSET_TOP := 16.0
 const TOAST_HEIGHT := 62.0
 const KIND_CONFIRM_DINNERTIME := "confirm_dinnertime"
+const KIND_CONFIRM_MARKETING := "confirm_marketing"
 const MILESTONE_ID_FIRST_HAVE_20 := "first_have_20"
 const TOOLBAR_HELP_TARGETS := [
 	{"node_name": "LogButton", "help_key": "ui_topbar_log"},
@@ -71,6 +73,7 @@ var _deferred_milestone_toasts: Array[Dictionary] = []
 var _eventbus_source: String = ""
 var _execute_command: Callable = Callable()
 var _dinnertime_anim_controller = null  # DinnertimeAnimationController
+var _marketing_anim_controller = null  # MarketingAnimationController
 var _ui_sync_controller = null  # GameUiSyncController (for bank_label)
 var _player_panel = null  # PlayerPanel
 var _dinnertime_confirm_in_flight: bool = false
@@ -78,6 +81,11 @@ var _dinnertime_confirm_in_flight_round: int = -1
 var _dinnertime_confirm_in_flight_local_pid: int = -1
 var _dinnertime_confirm_in_flight_request_id: String = ""
 var _dinnertime_confirm_in_flight_since_ms: int = -1
+var _marketing_confirm_in_flight: bool = false
+var _marketing_confirm_in_flight_round: int = -1
+var _marketing_confirm_in_flight_local_pid: int = -1
+var _marketing_confirm_in_flight_request_id: String = ""
+var _marketing_confirm_in_flight_since_ms: int = -1
 
 func _init(scene, map_view, map_canvas, game_log_panel) -> void:
 	_scene = scene
@@ -788,7 +796,8 @@ func sync_demand_indicator(state: GameState) -> void:
 		return
 	# 晚餐结算面板是一个“模态”覆盖层：显示时不应继续在地图上渲染需求指示器，
 	# 否则会出现巨大图标/矩形块，干扰结算阅读。
-	if _is_confirm_dinnertime_pending(state) or _dinnertime_anim_controller != null:
+	if _is_confirm_dinnertime_pending(state) or _dinnertime_anim_controller != null \
+		or _is_confirm_marketing_pending(state) or _marketing_anim_controller != null:
 		_demand_indicator_controller.hide()
 		demand_indicator = _demand_indicator_controller.demand_indicator
 		return
@@ -973,3 +982,216 @@ func _disable_dinnertime_overlay() -> void:
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("set_skip_bank_sync"):
 		_ui_sync_controller.set_skip_bank_sync(false)
 	_flush_deferred_milestone_toasts()
+
+func _reset_marketing_confirm_in_flight() -> void:
+	_marketing_confirm_in_flight = false
+	_marketing_confirm_in_flight_round = -1
+	_marketing_confirm_in_flight_local_pid = -1
+	_marketing_confirm_in_flight_request_id = ""
+	_marketing_confirm_in_flight_since_ms = -1
+
+func _set_marketing_confirm_in_flight(state: GameState, request_id: String) -> void:
+	if state == null:
+		return
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return
+	var local_pid := int(NetContext.local_player_id)
+	if local_pid < 0:
+		return
+	_marketing_confirm_in_flight = true
+	_marketing_confirm_in_flight_round = int(state.round_number)
+	_marketing_confirm_in_flight_local_pid = local_pid
+	_marketing_confirm_in_flight_request_id = str(request_id)
+	_marketing_confirm_in_flight_since_ms = int(Time.get_ticks_msec())
+
+func _is_marketing_confirm_in_flight_for_state(state: GameState) -> bool:
+	if not _marketing_confirm_in_flight:
+		return false
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return false
+	if state == null:
+		return false
+	if int(state.round_number) != _marketing_confirm_in_flight_round:
+		return false
+	var local_pid := int(NetContext.local_player_id)
+	if local_pid < 0:
+		return false
+	return local_pid == _marketing_confirm_in_flight_local_pid
+
+func sync_marketing_overlay(state: GameState, is_live: bool = true) -> void:
+	if str(state.phase) != DefsClass.PHASE_MARKETING or not is_live:
+		_reset_marketing_confirm_in_flight()
+		_disable_marketing_overlay()
+		return
+
+	if not _is_confirm_marketing_pending_for_local(state):
+		_reset_marketing_confirm_in_flight()
+		_disable_marketing_overlay()
+		return
+
+	if _is_marketing_confirm_in_flight_for_state(state):
+		return
+
+	var marketing_data := _get_marketing_report(state)
+	if marketing_data.is_empty():
+		_disable_marketing_overlay()
+		return
+
+	if _marketing_anim_controller != null:
+		return
+
+	_start_marketing_animation(marketing_data, state)
+
+func _is_confirm_marketing_pending(state: GameState) -> bool:
+	var list := _read_marketing_pending_list(state)
+	if list.is_empty():
+		return false
+	if _is_legacy_confirm_marketing_pending(list):
+		return true
+	if not _is_only_player_confirm_marketing_pending(list):
+		return false
+	return true
+
+func _is_confirm_marketing_pending_for_local(state: GameState) -> bool:
+	var list := _read_marketing_pending_list(state)
+	if list.is_empty():
+		return false
+	if _is_legacy_confirm_marketing_pending(list):
+		return true
+	if not _is_only_player_confirm_marketing_pending(list):
+		return false
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		var local_pid := int(NetContext.local_player_id)
+		if local_pid < 0:
+			return false
+		return _list_has_player_confirm_marketing_pending(list, local_pid)
+	return true
+
+func _read_marketing_pending_list(state: GameState) -> Array:
+	if state == null:
+		return []
+	if not (state.round_state is Dictionary):
+		return []
+	var rs: Dictionary = state.round_state
+	var ppa_val = rs.get("pending_phase_actions", null)
+	if not (ppa_val is Dictionary):
+		return []
+	var ppa: Dictionary = ppa_val
+	var list_val = ppa.get(DefsClass.PHASE_MARKETING, null)
+	if not (list_val is Array):
+		return []
+	return Array(list_val)
+
+func _is_legacy_confirm_marketing_pending(list: Array) -> bool:
+	return list.size() == 1 and (list[0] is String) and str(list[0]) == KIND_CONFIRM_MARKETING
+
+func _is_only_player_confirm_marketing_pending(list: Array) -> bool:
+	if list.is_empty():
+		return false
+	for item_val in list:
+		if not (item_val is Dictionary):
+			return false
+		var item: Dictionary = item_val
+		if str(item.get("kind", "")).strip_edges() != KIND_CONFIRM_MARKETING:
+			return false
+		var pid_val = item.get("player_id", null)
+		if not (pid_val is int):
+			if not (pid_val is float and float(pid_val) == floor(float(pid_val))):
+				return false
+	return true
+
+func _list_has_player_confirm_marketing_pending(list: Array, player_id: int) -> bool:
+	for item_val in list:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		if str(item.get("kind", "")).strip_edges() != KIND_CONFIRM_MARKETING:
+			continue
+		var pid_val = item.get("player_id", null)
+		var pid := -1
+		if pid_val is int:
+			pid = int(pid_val)
+		elif pid_val is float and float(pid_val) == floor(float(pid_val)):
+			pid = int(pid_val)
+		if pid == player_id:
+			return true
+	return false
+
+func _get_marketing_report(state: GameState) -> Dictionary:
+	if not (state.round_state is Dictionary):
+		return {}
+	var val = Dictionary(state.round_state).get("marketing", null)
+	if val is Dictionary:
+		return val
+	return {}
+
+func _start_marketing_animation(marketing_data: Dictionary, state: GameState) -> void:
+	if _scene == null:
+		return
+
+	hide_all_overlays()
+	if _demand_indicator_controller != null:
+		_demand_indicator_controller.hide()
+
+	_marketing_anim_controller = MarketingAnimControllerClass.new()
+	_marketing_anim_controller.settlement_completed.connect(_on_marketing_anim_completed)
+	_marketing_anim_controller.start(
+		marketing_data,
+		state,
+		_scene,
+		_map_canvas,
+		_player_panel,
+		Callable(self, "show_milestone_toast")
+	)
+
+func _should_send_marketing_confirm() -> bool:
+	var live_state := _read_live_game_state()
+	if live_state == null:
+		return false
+	if str(live_state.phase) != DefsClass.PHASE_MARKETING:
+		return false
+	if not _is_confirm_marketing_pending_for_local(live_state):
+		return false
+	if _is_marketing_confirm_in_flight_for_state(live_state):
+		return false
+	if _scene != null and is_instance_valid(_scene) and _scene.has_method("_is_online_resync_in_progress"):
+		if bool(_scene.call("_is_online_resync_in_progress")):
+			return false
+	return true
+
+func _on_marketing_anim_completed() -> void:
+	if not _should_send_marketing_confirm():
+		_disable_marketing_overlay()
+		return
+	if _execute_command.is_valid():
+		var live_state := _read_live_game_state()
+		var confirm_cmd = CommandClass.create_system("confirm_marketing")
+		if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+			var local_pid := int(NetContext.local_player_id)
+			if local_pid < 0:
+				_disable_marketing_overlay()
+				return
+			confirm_cmd = CommandClass.create("confirm_marketing", local_pid, {})
+		var exec_r_val = _execute_command.call(confirm_cmd)
+		if exec_r_val is Result:
+			if exec_r_val.ok:
+				var req_id := ""
+				if exec_r_val.value is Dictionary:
+					req_id = str(Dictionary(exec_r_val.value).get("request_id", ""))
+				_set_marketing_confirm_in_flight(live_state, req_id)
+			else:
+				var phase := str(live_state.phase) if live_state != null else "-"
+				var pending := _read_marketing_pending_list(live_state)
+				var mode := str(NetContext.mode) if NetContext != null else "NetContext:null"
+				var local_pid2 := int(NetContext.local_player_id) if NetContext != null else -1
+				GameLog.warn(
+					"Game",
+					"确认营销结算失败: %s phase=%s local_pid=%d mode=%s pending=%s"
+						% [str(exec_r_val.error), phase, local_pid2, mode, str(pending)]
+				)
+	_disable_marketing_overlay()
+
+func _disable_marketing_overlay() -> void:
+	if _marketing_anim_controller != null:
+		_marketing_anim_controller.dispose()
+	_marketing_anim_controller = null

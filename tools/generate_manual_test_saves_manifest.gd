@@ -16,6 +16,7 @@ const ExamplesManifest = preload("res://tools/manual_test_saves/manifest_example
 const MilestonesManifest = preload("res://tools/manual_test_saves/manifest_milestones.gd")
 const EmployeesManifest = preload("res://tools/manual_test_saves/manifest_employees.gd")
 const LogsManifest = preload("res://tools/manual_test_saves/manifest_logs.gd")
+const MarketingManifest = preload("res://tools/manual_test_saves/manifest_marketing.gd")
 
 static func get_cases() -> Array[Dictionary]:
 	var cases: Array[Dictionary] = []
@@ -23,4 +24,5 @@ static func get_cases() -> Array[Dictionary]:
 	cases.append_array(MilestonesManifest.get_cases())
 	cases.append_array(EmployeesManifest.get_cases())
 	cases.append_array(LogsManifest.get_cases())
+	cases.append_array(MarketingManifest.get_cases())
 	return cases

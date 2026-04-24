@@ -1043,6 +1043,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.ConfirmDinnertimeAvailabilityTestClass.run(),
 		},
 		{
+			"name": "ConfirmMarketingAvailabilityTest",
+			"fn": func() -> Result: return TestRefs.ConfirmMarketingAvailabilityTestClass.run(),
+		},
+		{
 			"name": "ActionPanelGuidedActionPlaceholderTest",
 			"fn": func() -> Result: return await TestRefs.ActionPanelGuidedActionPlaceholderTestClass.run(),
 		},
@@ -1493,6 +1497,14 @@ static func build_tests(host) -> Array[Dictionary]:
 			{
 				"name": "ConfirmDinnertimePendingPhaseActionsKeyTest",
 				"fn": func() -> Result: return TestRefs.ConfirmDinnertimePendingPhaseActionsKeyTestClass.run(2, 12345),
+			},
+			{
+				"name": "ConfirmMarketingPendingPhaseActionsKeyTest",
+				"fn": func() -> Result: return TestRefs.ConfirmMarketingPendingPhaseActionsKeyTestClass.run(2, 12345),
+			},
+			{
+				"name": "MarketingAnimationOrdersBuilderTest",
+				"fn": func() -> Result: return TestRefs.MarketingAnimationOrdersBuilderTestClass.run(),
 			},
 			{
 				"name": "ConfirmDinnertimeStateAccessTest",

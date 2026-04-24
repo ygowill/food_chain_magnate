@@ -1,4 +1,4 @@
-# 手工复核用存档索引（employees / milestones / logs）
+# 手工复核用存档索引（employees / milestones / logs / marketing）
 
 本目录包含用于**手工复核**的存档（archive JSON）与同名说明文件（Markdown）。
 
@@ -22,6 +22,7 @@ godot --headless --path . --script res://tools/generate_manual_test_saves.gd
 godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- --kind employee
 godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- --kind milestone
 godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- --kind logs
+godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- --kind marketing
 godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- --id kitchen_trainee
 ```
 
@@ -137,3 +138,7 @@ godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- 
 - `event_log_build_and_move`: `logs/event_log_build_and_move.json` + `logs/event_log_build_and_move.md`
 - `event_log_produce_and_cleanup`: `logs/event_log_produce_and_cleanup.json` + `logs/event_log_produce_and_cleanup.md`
 - `event_log_dinnertime_sale`: `logs/event_log_dinnertime_sale.json` + `logs/event_log_dinnertime_sale.md`
+
+## 营销（1）
+
+- `marketing_phase_animation_review`: `marketing/marketing_phase_animation_review.json` + `marketing/marketing_phase_animation_review.md`
