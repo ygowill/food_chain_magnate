@@ -1,5 +1,5 @@
 # 营销结算动画控制器
-# 自动逐个展示广告牌生效、房屋需求增加和广告持续时间变化。
+# 自动逐个展示广告牌生效和房屋需求增加。
 class_name MarketingAnimationController
 extends RefCounted
 
@@ -20,29 +20,43 @@ const BOARD_PULSE_SEC := 0.28
 const TOKEN_FLY_SEC := 0.42
 const HOUSE_PULSE_SEC := 0.20
 const ORDER_GAP_SEC := 0.14
-const DURATION_HOLD_SEC := 0.36
-const RADIO_WAVE_SEC := 0.62
-const AIRPLANE_FLY_SEC := 0.72
+const RADIO_WAVE_PERIOD_SEC := 1.05
+const AIRPLANE_FLY_SEC := 1.85
 
-class RadioWaveNode:
+class RadioWaveLoopNode:
 	extends Control
 
 	var wave_color: Color = Color(0.32, 0.62, 1.0, 0.55)
-	var radius_ratio: float = 0.10
+	var center: Vector2 = Vector2.ZERO
+	var min_radius: float = 12.0
+	var max_radius: float = 120.0
+	var wave_period: float = 1.05
+	var wave_count: int = 4
 	var line_width: float = 3.0
+	var _elapsed: float = 0.0
 
-	func set_radius_ratio(value: float) -> void:
-		radius_ratio = clampf(float(value), 0.0, 1.0)
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		set_process(true)
+
+	func _process(delta: float) -> void:
+		_elapsed += delta
 		queue_redraw()
 
 	func _draw() -> void:
-		var s := minf(size.x, size.y)
-		if s <= 1.0:
+		if max_radius <= min_radius:
 			return
-		var radius := s * 0.5 * radius_ratio
-		if radius <= 1.0:
-			return
-		draw_arc(size * 0.5, radius, 0.0, TAU, 96, wave_color, line_width, true)
+		var period := maxf(0.05, wave_period)
+		var count := maxi(1, wave_count)
+		for i in range(count):
+			var phase := fposmod((_elapsed / period) - (float(i) / float(count)), 1.0)
+			var eased := 1.0 - pow(1.0 - phase, 2.0)
+			var radius := lerpf(min_radius, max_radius, eased)
+			var c := wave_color
+			c.a *= clampf((1.0 - phase) * 1.15, 0.0, 1.0)
+			if c.a <= 0.01:
+				continue
+			draw_arc(center, radius, 0.0, TAU, 96, c, line_width, true)
 
 enum State { IDLE, PLAYING, DONE }
 
@@ -179,19 +193,22 @@ func _play_order(order: Dictionary) -> void:
 	if _state != State.PLAYING:
 		return
 	var board_rect := _compute_marketing_rect(order)
+	var unique_houses := _unique_house_ids_from_order(order)
+	var loop_effect := _start_campaign_loop_effect(order, board_rect, unique_houses)
 	await _pulse_board(order, board_rect)
-	await _play_campaign_range_effect(order, board_rect)
+	await _play_campaign_range_effect(order, board_rect, unique_houses)
 
 	var house_events_val = order.get("house_events", [])
 	var house_events: Array = house_events_val if house_events_val is Array else []
 	for evt_val in house_events:
 		if _state != State.PLAYING:
+			_stop_campaign_loop_effect(loop_effect)
 			return
 		if not (evt_val is Dictionary):
 			continue
 		await _play_house_demand_event(order, evt_val, board_rect)
 
-	await _play_duration_event(order, board_rect)
+	_stop_campaign_loop_effect(loop_effect)
 
 func _pulse_board(order: Dictionary, board_rect: Rect2) -> void:
 	if not is_instance_valid(_map_anim_layer):
@@ -220,10 +237,9 @@ func _pulse_board(order: Dictionary, board_rect: Rect2) -> void:
 	)
 	await tw.finished
 
-func _play_campaign_range_effect(order: Dictionary, board_rect: Rect2) -> void:
+func _play_campaign_range_effect(order: Dictionary, board_rect: Rect2, unique_houses: Array[String]) -> void:
 	if not is_instance_valid(_map_anim_layer):
 		return
-	var unique_houses := _unique_house_ids_from_order(order)
 	if unique_houses.is_empty():
 		await _wait(0.10)
 		return
@@ -294,55 +310,6 @@ func _play_house_demand_event(order: Dictionary, event: Dictionary, board_rect: 
 	if unshown_count > 0:
 		_reveal_house_demand_amount(order, event, unshown_count)
 	await _pulse_house(house_rect)
-
-func _play_duration_event(order: Dictionary, board_rect: Rect2) -> void:
-	var before_duration := int(order.get("duration_before", 0))
-	var after_duration := int(order.get("duration_after", 0))
-	var expired := bool(order.get("expired", false))
-	if before_duration == 0 and after_duration == 0 and not expired:
-		return
-	if not is_instance_valid(_map_anim_layer):
-		return
-
-	var label := Label.new()
-	label.name = "MarketingDurationLabel"
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.add_theme_font_size_override("font_size", maxi(12, int(_get_cell_size() * 0.34)))
-	label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
-	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
-	label.add_theme_constant_override("shadow_offset_x", 1)
-	label.add_theme_constant_override("shadow_offset_y", 1)
-	label.text = "失效" if expired else "%d > %d" % [before_duration, after_duration]
-	label.position = board_rect.position
-	label.size = board_rect.size
-	label.modulate.a = 0.0
-	_map_anim_layer.add_child(label)
-
-	var bg := ColorRect.new()
-	bg.name = "MarketingDurationPulse"
-	bg.position = board_rect.position
-	bg.size = board_rect.size
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bg.color = Color(0.78, 0.18, 0.16, 0.34) if expired else Color(0.10, 0.18, 0.22, 0.30)
-	_map_anim_layer.add_child(bg)
-	_map_anim_layer.move_child(bg, max(0, label.get_index() - 1))
-
-	var tw := _map_anim_layer.create_tween().set_parallel(true)
-	_active_tweens.append(tw)
-	tw.tween_property(label, "modulate:a", 1.0, 0.12 / _speed)
-	tw.tween_property(bg, "modulate:a", 1.0, 0.12 / _speed)
-	tw.tween_property(label, "modulate:a", 0.0, 0.18 / _speed).set_delay(DURATION_HOLD_SEC / _speed)
-	tw.tween_property(bg, "modulate:a", 0.0, 0.18 / _speed).set_delay(DURATION_HOLD_SEC / _speed)
-	tw.chain().tween_callback(func():
-		if is_instance_valid(label):
-			label.queue_free()
-		if is_instance_valid(bg):
-			bg.queue_free()
-		_active_tweens.erase(tw)
-	)
-	await tw.finished
 
 func _fly_product_token(product_id: String, board_rect: Rect2, house_rect: Rect2, index: int, total: int) -> void:
 	if not is_instance_valid(_map_anim_layer):
@@ -445,11 +412,27 @@ func _show_capped_marker(house_rect: Rect2) -> void:
 	)
 	await tw.finished
 
-func _create_campaign_effect(order: Dictionary, board_rect: Rect2, unique_houses: Array[String]) -> Dictionary:
+func _start_campaign_loop_effect(order: Dictionary, board_rect: Rect2, unique_houses: Array[String]) -> Control:
 	var marketing_type := str(order.get("type", ""))
 	match marketing_type:
 		"radio":
-			return _create_radio_wave_effect(order, board_rect, unique_houses)
+			return _create_radio_wave_loop_effect(board_rect, unique_houses)
+		_:
+			return null
+
+func _stop_campaign_loop_effect(effect: Control) -> void:
+	if is_instance_valid(effect):
+		effect.queue_free()
+
+func _create_campaign_effect(order: Dictionary, board_rect: Rect2, _unique_houses: Array[String]) -> Dictionary:
+	var marketing_type := str(order.get("type", ""))
+	match marketing_type:
+		"radio":
+			return {
+				"node": null,
+				"tweens": [],
+				"custom": true,
+			}
 		"airplane":
 			return _create_airplane_flight_effect(order, board_rect)
 		_:
@@ -459,9 +442,9 @@ func _create_campaign_effect(order: Dictionary, board_rect: Rect2, unique_houses
 				"custom": false,
 			}
 
-func _create_radio_wave_effect(_order: Dictionary, board_rect: Rect2, unique_houses: Array[String]) -> Dictionary:
+func _create_radio_wave_loop_effect(board_rect: Rect2, unique_houses: Array[String]) -> Control:
 	if not is_instance_valid(_map_anim_layer):
-		return {}
+		return null
 	var bounds := board_rect
 	for house_id in unique_houses:
 		var house_rect := _compute_house_rect(str(house_id))
@@ -477,39 +460,22 @@ func _create_radio_wave_effect(_order: Dictionary, board_rect: Rect2, unique_hou
 		bounds.position + bounds.size,
 	]:
 		max_distance = maxf(max_distance, center.distance_to(corner))
-	var wave_size := maxf(max_distance * 2.2, _get_cell_size() * 3.2)
-	var parent := Control.new()
-	parent.name = "MarketingRadioWaveEffect"
-	parent.position = center - Vector2(wave_size, wave_size) * 0.5
-	parent.size = Vector2(wave_size, wave_size)
-	parent.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_map_anim_layer.add_child(parent)
-
-	var tweens: Array = []
-	for i in range(3):
-		var wave := RadioWaveNode.new()
-		wave.name = "MarketingRadioWave"
-		wave.set_anchors_preset(Control.PRESET_FULL_RECT)
-		wave.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		wave.wave_color = _color_for_marketing_type("radio", 0.62)
-		wave.line_width = maxf(2.0, _get_cell_size() * 0.07)
-		wave.modulate.a = 0.0
-		parent.add_child(wave)
-		var tw := wave.create_tween().set_parallel(true)
-		_active_tweens.append(tw)
-		tweens.append(tw)
-		var delay := (0.10 * float(i)) / _speed
-		tw.tween_method(Callable(wave, "set_radius_ratio"), 0.08, 0.96, RADIO_WAVE_SEC / _speed).set_delay(delay).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-		tw.tween_property(wave, "modulate:a", 1.0, 0.10 / _speed).set_delay(delay)
-		tw.tween_property(wave, "modulate:a", 0.0, 0.30 / _speed).set_delay(delay + (RADIO_WAVE_SEC * 0.62) / _speed)
-		tw.chain().tween_callback(func():
-			_active_tweens.erase(tw)
-		)
-	return {
-		"node": parent,
-		"tweens": tweens,
-		"custom": true,
-	}
+	var wave := RadioWaveLoopNode.new()
+	wave.name = "MarketingRadioWaveLoop"
+	wave.set_anchors_preset(Control.PRESET_FULL_RECT)
+	wave.position = Vector2.ZERO
+	wave.size = _map_anim_layer.size
+	if wave.size == Vector2.ZERO and _map_canvas is Control:
+		wave.size = (_map_canvas as Control).size
+	wave.center = center
+	wave.min_radius = maxf(_get_cell_size() * 0.35, 8.0)
+	wave.max_radius = maxf(max_distance * 1.08, _get_cell_size() * 3.2)
+	wave.wave_period = RADIO_WAVE_PERIOD_SEC / _speed
+	wave.wave_count = 4
+	wave.wave_color = _color_for_marketing_type("radio", 0.54)
+	wave.line_width = maxf(2.0, _get_cell_size() * 0.07)
+	_map_anim_layer.add_child(wave)
+	return wave
 
 func _create_airplane_flight_effect(order: Dictionary, board_rect: Rect2) -> Dictionary:
 	if not is_instance_valid(_map_anim_layer):
@@ -519,6 +485,12 @@ func _create_airplane_flight_effect(order: Dictionary, board_rect: Rect2) -> Dic
 	var end_center: Vector2 = path.get("end", board_rect.position + board_rect.size * 0.5)
 	var axis := str(path.get("axis", "row"))
 	var dir: Vector2 = end_center - start_center
+	var cs := maxf(_get_cell_size(), 1.0)
+	if dir.length() > 0.01:
+		var dir_norm := dir.normalized()
+		start_center -= dir_norm * cs
+		end_center += dir_norm * cs
+		dir = end_center - start_center
 
 	var parent := Control.new()
 	parent.name = "MarketingAirplaneFlightEffect"
@@ -527,7 +499,6 @@ func _create_airplane_flight_effect(order: Dictionary, board_rect: Rect2) -> Dic
 	parent.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_map_anim_layer.add_child(parent)
 
-	var cs := maxf(_get_cell_size(), 1.0)
 	var trail := ColorRect.new()
 	trail.name = "MarketingAirplaneTrail"
 	trail.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -554,10 +525,10 @@ func _create_airplane_flight_effect(order: Dictionary, board_rect: Rect2) -> Dic
 	var tw := parent.create_tween().set_parallel(true)
 	_active_tweens.append(tw)
 	tw.tween_property(trail, "modulate:a", 1.0, 0.10 / _speed)
-	tw.tween_property(trail, "modulate:a", 0.0, 0.28 / _speed).set_delay((AIRPLANE_FLY_SEC * 0.64) / _speed)
+	tw.tween_property(trail, "modulate:a", 0.0, 0.36 / _speed).set_delay((AIRPLANE_FLY_SEC * 0.72) / _speed)
 	tw.tween_property(plane, "modulate:a", 1.0, 0.08 / _speed)
 	tw.tween_property(plane, "position", end_center - plane_size * 0.5, AIRPLANE_FLY_SEC / _speed).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
-	tw.tween_property(plane, "modulate:a", 0.0, 0.16 / _speed).set_delay((AIRPLANE_FLY_SEC * 0.78) / _speed)
+	tw.tween_property(plane, "modulate:a", 0.0, 0.18 / _speed).set_delay((AIRPLANE_FLY_SEC * 0.90) / _speed)
 	tw.chain().tween_callback(func():
 		_active_tweens.erase(tw)
 	)
