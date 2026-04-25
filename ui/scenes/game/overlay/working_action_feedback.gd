@@ -10,10 +10,11 @@ const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 
-const TOKEN_FLY_SEC := 0.96
-const TOKEN_EMIT_GAP_SEC := 0.18
-const BURST_TOTAL_SEC := 1.08
-const PULSE_SEC := 0.54
+const TOKEN_FLY_SEC := 1.45
+const TOKEN_EMIT_GAP_SEC := 0.24
+const BURST_TOTAL_SEC := 1.80
+const PULSE_SEC := 0.90
+const PLACEMENT_FLASH_SEC := 1.55
 const MAX_TOKENS_PER_FEEDBACK := 5
 
 var _scene = null
@@ -39,6 +40,10 @@ func initialize() -> void:
 	EventBus.subscribe(EventBus.EventType.DRINKS_PROCURED, Callable(self, "_on_feedback_event"), 130, _eventbus_source)
 	EventBus.subscribe(EventBus.EventType.EMPLOYEE_RECRUITED, Callable(self, "_on_feedback_event"), 130, _eventbus_source)
 	EventBus.subscribe(EventBus.EventType.EMPLOYEE_TRAINED, Callable(self, "_on_feedback_event"), 130, _eventbus_source)
+	EventBus.subscribe(EventBus.EventType.HOUSE_PLACED, Callable(self, "_on_feedback_event"), 130, _eventbus_source)
+	EventBus.subscribe(EventBus.EventType.GARDEN_ADDED, Callable(self, "_on_feedback_event"), 130, _eventbus_source)
+	EventBus.subscribe(EventBus.EventType.RESTAURANT_PLACED, Callable(self, "_on_feedback_event"), 130, _eventbus_source)
+	EventBus.subscribe(EventBus.EventType.RESTAURANT_MOVED, Callable(self, "_on_feedback_event"), 130, _eventbus_source)
 	EventBus.subscribe(EventBus.EventType.COMMAND_EXECUTED, Callable(self, "_on_feedback_event"), 130, _eventbus_source)
 
 func dispose() -> void:
@@ -57,8 +62,7 @@ func dispose() -> void:
 	_skin = null
 
 func clear() -> void:
-	_pending_events.clear()
-	_flush_scheduled = false
+	# 成功执行动作后，面板常会先清理选点 overlay；保留下一帧待播放的反馈事件。
 	_kill_tweens()
 	if is_instance_valid(_layer):
 		for child in _layer.get_children():
@@ -82,7 +86,12 @@ func _on_feedback_event(event: Dictionary) -> void:
 		var data: Dictionary = data_val if (data_val is Dictionary) else {}
 		if not data.has("price_modifier"):
 			return
-	_pending_events.append(event.duplicate(true))
+	var event_copy := event.duplicate(true)
+	var state := _read_live_game_state()
+	if state != null:
+		event_copy["__feedback_phase"] = str(state.phase)
+		event_copy["__feedback_sub_phase"] = str(state.sub_phase)
+	_pending_events.append(event_copy)
 	if _flush_scheduled:
 		return
 	_flush_scheduled = true
@@ -114,16 +123,19 @@ func _play_event(event: Dictionary) -> void:
 	var state := _read_live_game_state()
 	if state == null:
 		return
-	if str(state.phase) != DefsClass.PHASE_WORKING:
+	var data_val = event.get("data", null)
+	var data: Dictionary = data_val if (data_val is Dictionary) else {}
+	var type := str(event.get("type", "")).strip_edges()
+	var phase_name := str(event.get("__feedback_phase", "")).strip_edges()
+	if phase_name.is_empty():
+		phase_name = str(state.phase)
+	if not _is_feedback_phase_allowed(type, phase_name):
 		return
 	if not _ensure_layer():
 		return
 	_speed = maxf(float(Globals.animation_speed) if Globals != null else 1.0, 0.05)
 	_ensure_skin(state)
 
-	var data_val = event.get("data", null)
-	var data: Dictionary = data_val if (data_val is Dictionary) else {}
-	var type := str(event.get("type", "")).strip_edges()
 	match type:
 		EventBus.EventType.FOOD_PRODUCED:
 			_play_food_produced(state, data)
@@ -133,8 +145,21 @@ func _play_event(event: Dictionary) -> void:
 			_play_employee_recruited(state, data)
 		EventBus.EventType.EMPLOYEE_TRAINED:
 			_play_employee_trained(state, data)
+		EventBus.EventType.HOUSE_PLACED:
+			_play_house_placed(state, data)
+		EventBus.EventType.GARDEN_ADDED:
+			_play_garden_added(state, data)
+		EventBus.EventType.RESTAURANT_PLACED:
+			_play_restaurant_placed(state, data)
+		EventBus.EventType.RESTAURANT_MOVED:
+			_play_restaurant_moved(state, data)
 		EventBus.EventType.COMMAND_EXECUTED:
 			_play_price_modifier(state, data)
+
+func _is_feedback_phase_allowed(event_type: String, phase_name: String) -> bool:
+	if phase_name == DefsClass.PHASE_WORKING:
+		return true
+	return phase_name == DefsClass.PHASE_SETUP and event_type == EventBus.EventType.RESTAURANT_PLACED
 
 func _play_food_produced(state: GameState, data: Dictionary) -> void:
 	var player_id := int(data.get("player_id", -1))
@@ -259,6 +284,49 @@ func _play_price_modifier(state: GameState, data: Dictionary) -> void:
 	_start_rect_pulse(rect, Color(color.r, color.g, color.b, 0.22))
 	_start_action_burst(rect, label, color)
 
+func _play_house_placed(state: GameState, data: Dictionary) -> void:
+	var house_id := str(data.get("house_id", "")).strip_edges()
+	var rect := _get_house_rect(state, house_id)
+	if rect.size == Vector2.ZERO:
+		rect = _rect_from_event_position(data)
+	if rect.size == Vector2.ZERO:
+		rect = _get_map_center_rect()
+	var house_number := str(data.get("house_number", "")).strip_edges()
+	var label := "新房屋"
+	if not house_number.is_empty():
+		label += " #%s" % house_number
+	_start_placement_feedback(rect, label, Color(0.52, 0.95, 0.58, 1.0))
+
+func _play_garden_added(state: GameState, data: Dictionary) -> void:
+	var house_id := str(data.get("house_id", "")).strip_edges()
+	var rect := _get_house_rect(state, house_id)
+	if rect.size == Vector2.ZERO:
+		rect = _rect_from_event_position(data)
+	if rect.size == Vector2.ZERO:
+		rect = _get_map_center_rect()
+	_start_placement_feedback(rect, "加建花园", Color(0.36, 0.86, 0.48, 1.0))
+
+func _play_restaurant_placed(state: GameState, data: Dictionary) -> void:
+	var restaurant_id := str(data.get("restaurant_id", "")).strip_edges()
+	var rect := _get_restaurant_rect(state, restaurant_id)
+	if rect.size == Vector2.ZERO:
+		rect = _rect_from_event_position(data)
+	if rect.size == Vector2.ZERO:
+		rect = _get_map_center_rect()
+	var label := "新餐厅"
+	if bool(data.get("opening_soon", false)):
+		label = "即将开业"
+	_start_placement_feedback(rect, label, Color(1.0, 0.68, 0.32, 1.0))
+
+func _play_restaurant_moved(state: GameState, data: Dictionary) -> void:
+	var restaurant_id := str(data.get("restaurant_id", "")).strip_edges()
+	var rect := _get_restaurant_rect(state, restaurant_id)
+	if rect.size == Vector2.ZERO:
+		rect = _rect_from_event_position(data)
+	if rect.size == Vector2.ZERO:
+		rect = _get_map_center_rect()
+	_start_placement_feedback(rect, "移动餐厅", Color(0.98, 0.58, 0.36, 1.0))
+
 func _start_action_burst(anchor_rect: Rect2, text: String, color: Color, delay_sec: float = 0.0) -> void:
 	if not is_instance_valid(_layer):
 		return
@@ -335,6 +403,37 @@ func _start_rect_pulse(rect: Rect2, color: Color) -> void:
 		_active_tweens.erase(tw)
 	)
 
+func _start_placement_feedback(rect: Rect2, label: String, color: Color) -> void:
+	_start_rect_pulse(rect, Color(color.r, color.g, color.b, 0.24))
+	_start_placement_flash(rect, Color(color.r, color.g, color.b, 0.30))
+	_start_action_burst(rect, label, color, 0.10)
+
+func _start_placement_flash(rect: Rect2, color: Color) -> void:
+	if not is_instance_valid(_layer):
+		return
+	if rect.size == Vector2.ZERO:
+		return
+	var flash := ColorRect.new()
+	flash.name = "WorkingActionFeedbackPlacementFlash"
+	flash.position = rect.position
+	flash.size = rect.size
+	flash.pivot_offset = rect.size * 0.5
+	flash.color = color
+	flash.scale = Vector2(1.24, 1.24)
+	flash.modulate.a = 0.0
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_layer.add_child(flash)
+	var tw := flash.create_tween().set_parallel(true)
+	_active_tweens.append(tw)
+	tw.tween_property(flash, "modulate:a", 1.0, 0.16 / _speed).set_ease(Tween.EASE_OUT)
+	tw.tween_property(flash, "scale", Vector2(1.0, 1.0), 0.36 / _speed).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tw.tween_property(flash, "modulate:a", 0.0, 0.62 / _speed).set_delay(maxf(0.0, PLACEMENT_FLASH_SEC - 0.62) / _speed).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(func():
+		if is_instance_valid(flash):
+			flash.queue_free()
+		_active_tweens.erase(tw)
+	)
+
 func _start_product_token_flight(
 	product_id: String,
 	source_rect: Rect2,
@@ -347,7 +446,7 @@ func _start_product_token_flight(
 ) -> void:
 	if not is_instance_valid(_layer):
 		return
-	var icon_size := maxf(18.0, _get_cell_size() * 0.66)
+	var icon_size := maxf(26.0, _get_cell_size() * 0.92)
 	var token := Control.new()
 	token.name = "WorkingActionFeedbackProductToken"
 	token.size = Vector2(icon_size, icon_size)
@@ -367,7 +466,8 @@ func _start_product_token_flight(
 		points[points.size() - 1] = Vector2(points[points.size() - 1]) + offset * 0.4
 
 	token.position = Vector2(points[0]) - token.size * 0.5
-	token.scale = Vector2(0.78, 0.78)
+	token.scale = Vector2(0.64, 0.64)
+	token.rotation_degrees = -5.0 if index % 2 == 0 else 5.0
 	_layer.add_child(token)
 	_add_product_visual(token, product_id, amount)
 
@@ -376,6 +476,8 @@ func _start_product_token_flight(
 	var delay := maxf(0.0, delay_sec) / _speed
 	if delay > 0.0:
 		tw.tween_interval(delay)
+	tw.tween_property(token, "scale", Vector2(1.10, 1.10), 0.14 / _speed).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tw.parallel().tween_property(token, "rotation_degrees", 0.0, 0.14 / _speed).set_ease(Tween.EASE_OUT)
 	var top_left_points: Array[Vector2] = []
 	for p in points:
 		top_left_points.append(Vector2(p) - token.size * 0.5)
@@ -387,6 +489,8 @@ func _start_product_token_flight(
 		var seg_dist := top_left_points[i - 1].distance_to(top_left_points[i])
 		var seg_dur := maxf(0.04 / _speed, dur * seg_dist / total_dist)
 		tw.tween_property(token, "position", top_left_points[i], seg_dur).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+		var swing := 7.0 if i % 2 == 0 else -7.0
+		tw.parallel().tween_property(token, "rotation_degrees", swing, seg_dur).set_ease(Tween.EASE_IN_OUT)
 	tw.tween_callback(func():
 		if on_landed.is_valid():
 			on_landed.call()
@@ -400,6 +504,25 @@ func _start_product_token_flight(
 	)
 
 func _add_product_visual(token: Control, product_id: String, amount: int) -> void:
+	var bg := Panel.new()
+	bg.name = "TokenBackplate"
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.04, 0.10, 0.13, 0.72)
+	var radius := maxi(6, int(round(token.size.x * 0.28)))
+	style.corner_radius_top_left = radius
+	style.corner_radius_top_right = radius
+	style.corner_radius_bottom_left = radius
+	style.corner_radius_bottom_right = radius
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(0.80, 0.95, 1.0, 0.82)
+	bg.add_theme_stylebox_override("panel", style)
+	token.add_child(bg)
+
 	var tex := _get_product_texture(product_id)
 	if tex != null:
 		var icon := TextureRect.new()
@@ -523,6 +646,79 @@ func _get_player_restaurant_rect(state: GameState, player_id: int, preferred_res
 			out = rect
 			has_rect = true
 	return out if has_rect else Rect2()
+
+func _get_house_rect(state: GameState, house_id: String) -> Rect2:
+	if state == null or not (state.map is Dictionary):
+		return Rect2()
+	var houses_val = state.map.get("houses", null)
+	if not (houses_val is Dictionary):
+		return Rect2()
+	var houses: Dictionary = houses_val
+	if not houses.has(house_id):
+		return Rect2()
+	var house_val = houses.get(house_id, null)
+	if not (house_val is Dictionary):
+		return Rect2()
+	var house: Dictionary = house_val
+	var cells := _read_vector2i_array(house.get("cells", null))
+	if cells.is_empty():
+		var anchor := _read_vector2i(house.get("anchor_pos", null), Vector2i(-1, -1))
+		if anchor != Vector2i(-1, -1):
+			cells.append(anchor)
+	return _cells_rect(cells)
+
+func _get_restaurant_rect(state: GameState, restaurant_id: String) -> Rect2:
+	if state == null or not (state.map is Dictionary):
+		return Rect2()
+	var rid := str(restaurant_id).strip_edges()
+	if rid.is_empty():
+		return Rect2()
+	var restaurants_val = state.map.get("restaurants", null)
+	if restaurants_val is Dictionary:
+		var restaurants: Dictionary = restaurants_val
+		if restaurants.has(rid):
+			var rest_val = restaurants.get(rid, null)
+			if rest_val is Dictionary:
+				var rest: Dictionary = rest_val
+				var cells := _read_vector2i_array(rest.get("cells", null))
+				if cells.is_empty():
+					var anchor := _read_vector2i(rest.get("anchor_pos", null), Vector2i(-1, -1))
+					if anchor != Vector2i(-1, -1):
+						cells.append(anchor)
+				var rect := _cells_rect(cells)
+				if rect.size != Vector2.ZERO:
+					return rect
+	var pending_cells := _get_opening_soon_restaurant_cells(state, rid)
+	if not pending_cells.is_empty():
+		return _cells_rect(pending_cells)
+	return Rect2()
+
+func _get_opening_soon_restaurant_cells(state: GameState, restaurant_id: String) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if state == null or not (state.round_state is Dictionary):
+		return out
+	var pending_val = state.round_state.get("opening_soon_restaurants", null)
+	if not (pending_val is Array):
+		return out
+	for item_val in Array(pending_val):
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		if str(item.get("restaurant_id", "")).strip_edges() != restaurant_id:
+			continue
+		out = _read_vector2i_array(item.get("cells", null))
+		if out.is_empty():
+			var anchor := _read_vector2i(item.get("anchor_pos", null), Vector2i(-1, -1))
+			if anchor != Vector2i(-1, -1):
+				out.append(anchor)
+		return out
+	return out
+
+func _rect_from_event_position(data: Dictionary) -> Rect2:
+	var pos := _read_vector2i(data.get("position", null), Vector2i(-1, -1))
+	if pos == Vector2i(-1, -1):
+		return Rect2()
+	return _world_cell_rect(pos)
 
 func _get_map_center_rect() -> Rect2:
 	var cs := maxf(_get_cell_size(), 1.0)
