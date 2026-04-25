@@ -40,10 +40,33 @@ func _find_first_valid_move_restaurant(engine: GameEngine, actor: int, restauran
 	var state := engine.get_state()
 	if state == null:
 		return Result.failure("state is null")
+	var restaurants_val = state.map.get("restaurants", null)
+	if not (restaurants_val is Dictionary):
+		return Result.failure("state.map.restaurants is not Dictionary")
+	var restaurants: Dictionary = restaurants_val
+	var rest_val = restaurants.get(restaurant_id, null)
+	if not (rest_val is Dictionary):
+		return Result.failure("restaurants[%s] is not Dictionary" % restaurant_id)
+	var rest: Dictionary = rest_val
+	var current_anchor_val = rest.get("anchor_pos", null)
+	if not (current_anchor_val is Vector2i):
+		return Result.failure("restaurants[%s].anchor_pos is not Vector2i" % restaurant_id)
+	var current_anchor: Vector2i = current_anchor_val
+	var current_cells_read := _read_vector2i_array(rest.get("cells", null), "restaurants[%s].cells" % restaurant_id)
+	if not current_cells_read.ok:
+		return current_cells_read
+	var current_cells: Array = current_cells_read.value
 
 	var ex := engine.action_registry.get_executor("move_restaurant")
 	if ex == null:
 		return Result.failure("cannot find executor: move_restaurant")
+	var piece_registry_val = ex.call("_get_piece_registry") if ex.has_method("_get_piece_registry") else null
+	if not (piece_registry_val is Dictionary):
+		return Result.failure("move_restaurant executor cannot provide piece_registry")
+	var piece_registry: Dictionary = piece_registry_val
+	var restaurant_piece = piece_registry.get("restaurant", null)
+	if restaurant_piece == null or not restaurant_piece.has_method("get_world_cells"):
+		return Result.failure("piece_registry.restaurant cannot provide get_world_cells")
 
 	var coords_script = _get_coords_script()
 	if coords_script == null:
@@ -52,7 +75,12 @@ func _find_first_valid_move_restaurant(engine: GameEngine, actor: int, restauran
 	var maxp: Vector2i = coords_script.get_world_max(state)
 	for y in range(minp.y, maxp.y + 1):
 		for x in range(minp.x, maxp.x + 1):
+			if Vector2i(x, y) == current_anchor:
+				continue
 			for rot in MapUtils.VALID_ROTATIONS:
+				var target_cells: Array = restaurant_piece.call("get_world_cells", Vector2i(x, y), int(rot))
+				if _same_vector2i_cell_set(current_cells, target_cells):
+					continue
 				var cmd := Command.create("move_restaurant", actor, {
 					"restaurant_id": restaurant_id,
 					"position": [x, y],
@@ -66,6 +94,32 @@ func _find_first_valid_move_restaurant(engine: GameEngine, actor: int, restauran
 						"params": cmd.params.duplicate(true),
 					})
 	return Result.failure("no valid move_restaurant placement found (restaurant_id=%s)" % restaurant_id)
+
+func _read_vector2i_array(value, path: String) -> Result:
+	if not (value is Array):
+		return Result.failure("%s is not Array" % path)
+	var out: Array = []
+	var arr: Array = value
+	for i in range(arr.size()):
+		if not (arr[i] is Vector2i):
+			return Result.failure("%s[%d] is not Vector2i" % [path, i])
+		out.append(arr[i])
+	return Result.success(out)
+
+func _same_vector2i_cell_set(a: Array, b: Array) -> bool:
+	if a.size() != b.size():
+		return false
+	var seen := {}
+	for av in a:
+		if not (av is Vector2i):
+			return false
+		seen[av] = true
+	for bv in b:
+		if not (bv is Vector2i):
+			return false
+		if not seen.has(bv):
+			return false
+	return true
 
 func _get_remaining_house_numbers_from_state(state: GameState) -> Array[int]:
 	var default_list: Array[int] = [1, 3, 6, 9, 11, 14, 17, 19]
@@ -304,4 +358,3 @@ func _find_first_valid_lobbyists_park(engine: GameEngine, actor: int) -> Result:
 							"params": cmd.params.duplicate(true),
 						})
 	return Result.failure("no valid place_lobbyists_park placement found")
-

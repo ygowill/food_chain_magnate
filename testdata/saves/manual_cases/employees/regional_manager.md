@@ -26,7 +26,7 @@
 - actor: `0`
 - params:
 	- `restaurant_id`: `rest_1`
-	- `position`: `[3, 0]`
+	- `position`: `[13, 0]`
 	- `rotation`: `0`
 
 ## 关联单元测试

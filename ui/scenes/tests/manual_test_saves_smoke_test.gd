@@ -56,6 +56,9 @@ func _run_test() -> int:
 		var validate_r := _validate_map_structures(state.map, res_path)
 		if not validate_r.ok:
 			return _fail(validate_r.error)
+		var specific_r := _validate_manual_case_specifics(engine, res_path)
+		if not specific_r.ok:
+			return _fail(specific_r.error)
 		loaded += 1
 
 	if is_instance_valid(output):
@@ -133,6 +136,130 @@ func _validate_map_structures(map_data: Dictionary, res_path: String) -> Result:
 				return Result.failure("structure.anchor_cell 不匹配: %s @ (%d,%d) piece=%s expected=%s" % [res_path, x, y, piece_id, str(expected_anchor_cell)])
 
 	return Result.success()
+
+func _validate_manual_case_specifics(engine: GameEngine, res_path: String) -> Result:
+	match res_path:
+		"res://testdata/saves/manual_cases/employees/regional_manager.json":
+			return _validate_regional_manager_move_case(engine, res_path)
+		_:
+			return Result.success()
+
+func _validate_regional_manager_move_case(engine: GameEngine, res_path: String) -> Result:
+	if engine == null:
+		return Result.failure("regional_manager move case engine 为空")
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("regional_manager move case state 为空")
+
+	var params_read := _read_recommended_move_params_from_md(res_path.trim_suffix(".json") + ".md")
+	if not params_read.ok:
+		return params_read
+	var params: Dictionary = params_read.value
+	var rest_id := str(params.get("restaurant_id", "")).strip_edges()
+	if rest_id.is_empty():
+		return Result.failure("regional_manager 推荐参数缺少 restaurant_id")
+
+	var restaurants_val = state.map.get("restaurants", null)
+	if not (restaurants_val is Dictionary):
+		return Result.failure("regional_manager map.restaurants 类型错误")
+	var restaurants: Dictionary = restaurants_val
+	var rest_val = restaurants.get(rest_id, null)
+	if not (rest_val is Dictionary):
+		return Result.failure("regional_manager 推荐餐厅不存在: %s" % rest_id)
+	var rest: Dictionary = rest_val
+	var old_anchor = rest.get("anchor_pos", null)
+	var old_cells_read := _read_vector2i_array(rest.get("cells", null), "regional_manager restaurants[%s].cells" % rest_id)
+	if not old_cells_read.ok:
+		return old_cells_read
+	var old_cells: Array = old_cells_read.value
+
+	var actor := state.get_current_player_id()
+	var move_result := engine.execute_command(Command.create("move_restaurant", actor, params))
+	if not move_result.ok:
+		return Result.failure("regional_manager 推荐 move_restaurant 执行失败: %s" % move_result.error)
+
+	var new_state := engine.get_state()
+	var new_restaurants_val = new_state.map.get("restaurants", null)
+	if not (new_restaurants_val is Dictionary):
+		return Result.failure("regional_manager move 后 map.restaurants 类型错误")
+	var new_restaurants: Dictionary = new_restaurants_val
+	var new_rest_val = new_restaurants.get(rest_id, null)
+	if not (new_rest_val is Dictionary):
+		return Result.failure("regional_manager move 后餐厅不存在: %s" % rest_id)
+	var new_rest: Dictionary = new_rest_val
+	var new_anchor = new_rest.get("anchor_pos", null)
+	if old_anchor is Vector2i and new_anchor is Vector2i and old_anchor == new_anchor:
+		return Result.failure("regional_manager 推荐移动未改变餐厅 anchor_pos: %s" % str(old_anchor))
+	var new_cells_read := _read_vector2i_array(new_rest.get("cells", null), "regional_manager moved restaurants[%s].cells" % rest_id)
+	if not new_cells_read.ok:
+		return new_cells_read
+	if _same_vector2i_cell_set(old_cells, new_cells_read.value):
+		return Result.failure("regional_manager 推荐移动未改变餐厅占地: %s" % str(old_cells))
+	return Result.success()
+
+func _read_recommended_move_params_from_md(res_path: String) -> Result:
+	var abs_path := ProjectSettings.globalize_path(res_path)
+	var file := FileAccess.open(abs_path, FileAccess.READ)
+	if file == null:
+		return Result.failure("无法读取推荐参数文档: %s" % res_path)
+	var text := file.get_as_text()
+	file.close()
+
+	var params := {}
+	for raw_line in text.split("\n"):
+		var line := str(raw_line).strip_edges()
+		if line.begins_with("- `restaurant_id`:"):
+			params["restaurant_id"] = _extract_backtick_value_after_colon(line)
+		elif line.begins_with("- `position`:"):
+			var pos_value := _extract_backtick_value_after_colon(line)
+			var parsed_pos = JSON.parse_string(pos_value)
+			if not (parsed_pos is Array) or parsed_pos.size() < 2:
+				return Result.failure("推荐 position 解析失败: %s" % pos_value)
+			params["position"] = [int(parsed_pos[0]), int(parsed_pos[1])]
+		elif line.begins_with("- `rotation`:"):
+			params["rotation"] = int(_extract_backtick_value_after_colon(line))
+
+	if not params.has("restaurant_id") or not params.has("position") or not params.has("rotation"):
+		return Result.failure("推荐 move_restaurant 参数不完整: %s" % str(params))
+	return Result.success(params)
+
+func _extract_backtick_value_after_colon(line: String) -> String:
+	var colon_idx := line.find(":")
+	if colon_idx < 0:
+		return ""
+	var start_idx := line.find("`", colon_idx)
+	if start_idx < 0:
+		return ""
+	var end_idx := line.find("`", start_idx + 1)
+	if end_idx < 0:
+		return ""
+	return line.substr(start_idx + 1, end_idx - start_idx - 1)
+
+func _read_vector2i_array(value, path: String) -> Result:
+	if not (value is Array):
+		return Result.failure("%s 类型错误（期望 Array）" % path)
+	var out: Array = []
+	var arr: Array = value
+	for i in range(arr.size()):
+		if not (arr[i] is Vector2i):
+			return Result.failure("%s[%d] 类型错误（期望 Vector2i）" % [path, i])
+		out.append(arr[i])
+	return Result.success(out)
+
+func _same_vector2i_cell_set(a: Array, b: Array) -> bool:
+	if a.size() != b.size():
+		return false
+	var seen := {}
+	for av in a:
+		if not (av is Vector2i):
+			return false
+		seen[av] = true
+	for bv in b:
+		if not (bv is Vector2i):
+			return false
+		if not seen.has(bv):
+			return false
+	return true
 
 func _should_autorun() -> bool:
 	var args := OS.get_cmdline_user_args()
