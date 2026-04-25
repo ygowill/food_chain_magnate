@@ -26,7 +26,7 @@ const RADIO_WAVE_PERIOD_SEC := 3.50
 const AIRPLANE_FLY_SEC := 4.60
 const AIRPLANE_DROP_TOKEN_SEC := 0.72
 const AIRPLANE_DROP_START_RATIO := 0.18
-const AIRPLANE_DROP_END_RATIO := 0.76
+const AIRPLANE_DROP_END_RATIO := 0.92
 
 class RadioWaveLoopNode:
 	extends Control
@@ -486,14 +486,18 @@ func _schedule_airplane_house_drops(order: Dictionary, house_events: Array, flig
 func _airplane_drop_ratio_for_event(event: Dictionary, flight: Dictionary) -> float:
 	var start_val = flight.get("start_center", null)
 	var end_val = flight.get("end_center", null)
-	if not (start_val is Vector2) or not (end_val is Vector2):
+	var board_size_val = flight.get("board_size", null)
+	if not (start_val is Vector2) or not (end_val is Vector2) or not (board_size_val is Vector2):
 		return -1.0
 	var start_center: Vector2 = start_val
 	var end_center: Vector2 = end_val
+	var board_size: Vector2 = board_size_val
 	var travel := end_center - start_center
 	var travel_len_sq := travel.length_squared()
 	if travel_len_sq <= 0.01:
 		return -1.0
+	var travel_len := sqrt(travel_len_sq)
+	var travel_dir := travel / travel_len
 	var house_id := str(event.get("house_id", "")).strip_edges()
 	if house_id.is_empty():
 		return -1.0
@@ -502,7 +506,10 @@ func _airplane_drop_ratio_for_event(event: Dictionary, flight: Dictionary) -> fl
 		return -1.0
 	var house_center := house_rect.position + house_rect.size * 0.5
 	var raw_ratio := (house_center - start_center).dot(travel) / travel_len_sq
-	return clampf(raw_ratio, AIRPLANE_DROP_START_RATIO, AIRPLANE_DROP_END_RATIO)
+	var board_extent := absf(travel_dir.x) * board_size.x + absf(travel_dir.y) * board_size.y
+	var house_extent := absf(travel_dir.x) * house_rect.size.x + absf(travel_dir.y) * house_rect.size.y
+	var clear_ratio := ((board_extent * 0.5) + (house_extent * 0.5)) / maxf(travel_len, 1.0)
+	return clampf(raw_ratio + clear_ratio, AIRPLANE_DROP_START_RATIO, AIRPLANE_DROP_END_RATIO)
 
 func _on_airplane_house_drop_timeout(order: Dictionary, event: Dictionary, flight: Dictionary) -> void:
 	if _state != State.PLAYING:
@@ -779,19 +786,13 @@ func _create_radio_wave_loop_effect(board_rect: Rect2, unique_houses: Array[Stri
 func _create_airplane_flight_effect(order: Dictionary, board_rect: Rect2) -> Dictionary:
 	if not is_instance_valid(_map_anim_layer):
 		return {}
-	var path := _compute_airplane_flight_path(order, board_rect)
+	var board_size := _compute_airplane_board_flight_size(order, board_rect)
+	var placement_rect := _compute_airplane_visual_rect(order, board_size, board_rect)
+	var path := _compute_airplane_flight_path(order, placement_rect)
 	var start_center: Vector2 = path.get("start", board_rect.position + board_rect.size * 0.5)
 	var end_center: Vector2 = path.get("end", board_rect.position + board_rect.size * 0.5)
 	var axis := str(path.get("axis", "row"))
-	var dir: Vector2 = end_center - start_center
 	var cs := maxf(_get_cell_size(), 1.0)
-	var board_size := _compute_airplane_board_flight_size(order, board_rect)
-	if dir.length() > 0.01:
-		var dir_norm := dir.normalized()
-		var travel_pad := maxf(cs, maxf(board_size.x, board_size.y) * 0.65)
-		start_center -= dir_norm * travel_pad
-		end_center += dir_norm * travel_pad
-		dir = end_center - start_center
 
 	var parent := Control.new()
 	parent.name = "MarketingAirplaneBoardFlightEffect"
@@ -838,8 +839,37 @@ func _create_airplane_flight_effect(order: Dictionary, board_rect: Rect2) -> Dic
 		"board": board,
 		"start_center": start_center,
 		"end_center": end_center,
+		"board_size": board_size,
 		"custom": true,
 	}
+
+func _compute_airplane_visual_rect(order: Dictionary, board_size: Vector2, fallback_rect: Rect2) -> Rect2:
+	if board_size == Vector2.ZERO:
+		return fallback_rect
+	var world_pos := _read_vector2i(order.get("world_pos", [0, 0]), Vector2i.ZERO)
+	var origin := _get_world_origin()
+	var cs := maxf(_get_cell_size(), 1.0)
+	var rect := Rect2(Vector2(world_pos - origin) * cs, board_size)
+	var map_bounds := _get_map_canvas_rect()
+	if map_bounds.size == Vector2.ZERO:
+		return rect
+
+	var minp := _get_map_world_min()
+	var maxp := _get_map_world_max()
+	var axis := str(order.get("axis", "")).strip_edges()
+	if axis != "row" and axis != "col":
+		axis = "row" if fallback_rect.size.x >= fallback_rect.size.y else "col"
+	if axis == "row":
+		if world_pos.x == minp.x:
+			rect.position.x = map_bounds.position.x - rect.size.x
+		elif world_pos.x >= maxp.x - 1:
+			rect.position.x = map_bounds.position.x + map_bounds.size.x
+	else:
+		if world_pos.y == minp.y:
+			rect.position.y = map_bounds.position.y - rect.size.y
+		elif world_pos.y >= maxp.y - 1:
+			rect.position.y = map_bounds.position.y + map_bounds.size.y
+	return rect
 
 func _compute_airplane_board_flight_size(order: Dictionary, board_rect: Rect2) -> Vector2:
 	var cs := maxf(_get_cell_size(), 1.0)
@@ -888,11 +918,27 @@ func _read_duration_label(order: Dictionary) -> String:
 		return str(rd)
 	return ""
 
-func _compute_airplane_flight_path(order: Dictionary, board_rect: Rect2) -> Dictionary:
+func _compute_airplane_flight_path(order: Dictionary, placement_rect: Rect2) -> Dictionary:
 	var axis := str(order.get("axis", "")).strip_edges()
 	if axis != "row" and axis != "col":
-		axis = "row" if board_rect.size.x >= board_rect.size.y else "col"
+		axis = "row" if placement_rect.size.x >= placement_rect.size.y else "col"
 	var world_pos := _read_vector2i(order.get("world_pos", [0, 0]), Vector2i.ZERO)
+	var map_bounds := _get_map_canvas_rect()
+	if placement_rect.size != Vector2.ZERO and map_bounds.size != Vector2.ZERO:
+		var start_center := placement_rect.position + placement_rect.size * 0.5
+		var end_center := start_center
+		if axis == "col":
+			var from_bottom := start_center.y > map_bounds.position.y + map_bounds.size.y * 0.5
+			end_center.y = (map_bounds.position.y - placement_rect.size.y * 0.5) if from_bottom else (map_bounds.position.y + map_bounds.size.y + placement_rect.size.y * 0.5)
+		else:
+			var from_right := start_center.x > map_bounds.position.x + map_bounds.size.x * 0.5
+			end_center.x = (map_bounds.position.x - placement_rect.size.x * 0.5) if from_right else (map_bounds.position.x + map_bounds.size.x + placement_rect.size.x * 0.5)
+		return {
+			"axis": axis,
+			"start": start_center,
+			"end": end_center,
+		}
+
 	var minp := _get_map_world_min()
 	var maxp := _get_map_world_max()
 	var start_world := world_pos
@@ -912,6 +958,17 @@ func _compute_airplane_flight_path(order: Dictionary, board_rect: Rect2) -> Dict
 		"start": _world_cell_center(start_world),
 		"end": _world_cell_center(end_world),
 	}
+
+func _get_map_canvas_rect() -> Rect2:
+	if _game_state == null or not (_game_state.map is Dictionary):
+		return Rect2()
+	var grid_size: Vector2i = _game_state.map.get("grid_size", Vector2i.ZERO)
+	if grid_size.x <= 0 or grid_size.y <= 0:
+		return Rect2()
+	var minp := _get_map_world_min()
+	var origin := _get_world_origin()
+	var cs := maxf(_get_cell_size(), 1.0)
+	return Rect2(Vector2(minp - origin) * cs, Vector2(grid_size) * cs)
 
 func _world_cell_center(world_pos: Vector2i) -> Vector2:
 	var view_pos := world_pos - _get_world_origin()
