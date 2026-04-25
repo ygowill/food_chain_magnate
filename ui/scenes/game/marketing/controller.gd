@@ -20,8 +20,8 @@ const BOARD_PULSE_SEC := 0.28
 const TOKEN_FLY_SEC := 0.42
 const HOUSE_PULSE_SEC := 0.20
 const ORDER_GAP_SEC := 0.14
-const RADIO_WAVE_PERIOD_SEC := 1.05
-const AIRPLANE_FLY_SEC := 1.85
+const RADIO_WAVE_PERIOD_SEC := 2.35
+const AIRPLANE_FLY_SEC := 2.85
 
 class RadioWaveLoopNode:
 	extends Control
@@ -57,6 +57,83 @@ class RadioWaveLoopNode:
 			if c.a <= 0.01:
 				continue
 			draw_arc(center, radius, 0.0, TAU, 96, c, line_width, true)
+
+class AirplaneBoardFlightNode:
+	extends Control
+
+	var marketing_texture: Texture2D = null
+	var product_texture: Texture2D = null
+	var board_number: int = 0
+	var remaining_text: String = ""
+	var cell_size: float = 40.0
+	var rotate_marketing_texture: bool = false
+
+	func _draw() -> void:
+		var rect := Rect2(Vector2.ZERO, size)
+		draw_rect(rect, Color("#98a295"), true)
+		var icon_pad := maxf(2.0, cell_size * 0.08)
+		var icon_rect := rect.grow(-icon_pad)
+		if marketing_texture != null:
+			if rotate_marketing_texture:
+				var center_pos := icon_rect.position + icon_rect.size * 0.5
+				var draw_size := Vector2(icon_rect.size.y, icon_rect.size.x)
+				draw_set_transform(center_pos, deg_to_rad(90.0), Vector2.ONE)
+				_draw_texture_fit(marketing_texture, Rect2(-draw_size * 0.5, draw_size), Color(1, 1, 1, 0.45))
+				draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			else:
+				_draw_texture_fit(marketing_texture, icon_rect, Color(1, 1, 1, 0.45))
+		_draw_board_badge()
+		_draw_product()
+
+	func _draw_product() -> void:
+		if product_texture == null:
+			return
+		var pad := maxf(2.0, cell_size * 0.12)
+		var avail := size - Vector2(pad * 2.0, pad * 2.0)
+		var s := minf(avail.x, avail.y) * 0.85
+		if s <= 1.0:
+			return
+		var product_rect := Rect2((size - Vector2(s, s)) * 0.5, Vector2(s, s))
+		_draw_texture_fit(product_texture, product_rect, Color(1, 1, 1, 0.95))
+		if remaining_text.is_empty():
+			return
+		var font: Font = ThemeDB.fallback_font
+		var font_size := maxi(10, int(round(minf(product_rect.size.x, product_rect.size.y) * 0.55)))
+		if remaining_text.length() >= 2:
+			font_size = int(round(float(font_size) * 0.85))
+		if remaining_text.length() >= 3:
+			font_size = int(round(float(font_size) * 0.75))
+		font_size = maxi(10, font_size)
+		var baseline := Vector2(product_rect.position.x, product_rect.position.y + product_rect.size.y * 0.5 + float(font_size) * 0.35)
+		draw_string(font, baseline + Vector2(1, 1), remaining_text, HORIZONTAL_ALIGNMENT_CENTER, product_rect.size.x, font_size, Color(0, 0, 0, 0.85))
+		draw_string(font, baseline, remaining_text, HORIZONTAL_ALIGNMENT_CENTER, product_rect.size.x, font_size, Color(1, 1, 1, 1))
+
+	func _draw_board_badge() -> void:
+		if board_number <= 0:
+			return
+		var badge_size := maxf(14.0, cell_size * 0.42)
+		var margin := maxf(2.0, cell_size * 0.06)
+		var badge_rect := Rect2(Vector2(size.x - badge_size - margin, margin), Vector2(badge_size, badge_size))
+		draw_rect(badge_rect, Color(0.05, 0.06, 0.06, 0.72), true)
+		var font: Font = ThemeDB.fallback_font
+		var font_size := maxi(9, int(round(badge_size * 0.58)))
+		var text := str(board_number)
+		var baseline := Vector2(badge_rect.position.x, badge_rect.position.y + badge_rect.size.y * 0.5 + float(font_size) * 0.35)
+		draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_CENTER, badge_rect.size.x, font_size, Color(1, 1, 1, 1))
+
+	func _draw_texture_fit(texture: Texture2D, rect: Rect2, modulate: Color) -> void:
+		var fit_rect := _texture_fit_rect(texture, rect)
+		draw_texture_rect(texture, fit_rect, false, modulate)
+
+	func _texture_fit_rect(texture: Texture2D, rect: Rect2) -> Rect2:
+		if texture == null:
+			return rect
+		var tex_size := texture.get_size()
+		if tex_size.x <= 0.0 or tex_size.y <= 0.0 or rect.size.x <= 0.0 or rect.size.y <= 0.0:
+			return rect
+		var scale := minf(rect.size.x / tex_size.x, rect.size.y / tex_size.y)
+		var draw_size := tex_size * scale
+		return Rect2(rect.position + (rect.size - draw_size) * 0.5, draw_size)
 
 enum State { IDLE, PLAYING, DONE }
 
@@ -471,7 +548,7 @@ func _create_radio_wave_loop_effect(board_rect: Rect2, unique_houses: Array[Stri
 	wave.min_radius = maxf(_get_cell_size() * 0.35, 8.0)
 	wave.max_radius = maxf(max_distance * 1.08, _get_cell_size() * 3.2)
 	wave.wave_period = RADIO_WAVE_PERIOD_SEC / _speed
-	wave.wave_count = 4
+	wave.wave_count = 3
 	wave.wave_color = _color_for_marketing_type("radio", 0.54)
 	wave.line_width = maxf(2.0, _get_cell_size() * 0.07)
 	_map_anim_layer.add_child(wave)
@@ -486,14 +563,16 @@ func _create_airplane_flight_effect(order: Dictionary, board_rect: Rect2) -> Dic
 	var axis := str(path.get("axis", "row"))
 	var dir: Vector2 = end_center - start_center
 	var cs := maxf(_get_cell_size(), 1.0)
+	var board_size := _compute_airplane_board_flight_size(order, board_rect)
 	if dir.length() > 0.01:
 		var dir_norm := dir.normalized()
-		start_center -= dir_norm * cs
-		end_center += dir_norm * cs
+		var travel_pad := maxf(cs, maxf(board_size.x, board_size.y) * 0.65)
+		start_center -= dir_norm * travel_pad
+		end_center += dir_norm * travel_pad
 		dir = end_center - start_center
 
 	var parent := Control.new()
-	parent.name = "MarketingAirplaneFlightEffect"
+	parent.name = "MarketingAirplaneBoardFlightEffect"
 	parent.position = Vector2.ZERO
 	parent.size = _map_anim_layer.size
 	parent.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -516,19 +595,18 @@ func _create_airplane_flight_effect(order: Dictionary, board_rect: Rect2) -> Dic
 		trail.size = Vector2(x1 - x0, cs * 0.60)
 	parent.add_child(trail)
 
-	var plane_size := Vector2(cs * 0.95, cs * 0.95)
-	var plane: Control = _create_airplane_visual(plane_size, dir)
-	plane.position = start_center - plane_size * 0.5
-	plane.modulate.a = 0.0
-	parent.add_child(plane)
+	var board: Control = _create_airplane_board_flight_visual(order, board_size)
+	board.position = start_center - board_size * 0.5
+	board.modulate.a = 0.0
+	parent.add_child(board)
 
 	var tw := parent.create_tween().set_parallel(true)
 	_active_tweens.append(tw)
 	tw.tween_property(trail, "modulate:a", 1.0, 0.10 / _speed)
 	tw.tween_property(trail, "modulate:a", 0.0, 0.36 / _speed).set_delay((AIRPLANE_FLY_SEC * 0.72) / _speed)
-	tw.tween_property(plane, "modulate:a", 1.0, 0.08 / _speed)
-	tw.tween_property(plane, "position", end_center - plane_size * 0.5, AIRPLANE_FLY_SEC / _speed).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
-	tw.tween_property(plane, "modulate:a", 0.0, 0.18 / _speed).set_delay((AIRPLANE_FLY_SEC * 0.90) / _speed)
+	tw.tween_property(board, "modulate:a", 1.0, 0.12 / _speed)
+	tw.tween_property(board, "position", end_center - board_size * 0.5, AIRPLANE_FLY_SEC / _speed).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(board, "modulate:a", 0.0, 0.24 / _speed).set_delay((AIRPLANE_FLY_SEC * 0.90) / _speed)
 	tw.chain().tween_callback(func():
 		_active_tweens.erase(tw)
 	)
@@ -538,34 +616,52 @@ func _create_airplane_flight_effect(order: Dictionary, board_rect: Rect2) -> Dic
 		"custom": true,
 	}
 
-func _create_airplane_visual(plane_size: Vector2, dir: Vector2) -> Control:
-	var tex: Texture2D = null
-	if _skin != null:
-		tex = _skin.get_marketing_texture("airplane")
-	var node: Control
-	if tex != null:
-		var icon := TextureRect.new()
-		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.texture = tex
-		node = icon
+func _compute_airplane_board_flight_size(order: Dictionary, board_rect: Rect2) -> Vector2:
+	var cs := maxf(_get_cell_size(), 1.0)
+	var base_size := _read_vector2i(order.get("footprint_size", [1, 1]), Vector2i.ONE)
+	if base_size.x <= 0 or base_size.y <= 0:
+		base_size = Vector2i.ONE
+	var thickness := 2
+	var length := 1
+	if base_size.x == 2 and base_size.y != 2:
+		length = base_size.y
+	elif base_size.y == 2 and base_size.x != 2:
+		length = base_size.x
 	else:
-		var label := Label.new()
-		label.text = "AIR"
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		label.add_theme_font_size_override("font_size", maxi(10, int(plane_size.y * 0.36)))
-		label.add_theme_color_override("font_color", Color(0.08, 0.12, 0.18, 1))
-		node = label
-	node.name = "MarketingAirplane"
-	node.size = plane_size
-	node.pivot_offset = plane_size * 0.5
-	node.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if absf(dir.y) > absf(dir.x):
-		node.rotation = PI * 0.5 if dir.y >= 0.0 else -PI * 0.5
-	elif dir.x < 0.0:
-		node.rotation = PI
-	return node
+		thickness = mini(base_size.x, base_size.y)
+		length = maxi(base_size.x, base_size.y)
+	var axis := str(order.get("axis", "")).strip_edges()
+	if axis == "row":
+		return Vector2(maxi(1, thickness) * cs, maxi(1, length) * cs)
+	if axis == "col":
+		return Vector2(maxi(1, length) * cs, maxi(1, thickness) * cs)
+	if board_rect.size != Vector2.ZERO:
+		return board_rect.size
+	return Vector2(maxi(1, base_size.x) * cs, maxi(1, base_size.y) * cs)
+
+func _create_airplane_board_flight_visual(order: Dictionary, board_size: Vector2) -> Control:
+	var board := AirplaneBoardFlightNode.new()
+	board.name = "MarketingAirplaneBoard"
+	board.size = board_size
+	board.custom_minimum_size = board_size
+	board.pivot_offset = board_size * 0.5
+	board.cell_size = maxf(_get_cell_size(), 1.0)
+	board.board_number = int(order.get("board_number", 0))
+	board.remaining_text = _read_duration_label(order)
+	board.rotate_marketing_texture = board_size.y > board_size.x
+	if _skin != null:
+		board.marketing_texture = _skin.get_marketing_texture("airplane")
+	board.product_texture = _get_product_texture(str(order.get("product", "")))
+	board.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return board
+
+func _read_duration_label(order: Dictionary) -> String:
+	var rd := int(order.get("duration_after", order.get("duration_before", 0)))
+	if rd == -1:
+		return "无限"
+	if rd > 0:
+		return str(rd)
+	return ""
 
 func _compute_airplane_flight_path(order: Dictionary, board_rect: Rect2) -> Dictionary:
 	var axis := str(order.get("axis", "")).strip_edges()
