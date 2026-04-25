@@ -512,6 +512,8 @@ func _on_restaurant_placement_confirmed(position: Vector2i, rotation: int, resta
 	if result.ok:
 		if is_instance_valid(restaurant_placement_overlay):
 			restaurant_placement_overlay.visible = false
+			if restaurant_placement_overlay.has_method("clear_selection"):
+				restaurant_placement_overlay.clear_selection()
 		if _map_controller != null:
 			_map_controller.clear_selection()
 		if _overlay_controller != null:

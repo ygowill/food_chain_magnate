@@ -34,6 +34,9 @@ static func run() -> Result:
 	r = await _case_command_phase_is_used_for_feedback_gate()
 	if not r.ok:
 		return r
+	r = await _case_event_sequence_reset_keeps_feedback_alive()
+	if not r.ok:
+		return r
 	return Result.success({})
 
 static func _case_restaurant_moved_feedback_survives_overlay_clear() -> Result:
@@ -104,6 +107,19 @@ static func _case_command_phase_is_used_for_feedback_gate() -> Result:
 		return await _finish(Result.failure("反馈应读取触发命令所在子阶段，实际: %s" % str(phase_info)), controller, scene)
 
 	return await _finish(Result.success({}), controller, scene)
+
+static func _case_event_sequence_reset_keeps_feedback_alive() -> Result:
+	var controller = WorkingActionFeedbackControllerClass.new(null, null)
+	if not bool(controller.call("_accept_event_sequence", 18)):
+		return Result.failure("首次事件序号应被接受")
+	if not bool(controller.call("_accept_event_sequence", 19)):
+		return Result.failure("递增事件序号应被接受")
+	if not bool(controller.call("_accept_event_sequence", 2)):
+		return Result.failure("回退重建后重置的小序号应被接受，避免新分支反馈丢失")
+	if not bool(controller.call("_accept_event_sequence", 3)):
+		return Result.failure("重置后的后续事件序号应继续被接受")
+	controller.dispose()
+	return Result.success({})
 
 static func _finish(result: Result, controller, scene: Node) -> Result:
 	if controller != null:

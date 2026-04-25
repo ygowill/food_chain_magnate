@@ -28,6 +28,8 @@ var _pending_events: Array[Dictionary] = []
 var _flush_scheduled: bool = false
 var _active_tweens: Array[Tween] = []
 var _handled_sequences: Dictionary = {}
+var _last_seen_sequence: int = 0
+var _initialized: bool = false
 
 func _init(scene, map_canvas) -> void:
 	_scene = scene
@@ -37,6 +39,9 @@ func _init(scene, map_canvas) -> void:
 func initialize() -> void:
 	if OS.has_feature("headless"):
 		return
+	if _initialized:
+		return
+	_initialized = true
 	EventBus.subscribe(EventBus.EventType.FOOD_PRODUCED, Callable(self, "_on_feedback_event"), 130, _eventbus_source)
 	EventBus.subscribe(EventBus.EventType.DRINKS_PROCURED, Callable(self, "_on_feedback_event"), 130, _eventbus_source)
 	EventBus.subscribe(EventBus.EventType.EMPLOYEE_RECRUITED, Callable(self, "_on_feedback_event"), 130, _eventbus_source)
@@ -54,6 +59,8 @@ func dispose() -> void:
 	_pending_events.clear()
 	_flush_scheduled = false
 	_handled_sequences.clear()
+	_last_seen_sequence = 0
+	_initialized = false
 	_kill_tweens()
 	if is_instance_valid(_layer):
 		_layer.queue_free()
@@ -73,12 +80,8 @@ func _on_feedback_event(event: Dictionary) -> void:
 	if not (event is Dictionary) or event.is_empty():
 		return
 	var seq := int(event.get("sequence", -1))
-	if seq > 0:
-		if _handled_sequences.has(seq):
-			return
-		_handled_sequences[seq] = true
-		if _handled_sequences.size() > 256:
-			_handled_sequences.clear()
+	if not _accept_event_sequence(seq):
+		return
 	var type := str(event.get("type", "")).strip_edges()
 	if type == EventBus.EventType.COMMAND_EXECUTED:
 		var data_val = event.get("data", null)
@@ -105,6 +108,22 @@ func _on_feedback_event(event: Dictionary) -> void:
 		return
 	_flush_scheduled = true
 	call_deferred("_flush_pending_events")
+
+func _accept_event_sequence(seq: int) -> bool:
+	if seq <= 0:
+		return true
+	# 回退/截断历史会重建 EventBus.history 并把事件序号从 1 重新开始。
+	# 旧去重表如果不清空，会把新分支上的即时反馈误判为已播放。
+	if _last_seen_sequence > 0 and seq <= _last_seen_sequence:
+		_handled_sequences.clear()
+	_last_seen_sequence = seq
+	if _handled_sequences.has(seq):
+		return false
+	_handled_sequences[seq] = true
+	if _handled_sequences.size() > 256:
+		_handled_sequences.clear()
+		_handled_sequences[seq] = true
+	return true
 
 func _flush_pending_events() -> void:
 	_flush_scheduled = false

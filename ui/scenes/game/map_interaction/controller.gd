@@ -162,10 +162,7 @@ func begin_selection(mode: String, payload: Dictionary = {}) -> void:
 	_piece_valid_anchors.clear()
 	_marketing_valid_anchors.clear()
 	_marketing_outside_to_anchor.clear()
-	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_cell_highlights"):
-		_map_canvas.call("clear_cell_highlights")
-	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_move_restaurant_selected_restaurant"):
-		_map_canvas.call("clear_move_restaurant_selected_restaurant")
+	_clear_selection_visuals(false)
 	if _distance_tool_controller != null and _distance_tool_controller.has_method("clear_points_overlay"):
 		_distance_tool_controller.clear_points_overlay()
 	_reset_custom_modes()
@@ -184,12 +181,7 @@ func clear_selection() -> void:
 	_clear_suspended_distance_tool_state()
 	_reset_procure_drinks_restaurant_hover()
 	_hide_map_hover_tooltip()
-	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_structure_preview"):
-		_map_canvas.call("clear_structure_preview")
-	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_cell_highlights"):
-		_map_canvas.call("clear_cell_highlights")
-	if is_instance_valid(_map_canvas) and _map_canvas.has_method("clear_move_restaurant_selected_restaurant"):
-		_map_canvas.call("clear_move_restaurant_selected_restaurant")
+	_clear_selection_visuals(true)
 	if _distance_tool_controller != null and _distance_tool_controller.has_method("clear_points_overlay"):
 		_distance_tool_controller.clear_points_overlay()
 	_reset_custom_modes()
@@ -206,6 +198,22 @@ func clear_selection() -> void:
 		if _distance_tool_controller != null and _distance_tool_controller.has_method("on_mode_cleared"):
 			_distance_tool_controller.on_mode_cleared()
 	_emit_mode_changed()
+	call_deferred("_clear_selection_visuals_if_idle")
+
+func _clear_selection_visuals(clear_preview: bool) -> void:
+	if not is_instance_valid(_map_canvas):
+		return
+	if clear_preview and _map_canvas.has_method("clear_structure_preview"):
+		_map_canvas.call("clear_structure_preview")
+	if _map_canvas.has_method("clear_cell_highlights"):
+		_map_canvas.call("clear_cell_highlights")
+	if _map_canvas.has_method("clear_move_restaurant_selected_restaurant"):
+		_map_canvas.call("clear_move_restaurant_selected_restaurant")
+
+func _clear_selection_visuals_if_idle() -> void:
+	if not str(_mode).is_empty():
+		return
+	_clear_selection_visuals(true)
 
 func get_mode() -> String:
 	return _mode
