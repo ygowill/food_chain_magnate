@@ -219,6 +219,10 @@ func update_ui(do_profile: bool) -> void:
 			"timeline_at_head": bool(head_index == cursor_index),
 		})
 
+	# Overlay 同步可能刚刚创建或清理结算动画控制器；右侧动作控制需要再取一次最终配置。
+	if is_instance_valid(_panel_controller) and _panel_controller.has_method("sync_action_flow_controls"):
+		_panel_controller.call("sync_action_flow_controls")
+
 	_maybe_show_online_turn_toast(head_index, cursor_index, state)
 	_maybe_show_phase_change_toast(head_index, cursor_index, state)
 	_maybe_open_first_have_20_overview(game_engine, state)

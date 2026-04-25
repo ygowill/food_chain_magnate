@@ -369,6 +369,9 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	_hide_open_guided_action_panels_if_not_initiatable(state)
 	_auto_open_guided_action_ui(state)
 
+func sync_action_flow_controls() -> void:
+	_sync_action_flow_controls()
+
 func get_milestone_full_screen_view():
 	if _views_controller == null:
 		return null

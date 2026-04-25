@@ -122,9 +122,11 @@ func set_bank_break_panel(panel) -> void:
 		_demand_indicator_controller.set_bank_break_panel(panel)
 
 func get_settlement_flow_controls_config() -> Dictionary:
-	if _dinnertime_anim_controller != null:
+	var live_state := _read_live_game_state()
+	var live_phase := str(live_state.phase) if live_state != null else ""
+	if _dinnertime_anim_controller != null and live_phase == DefsClass.PHASE_DINNERTIME:
 		return _build_dinnertime_flow_controls_config()
-	if _marketing_anim_controller != null:
+	if _marketing_anim_controller != null and live_phase == DefsClass.PHASE_MARKETING:
 		return _build_settlement_flow_controls_config(
 			"confirm_marketing_settlement",
 			"skip_marketing_settlement",
