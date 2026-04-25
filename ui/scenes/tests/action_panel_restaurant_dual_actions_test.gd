@@ -52,30 +52,27 @@ static func run() -> Result:
 	if action_panel.items_container == null or not is_instance_valid(action_panel.items_container):
 		await _cleanup_panel(panel, st)
 		return Result.failure("ItemsContainer 节点缺失")
-	if not action_panel.items_container.visible:
+	if action_panel.items_container.visible and action_panel.items_container.get_child_count() > 0:
 		await _cleanup_panel(panel, st)
-		return Result.failure("存在次级餐厅动作时，ItemsContainer 应可见")
+		return Result.failure("餐厅双动作不应再渲染独立次级动作按钮")
 
 	var move_button = action_panel.items_container.get_node_or_null("ActionButton_move_restaurant")
-	if not (move_button is Button):
+	if move_button != null:
 		await _cleanup_panel(panel, st)
-		return Result.failure("应为 move_restaurant 渲染切换按钮")
+		return Result.failure("餐厅放置/移动应由同一个上下文面板切换，不应渲染 move_restaurant 次级按钮")
 	if action_panel.items_container.get_node_or_null("ActionButton_place_restaurant") != null:
 		await _cleanup_panel(panel, st)
 		return Result.failure("guided action 不应在次级按钮列表中重复渲染")
-	if (move_button as Button).disabled:
-		await _cleanup_panel(panel, st)
-		return Result.failure("move_restaurant 切换按钮不应被禁用")
 
-	(move_button as Button).emit_signal("pressed")
+	action_panel.open_guided_action_button.emit_signal("pressed")
 	await st.process_frame
 
-	if capture.action_id != "move_restaurant":
+	if capture.action_id != "place_restaurant":
 		await _cleanup_panel(panel, st)
-		return Result.failure("点击次级动作按钮后应请求 move_restaurant，实际: %s" % capture.action_id)
+		return Result.failure("点击主引导动作后应请求 place_restaurant，实际: %s" % capture.action_id)
 	if not capture.params.is_empty():
 		await _cleanup_panel(panel, st)
-		return Result.failure("切换按钮不应附带额外参数，实际: %s" % str(capture.params))
+		return Result.failure("主引导动作不应附带额外参数，实际: %s" % str(capture.params))
 
 	await _cleanup_panel(panel, st)
 	return Result.success({})

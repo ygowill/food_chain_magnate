@@ -83,6 +83,9 @@ static func run() -> Result:
 	r = _case_restaurant_overlay_defaults_to_enabled_staff()
 	if not r.ok:
 		return r
+	r = await _case_restaurant_context_uses_custom_layout()
+	if not r.ok:
+		return r
 	r = await _case_house_confirm_keeps_context_and_marks_used_staff()
 	if not r.ok:
 		return r
@@ -174,6 +177,77 @@ static func _case_restaurant_overlay_defaults_to_enabled_staff() -> Result:
 		return Result.failure("restaurant overlay 切换后应保留 staff_id=201，实际: %s" % str(overlay.get_selected_staff_id()))
 	overlay.free()
 	return Result.success()
+
+static func _case_restaurant_context_uses_custom_layout() -> Result:
+	var tree = Engine.get_main_loop()
+	if not (tree is SceneTree):
+		return Result.failure("MainLoop 不是 SceneTree（无法运行餐厅 Context UI 测试）")
+	var st: SceneTree = tree
+	var host := st.current_scene
+	if host == null or not is_instance_valid(host):
+		return Result.failure("current_scene 为空（无法挂载餐厅 Context UI 测试节点）")
+	if ActionPanelScene == null:
+		return Result.failure("预加载 action_panel.tscn 失败（PackedScene 为空）")
+
+	var overlay := RestaurantOverlayClass.new()
+	host.add_child(overlay)
+	overlay.visible = true
+	overlay.set_mode("place_restaurant")
+	overlay.set_map_data({
+		"restaurants": {
+			"rest_0": {"entrance_pos": Vector2i(2, 3)},
+		}
+	})
+	overlay.set_available_restaurants(["rest_0"])
+	overlay.set_available_employee_items([
+		{"staff_id": 201, "employee_type": "regional_manager", "capacity": 1, "used": 0, "remaining": 1, "can_place_restaurant": true, "can_move_restaurant": true},
+	])
+
+	var action_panel = ActionPanelScene.instantiate()
+	if action_panel == null or not is_instance_valid(action_panel):
+		return await _finish_restaurant_context_case(Result.failure("实例化 ActionPanel 失败"), overlay, action_panel, st)
+	host.add_child(action_panel)
+	(action_panel as Control).visible = true
+	await st.process_frame
+
+	if not (action_panel is ActionPanel):
+		return await _finish_restaurant_context_case(Result.failure("实例不是 ActionPanel"), overlay, action_panel, st)
+	var panel: ActionPanel = action_panel
+	panel.bind_context_overlay(overlay)
+	await st.process_frame
+
+	if not panel.context_panel.visible:
+		return await _finish_restaurant_context_case(Result.failure("绑定餐厅 overlay 后 ContextPanel 应可见"), overlay, action_panel, st)
+	if panel.custom_context_container.get_child_count() <= 0:
+		return await _finish_restaurant_context_case(Result.failure("餐厅 ContextPanel 应挂载自定义 UI"), overlay, action_panel, st)
+	if panel.restaurant_row.visible or panel.employee_row.visible or panel.confirm_context_button.visible:
+		return await _finish_restaurant_context_case(Result.failure("餐厅自定义 Context 不应显示旧的行式餐厅/员工/确认控件"), overlay, action_panel, st)
+
+	var context_node = panel.custom_context_container.get_child(0)
+	var employee_row = context_node.get("_employee_row")
+	var mode_row = context_node.get("_mode_row")
+	if employee_row == null or not is_instance_valid(employee_row):
+		return await _finish_restaurant_context_case(Result.failure("餐厅 Context 缺少顶部员工选择区"), overlay, action_panel, st)
+	if mode_row == null or not is_instance_valid(mode_row):
+		return await _finish_restaurant_context_case(Result.failure("餐厅 Context 缺少下方模式切换区"), overlay, action_panel, st)
+	if context_node.get_child(0) != employee_row or context_node.get_child(1) != mode_row:
+		return await _finish_restaurant_context_case(Result.failure("餐厅 Context 应先显示员工选择，再显示放置/移动面板"), overlay, action_panel, st)
+
+	var move_button = context_node.get("_move_restaurant_button")
+	if not (move_button is Button):
+		return await _finish_restaurant_context_case(Result.failure("餐厅 Context 缺少移动餐厅按钮"), overlay, action_panel, st)
+	if (move_button as Button).disabled:
+		return await _finish_restaurant_context_case(Result.failure("区域经理和已有餐厅可用时，移动餐厅按钮不应禁用"), overlay, action_panel, st)
+
+	(move_button as Button).emit_signal("pressed")
+	await st.process_frame
+
+	if overlay.get_mode() != "move_restaurant":
+		return await _finish_restaurant_context_case(Result.failure("点击移动餐厅后 overlay 模式应切换为 move_restaurant，实际: %s" % overlay.get_mode()), overlay, action_panel, st)
+	if overlay.get_selected_restaurant() != "rest_0":
+		return await _finish_restaurant_context_case(Result.failure("切换移动餐厅后应默认选中可移动餐厅 rest_0，实际: %s" % overlay.get_selected_restaurant()), overlay, action_panel, st)
+
+	return await _finish_restaurant_context_case(Result.success({}), overlay, action_panel, st)
 
 static func _case_house_confirm_keeps_context_and_marks_used_staff() -> Result:
 	var tree = Engine.get_main_loop()
@@ -377,6 +451,14 @@ static func _find_staff_picker_item(items: Array[Dictionary], staff_id: int) -> 
 		if int(item.get("staff_id", -1)) == staff_id:
 			return item
 	return {}
+
+static func _finish_restaurant_context_case(result: Result, overlay: Node, action_panel: Node, st: SceneTree) -> Result:
+	if action_panel != null and is_instance_valid(action_panel):
+		action_panel.queue_free()
+	if overlay != null and is_instance_valid(overlay):
+		overlay.queue_free()
+	await st.process_frame
+	return result
 
 static func _finish_overlay_case(result: Result, overlays, scene: Node, action_panel: Node, engine: GameEngine, st: SceneTree) -> Result:
 	if overlays != null and overlays.has_method("dispose"):

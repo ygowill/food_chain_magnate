@@ -19,6 +19,10 @@ const HOUSE_PLACEMENT_ACTION_IDS := {
 	"place_house": true,
 	"add_garden": true,
 }
+const RESTAURANT_PLACEMENT_ACTION_IDS := {
+	"place_restaurant": true,
+	"move_restaurant": true,
+}
 
 var _panel = null
 var _rendered_button_ids_snapshot: Array[String] = []
@@ -351,6 +355,8 @@ func _get_rendered_action_button_ids() -> Array[String]:
 		if aid.is_empty():
 			continue
 		if aid == ActionIdsClass.SKIP or aid == ActionIdsClass.SKIP_SUB_PHASE:
+			continue
+		if RESTAURANT_PLACEMENT_ACTION_IDS.has(guided) and RESTAURANT_PLACEMENT_ACTION_IDS.has(aid):
 			continue
 		if HOUSE_PLACEMENT_ACTION_IDS.has(guided) and HOUSE_PLACEMENT_ACTION_IDS.has(aid):
 			continue

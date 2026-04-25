@@ -12,6 +12,7 @@ signal highlight_requested(mode: String, rotation: int, restaurant_id: String)
 signal ui_state_changed()
 
 const INVALID_POS := Vector2i(-1, -1)
+const ActionPanelRestaurantContextScenePath := "res://ui/components/restaurant_placement/action_panel_restaurant_placement_context.gd"
 const StaffPickerStateClass = preload("res://ui/components/employee_picker/staff_picker_state.gd")
 
 @onready var hint_margin: Control = $HintMargin
@@ -23,6 +24,7 @@ var _selected_rotation: int = 0
 var _available_restaurants: Array[String] = []
 var _selected_restaurant_id: String = ""
 var _staff_picker_state := StaffPickerStateClass.new(["can_place_restaurant", "can_move_restaurant"])
+var _all_employee_items: Array[Dictionary] = []
 
 var _map_data: Dictionary = {}
 var _restaurant_index_by_id: Dictionary = {} # restaurant_id -> 1-based index (stable for current list)
@@ -71,9 +73,42 @@ func get_selected_employee_key() -> String:
 func get_selected_staff_id() -> int:
 	return _staff_picker_state.get_selected_staff_id()
 
+func get_action_panel_context_spec() -> Dictionary:
+	return {
+		"title": "",
+		"hint": "",
+		"show_chrome": false,
+		"show_confirm": false,
+		"show_skip_step": false,
+		"confirm_text": "",
+		"cancel_text": "取消",
+		"custom_scene": ActionPanelRestaurantContextScenePath,
+	}
+
+func is_mode_available(action_id: String) -> bool:
+	var aid := _normalize_mode(action_id)
+	if aid == "move_restaurant" and _available_restaurants.is_empty():
+		return false
+
+	if _all_employee_items.is_empty():
+		return aid == "place_restaurant"
+
+	var item := _get_selected_employee_item()
+	if item.is_empty():
+		return false
+	if int(item.get("remaining", 0)) <= 0:
+		return false
+	return bool(item.get(_capability_key_for_mode(aid), false))
+
 func set_mode(action_id: String) -> void:
-	_mode = str(action_id)
-	clear_selection()
+	_mode = _normalize_mode(action_id)
+	_selected_position = INVALID_POS
+	_selected_rotation = 0
+	_selected_restaurant_id = ""
+	_validation_ok = true
+	_validation_message = ""
+	_staff_picker_state.refresh_selected()
+	_ensure_selected_restaurant_for_mode()
 	_update_ui()
 	_emit_highlight_request()
 	ui_state_changed.emit()
@@ -91,12 +126,7 @@ func set_available_restaurants(restaurant_ids: Array[String]) -> void:
 	ids.sort()
 	_available_restaurants = ids
 	_rebuild_restaurant_indices()
-
-	if _mode == "move_restaurant":
-		if ids.is_empty():
-			_selected_restaurant_id = ""
-		elif _selected_restaurant_id.is_empty() or not ids.has(_selected_restaurant_id):
-			_selected_restaurant_id = ids[0]
+	_ensure_selected_restaurant_for_mode()
 
 	_emit_preview()
 	_emit_highlight_request()
@@ -147,18 +177,29 @@ func _get_restaurant_entrance_pos(restaurant_id: String) -> Vector2i:
 	return Vector2i(-1, -1)
 
 func set_available_employee_items(items: Array[Dictionary]) -> void:
-	_staff_picker_state.set_items(items)
+	_all_employee_items.clear()
+	for item_val in items:
+		if item_val is Dictionary:
+			_all_employee_items.append(Dictionary(item_val).duplicate(true))
+	_staff_picker_state.set_items(_all_employee_items)
+	_ensure_supported_mode_for_selected_employee()
 	_update_ui()
 	ui_state_changed.emit()
 
 func set_selected_employee_key(employee_key: String) -> void:
 	_staff_picker_state.apply_selected_key(str(employee_key).strip_edges())
+	_ensure_supported_mode_for_selected_employee()
 	_update_ui()
+	_emit_preview()
+	_emit_highlight_request()
 	ui_state_changed.emit()
 
 func set_selected_employee(employee_type: String) -> void:
 	_staff_picker_state.apply_selected_employee_type(str(employee_type).strip_edges())
+	_ensure_supported_mode_for_selected_employee()
 	_update_ui()
+	_emit_preview()
+	_emit_highlight_request()
 	ui_state_changed.emit()
 
 func set_selected_restaurant(restaurant_id: String) -> void:
@@ -199,6 +240,8 @@ func clear_selection() -> void:
 	_selected_rotation = 0
 	_selected_restaurant_id = ""
 	_staff_picker_state.refresh_selected()
+	_ensure_supported_mode_for_selected_employee()
+	_ensure_selected_restaurant_for_mode()
 	_validation_ok = true
 	_validation_message = ""
 	_emit_preview()
@@ -214,6 +257,10 @@ func can_confirm() -> bool:
 	ok = ok and (_selected_position != INVALID_POS)
 	if _mode == "move_restaurant":
 		ok = ok and not _selected_restaurant_id.is_empty()
+		if _all_employee_items.is_empty():
+			ok = false
+	if not _all_employee_items.is_empty():
+		ok = ok and is_mode_available(_mode)
 	ok = ok and _validation_ok
 	return ok
 
@@ -237,6 +284,53 @@ func _normalize_rotation(rotation: int) -> int:
 	if r != 0 and r != 90 and r != 180 and r != 270:
 		r = 0
 	return r
+
+func _normalize_mode(action_id: String) -> String:
+	var aid := str(action_id).strip_edges()
+	if aid == "move_restaurant":
+		return "move_restaurant"
+	return "place_restaurant"
+
+func _capability_key_for_mode(action_id: String) -> String:
+	return "can_move_restaurant" if _normalize_mode(action_id) == "move_restaurant" else "can_place_restaurant"
+
+func _get_selected_employee_item() -> Dictionary:
+	var key := _staff_picker_state.get_selected_key()
+	if key.is_empty():
+		return {}
+	for item_val in _all_employee_items:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		var item_key := "staff:%d" % int(item.get("staff_id", -1))
+		if str(item.get("key", item_key)).strip_edges() == key:
+			return item
+	return {}
+
+func _ensure_supported_mode_for_selected_employee() -> void:
+	if _all_employee_items.is_empty():
+		if _mode != "place_restaurant":
+			_mode = "place_restaurant"
+		_ensure_selected_restaurant_for_mode()
+		return
+	if is_mode_available(_mode):
+		_ensure_selected_restaurant_for_mode()
+		return
+	if is_mode_available("place_restaurant"):
+		_mode = "place_restaurant"
+	elif is_mode_available("move_restaurant"):
+		_mode = "move_restaurant"
+	_ensure_selected_restaurant_for_mode()
+
+func _ensure_selected_restaurant_for_mode() -> void:
+	if _mode != "move_restaurant":
+		_selected_restaurant_id = ""
+		return
+	if _available_restaurants.is_empty():
+		_selected_restaurant_id = ""
+		return
+	if _selected_restaurant_id.is_empty() or not _available_restaurants.has(_selected_restaurant_id):
+		_selected_restaurant_id = _available_restaurants[0]
 
 func _update_ui() -> void:
 	_update_hint()

@@ -139,14 +139,13 @@ func _sync_restaurant_placement_overlay(state: GameState, force_full_refresh: bo
 		if restaurant_placement_overlay.has_method("set_map_data"):
 			restaurant_placement_overlay.set_map_data(state.map)
 
-		if action_id == "move_restaurant":
-			if restaurant_placement_overlay.has_method("set_available_restaurants"):
-				var ids: Array[String] = []
-				for rid in Array(current_player.get("restaurants", [])):
-					ids.append(str(rid))
-				restaurant_placement_overlay.set_available_restaurants(ids)
-			if restaurant_placement_overlay.has_method("set_selected_restaurant") and not prev_restaurant.is_empty():
-				restaurant_placement_overlay.set_selected_restaurant(prev_restaurant)
+		if restaurant_placement_overlay.has_method("set_available_restaurants"):
+			var ids: Array[String] = []
+			for rid in Array(current_player.get("restaurants", [])):
+				ids.append(str(rid))
+			restaurant_placement_overlay.set_available_restaurants(ids)
+		if action_id == "move_restaurant" and restaurant_placement_overlay.has_method("set_selected_restaurant") and not prev_restaurant.is_empty():
+			restaurant_placement_overlay.set_selected_restaurant(prev_restaurant)
 
 		if restaurant_placement_overlay.has_method("set_available_employee_items"):
 			restaurant_placement_overlay.set_available_employee_items(
@@ -366,15 +365,14 @@ func show_restaurant_placement(action_id: String, params: Dictionary) -> void:
 	if restaurant_placement_overlay.has_method("set_map_data"):
 		restaurant_placement_overlay.set_map_data(state.map)
 
-	if action_id == "move_restaurant":
-		if restaurant_placement_overlay.has_method("set_available_restaurants"):
-			var ids: Array[String] = []
-			for rid in Array(current_player.get("restaurants", [])):
-				ids.append(str(rid))
-			restaurant_placement_overlay.set_available_restaurants(ids)
+	if restaurant_placement_overlay.has_method("set_available_restaurants"):
+		var ids: Array[String] = []
+		for rid in Array(current_player.get("restaurants", [])):
+			ids.append(str(rid))
+		restaurant_placement_overlay.set_available_restaurants(ids)
 
-		if params.has("restaurant_id") and restaurant_placement_overlay.has_method("set_selected_restaurant"):
-			restaurant_placement_overlay.set_selected_restaurant(str(params.restaurant_id))
+	if action_id == "move_restaurant" and params.has("restaurant_id") and restaurant_placement_overlay.has_method("set_selected_restaurant"):
+		restaurant_placement_overlay.set_selected_restaurant(str(params.restaurant_id))
 
 	if restaurant_placement_overlay.has_method("set_available_employee_items"):
 		restaurant_placement_overlay.set_available_employee_items(
@@ -510,12 +508,7 @@ func _on_restaurant_placement_confirmed(position: Vector2i, rotation: int, resta
 
 	var result: Result = _execute_command.call(Command.create(action_id, current_player_id, command_params))
 	if result.ok:
-		if is_instance_valid(restaurant_placement_overlay):
-			restaurant_placement_overlay.visible = false
-		if _map_controller != null:
-			_map_controller.clear_selection()
-		if _overlay_controller != null:
-			_overlay_controller.hide_all_overlays()
+		_after_restaurant_command_success(current_player_id)
 	else:
 		if is_instance_valid(restaurant_placement_overlay) and restaurant_placement_overlay.has_method("set_validation"):
 			restaurant_placement_overlay.set_validation(false, result.error)
@@ -639,6 +632,35 @@ func _after_house_garden_command_success(actor_id: int) -> void:
 
 	_close_house_garden_overlay_and_refresh()
 
+func _after_restaurant_command_success(actor_id: int) -> void:
+	var state_after: GameState = _scene.game_engine.get_state() if (_scene != null and _scene.game_engine != null) else null
+	if state_after == null:
+		_close_restaurant_overlay_and_refresh()
+		return
+
+	var same_place_restaurants_turn := (
+		state_after.phase == DefsClass.PHASE_WORKING
+		and state_after.sub_phase == DefsClass.SUB_PHASE_PLACE_RESTAURANTS
+		and int(state_after.get_current_player_id()) == int(actor_id)
+	)
+	if same_place_restaurants_turn:
+		_sync_restaurant_placement_overlay(state_after, true)
+		_select_first_enabled_restaurant_staff_if_needed()
+		if is_instance_valid(restaurant_placement_overlay) and restaurant_placement_overlay.has_method("clear_selection"):
+			restaurant_placement_overlay.clear_selection()
+		return
+
+	_close_restaurant_overlay_and_refresh()
+
+func _close_restaurant_overlay_and_refresh() -> void:
+	if is_instance_valid(restaurant_placement_overlay):
+		restaurant_placement_overlay.visible = false
+	if _map_controller != null:
+		_map_controller.clear_selection()
+	if _overlay_controller != null:
+		_overlay_controller.hide_all_overlays()
+	_request_scene_ui_refresh_deferred()
+
 func _close_house_garden_overlay_and_refresh() -> void:
 	if is_instance_valid(house_placement_overlay):
 		house_placement_overlay.visible = false
@@ -664,6 +686,23 @@ func _select_first_enabled_house_garden_staff_if_needed() -> void:
 	if fallback_key.is_empty():
 		return
 	house_placement_overlay.set_selected_employee_key(fallback_key)
+
+func _select_first_enabled_restaurant_staff_if_needed() -> void:
+	if not is_instance_valid(restaurant_placement_overlay):
+		return
+	if not restaurant_placement_overlay.has_method("get_selected_employee_key"):
+		return
+	if not restaurant_placement_overlay.has_method("set_selected_employee_key"):
+		return
+
+	var current_key := str(restaurant_placement_overlay.get_selected_employee_key()).strip_edges()
+	if current_key.is_empty() or _employee_item_key_enabled(restaurant_placement_overlay, current_key):
+		return
+
+	var fallback_key := _find_first_enabled_employee_key(restaurant_placement_overlay)
+	if fallback_key.is_empty():
+		return
+	restaurant_placement_overlay.set_selected_employee_key(fallback_key)
 
 func _find_first_enabled_employee_key(overlay) -> String:
 	if overlay == null or not is_instance_valid(overlay):
@@ -724,17 +763,14 @@ func _build_house_garden_employee_items(state: GameState, player_id: int, action
 		out.append(item)
 	return out
 
-func _build_restaurant_employee_items(state: GameState, player_id: int, action_id: String) -> Array[Dictionary]:
+func _build_restaurant_employee_items(state: GameState, player_id: int, _action_id: String) -> Array[Dictionary]:
 	var all_items := EmployeeRulesClass.get_restaurant_placers_for_working(state, player_id)
 	var out: Array[Dictionary] = []
-	var capability := "can_move_restaurant" if str(action_id).strip_edges() == "move_restaurant" else "can_place_restaurant"
 	for item_val in all_items:
 		if not (item_val is Dictionary):
 			continue
 		var item: Dictionary = Dictionary(item_val).duplicate(true)
-		if not bool(item.get(capability, false)):
-			continue
-		if int(item.get("remaining", 0)) <= 0:
+		if not bool(item.get("can_place_restaurant", false)) and not bool(item.get("can_move_restaurant", false)):
 			continue
 		out.append(item)
 	return out
