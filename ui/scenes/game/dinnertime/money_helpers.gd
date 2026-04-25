@@ -204,6 +204,7 @@ static func animate_player_income(
 	tween.tween_property(lbl, "position:y", lbl.position.y - 40, dur2)
 	tween.tween_property(lbl, "modulate:a", 0.0, dur2).set_delay(dur2 * 0.5)
 	tween.chain().tween_callback(func():
-		lbl.queue_free()
+		if is_instance_valid(lbl):
+			lbl.queue_free()
 		active_tweens.erase(tween)
 	)
