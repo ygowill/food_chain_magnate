@@ -59,7 +59,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_generate_specific_events_returns_empty_on_invalid_rotation()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 13})
+	r = _test_generate_specific_events_includes_move_feedback_payload()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 14})
 
 static func _build_move_restaurant_working_engine(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -391,6 +394,46 @@ static func _test_generate_specific_events_returns_empty_on_invalid_rotation() -
 	var events := action._generate_specific_events(old_state, new_state, Command.create("move_restaurant", 0, {"restaurant_id": "r1", "employee_type": "regional_manager"}))
 	if not events.is_empty():
 		return Result.failure("rotation 损坏时应返回空事件列表")
+	return Result.success()
+
+static func _test_generate_specific_events_includes_move_feedback_payload() -> Result:
+	var action = MoveRestaurantActionClass.new()
+	var old_state := _make_event_state({
+		"r1": {
+			"anchor_pos": Vector2i(1, 2),
+			"rotation": 0,
+			"cells": [Vector2i(1, 2), Vector2i(2, 2)],
+		},
+	})
+	var new_state := _make_event_state({
+		"r1": {
+			"anchor_pos": Vector2i(5, 6),
+			"rotation": 90,
+			"cells": [Vector2i(5, 6), Vector2i(5, 7)],
+		},
+	})
+	var events := action._generate_specific_events(old_state, new_state, Command.create("move_restaurant", 0, {"restaurant_id": "r1", "employee_type": "regional_manager"}))
+	if events.size() != 1:
+		return Result.failure("移动餐厅应生成 1 条事件，实际: %d" % events.size())
+	var event: Dictionary = events[0]
+	if str(event.get("type", "")) != EventBus.EventType.RESTAURANT_MOVED:
+		return Result.failure("移动餐厅事件类型错误: %s" % str(event.get("type", "")))
+	var data_val = event.get("data", null)
+	if not (data_val is Dictionary):
+		return Result.failure("移动餐厅事件缺少 data")
+	var data: Dictionary = data_val
+	if str(data.get("restaurant_id", "")) != "r1":
+		return Result.failure("移动餐厅事件 restaurant_id 错误: %s" % str(data))
+	if str(data.get("from_position", [])) != str([1, 2]):
+		return Result.failure("移动餐厅事件应包含 from_position=[1, 2]，实际: %s" % str(data))
+	if str(data.get("to_position", [])) != str([5, 6]):
+		return Result.failure("移动餐厅事件应包含 to_position=[5, 6]，实际: %s" % str(data))
+	if int(data.get("from_rotation", -1)) != 0 or int(data.get("to_rotation", -1)) != 90:
+		return Result.failure("移动餐厅事件旋转信息错误: %s" % str(data))
+	if not (data.get("from_cells", null) is Array) or Array(data.get("from_cells", [])).size() != 2:
+		return Result.failure("移动餐厅事件应包含 from_cells，实际: %s" % str(data))
+	if not (data.get("to_cells", null) is Array) or Array(data.get("to_cells", [])).size() != 2:
+		return Result.failure("移动餐厅事件应包含 to_cells，实际: %s" % str(data))
 	return Result.success()
 
 static func _get_first_restaurant_id(state: GameState, actor: int) -> String:

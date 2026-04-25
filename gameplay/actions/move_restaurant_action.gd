@@ -396,6 +396,14 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 	var restaurants: Dictionary = restaurants_read.value
 	if not restaurants.has(rest_id):
 		return events
+	var old_rest: Dictionary = {}
+	if _old_state != null:
+		var old_restaurants_read := MapStateAccessClass.require_restaurants(_old_state, action_id)
+		if old_restaurants_read.ok and old_restaurants_read.value is Dictionary:
+			var old_restaurants: Dictionary = old_restaurants_read.value
+			var old_rest_val = old_restaurants.get(rest_id, null)
+			if old_rest_val is Dictionary:
+				old_rest = old_rest_val
 	var rest_val = restaurants[rest_id]
 	if not (rest_val is Dictionary):
 		return events
@@ -407,21 +415,46 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 		return events
 	var rotation: int = int(rest["rotation"])
 	var p := [anchor_pos.x, anchor_pos.y]
+	var data := {
+		"player_id": command.actor,
+		"restaurant_id": rest_id,
+		"position": p,
+		"to_position": p,
+		"rotation": rotation,
+		"to_rotation": rotation,
+		"employee_type": employee_type,
+	}
+	var cells_val = rest.get("cells", null)
+	if cells_val is Array:
+		data["to_cells"] = _serialize_vector2i_array(Array(cells_val))
+	if not old_rest.is_empty():
+		var old_anchor_val = old_rest.get("anchor_pos", null)
+		if old_anchor_val is Vector2i:
+			var old_anchor: Vector2i = old_anchor_val
+			data["from_position"] = [old_anchor.x, old_anchor.y]
+		var old_rotation_val = old_rest.get("rotation", null)
+		if old_rotation_val is int or old_rotation_val is float:
+			data["from_rotation"] = int(old_rotation_val)
+		var old_cells_val = old_rest.get("cells", null)
+		if old_cells_val is Array:
+			data["from_cells"] = _serialize_vector2i_array(Array(old_cells_val))
 	events.append({
 		"type": EventBus.EventType.RESTAURANT_MOVED,
-		"data": {
-			"player_id": command.actor,
-			"restaurant_id": rest_id,
-			"position": p,
-			"rotation": rotation,
-			"employee_type": employee_type,
-		}
+		"data": data,
 	})
 	if staff_id > 0:
-		var data: Dictionary = events[0].get("data", {})
-		data["staff_id"] = staff_id
-		events[0]["data"] = data
+		var event_data: Dictionary = events[0].get("data", {})
+		event_data["staff_id"] = staff_id
+		events[0]["data"] = event_data
 	return events
+
+func _serialize_vector2i_array(cells: Array) -> Array:
+	var out: Array = []
+	for cell_val in cells:
+		if cell_val is Vector2i:
+			var p: Vector2i = cell_val
+			out.append([p.x, p.y])
+	return out
 
 func _validate_restaurant_placement(map_ctx: Dictionary, world_anchor: Vector2i, rotation: int, piece_registry: Dictionary, player_id: int, ignore_cells: Array) -> Result:
 	return _placement_validator.validate_restaurant_placement(

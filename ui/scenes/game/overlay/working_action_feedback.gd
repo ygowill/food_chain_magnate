@@ -15,6 +15,7 @@ const TOKEN_EMIT_GAP_SEC := 0.24
 const BURST_TOTAL_SEC := 1.80
 const PULSE_SEC := 0.90
 const PLACEMENT_FLASH_SEC := 1.55
+const MOVE_GHOST_SEC := 1.05
 const MAX_TOKENS_PER_FEEDBACK := 5
 
 var _scene = null
@@ -320,12 +321,22 @@ func _play_restaurant_placed(state: GameState, data: Dictionary) -> void:
 
 func _play_restaurant_moved(state: GameState, data: Dictionary) -> void:
 	var restaurant_id := str(data.get("restaurant_id", "")).strip_edges()
-	var rect := _get_restaurant_rect(state, restaurant_id)
-	if rect.size == Vector2.ZERO:
-		rect = _rect_from_event_position(data)
-	if rect.size == Vector2.ZERO:
-		rect = _get_map_center_rect()
-	_start_placement_feedback(rect, "移动餐厅", Color(0.98, 0.58, 0.36, 1.0))
+	var to_rect := _rect_from_event_cells(data, "to_cells")
+	if to_rect.size == Vector2.ZERO:
+		to_rect = _get_restaurant_rect(state, restaurant_id)
+	if to_rect.size == Vector2.ZERO:
+		to_rect = _rect_from_event_position_key(data, "to_position")
+	if to_rect.size == Vector2.ZERO:
+		to_rect = _rect_from_event_position(data)
+	if to_rect.size == Vector2.ZERO:
+		to_rect = _get_map_center_rect()
+
+	var from_rect := _rect_from_event_cells(data, "from_cells")
+	if from_rect.size == Vector2.ZERO:
+		from_rect = _rect_from_event_position_key(data, "from_position")
+	if from_rect.size != Vector2.ZERO and from_rect.position.distance_to(to_rect.position) > 1.0:
+		_start_move_ghost(from_rect, to_rect, Color(1.0, 0.58, 0.30, 1.0))
+	_start_placement_feedback(to_rect, "移动餐厅", Color(0.98, 0.58, 0.36, 1.0))
 
 func _start_action_burst(anchor_rect: Rect2, text: String, color: Color, delay_sec: float = 0.0) -> void:
 	if not is_instance_valid(_layer):
@@ -431,6 +442,34 @@ func _start_placement_flash(rect: Rect2, color: Color) -> void:
 	tw.chain().tween_callback(func():
 		if is_instance_valid(flash):
 			flash.queue_free()
+		_active_tweens.erase(tw)
+	)
+
+func _start_move_ghost(from_rect: Rect2, to_rect: Rect2, color: Color) -> void:
+	if not is_instance_valid(_layer):
+		return
+	if from_rect.size == Vector2.ZERO or to_rect.size == Vector2.ZERO:
+		return
+	var ghost := ColorRect.new()
+	ghost.name = "WorkingActionFeedbackMoveGhost"
+	ghost.position = from_rect.position
+	ghost.size = to_rect.size
+	ghost.pivot_offset = ghost.size * 0.5
+	ghost.color = Color(color.r, color.g, color.b, 0.28)
+	ghost.modulate.a = 0.0
+	ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_layer.add_child(ghost)
+
+	var tw := ghost.create_tween().set_parallel(true)
+	_active_tweens.append(tw)
+	tw.tween_property(ghost, "modulate:a", 1.0, 0.16 / _speed).set_ease(Tween.EASE_OUT)
+	tw.tween_property(ghost, "position", to_rect.position, MOVE_GHOST_SEC / _speed).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(ghost, "scale", Vector2(1.10, 1.10), 0.18 / _speed).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tw.tween_property(ghost, "scale", Vector2(1.0, 1.0), 0.24 / _speed).set_delay(0.18 / _speed).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(ghost, "modulate:a", 0.0, 0.28 / _speed).set_delay(maxf(0.0, MOVE_GHOST_SEC - 0.28) / _speed).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(func():
+		if is_instance_valid(ghost):
+			ghost.queue_free()
 		_active_tweens.erase(tw)
 	)
 
@@ -715,10 +754,16 @@ func _get_opening_soon_restaurant_cells(state: GameState, restaurant_id: String)
 	return out
 
 func _rect_from_event_position(data: Dictionary) -> Rect2:
-	var pos := _read_vector2i(data.get("position", null), Vector2i(-1, -1))
+	return _rect_from_event_position_key(data, "position")
+
+func _rect_from_event_position_key(data: Dictionary, key: String) -> Rect2:
+	var pos := _read_vector2i(data.get(key, null), Vector2i(-1, -1))
 	if pos == Vector2i(-1, -1):
 		return Rect2()
 	return _world_cell_rect(pos)
+
+func _rect_from_event_cells(data: Dictionary, key: String) -> Rect2:
+	return _cells_rect(_read_vector2i_array(data.get(key, null)))
 
 func _get_map_center_rect() -> Rect2:
 	var cs := maxf(_get_cell_size(), 1.0)
