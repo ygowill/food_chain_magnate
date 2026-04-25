@@ -13,12 +13,13 @@
 
 ## 情景设计
 
-- 地图：水平道路 y=3；rest_0/rest_1 位于道路下方；h0(花园)/h1/h2 位于道路上方。
-- h0：花园房屋，需求 burger+beer（覆盖：花园翻倍 + 营销加成 + 薯条主厨房屋奖）。
-- h1：需求 pizza（覆盖：按品类营销加成）。
-- h2：需求 soda（由玩家2售出）。
-- 沿路购买：玩家2在 rest_1 持有 coffee 库存；玩家1从 rest_0 前往 h0/h1 的路径会路过 rest_1，触发咖啡沿路购买收入。
-- 玩家1：waitress x2（tips + 平局）、cfo x1（+50%）、fry_chef x2（每房屋+$10）；里程碑 first_*_marketed 提供 sell_bonus。
+- 地图：保留 seed=12345 的正常生成地图与 tile_placements；仅通过合法建房/加花园动作补一栋复核用花园房屋。
+- 房屋 1：花园房屋，需求 burger+beer（覆盖：花园翻倍 + 营销加成 + 薯条主厨房屋奖）。
+- 房屋 12：需求 pizza（覆盖：按品类营销加成）。
+- 房屋 15：需求 soda（由玩家2售出）。
+- 沿路购买：在玩家1到目标房屋的候选路径旁放置玩家2咖啡店，玩家2持有 coffee 库存，触发 route_purchase_income。
+- 玩家1：new_business_developer x2、waitress x2、cfo x1、fry_chef x2；玩家2：waitress x1、barista x1，均通过正常员工池发放以保持数量守恒。
+- 为稳定复核实体 CFO 本回合加成，本档从可获得里程碑池中排除 first_have_100，避免它在结算中替换掉 CFO。
 
 ## 复核步骤
 

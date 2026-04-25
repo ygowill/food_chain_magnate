@@ -123,6 +123,10 @@ static func run() -> Result:
 
 		# Ensure ordering for the dinnertime settlement: sold logs first, cash changes after.
 		if res_path.ends_with("event_log_dinnertime_sale.json"):
+			var scenario_verify := _verify_dinnertime_sale_manual_case(engine, res_path)
+			if not scenario_verify.ok:
+				return scenario_verify
+
 			var sold_events: Array = EventBus.get_history_by_type(EventBus.EventType.FOOD_SOLD)
 			var cash_events: Array = EventBus.get_history_by_type(EventBus.EventType.PLAYER_CASH_CHANGED)
 
@@ -239,6 +243,53 @@ static func run() -> Result:
 
 	# Avoid polluting subsequent tests with history from a replay-loaded archive.
 	_clear_event_history()
+
+	return Result.success({})
+
+static func _verify_dinnertime_sale_manual_case(engine: GameEngine, res_path: String) -> Result:
+	if engine == null:
+		return Result.failure("dinnertime sale verification: engine is null (%s)" % res_path)
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("dinnertime sale verification: state is null (%s)" % res_path)
+	if not (state.map is Dictionary):
+		return Result.failure("dinnertime sale verification: state.map invalid (%s)" % res_path)
+	var map: Dictionary = state.map
+	var grid_val = map.get("grid_size", null)
+	if not (grid_val is Vector2i) or Vector2i(grid_val) != Vector2i(15, 15):
+		return Result.failure("dinnertime sale save should keep the normal 2p generated map grid_size=15x15, got %s (%s)" % [str(grid_val), res_path])
+	var placements_val = map.get("tile_placements", null)
+	if not (placements_val is Array) or Array(placements_val).size() < 9:
+		return Result.failure("dinnertime sale save should keep normal tile_placements, got %s (%s)" % [str(placements_val), res_path])
+
+	var dt_val = state.round_state.get("dinnertime", null) if (state.round_state is Dictionary) else null
+	if not (dt_val is Dictionary):
+		return Result.failure("dinnertime sale verification: missing round_state.dinnertime (%s)" % res_path)
+	var dt: Dictionary = dt_val
+	var sales_val = dt.get("sales", null)
+	if not (sales_val is Array) or Array(sales_val).size() < 3:
+		return Result.failure("dinnertime sale verification: expected at least 3 sales, got %s (%s)" % [str(sales_val), res_path])
+	var has_route_purchase := false
+	for sale_val in Array(sales_val):
+		if not (sale_val is Dictionary):
+			continue
+		var sale: Dictionary = sale_val
+		var route_val = sale.get("route_purchases", null)
+		if route_val is Array and not Array(route_val).is_empty():
+			has_route_purchase = true
+			break
+	if not has_route_purchase:
+		return Result.failure("dinnertime sale verification: expected route_purchases for coffee route income (%s)" % res_path)
+
+	var tips: Array = dt.get("income_tips", []) if (dt.get("income_tips", null) is Array) else []
+	if tips.size() < 2 or int(tips[0]) <= 0 or int(tips[1]) <= 0:
+		return Result.failure("dinnertime sale verification: expected waitress tips for both players, got %s (%s)" % [str(tips), res_path])
+	var cfo: Array = dt.get("income_cfo_bonus", []) if (dt.get("income_cfo_bonus", null) is Array) else []
+	if cfo.is_empty() or int(cfo[0]) <= 0:
+		return Result.failure("dinnertime sale verification: expected player 1 CFO bonus, got %s (%s)" % [str(cfo), res_path])
+	var house_bonus: Array = dt.get("income_sale_house_bonus", []) if (dt.get("income_sale_house_bonus", null) is Array) else []
+	if house_bonus.is_empty() or int(house_bonus[0]) <= 0:
+		return Result.failure("dinnertime sale verification: expected fry_chef house bonus, got %s (%s)" % [str(house_bonus), res_path])
 
 	return Result.success({})
 

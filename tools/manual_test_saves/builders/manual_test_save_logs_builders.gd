@@ -407,17 +407,61 @@ func _build_logs_produce_and_cleanup(engine: GameEngine, _c: Dictionary) -> Resu
 	return Result.success()
 
 func _build_logs_dinnertime_sale(engine: GameEngine, _c: Dictionary) -> Result:
-	var adv := _advance_to_working_sub_phase(engine, "PlaceRestaurants")
+	var adv := _advance_to_working_sub_phase(engine, "PlaceHouses")
 	if not adv.ok:
 		return adv
 
 	var state := engine.get_state()
 	_force_turn_order(state)
-	_apply_test_map_dinnertime_sale_complex(state)
 
 	var actor := state.get_current_player_id()
 	if actor < 0:
 		return Result.failure("logs_dinnertime_sale: cannot resolve current player")
+
+	# Build the review scene on the normal generated map:
+	# add one legal garden house first, then freeze at PlaceRestaurants for the replay.
+	var ensure_house := _ensure_employee(state, actor, "new_business_developer", false, 2)
+	if not ensure_house.ok:
+		return ensure_house
+	for pid in range(state.players.size()):
+		var give := engine.execute_command(Command.create_system("debug_give_money", {"player_id": pid, "amount": 120}))
+		if not give.ok:
+			return Result.failure("debug_give_money failed: %s" % give.error)
+	state = engine.get_state()
+	var bank_top_up := BankStateAccess.apply_reserve_injection(state, 300, "logs_dinnertime_sale")
+	if not bank_top_up.ok:
+		return bank_top_up
+
+	var numbers := _get_remaining_house_numbers_from_state(state)
+	if numbers.is_empty():
+		return Result.failure("logs_dinnertime_sale: no remaining house numbers")
+	var house_number := int(numbers[0])
+	var plan_r := _find_first_valid_place_house_then_add_garden(engine, actor, house_number)
+	if not plan_r.ok:
+		return plan_r
+	var plan: Dictionary = plan_r.value if (plan_r.value is Dictionary) else {}
+
+	var house_params: Dictionary = plan.get("place_house_params", {}) if (plan.get("place_house_params", null) is Dictionary) else {}
+	house_params["employee_type"] = "new_business_developer"
+	var place_house := engine.execute_command(Command.create("place_house", actor, house_params))
+	if not place_house.ok:
+		return Result.failure("place_house failed: %s" % place_house.error)
+
+	var garden_params: Dictionary = plan.get("add_garden_params", {}) if (plan.get("add_garden_params", null) is Dictionary) else {}
+	garden_params["employee_type"] = "new_business_developer"
+	var add_garden := engine.execute_command(Command.create("add_garden", actor, garden_params))
+	if not add_garden.ok:
+		return Result.failure("add_garden failed: %s" % add_garden.error)
+
+	var to_place_restaurants := TestPhaseUtils.advance_until_working_sub_phase(engine, "PlaceRestaurants", 20)
+	if not to_place_restaurants.ok:
+		return to_place_restaurants
+
+	state = engine.get_state()
+	_force_turn_order(state)
+	actor = state.get_current_player_id()
+	if actor < 0:
+		return Result.failure("logs_dinnertime_sale: cannot resolve current player after setup")
 
 	# Ensure employee-based bonuses:
 	# - waitress: tips + tiebreaker
@@ -432,6 +476,13 @@ func _build_logs_dinnertime_sale(engine: GameEngine, _c: Dictionary) -> Result:
 	var ensure_fry_chef := _ensure_employee(state, actor, "fry_chef", false, 2)
 	if not ensure_fry_chef.ok:
 		return ensure_fry_chef
+	if state.players.size() > 1:
+		var ensure_waitress_p2 := _ensure_employee(state, 1, "waitress", false, 1)
+		if not ensure_waitress_p2.ok:
+			return ensure_waitress_p2
+		var ensure_barista_p2 := _ensure_employee(state, 1, "barista", false, 1)
+		if not ensure_barista_p2.ok:
+			return ensure_barista_p2
 
 	# Seed milestone-based marketing bonuses (sell_bonus).
 	state.players[actor]["milestones"] = [
@@ -439,65 +490,99 @@ func _build_logs_dinnertime_sale(engine: GameEngine, _c: Dictionary) -> Result:
 		"first_drink_marketed",
 		"first_pizza_marketed",
 	]
+	_logs_remove_milestone_from_pool(state, "first_have_100")
 
-	var houses: Dictionary = state.map.get("houses", {}) if (state.map is Dictionary) else {}
-	if not houses.has("h0") or not (houses["h0"] is Dictionary):
-		return Result.failure("logs_dinnertime_sale: test house missing (h0)")
-	if not houses.has("h1") or not (houses["h1"] is Dictionary):
-		return Result.failure("logs_dinnertime_sale: test house missing (h1)")
-	if not houses.has("h2") or not (houses["h2"] is Dictionary):
-		return Result.failure("logs_dinnertime_sale: test house missing (h2)")
+	if state.players.size() < 2:
+		return Result.failure("logs_dinnertime_sale: requires at least 2 players")
+	var rid0_r := _get_player_first_restaurant_id(state, 0)
+	if not rid0_r.ok:
+		return rid0_r
+	var rid1_r := _get_player_first_restaurant_id(state, 1)
+	if not rid1_r.ok:
+		return rid1_r
+	var rid0: String = str(rid0_r.value)
+	var rid1: String = str(rid1_r.value)
 
-	# h0: garden + multiple products (food+drink) to cover garden bonus + marketing bonus.
-	var h0: Dictionary = houses["h0"]
+	if not (state.map is Dictionary):
+		return Result.failure("logs_dinnertime_sale: state.map is invalid")
+	var restaurants_val = state.map.get("restaurants", null)
+	if not (restaurants_val is Dictionary):
+		return Result.failure("logs_dinnertime_sale: state.map.restaurants missing or invalid")
+	var restaurants: Dictionary = restaurants_val
+	if not restaurants.has(rid0) or not (restaurants[rid0] is Dictionary):
+		return Result.failure("logs_dinnertime_sale: player 1 restaurant missing: %s" % rid0)
+	if not restaurants.has(rid1) or not (restaurants[rid1] is Dictionary):
+		return Result.failure("logs_dinnertime_sale: player 2 restaurant missing: %s" % rid1)
+	var rest0: Dictionary = restaurants[rid0]
+	var rest1: Dictionary = restaurants[rid1]
+
+	var selection_r := _logs_pick_dinnertime_sale_houses(state, rid0, rest0, rid1, rest1)
+	if not selection_r.ok:
+		return selection_r
+	var selection: Dictionary = selection_r.value if (selection_r.value is Dictionary) else {}
+	var h0_id := str(selection.get("garden_house_id", "")).strip_edges()
+	var h1_id := str(selection.get("pizza_house_id", "")).strip_edges()
+	var h2_id := str(selection.get("soda_house_id", "")).strip_edges()
+	if h0_id.is_empty() or h1_id.is_empty() or h2_id.is_empty():
+		return Result.failure("logs_dinnertime_sale: selected house ids are invalid: %s" % str(selection))
+
+	var houses_val = state.map.get("houses", null)
+	if not (houses_val is Dictionary):
+		return Result.failure("logs_dinnertime_sale: state.map.houses missing or invalid")
+	var houses: Dictionary = houses_val
+	if not houses.has(h0_id) or not (houses[h0_id] is Dictionary):
+		return Result.failure("logs_dinnertime_sale: garden house missing: %s" % h0_id)
+	if not houses.has(h1_id) or not (houses[h1_id] is Dictionary):
+		return Result.failure("logs_dinnertime_sale: pizza house missing: %s" % h1_id)
+	if not houses.has(h2_id) or not (houses[h2_id] is Dictionary):
+		return Result.failure("logs_dinnertime_sale: soda house missing: %s" % h2_id)
+
+	# Garden house: food + drink to cover garden bonus, marketing bonus, and fry-chef house bonus.
+	var h0: Dictionary = houses[h0_id]
 	h0["demands"] = [{"product": "burger"}, {"product": "beer"}]
 	h0["has_garden"] = true
-	houses["h0"] = h0
+	houses[h0_id] = h0
 
-	# h1: pizza to cover per-product marketing bonus.
-	var h1: Dictionary = houses["h1"]
+	# Pizza demand covers a second per-product marketing bonus.
+	var h1: Dictionary = houses[h1_id]
 	h1["demands"] = [{"product": "pizza"}]
-	houses["h1"] = h1
+	houses[h1_id] = h1
 
-	# h2: soda sale by player 2 (also enables route purchase income split).
-	var h2: Dictionary = houses["h2"]
+	# Soda demand is reserved for player 2, giving the replay at least one sale for each player.
+	var h2: Dictionary = houses[h2_id]
 	h2["demands"] = [{"product": "soda"}]
-	houses["h2"] = h2
+	houses[h2_id] = h2
 
 	state.map["houses"] = houses
 
-	# Keep cells structure in sync for garden visualization (optional, but avoids confusing state).
-	if state.map.has("cells") and (state.map["cells"] is Array) and h0.has("anchor_pos") and (h0["anchor_pos"] is Vector2i):
-		var p: Vector2i = h0["anchor_pos"]
-		var cells: Array = state.map["cells"]
-		if p.y >= 0 and p.y < cells.size() and (cells[p.y] is Array):
-			var row: Array = cells[p.y]
-			if p.x >= 0 and p.x < row.size() and (row[p.x] is Dictionary):
-				var cell: Dictionary = row[p.x]
-				var s_val = cell.get("structure", null)
-				if s_val is Dictionary:
-					var s: Dictionary = s_val
-					s["has_garden"] = true
-					cell["structure"] = s
-					row[p.x] = cell
-					cells[p.y] = row
-					state.map["cells"] = cells
+	var coffee_shop_r := _logs_place_review_coffee_shop_for_paths(state, 1, [
+		selection.get("garden_path", []),
+		selection.get("pizza_path", []),
+	])
+	if not coffee_shop_r.ok:
+		return coffee_shop_r
 
 	# Inventory:
-	# - player 1 wins h0/h1 (food+drink, pizza)
-	# - player 2 wins h2 (soda) and sells coffee along the route to generate route_purchase_income
-	state.players[0]["inventory"]["burger"] = 1
-	state.players[0]["inventory"]["beer"] = 1
-	state.players[0]["inventory"]["pizza"] = 1
-	state.players[0]["inventory"]["soda"] = 0
-	state.players[0]["inventory"]["coffee"] = 0
-
-	if state.players.size() > 1:
-		state.players[1]["inventory"]["burger"] = 0
-		state.players[1]["inventory"]["beer"] = 0
-		state.players[1]["inventory"]["pizza"] = 0
-		state.players[1]["inventory"]["soda"] = 1
-		state.players[1]["inventory"]["coffee"] = 4
+	# - player 1 wins the burger+beer and pizza houses.
+	# - player 2 wins the soda house and has coffee for route purchases.
+	var inv0 := _logs_set_inventory(state, 0, {
+		"burger": 1,
+		"beer": 1,
+		"pizza": 1,
+		"soda": 0,
+		"coffee": 0,
+	})
+	if not inv0.ok:
+		return inv0
+	var inv1 := _logs_set_inventory(state, 1, {
+		"burger": 0,
+		"beer": 0,
+		"pizza": 0,
+		"soda": 1,
+		"coffee": 4,
+	})
+	if not inv1.ok:
+		return inv1
 
 	_freeze_engine_as_initial(engine)
 
@@ -510,14 +595,253 @@ func _build_logs_dinnertime_sale(engine: GameEngine, _c: Dictionary) -> Result:
 
 	return Result.success({
 		"scenario": [
-			"地图：水平道路 y=3；rest_0/rest_1 位于道路下方；h0(花园)/h1/h2 位于道路上方。",
-			"h0：花园房屋，需求 burger+beer（覆盖：花园翻倍 + 营销加成 + 薯条主厨房屋奖）。",
-			"h1：需求 pizza（覆盖：按品类营销加成）。",
-			"h2：需求 soda（由玩家2售出）。",
-			"沿路购买：玩家2在 rest_1 持有 coffee 库存；玩家1从 rest_0 前往 h0/h1 的路径会路过 rest_1，触发咖啡沿路购买收入。",
-			"玩家1：waitress x2（tips + 平局）、cfo x1（+50%）、fry_chef x2（每房屋+$10）；里程碑 first_*_marketed 提供 sell_bonus。",
+			"地图：保留 seed=%d 的正常生成地图与 tile_placements；仅通过合法建房/加花园动作补一栋复核用花园房屋。" % int(_c.get("seed", 12345)),
+			"房屋 %s：花园房屋，需求 burger+beer（覆盖：花园翻倍 + 营销加成 + 薯条主厨房屋奖）。" % h0_id,
+			"房屋 %s：需求 pizza（覆盖：按品类营销加成）。" % h1_id,
+			"房屋 %s：需求 soda（由玩家2售出）。" % h2_id,
+			"沿路购买：在玩家1到目标房屋的候选路径旁放置玩家2咖啡店，玩家2持有 coffee 库存，触发 route_purchase_income。",
+			"玩家1：new_business_developer x2、waitress x2、cfo x1、fry_chef x2；玩家2：waitress x1、barista x1，均通过正常员工池发放以保持数量守恒。",
+			"为稳定复核实体 CFO 本回合加成，本档从可获得里程碑池中排除 first_have_100，避免它在结算中替换掉 CFO。",
 		],
 	})
+
+func _logs_pick_dinnertime_sale_houses(
+	state: GameState,
+	rid0: String,
+	rest0: Dictionary,
+	rid1: String,
+	rest1: Dictionary
+) -> Result:
+	if state == null or not (state.map is Dictionary):
+		return Result.failure("logs_dinnertime_sale: state.map is invalid")
+	var grid_val = state.map.get("grid_size", null)
+	if not (grid_val is Vector2i):
+		return Result.failure("logs_dinnertime_sale: grid_size missing or invalid")
+	var grid_size: Vector2i = grid_val
+	var houses_val = state.map.get("houses", null)
+	if not (houses_val is Dictionary):
+		return Result.failure("logs_dinnertime_sale: houses missing or invalid")
+	var houses: Dictionary = houses_val
+	var house_ids: Array[String] = []
+	for k in houses.keys():
+		if k is String:
+			house_ids.append(str(k))
+	house_ids.sort()
+	if house_ids.size() < 3:
+		return Result.failure("logs_dinnertime_sale: need at least 3 houses, got %d" % house_ids.size())
+
+	var road_graph = _get_road_graph(state)
+	if road_graph == null:
+		return Result.failure("logs_dinnertime_sale: road_graph is null")
+
+	var reachable0: Array[String] = []
+	var reachable1: Array[String] = []
+	var path0_by_house := {}
+	var path1_by_house := {}
+	for hid in house_ids:
+		var hv = houses.get(hid, null)
+		if not (hv is Dictionary):
+			continue
+		var house: Dictionary = hv
+		var d0 := _logs_get_dinnertime_distance_info(road_graph, state, grid_size, rid0, rest0, hid, house)
+		if d0.ok and d0.value is Dictionary and not (d0.value as Dictionary).is_empty():
+			reachable0.append(hid)
+			path0_by_house[hid] = (d0.value as Dictionary).get("path", [])
+		var d1 := _logs_get_dinnertime_distance_info(road_graph, state, grid_size, rid1, rest1, hid, house)
+		if d1.ok and d1.value is Dictionary and not (d1.value as Dictionary).is_empty():
+			reachable1.append(hid)
+			path1_by_house[hid] = (d1.value as Dictionary).get("path", [])
+
+	var garden_id := ""
+	for hid0 in reachable0:
+		var house0: Dictionary = houses[hid0]
+		if bool(house0.get("has_garden", false)):
+			garden_id = hid0
+			break
+	if garden_id.is_empty():
+		return Result.failure("logs_dinnertime_sale: cannot find a player 1 reachable garden house")
+
+	var pizza_id := ""
+	for hid1 in reachable0:
+		if hid1 == garden_id:
+			continue
+		pizza_id = hid1
+		break
+	if pizza_id.is_empty():
+		return Result.failure("logs_dinnertime_sale: cannot find a second player 1 reachable house")
+
+	var soda_id := ""
+	for hid2 in reachable1:
+		if hid2 == garden_id or hid2 == pizza_id:
+			continue
+		soda_id = hid2
+		break
+	if soda_id.is_empty():
+		return Result.failure("logs_dinnertime_sale: cannot find a player 2 reachable house")
+
+	return Result.success({
+		"garden_house_id": garden_id,
+		"pizza_house_id": pizza_id,
+		"soda_house_id": soda_id,
+		"garden_path": path0_by_house.get(garden_id, []),
+		"pizza_path": path0_by_house.get(pizza_id, []),
+		"soda_path": path1_by_house.get(soda_id, []),
+	})
+
+func _logs_get_dinnertime_distance_info(
+	road_graph,
+	state: GameState,
+	grid_size: Vector2i,
+	rest_id: String,
+	rest: Dictionary,
+	house_id: String,
+	house: Dictionary
+) -> Result:
+	var r := DinnertimeDistance.get_restaurant_to_house_distance(
+		road_graph,
+		state,
+		grid_size,
+		rest_id,
+		rest,
+		house_id,
+		house
+	)
+	if not r.ok:
+		return r
+	if not (r.value is Dictionary):
+		return Result.success({})
+	return Result.success(r.value)
+
+func _logs_place_review_coffee_shop_for_paths(state: GameState, owner: int, paths: Array) -> Result:
+	if state == null or not (state.map is Dictionary):
+		return Result.failure("logs_dinnertime_sale: state.map is invalid")
+	if owner < 0 or owner >= state.players.size():
+		return Result.failure("logs_dinnertime_sale: invalid coffee shop owner: %d" % owner)
+	for path_val in paths:
+		if not (path_val is Array):
+			continue
+		var path: Array = path_val
+		for pos_val in path:
+			if not (pos_val is Vector2i):
+				continue
+			var placed := _logs_try_place_review_coffee_shop_adjacent_to_road(state, owner, pos_val)
+			if placed.ok:
+				return placed
+	return Result.failure("logs_dinnertime_sale: cannot place review coffee shop next to selected routes")
+
+func _logs_try_place_review_coffee_shop_adjacent_to_road(state: GameState, owner: int, road_pos: Vector2i) -> Result:
+	for dir in MapUtils.DIRECTIONS:
+		var world_pos := MapUtils.get_neighbor_pos(road_pos, dir)
+		if not _logs_is_empty_world_cell_for_review_shop(state, world_pos):
+			continue
+		var shops: Dictionary = state.map.get("coffee_shops", {}) if (state.map.get("coffee_shops", null) is Dictionary) else {}
+		var next_id := int(state.map.get("next_coffee_shop_id", 1))
+		var shop_id := "coffee_shop_%d" % next_id
+		while shops.has(shop_id):
+			next_id += 1
+			shop_id = "coffee_shop_%d" % next_id
+		_logs_write_review_coffee_shop(state, owner, shop_id, world_pos, shops, next_id + 1)
+		return Result.success({
+			"shop_id": shop_id,
+			"position": world_pos,
+			"adjacent_road": road_pos,
+		})
+	return Result.failure("no empty adjacent cell for coffee shop at road=%s" % str(road_pos))
+
+func _logs_is_empty_world_cell_for_review_shop(state: GameState, world_pos: Vector2i) -> bool:
+	var coords_script = _get_coords_script()
+	if coords_script == null:
+		return false
+	if not coords_script.is_world_pos_in_grid(state, world_pos):
+		return false
+	var idx: Vector2i = coords_script.world_to_index(state, world_pos)
+	var cells_val = state.map.get("cells", null) if (state.map is Dictionary) else null
+	if not (cells_val is Array):
+		return false
+	var cells: Array = cells_val
+	if idx.y < 0 or idx.y >= cells.size() or not (cells[idx.y] is Array):
+		return false
+	var row: Array = cells[idx.y]
+	if idx.x < 0 or idx.x >= row.size() or not (row[idx.x] is Dictionary):
+		return false
+	var cell: Dictionary = row[idx.x]
+	if bool(cell.get("blocked", false)):
+		return false
+	var roads_val = cell.get("road_segments", [])
+	if roads_val is Array and not (roads_val as Array).is_empty():
+		return false
+	var structure_val = cell.get("structure", {})
+	if structure_val is Dictionary and not (structure_val as Dictionary).is_empty():
+		return false
+	return true
+
+func _logs_write_review_coffee_shop(
+	state: GameState,
+	owner: int,
+	shop_id: String,
+	world_pos: Vector2i,
+	shops: Dictionary,
+	next_id: int
+) -> void:
+	var coords_script = _get_coords_script()
+	if coords_script == null:
+		return
+	var idx: Vector2i = coords_script.world_to_index(state, world_pos)
+	var cells: Array = state.map["cells"]
+	var row: Array = cells[idx.y]
+	var cell: Dictionary = row[idx.x]
+	cell["structure"] = {
+		"piece_id": "coffee_shop",
+		"owner": owner,
+		"shop_id": shop_id,
+		"anchor_cell": true,
+		"parent_anchor": world_pos,
+		"rotation": 0,
+		"dynamic": true,
+	}
+	row[idx.x] = cell
+	cells[idx.y] = row
+	state.map["cells"] = cells
+	shops[shop_id] = {
+		"shop_id": shop_id,
+		"owner": owner,
+		"anchor_pos": world_pos,
+		"entrance_pos": world_pos,
+	}
+	state.map["coffee_shops"] = shops
+	state.map["next_coffee_shop_id"] = next_id
+	if owner >= 0 and owner < state.players.size() and state.players[owner] is Dictionary:
+		var player: Dictionary = state.players[owner]
+		if player.has("coffee_shop_tokens_remaining"):
+			player["coffee_shop_tokens_remaining"] = maxi(0, int(player.get("coffee_shop_tokens_remaining", 0)) - 1)
+			state.players[owner] = player
+
+func _logs_set_inventory(state: GameState, player_id: int, values: Dictionary) -> Result:
+	if state == null:
+		return Result.failure("state is null")
+	if player_id < 0 or player_id >= state.players.size():
+		return Result.failure("invalid player_id: %d" % player_id)
+	if not (state.players[player_id] is Dictionary):
+		return Result.failure("players[%d] is not a Dictionary" % player_id)
+	var player: Dictionary = state.players[player_id]
+	if not player.has("inventory") or not (player["inventory"] is Dictionary):
+		player["inventory"] = {}
+	var inv: Dictionary = player["inventory"]
+	for k in values.keys():
+		if not (k is String):
+			continue
+		inv[str(k)] = int(values[k])
+	player["inventory"] = inv
+	state.players[player_id] = player
+	return Result.success()
+
+func _logs_remove_milestone_from_pool(state: GameState, milestone_id: String) -> void:
+	if state == null or milestone_id.is_empty():
+		return
+	if not (state.milestone_pool is Array):
+		return
+	while state.milestone_pool.has(milestone_id):
+		state.milestone_pool.erase(milestone_id)
 
 func _build_logs_game_over_bankruptcy(engine: GameEngine, _c: Dictionary) -> Result:
 	# GameOver case:
