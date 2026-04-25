@@ -204,6 +204,7 @@ const ActionPanelOnlineLocalPlayerTestClass = preload("res://ui/scenes/tests/act
 const ActionPanelGlobalDisabledRestoreTestClass = preload("res://ui/scenes/tests/action_panel_global_disabled_restore_test.gd")
 const ActionPanelRefreshSingleRebuildTestClass = preload("res://ui/scenes/tests/action_panel_refresh_single_rebuild_test.gd")
 const ActionFlowControlsNoopTestClass = preload("res://ui/scenes/tests/action_flow_controls_noop_test.gd")
+const DinnertimeAnimationCompletionTestClass = preload("res://ui/scenes/tests/dinnertime_animation_completion_test.gd")
 const ActionPanelExternalBlockReasonTestClass = preload("res://ui/scenes/tests/action_panel_external_block_reason_test.gd")
 const ActionPanelExecutorMetadataTestClass = preload("res://ui/scenes/tests/action_panel_executor_metadata_test.gd")
 const ActionPanelHideNonInitiatableSpecialActionsTestClass = preload("res://ui/scenes/tests/action_panel_hide_non_initiatable_special_actions_test.gd")

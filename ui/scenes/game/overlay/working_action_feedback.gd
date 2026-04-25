@@ -10,10 +10,10 @@ const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 
-const TOKEN_FLY_SEC := 0.56
-const TOKEN_EMIT_GAP_SEC := 0.12
-const BURST_TOTAL_SEC := 0.62
-const PULSE_SEC := 0.34
+const TOKEN_FLY_SEC := 0.96
+const TOKEN_EMIT_GAP_SEC := 0.18
+const BURST_TOTAL_SEC := 1.08
+const PULSE_SEC := 0.54
 const MAX_TOKENS_PER_FEEDBACK := 5
 
 var _scene = null
@@ -296,6 +296,7 @@ func _start_action_burst(anchor_rect: Rect2, text: String, color: Color, delay_s
 	_active_tweens.append(tw)
 	var d := maxf(0.0, delay_sec) / _speed
 	var rise := maxf(18.0, cell_size * 0.56)
+	var fade_start := maxf(0.36, BURST_TOTAL_SEC - 0.34)
 	tw.tween_property(marker, "modulate:a", 1.0, 0.08 / _speed).set_delay(d)
 	tw.tween_property(marker, "scale", Vector2(1.30, 1.30), 0.14 / _speed).set_delay(d).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	tw.tween_property(marker, "scale", Vector2(0.96, 0.96), 0.10 / _speed).set_delay(d + 0.14 / _speed).set_ease(Tween.EASE_IN_OUT)
@@ -304,7 +305,7 @@ func _start_action_burst(anchor_rect: Rect2, text: String, color: Color, delay_s
 	tw.tween_property(marker, "rotation_degrees", -3.0, 0.10 / _speed).set_delay(d + 0.14 / _speed).set_ease(Tween.EASE_IN_OUT)
 	tw.tween_property(marker, "rotation_degrees", 0.0, 0.16 / _speed).set_delay(d + 0.24 / _speed).set_ease(Tween.EASE_OUT)
 	tw.tween_property(marker, "position:y", marker.position.y - rise, BURST_TOTAL_SEC / _speed).set_delay(d).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	tw.tween_property(marker, "modulate:a", 0.0, 0.20 / _speed).set_delay(d + 0.42 / _speed)
+	tw.tween_property(marker, "modulate:a", 0.0, 0.30 / _speed).set_delay(d + fade_start / _speed)
 	tw.chain().tween_callback(func():
 		if is_instance_valid(marker):
 			marker.queue_free()

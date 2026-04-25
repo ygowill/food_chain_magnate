@@ -787,6 +787,10 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 			if _overlay_controller != null and _overlay_controller.has_method("skip_dinnertime_settlement_animation"):
 				_overlay_controller.call("skip_dinnertime_settlement_animation")
 			return
+		"advance_dinnertime_settlement":
+			if _overlay_controller != null and _overlay_controller.has_method("advance_dinnertime_settlement_animation"):
+				_overlay_controller.call("advance_dinnertime_settlement_animation")
+			return
 		"confirm_dinnertime_settlement":
 			if _overlay_controller != null and _overlay_controller.has_method("confirm_dinnertime_settlement"):
 				_overlay_controller.call("confirm_dinnertime_settlement")

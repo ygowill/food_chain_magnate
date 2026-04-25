@@ -123,14 +123,7 @@ func set_bank_break_panel(panel) -> void:
 
 func get_settlement_flow_controls_config() -> Dictionary:
 	if _dinnertime_anim_controller != null:
-		return _build_settlement_flow_controls_config(
-			"confirm_dinnertime_settlement",
-			"skip_dinnertime_settlement",
-			"确认晚餐结算",
-			"跳过晚餐结算",
-			_dinnertime_anim_ready_to_confirm,
-			"等待晚餐结算动画播放完成"
-		)
+		return _build_dinnertime_flow_controls_config()
 	if _marketing_anim_controller != null:
 		return _build_settlement_flow_controls_config(
 			"confirm_marketing_settlement",
@@ -149,6 +142,15 @@ func skip_dinnertime_settlement_animation() -> void:
 		return
 	if _dinnertime_anim_controller.has_method("skip_all"):
 		_dinnertime_anim_controller.call("skip_all")
+
+func advance_dinnertime_settlement_animation() -> void:
+	if _dinnertime_anim_controller == null:
+		return
+	if _dinnertime_anim_ready_to_confirm:
+		return
+	if _dinnertime_anim_controller.has_method("advance"):
+		_dinnertime_anim_controller.call("advance")
+	_sync_settlement_flow_controls()
 
 func confirm_dinnertime_settlement() -> void:
 	if not _dinnertime_anim_ready_to_confirm:
@@ -248,6 +250,49 @@ func _build_settlement_flow_controls_config(
 			"enabled": true,
 			"disabled_reason": "",
 			"action_id": skip_action_id,
+		},
+		"rewind": {
+			"visible": false,
+			"enabled": false,
+			"action_id": "rewind_to_turn_start",
+		},
+	}
+
+func _build_dinnertime_flow_controls_config() -> Dictionary:
+	if _dinnertime_anim_ready_to_confirm:
+		return _build_settlement_flow_controls_config(
+			"confirm_dinnertime_settlement",
+			"skip_dinnertime_settlement",
+			"确认晚餐结算",
+			"跳过晚餐结算",
+			true,
+			""
+		)
+
+	var can_advance := false
+	var progress_text := "晚餐结算"
+	if _dinnertime_anim_controller != null:
+		if _dinnertime_anim_controller.has_method("can_advance"):
+			can_advance = bool(_dinnertime_anim_controller.call("can_advance"))
+		if _dinnertime_anim_controller.has_method("get_progress_text"):
+			progress_text = str(_dinnertime_anim_controller.call("get_progress_text")).strip_edges()
+			if progress_text.is_empty():
+				progress_text = "晚餐结算"
+
+	return {
+		"confirm_end": {
+			"visible": true,
+			"text": "下一笔结算",
+			"enabled": can_advance,
+			"disabled_reason": "" if can_advance else "%s播放中" % progress_text,
+			"action_id": "advance_dinnertime_settlement",
+		},
+		"skip_step": {
+			"visible": true,
+			"text": "跳过晚餐结算",
+			"enabled": true,
+			"disabled_reason": "",
+			"action_id": "skip_dinnertime_settlement",
 		},
 		"rewind": {
 			"visible": false,
@@ -1067,6 +1112,8 @@ func _start_dinnertime_animation(dt_data: Dictionary, state: GameState) -> void:
 	_dinnertime_anim_controller = DinnertimeAnimControllerClass.new()
 	_dinnertime_anim_ready_to_confirm = false
 	_dinnertime_anim_controller.settlement_completed.connect(_on_dinnertime_anim_completed)
+	if _dinnertime_anim_controller.has_signal("flow_state_changed"):
+		_dinnertime_anim_controller.flow_state_changed.connect(_sync_settlement_flow_controls)
 	_dinnertime_anim_controller.start(
 		dt_data,
 		state,

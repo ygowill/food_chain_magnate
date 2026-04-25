@@ -4,6 +4,7 @@ class_name DinnertimeAnimationController
 extends RefCounted
 
 signal settlement_completed()
+signal flow_state_changed()
 
 const OverlayUtilsClass = preload("res://ui/scenes/game/overlay/utils.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
@@ -153,7 +154,6 @@ func start(
 	_load_coin_texture()
 	_create_anim_layer()
 	_create_map_anim_layer()
-	_create_control_bar()
 	_state = State.PLAYING
 	_started_preview = false
 	_stop_layout_monitor()
@@ -220,6 +220,15 @@ func set_auto_play(enabled: bool) -> void:
 	if _auto_play and _state == State.PLAYING and _previewing:
 		advance()
 
+func can_advance() -> bool:
+	return _state == State.PLAYING and _previewing and not _post_income_playing
+
+func is_playing_step() -> bool:
+	return _state == State.PLAYING and (not _previewing or _post_income_playing)
+
+func get_progress_text() -> String:
+	return "晚餐结算 (%d/%d)" % [clampi(_current_idx, 0, _orders.size()), _orders.size()]
+
 func dispose() -> void:
 	_stop_layout_monitor()
 	_stop_layout_start_wait()
@@ -280,24 +289,20 @@ func _create_map_anim_layer() -> void:
 	(_map_canvas as Control).add_child(_map_anim_layer)
 
 func _create_control_bar() -> void:
-	if _scene == null:
-		return
-	_control_bar = DinnertimeAnimationControlBarHelpersClass.build_control_bar(
-		func(): _on_next_pressed()
-	)
-	UiZClass.apply_absolute(_control_bar, UiZClass.DINNERTIME_CONTROL_BAR)
-	_scene.add_child(_control_bar)
-	_update_control_bar()
+	# 晚餐结算推进入口已迁移到右侧动作面板；保留空实现兼容旧调用路径。
+	return
 
 func _update_control_bar() -> void:
-	DinnertimeAnimationControlBarHelpersClass.update_control_bar(
-		_control_bar,
-		_current_idx,
-		_orders.size(),
-		_previewing,
-		_post_income_playing,
-		_post_income_done
-	)
+	if is_instance_valid(_control_bar):
+		DinnertimeAnimationControlBarHelpersClass.update_control_bar(
+			_control_bar,
+			_current_idx,
+			_orders.size(),
+			_previewing,
+			_post_income_playing,
+			_post_income_done
+		)
+	flow_state_changed.emit()
 
 func _on_next_pressed() -> void:
 	if _current_idx >= _orders.size() and not _previewing:
@@ -317,6 +322,9 @@ func _preview_current() -> void:
 	if _current_idx >= _orders.size():
 		if not _post_income_started:
 			_post_income_started = true
+			if _post_income_done:
+				_finish()
+				return
 			_play_post_house_income_sequence()
 		_update_control_bar()
 		return
@@ -807,11 +815,13 @@ func _apply_bankruptcy_event_bank_increase_if_needed(event: Dictionary, kind: St
 
 func _play_post_house_income_sequence() -> void:
 	if _post_income_done or _post_income_playing:
+		if _post_income_done and not _post_income_playing:
+			_finish()
 		return
 	if _post_income_events.is_empty():
 		_post_income_done = true
 		_post_income_playing = false
-		_update_control_bar()
+		_finish()
 		return
 	_post_income_playing = true
 	_update_control_bar()
@@ -828,13 +838,13 @@ func _play_post_house_income_event(index: int) -> void:
 		_post_income_playing = false
 		_post_income_done = true
 		_remove_post_income_card()
-		_update_control_bar()
+		_finish()
 		return
 	if not is_instance_valid(_anim_layer):
 		_post_income_playing = false
 		_post_income_done = true
 		_remove_post_income_card()
-		_update_control_bar()
+		_finish()
 		return
 
 	var event: Dictionary = _post_income_events[index]
@@ -977,6 +987,7 @@ func _finish() -> void:
 	_control_bar = null
 	_clear_anim_layer()
 	_clear_map_anim_layer()
+	flow_state_changed.emit()
 	settlement_completed.emit()
 
 func _clear_anim_layer() -> void:
