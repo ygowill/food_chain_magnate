@@ -10,19 +10,21 @@ const MapUtilsClass = preload("res://core/map/map_utils.gd")
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 const UiZClass = preload("res://ui/utils/ui_z.gd")
-const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const MarketingAnimationOrdersBuilderClass = preload("res://ui/scenes/game/marketing/orders_builder.gd")
 const DinnertimeAnimationMapHelpersClass = preload("res://ui/scenes/game/dinnertime/map_helpers.gd")
 const DinnertimeAnimationPositionHelpersClass = preload("res://ui/scenes/game/dinnertime/position_helpers.gd")
 
 const TOKEN_MAX_PER_HOUSE_EVENT := 3
-const BOARD_PULSE_SEC := 0.28
-const TOKEN_FLY_SEC := 0.42
-const HOUSE_PULSE_SEC := 0.20
-const ORDER_GAP_SEC := 0.14
-const RADIO_WAVE_PERIOD_SEC := 2.35
-const AIRPLANE_FLY_SEC := 2.85
-const AIRPLANE_DROP_TOKEN_SEC := 0.46
+const BOARD_PULSE_SEC := 0.48
+const TOKEN_FLY_SEC := 0.68
+const HOUSE_PULSE_SEC := 0.34
+const ORDER_GAP_SEC := 0.36
+const RANGE_PULSE_IN_SEC := 0.24
+const RANGE_PULSE_OUT_SEC := 0.48
+const SWEEP_FADE_SEC := 0.70
+const RADIO_WAVE_PERIOD_SEC := 3.50
+const AIRPLANE_FLY_SEC := 4.60
+const AIRPLANE_DROP_TOKEN_SEC := 0.72
 const AIRPLANE_DROP_START_RATIO := 0.18
 const AIRPLANE_DROP_END_RATIO := 0.76
 
@@ -358,8 +360,8 @@ func _play_campaign_house_range_pulse(order: Dictionary, unique_houses: Array[St
 	var tw := _map_anim_layer.create_tween().set_parallel(true)
 	_active_tweens.append(tw)
 	for n in nodes:
-		tw.tween_property(n, "modulate:a", 1.0, 0.16 / _speed)
-		tw.tween_property(n, "modulate:a", 0.0, 0.28 / _speed).set_delay(0.16 / _speed)
+		tw.tween_property(n, "modulate:a", 1.0, RANGE_PULSE_IN_SEC / _speed)
+		tw.tween_property(n, "modulate:a", 0.0, RANGE_PULSE_OUT_SEC / _speed).set_delay(RANGE_PULSE_IN_SEC / _speed)
 	tw.chain().tween_callback(func():
 		for n2 in nodes:
 			if is_instance_valid(n2):
@@ -398,10 +400,10 @@ func _play_campaign_range_effect(order: Dictionary, board_rect: Rect2, unique_ho
 	var tw := _map_anim_layer.create_tween().set_parallel(true)
 	_active_tweens.append(tw)
 	for n in nodes:
-		tw.tween_property(n, "modulate:a", 1.0, 0.16 / _speed)
-		tw.tween_property(n, "modulate:a", 0.0, 0.28 / _speed).set_delay(0.16 / _speed)
+		tw.tween_property(n, "modulate:a", 1.0, RANGE_PULSE_IN_SEC / _speed)
+		tw.tween_property(n, "modulate:a", 0.0, RANGE_PULSE_OUT_SEC / _speed).set_delay(RANGE_PULSE_IN_SEC / _speed)
 	if is_instance_valid(sweep) and not custom_effect:
-		tw.tween_property(sweep, "modulate:a", 0.0, 0.44 / _speed).set_delay(0.05 / _speed)
+		tw.tween_property(sweep, "modulate:a", 0.0, SWEEP_FADE_SEC / _speed).set_delay(0.08 / _speed)
 	tw.chain().tween_callback(func():
 		for n2 in nodes:
 			if is_instance_valid(n2):
@@ -959,11 +961,11 @@ func _create_campaign_sweep(order: Dictionary, board_rect: Rect2) -> Control:
 	var tw := sweep.create_tween().set_parallel(true)
 	_active_tweens.append(tw)
 	if marketing_type == "radio":
-		tw.tween_property(sweep, "scale", Vector2(1.0, 1.0), 0.38 / _speed).set_ease(Tween.EASE_OUT)
+		tw.tween_property(sweep, "scale", Vector2(1.0, 1.0), 0.58 / _speed).set_ease(Tween.EASE_OUT)
 	elif marketing_type == "airplane":
-		tw.tween_property(sweep, "scale", Vector2.ONE, 0.34 / _speed).set_ease(Tween.EASE_OUT)
+		tw.tween_property(sweep, "scale", Vector2.ONE, 0.54 / _speed).set_ease(Tween.EASE_OUT)
 	else:
-		tw.tween_property(sweep, "scale", Vector2(1.12, 1.12), 0.34 / _speed).set_ease(Tween.EASE_OUT)
+		tw.tween_property(sweep, "scale", Vector2(1.12, 1.12), 0.54 / _speed).set_ease(Tween.EASE_OUT)
 	tw.chain().tween_callback(func():
 		_active_tweens.erase(tw)
 	)
@@ -1113,14 +1115,6 @@ func _create_control_bar() -> void:
 	progress.add_theme_font_size_override("font_size", 14)
 	progress.add_theme_color_override("font_color", Color(0.92, 0.95, 0.88, 1))
 	hbox.add_child(progress)
-
-	var skip_btn := Button.new()
-	skip_btn.name = "SkipBtn"
-	skip_btn.text = "跳过全部"
-	skip_btn.custom_minimum_size = Vector2(88, 32)
-	UiStylesClass.apply_button_secondary(skip_btn)
-	skip_btn.pressed.connect(skip_all)
-	hbox.add_child(skip_btn)
 
 	UiZClass.apply_absolute(_control_bar, UiZClass.DINNERTIME_CONTROL_BAR)
 	_scene.add_child(_control_bar)

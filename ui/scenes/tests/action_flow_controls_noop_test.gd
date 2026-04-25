@@ -123,6 +123,37 @@ static func run() -> Result:
 		await _cleanup(controls, st)
 		return Result.failure("变化后 skip_step 文案错误: %s" % str(skip_button.text))
 
+	var emitted: Array[String] = []
+	flow_controls.action_requested.connect(func(action_id: String, _params: Dictionary):
+		emitted.append(action_id)
+	)
+	var settlement_cfg := {
+		"confirm_end": {
+			"visible": true,
+			"text": "确认营销结算",
+			"enabled": true,
+			"disabled_reason": "",
+			"action_id": "confirm_marketing_settlement",
+		},
+		"skip_step": {
+			"visible": true,
+			"text": "跳过营销结算",
+			"enabled": true,
+			"disabled_reason": "",
+			"action_id": "skip_marketing_settlement",
+		},
+		"rewind": {
+			"visible": false,
+			"enabled": false,
+		},
+	}
+	flow_controls.apply_flow_config(settlement_cfg)
+	confirm_button.emit_signal("pressed")
+	skip_button.emit_signal("pressed")
+	if emitted != ["confirm_marketing_settlement", "skip_marketing_settlement"]:
+		await _cleanup(controls, st)
+		return Result.failure("结算控制按钮应发出自定义动作 id，实际=%s" % str(emitted))
+
 	await _cleanup(controls, st)
 	return Result.success({})
 

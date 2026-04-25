@@ -4,7 +4,7 @@ extends RefCounted
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
-static func build_control_bar(on_next: Callable, on_skip: Callable) -> PanelContainer:
+static func build_control_bar(on_next: Callable) -> PanelContainer:
 	var bar := PanelContainer.new()
 	bar.name = "DinnertimeControlBar"
 	bar.anchor_left = 0.5
@@ -43,15 +43,6 @@ static func build_control_bar(on_next: Callable, on_skip: Callable) -> PanelCont
 		next_btn.pressed.connect(on_next)
 	hbox.add_child(next_btn)
 
-	var skip_btn := Button.new()
-	skip_btn.name = "SkipBtn"
-	skip_btn.text = "跳过全部"
-	skip_btn.custom_minimum_size = Vector2(80, 32)
-	UiStylesClass.apply_button_secondary(skip_btn)
-	if on_skip.is_valid():
-		skip_btn.pressed.connect(on_skip)
-	hbox.add_child(skip_btn)
-
 	return bar
 
 static func update_control_bar(control_bar: Control, current_idx: int, total_orders: int, previewing: bool, post_income_playing: bool, post_income_done: bool) -> void:
@@ -65,14 +56,17 @@ static func update_control_bar(control_bar: Control, current_idx: int, total_ord
 		return
 
 	if post_income_playing:
+		btn.visible = true
 		btn.text = "播放中..."
 		btn.disabled = true
 	elif current_idx >= total_orders and not previewing and post_income_done:
-		btn.text = "确认结算"
-		btn.disabled = false
+		btn.visible = false
+		btn.disabled = true
 	elif previewing:
+		btn.visible = true
 		btn.text = "下一笔"
 		btn.disabled = false
 	else:
+		btn.visible = true
 		btn.text = "播放中..."
 		btn.disabled = true

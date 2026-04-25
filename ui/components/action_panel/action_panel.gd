@@ -66,6 +66,8 @@ var _last_disabled_refresh_signature: Dictionary = {}
 const BASE_HIDDEN_ACTION_IDS := {
 	ActionIdsClass.END_TURN: true,
 	ActionIdsClass.ADVANCE_PHASE: true,
+	"confirm_dinnertime": true,
+	"confirm_marketing": true,
 	# 定价类强制动作改为“准备离开 Working 时自动执行”，不在面板中展示。
 	ActionIdsClass.SET_PRICE: true,
 	ActionIdsClass.SET_DISCOUNT: true,

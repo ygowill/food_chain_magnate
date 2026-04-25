@@ -283,8 +283,7 @@ func _create_control_bar() -> void:
 	if _scene == null:
 		return
 	_control_bar = DinnertimeAnimationControlBarHelpersClass.build_control_bar(
-		func(): _on_next_pressed(),
-		func(): skip_all()
+		func(): _on_next_pressed()
 	)
 	UiZClass.apply_absolute(_control_bar, UiZClass.DINNERTIME_CONTROL_BAR)
 	_scene.add_child(_control_bar)
@@ -302,8 +301,6 @@ func _update_control_bar() -> void:
 
 func _on_next_pressed() -> void:
 	if _current_idx >= _orders.size() and not _previewing:
-		if _post_income_done:
-			skip_all()
 		return
 	else:
 		advance()

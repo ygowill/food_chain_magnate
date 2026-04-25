@@ -74,6 +74,8 @@ var _eventbus_source: String = ""
 var _execute_command: Callable = Callable()
 var _dinnertime_anim_controller = null  # DinnertimeAnimationController
 var _marketing_anim_controller = null  # MarketingAnimationController
+var _dinnertime_anim_ready_to_confirm: bool = false
+var _marketing_anim_ready_to_confirm: bool = false
 var _ui_sync_controller = null  # GameUiSyncController (for bank_label)
 var _player_panel = null  # PlayerPanel
 var _dinnertime_confirm_in_flight: bool = false
@@ -113,6 +115,154 @@ func set_bank_break_panel(panel) -> void:
 	_bank_break_panel = panel
 	if _demand_indicator_controller != null:
 		_demand_indicator_controller.set_bank_break_panel(panel)
+
+func get_settlement_flow_controls_config() -> Dictionary:
+	if _dinnertime_anim_controller != null:
+		return _build_settlement_flow_controls_config(
+			"confirm_dinnertime_settlement",
+			"skip_dinnertime_settlement",
+			"确认晚餐结算",
+			"跳过晚餐结算",
+			_dinnertime_anim_ready_to_confirm,
+			"等待晚餐结算动画播放完成"
+		)
+	if _marketing_anim_controller != null:
+		return _build_settlement_flow_controls_config(
+			"confirm_marketing_settlement",
+			"skip_marketing_settlement",
+			"确认营销结算",
+			"跳过营销结算",
+			_marketing_anim_ready_to_confirm,
+			"等待营销结算动画播放完成"
+		)
+	return {}
+
+func skip_dinnertime_settlement_animation() -> void:
+	if _dinnertime_anim_controller == null:
+		return
+	if _dinnertime_anim_ready_to_confirm:
+		return
+	if _dinnertime_anim_controller.has_method("skip_all"):
+		_dinnertime_anim_controller.call("skip_all")
+
+func confirm_dinnertime_settlement() -> void:
+	if not _dinnertime_anim_ready_to_confirm:
+		return
+	if not _should_send_dinnertime_confirm():
+		_disable_dinnertime_overlay()
+		return
+	if _execute_command.is_valid():
+		var live_state := _read_live_game_state()
+		var confirm_cmd = CommandClass.create_system("confirm_dinnertime")
+		if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+			var local_pid := int(NetContext.local_player_id)
+			if local_pid < 0:
+				_disable_dinnertime_overlay()
+				return
+			confirm_cmd = CommandClass.create("confirm_dinnertime", local_pid, {})
+		var exec_r_val = _execute_command.call(confirm_cmd)
+		if exec_r_val is Result:
+			if exec_r_val.ok:
+				var req_id := ""
+				if exec_r_val.value is Dictionary:
+					req_id = str(Dictionary(exec_r_val.value).get("request_id", ""))
+				_set_dinnertime_confirm_in_flight(live_state, req_id)
+			else:
+				var phase := str(live_state.phase) if live_state != null else "-"
+				var pending := _read_dinnertime_pending_list(live_state)
+				var mode := str(NetContext.mode) if NetContext != null else "NetContext:null"
+				var local_pid2 := int(NetContext.local_player_id) if NetContext != null else -1
+				GameLog.warn(
+					"Game",
+					"确认晚餐结算失败: %s phase=%s local_pid=%d mode=%s pending=%s"
+						% [str(exec_r_val.error), phase, local_pid2, mode, str(pending)]
+				)
+	_disable_dinnertime_overlay()
+
+func skip_marketing_settlement_animation() -> void:
+	if _marketing_anim_controller == null:
+		return
+	if _marketing_anim_ready_to_confirm:
+		return
+	if _marketing_anim_controller.has_method("skip_all"):
+		_marketing_anim_controller.call("skip_all")
+
+func confirm_marketing_settlement() -> void:
+	if not _marketing_anim_ready_to_confirm:
+		return
+	if not _should_send_marketing_confirm():
+		_disable_marketing_overlay()
+		return
+	if _execute_command.is_valid():
+		var live_state := _read_live_game_state()
+		var confirm_cmd = CommandClass.create_system("confirm_marketing")
+		if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+			var local_pid := int(NetContext.local_player_id)
+			if local_pid < 0:
+				_disable_marketing_overlay()
+				return
+			confirm_cmd = CommandClass.create("confirm_marketing", local_pid, {})
+		var exec_r_val = _execute_command.call(confirm_cmd)
+		if exec_r_val is Result:
+			if exec_r_val.ok:
+				var req_id := ""
+				if exec_r_val.value is Dictionary:
+					req_id = str(Dictionary(exec_r_val.value).get("request_id", ""))
+				_set_marketing_confirm_in_flight(live_state, req_id)
+			else:
+				var phase := str(live_state.phase) if live_state != null else "-"
+				var pending := _read_marketing_pending_list(live_state)
+				var mode := str(NetContext.mode) if NetContext != null else "NetContext:null"
+				var local_pid2 := int(NetContext.local_player_id) if NetContext != null else -1
+				GameLog.warn(
+					"Game",
+					"确认营销结算失败: %s phase=%s local_pid=%d mode=%s pending=%s"
+						% [str(exec_r_val.error), phase, local_pid2, mode, str(pending)]
+				)
+	_disable_marketing_overlay()
+
+func _build_settlement_flow_controls_config(
+	confirm_action_id: String,
+	skip_action_id: String,
+	confirm_text: String,
+	skip_text: String,
+	ready_to_confirm: bool,
+	disabled_reason: String
+) -> Dictionary:
+	return {
+		"confirm_end": {
+			"visible": true,
+			"text": confirm_text,
+			"enabled": ready_to_confirm,
+			"disabled_reason": "" if ready_to_confirm else disabled_reason,
+			"action_id": confirm_action_id,
+		},
+		"skip_step": {
+			"visible": not ready_to_confirm,
+			"text": skip_text,
+			"enabled": true,
+			"disabled_reason": "",
+			"action_id": skip_action_id,
+		},
+		"rewind": {
+			"visible": false,
+			"enabled": false,
+			"action_id": "rewind_to_turn_start",
+		},
+	}
+
+func _sync_settlement_flow_controls() -> void:
+	var cfg := get_settlement_flow_controls_config()
+	if cfg.is_empty():
+		return
+	if _scene == null or not is_instance_valid(_scene):
+		return
+	var controls = _scene.get("action_flow_controls")
+	if controls == null or not is_instance_valid(controls):
+		return
+	if not controls.has_method("apply_flow_config"):
+		return
+	controls.call("apply_flow_config", cfg)
 
 func initialize() -> void:
 	# 初始化帮助提示管理器
@@ -901,6 +1051,7 @@ func _start_dinnertime_animation(dt_data: Dictionary, state: GameState) -> void:
 		bank_label = _ui_sync_controller.get_bank_label()
 
 	_dinnertime_anim_controller = DinnertimeAnimControllerClass.new()
+	_dinnertime_anim_ready_to_confirm = false
 	_dinnertime_anim_controller.settlement_completed.connect(_on_dinnertime_anim_completed)
 	_dinnertime_anim_controller.start(
 		dt_data,
@@ -914,6 +1065,7 @@ func _start_dinnertime_animation(dt_data: Dictionary, state: GameState) -> void:
 	)
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("set_skip_bank_sync"):
 		_ui_sync_controller.set_skip_bank_sync(true)
+	_sync_settlement_flow_controls()
 
 func _read_live_game_state() -> GameState:
 	if _scene == null or not is_instance_valid(_scene):
@@ -947,38 +1099,14 @@ func _on_dinnertime_anim_completed() -> void:
 	if not _should_send_dinnertime_confirm():
 		_disable_dinnertime_overlay()
 		return
-	if _execute_command.is_valid():
-		var live_state := _read_live_game_state()
-		var confirm_cmd = CommandClass.create_system("confirm_dinnertime")
-		if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-			var local_pid := int(NetContext.local_player_id)
-			if local_pid < 0:
-				_disable_dinnertime_overlay()
-				return
-			confirm_cmd = CommandClass.create("confirm_dinnertime", local_pid, {})
-		var exec_r_val = _execute_command.call(confirm_cmd)
-		if exec_r_val is Result:
-			if exec_r_val.ok:
-				var req_id := ""
-				if exec_r_val.value is Dictionary:
-					req_id = str(Dictionary(exec_r_val.value).get("request_id", ""))
-				_set_dinnertime_confirm_in_flight(live_state, req_id)
-			else:
-				var phase := str(live_state.phase) if live_state != null else "-"
-				var pending := _read_dinnertime_pending_list(live_state)
-				var mode := str(NetContext.mode) if NetContext != null else "NetContext:null"
-				var local_pid2 := int(NetContext.local_player_id) if NetContext != null else -1
-				GameLog.warn(
-					"Game",
-					"确认晚餐结算失败: %s phase=%s local_pid=%d mode=%s pending=%s"
-						% [str(exec_r_val.error), phase, local_pid2, mode, str(pending)]
-				)
-	_disable_dinnertime_overlay()
+	_dinnertime_anim_ready_to_confirm = true
+	_sync_settlement_flow_controls()
 
 func _disable_dinnertime_overlay() -> void:
 	if _dinnertime_anim_controller != null:
 		_dinnertime_anim_controller.dispose()
 	_dinnertime_anim_controller = null
+	_dinnertime_anim_ready_to_confirm = false
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("set_skip_bank_sync"):
 		_ui_sync_controller.set_skip_bank_sync(false)
 	_flush_deferred_milestone_toasts()
@@ -1134,6 +1262,7 @@ func _start_marketing_animation(marketing_data: Dictionary, state: GameState) ->
 		_demand_indicator_controller.hide()
 
 	_marketing_anim_controller = MarketingAnimControllerClass.new()
+	_marketing_anim_ready_to_confirm = false
 	_marketing_anim_controller.settlement_completed.connect(_on_marketing_anim_completed)
 	_marketing_anim_controller.start(
 		marketing_data,
@@ -1143,6 +1272,7 @@ func _start_marketing_animation(marketing_data: Dictionary, state: GameState) ->
 		_player_panel,
 		Callable(self, "show_milestone_toast")
 	)
+	_sync_settlement_flow_controls()
 
 func _should_send_marketing_confirm() -> bool:
 	var live_state := _read_live_game_state()
@@ -1163,35 +1293,11 @@ func _on_marketing_anim_completed() -> void:
 	if not _should_send_marketing_confirm():
 		_disable_marketing_overlay()
 		return
-	if _execute_command.is_valid():
-		var live_state := _read_live_game_state()
-		var confirm_cmd = CommandClass.create_system("confirm_marketing")
-		if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-			var local_pid := int(NetContext.local_player_id)
-			if local_pid < 0:
-				_disable_marketing_overlay()
-				return
-			confirm_cmd = CommandClass.create("confirm_marketing", local_pid, {})
-		var exec_r_val = _execute_command.call(confirm_cmd)
-		if exec_r_val is Result:
-			if exec_r_val.ok:
-				var req_id := ""
-				if exec_r_val.value is Dictionary:
-					req_id = str(Dictionary(exec_r_val.value).get("request_id", ""))
-				_set_marketing_confirm_in_flight(live_state, req_id)
-			else:
-				var phase := str(live_state.phase) if live_state != null else "-"
-				var pending := _read_marketing_pending_list(live_state)
-				var mode := str(NetContext.mode) if NetContext != null else "NetContext:null"
-				var local_pid2 := int(NetContext.local_player_id) if NetContext != null else -1
-				GameLog.warn(
-					"Game",
-					"确认营销结算失败: %s phase=%s local_pid=%d mode=%s pending=%s"
-						% [str(exec_r_val.error), phase, local_pid2, mode, str(pending)]
-				)
-	_disable_marketing_overlay()
+	_marketing_anim_ready_to_confirm = true
+	_sync_settlement_flow_controls()
 
 func _disable_marketing_overlay() -> void:
 	if _marketing_anim_controller != null:
 		_marketing_anim_controller.dispose()
 	_marketing_anim_controller = null
+	_marketing_anim_ready_to_confirm = false

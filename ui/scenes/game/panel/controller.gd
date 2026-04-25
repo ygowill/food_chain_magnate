@@ -472,6 +472,12 @@ func _sync_action_flow_controls() -> void:
 	if not (_scene.action_flow_controls.has_method("apply_flow_config")):
 		return
 
+	if _overlay_controller != null and _overlay_controller.has_method("get_settlement_flow_controls_config"):
+		var settlement_cfg_val = _overlay_controller.call("get_settlement_flow_controls_config")
+		if settlement_cfg_val is Dictionary and not (settlement_cfg_val as Dictionary).is_empty():
+			_scene.action_flow_controls.call("apply_flow_config", settlement_cfg_val)
+			return
+
 	var cfg_val = _scene.action_panel.call("get_flow_controls_config")
 	if cfg_val is Dictionary:
 		var cfg := Dictionary(cfg_val)
@@ -776,6 +782,22 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 		"rewind_to_turn_start":
 			if _scene != null and _scene.has_method("rewind_to_turn_start"):
 				_scene.call("rewind_to_turn_start")
+			return
+		"skip_dinnertime_settlement":
+			if _overlay_controller != null and _overlay_controller.has_method("skip_dinnertime_settlement_animation"):
+				_overlay_controller.call("skip_dinnertime_settlement_animation")
+			return
+		"confirm_dinnertime_settlement":
+			if _overlay_controller != null and _overlay_controller.has_method("confirm_dinnertime_settlement"):
+				_overlay_controller.call("confirm_dinnertime_settlement")
+			return
+		"skip_marketing_settlement":
+			if _overlay_controller != null and _overlay_controller.has_method("skip_marketing_settlement_animation"):
+				_overlay_controller.call("skip_marketing_settlement_animation")
+			return
+		"confirm_marketing_settlement":
+			if _overlay_controller != null and _overlay_controller.has_method("confirm_marketing_settlement"):
+				_overlay_controller.call("confirm_marketing_settlement")
 			return
 
 		# 系统动作
