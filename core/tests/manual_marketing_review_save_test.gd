@@ -55,7 +55,7 @@ static func _validate_marketing_placements(state: GameState) -> Result:
 	var placements: Dictionary = placements_val
 	var expected := {
 		"1": "radio",
-		"4": "airplane",
+		"6": "airplane",
 		"7": "mailbox",
 		"14": "billboard",
 	}
@@ -84,7 +84,7 @@ static func _validate_marketing_report(state: GameState) -> Result:
 	if not (processed_val is Array):
 		return Result.failure("round_state.marketing.processed missing")
 	var processed: Array = processed_val
-	for board_number in [1, 4, 7, 14]:
+	for board_number in [1, 6, 7, 14]:
 		var found := false
 		for item_val in processed:
 			if not (item_val is Dictionary):
@@ -96,6 +96,11 @@ static func _validate_marketing_report(state: GameState) -> Result:
 			var affected_val = item.get("affected_houses", null)
 			if not (affected_val is Array) or (affected_val as Array).is_empty():
 				return Result.failure("processed board #%d has no affected_houses" % board_number)
+			var min_count := 1
+			if board_number == 1 or board_number == 6:
+				min_count = 4
+			if (affected_val as Array).size() < min_count:
+				return Result.failure("processed board #%d should affect at least %d houses for manual animation review, actual=%d" % [board_number, min_count, (affected_val as Array).size()])
 			break
 		if not found:
 			return Result.failure("processed missing board #%d" % board_number)

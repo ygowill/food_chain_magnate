@@ -1,15 +1,15 @@
 {
 	"checkpoints": [
 		{
-			"hash": "0d7d3c44679cd21774f62094bac09e48",
+			"hash": "5496c4d440297d6631597f2a49606bca",
 			"index": 0,
 			"rng_calls": 29
 		}
 	],
 	"commands": [],
-	"created_at": "2026-04-25T01:00:53",
+	"created_at": "2026-04-25T11:43:11",
 	"current_index": -1,
-	"final_hash": "0d7d3c44679cd21774f62094bac09e48",
+	"final_hash": "5496c4d440297d6631597f2a49606bca",
 	"game_version": "0.4.2",
 	"initial_state": {
 		"bank": {
@@ -805,18 +805,7 @@
 						"drink_source": null,
 						"road_segments": [],
 						"structure": {
-							"anchor_cell": true,
-							"dynamic": true,
-							"has_garden": false,
-							"house_id": "manual_marketing_review_house",
-							"house_number": 16,
-							"owner": -1,
-							"parent_anchor": [
-								8,
-								2
-							],
-							"piece_id": "house",
-							"rotation": 0
+
 						},
 						"terrain_type": null,
 						"tile_origin": [
@@ -4119,10 +4108,10 @@
 							"type": "radio"
 						},
 						{
-							"board_number": 7,
+							"board_number": 6,
 							"from_player": 0,
-							"product": "pizza",
-							"type": "mailbox"
+							"product": "beer",
+							"type": "airplane"
 						}
 					],
 					"has_garden": false,
@@ -4154,7 +4143,26 @@
 							14
 						]
 					],
-					"demands": [],
+					"demands": [
+						{
+							"board_number": 1,
+							"from_player": 0,
+							"product": "soda",
+							"type": "radio"
+						},
+						{
+							"board_number": 1,
+							"from_player": 0,
+							"product": "soda",
+							"type": "radio"
+						},
+						{
+							"board_number": 6,
+							"from_player": 0,
+							"product": "beer",
+							"type": "airplane"
+						}
+					],
 					"has_garden": false,
 					"house_id": "15",
 					"house_number": 15.0,
@@ -4186,10 +4194,16 @@
 					],
 					"demands": [
 						{
-							"board_number": 4,
+							"board_number": 1,
 							"from_player": 0,
-							"product": "beer",
-							"type": "airplane"
+							"product": "soda",
+							"type": "radio"
+						},
+						{
+							"board_number": 1,
+							"from_player": 0,
+							"product": "soda",
+							"type": "radio"
 						}
 					],
 					"has_garden": false,
@@ -4221,7 +4235,26 @@
 							13
 						]
 					],
-					"demands": [],
+					"demands": [
+						{
+							"board_number": 1,
+							"from_player": 0,
+							"product": "soda",
+							"type": "radio"
+						},
+						{
+							"board_number": 1,
+							"from_player": 0,
+							"product": "soda",
+							"type": "radio"
+						},
+						{
+							"board_number": 6,
+							"from_player": 0,
+							"product": "beer",
+							"type": "airplane"
+						}
+					],
 					"has_garden": false,
 					"house_id": "4",
 					"house_number": 4.0,
@@ -4251,24 +4284,6 @@
 							12
 						]
 					],
-					"demands": [],
-					"has_garden": false,
-					"house_id": "5",
-					"house_number": 5.0,
-					"is_apartment": false,
-					"printed": true
-				},
-				"manual_marketing_review_house": {
-					"anchor_pos": [
-						8,
-						2
-					],
-					"cells": [
-						[
-							8,
-							2
-						]
-					],
 					"demands": [
 						{
 							"board_number": 1,
@@ -4283,18 +4298,17 @@
 							"type": "radio"
 						},
 						{
-							"board_number": 14,
+							"board_number": 6,
 							"from_player": 0,
-							"product": "burger",
-							"type": "billboard"
+							"product": "beer",
+							"type": "airplane"
 						}
 					],
 					"has_garden": false,
-					"house_id": "manual_marketing_review_house",
-					"house_number": 16,
+					"house_id": "5",
+					"house_number": 5.0,
 					"is_apartment": false,
-					"owner": -1,
-					"printed": false
+					"printed": true
 				}
 			},
 			"map_origin": [
@@ -4316,8 +4330,8 @@
 					"tile_index": -1,
 					"type": "radio",
 					"world_pos": [
-						11,
-						0
+						6,
+						5
 					]
 				},
 				"14": {
@@ -4334,26 +4348,26 @@
 					"tile_index": -1,
 					"type": "billboard",
 					"world_pos": [
-						7,
-						1
+						6,
+						11
 					]
 				},
-				"4": {
+				"6": {
 					"axis": "row",
-					"board_number": 4,
+					"board_number": 6,
 					"footprint_size": [
-						1,
+						5,
 						2
 					],
 					"owner": 0,
 					"product": "beer",
 					"remaining_duration": 2,
 					"rotation": 0,
-					"tile_index": 0,
+					"tile_index": 9,
 					"type": "airplane",
 					"world_pos": [
 						0,
-						0
+						9
 					]
 				},
 				"7": {
@@ -4375,7 +4389,7 @@
 					]
 				}
 			},
-			"next_house_number": 17,
+			"next_house_number": 16,
 			"next_restaurant_id": 3,
 			"restaurants": {
 				"rest_1": {
@@ -4547,22 +4561,22 @@
 				"staff_id": 3,
 				"tile_index": -1,
 				"type": "radio",
-				"world_pos": "(11, 0)"
+				"world_pos": "(6, 5)"
 			},
 			{
 				"axis": "row",
-				"board_number": 4,
+				"board_number": 6,
 				"created_round": 1,
 				"employee_type": "brand_manager",
-				"footprint_size": "(1, 2)",
+				"footprint_size": "(5, 2)",
 				"owner": 0,
 				"product": "beer",
 				"remaining_duration": 2,
 				"rotation": 0,
 				"staff_id": 4,
-				"tile_index": 0,
+				"tile_index": 9,
 				"type": "airplane",
-				"world_pos": "(0, 0)"
+				"world_pos": "(0, 9)"
 			},
 			{
 				"axis": "",
@@ -4592,7 +4606,7 @@
 				"staff_id": 6,
 				"tile_index": -1,
 				"type": "billboard",
-				"world_pos": "(7, 1)"
+				"world_pos": "(6, 11)"
 			}
 		],
 		"milestone_pool": [
@@ -4668,9 +4682,7 @@
 					"first_radio",
 					"first_airplane",
 					"first_billboard",
-					"first_drink_marketed",
-					"first_pizza_marketed",
-					"first_burger_marketed"
+					"first_drink_marketed"
 				],
 				"multi_trainer_on_one": false,
 				"reserve_card_revealed": false,
@@ -4803,11 +4815,14 @@
 				"processed": [
 					{
 						"affected_houses": [
+							"2",
+							"4",
+							"5",
 							"12",
-							"manual_marketing_review_house"
+							"15"
 						],
 						"board_number": 1,
-						"demands_added": 4,
+						"demands_added": 10,
 						"duration_after": 2,
 						"duration_before": 3,
 						"employee_type": "brand_director",
@@ -4817,16 +4832,19 @@
 						"rounds": 1,
 						"type": "radio",
 						"world_pos": [
-							11,
-							0
+							6,
+							5
 						]
 					},
 					{
 						"affected_houses": [
-							"2"
+							"4",
+							"5",
+							"12",
+							"15"
 						],
-						"board_number": 4,
-						"demands_added": 1,
+						"board_number": 6,
+						"demands_added": 4,
 						"duration_after": 2,
 						"duration_before": 3,
 						"employee_type": "brand_manager",
@@ -4837,7 +4855,7 @@
 						"type": "airplane",
 						"world_pos": [
 							0,
-							0
+							9
 						]
 					},
 					{
@@ -4845,7 +4863,7 @@
 							"12"
 						],
 						"board_number": 7,
-						"demands_added": 1,
+						"demands_added": 0,
 						"duration_after": 2,
 						"duration_before": 3,
 						"employee_type": "campaign_manager",
@@ -4861,10 +4879,10 @@
 					},
 					{
 						"affected_houses": [
-							"manual_marketing_review_house"
+							"5"
 						],
 						"board_number": 14,
-						"demands_added": 1,
+						"demands_added": 0,
 						"duration_after": 2,
 						"duration_before": 3,
 						"employee_type": "campaign_manager",
@@ -4874,8 +4892,8 @@
 						"rounds": 1,
 						"type": "billboard",
 						"world_pos": [
-							7,
-							1
+							6,
+							11
 						]
 					}
 				],
@@ -4883,8 +4901,11 @@
 				"timeline_events": [
 					{
 						"affected_houses": [
+							"2",
+							"4",
+							"5",
 							"12",
-							"manual_marketing_review_house"
+							"15"
 						],
 						"axis": "",
 						"board_number": 1,
@@ -4904,8 +4925,68 @@
 						"round_index": 0,
 						"type": "radio",
 						"world_pos": [
-							11,
-							0
+							6,
+							5
+						]
+					},
+					{
+						"amount_added": 2,
+						"amount_requested": 2,
+						"board_number": 1,
+						"cap": 3,
+						"demand_after": 2,
+						"demand_before": 0,
+						"has_garden": false,
+						"house_id": "2",
+						"house_number": 2.0,
+						"kind": "house_demand",
+						"owner": 0,
+						"product": "soda",
+						"round_index": 0,
+						"type": "radio",
+						"world_pos": [
+							6,
+							5
+						]
+					},
+					{
+						"amount_added": 2,
+						"amount_requested": 2,
+						"board_number": 1,
+						"cap": 3,
+						"demand_after": 2,
+						"demand_before": 0,
+						"has_garden": false,
+						"house_id": "4",
+						"house_number": 4.0,
+						"kind": "house_demand",
+						"owner": 0,
+						"product": "soda",
+						"round_index": 0,
+						"type": "radio",
+						"world_pos": [
+							6,
+							5
+						]
+					},
+					{
+						"amount_added": 2,
+						"amount_requested": 2,
+						"board_number": 1,
+						"cap": 3,
+						"demand_after": 2,
+						"demand_before": 0,
+						"has_garden": false,
+						"house_id": "5",
+						"house_number": 5.0,
+						"kind": "house_demand",
+						"owner": 0,
+						"product": "soda",
+						"round_index": 0,
+						"type": "radio",
+						"world_pos": [
+							6,
+							5
 						]
 					},
 					{
@@ -4924,8 +5005,8 @@
 						"round_index": 0,
 						"type": "radio",
 						"world_pos": [
-							11,
-							0
+							6,
+							5
 						]
 					},
 					{
@@ -4936,28 +5017,31 @@
 						"demand_after": 2,
 						"demand_before": 0,
 						"has_garden": false,
-						"house_id": "manual_marketing_review_house",
-						"house_number": 16,
+						"house_id": "15",
+						"house_number": 15.0,
 						"kind": "house_demand",
 						"owner": 0,
 						"product": "soda",
 						"round_index": 0,
 						"type": "radio",
 						"world_pos": [
-							11,
-							0
+							6,
+							5
 						]
 					},
 					{
 						"affected_houses": [
-							"2"
+							"4",
+							"5",
+							"12",
+							"15"
 						],
 						"axis": "row",
-						"board_number": 4,
+						"board_number": 6,
 						"demand_amount": 1,
 						"employee_type": "brand_manager",
 						"footprint_size": [
-							1,
+							5,
 							2
 						],
 						"kind": "campaign_start",
@@ -4971,19 +5055,19 @@
 						"type": "airplane",
 						"world_pos": [
 							0,
-							0
+							9
 						]
 					},
 					{
 						"amount_added": 1,
 						"amount_requested": 1,
-						"board_number": 4,
+						"board_number": 6,
 						"cap": 3,
-						"demand_after": 1,
-						"demand_before": 0,
+						"demand_after": 3,
+						"demand_before": 2,
 						"has_garden": false,
-						"house_id": "2",
-						"house_number": 2.0,
+						"house_id": "4",
+						"house_number": 4.0,
 						"kind": "house_demand",
 						"owner": 0,
 						"product": "beer",
@@ -4991,7 +5075,67 @@
 						"type": "airplane",
 						"world_pos": [
 							0,
-							0
+							9
+						]
+					},
+					{
+						"amount_added": 1,
+						"amount_requested": 1,
+						"board_number": 6,
+						"cap": 3,
+						"demand_after": 3,
+						"demand_before": 2,
+						"has_garden": false,
+						"house_id": "5",
+						"house_number": 5.0,
+						"kind": "house_demand",
+						"owner": 0,
+						"product": "beer",
+						"round_index": 0,
+						"type": "airplane",
+						"world_pos": [
+							0,
+							9
+						]
+					},
+					{
+						"amount_added": 1,
+						"amount_requested": 1,
+						"board_number": 6,
+						"cap": 3,
+						"demand_after": 3,
+						"demand_before": 2,
+						"has_garden": false,
+						"house_id": "12",
+						"house_number": 12.0,
+						"kind": "house_demand",
+						"owner": 0,
+						"product": "beer",
+						"round_index": 0,
+						"type": "airplane",
+						"world_pos": [
+							0,
+							9
+						]
+					},
+					{
+						"amount_added": 1,
+						"amount_requested": 1,
+						"board_number": 6,
+						"cap": 3,
+						"demand_after": 3,
+						"demand_before": 2,
+						"has_garden": false,
+						"house_id": "15",
+						"house_number": 15.0,
+						"kind": "house_demand",
+						"owner": 0,
+						"product": "beer",
+						"round_index": 0,
+						"type": "airplane",
+						"world_pos": [
+							0,
+							9
 						]
 					},
 					{
@@ -5021,12 +5165,12 @@
 						]
 					},
 					{
-						"amount_added": 1,
+						"amount_added": 0,
 						"amount_requested": 1,
 						"board_number": 7,
 						"cap": 3,
 						"demand_after": 3,
-						"demand_before": 2,
+						"demand_before": 3,
 						"has_garden": false,
 						"house_id": "12",
 						"house_number": 12.0,
@@ -5042,7 +5186,7 @@
 					},
 					{
 						"affected_houses": [
-							"manual_marketing_review_house"
+							"5"
 						],
 						"axis": "",
 						"board_number": 14,
@@ -5062,28 +5206,28 @@
 						"round_index": 0,
 						"type": "billboard",
 						"world_pos": [
-							7,
-							1
+							6,
+							11
 						]
 					},
 					{
-						"amount_added": 1,
+						"amount_added": 0,
 						"amount_requested": 1,
 						"board_number": 14,
 						"cap": 3,
 						"demand_after": 3,
-						"demand_before": 2,
+						"demand_before": 3,
 						"has_garden": false,
-						"house_id": "manual_marketing_review_house",
-						"house_number": 16,
+						"house_id": "5",
+						"house_number": 5.0,
 						"kind": "house_demand",
 						"owner": 0,
 						"product": "burger",
 						"round_index": 0,
 						"type": "billboard",
 						"world_pos": [
-							7,
-							1
+							6,
+							11
 						]
 					},
 					{
@@ -5103,19 +5247,19 @@
 						"rotation": 0,
 						"type": "radio",
 						"world_pos": [
-							11,
-							0
+							6,
+							5
 						]
 					},
 					{
 						"axis": "row",
-						"board_number": 4,
+						"board_number": 6,
 						"duration_after": 2,
 						"duration_before": 3,
 						"employee_type": "brand_manager",
 						"expired": false,
 						"footprint_size": [
-							1,
+							5,
 							2
 						],
 						"kind": "duration_tick",
@@ -5125,7 +5269,7 @@
 						"type": "airplane",
 						"world_pos": [
 							0,
-							0
+							9
 						]
 					},
 					{
@@ -5166,8 +5310,8 @@
 						"rotation": 90,
 						"type": "billboard",
 						"world_pos": [
-							7,
-							1
+							6,
+							11
 						]
 					}
 				]
@@ -5222,24 +5366,6 @@
 					"event": "DemandMarked",
 					"milestone_id": "first_drink_marketed",
 					"player_id": 0
-				},
-				{
-					"context": {
-						"player_id": 0,
-						"product": "pizza"
-					},
-					"event": "DemandMarked",
-					"milestone_id": "first_pizza_marketed",
-					"player_id": 0
-				},
-				{
-					"context": {
-						"player_id": 0,
-						"product": "burger"
-					},
-					"event": "DemandMarked",
-					"milestone_id": "first_burger_marketed",
-					"player_id": 0
 				}
 			],
 			"milestones_claimed": {
@@ -5249,13 +5375,7 @@
 				"first_billboard": [
 					0
 				],
-				"first_burger_marketed": [
-					0
-				],
 				"first_drink_marketed": [
-					0
-				],
-				"first_pizza_marketed": [
 					0
 				],
 				"first_radio": [

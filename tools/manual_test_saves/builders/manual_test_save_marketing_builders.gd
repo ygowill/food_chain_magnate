@@ -46,9 +46,9 @@ func _build_marketing_phase_animation_review(engine: GameEngine, _c: Dictionary)
 			"duration": 3,
 		},
 		{
-			"label": "airplane #4",
+			"label": "airplane #6",
 			"employee_type": "brand_manager",
-			"board_number": 4,
+			"board_number": 6,
 			"product": "beer",
 			"duration": 3,
 		},
@@ -94,7 +94,7 @@ func _build_marketing_phase_animation_review(engine: GameEngine, _c: Dictionary)
 	state = engine.get_state()
 	var visible_before := _validate_visible_marketing_placements(state, {
 		"1": "radio",
-		"4": "airplane",
+		"6": "airplane",
 		"7": "mailbox",
 		"14": "billboard",
 	})
@@ -125,7 +125,7 @@ func _build_marketing_phase_animation_review(engine: GameEngine, _c: Dictionary)
 		return processed_check
 	var visible_after := _validate_visible_marketing_placements(state, {
 		"1": "radio",
-		"4": "airplane",
+		"6": "airplane",
 		"7": "mailbox",
 		"14": "billboard",
 	})
@@ -142,7 +142,7 @@ func _build_marketing_phase_animation_review(engine: GameEngine, _c: Dictionary)
 		"scenario": [
 			"存档已冻结在 Marketing 阶段，并保留 confirm_marketing pending；图形界面载入后应启动营销结算动画，而不是立刻跳过。",
 			"本场景使用项目真实随机板块地图（保留 tile_placements），避免极简测试地图在 UI 中缺少正常地图渲染上下文。",
-			"本场景包含四种基础广告：radio #1、airplane #4、mailbox #7、billboard #14，结算顺序按 board_number 升序。",
+			"本场景包含四种基础广告：radio #1、airplane #6、mailbox #7、billboard #14，结算顺序按 board_number 升序。",
 			"四个广告均设置为 3 回合，结算后仍剩余 2 回合并保留在 map.marketing_placements 中，便于复核广告件本体渲染。",
 			"自动选择的放置参数：%s" % str(chosen),
 		],
@@ -194,6 +194,8 @@ func _find_first_valid_marketing_with_affected_houses(
 	var empty_affected_candidates := 0
 	var fallback_attempts := 0
 	var last_fallback_error := ""
+	var best: Dictionary = {}
+	var best_affected_count := 0
 	for y in range(minp.y, maxp.y + 1):
 		for x in range(minp.x, maxp.x + 1):
 			for rot in MapUtils.VALID_ROTATIONS:
@@ -216,27 +218,48 @@ func _find_first_valid_marketing_with_affected_houses(
 				var affected: Array = affected_read.value
 				if affected.is_empty():
 					empty_affected_candidates += 1
-					fallback_attempts += 1
-					var prepared := _try_make_billboard_candidate_affect_review_house(engine, state, board_number, cmd, ex)
-					if not prepared.ok:
-						last_fallback_error = prepared.error
-						continue
-					var prepared_value: Dictionary = prepared.value
-					var prepared_affected: Array = prepared_value.get("affected_houses", [])
-					if prepared_affected.is_empty():
-						continue
-					return Result.success({
+					continue
+				if affected.size() > best_affected_count:
+					best_affected_count = affected.size()
+					best = {
 						"action_id": "initiate_marketing",
 						"actor": actor,
 						"params": cmd.params.duplicate(true),
-						"affected_houses": prepared_affected.duplicate(true),
-						"added_house": prepared_value.get("added_house", {}),
-					})
+						"affected_houses": affected.duplicate(true),
+					}
+	if not best.is_empty():
+		return Result.success(best)
+
+	for y in range(minp.y, maxp.y + 1):
+		for x in range(minp.x, maxp.x + 1):
+			for rot in MapUtils.VALID_ROTATIONS:
+				var params := {
+					"employee_type": employee_type,
+					"board_number": board_number,
+					"product": product,
+					"duration": duration,
+					"position": [x, y],
+					"rotation": int(rot),
+				}
+				var cmd := Command.create("initiate_marketing", actor, params)
+				var vr := ex.validate(state, cmd)
+				if not vr.ok:
+					continue
+				fallback_attempts += 1
+				var prepared := _try_make_billboard_candidate_affect_review_house(engine, state, board_number, cmd, ex)
+				if not prepared.ok:
+					last_fallback_error = prepared.error
+					continue
+				var prepared_value: Dictionary = prepared.value
+				var prepared_affected: Array = prepared_value.get("affected_houses", [])
+				if prepared_affected.is_empty():
+					continue
 				return Result.success({
 					"action_id": "initiate_marketing",
 					"actor": actor,
 					"params": cmd.params.duplicate(true),
-					"affected_houses": affected.duplicate(true),
+					"affected_houses": prepared_affected.duplicate(true),
+					"added_house": prepared_value.get("added_house", {}),
 				})
 
 	return Result.failure(
@@ -575,7 +598,7 @@ func _validate_processed_marketing_report(marketing_report: Dictionary) -> Resul
 	var processed: Array = processed_val
 	var expected := {
 		"1": "radio",
-		"4": "airplane",
+		"6": "airplane",
 		"7": "mailbox",
 		"14": "billboard",
 	}

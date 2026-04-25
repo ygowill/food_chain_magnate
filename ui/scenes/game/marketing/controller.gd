@@ -22,6 +22,9 @@ const HOUSE_PULSE_SEC := 0.20
 const ORDER_GAP_SEC := 0.14
 const RADIO_WAVE_PERIOD_SEC := 2.35
 const AIRPLANE_FLY_SEC := 2.85
+const AIRPLANE_DROP_TOKEN_SEC := 0.46
+const AIRPLANE_DROP_START_RATIO := 0.18
+const AIRPLANE_DROP_END_RATIO := 0.76
 
 class RadioWaveLoopNode:
 	extends Control
@@ -272,6 +275,9 @@ func _play_order(order: Dictionary) -> void:
 	var board_rect := _compute_marketing_rect(order)
 	var unique_houses := _unique_house_ids_from_order(order)
 	var loop_effect := _start_campaign_loop_effect(order, board_rect, unique_houses)
+	if str(order.get("type", "")) == "airplane":
+		await _play_airplane_order(order, board_rect, unique_houses, loop_effect)
+		return
 	await _pulse_board(order, board_rect)
 	await _play_campaign_range_effect(order, board_rect, unique_houses)
 
@@ -285,6 +291,18 @@ func _play_order(order: Dictionary) -> void:
 			continue
 		await _play_house_demand_event(order, evt_val, board_rect)
 
+	_stop_campaign_loop_effect(loop_effect)
+
+func _play_airplane_order(order: Dictionary, board_rect: Rect2, unique_houses: Array[String], loop_effect: Control) -> void:
+	await _pulse_board(order, board_rect)
+	var flight := _create_airplane_flight_effect(order, board_rect)
+	var house_events_val = order.get("house_events", [])
+	var house_events: Array = house_events_val if house_events_val is Array else []
+	var drop_tail_sec := _schedule_airplane_house_drops(order, house_events, flight)
+	await _play_campaign_house_range_pulse(order, unique_houses)
+	await _await_campaign_effect(flight)
+	if drop_tail_sec > AIRPLANE_FLY_SEC:
+		await _wait(drop_tail_sec - AIRPLANE_FLY_SEC)
 	_stop_campaign_loop_effect(loop_effect)
 
 func _pulse_board(order: Dictionary, board_rect: Rect2) -> void:
@@ -310,6 +328,42 @@ func _pulse_board(order: Dictionary, board_rect: Rect2) -> void:
 	tw.chain().tween_callback(func():
 		if is_instance_valid(pulse):
 			pulse.queue_free()
+		_active_tweens.erase(tw)
+	)
+	await tw.finished
+
+func _play_campaign_house_range_pulse(order: Dictionary, unique_houses: Array[String]) -> void:
+	if not is_instance_valid(_map_anim_layer):
+		return
+	if unique_houses.is_empty():
+		await _wait(0.10)
+		return
+
+	var color := _color_for_marketing_type(str(order.get("type", "")), 0.24)
+	var nodes: Array[Control] = []
+	for house_id in unique_houses:
+		var rect := _compute_house_rect(str(house_id))
+		if rect.size == Vector2.ZERO:
+			continue
+		var h := ColorRect.new()
+		h.name = "MarketingHouseRangePulse"
+		h.position = rect.position
+		h.size = rect.size
+		h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		h.color = color
+		h.modulate.a = 0.0
+		_map_anim_layer.add_child(h)
+		nodes.append(h)
+
+	var tw := _map_anim_layer.create_tween().set_parallel(true)
+	_active_tweens.append(tw)
+	for n in nodes:
+		tw.tween_property(n, "modulate:a", 1.0, 0.16 / _speed)
+		tw.tween_property(n, "modulate:a", 0.0, 0.28 / _speed).set_delay(0.16 / _speed)
+	tw.chain().tween_callback(func():
+		for n2 in nodes:
+			if is_instance_valid(n2):
+				n2.queue_free()
 		_active_tweens.erase(tw)
 	)
 	await tw.finished
@@ -365,6 +419,17 @@ func _play_campaign_range_effect(order: Dictionary, board_rect: Rect2, unique_ho
 	if is_instance_valid(sweep):
 		sweep.queue_free()
 
+func _await_campaign_effect(effect: Dictionary) -> void:
+	var node: Control = effect.get("node", null)
+	var effect_tweens: Array = effect.get("tweens", [])
+	for effect_tw_val in effect_tweens:
+		if effect_tw_val is Tween:
+			var effect_tw: Tween = effect_tw_val
+			if is_instance_valid(effect_tw) and effect_tw.is_running():
+				await effect_tw.finished
+	if is_instance_valid(node):
+		node.queue_free()
+
 func _play_house_demand_event(order: Dictionary, event: Dictionary, board_rect: Rect2) -> void:
 	var house_id := str(event.get("house_id", "")).strip_edges()
 	if house_id.is_empty():
@@ -387,6 +452,156 @@ func _play_house_demand_event(order: Dictionary, event: Dictionary, board_rect: 
 	if unshown_count > 0:
 		_reveal_house_demand_amount(order, event, unshown_count)
 	await _pulse_house(house_rect)
+
+func _schedule_airplane_house_drops(order: Dictionary, house_events: Array, flight: Dictionary) -> float:
+	if _scene == null or not is_instance_valid(_scene):
+		return 0.0
+	var tree := _scene.get_tree()
+	if tree == null:
+		return 0.0
+	var events: Array[Dictionary] = []
+	for evt_val in house_events:
+		if evt_val is Dictionary:
+			events.append(evt_val)
+	if events.is_empty():
+		return 0.0
+	var denom := maxf(1.0, float(events.size() - 1))
+	var max_delay_sec := 0.0
+	for i in range(events.size()):
+		var t := 0.5
+		if events.size() > 1:
+			t = float(i) / denom
+		var ratio := _airplane_drop_ratio_for_event(events[i], flight)
+		if ratio < 0.0:
+			ratio = lerpf(AIRPLANE_DROP_START_RATIO, AIRPLANE_DROP_END_RATIO, t)
+		var delay_sec := maxf(0.0, AIRPLANE_FLY_SEC * ratio)
+		max_delay_sec = maxf(max_delay_sec, delay_sec)
+		var event_for_timer: Dictionary = events[i]
+		var timer := tree.create_timer(maxf(0.01, delay_sec / _speed))
+		timer.timeout.connect(_on_airplane_house_drop_timeout.bind(order, event_for_timer, flight))
+	return max_delay_sec + AIRPLANE_DROP_TOKEN_SEC + HOUSE_PULSE_SEC
+
+func _airplane_drop_ratio_for_event(event: Dictionary, flight: Dictionary) -> float:
+	var start_val = flight.get("start_center", null)
+	var end_val = flight.get("end_center", null)
+	if not (start_val is Vector2) or not (end_val is Vector2):
+		return -1.0
+	var start_center: Vector2 = start_val
+	var end_center: Vector2 = end_val
+	var travel := end_center - start_center
+	var travel_len_sq := travel.length_squared()
+	if travel_len_sq <= 0.01:
+		return -1.0
+	var house_id := str(event.get("house_id", "")).strip_edges()
+	if house_id.is_empty():
+		return -1.0
+	var house_rect := _compute_house_rect(house_id)
+	if house_rect.size == Vector2.ZERO:
+		return -1.0
+	var house_center := house_rect.position + house_rect.size * 0.5
+	var raw_ratio := (house_center - start_center).dot(travel) / travel_len_sq
+	return clampf(raw_ratio, AIRPLANE_DROP_START_RATIO, AIRPLANE_DROP_END_RATIO)
+
+func _on_airplane_house_drop_timeout(order: Dictionary, event: Dictionary, flight: Dictionary) -> void:
+	if _state != State.PLAYING:
+		return
+	_start_airplane_house_drop_event(order, event, flight)
+
+func _start_airplane_house_drop_event(order: Dictionary, event: Dictionary, flight: Dictionary) -> void:
+	var house_id := str(event.get("house_id", "")).strip_edges()
+	if house_id.is_empty():
+		return
+	var house_rect := _compute_house_rect(house_id)
+	if house_rect.size == Vector2.ZERO:
+		return
+	var amount_added := int(event.get("amount_added", 0))
+	if amount_added <= 0:
+		_show_capped_marker(house_rect)
+		return
+	var source: Control = flight.get("board", null)
+	if not is_instance_valid(source):
+		return
+	var product_id := str(event.get("product", order.get("product", "")))
+	var count := mini(amount_added, TOKEN_MAX_PER_HOUSE_EVENT)
+	var unshown_count := amount_added - count
+	for i in range(count):
+		var reveal_amount := 1
+		if i == count - 1:
+			reveal_amount += unshown_count
+		var reveal_for_token := reveal_amount
+		_drop_product_token_from_airplane(
+			product_id,
+			source,
+			house_rect,
+			i,
+			count,
+			func():
+				_reveal_house_demand_amount(order, event, reveal_for_token)
+				_start_house_pulse(house_rect)
+		)
+
+func _drop_product_token_from_airplane(
+	product_id: String,
+	source: Control,
+	house_rect: Rect2,
+	index: int,
+	total: int,
+	on_landed: Callable
+) -> void:
+	if not is_instance_valid(_map_anim_layer) or not is_instance_valid(source):
+		return
+	var icon_size := maxf(18.0, _get_cell_size() * 0.68)
+	var token := Control.new()
+	token.name = "MarketingAirplaneDemandDrop"
+	token.size = Vector2(icon_size, icon_size)
+	token.custom_minimum_size = token.size
+	token.pivot_offset = token.size * 0.5
+	token.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var from_pos := source.position + source.size * 0.5 - token.size * 0.5
+	var to_pos := house_rect.position + house_rect.size * 0.5 - token.size * 0.5
+	if total > 1:
+		var angle := TAU * float(index) / float(total)
+		to_pos += Vector2(cos(angle), sin(angle)) * minf(_get_cell_size() * 0.18, 12.0)
+	token.position = from_pos
+	token.scale = Vector2(0.90, 0.90)
+	_map_anim_layer.add_child(token)
+
+	var tex := _get_product_texture(product_id)
+	if tex != null:
+		var icon := TextureRect.new()
+		icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.texture = tex
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		token.add_child(icon)
+	else:
+		var fallback := Label.new()
+		fallback.set_anchors_preset(Control.PRESET_FULL_RECT)
+		fallback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		fallback.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		fallback.text = product_id.left(2).to_upper()
+		fallback.add_theme_font_size_override("font_size", 12)
+		token.add_child(fallback)
+
+	var tw := token.create_tween()
+	_active_tweens.append(tw)
+	var dur := AIRPLANE_DROP_TOKEN_SEC / _speed
+	var arc_pos := Vector2((from_pos.x + to_pos.x) * 0.5, minf(from_pos.y, to_pos.y) - maxf(10.0, _get_cell_size() * 0.32))
+	tw.tween_property(token, "position", arc_pos, dur * 0.42).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tw.tween_property(token, "position", to_pos, dur * 0.58).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tw.tween_callback(func():
+		if on_landed.is_valid():
+			on_landed.call()
+	)
+	tw.tween_property(token, "scale", Vector2(1.10, 1.10), 0.06 / _speed)
+	tw.parallel().tween_property(token, "modulate:a", 0.0, 0.16 / _speed)
+	tw.tween_callback(func():
+		if is_instance_valid(token):
+			token.queue_free()
+		_active_tweens.erase(tw)
+	)
 
 func _fly_product_token(product_id: String, board_rect: Rect2, house_rect: Rect2, index: int, total: int) -> void:
 	if not is_instance_valid(_map_anim_layer):
@@ -442,6 +657,12 @@ func _fly_product_token(product_id: String, board_rect: Rect2, house_rect: Rect2
 func _pulse_house(house_rect: Rect2) -> void:
 	if not is_instance_valid(_map_anim_layer):
 		return
+	_start_house_pulse(house_rect)
+	await _wait(HOUSE_PULSE_SEC)
+
+func _start_house_pulse(house_rect: Rect2) -> void:
+	if not is_instance_valid(_map_anim_layer):
+		return
 	var pulse := ColorRect.new()
 	pulse.name = "MarketingHousePulse"
 	pulse.position = house_rect.position
@@ -457,7 +678,6 @@ func _pulse_house(house_rect: Rect2) -> void:
 			pulse.queue_free()
 		_active_tweens.erase(tw)
 	)
-	await tw.finished
 
 func _show_capped_marker(house_rect: Rect2) -> void:
 	if not is_instance_valid(_map_anim_layer):
@@ -613,6 +833,9 @@ func _create_airplane_flight_effect(order: Dictionary, board_rect: Rect2) -> Dic
 	return {
 		"node": parent,
 		"tweens": [tw],
+		"board": board,
+		"start_center": start_center,
+		"end_center": end_center,
 		"custom": true,
 	}
 

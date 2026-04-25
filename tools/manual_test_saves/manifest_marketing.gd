@@ -18,14 +18,14 @@ static func get_cases() -> Array[Dictionary]:
 		"steps": [
 			"从主菜单载入本存档，进入游戏画面后不要手动推进阶段。",
 			"确认地图为正常随机板块地图，且地图上能看到四类营销广告件。",
-			"观察营销结算控制条与地图动画：广告牌应按 #1 radio、#4 airplane、#7 mailbox、#14 billboard 的顺序播放。",
+			"观察营销结算控制条与地图动画：广告牌应按 #1 radio、#6 airplane、#7 mailbox、#14 billboard 的顺序播放。",
 			"等待动画自动结束，确认游戏会执行 confirm_marketing 并继续推进到后续阶段。",
 		],
 		"expected": [
-			"#1 radio：soda 需求以扩散动画飞向覆盖范围内房屋，并显示持续时间 2 > 1。",
-			"#4 airplane：beer 沿边缘飞行条带生效，并显示持续时间 2 > 1。",
-			"#7 mailbox：pizza 对同街区房屋生效，并显示持续时间 2 > 1。",
-			"#14 billboard：burger 对相邻房屋生效，并显示持续时间 2 > 1。",
+			"#1 radio：电波动画在需求发射期间持续循环，soda 需求逐个飞向覆盖范围内房屋。",
+			"#6 airplane：飞机广告板件缓慢飞过地图，并在飞行途中以投放方式向覆盖房屋丢下 beer 需求。",
+			"#7 mailbox：pizza 对同街区房屋生效，不再额外显示持续时间变化提示。",
+			"#14 billboard：burger 对相邻房屋生效，不再额外显示持续时间变化提示。",
 			"动画结束后 pending_phase_actions[Marketing] 被清除，阶段不再卡在 Marketing。",
 		],
 		"related_tests": [
