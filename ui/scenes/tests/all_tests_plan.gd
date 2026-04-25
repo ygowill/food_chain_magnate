@@ -639,6 +639,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return await TestRefs.PlacementStaffPickerUiTestClass.run(),
 			},
 			{
+				"name": "WorkingActionFeedbackTest",
+				"fn": func() -> Result: return await TestRefs.WorkingActionFeedbackTestClass.run(),
+			},
+			{
 				"name": "EmployeePickerRebuildCleanupTest",
 				"fn": func() -> Result: return await TestRefs.EmployeePickerRebuildCleanupTestClass.run(),
 			},

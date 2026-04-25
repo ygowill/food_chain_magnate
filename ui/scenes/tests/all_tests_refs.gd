@@ -258,6 +258,7 @@ const MapHoverHelpTooltipTestClass = preload("res://ui/scenes/tests/map_hover_he
 const MapTouchSelectionTestClass = preload("res://ui/scenes/tests/map_touch_selection_test.gd")
 const AirplaneMarketingOutsideSelectionTestClass = preload("res://ui/scenes/tests/airplane_marketing_outside_selection_test.gd")
 const SoundManagerLocalInputGateTestClass = preload("res://ui/scenes/tests/sound_manager_local_input_gate_test.gd")
+const WorkingActionFeedbackTestClass = preload("res://ui/scenes/tests/working_action_feedback_test.gd")
 const MoveRestaurantDisplayLabelTestClass = preload("res://ui/scenes/tests/move_restaurant_display_label_test.gd")
 const RestaurantPlacementDistanceToolToggleTestClass = preload("res://ui/scenes/tests/restaurant_placement_distance_tool_toggle_test.gd")
 const ActionPanelGuidedActionPlaceholderTestClass = preload("res://ui/scenes/tests/action_panel_guided_action_placeholder_test.gd")

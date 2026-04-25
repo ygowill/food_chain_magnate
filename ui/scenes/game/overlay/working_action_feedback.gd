@@ -63,11 +63,9 @@ func dispose() -> void:
 	_skin = null
 
 func clear() -> void:
-	# 成功执行动作后，面板常会先清理选点 overlay；保留下一帧待播放的反馈事件。
-	_kill_tweens()
-	if is_instance_valid(_layer):
-		for child in _layer.get_children():
-			child.queue_free()
+	# hide_all_overlays() 也会在命令成功后的 UI 同步中被调用。
+	# 工作行动反馈是非阻塞即时反馈，不能被通用选点/面板清理打断；节点会按各自动画自行释放。
+	pass
 
 func _on_feedback_event(event: Dictionary) -> void:
 	if OS.has_feature("headless"):
@@ -88,6 +86,16 @@ func _on_feedback_event(event: Dictionary) -> void:
 		if not data.has("price_modifier"):
 			return
 	var event_copy := event.duplicate(true)
+	var command_phase := _read_event_command_phase(event_copy)
+	if not command_phase.is_empty():
+		event_copy["__feedback_phase"] = str(command_phase.get("phase", ""))
+		event_copy["__feedback_sub_phase"] = str(command_phase.get("sub_phase", ""))
+		_pending_events.append(event_copy)
+		if _flush_scheduled:
+			return
+		_flush_scheduled = true
+		call_deferred("_flush_pending_events")
+		return
 	var state := _read_live_game_state()
 	if state != null:
 		event_copy["__feedback_phase"] = str(state.phase)
@@ -895,15 +903,53 @@ func _employee_name(employee_id: String) -> String:
 	return eid
 
 func _read_live_game_state() -> GameState:
+	var engine_val = _read_live_game_engine()
+	if engine_val == null or not engine_val.has_method("get_state"):
+		return null
+	var state_val = engine_val.get_state()
+	return state_val if state_val is GameState else null
+
+func _read_live_game_engine():
 	if _scene == null or not is_instance_valid(_scene):
 		return null
 	if not _scene.has_method("get"):
 		return null
 	var engine_val = _scene.get("game_engine")
-	if engine_val == null or not engine_val.has_method("get_state"):
-		return null
-	var state_val = engine_val.get_state()
-	return state_val if state_val is GameState else null
+	return engine_val
+
+func _read_event_command_phase(event: Dictionary) -> Dictionary:
+	var data_val = event.get("data", null)
+	if not (data_val is Dictionary):
+		return {}
+	var data: Dictionary = data_val
+	if not data.has("command_index"):
+		return {}
+	var command_index := int(data.get("command_index", -1))
+	if command_index < 0:
+		return {}
+	var engine_val = _read_live_game_engine()
+	if engine_val == null or not engine_val.has_method("get"):
+		return {}
+	var history_val = engine_val.get("command_history")
+	if not (history_val is Array):
+		return {}
+	var history: Array = history_val
+	if command_index >= history.size():
+		return {}
+	var command_val = history[command_index]
+	if command_val is Command:
+		var command: Command = command_val
+		return {
+			"phase": str(command.phase),
+			"sub_phase": str(command.sub_phase),
+		}
+	if command_val is Dictionary:
+		var command_dict: Dictionary = command_val
+		return {
+			"phase": str(command_dict.get("phase", "")),
+			"sub_phase": str(command_dict.get("sub_phase", "")),
+		}
+	return {}
 
 func _get_world_origin() -> Vector2i:
 	if _map_canvas != null and is_instance_valid(_map_canvas) and _map_canvas.has_method("get_world_origin"):
