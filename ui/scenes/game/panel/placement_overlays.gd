@@ -655,6 +655,8 @@ func _after_restaurant_command_success(actor_id: int) -> void:
 func _close_restaurant_overlay_and_refresh() -> void:
 	if is_instance_valid(restaurant_placement_overlay):
 		restaurant_placement_overlay.visible = false
+		if restaurant_placement_overlay.has_method("clear_selection"):
+			restaurant_placement_overlay.clear_selection()
 	if _map_controller != null:
 		_map_controller.clear_selection()
 	if _overlay_controller != null:
