@@ -23,6 +23,7 @@ const RANGE_PULSE_IN_SEC := 0.24
 const RANGE_PULSE_OUT_SEC := 0.48
 const SWEEP_FADE_SEC := 0.70
 const RADIO_WAVE_PERIOD_SEC := 3.50
+const RADIO_DEMAND_EMIT_GAP_SEC := 0.22
 const AIRPLANE_FLY_SEC := 4.60
 const AIRPLANE_DROP_TOKEN_SEC := 0.72
 const AIRPLANE_DROP_START_RATIO := 0.18
@@ -285,6 +286,10 @@ func _play_order(order: Dictionary) -> void:
 
 	var house_events_val = order.get("house_events", [])
 	var house_events: Array = house_events_val if house_events_val is Array else []
+	if str(order.get("type", "")) == "radio":
+		await _play_radio_demand_events(order, house_events, board_rect)
+		_stop_campaign_loop_effect(loop_effect)
+		return
 	for evt_val in house_events:
 		if _state != State.PLAYING:
 			_stop_campaign_loop_effect(loop_effect)
@@ -294,6 +299,56 @@ func _play_order(order: Dictionary) -> void:
 		await _play_house_demand_event(order, evt_val, board_rect)
 
 	_stop_campaign_loop_effect(loop_effect)
+
+func _play_radio_demand_events(order: Dictionary, house_events: Array, board_rect: Rect2) -> void:
+	var scheduled := false
+	for evt_val in house_events:
+		if _state != State.PLAYING:
+			return
+		if not (evt_val is Dictionary):
+			continue
+		var event: Dictionary = evt_val
+		var house_id := str(event.get("house_id", "")).strip_edges()
+		if house_id.is_empty():
+			continue
+		var house_rect := _compute_house_rect(house_id)
+		if house_rect.size == Vector2.ZERO:
+			continue
+
+		var amount_added := int(event.get("amount_added", 0))
+		if amount_added <= 0:
+			_start_capped_marker(house_rect)
+			scheduled = true
+			await _wait(RADIO_DEMAND_EMIT_GAP_SEC)
+			continue
+
+		var product_id := str(event.get("product", order.get("product", "")))
+		var count := mini(amount_added, TOKEN_MAX_PER_HOUSE_EVENT)
+		var unshown_count := amount_added - count
+		for i in range(count):
+			if _state != State.PLAYING:
+				return
+			var reveal_amount := 1
+			if i == count - 1:
+				reveal_amount += unshown_count
+			var reveal_for_token := reveal_amount
+			var event_for_token: Dictionary = event
+			var house_rect_for_token := house_rect
+			_start_product_token_flight(
+				product_id,
+				board_rect,
+				house_rect,
+				i,
+				count,
+				func():
+					_reveal_house_demand_amount(order, event_for_token, reveal_for_token)
+					_start_house_pulse(house_rect_for_token)
+			)
+			scheduled = true
+			await _wait(RADIO_DEMAND_EMIT_GAP_SEC)
+
+	if scheduled:
+		await _wait(TOKEN_FLY_SEC + HOUSE_PULSE_SEC)
 
 func _play_airplane_order(order: Dictionary, board_rect: Rect2, unique_houses: Array[String], loop_effect: Control) -> void:
 	await _pulse_board(order, board_rect)
@@ -613,8 +668,20 @@ func _drop_product_token_from_airplane(
 	)
 
 func _fly_product_token(product_id: String, board_rect: Rect2, house_rect: Rect2, index: int, total: int) -> void:
+	var tw := _start_product_token_flight(product_id, board_rect, house_rect, index, total)
+	if tw != null and is_instance_valid(tw):
+		await tw.finished
+
+func _start_product_token_flight(
+	product_id: String,
+	board_rect: Rect2,
+	house_rect: Rect2,
+	index: int,
+	total: int,
+	on_landed: Callable = Callable()
+) -> Tween:
 	if not is_instance_valid(_map_anim_layer):
-		return
+		return null
 	var icon_size := maxf(18.0, _get_cell_size() * 0.68)
 	var token := Control.new()
 	token.name = "MarketingDemandToken"
@@ -657,11 +724,13 @@ func _fly_product_token(product_id: String, board_rect: Rect2, house_rect: Rect2
 	tw.tween_property(token, "scale", Vector2(1.05, 1.05), dur * 0.65)
 	tw.tween_property(token, "modulate:a", 0.0, dur * 0.28).set_delay(dur * 0.72)
 	tw.chain().tween_callback(func():
+		if on_landed.is_valid():
+			on_landed.call()
 		if is_instance_valid(token):
 			token.queue_free()
 		_active_tweens.erase(tw)
 	)
-	await tw.finished
+	return tw
 
 func _pulse_house(house_rect: Rect2) -> void:
 	if not is_instance_valid(_map_anim_layer):
@@ -689,34 +758,57 @@ func _start_house_pulse(house_rect: Rect2) -> void:
 	)
 
 func _show_capped_marker(house_rect: Rect2) -> void:
+	var tw := _start_capped_marker(house_rect)
+	if tw != null and is_instance_valid(tw):
+		await tw.finished
+
+func _start_capped_marker(house_rect: Rect2) -> Tween:
 	if not is_instance_valid(_map_anim_layer):
-		return
+		return null
+	var cell_size := maxf(_get_cell_size(), 1.0)
+	var marker_size := Vector2(
+		maxf(house_rect.size.x * 1.55, cell_size * 2.25),
+		maxf(house_rect.size.y * 1.05, cell_size * 1.20)
+	)
+	var start_pos := house_rect.position + house_rect.size * 0.5 - marker_size * 0.5
 	var marker := Label.new()
 	marker.name = "MarketingCappedMarker"
 	marker.text = "已满"
 	marker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	marker.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	marker.add_theme_font_size_override("font_size", maxi(10, int(_get_cell_size() * 0.28)))
-	marker.add_theme_color_override("font_color", Color(1, 1, 1, 1))
-	marker.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
-	marker.add_theme_constant_override("shadow_offset_x", 1)
-	marker.add_theme_constant_override("shadow_offset_y", 1)
-	marker.position = house_rect.position
-	marker.size = house_rect.size
+	marker.add_theme_font_size_override("font_size", maxi(18, int(cell_size * 0.58)))
+	marker.add_theme_color_override("font_color", Color(1.0, 0.94, 0.22, 1))
+	marker.add_theme_color_override("font_outline_color", Color(0.04, 0.05, 0.04, 0.95))
+	marker.add_theme_constant_override("outline_size", maxi(2, int(round(cell_size * 0.08))))
+	marker.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.70))
+	marker.add_theme_constant_override("shadow_offset_x", 2)
+	marker.add_theme_constant_override("shadow_offset_y", 2)
+	marker.position = start_pos
+	marker.size = marker_size
+	marker.pivot_offset = marker.size * 0.5
+	marker.scale = Vector2(0.45, 0.45)
+	marker.rotation_degrees = -8.0
 	marker.modulate.a = 0.0
 	marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_map_anim_layer.add_child(marker)
 	var tw := marker.create_tween().set_parallel(true)
 	_active_tweens.append(tw)
-	tw.tween_property(marker, "modulate:a", 1.0, 0.10 / _speed)
-	tw.tween_property(marker, "position:y", marker.position.y - maxf(12.0, _get_cell_size() * 0.35), 0.34 / _speed)
-	tw.tween_property(marker, "modulate:a", 0.0, 0.18 / _speed).set_delay(0.18 / _speed)
+	var rise := maxf(18.0, cell_size * 0.56)
+	tw.tween_property(marker, "modulate:a", 1.0, 0.08 / _speed)
+	tw.tween_property(marker, "scale", Vector2(1.30, 1.30), 0.14 / _speed).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tw.tween_property(marker, "scale", Vector2(0.96, 0.96), 0.10 / _speed).set_delay(0.14 / _speed).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(marker, "scale", Vector2(1.06, 1.06), 0.12 / _speed).set_delay(0.24 / _speed).set_ease(Tween.EASE_OUT)
+	tw.tween_property(marker, "rotation_degrees", 7.0, 0.14 / _speed).set_ease(Tween.EASE_OUT)
+	tw.tween_property(marker, "rotation_degrees", -3.0, 0.10 / _speed).set_delay(0.14 / _speed).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(marker, "rotation_degrees", 0.0, 0.16 / _speed).set_delay(0.24 / _speed).set_ease(Tween.EASE_OUT)
+	tw.tween_property(marker, "position:y", marker.position.y - rise, 0.62 / _speed).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(marker, "modulate:a", 0.0, 0.20 / _speed).set_delay(0.42 / _speed)
 	tw.chain().tween_callback(func():
 		if is_instance_valid(marker):
 			marker.queue_free()
 		_active_tweens.erase(tw)
 	)
-	await tw.finished
+	return tw
 
 func _start_campaign_loop_effect(order: Dictionary, board_rect: Rect2, unique_houses: Array[String]) -> Control:
 	var marketing_type := str(order.get("type", ""))
