@@ -1,16 +1,16 @@
 {
 	"checkpoints": [
 		{
-			"hash": "1c293c20e59ce116673d3ab37618ddf0",
+			"hash": "3129b102cd260eabab5cf1e48f2635c6",
 			"index": 0,
 			"rng_calls": 29
 		}
 	],
 	"commands": [],
-	"created_at": "2026-01-20T03:45:36",
+	"created_at": "2026-04-25T23:40:48",
 	"current_index": -1,
-	"final_hash": "1c293c20e59ce116673d3ab37618ddf0",
-	"game_version": "0.1.0",
+	"final_hash": "3129b102cd260eabab5cf1e48f2635c6",
+	"game_version": "0.4.2",
 	"initial_state": {
 		"bank": {
 			"broke_count": 0,
@@ -29,12 +29,12 @@
 			"cart_operator": 6,
 			"cfo": 1,
 			"coach": 6,
-			"discount_manager": 1,
+			"discount_manager": 6,
 			"errand_boy": 12,
 			"executive_vice_president": 1,
 			"guru": 1,
 			"hr_director": 1,
-			"junior_vice_president": 1,
+			"junior_vice_president": 12,
 			"kitchen_trainee": 12,
 			"local_manager": 6,
 			"luxury_manager": 1,
@@ -43,14 +43,14 @@
 			"new_business_developer": 6,
 			"pizza_chef": 1,
 			"pizza_cook": 6,
-			"pricing_manager": 1,
+			"pricing_manager": 12,
 			"recruiting_girl": 12,
 			"recruiting_manager": 6,
 			"regional_manager": 0,
 			"senior_vice_president": 6,
 			"trainer": 11,
 			"truck_driver": 6,
-			"vice_president": 1,
+			"vice_president": 6,
 			"waitress": 12,
 			"zeppelin_pilot": 1
 		},
@@ -4418,11 +4418,13 @@
 			"base_tiles",
 			"base_maps"
 		],
+		"next_staff_id": 4,
 		"phase": "Working",
 		"players": [
 			{
 				"banned_employee_ids": [],
 				"busy_marketers": [],
+				"busy_staff_ids": [],
 				"can_peek_all_reserve_cards": false,
 				"cash": 0,
 				"ceo_cfo_ability_start_round": -1,
@@ -4430,11 +4432,15 @@
 					"ceo_slots": 3.0,
 					"structure": []
 				},
-				"drive_thru_active": false,
 				"employees": [
 					"ceo",
 					"regional_manager"
 				],
+				"employees_staff_ids": [
+					1,
+					3
+				],
+				"forfeited": false,
 				"id": 0,
 				"inventory": {
 					"beer": 0,
@@ -4465,14 +4471,28 @@
 					}
 				],
 				"reserve_employees": [],
-				"restaurant_logo_id": 2,
+				"reserve_staff_ids": [],
+				"restaurant_logo_id": 4,
 				"restaurants": [
 					"rest_1"
-				]
+				],
+				"staff_registry": {
+					"1": {
+						"created_round": 0,
+						"employee_type": "ceo",
+						"staff_id": 1
+					},
+					"3": {
+						"created_round": 1,
+						"employee_type": "regional_manager",
+						"staff_id": 3
+					}
+				}
 			},
 			{
 				"banned_employee_ids": [],
 				"busy_marketers": [],
+				"busy_staff_ids": [],
 				"can_peek_all_reserve_cards": false,
 				"cash": 0,
 				"ceo_cfo_ability_start_round": -1,
@@ -4480,10 +4500,13 @@
 					"ceo_slots": 3.0,
 					"structure": []
 				},
-				"drive_thru_active": false,
 				"employees": [
 					"ceo"
 				],
+				"employees_staff_ids": [
+					2
+				],
+				"forfeited": false,
 				"id": 1,
 				"inventory": {
 					"beer": 0,
@@ -4514,10 +4537,18 @@
 					}
 				],
 				"reserve_employees": [],
-				"restaurant_logo_id": 3,
+				"reserve_staff_ids": [],
+				"restaurant_logo_id": 0,
 				"restaurants": [
 					"rest_2"
-				]
+				],
+				"staff_registry": {
+					"2": {
+						"created_round": 0,
+						"employee_type": "ceo",
+						"staff_id": 2
+					}
+				}
 			}
 		],
 		"round_number": 1,
@@ -4563,9 +4594,24 @@
 					"1": false
 				}
 			},
+			"staff_train_event_counts": {
+
+			},
+			"staff_usage": {
+
+			},
 			"sub_phase_passed": {
 				"0": false,
 				"1": false
+			},
+			"train_employee_locks": {
+
+			},
+			"train_slot_usage": {
+
+			},
+			"train_slot_usage_instances": {
+
 			},
 			"working_sub_phase_order": [
 				"Recruit",
@@ -4578,6 +4624,8 @@
 			]
 		},
 		"rules": {
+			"bankruptcy_extra_reserve_per_player": 0,
+			"bankruptcy_max_breaks": 2,
 			"base_unit_price": 10,
 			"cfo_bonus_percent": 50,
 			"demand_cap_normal": 3,
