@@ -342,6 +342,9 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 				var rest_id := str(plan.get("restaurant_id", "")).strip_edges()
 				if not rest_id.is_empty():
 					data["restaurant_id"] = rest_id
+				var route_val = plan.get("route", null)
+				if route_val is Array:
+					data["route"] = DrinksProcurementClass.serialize_route(Array(route_val))
 
 				# issue_tracker #48: include chosen drink sources for log readability (route A: start restaurant + sources).
 				var picked_val = plan.get("picked_sources", null)

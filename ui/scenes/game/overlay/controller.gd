@@ -16,6 +16,7 @@ const DistanceOverlayControllerClass = preload("res://ui/scenes/game/overlay/dis
 const MarketingRangeOverlayControllerClass = preload("res://ui/scenes/game/overlay/marketing_range.gd")
 const ProcurementRouteOverlayControllerClass = preload("res://ui/scenes/game/overlay/procurement_route.gd")
 const DemandIndicatorControllerClass = preload("res://ui/scenes/game/overlay/demand_indicator.gd")
+const WorkingActionFeedbackControllerClass = preload("res://ui/scenes/game/overlay/working_action_feedback.gd")
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const UiZClass = preload("res://ui/utils/ui_z.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
@@ -51,6 +52,7 @@ var distance_overlay = null
 var marketing_range_overlay = null
 var procurement_route_overlay = null
 var demand_indicator = null
+var working_action_feedback = null
 var zoom_control = null
 var settings_dialog = null
 var help_tooltip_manager = null
@@ -62,6 +64,7 @@ var _distance_overlay_controller = null
 var _marketing_range_controller = null
 var _procurement_route_controller = null
 var _demand_indicator_controller = null
+var _working_action_feedback_controller = null
 var _help_tooltips_initialized: bool = false
 var _milestone_toast_initialized: bool = false
 var _toast_queue: Array[String] = []
@@ -101,6 +104,8 @@ func _init(scene, map_view, map_canvas, game_log_panel) -> void:
 	_marketing_range_controller = MarketingRangeOverlayControllerClass.new(_scene, _map_canvas)
 	_procurement_route_controller = ProcurementRouteOverlayControllerClass.new(_scene, _map_canvas)
 	_demand_indicator_controller = DemandIndicatorControllerClass.new(_scene, _map_canvas)
+	_working_action_feedback_controller = WorkingActionFeedbackControllerClass.new(_scene, _map_canvas)
+	working_action_feedback = _working_action_feedback_controller
 
 func set_execute_command(callable: Callable) -> void:
 	_execute_command = callable
@@ -293,6 +298,8 @@ func initialize() -> void:
 	if _zoom_controller != null:
 		_zoom_controller.initialize()
 		zoom_control = _zoom_controller.zoom_control
+	if _working_action_feedback_controller != null:
+		_working_action_feedback_controller.initialize()
 
 # === 覆盖层入口（P2）===
 
@@ -597,6 +604,8 @@ func hide_all_overlays() -> void:
 	hide_distance_overlay()
 	hide_marketing_range_overlay()
 	hide_procurement_route_overlay()
+	if _working_action_feedback_controller != null:
+		_working_action_feedback_controller.clear()
 
 func dispose() -> void:
 	if not _eventbus_source.is_empty():
@@ -620,7 +629,11 @@ func dispose() -> void:
 	_marketing_range_controller = null
 	_procurement_route_controller = null
 	_disable_dinnertime_overlay()
+	_disable_marketing_overlay()
 	_demand_indicator_controller = null
+	if _working_action_feedback_controller != null:
+		_working_action_feedback_controller.dispose()
+	_working_action_feedback_controller = null
 
 	_scene = null
 	_map_view = null
@@ -633,6 +646,7 @@ func dispose() -> void:
 	marketing_range_overlay = null
 	procurement_route_overlay = null
 	demand_indicator = null
+	working_action_feedback = null
 	zoom_control = null
 	settings_dialog = null
 	help_tooltip_manager = null
