@@ -235,13 +235,16 @@ func set_validation(valid: bool, message: String = "") -> void:
 	_update_ui()
 	ui_state_changed.emit()
 
-func clear_selection() -> void:
+func clear_selection(auto_select_restaurant: bool = true) -> void:
 	_selected_position = INVALID_POS
 	_selected_rotation = 0
 	_selected_restaurant_id = ""
 	_staff_picker_state.refresh_selected()
 	_ensure_supported_mode_for_selected_employee()
-	_ensure_selected_restaurant_for_mode()
+	if auto_select_restaurant:
+		_ensure_selected_restaurant_for_mode()
+	else:
+		_selected_restaurant_id = ""
 	_validation_ok = true
 	_validation_message = ""
 	_emit_preview()

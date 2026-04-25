@@ -508,7 +508,7 @@ func _on_restaurant_placement_confirmed(position: Vector2i, rotation: int, resta
 
 	var result: Result = _execute_command.call(Command.create(action_id, current_player_id, command_params))
 	if result.ok:
-		_after_restaurant_command_success(current_player_id)
+		_after_restaurant_command_success(current_player_id, action_id)
 	else:
 		if is_instance_valid(restaurant_placement_overlay) and restaurant_placement_overlay.has_method("set_validation"):
 			restaurant_placement_overlay.set_validation(false, result.error)
@@ -632,7 +632,7 @@ func _after_house_garden_command_success(actor_id: int) -> void:
 
 	_close_house_garden_overlay_and_refresh()
 
-func _after_restaurant_command_success(actor_id: int) -> void:
+func _after_restaurant_command_success(actor_id: int, action_id: String = "") -> void:
 	var state_after: GameState = _scene.game_engine.get_state() if (_scene != null and _scene.game_engine != null) else null
 	if state_after == null:
 		_close_restaurant_overlay_and_refresh()
@@ -647,7 +647,7 @@ func _after_restaurant_command_success(actor_id: int) -> void:
 		_sync_restaurant_placement_overlay(state_after, true)
 		_select_first_enabled_restaurant_staff_if_needed()
 		if is_instance_valid(restaurant_placement_overlay) and restaurant_placement_overlay.has_method("clear_selection"):
-			restaurant_placement_overlay.clear_selection()
+			restaurant_placement_overlay.clear_selection(str(action_id).strip_edges() != "move_restaurant")
 		return
 
 	_close_restaurant_overlay_and_refresh()
@@ -656,7 +656,7 @@ func _close_restaurant_overlay_and_refresh() -> void:
 	if is_instance_valid(restaurant_placement_overlay):
 		restaurant_placement_overlay.visible = false
 		if restaurant_placement_overlay.has_method("clear_selection"):
-			restaurant_placement_overlay.clear_selection()
+			restaurant_placement_overlay.clear_selection(false)
 	if _map_controller != null:
 		_map_controller.clear_selection()
 	if _overlay_controller != null:

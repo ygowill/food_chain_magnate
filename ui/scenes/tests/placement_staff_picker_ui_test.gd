@@ -83,6 +83,9 @@ static func run() -> Result:
 	r = _case_restaurant_overlay_defaults_to_enabled_staff()
 	if not r.ok:
 		return r
+	r = _case_restaurant_move_clear_can_skip_auto_restaurant_selection()
+	if not r.ok:
+		return r
 	r = await _case_restaurant_context_uses_custom_layout()
 	if not r.ok:
 		return r
@@ -175,6 +178,33 @@ static func _case_restaurant_overlay_defaults_to_enabled_staff() -> Result:
 	if int(overlay.get_selected_staff_id()) != 201:
 		overlay.free()
 		return Result.failure("restaurant overlay 切换后应保留 staff_id=201，实际: %s" % str(overlay.get_selected_staff_id()))
+	overlay.free()
+	return Result.success()
+
+static func _case_restaurant_move_clear_can_skip_auto_restaurant_selection() -> Result:
+	var overlay := RestaurantOverlayClass.new()
+	var highlighted_restaurants: Array[String] = []
+	overlay.highlight_requested.connect(func(_mode: String, _rotation: int, restaurant_id: String) -> void:
+		highlighted_restaurants.append(str(restaurant_id))
+	)
+	overlay.set_available_employee_items([
+		{"staff_id": 201, "employee_type": "regional_manager", "capacity": 1, "used": 0, "remaining": 1, "can_place_restaurant": true, "can_move_restaurant": true},
+	])
+	overlay.set_available_restaurants(["rest_0", "rest_1"])
+	overlay.set_mode("move_restaurant")
+	if str(overlay.get_selected_restaurant()).is_empty():
+		overlay.free()
+		return Result.failure("move_restaurant 初始应自动选择一家餐厅，方便进入移动模式")
+
+	highlighted_restaurants.clear()
+	overlay.clear_selection(false)
+	if not str(overlay.get_selected_restaurant()).is_empty():
+		overlay.free()
+		return Result.failure("移动餐厅确认后清理选点时不应重新自动选择餐厅")
+	if highlighted_restaurants.is_empty() or not str(highlighted_restaurants.back()).is_empty():
+		overlay.free()
+		return Result.failure("移动餐厅清理后应发出空 restaurant_id 的高亮请求来清掉地图高亮")
+
 	overlay.free()
 	return Result.success()
 
