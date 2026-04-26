@@ -3,7 +3,6 @@
     <header class="app-nav">
       <div class="app-nav__inner">
         <router-link to="/game" class="app-nav__brand">
-          <img src="/logo.png" alt="FCM" class="app-nav__logo" />
           <span class="app-nav__title">Food Chain Magnate</span>
         </router-link>
 
@@ -136,14 +135,6 @@ async function handleLogout() {
   text-decoration: none;
   margin-right: 32px;
   flex-shrink: 0;
-}
-
-.app-nav__logo {
-  width: 36px;
-  height: 36px;
-  border-radius: 6px;
-  object-fit: cover;
-  border: 1px solid rgba(201, 160, 32, 0.3);
 }
 
 .app-nav__title {

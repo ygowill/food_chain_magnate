@@ -134,6 +134,10 @@ function openGame() {
 <style scoped>
 .home {
   margin: -32px -28px;
+  background:
+    linear-gradient(180deg, rgba(43, 33, 23, 0.04) 0%, rgba(43, 33, 23, 0) 40%),
+    repeating-conic-gradient(rgba(43, 33, 23, 0.03) 0% 25%, transparent 0% 50%) 0 0 / 40px 40px,
+    var(--fcm-wall-bg);
 }
 
 /* ---- Hero ---- */
@@ -144,14 +148,7 @@ function openGame() {
 }
 
 .hero__bg {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background:
-    linear-gradient(180deg, rgba(43, 33, 23, 0.04) 0%, rgba(43, 33, 23, 0) 40%),
-    repeating-conic-gradient(rgba(43, 33, 23, 0.03) 0% 25%, transparent 0% 50%) 0 0 / 40px 40px;
-  pointer-events: none;
+  display: none;
 }
 
 .hero__content {
@@ -309,13 +306,13 @@ function openGame() {
 }
 
 .feature-card {
-  background: var(--fcm-surface);
-  border: 1px solid var(--fcm-field-border);
+  background: linear-gradient(180deg, #fff6dc 0%, #f3e3bb 100%);
+  border: 1px solid rgba(43, 33, 23, 0.34);
   border-radius: var(--fcm-radius-lg);
   padding: 32px 24px;
   text-align: center;
   transition: transform 0.2s, box-shadow 0.2s;
-  box-shadow: var(--fcm-shadow-card);
+  box-shadow: var(--fcm-shadow-card), inset 0 1px 0 rgba(255, 255, 255, 0.65);
 }
 
 .feature-card:hover {
@@ -331,8 +328,10 @@ function openGame() {
   align-items: center;
   justify-content: center;
   border-radius: var(--fcm-radius-lg);
-  background: var(--fcm-gold-light);
+  background: #ead596;
+  border: 1px solid rgba(43, 33, 23, 0.18);
   color: var(--fcm-gold);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 2px 6px rgba(18, 13, 8, 0.08);
 }
 
 .feature-card__icon {
@@ -386,13 +385,16 @@ function openGame() {
   width: 72px;
   height: 72px;
   border-radius: var(--fcm-radius-lg);
-  object-fit: cover;
-  border: 2px solid var(--fcm-field-border);
-  box-shadow: var(--fcm-shadow-card);
-  transition: border-color 0.2s;
+  object-fit: contain;
+  padding: 8px;
+  background: #fff6dc;
+  border: 2px solid rgba(43, 33, 23, 0.32);
+  box-shadow: var(--fcm-shadow-card), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  transition: border-color 0.2s, background-color 0.2s;
 }
 
 .brand-card:hover .brand-card__logo {
+  background: #fff0c1;
   border-color: var(--fcm-gold-border);
 }
 
