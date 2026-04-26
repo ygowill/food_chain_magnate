@@ -405,8 +405,8 @@ func find_phase_start_command_index() -> Result:
 # - 目标是撤销“当前玩家在当前阶段内”的操作（不跨阶段）。
 # - 仅依赖 PLAYER_TURN_STARTED 会漏掉“阶段变化但当前玩家不变”的场景（例如 OrderOfBusiness 自动进入 Working），
 #   从而把回合开始错误定位到更早的阶段（例如 Payday）。因此这里同时考虑 phase/round 变化。
-func find_current_player_turn_start_command_index() -> Result:
-	return CommandIndexQueriesClass.find_current_player_turn_start_command_index(self)
+func find_current_player_turn_start_command_index(player_id: int = -1) -> Result:
+	return CommandIndexQueriesClass.find_current_player_turn_start_command_index(self, player_id)
 
 # 获取特定范围的命令
 func get_commands_range(from: int, to: int) -> Array[Command]:

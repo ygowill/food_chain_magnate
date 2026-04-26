@@ -11,6 +11,7 @@ const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const ResyncSnapshotTransferClass = preload("res://core/utils/resync_snapshot_transfer.gd")
 const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
+const ONLINE_MARKETING_CONFIRM_KEY := "online_require_marketing_confirm"
 
 static func run() -> Result:
 	_reset_net_context()
@@ -717,6 +718,7 @@ static func _build_midpoint_resume_archive(base_archive: Dictionary) -> Result:
 	if not (preview_state.rules is Dictionary):
 		preview_state.rules = {}
 	preview_state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
+	preview_state.rules[ONLINE_MARKETING_CONFIRM_KEY] = 1
 	var archive: Dictionary = base_archive.duplicate(true)
 	archive["current_index"] = selected_index
 	var expected_hash := str(preview_state.compute_hash())

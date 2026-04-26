@@ -3,6 +3,7 @@ extends RefCounted
 
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const ArchiveClass = preload("res://core/engine/game_engine/archive.gd")
+const ArchiveRecoveryClass = preload("res://core/engine/game_engine/archive_recovery.gd")
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 const DEFAULT_RESTAURANT_LOGO_COUNT := 6
@@ -292,7 +293,7 @@ static func _normalize_room_mode(raw_mode: String) -> String:
 		return ROOM_MODE_RESUME_ARCHIVE
 	return ROOM_MODE_NORMAL
 
-static func _enable_online_dinnertime_confirm_on_engine(engine) -> void:
+static func _enable_online_settlement_confirm_on_engine(engine) -> void:
 	OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
 
 func _clear_prepared_resume_start_cache() -> void:
@@ -1113,14 +1114,18 @@ func configure_resume_lobby(archive: Dictionary) -> Result:
 	_clear_prepared_resume_start_cache()
 	room_mode = ROOM_MODE_RESUME_ARCHIVE
 	config["room_mode"] = ROOM_MODE_RESUME_ARCHIVE
-	_resume_lobby_archive = Dictionary(archive).duplicate(true)
+	var load_r: Result = ArchiveRecoveryClass.load_for_online_resume(Dictionary(archive).duplicate(true))
+	if not load_r.ok:
+		return Result.failure("resume archive load failed: %s" % load_r.error)
+	var loaded_info: Dictionary = Dictionary(load_r.value) if load_r.value is Dictionary else {}
+	_resume_lobby_archive = Dictionary(loaded_info.get("archive", archive)).duplicate(true)
 	var inferred_player_count := _infer_resume_player_count_from_archive(_resume_lobby_archive)
 	if inferred_player_count <= 0:
 		return Result.failure("resume archive player_count invalid")
 	_desired_player_count = inferred_player_count
 	config["desired_player_count"] = inferred_player_count
 	_touch()
-	return Result.success()
+	return Result.success().with_warnings(load_r.warnings)
 
 func get_resume_lobby_archive() -> Dictionary:
 	return _resume_lobby_archive.duplicate(true)
@@ -1876,7 +1881,7 @@ func _build_start_game_engine_and_payload() -> Result:
 		if not init_r.ok:
 			return Result.failure("GameEngine.initialize failed: %s" % init_r.error)
 
-	_enable_online_dinnertime_confirm_on_engine(engine)
+	_enable_online_settlement_confirm_on_engine(engine)
 	return Result.success({
 		"engine": engine,
 		"payload": {
@@ -1963,7 +1968,7 @@ func start_game() -> Result:
 		return commit_r
 	return commit_r
 
-func rewind_to_current_player_turn_start(include_archive: bool = true) -> Result:
+func rewind_to_current_player_turn_start(include_archive: bool = true, player_id: int = -1) -> Result:
 	if status != STATUS_IN_GAME:
 		return Result.failure("Room is not in game")
 	if game_engine == null:
@@ -1971,7 +1976,7 @@ func rewind_to_current_player_turn_start(include_archive: bool = true) -> Result
 	if not game_engine.has_method("find_current_player_turn_start_command_index"):
 		return Result.failure("Room engine missing turn-start query")
 
-	var idx_r: Result = game_engine.find_current_player_turn_start_command_index()
+	var idx_r: Result = game_engine.find_current_player_turn_start_command_index(player_id)
 	if not idx_r.ok:
 		return Result.failure("find_current_player_turn_start_command_index failed: %s" % idx_r.error)
 
@@ -1989,6 +1994,9 @@ func rewind_to_current_player_turn_start(include_archive: bool = true) -> Result
 	var state = game_engine.get_state()
 	if state != null:
 		state_hash = str(state.compute_hash())
+	var resolved_player_id := int(player_id)
+	if resolved_player_id < 0 and state != null:
+		resolved_player_id = int(state.get_current_player_id())
 
 	var out := {
 		"target_index": target_index,
@@ -1997,6 +2005,7 @@ func rewind_to_current_player_turn_start(include_archive: bool = true) -> Result
 		"history_size": int(game_engine.command_history.size()),
 		"state_hash": state_hash,
 		"noop": target_index >= before_index,
+		"player_id": resolved_player_id,
 	}
 
 	if include_archive:

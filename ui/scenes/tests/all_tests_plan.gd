@@ -247,6 +247,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.OnlineResumeRoomLobbyTestClass.run(),
 		},
 		{
+			"name": "OnlineResumeArchiveRecoveryTest",
+			"fn": func() -> Result: return TestRefs.OnlineResumeArchiveRecoveryTestClass.run(),
+		},
+		{
 			"name": "OnlineResumeStartValidationTest",
 			"fn": func() -> Result: return TestRefs.OnlineResumeStartValidationTestClass.run(),
 		},
@@ -1177,6 +1181,10 @@ static func build_tests(host) -> Array[Dictionary]:
 										{
 											"name": "RewindTurnStartSetupTurnSwitchTest",
 											"fn": func() -> Result: return TestRefs.RewindTurnStartSetupTurnSwitchTestClass.run(12345),
+										},
+										{
+											"name": "RewindTurnStartActorIdTest",
+											"fn": func() -> Result: return TestRefs.RewindTurnStartActorIdTestClass.run(2, 12345),
 										},
 										{
 											"name": "EventTimelineBuildTest",

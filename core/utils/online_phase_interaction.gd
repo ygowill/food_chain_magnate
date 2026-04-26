@@ -126,6 +126,17 @@ static func can_local_player_act_in_online_phase(state: GameState) -> bool:
 		return can_player_act_in_online_marketing(state, local_pid)
 	return int(state.get_current_player_id()) == local_pid
 
+static func can_player_request_rewind_in_online_phase(state: GameState, player_id: int) -> bool:
+	if not is_online_mode():
+		return false
+	if state == null:
+		return false
+	if not is_valid_player_id(state, player_id):
+		return false
+	if is_online_parallel_phase(state):
+		return true
+	return int(state.get_current_player_id()) == int(player_id)
+
 static func _read_dinnertime_pending_list(state: GameState) -> Array:
 	if state == null:
 		return []

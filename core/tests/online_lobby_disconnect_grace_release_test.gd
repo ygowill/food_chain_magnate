@@ -5,6 +5,7 @@ const ConnectTokenClass = preload("res://core/utils/connect_token.gd")
 const ServerLogicClass = preload("res://autoload/net_client/server.gd")
 const RoomManagerClass = preload("res://server/room_manager.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
+const GameEngineClass = preload("res://core/engine/game_engine.gd")
 
 static func run() -> Result:
 	_reset_net_context()
@@ -257,11 +258,10 @@ static func _create_resume_waiting_lobby(rm, room_code: String, host_peer_id: in
 			"current_index": 0,
 		},
 	}
-	var archive := {
-		"initial_state": {
-			"players": [{}, {}],
-		},
-	}
+	var archive_r := _build_resume_waiting_archive()
+	if not archive_r.ok:
+		return archive_r
+	var archive: Dictionary = Dictionary(archive_r.value).duplicate(true)
 	var host_profile := {
 		"name": "ResumeHost",
 		"color_index": 0,
@@ -281,6 +281,16 @@ static func _create_resume_waiting_lobby(rm, room_code: String, host_peer_id: in
 	if not join_r.ok:
 		return Result.failure("join_room_as_waiting_member 失败: %s" % join_r.error)
 	return Result.success()
+
+static func _build_resume_waiting_archive() -> Result:
+	var engine := GameEngineClass.new()
+	var init_r: Result = engine.initialize(2, 12345, [], GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR)
+	if not init_r.ok:
+		return Result.failure("构造 resume waiting 测试存档失败: %s" % init_r.error)
+	var archive_r: Result = engine.create_archive()
+	if not archive_r.ok:
+		return Result.failure("创建 resume waiting 测试存档失败: %s" % archive_r.error)
+	return Result.success(Dictionary(archive_r.value).duplicate(true))
 
 static func _issue_token(payload: Dictionary, secret: String) -> Result:
 	return ConnectTokenClass.create_token(payload, str(secret))

@@ -5,6 +5,9 @@ const CommandClass = preload("res://core/types/command.gd")
 const ServerLogicClass = preload("res://autoload/net_client/server.gd")
 const RoomManagerClass = preload("res://server/room_manager.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
+const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run() -> Result:
 	_reset_net_context()
@@ -26,6 +29,11 @@ static func run() -> Result:
 	if not rewind_meta_r.ok:
 		_reset_net_context()
 		return rewind_meta_r
+
+	var rewind_actor_scope_r := _run_rewind_actor_scope_case()
+	if not rewind_actor_scope_r.ok:
+		_reset_net_context()
+		return rewind_actor_scope_r
 
 	var rate_limit_r := _run_rate_limit_case()
 	_reset_net_context()
@@ -206,6 +214,94 @@ static func _run_rewind_meta_case() -> Result:
 		if str(payload.get("request_id", "")) != "req_rewind":
 			return Result.failure("rewind meta request_id 错误: %s" % str(payload))
 	return Result.success()
+
+static func _run_rewind_actor_scope_case() -> Result:
+	var setup_r := _build_in_game_room_setup()
+	if not setup_r.ok:
+		return setup_r
+	var setup: Dictionary = Dictionary(setup_r.value)
+	var room = setup.get("room", null)
+	if room == null:
+		return Result.failure("rewind actor scope case 缺少 room")
+	var prepare_r := _prepare_restructuring_actor_scope_history(room)
+	if not prepare_r.ok:
+		return prepare_r
+	var prepare: Dictionary = Dictionary(prepare_r.value)
+	var expected_target := int(prepare.get("expected_target", -999))
+	var p0_submit_index := int(prepare.get("p0_submit_index", -1))
+	var p1_direct_index := int(prepare.get("p1_direct_index", -1))
+	if expected_target < 0:
+		return Result.failure("rewind actor scope case expected_target 无效: %d" % expected_target)
+
+	var mock_net := _MockNetClient.new(setup.get("room_manager", null), 16 * 1024 * 1024)
+	var server = ServerLogicClass.new()
+	server.setup(mock_net)
+
+	mock_net.multiplayer.remote_sender_id = 11
+	server.handle_rpc_rewind_to_turn_start({"request_id": "req_rewind_actor_scope"})
+
+	var idx := _find_sent_method(mock_net.sent, 11, "rpc_rewind_to_turn_start_meta")
+	if idx < 0:
+		return Result.failure("actor scope rewind 应发送 meta 给 P2，实际=%s" % str(mock_net.sent))
+	var payload_val = Dictionary(mock_net.sent[idx]).get("payload", null)
+	if not (payload_val is Dictionary):
+		return Result.failure("actor scope rewind payload 类型错误: %s" % str(mock_net.sent[idx]))
+	var payload: Dictionary = Dictionary(payload_val)
+	if int(payload.get("player_id", -1)) != 1:
+		return Result.failure("actor scope rewind 应记录发起玩家 P2: %s" % str(payload))
+	if int(payload.get("target_index", -999)) != expected_target:
+		return Result.failure(
+			"actor scope rewind target 错误: got=%d want=%d p0_submit=%d p1_direct=%d payload=%s"
+				% [int(payload.get("target_index", -999)), expected_target, p0_submit_index, p1_direct_index, str(payload)]
+		)
+	if int(room.game_engine.current_command_index) != expected_target:
+		return Result.failure("actor scope rewind 后 engine current_index 错误: got=%d want=%d" % [int(room.game_engine.current_command_index), expected_target])
+	if int(room.game_engine.command_history.size()) != expected_target + 1:
+		return Result.failure("actor scope rewind 后 history_size 错误: got=%d want=%d" % [int(room.game_engine.command_history.size()), expected_target + 1])
+	return Result.success()
+
+static func _prepare_restructuring_actor_scope_history(room) -> Result:
+	if room == null or room.game_engine == null:
+		return Result.failure("actor scope setup 缺少 engine")
+	var engine = room.game_engine
+	var state = engine.get_state()
+	if state == null:
+		return Result.failure("actor scope setup state 为空")
+	state.round_number = 1
+	var adv: Result = engine.execute_command(CommandClass.create_system(ActionIdsClass.ADVANCE_PHASE))
+	if not adv.ok:
+		return Result.failure("actor scope setup 推进到 Restructuring 失败: %s" % adv.error)
+	state = engine.get_state()
+	if str(state.phase) != DefsClass.PHASE_RESTRUCTURING:
+		return Result.failure("actor scope setup 应在 Restructuring，实际: %s" % str(state.phase))
+	var p0_submit: Result = engine.execute_command(CommandClass.create("submit_restructuring", 0, {}))
+	if not p0_submit.ok:
+		return Result.failure("actor scope setup P1 submit 失败: %s" % p0_submit.error)
+	var p0_submit_index := int(engine.current_command_index)
+
+	state = engine.get_state()
+	var take := StateUpdaterClass.take_from_pool(state, "local_manager", 1)
+	if not take.ok:
+		return Result.failure("actor scope setup 取 local_manager 失败: %s" % take.error)
+	var add := StateUpdaterClass.add_employee(state, 1, "local_manager", true)
+	if not add.ok:
+		return Result.failure("actor scope setup 给 P2 添加 local_manager 失败: %s" % add.error)
+
+	var p1_direct: Result = engine.execute_command(CommandClass.create("set_company_structure_direct", 1, {
+		"slot_index": 0,
+		"employee_id": "local_manager",
+	}))
+	if not p1_direct.ok:
+		return Result.failure("actor scope setup P2 direct 失败: %s" % p1_direct.error)
+	var p1_direct_index := int(engine.current_command_index)
+	state = engine.get_state()
+	if state != null:
+		state.current_player_index = maxi(0, Array(state.turn_order).find(0))
+	return Result.success({
+		"expected_target": p1_direct_index - 1,
+		"p0_submit_index": p0_submit_index,
+		"p1_direct_index": p1_direct_index,
+	})
 
 static func _build_in_game_room_setup() -> Result:
 	var rng := RandomNumberGenerator.new()

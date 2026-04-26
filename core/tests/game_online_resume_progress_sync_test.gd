@@ -7,6 +7,7 @@ const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
+const ONLINE_MARKETING_CONFIRM_KEY := "online_require_marketing_confirm"
 
 static func run() -> Result:
 	if NetContext == null:
@@ -501,6 +502,7 @@ static func _apply_online_dinnertime_confirm_to_engine(engine) -> void:
 	if not (state.rules is Dictionary):
 		state.rules = {}
 	state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
+	state.rules[ONLINE_MARKETING_CONFIRM_KEY] = 1
 
 static func _restore(
 	prev_mode,
