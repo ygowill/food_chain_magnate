@@ -4,6 +4,7 @@ const AutoAdvanceTryStepClass = preload("res://core/engine/game_engine/auto_adva
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
+const ONLINE_MARKETING_CONFIRM_KEY := "online_require_marketing_confirm"
 
 static func prepare_engine_for_online_resume(
 	engine: GameEngine,
@@ -20,6 +21,8 @@ static func prepare_engine_for_online_resume(
 	if not (state.rules is Dictionary):
 		state.rules = {}
 	state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
+	state.rules[ONLINE_MARKETING_CONFIRM_KEY] = 1
+	_persist_online_confirm_markers_to_initial_checkpoint(engine)
 
 	if str(state.phase) == DefsClass.PHASE_DINNERTIME:
 		AutoAdvanceTryStepClass._ensure_online_dinnertime_pending_guard(state)
@@ -37,6 +40,45 @@ static func prepare_engine_for_online_resume(
 		"history_size": int(engine.command_history.size()),
 		"state_hash": str(state.compute_hash()),
 	})
+
+static func _persist_online_confirm_markers_to_initial_checkpoint(engine: GameEngine) -> void:
+	if engine == null or engine.checkpoints.is_empty() or not (engine.checkpoints[0] is Dictionary):
+		return
+	var checkpoint0: Dictionary = Dictionary(engine.checkpoints[0]).duplicate(true)
+	var state_dict_val = checkpoint0.get("state_dict", null)
+	if not (state_dict_val is Dictionary):
+		return
+	var state_dict: Dictionary = Dictionary(state_dict_val).duplicate(true)
+	var rules: Dictionary = Dictionary(state_dict.get("rules", {})).duplicate(true) if state_dict.get("rules", null) is Dictionary else {}
+	var can_persist_dinnertime := int(engine.current_command_index) < 0 or _has_player_confirm_command(engine, "confirm_dinnertime")
+	var can_persist_marketing := int(engine.current_command_index) < 0 or _has_player_confirm_command(engine, "confirm_marketing")
+	var changed := false
+	if can_persist_dinnertime and int(rules.get(ONLINE_DINNERTIME_CONFIRM_KEY, 0)) != 1:
+		rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
+		changed = true
+	if can_persist_marketing and int(rules.get(ONLINE_MARKETING_CONFIRM_KEY, 0)) != 1:
+		rules[ONLINE_MARKETING_CONFIRM_KEY] = 1
+		changed = true
+	if not changed:
+		return
+	state_dict["rules"] = rules
+	checkpoint0["state_dict"] = state_dict
+	var state_read := GameState.from_dict(state_dict)
+	if state_read.ok and state_read.value != null:
+		checkpoint0["hash"] = state_read.value.compute_hash()
+	engine.checkpoints[0] = checkpoint0
+
+static func _has_player_confirm_command(engine: GameEngine, action_id: String) -> bool:
+	if engine == null:
+		return false
+	for cmd in engine.command_history:
+		if cmd == null:
+			continue
+		if str(cmd.action_id) != action_id:
+			continue
+		if int(cmd.actor) >= 0:
+			return true
+	return false
 
 static func validate_resume_point(
 	engine: GameEngine,

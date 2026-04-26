@@ -47,16 +47,18 @@ static func find_phase_start_command_index(engine: GameEngine) -> Result:
 # - 目标是撤销“当前玩家在当前阶段内”的操作（不跨阶段）。
 # - 仅依赖 PLAYER_TURN_STARTED 会漏掉“阶段变化但当前玩家不变”的场景（例如 OrderOfBusiness 自动进入 Working），
 #   从而把回合开始错误定位到更早的阶段（例如 Payday）。因此这里同时考虑 phase/round 变化。
-static func find_current_player_turn_start_command_index(engine: GameEngine) -> Result:
+static func find_current_player_turn_start_command_index(engine: GameEngine, player_id: int = -1) -> Result:
 	var init_check := engine.ensure_initialized()
 	if not init_check.ok:
 		return init_check
 	if engine.state == null:
 		return Result.failure("游戏状态为空")
 
-	var pid := engine.state.get_current_player_id()
+	var pid := int(player_id)
 	if pid < 0:
-		return Result.failure("当前玩家无效")
+		pid = engine.state.get_current_player_id()
+	if pid < 0 or pid >= engine.state.players.size():
+		return Result.failure("当前玩家无效: %d" % pid)
 
 	if engine.current_command_index < 0:
 		return Result.success(-1)

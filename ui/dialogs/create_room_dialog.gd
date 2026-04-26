@@ -6,29 +6,14 @@ signal create_requested(room_password: String, config_patch: Dictionary, resume_
 signal cancelled()
 
 const ArchiveClass = preload("res://core/engine/game_engine/archive.gd")
+const ArchiveRecoveryClass = preload("res://core/engine/game_engine/archive_recovery.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
-const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const ResumeLogHistoryBuilderClass = preload("res://ui/dialogs/create_room_resume_log_history_builder.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 const WEB_UPLOAD_DIR := "user://web_uploads"
-
-class _SilentEventSink:
-	extends RefCounted
-
-	func emit_event(_event_type: String, _data: Dictionary) -> void:
-		pass
-
-	func clear_history_and_reset_sequence() -> void:
-		pass
-
-	func clear_history() -> void:
-		pass
-
-	func record_event(_event_type: String, _data: Dictionary) -> void:
-		pass
 
 var _dialog_panel: PanelContainer = null
 var _inner_border: PanelContainer = null
@@ -838,13 +823,18 @@ func _load_archive_from_path(path: String) -> void:
 		_set_error("读取存档失败：%s" % archive_r.error)
 		return
 	var archive: Dictionary = Dictionary(archive_r.value).duplicate(true)
-	var engine = GameEngineClass.new()
-	if engine.has_method("set_event_sink"):
-		engine.set_event_sink(_SilentEventSink.new())
-	var load_r: Result = engine.load_from_archive(archive)
+	var load_r: Result = ArchiveRecoveryClass.load_for_online_resume(archive)
 	if not load_r.ok:
 		_set_error("存档不可用于联机恢复：%s" % load_r.error)
 		return
+	var loaded_info: Dictionary = Dictionary(load_r.value) if load_r.value is Dictionary else {}
+	archive = Dictionary(loaded_info.get("archive", archive)).duplicate(true)
+	var engine = loaded_info.get("engine", null)
+	if engine == null or not is_instance_valid(engine):
+		_set_error("存档不可用于联机恢复：恢复引擎为空")
+		return
+	for warning in load_r.warnings:
+		push_warning(str(warning))
 	var state = engine.get_state()
 	if state == null or not (state.players is Array):
 		_set_error("存档状态无效：缺少玩家信息")

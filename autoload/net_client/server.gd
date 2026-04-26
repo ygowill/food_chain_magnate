@@ -9,6 +9,7 @@ const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const EventHistoryRebuildClass = preload("res://core/engine/game_engine/event_history_rebuild.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const ConnectTokenClass = preload("res://core/utils/connect_token.gd")
+const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
 const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 const ResyncSnapshotTransferClass = preload("res://core/utils/resync_snapshot_transfer.gd")
 const RESUME_BOOTSTRAP_MODE_FULL_ARCHIVE_SNAPSHOT := "full_archive_snapshot"
@@ -2595,20 +2596,20 @@ func handle_rpc_rewind_to_turn_start(request: Dictionary) -> void:
 		send_request_rejected(peer_id, request_id, "spectator_readonly", "Spectator cannot request rewind")
 		return
 
-	# 仅允许“当前玩家”发起回退（避免旁观/非当前回合玩家影响对局）。
+	# 非同时阶段仅允许当前玩家；同时阶段使用发起 peer 对应的玩家作为回退主体。
 	var state = room.game_engine.get_state()
 	if state == null:
 		send_request_rejected(peer_id, request_id, "state_missing", "Room state missing")
 		return
-	if str(state.phase) != DefsClass.PHASE_RESTRUCTURING and int(state.get_current_player_id()) != actor_id:
-		send_request_rejected(peer_id, request_id, "not_current_player", "Only current player can request rewind")
+	if not OnlinePhaseInteractionClass.can_player_request_rewind_in_online_phase(state, actor_id):
+		send_request_rejected(peer_id, request_id, "not_current_player", "Only the acting player can request rewind")
 		return
 
 	if not room.has_method("rewind_to_current_player_turn_start"):
 		send_request_rejected(peer_id, request_id, "not_supported", "Room does not support rewind")
 		return
 
-	var rr = room.rewind_to_current_player_turn_start(false)
+	var rr = room.rewind_to_current_player_turn_start(false, actor_id)
 	if not rr.ok:
 		send_request_rejected(peer_id, request_id, "rewind_failed", rr.error)
 		return
@@ -2625,6 +2626,7 @@ func handle_rpc_rewind_to_turn_start(request: Dictionary) -> void:
 		"history_size": int(payload.get("history_size", -1)),
 		"state_hash": str(payload.get("state_hash", "")),
 		"noop": bool(payload.get("noop", false)),
+		"player_id": actor_id,
 	}
 	GameLog.warn(
 		"NetClient",

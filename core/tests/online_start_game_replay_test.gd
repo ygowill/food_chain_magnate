@@ -7,6 +7,7 @@ const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const CommandClass = preload("res://core/types/command.gd")
 const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
+const ONLINE_MARKETING_CONFIRM_KEY := "online_require_marketing_confirm"
 
 static func run() -> Result:
 	var rng := RandomNumberGenerator.new()
@@ -94,6 +95,7 @@ static func run() -> Result:
 		if not (client_state.rules is Dictionary):
 			client_state.rules = {}
 		client_state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
+		client_state.rules[ONLINE_MARKETING_CONFIRM_KEY] = 1
 
 	for _i in range(player_count):
 		var server_state = server_engine.get_state()

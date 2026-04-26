@@ -546,7 +546,7 @@ func _on_online_rewind_to_turn_start_meta(payload: Dictionary) -> void:
 
 	if target_index < -1:
 		GameLog.warn("Game", "联机回退应用失败：target_index 无效: %d" % target_index)
-		_resync_in_progress = false
+		_begin_full_resync_request("rewind_target_before_runtime_anchor", true)
 		if _update_ui.is_valid():
 			_update_ui.call()
 		return

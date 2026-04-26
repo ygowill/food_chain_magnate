@@ -64,7 +64,17 @@ func rewind_to_turn_start() -> void:
 		GameLog.warn("Game", "回放模式下无法回退回合")
 		return
 
-	var idx_r: Result = game_engine.find_current_player_turn_start_command_index()
+	var state := game_engine.get_state()
+	if state == null:
+		return
+	var pid := int(state.get_current_player_id())
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		pid = int(OnlinePhaseInteractionClass.get_online_local_player_id(state, pid))
+		if not OnlinePhaseInteractionClass.can_player_request_rewind_in_online_phase(state, pid):
+			GameLog.warn("Game", "联机模式下当前玩家不能发起回退（player=%d）" % pid)
+			return
+
+	var idx_r: Result = game_engine.find_current_player_turn_start_command_index(pid)
 	if not idx_r.ok:
 		GameLog.warn("Game", "计算回合开始索引失败: %s" % idx_r.error)
 		return
@@ -74,8 +84,6 @@ func rewind_to_turn_start() -> void:
 	if target_index >= current_index:
 		return
 
-	var state := game_engine.get_state()
-	var pid := int(state.get_current_player_id())
 	var phase_name := str(state.phase)
 	var steps := current_index - target_index
 

@@ -7,6 +7,7 @@ const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
+const ONLINE_MARKETING_CONFIRM_KEY := "online_require_marketing_confirm"
 
 static func run() -> Result:
 	var legacy_r := _run_manual_assignment_resume_room_scenario()
@@ -43,6 +44,7 @@ static func _build_resume_archive() -> Result:
 	if not (preview_state.rules is Dictionary):
 		preview_state.rules = {}
 	preview_state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
+	preview_state.rules[ONLINE_MARKETING_CONFIRM_KEY] = 1
 	var archive: Dictionary = base_archive.duplicate(true)
 	archive["current_index"] = selected_index
 	var expected_hash := str(preview_state.compute_hash())
