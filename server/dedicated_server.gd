@@ -6,6 +6,7 @@ const DEFAULT_BIND_ADDRESS := "0.0.0.0"
 const DEFAULT_PLATFORM_BACKEND_URL := "http://127.0.0.1:8000"
 const DEFAULT_INTERNAL_API_SECRET := "dev-internal-secret-change-in-production"
 const DEFAULT_ROOM_PERSIST_PATH := "user://dedicated_server/online_room_snapshots.json"
+const DEFAULT_ROUND_AUTOSAVE_DIR := "user://dedicated_server/online_round_autosaves"
 const DEFAULT_SERVER_IDENTITY_PATH := "user://dedicated_server/server_identity.cfg"
 const HEARTBEAT_INTERVAL_SEC := 15.0
 const PERSIST_INTERVAL_SEC := 2.0
@@ -97,6 +98,11 @@ func _setup_persistence() -> Result:
 	if snapshot_path.is_empty():
 		snapshot_path = DEFAULT_ROOM_PERSIST_PATH
 	_room_persistence_store = RoomPersistenceStoreClass.new(snapshot_path)
+	var round_autosave_dir := str(OS.get_environment("FCM_ROUND_AUTOSAVE_DIR")).strip_edges()
+	if round_autosave_dir.is_empty():
+		round_autosave_dir = DEFAULT_ROUND_AUTOSAVE_DIR
+	if _room_persistence_store.has_method("set_round_autosave_dir"):
+		_room_persistence_store.set_round_autosave_dir(round_autosave_dir)
 
 	if NetClient == null or NetClient._room_manager == null or not is_instance_valid(NetClient._room_manager):
 		return Result.failure("DedicatedServer persistence setup failed: RoomManager missing")
@@ -121,6 +127,7 @@ func _setup_persistence() -> Result:
 	add_child(_persist_timer)
 	_persist_timer.timeout.connect(_on_persist_timeout)
 	_persist_timer.start()
+	_setup_round_autosave()
 
 	var restored_rooms := int(restore_r.value.get("restored_rooms", 0)) if restore_r.value is Dictionary else 0
 	GameLog.info(
@@ -130,6 +137,66 @@ func _setup_persistence() -> Result:
 	)
 	_persist_rooms()
 	return Result.success()
+
+func _setup_round_autosave() -> void:
+	if NetClient == null or not is_instance_valid(NetClient):
+		return
+	if not NetClient.has_signal("server_round_autosave_requested"):
+		return
+	var cb := Callable(self, "_on_server_round_autosave_requested")
+	if not NetClient.server_round_autosave_requested.is_connected(cb):
+		NetClient.server_round_autosave_requested.connect(cb)
+
+func _on_server_round_autosave_requested(room_code: String, completed_round_number: int, state_hash: String) -> void:
+	_persist_round_autosave(room_code, completed_round_number, state_hash)
+
+func _persist_round_autosave(room_code: String, completed_round_number: int, state_hash: String) -> void:
+	if _room_persistence_store == null:
+		return
+	if NetClient == null or NetClient._room_manager == null or not is_instance_valid(NetClient._room_manager):
+		return
+	if not (NetClient._room_manager.rooms is Dictionary):
+		return
+	var code := str(room_code).strip_edges().to_upper()
+	if code.is_empty():
+		return
+	var room = NetClient._room_manager.rooms.get(code, null)
+	if room == null:
+		GameLog.warn("DedicatedServer", "Round autosave skipped: room not found %s" % code)
+		return
+	if not room.has_method("build_full_authority_archive_export"):
+		GameLog.warn("DedicatedServer", "Round autosave skipped: room export missing %s" % code)
+		return
+	var export_r: Result = room.build_full_authority_archive_export()
+	if not export_r.ok:
+		GameLog.warn("DedicatedServer", "Round autosave export failed room=%s err=%s" % [code, export_r.error])
+		return
+	var export_info: Dictionary = Dictionary(export_r.value) if export_r.value is Dictionary else {}
+	var archive_val = export_info.get("archive", null)
+	if not (archive_val is Dictionary):
+		GameLog.warn("DedicatedServer", "Round autosave export returned invalid archive room=%s" % code)
+		return
+	var save_r: Result = _room_persistence_store.save_round_autosave_archive(
+		code,
+		Dictionary(archive_val).duplicate(true),
+		int(completed_round_number),
+		str(state_hash).strip_edges()
+	)
+	if not save_r.ok:
+		GameLog.warn("DedicatedServer", "Round autosave write failed room=%s err=%s" % [code, save_r.error])
+		return
+	var save_info: Dictionary = Dictionary(save_r.value).duplicate(true) if save_r.value is Dictionary else {}
+	GameLog.info(
+		"DedicatedServer",
+		"Round autosave saved room=%s completed_round=%d path=%s bytes=%d"
+			% [
+				code,
+				int(completed_round_number),
+				str(save_info.get("path", "")),
+				int(save_info.get("json_bytes", 0)),
+			]
+	)
+	_persist_rooms()
 
 func _sync_room_directory_snapshot(snapshot: Dictionary) -> Result:
 	if _backend_url.is_empty() or _internal_api_secret.is_empty() or _game_server_id.is_empty():

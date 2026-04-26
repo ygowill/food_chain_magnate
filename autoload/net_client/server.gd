@@ -2724,6 +2724,7 @@ func broadcast_command_applied(room, cmd, perf_meta: Dictionary = {}) -> void:
 	}
 	if room.has_method("record_resume_delta"):
 		room.record_resume_delta(cmd, state_hash)
+	_maybe_request_round_end_autosave(room, cmd, state, state_hash)
 	var targets := Array(room.get_peer_ids())
 	var broadcast_start_mono_usec := OnlinePerfTraceClass.now_mono_usec()
 	var broadcast_fields := Dictionary(perf_meta).duplicate(true)
@@ -2752,6 +2753,25 @@ func broadcast_command_applied(room, cmd, perf_meta: Dictionary = {}) -> void:
 		"TX CommandApplied %s state_hash=%s recipients=%d %s"
 			% [_command_brief(cmd), _short_hash(state_hash), targets.size(), _room_brief(room)]
 	)
+
+func _maybe_request_round_end_autosave(room, cmd, state, state_hash: String) -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	if room == null or cmd == null or state == null:
+		return
+	if str(cmd.phase) != DefsClass.PHASE_CLEANUP:
+		return
+	if str(state.phase) != DefsClass.PHASE_RESTRUCTURING:
+		return
+	var completed_round_number := int(state.round_number) - 1
+	if completed_round_number <= 0:
+		return
+	if not _net.has_method("request_server_round_autosave"):
+		return
+	var room_code := str(room.room_code).strip_edges().to_upper()
+	if room_code.is_empty():
+		return
+	_net.request_server_round_autosave(room_code, completed_round_number, str(state_hash).strip_edges())
 
 func server_is_player_forfeited(state, player_id: int) -> bool:
 	if state == null:

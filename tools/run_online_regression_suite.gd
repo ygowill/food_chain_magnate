@@ -112,6 +112,10 @@ const TESTS: Array[Dictionary] = [
 		"path": "res://core/tests/online_room_persistence_recovery_test.gd",
 	},
 	{
+		"name": "OnlineRoundAutosaveTest",
+		"path": "res://core/tests/online_round_autosave_test.gd",
+	},
+	{
 		"name": "OnlineLobbyResumeControllerTest",
 		"path": "res://core/tests/online_lobby_resume_controller_test.gd",
 	},

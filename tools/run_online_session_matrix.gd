@@ -169,6 +169,11 @@ const GROUPS := {
 				"path": "res://core/tests/online_room_persistence_recovery_test.gd",
 			},
 			{
+				"name": "OnlineRoundAutosaveTest",
+				"scenario": "round_end_server_autosave",
+				"path": "res://core/tests/online_round_autosave_test.gd",
+			},
+			{
 				"name": "OnlineLobbyPersistenceRecoveryTest",
 				"scenario": "lobby_room_persistence_recovery",
 				"path": "res://core/tests/online_lobby_persistence_recovery_test.gd",

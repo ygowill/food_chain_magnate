@@ -1,0 +1,155 @@
+class_name OnlineRoundAutosaveTest
+extends RefCounted
+
+const ArchiveClass = preload("res://core/engine/game_engine/archive.gd")
+const CommandClass = preload("res://core/types/command.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
+const GameStateClass = preload("res://core/state/game_state.gd")
+const NetClientServerLogicClass = preload("res://autoload/net_client/server.gd")
+const RoomManagerClass = preload("res://server/room_manager.gd")
+const RoomPersistenceStoreClass = preload("res://server/room_persistence_store.gd")
+
+class FakeNet:
+	extends RefCounted
+	var calls: Array[Dictionary] = []
+
+	func request_server_round_autosave(room_code: String, completed_round_number: int, state_hash: String = "") -> void:
+		calls.append({
+			"room_code": str(room_code),
+			"completed_round_number": int(completed_round_number),
+			"state_hash": str(state_hash),
+		})
+
+class FakeRoom:
+	extends RefCounted
+	var room_code: String = "AUTO01"
+
+static func run() -> Result:
+	var signal_r := _test_cleanup_to_restructuring_requests_round_autosave()
+	if not signal_r.ok:
+		return signal_r
+
+	var store_r := _test_round_autosave_store_writes_standard_archive_and_overwrites()
+	if not store_r.ok:
+		return store_r
+
+	return Result.success()
+
+static func _test_cleanup_to_restructuring_requests_round_autosave() -> Result:
+	var fake_net := FakeNet.new()
+	var server_logic = NetClientServerLogicClass.new()
+	server_logic.setup(fake_net)
+
+	var room := FakeRoom.new()
+	room.room_code = "auto01"
+	var state := GameStateClass.new()
+	state.phase = DefsClass.PHASE_RESTRUCTURING
+	state.round_number = 3
+	var cmd = CommandClass.create("skip", 0)
+	cmd.phase = DefsClass.PHASE_CLEANUP
+
+	server_logic._maybe_request_round_end_autosave(room, cmd, state, "hash_after_round")
+	if fake_net.calls.size() != 1:
+		return Result.failure("Cleanup -> Restructuring 应请求一次回合自动存档，实际: %d" % fake_net.calls.size())
+	var call: Dictionary = fake_net.calls[0]
+	if str(call.get("room_code", "")) != "AUTO01":
+		return Result.failure("自动存档 room_code 应规范为大写，实际: %s" % str(call.get("room_code", "")))
+	if int(call.get("completed_round_number", -1)) != 2:
+		return Result.failure("completed_round_number 错误: %s" % str(call))
+	if str(call.get("state_hash", "")) != "hash_after_round":
+		return Result.failure("state_hash 未透传: %s" % str(call))
+
+	var non_cleanup_cmd = CommandClass.create("skip", 0)
+	non_cleanup_cmd.phase = DefsClass.PHASE_PAYDAY
+	server_logic._maybe_request_round_end_autosave(room, non_cleanup_cmd, state, "hash_after_payday")
+	if fake_net.calls.size() != 1:
+		return Result.failure("非 Cleanup 阶段不应请求回合自动存档")
+
+	return Result.success()
+
+static func _test_round_autosave_store_writes_standard_archive_and_overwrites() -> Result:
+	var room_code := "RASV01"
+	var rm := RoomManagerClass.new()
+	var cfg := {
+		"desired_player_count": 2,
+		"seed_mode": "fixed",
+		"seed": 12345,
+		"allow_spectators": true,
+		"enabled_modules_v2": [],
+		"modules_v2_base_dir": GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR,
+	}
+	var create_r: Result = rm.create_room_with_code(
+		10,
+		{"name": "Host", "color_index": 0, "restaurant_logo_id": -1, "user_id": "u_autosave_host"},
+		room_code,
+		cfg
+	)
+	if not create_r.ok:
+		return Result.failure("create_room_with_code 失败: %s" % create_r.error)
+	var join_r: Result = rm.join_room(
+		11,
+		{"name": "Player2", "color_index": 1, "restaurant_logo_id": -1, "user_id": "u_autosave_p2"},
+		room_code,
+		""
+	)
+	if not join_r.ok:
+		return Result.failure("join_room 失败: %s" % join_r.error)
+
+	var room = rm.rooms.get(room_code, null)
+	if room == null:
+		return Result.failure("room missing after setup")
+	var start_r: Result = room.start_game()
+	if not start_r.ok:
+		return Result.failure("start_game 失败: %s" % start_r.error)
+	var export_r: Result = room.build_full_authority_archive_export()
+	if not export_r.ok:
+		return Result.failure("build_full_authority_archive_export 失败: %s" % export_r.error)
+	var export_info: Dictionary = Dictionary(export_r.value) if export_r.value is Dictionary else {}
+	var archive_val = export_info.get("archive", null)
+	if not (archive_val is Dictionary):
+		return Result.failure("export archive 类型错误")
+	var archive: Dictionary = Dictionary(archive_val).duplicate(true)
+
+	var store := RoomPersistenceStoreClass.new(
+		"user://online_round_autosave_test_snapshot.json",
+		"user://online_round_autosave_test"
+	)
+	var save1: Result = store.save_round_autosave_archive(room_code, archive, 1, "hash_one")
+	if not save1.ok:
+		return Result.failure("save_round_autosave_archive #1 失败: %s" % save1.error)
+	var save_path := str(store.get_round_autosave_path(room_code))
+	var load1: Result = ArchiveClass.load_archive_from_file(save_path)
+	if not load1.ok:
+		return Result.failure("读取回合自动存档 #1 失败: %s" % load1.error)
+	var check1 := _assert_loaded_autosave_archive(Dictionary(load1.value), 1, "hash_one")
+	if not check1.ok:
+		return check1
+
+	var save2: Result = store.save_round_autosave_archive(room_code, archive, 2, "hash_two")
+	if not save2.ok:
+		return Result.failure("save_round_autosave_archive #2 失败: %s" % save2.error)
+	var load2: Result = ArchiveClass.load_archive_from_file(save_path)
+	if not load2.ok:
+		return Result.failure("读取回合自动存档 #2 失败: %s" % load2.error)
+	var check2 := _assert_loaded_autosave_archive(Dictionary(load2.value), 2, "hash_two")
+	if not check2.ok:
+		return check2
+
+	return Result.success()
+
+static func _assert_loaded_autosave_archive(archive: Dictionary, completed_round_number: int, state_hash: String) -> Result:
+	if not archive.has("schema_version"):
+		return Result.failure("回合自动存档应保持标准 archive 根结构，缺少 schema_version")
+	if not (archive.get("commands", null) is Array):
+		return Result.failure("回合自动存档应保持标准 archive 根结构，缺少 commands")
+	var meta: Dictionary = ArchiveClass.get_online_resume_meta(archive)
+	var autosave_val = meta.get("round_autosave", null)
+	if not (autosave_val is Dictionary):
+		return Result.failure("online_resume_meta.round_autosave 缺失")
+	var autosave: Dictionary = Dictionary(autosave_val)
+	if int(autosave.get("completed_round_number", -1)) != int(completed_round_number):
+		return Result.failure("completed_round_number 未覆盖更新: %s" % str(autosave))
+	if str(autosave.get("state_hash", "")) != str(state_hash):
+		return Result.failure("state_hash 未覆盖更新: %s" % str(autosave))
+	return Result.success()

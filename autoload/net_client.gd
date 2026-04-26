@@ -32,6 +32,7 @@ signal rewind_to_turn_start_meta_received(payload: Dictionary)
 signal resync_delta_applied(payload: Dictionary)
 signal resync_delta_failed(message: String)
 signal server_room_directory_dirty()
+signal server_round_autosave_requested(room_code: String, completed_round_number: int, state_hash: String)
 
 var _peer: WebSocketMultiplayerPeer = null
 
@@ -214,6 +215,14 @@ func mark_server_room_directory_dirty() -> void:
 	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_SERVER:
 		return
 	server_room_directory_dirty.emit()
+
+func request_server_round_autosave(room_code: String, completed_round_number: int, state_hash: String = "") -> void:
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_SERVER:
+		return
+	var normalized_room_code := str(room_code).strip_edges().to_upper()
+	if normalized_room_code.is_empty():
+		return
+	server_round_autosave_requested.emit(normalized_room_code, int(completed_round_number), str(state_hash).strip_edges())
 
 func request_create_room(desired_player_count: int, room_password: String, config: Dictionary = {}) -> String:
 	var request_id := _next_request_id()
