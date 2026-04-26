@@ -480,14 +480,22 @@ static func _draw_selection(canvas, cell_size: int) -> void:
 		else:
 			hover_ok = bool(canvas._is_valid_world_pos(canvas._hover_pos))
 	if hover_ok:
-		var show_hover := false
-		if Globals != null:
-			show_hover = bool(Globals.show_cell_hover_tooltip)
+		var show_hover := _read_globals_bool("show_cell_hover_tooltip", false)
 		if not show_hover:
 			return
 		var v2 = canvas._world_to_view(canvas._hover_pos)
 		var rect2 := Rect2(Vector2(v2.x * cell_size, v2.y * cell_size), Vector2(cell_size, cell_size))
 		canvas.draw_rect(rect2, Color(1.0, 1.0, 1.0, 0.35), false, 1.0)
+
+static func _read_globals_bool(key: String, fallback: bool) -> bool:
+	var tree = Engine.get_main_loop()
+	if tree is SceneTree:
+		var globals = (tree as SceneTree).root.get_node_or_null("Globals")
+		if globals != null:
+			var val = globals.get(key)
+			if val is bool:
+				return bool(val)
+	return fallback
 
 static func _draw_tile_borders(canvas, cell_size: int) -> void:
 	TilesPassClass.draw_tile_borders(canvas, cell_size)

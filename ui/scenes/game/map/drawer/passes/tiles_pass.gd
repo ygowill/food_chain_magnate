@@ -72,9 +72,7 @@ static func draw_tile_id_labels(canvas, cell_size: int) -> void:
 	if tps.is_empty():
 		return
 
-	var show_tile_ids := false
-	if Globals != null:
-		show_tile_ids = bool(Globals.show_tile_ids)
+	var show_tile_ids := _read_globals_bool("show_tile_ids", false)
 	if not show_tile_ids:
 		return
 
@@ -127,3 +125,13 @@ static func draw_tile_id_labels(canvas, cell_size: int) -> void:
 		var width := rect.size.x - pad * 2.0
 		canvas.draw_string(font, baseline + Vector2(1, 1), tile_id, align, width, font_size, Color(0, 0, 0, 0.85))
 		canvas.draw_string(font, baseline, tile_id, align, width, font_size, Color(1, 1, 1, 1))
+
+static func _read_globals_bool(key: String, fallback: bool) -> bool:
+	var tree = Engine.get_main_loop()
+	if tree is SceneTree:
+		var globals = (tree as SceneTree).root.get_node_or_null("Globals")
+		if globals != null:
+			var val = globals.get(key)
+			if val is bool:
+				return bool(val)
+	return fallback

@@ -150,6 +150,11 @@ static func _test_map_snapshot_renderer_outputs_png() -> Result:
 	if not render_r.ok:
 		return Result.failure("MapSnapshotRenderer.render_state_png 失败: %s" % render_r.error)
 	var info: Dictionary = Dictionary(render_r.value)
+	if str(info.get("renderer", "")) != "map_canvas_cpu":
+		return Result.failure("地图截图应复用 MapCanvas CPU 渲染，实际 renderer=%s warnings=%s" % [str(info.get("renderer", "")), render_r.get_warnings_string()])
+	var fallback_font: Font = ThemeDB.fallback_font
+	if fallback_font == null or not fallback_font.has_char("汉".unicode_at(0)):
+		return Result.failure("地图截图渲染应安装支持中文的项目字体，避免中文变成问号")
 	var png_bytes: PackedByteArray = PackedByteArray(info.get("png_bytes", PackedByteArray()))
 	if png_bytes.size() < 8:
 		return Result.failure("地图截图 PNG 过小")
