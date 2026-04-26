@@ -1,28 +1,28 @@
 <template>
-  <AuthCard title="注册" width="460px">
+  <AuthCard title="注册" width="480px">
     <el-form @submit.prevent="handleRegister" :disabled="loading">
       <el-form-item label="昵称">
-        <el-input v-model="displayName" placeholder="可选，不填则自动生成" />
+        <el-input v-model="displayName" placeholder="可选，不填则自动生成" size="large" />
       </el-form-item>
       <el-form-item label="邮箱">
-        <el-input v-model="email" placeholder="请输入邮箱" />
+        <el-input v-model="email" placeholder="请输入邮箱" size="large" />
       </el-form-item>
       <el-form-item label="密码">
-        <el-input v-model="password" type="password" placeholder="请输入密码" show-password />
+        <el-input v-model="password" type="password" placeholder="请输入密码" show-password size="large" />
       </el-form-item>
       <el-form-item label="确认密码">
-        <el-input v-model="confirmPassword" type="password" placeholder="请再次输入密码" show-password />
+        <el-input v-model="confirmPassword" type="password" placeholder="请再次输入密码" show-password size="large" />
       </el-form-item>
       <el-form-item label="验证码">
         <div class="captcha-row">
           <div class="captcha-code">{{ captchaCode }}</div>
-          <el-input v-model="captchaInput" placeholder="请输入验证码" />
-          <el-button @click="refreshCaptcha">换一张</el-button>
+          <el-input v-model="captchaInput" placeholder="请输入验证码" size="large" />
+          <el-button @click="refreshCaptcha" size="large">换一张</el-button>
         </div>
       </el-form-item>
       <el-alert v-if="error" :title="error" type="error" :closable="false" style="margin-bottom: 16px" />
       <el-form-item>
-        <el-button type="primary" native-type="submit" :loading="loading" style="width: 100%">
+        <el-button type="primary" native-type="submit" :loading="loading" size="large" class="auth-btn">
           注册
         </el-button>
       </el-form-item>
@@ -94,6 +94,11 @@ async function handleRegister() {
 </script>
 
 <style scoped>
+.auth-btn {
+  width: 100%;
+  font-weight: 600;
+}
+
 .captcha-row {
   display: grid;
   grid-template-columns: 108px 1fr auto;
@@ -107,11 +112,11 @@ async function handleRegister() {
   align-items: center;
   justify-content: center;
   min-height: 40px;
-  border: 1px solid var(--fcm-field-border);
-  border-radius: 10px;
+  border: 1px solid var(--fcm-gold-border);
+  border-radius: var(--fcm-radius);
   background:
-    linear-gradient(135deg, rgba(122, 53, 42, 0.1), rgba(201, 168, 104, 0.18)),
-    repeating-linear-gradient(-45deg, rgba(122, 53, 42, 0.08), rgba(122, 53, 42, 0.08) 6px, transparent 6px, transparent 12px);
+    linear-gradient(135deg, rgba(201, 160, 32, 0.08), rgba(201, 160, 32, 0.15)),
+    repeating-linear-gradient(-45deg, rgba(43, 33, 23, 0.04), rgba(43, 33, 23, 0.04) 6px, transparent 6px, transparent 12px);
   color: var(--fcm-text-primary);
   font-size: 18px;
   font-weight: 700;

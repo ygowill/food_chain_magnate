@@ -26,7 +26,6 @@ const router = createRouter({
       path: '/game',
       name: 'game',
       component: () => import('../views/GameView.vue'),
-      meta: { auth: true },
     },
     {
       path: '/matches',

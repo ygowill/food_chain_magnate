@@ -6,7 +6,7 @@
 
 body {
   margin: 0;
-  font-family: 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+  font-family: var(--fcm-font-body);
   font-weight: 400;
   color: var(--fcm-text-primary);
   background: var(--fcm-wall-bg);
@@ -14,20 +14,41 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Vignette overlay on auth pages */
-.fcm-vignette {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(ellipse at center, transparent 50%, rgba(18, 13, 8, 0.18) 100%);
-  z-index: 0;
-}
-
-/* Common link style */
 a {
   color: var(--fcm-primary);
   text-decoration: none;
+  transition: color 0.15s;
 }
 a:hover {
+  color: var(--fcm-primary-hover);
   text-decoration: underline;
+}
+
+/* Route transition */
+.route-enter-active {
+  transition: opacity 0.25s ease-out;
+}
+.route-leave-active {
+  transition: opacity 0.15s ease-in;
+}
+.route-enter-from,
+.route-leave-to {
+  opacity: 0;
+}
+
+/* Primary button gradient override */
+.el-button--primary {
+  background: linear-gradient(135deg, var(--fcm-primary) 0%, var(--fcm-primary-hover) 100%) !important;
+  border-color: var(--fcm-primary) !important;
+  transition: all 0.2s !important;
+}
+
+.el-button--primary:hover {
+  background: linear-gradient(135deg, var(--fcm-primary-hover) 0%, var(--fcm-primary-pressed) 100%) !important;
+  border-color: var(--fcm-primary-hover) !important;
+  box-shadow: 0 4px 12px rgba(186, 59, 46, 0.25) !important;
+}
+
+.el-button--primary:active {
+  box-shadow: 0 2px 4px rgba(186, 59, 46, 0.2) !important;
 }

@@ -1,10 +1,10 @@
 <template>
-  <AuthCard title="设备授权" width="460px">
+  <AuthCard title="设备授权" width="480px">
     <div v-if="!authorized" style="text-align: center">
       <p class="device-hint">请确认以下设备码与客户端显示一致：</p>
       <div class="user-code">{{ userCode }}</div>
       <el-alert v-if="error" :title="error" type="error" :closable="false" style="margin: 16px 0" />
-      <el-button type="primary" :loading="loading" @click="handleAuthorize" style="width: 100%">
+      <el-button type="primary" :loading="loading" @click="handleAuthorize" size="large" style="width: 100%; font-weight: 600">
         授权此设备
       </el-button>
     </div>
@@ -53,18 +53,19 @@ async function handleAuthorize() {
 .device-hint {
   color: var(--fcm-text-muted);
   margin: 0 0 8px;
+  font-size: 14px;
 }
 .user-code {
-  font-size: 32px;
+  font-size: 36px;
   font-weight: 700;
-  letter-spacing: 4px;
-  margin: 16px 0 20px;
-  font-family: monospace;
+  letter-spacing: 6px;
+  margin: 20px 0 28px;
+  font-family: 'Playfair Display', monospace;
   color: var(--fcm-text-primary);
   background: var(--fcm-field-bg);
-  border: 1px solid var(--fcm-field-border);
+  border: 2px solid var(--fcm-gold-border);
   border-radius: var(--fcm-radius);
   display: inline-block;
-  padding: 8px 24px;
+  padding: 12px 32px;
 }
 </style>

@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@theme {
+  --color-fcm-primary-50: #fef2f1;
+  --color-fcm-primary-100: #fde3e1;
+  --color-fcm-primary-200: #fccbc7;
+  --color-fcm-primary-300: #f8a8a1;
+  --color-fcm-primary-400: #f17a6e;
+  --color-fcm-primary-500: #ba3b2e;
+  --color-fcm-primary-600: #a63126;
+  --color-fcm-primary-700: #922a20;
+  --color-fcm-primary-800: #7a241c;
+  --color-fcm-primary-900: #5e1c16;
+
+  --color-fcm-gold-50: #fefcf0;
+  --color-fcm-gold-100: #fdf6d3;
+  --color-fcm-gold-200: #faeaa7;
+  --color-fcm-gold-300: #f5d96e;
+  --color-fcm-gold-400: #e8c23a;
+  --color-fcm-gold-500: #c9a020;
+  --color-fcm-gold-600: #a67d18;
+  --color-fcm-gold-700: #845f14;
+  --color-fcm-gold-800: #6b4c12;
+  --color-fcm-gold-900: #4a3410;
+
+  --color-fcm-dark-50: #f5f0eb;
+  --color-fcm-dark-100: #e0d5c7;
+  --color-fcm-dark-200: #c4b39e;
+  --color-fcm-dark-300: #9e8a6e;
+  --color-fcm-dark-400: #6b5d47;
+  --color-fcm-dark-500: #4a3f30;
+  --color-fcm-dark-600: #3a3125;
+  --color-fcm-dark-700: #2b2117;
+  --color-fcm-dark-800: #1e170f;
+  --color-fcm-dark-900: #120d08;
+
+  --color-fcm-surface: #f7f0db;
+  --color-fcm-surface-alt: #ebe0c7;
+  --color-fcm-wall: #ede0bf;
+  --color-fcm-cream: #faf5e8;
+
+  --font-display: 'Playfair Display', 'Noto Serif SC', Georgia, serif;
+  --font-body: 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+
+  --shadow-card: 0 2px 8px rgba(18, 13, 8, 0.08), 0 4px 16px rgba(18, 13, 8, 0.06);
+  --shadow-card-hover: 0 4px 12px rgba(18, 13, 8, 0.12), 0 8px 24px rgba(18, 13, 8, 0.1);
+  --shadow-elevated: 0 8px 24px rgba(18, 13, 8, 0.14), 0 16px 40px rgba(18, 13, 8, 0.1);
+  --shadow-nav: 0 2px 12px rgba(18, 13, 8, 0.18);
+}

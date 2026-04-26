@@ -894,20 +894,20 @@ onMounted(async () => {
 
 <style scoped>
 .page-header {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .page-title {
   margin: 0 0 8px;
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--fcm-text-primary);
 }
 
 .page-title-line {
   height: 2px;
-  background: var(--fcm-accent-line);
-  max-width: 120px;
+  background: linear-gradient(90deg, var(--fcm-gold, #c9a020), transparent);
+  max-width: 200px;
 }
 
 .error-alert {
@@ -917,8 +917,8 @@ onMounted(async () => {
 .poster-card {
   background: var(--fcm-surface);
   border: 1px solid var(--fcm-field-border);
-  border-radius: var(--fcm-radius);
-  padding: 16px;
+  border-radius: var(--fcm-radius-lg, 12px);
+  padding: 20px;
   box-shadow: var(--fcm-shadow-card);
 }
 
@@ -926,7 +926,10 @@ onMounted(async () => {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: var(--fcm-surface-alt);
+  border-radius: var(--fcm-radius, 6px);
 }
 
 .toolbar-input {
@@ -942,6 +945,7 @@ onMounted(async () => {
   align-items: center;
   color: var(--fcm-text-muted);
   font-size: 13px;
+  font-weight: 500;
 }
 
 .inline-row {
@@ -959,11 +963,14 @@ onMounted(async () => {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--fcm-field-border);
 }
 
 .pager__label {
   color: var(--fcm-text-muted);
   font-size: 13px;
+  font-weight: 500;
 }
 </style>

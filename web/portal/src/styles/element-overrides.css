@@ -25,9 +25,52 @@
   --el-border-radius-base: var(--fcm-radius);
   --el-border-radius-small: var(--fcm-radius-sm);
 
-  --el-font-family: 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+  --el-font-family: var(--fcm-font-body);
   --el-font-size-base: 14px;
 
   --el-fill-color-blank: var(--fcm-field-bg);
   --el-fill-color-light: var(--fcm-surface-alt);
+}
+
+/* Input focus glow */
+.el-input__wrapper:focus-within {
+  box-shadow: 0 0 0 1px var(--fcm-primary) inset, 0 0 0 3px rgba(186, 59, 46, 0.1) !important;
+}
+
+/* Table refinements */
+.el-table {
+  --el-table-border-color: var(--fcm-field-border);
+  border-radius: var(--fcm-radius) !important;
+  overflow: hidden;
+}
+
+.el-table th.el-table__cell {
+  font-weight: 600 !important;
+  font-size: 13px !important;
+}
+
+/* Descriptions refinements */
+.el-descriptions__label {
+  font-weight: 500 !important;
+  color: var(--fcm-text-muted) !important;
+}
+
+/* Tag refinements */
+.el-tag {
+  border-radius: 4px !important;
+}
+
+/* Alert refinements */
+.el-alert {
+  border-radius: var(--fcm-radius) !important;
+}
+
+/* Form item label */
+.el-form-item__label {
+  font-weight: 500 !important;
+}
+
+/* Tabs overrides for admin page */
+.el-tabs__item.is-active {
+  font-weight: 600 !important;
 }
