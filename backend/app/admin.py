@@ -11,8 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user, has_admin_access_configured, is_admin_user
 from app.config import settings
 from app.db import get_db
-from app.models import AuthIdentity, Match, MatchParticipant, MatchReplay, Room, RoomMember, RoomTombstone, Session, User
-from app.replay_storage import get_local_replay_path, parse_local_replay_filename
+from app.models import AuthIdentity, Match, MatchArtifact, MatchParticipant, MatchReplay, Room, RoomMember, RoomTombstone, Session, User
+from app.replay_storage import (
+    get_local_artifact_path,
+    get_local_replay_path,
+    parse_local_artifact_relative_path,
+    parse_local_replay_filename,
+)
 
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
 
@@ -176,8 +181,22 @@ async def _delete_matches_by_ids(db: AsyncSession, match_ids: list[str]) -> list
         except OSError:
             pass
 
+    artifacts = (await db.execute(
+        select(MatchArtifact).where(MatchArtifact.match_id.in_(existing_match_ids))
+    )).scalars().all()
+    for artifact in artifacts:
+        relative_path = parse_local_artifact_relative_path(artifact.storage_uri)
+        if not relative_path:
+            continue
+        path = get_local_artifact_path(relative_path)
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
     await db.execute(delete(MatchParticipant).where(MatchParticipant.match_id.in_(existing_match_ids)))
     await db.execute(delete(MatchReplay).where(MatchReplay.match_id.in_(existing_match_ids)))
+    await db.execute(delete(MatchArtifact).where(MatchArtifact.match_id.in_(existing_match_ids)))
     await db.execute(delete(Match).where(Match.match_id.in_(existing_match_ids)))
     return existing_match_ids
 

@@ -37,6 +37,14 @@ func get_round_autosave_path(room_code: String) -> String:
 		return ""
 	return _round_autosave_dir.path_join("%s.json" % code)
 
+func get_round_map_snapshot_path(room_code: String, completed_round_number: int, snapshot_kind: String = "round_end") -> String:
+	var code := _normalize_room_code(room_code)
+	if code.is_empty():
+		return ""
+	var kind := _normalize_snapshot_kind(snapshot_kind)
+	var round_num := maxi(0, int(completed_round_number))
+	return _round_autosave_dir.path_join("%s_round_%04d_%s.png" % [code, round_num, kind])
+
 func load_snapshot() -> Result:
 	if not FileAccess.file_exists(_snapshot_path):
 		return Result.success(_empty_snapshot())
@@ -127,7 +135,7 @@ func save_snapshot(snapshot: Dictionary) -> Result:
 		"json_bytes": json_bytes,
 	})
 
-func save_round_autosave_archive(room_code: String, archive: Dictionary, completed_round_number: int, state_hash: String = "") -> Result:
+func save_round_autosave_archive(room_code: String, archive: Dictionary, completed_round_number: int, state_hash: String = "", snapshot_kind: String = "round_end") -> Result:
 	var code := _normalize_room_code(room_code)
 	if code.is_empty():
 		return Result.failure("round autosave room_code 不能为空")
@@ -143,6 +151,7 @@ func save_round_autosave_archive(room_code: String, archive: Dictionary, complet
 		"version": ROUND_AUTOSAVE_VERSION,
 		"room_code": code,
 		"completed_round_number": int(completed_round_number),
+		"snapshot_kind": _normalize_snapshot_kind(snapshot_kind),
 		"state_hash": str(state_hash).strip_edges(),
 		"saved_at": Time.get_datetime_string_from_system(),
 		"saved_at_unix_sec": int(Time.get_unix_time_from_system()),
@@ -167,6 +176,37 @@ func save_round_autosave_archive(room_code: String, archive: Dictionary, complet
 		"room_code": code,
 		"completed_round_number": int(completed_round_number),
 		"json_bytes": json_bytes,
+		"json_text": json_text,
+	})
+
+func save_round_map_snapshot_png(room_code: String, png_bytes: PackedByteArray, completed_round_number: int, snapshot_kind: String = "round_end") -> Result:
+	var code := _normalize_room_code(room_code)
+	if code.is_empty():
+		return Result.failure("round map snapshot room_code 不能为空")
+	if png_bytes.is_empty():
+		return Result.failure("round map snapshot png 不能为空")
+	var save_path := get_round_map_snapshot_path(code, completed_round_number, snapshot_kind)
+	if save_path.is_empty():
+		return Result.failure("round map snapshot path 为空")
+
+	var abs_path := ProjectSettings.globalize_path(save_path)
+	var abs_dir := abs_path.get_base_dir()
+	var mkdir_err := DirAccess.make_dir_recursive_absolute(abs_dir)
+	if mkdir_err != OK:
+		return Result.failure("创建回合地图截图目录失败: %s err=%s" % [abs_dir, str(mkdir_err)])
+
+	var file := FileAccess.open(save_path, FileAccess.WRITE)
+	if file == null:
+		return Result.failure("写入回合地图截图失败: %s" % save_path)
+	file.store_buffer(png_bytes)
+	file.close()
+
+	return Result.success({
+		"path": abs_path,
+		"room_code": code,
+		"completed_round_number": int(completed_round_number),
+		"snapshot_kind": _normalize_snapshot_kind(snapshot_kind),
+		"png_bytes": png_bytes.size(),
 	})
 
 func _empty_snapshot() -> Dictionary:
@@ -178,6 +218,12 @@ func _empty_snapshot() -> Dictionary:
 
 func _normalize_room_code(room_code: String) -> String:
 	return str(room_code).strip_edges().to_upper()
+
+func _normalize_snapshot_kind(snapshot_kind: String) -> String:
+	var kind := str(snapshot_kind).strip_edges()
+	if kind == "game_over":
+		return "game_over"
+	return "round_end"
 
 func _normalize_json_numbers(value):
 	match typeof(value):

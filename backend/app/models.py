@@ -156,6 +156,28 @@ class MatchReplay(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
+class MatchArtifact(Base):
+    __tablename__ = "match_artifacts"
+    __table_args__ = (
+        Index("ix_match_artifacts_match_type", "match_id", "artifact_type"),
+        Index("ix_match_artifacts_room_type", "room_code", "artifact_type"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_id)
+    match_id: Mapped[Optional[str]] = mapped_column(ForeignKey("matches.match_id"), nullable=True)
+    room_code: Mapped[str] = mapped_column(String, nullable=False)
+    artifact_type: Mapped[str] = mapped_column(String, nullable=False)
+    snapshot_kind: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    round_number: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    state_hash: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    storage_uri: Mapped[str] = mapped_column(String, nullable=False)
+    mime_type: Mapped[str] = mapped_column(String, nullable=False)
+    checksum: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+
 class DeviceCode(Base):
     __tablename__ = "device_codes"
 

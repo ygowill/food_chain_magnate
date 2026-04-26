@@ -6,6 +6,7 @@ const CommandClass = preload("res://core/types/command.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const GameStateClass = preload("res://core/state/game_state.gd")
+const MapSnapshotRendererClass = preload("res://server/map_snapshot_renderer.gd")
 const NetClientServerLogicClass = preload("res://autoload/net_client/server.gd")
 const RoomManagerClass = preload("res://server/room_manager.gd")
 const RoomPersistenceStoreClass = preload("res://server/room_persistence_store.gd")
@@ -14,11 +15,12 @@ class FakeNet:
 	extends RefCounted
 	var calls: Array[Dictionary] = []
 
-	func request_server_round_autosave(room_code: String, completed_round_number: int, state_hash: String = "") -> void:
+	func request_server_round_autosave(room_code: String, completed_round_number: int, state_hash: String = "", snapshot_kind: String = "round_end") -> void:
 		calls.append({
 			"room_code": str(room_code),
 			"completed_round_number": int(completed_round_number),
 			"state_hash": str(state_hash),
+			"snapshot_kind": str(snapshot_kind),
 		})
 
 class FakeRoom:
@@ -30,9 +32,17 @@ static func run() -> Result:
 	if not signal_r.ok:
 		return signal_r
 
+	var game_over_r := _test_game_over_requests_final_round_snapshot()
+	if not game_over_r.ok:
+		return game_over_r
+
 	var store_r := _test_round_autosave_store_writes_standard_archive_and_overwrites()
 	if not store_r.ok:
 		return store_r
+
+	var render_r := _test_map_snapshot_renderer_outputs_png()
+	if not render_r.ok:
+		return render_r
 
 	return Result.success()
 
@@ -59,6 +69,8 @@ static func _test_cleanup_to_restructuring_requests_round_autosave() -> Result:
 		return Result.failure("completed_round_number 错误: %s" % str(call))
 	if str(call.get("state_hash", "")) != "hash_after_round":
 		return Result.failure("state_hash 未透传: %s" % str(call))
+	if str(call.get("snapshot_kind", "")) != "round_end":
+		return Result.failure("snapshot_kind 应为 round_end: %s" % str(call))
 
 	var non_cleanup_cmd = CommandClass.create("skip", 0)
 	non_cleanup_cmd.phase = DefsClass.PHASE_PAYDAY
@@ -66,6 +78,95 @@ static func _test_cleanup_to_restructuring_requests_round_autosave() -> Result:
 	if fake_net.calls.size() != 1:
 		return Result.failure("非 Cleanup 阶段不应请求回合自动存档")
 
+	return Result.success()
+
+static func _test_game_over_requests_final_round_snapshot() -> Result:
+	var fake_net := FakeNet.new()
+	var server_logic = NetClientServerLogicClass.new()
+	server_logic.setup(fake_net)
+
+	var room := FakeRoom.new()
+	room.room_code = "final01"
+	var state := GameStateClass.new()
+	state.phase = DefsClass.PHASE_GAME_OVER
+	state.round_number = 5
+	var cmd = CommandClass.create("skip", 0)
+	cmd.phase = DefsClass.PHASE_CLEANUP
+
+	server_logic._maybe_request_round_end_autosave(room, cmd, state, "hash_final")
+	if fake_net.calls.size() != 1:
+		return Result.failure("GameOver 应请求一次终局地图截图/存档，实际: %d" % fake_net.calls.size())
+	var call: Dictionary = fake_net.calls[0]
+	if str(call.get("room_code", "")) != "FINAL01":
+		return Result.failure("终局自动存档 room_code 应规范为大写，实际: %s" % str(call.get("room_code", "")))
+	if int(call.get("completed_round_number", -1)) != 4:
+		return Result.failure("Cleanup 进入 GameOver 时 completed_round_number 应回退到已完成回合: %s" % str(call))
+	if str(call.get("snapshot_kind", "")) != "game_over":
+		return Result.failure("GameOver snapshot_kind 应为 game_over: %s" % str(call))
+	if str(call.get("state_hash", "")) != "hash_final":
+		return Result.failure("GameOver state_hash 未透传: %s" % str(call))
+	return Result.success()
+
+static func _test_map_snapshot_renderer_outputs_png() -> Result:
+	var state := GameStateClass.new()
+	state.map = {
+		"grid_size": Vector2i(2, 2),
+		"map_origin": Vector2i.ZERO,
+		"cells": [
+			[
+				{"road_segments": [{"dir": "n"}]},
+				{},
+			],
+			[
+				{},
+				{"blocked": true},
+			],
+		],
+		"houses": {
+			"1": {
+				"anchor_pos": Vector2i(0, 1),
+				"cells": [Vector2i(0, 1)],
+				"has_garden": true,
+			},
+		},
+		"restaurants": {
+			"r1": {
+				"owner": 1,
+				"anchor_pos": Vector2i(1, 0),
+				"cells": [Vector2i(1, 0)],
+			},
+		},
+		"drink_sources": [
+			{"world_pos": Vector2i(0, 0), "type": "soda"},
+		],
+		"marketing_placements": {
+			"1": {
+				"world_pos": Vector2i(1, 1),
+				"footprint_size": Vector2i.ONE,
+			},
+		},
+	}
+	var render_r: Result = MapSnapshotRendererClass.render_state_png(state)
+	if not render_r.ok:
+		return Result.failure("MapSnapshotRenderer.render_state_png 失败: %s" % render_r.error)
+	var info: Dictionary = Dictionary(render_r.value)
+	var png_bytes: PackedByteArray = PackedByteArray(info.get("png_bytes", PackedByteArray()))
+	if png_bytes.size() < 8:
+		return Result.failure("地图截图 PNG 过小")
+	var signature := png_bytes.slice(0, 8)
+	if signature != PackedByteArray([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]):
+		return Result.failure("地图截图 PNG 签名错误")
+
+	var store := RoomPersistenceStoreClass.new(
+		"user://online_round_autosave_render_test_snapshot.json",
+		"user://online_round_autosave_render_test"
+	)
+	var save_r: Result = store.save_round_map_snapshot_png("render01", png_bytes, 2, "game_over")
+	if not save_r.ok:
+		return Result.failure("save_round_map_snapshot_png 失败: %s" % save_r.error)
+	var png_path := str(store.get_round_map_snapshot_path("render01", 2, "game_over"))
+	if not FileAccess.file_exists(png_path):
+		return Result.failure("地图截图未写入: %s" % png_path)
 	return Result.success()
 
 static func _test_round_autosave_store_writes_standard_archive_and_overwrites() -> Result:
@@ -118,6 +219,8 @@ static func _test_round_autosave_store_writes_standard_archive_and_overwrites() 
 	var save1: Result = store.save_round_autosave_archive(room_code, archive, 1, "hash_one")
 	if not save1.ok:
 		return Result.failure("save_round_autosave_archive #1 失败: %s" % save1.error)
+	if str(Dictionary(save1.value).get("json_text", "")).strip_edges().is_empty():
+		return Result.failure("save_round_autosave_archive 应返回 json_text 供服务端上传")
 	var save_path := str(store.get_round_autosave_path(room_code))
 	var load1: Result = ArchiveClass.load_archive_from_file(save_path)
 	if not load1.ok:
@@ -152,4 +255,6 @@ static func _assert_loaded_autosave_archive(archive: Dictionary, completed_round
 		return Result.failure("completed_round_number 未覆盖更新: %s" % str(autosave))
 	if str(autosave.get("state_hash", "")) != str(state_hash):
 		return Result.failure("state_hash 未覆盖更新: %s" % str(autosave))
+	if str(autosave.get("snapshot_kind", "")) != "round_end":
+		return Result.failure("snapshot_kind 默认应为 round_end: %s" % str(autosave))
 	return Result.success()

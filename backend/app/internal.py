@@ -1,22 +1,29 @@
 from __future__ import annotations
 
+import base64
+import binascii
+import hashlib
 from datetime import datetime, timezone
 import hmac
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import get_db
-from app.models import GameServer, Room, RoomMember, RoomTombstone, Match, MatchParticipant, MatchReplay
-from app.replay_storage import save_local_replay_archive
+from app.models import GameServer, Room, RoomMember, RoomTombstone, Match, MatchParticipant, MatchReplay, MatchArtifact
+from app.replay_storage import save_local_match_artifact, save_local_replay_archive
 
 router = APIRouter(prefix="/internal", tags=["internal"])
 ACTIVE_ROOM_STATUSES = ("Lobby", "Starting", "InGame")
 RESUMABLE_MEMBER_STATUSES = ("active", "reconnecting")
+ARTIFACT_TYPE_LATEST_AUTOSAVE = "autosave_latest"
+ARTIFACT_TYPE_MAP_SNAPSHOT = "map_snapshot"
+SNAPSHOT_KIND_ROUND_END = "round_end"
+SNAPSHOT_KIND_GAME_OVER = "game_over"
 
 async def _mark_room_members_left(
     db: AsyncSession,
@@ -313,12 +320,210 @@ class FinalizeRequest(BaseModel):
     replay_size_bytes: Optional[int] = None
 
 
+class RoundArtifactUploadRequest(BaseModel):
+    room_code: str
+    round_number: int = Field(ge=0)
+    snapshot_kind: str = SNAPSHOT_KIND_ROUND_END
+    state_hash: Optional[str] = None
+    archive_json: Optional[str] = None
+    archive_checksum: Optional[str] = None
+    archive_size_bytes: Optional[int] = Field(default=None, ge=0)
+    map_snapshot_png_base64: Optional[str] = None
+    map_snapshot_checksum: Optional[str] = None
+    map_snapshot_size_bytes: Optional[int] = Field(default=None, ge=0)
+
+
+def _normalize_room_code(value: Optional[str]) -> str:
+    return str(value or "").strip().upper()
+
+
+def _normalize_snapshot_kind(value: str) -> str:
+    kind = str(value or SNAPSHOT_KIND_ROUND_END).strip()
+    if kind not in (SNAPSHOT_KIND_ROUND_END, SNAPSHOT_KIND_GAME_OVER):
+        raise HTTPException(status_code=400, detail="invalid snapshot_kind")
+    return kind
+
+
+def _sha256_hex(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _normalize_checksum(value: Optional[str]) -> str:
+    text = str(value or "").strip().lower()
+    if text.startswith("sha256:"):
+        text = text[len("sha256:"):]
+    return text
+
+
+def _validate_payload_integrity(
+    label: str,
+    data: bytes,
+    expected_size: Optional[int],
+    expected_checksum: Optional[str],
+) -> str:
+    if expected_size is not None and int(expected_size) != len(data):
+        raise HTTPException(status_code=400, detail=f"{label} size mismatch")
+    computed = _sha256_hex(data)
+    provided = _normalize_checksum(expected_checksum)
+    if provided and provided != computed:
+        raise HTTPException(status_code=400, detail=f"{label} checksum mismatch")
+    return computed
+
+
+async def _find_match_id_for_room(db: AsyncSession, room_code: str) -> Optional[str]:
+    match = (await db.execute(
+        select(Match)
+        .where(Match.room_code == room_code)
+        .order_by(Match.created_at.desc())
+    )).scalars().first()
+    if match is None:
+        return None
+    return str(match.match_id)
+
+
+async def _upsert_match_artifact(
+    db: AsyncSession,
+    *,
+    room_code: str,
+    artifact_type: str,
+    snapshot_kind: str,
+    round_number: int,
+    state_hash: Optional[str],
+    storage_uri: str,
+    mime_type: str,
+    checksum: Optional[str],
+    size_bytes: int,
+    match_id: Optional[str],
+) -> MatchArtifact:
+    stmt = select(MatchArtifact).where(
+        MatchArtifact.room_code == room_code,
+        MatchArtifact.artifact_type == artifact_type,
+    )
+    if artifact_type == ARTIFACT_TYPE_MAP_SNAPSHOT:
+        stmt = stmt.where(
+            MatchArtifact.snapshot_kind == snapshot_kind,
+            MatchArtifact.round_number == round_number,
+        )
+    artifact = (await db.execute(stmt)).scalar_one_or_none()
+    now = datetime.now(timezone.utc)
+    if artifact is None:
+        artifact = MatchArtifact(
+            match_id=match_id,
+            room_code=room_code,
+            artifact_type=artifact_type,
+            snapshot_kind=snapshot_kind,
+            round_number=round_number,
+            state_hash=state_hash,
+            storage_uri=storage_uri,
+            mime_type=mime_type,
+            checksum=checksum,
+            size_bytes=size_bytes,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(artifact)
+        await db.flush()
+        return artifact
+
+    artifact.match_id = artifact.match_id or match_id
+    artifact.snapshot_kind = snapshot_kind
+    artifact.round_number = round_number
+    artifact.state_hash = state_hash
+    artifact.storage_uri = storage_uri
+    artifact.mime_type = mime_type
+    artifact.checksum = checksum
+    artifact.size_bytes = size_bytes
+    artifact.updated_at = now
+    return artifact
+
+
+@router.post("/matches/round_artifacts", dependencies=[Depends(_require_internal_secret)])
+async def upload_round_artifacts(req: RoundArtifactUploadRequest, db: AsyncSession = Depends(get_db)):
+    room_code = _normalize_room_code(req.room_code)
+    if not room_code:
+        raise HTTPException(status_code=400, detail="room_code required")
+    snapshot_kind = _normalize_snapshot_kind(req.snapshot_kind)
+    round_number = max(0, int(req.round_number))
+    state_hash = str(req.state_hash or "").strip() or None
+    match_id = await _find_match_id_for_room(db, room_code)
+    artifacts: list[dict] = []
+
+    archive_json = str(req.archive_json or "")
+    if archive_json.strip():
+        archive_bytes = archive_json.encode("utf-8")
+        checksum = _validate_payload_integrity(
+            "archive",
+            archive_bytes,
+            req.archive_size_bytes,
+            req.archive_checksum,
+        )
+        try:
+            storage_uri = save_local_match_artifact(f"rooms/{room_code}/latest_autosave.json", archive_bytes)
+        except (OSError, ValueError) as exc:
+            raise HTTPException(status_code=500, detail=f"failed to persist archive artifact: {exc}") from exc
+        artifact = await _upsert_match_artifact(
+            db,
+            room_code=room_code,
+            artifact_type=ARTIFACT_TYPE_LATEST_AUTOSAVE,
+            snapshot_kind=snapshot_kind,
+            round_number=round_number,
+            state_hash=state_hash,
+            storage_uri=storage_uri,
+            mime_type="application/json",
+            checksum=checksum,
+            size_bytes=len(archive_bytes),
+            match_id=match_id,
+        )
+        artifacts.append({"id": artifact.id, "artifact_type": artifact.artifact_type})
+
+    snapshot_b64 = str(req.map_snapshot_png_base64 or "").strip()
+    if snapshot_b64:
+        try:
+            png_bytes = base64.b64decode(snapshot_b64, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="map snapshot base64 invalid") from exc
+        if not png_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise HTTPException(status_code=400, detail="map snapshot must be png")
+        checksum = _validate_payload_integrity(
+            "map_snapshot",
+            png_bytes,
+            req.map_snapshot_size_bytes,
+            req.map_snapshot_checksum,
+        )
+        filename = f"round_{round_number:04d}_{snapshot_kind}.png"
+        try:
+            storage_uri = save_local_match_artifact(f"rooms/{room_code}/map_snapshots/{filename}", png_bytes)
+        except (OSError, ValueError) as exc:
+            raise HTTPException(status_code=500, detail=f"failed to persist map snapshot: {exc}") from exc
+        artifact = await _upsert_match_artifact(
+            db,
+            room_code=room_code,
+            artifact_type=ARTIFACT_TYPE_MAP_SNAPSHOT,
+            snapshot_kind=snapshot_kind,
+            round_number=round_number,
+            state_hash=state_hash,
+            storage_uri=storage_uri,
+            mime_type="image/png",
+            checksum=checksum,
+            size_bytes=len(png_bytes),
+            match_id=match_id,
+        )
+        artifacts.append({"id": artifact.id, "artifact_type": artifact.artifact_type})
+
+    if not artifacts:
+        raise HTTPException(status_code=400, detail="no artifacts uploaded")
+
+    await db.commit()
+    return {"ok": True, "artifacts": artifacts}
+
+
 @router.post("/matches/finalize", dependencies=[Depends(_require_internal_secret)])
 async def finalize(req: FinalizeRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.fromisoformat(req.started_at) if req.started_at else None
     ended = datetime.fromisoformat(req.ended_at) if req.ended_at else None
+    room_code = _normalize_room_code(req.room_code) or req.room_code
     m = Match(
-        room_id=req.room_id, room_code=req.room_code, status=req.status,
+        room_id=req.room_id, room_code=room_code, status=req.status,
         started_at=started, ended_at=ended, duration_sec=req.duration_sec,
         player_count=req.player_count, seed=req.seed,
         schema_version=req.schema_version, game_version=req.game_version,
@@ -346,6 +551,16 @@ async def finalize(req: FinalizeRequest, db: AsyncSession = Depends(get_db)):
             match_id=m.match_id, storage_uri=replay_storage_uri,
             checksum=req.replay_checksum, size_bytes=req.replay_size_bytes,
         ))
+
+    if room_code:
+        artifact_rows = (await db.execute(
+            select(MatchArtifact).where(
+                MatchArtifact.room_code == room_code,
+                MatchArtifact.match_id.is_(None),
+            )
+        )).scalars().all()
+        for artifact in artifact_rows:
+            artifact.match_id = m.match_id
 
     await db.commit()
     return {"match_id": m.match_id}

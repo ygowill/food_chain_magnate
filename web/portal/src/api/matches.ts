@@ -62,6 +62,8 @@ export interface MatchSummary {
   ended_at: string | null
   duration_sec: number | null
   participants: ParticipantInfo[]
+  latest_save_round?: number | null
+  map_snapshot_count?: number
 }
 
 export interface MatchDetail extends MatchSummary {
@@ -71,6 +73,8 @@ export interface MatchDetail extends MatchSummary {
   final_hash: string | null
   summary: GameSummary | null
   has_replay: boolean
+  latest_save: MatchArtifactInfo | null
+  map_snapshots: MatchArtifactInfo[]
 }
 
 export interface ReplayInfo {
@@ -78,6 +82,21 @@ export interface ReplayInfo {
   storage_uri: string
   checksum: string | null
   size_bytes: number | null
+}
+
+export interface MatchArtifactInfo {
+  id: string
+  artifact_type: string
+  snapshot_kind: string | null
+  round_number: number
+  state_hash: string | null
+  storage_uri: string
+  download_url: string
+  mime_type: string
+  checksum: string | null
+  size_bytes: number | null
+  created_at: string
+  updated_at: string | null
 }
 
 export function listMatches(sessionId: string) {

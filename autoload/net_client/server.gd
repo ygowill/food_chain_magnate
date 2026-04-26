@@ -2759,6 +2759,19 @@ func _maybe_request_round_end_autosave(room, cmd, state, state_hash: String) -> 
 		return
 	if room == null or cmd == null or state == null:
 		return
+	if str(state.phase) == DefsClass.PHASE_GAME_OVER:
+		if not _net.has_method("request_server_round_autosave"):
+			return
+		var game_over_room_code := str(room.room_code).strip_edges().to_upper()
+		if game_over_room_code.is_empty():
+			return
+		var final_round_number := int(state.round_number)
+		if str(cmd.phase) == DefsClass.PHASE_CLEANUP and final_round_number > 1:
+			final_round_number -= 1
+		if final_round_number <= 0:
+			final_round_number = 1
+		_net.request_server_round_autosave(game_over_room_code, final_round_number, str(state_hash).strip_edges(), "game_over")
+		return
 	if str(cmd.phase) != DefsClass.PHASE_CLEANUP:
 		return
 	if str(state.phase) != DefsClass.PHASE_RESTRUCTURING:
@@ -2771,7 +2784,7 @@ func _maybe_request_round_end_autosave(room, cmd, state, state_hash: String) -> 
 	var room_code := str(room.room_code).strip_edges().to_upper()
 	if room_code.is_empty():
 		return
-	_net.request_server_round_autosave(room_code, completed_round_number, str(state_hash).strip_edges())
+	_net.request_server_round_autosave(room_code, completed_round_number, str(state_hash).strip_edges(), "round_end")
 
 func server_is_player_forfeited(state, player_id: int) -> bool:
 	if state == null:

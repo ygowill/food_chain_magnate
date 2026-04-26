@@ -165,6 +165,67 @@
         <span v-else class="empty-hint">无统计数据</span>
       </div>
 
+      <div v-if="match?.latest_save" class="info-card">
+        <h3 class="card-title">服务端存档</h3>
+        <div class="artifact-info">
+          <el-descriptions :column="2" border size="small">
+            <el-descriptions-item label="最新回合">R{{ match.latest_save.round_number }}</el-descriptions-item>
+            <el-descriptions-item label="保存类型">{{ snapshotKindLabel(match.latest_save.snapshot_kind) }}</el-descriptions-item>
+            <el-descriptions-item label="文件大小">{{ formatBytes(match.latest_save.size_bytes) }}</el-descriptions-item>
+            <el-descriptions-item label="保存时间">{{ formatTime(match.latest_save.updated_at ?? match.latest_save.created_at) }}</el-descriptions-item>
+            <el-descriptions-item label="状态哈希" :span="2">
+              <code class="seed-code">{{ match.latest_save.state_hash ?? '-' }}</code>
+            </el-descriptions-item>
+            <el-descriptions-item label="校验和" :span="2">
+              <code class="seed-code">{{ match.latest_save.checksum ?? '-' }}</code>
+            </el-descriptions-item>
+          </el-descriptions>
+          <el-button type="primary" class="artifact-action" @click="downloadLatestSave">
+            <svg viewBox="0 0 20 20" fill="currentColor" class="button-icon"><path d="M10.75 2.75a.75.75 0 00-1.5 0v8.69L6.53 8.72a.75.75 0 00-1.06 1.06l4 4a.75.75 0 001.06 0l4-4a.75.75 0 10-1.06-1.06l-2.72 2.72V2.75z"/><path d="M3.5 13.75a.75.75 0 011.5 0v1.5h10v-1.5a.75.75 0 011.5 0v2.25a.75.75 0 01-.75.75H4.25a.75.75 0 01-.75-.75v-2.25z"/></svg>
+            下载最新存档
+          </el-button>
+        </div>
+      </div>
+
+      <div v-if="mapSnapshots.length" class="info-card">
+        <div class="snapshot-header">
+          <h3 class="card-title">地图回看</h3>
+          <div class="snapshot-header__meta">{{ mapSnapshots.length }} 张截图</div>
+        </div>
+        <div class="snapshot-viewer">
+          <div class="snapshot-stage">
+            <img
+              v-if="selectedSnapshot"
+              :src="buildSessionDownloadUrl(selectedSnapshot.download_url)"
+              :alt="snapshotAlt(selectedSnapshot)"
+              class="snapshot-image"
+            />
+          </div>
+          <div class="snapshot-panel">
+            <div class="snapshot-panel__actions">
+              <el-button size="small" :disabled="!selectedSnapshot" @click="downloadSelectedSnapshot">
+                <svg viewBox="0 0 20 20" fill="currentColor" class="button-icon"><path d="M10.75 2.75a.75.75 0 00-1.5 0v8.69L6.53 8.72a.75.75 0 00-1.06 1.06l4 4a.75.75 0 001.06 0l4-4a.75.75 0 10-1.06-1.06l-2.72 2.72V2.75z"/><path d="M3.5 13.75a.75.75 0 011.5 0v1.5h10v-1.5a.75.75 0 011.5 0v2.25a.75.75 0 01-.75.75H4.25a.75.75 0 01-.75-.75v-2.25z"/></svg>
+                下载当前截图
+              </el-button>
+            </div>
+            <div class="snapshot-list">
+              <button
+                v-for="snapshot in mapSnapshots"
+                :key="snapshot.id"
+                class="snapshot-item"
+                :class="{ 'snapshot-item--active': selectedSnapshot?.id === snapshot.id }"
+                type="button"
+                @click="selectedSnapshotId = snapshot.id"
+              >
+                <span class="snapshot-item__round">R{{ snapshot.round_number }}</span>
+                <span class="snapshot-item__kind">{{ snapshotKindLabel(snapshot.snapshot_kind) }}</span>
+                <span class="snapshot-item__size">{{ formatBytes(snapshot.size_bytes) }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div v-if="match?.has_replay" class="info-card">
         <h3 class="card-title">对局回放</h3>
         <div v-if="replay" class="replay-info">
@@ -187,7 +248,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppLayout from '../components/AppLayout.vue'
-import { getMatch, getReplay, type MatchDetail, type ParticipantInfo, type ReplayInfo } from '../api/matches'
+import { getMatch, getReplay, type MatchArtifactInfo, type MatchDetail, type ParticipantInfo, type ReplayInfo } from '../api/matches'
 import { employeeName, milestoneName, moduleName, productName } from '../utils/game-names'
 import { buildPlayerStatMatrixRows } from '../utils/match-stats'
 import { participantDisplayName, resolveParticipantLogoInfo } from '../utils/participant-display'
@@ -200,6 +261,7 @@ const auth = useAuthStore()
 const match = ref<MatchDetail | null>(null)
 const replay = ref<ReplayInfo | null>(null)
 const loading = ref(false)
+const selectedSnapshotId = ref<string | null>(null)
 
 const matchId = route.params.id as string
 
@@ -235,6 +297,14 @@ const playerStatMatrixRows = computed(() => {
     })),
     productName,
   )
+})
+
+const mapSnapshots = computed(() => match.value?.map_snapshots ?? [])
+
+const selectedSnapshot = computed(() => {
+  const snapshots = mapSnapshots.value
+  if (!snapshots.length) return null
+  return snapshots.find(snapshot => snapshot.id === selectedSnapshotId.value) ?? snapshots[snapshots.length - 1]
 })
 
 const participantDisplayMetaByUserId = computed<Record<string, { name: string; logoUrl: string | null; logoLabel: string | null }>>(() => {
@@ -298,6 +368,11 @@ function statusLabel(status: string | undefined): string {
   return status
 }
 
+function snapshotKindLabel(kind: string | null | undefined): string {
+  if (kind === 'game_over') return '终局'
+  return '回合结束'
+}
+
 async function loadReplay() {
   try {
     const { data } = await getReplay(matchId, auth.sessionId)
@@ -318,12 +393,11 @@ function inferReplayFileName(uri: string): string {
   return `match-${matchId}-replay.json`
 }
 
-function buildReplayDownloadUrl(uri: string): string {
+function buildSessionDownloadUrl(uri: string): string {
   try {
     const url = new URL(uri, window.location.origin)
     if (
       url.pathname.startsWith('/v1/matches/')
-      && url.pathname.endsWith('/replay/download')
       && !url.searchParams.has('session_id')
       && auth.sessionId
     ) {
@@ -333,6 +407,10 @@ function buildReplayDownloadUrl(uri: string): string {
   } catch {
     return uri
   }
+}
+
+function buildReplayDownloadUrl(uri: string): string {
+  return buildSessionDownloadUrl(uri)
 }
 
 function downloadReplay() {
@@ -347,13 +425,47 @@ function downloadReplay() {
   link.remove()
 }
 
+function inferArtifactFileName(artifact: MatchArtifactInfo): string {
+  if (artifact.artifact_type === 'autosave_latest') {
+    return `match-${matchId}-latest-autosave.json`
+  }
+  return `match-${matchId}-round-${String(artifact.round_number).padStart(4, '0')}-${artifact.snapshot_kind ?? 'snapshot'}.png`
+}
+
+function snapshotAlt(snapshot: MatchArtifactInfo): string {
+  return `第 ${snapshot.round_number} 回合${snapshotKindLabel(snapshot.snapshot_kind)}地图截图`
+}
+
+function downloadArtifact(artifact: MatchArtifactInfo | null | undefined) {
+  if (!artifact?.download_url) return
+  const link = document.createElement('a')
+  link.href = buildSessionDownloadUrl(artifact.download_url)
+  link.download = inferArtifactFileName(artifact)
+  link.rel = 'noopener'
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+}
+
+function downloadLatestSave() {
+  downloadArtifact(match.value?.latest_save)
+}
+
+function downloadSelectedSnapshot() {
+  downloadArtifact(selectedSnapshot.value)
+}
+
 onMounted(async () => {
   loading.value = true
   try {
     const { data } = await getMatch(matchId, auth.sessionId)
     match.value = data
+    const snapshots = data.map_snapshots ?? []
+    selectedSnapshotId.value = snapshots.length ? snapshots[snapshots.length - 1].id : null
   } catch {
     match.value = null
+    selectedSnapshotId.value = null
   }
   loading.value = false
 })
@@ -686,5 +798,130 @@ onMounted(async () => {
 
 .replay-info {
   margin-top: 4px;
+}
+
+.artifact-info {
+  margin-top: 4px;
+}
+
+.artifact-action {
+  margin-top: 16px;
+}
+
+.button-icon {
+  width: 15px;
+  height: 15px;
+  margin-right: 6px;
+}
+
+.snapshot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.snapshot-header .card-title {
+  margin-bottom: 0;
+}
+
+.snapshot-header__meta {
+  font-size: 12px;
+  color: var(--fcm-text-muted);
+}
+
+.snapshot-viewer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 16px;
+}
+
+.snapshot-stage {
+  min-height: 360px;
+  max-height: 620px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  background: var(--fcm-surface-alt);
+  border: 1px solid var(--fcm-field-border);
+  border-radius: var(--fcm-radius);
+}
+
+.snapshot-image {
+  display: block;
+  max-width: 100%;
+  max-height: 600px;
+  image-rendering: auto;
+}
+
+.snapshot-panel {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.snapshot-panel__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.snapshot-list {
+  max-height: 560px;
+  overflow-y: auto;
+  border: 1px solid var(--fcm-field-border);
+  border-radius: var(--fcm-radius);
+}
+
+.snapshot-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 54px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--fcm-field-border);
+  background: var(--fcm-surface);
+  color: var(--fcm-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.snapshot-item:last-child {
+  border-bottom: 0;
+}
+
+.snapshot-item:hover,
+.snapshot-item--active {
+  background: var(--fcm-primary-light);
+}
+
+.snapshot-item__round {
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.snapshot-item__kind,
+.snapshot-item__size {
+  font-size: 12px;
+  color: var(--fcm-text-muted);
+}
+
+@media (max-width: 900px) {
+  .snapshot-viewer {
+    grid-template-columns: 1fr;
+  }
+
+  .snapshot-stage {
+    min-height: 260px;
+  }
+
+  .snapshot-panel__actions {
+    justify-content: flex-start;
+  }
 }
 </style>

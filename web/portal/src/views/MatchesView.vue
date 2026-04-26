@@ -49,6 +49,15 @@
             <span class="meta-text">{{ formatDuration(row.duration_sec) }}</span>
           </template>
         </el-table-column>
+        <el-table-column label="记录" width="150">
+          <template #default="{ row }">
+            <div v-if="hasArtifacts(row)" class="record-badges">
+              <span v-if="row.latest_save_round != null" class="record-badge">存档 R{{ row.latest_save_round }}</span>
+              <span v-if="row.map_snapshot_count" class="record-badge">截图 {{ row.map_snapshot_count }}</span>
+            </div>
+            <span v-else class="empty-text">-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="开始时间" min-width="160">
           <template #default="{ row }">
             <span class="meta-text">{{ row.started_at ? new Date(row.started_at).toLocaleString('zh-CN') : '-' }}</span>
@@ -111,6 +120,10 @@ function statusLabel(status: string): string {
   if (status === 'in_progress') return '进行中'
   if (status === 'waiting') return '等待中'
   return status
+}
+
+function hasArtifacts(match: MatchSummary): boolean {
+  return match.latest_save_round != null || Number(match.map_snapshot_count ?? 0) > 0
 }
 
 function participantDisplays(match: MatchSummary): Array<{ name: string; logoUrl: string | null; logoLabel: string | null }> {
@@ -275,6 +288,24 @@ onMounted(async () => {
 
 .empty-text {
   color: var(--fcm-text-muted);
+}
+
+.record-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.record-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(43, 33, 23, 0.06);
+  color: var(--fcm-text-muted);
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .empty-state {

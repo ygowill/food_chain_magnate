@@ -8,7 +8,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models import Match, MatchParticipant, MatchReplay
+from app.models import Match, MatchArtifact, MatchParticipant, MatchReplay
 
 
 async def _create_user(client: AsyncClient) -> dict:
@@ -76,6 +76,54 @@ async def _seed_local_replay_match_with_archive(
     return m.match_id
 
 
+async def _seed_match_with_local_artifacts(db: AsyncSession, user_id: str, replay_storage_dir: str) -> tuple[str, str]:
+    m = Match(room_code="ARTDET", status="completed", player_count=1)
+    db.add(m)
+    await db.flush()
+    db.add(MatchParticipant(
+        match_id=m.match_id,
+        user_id=user_id,
+        role="player",
+        seat_index=0,
+    ))
+    autosave_path = f"{replay_storage_dir}/artifacts/rooms/ARTDET/latest_autosave.json"
+    snapshot_path = f"{replay_storage_dir}/artifacts/rooms/ARTDET/map_snapshots/round_0002_round_end.png"
+    import os
+    os.makedirs(os.path.dirname(snapshot_path), exist_ok=True)
+    with open(autosave_path, "w", encoding="utf-8") as f:
+        f.write('{"round":2}')
+    png_bytes = b"\x89PNG\r\n\x1a\nartifact-test"
+    with open(snapshot_path, "wb") as f:
+        f.write(png_bytes)
+    db.add(MatchArtifact(
+        match_id=m.match_id,
+        room_code="ARTDET",
+        artifact_type="autosave_latest",
+        snapshot_kind="round_end",
+        round_number=2,
+        state_hash="hash-2",
+        storage_uri="local_artifact://rooms/ARTDET/latest_autosave.json",
+        mime_type="application/json",
+        checksum="save-checksum",
+        size_bytes=len('{"round":2}'),
+    ))
+    snapshot = MatchArtifact(
+        match_id=m.match_id,
+        room_code="ARTDET",
+        artifact_type="map_snapshot",
+        snapshot_kind="round_end",
+        round_number=2,
+        state_hash="hash-2",
+        storage_uri="local_artifact://rooms/ARTDET/map_snapshots/round_0002_round_end.png",
+        mime_type="image/png",
+        checksum="snapshot-checksum",
+        size_bytes=len(png_bytes),
+    )
+    db.add(snapshot)
+    await db.commit()
+    return m.match_id, snapshot.id
+
+
 @pytest.mark.asyncio
 async def test_list_matches_empty(client: AsyncClient):
     user = await _create_user(client)
@@ -102,6 +150,26 @@ async def test_get_match_detail(client: AsyncClient, db_session: AsyncSession):
     assert resp.status_code == 200
     assert resp.json()["match_id"] == mid
     assert resp.json()["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_get_match_detail_includes_server_artifacts(client: AsyncClient, db_session: AsyncSession, tmp_path):
+    old_replay_storage_dir = settings.replay_storage_dir
+    settings.replay_storage_dir = str(tmp_path)
+    try:
+        user = await _create_user(client)
+        mid, snapshot_id = await _seed_match_with_local_artifacts(db_session, user["user_id"], str(tmp_path))
+        resp = await client.get(f"/v1/matches/{mid}", params={"session_id": user["session_id"]})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["latest_save_round"] == 2
+        assert body["map_snapshot_count"] == 1
+        assert body["latest_save"]["storage_uri"] == f"/v1/matches/{mid}/autosave/download"
+        assert body["latest_save"]["state_hash"] == "hash-2"
+        assert body["map_snapshots"][0]["id"] == snapshot_id
+        assert body["map_snapshots"][0]["download_url"] == f"/v1/matches/{mid}/map-snapshots/{snapshot_id}/download"
+    finally:
+        settings.replay_storage_dir = old_replay_storage_dir
 
 
 @pytest.mark.asyncio
@@ -253,6 +321,44 @@ async def test_download_replay_local(client: AsyncClient, db_session: AsyncSessi
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("application/json")
         assert '"schema_version":3' in resp.text
+    finally:
+        settings.replay_storage_dir = old_replay_storage_dir
+
+
+@pytest.mark.asyncio
+async def test_download_local_match_artifacts(client: AsyncClient, db_session: AsyncSession, tmp_path):
+    old_replay_storage_dir = settings.replay_storage_dir
+    settings.replay_storage_dir = str(tmp_path)
+    try:
+        user = await _create_user(client)
+        mid, snapshot_id = await _seed_match_with_local_artifacts(db_session, user["user_id"], str(tmp_path))
+
+        autosave = await client.get(f"/v1/matches/{mid}/autosave/download", params={"session_id": user["session_id"]})
+        assert autosave.status_code == 200
+        assert autosave.headers["content-type"].startswith("application/json")
+        assert autosave.text == '{"round":2}'
+
+        snapshot = await client.get(
+            f"/v1/matches/{mid}/map-snapshots/{snapshot_id}/download",
+            params={"session_id": user["session_id"]},
+        )
+        assert snapshot.status_code == 200
+        assert snapshot.headers["content-type"].startswith("image/png")
+        assert snapshot.content == b"\x89PNG\r\n\x1a\nartifact-test"
+    finally:
+        settings.replay_storage_dir = old_replay_storage_dir
+
+
+@pytest.mark.asyncio
+async def test_download_match_artifact_forbidden(client: AsyncClient, db_session: AsyncSession, tmp_path):
+    old_replay_storage_dir = settings.replay_storage_dir
+    settings.replay_storage_dir = str(tmp_path)
+    try:
+        user1 = await _create_user(client)
+        user2 = await _create_user(client)
+        mid, _snapshot_id = await _seed_match_with_local_artifacts(db_session, user1["user_id"], str(tmp_path))
+        resp = await client.get(f"/v1/matches/{mid}/autosave/download", params={"session_id": user2["session_id"]})
+        assert resp.status_code == 403
     finally:
         settings.replay_storage_dir = old_replay_storage_dir
 

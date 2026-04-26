@@ -1,10 +1,13 @@
+import base64
+import hashlib
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models import GameServer, Room, RoomMember, RoomTombstone, Match, MatchParticipant, MatchReplay
+from app.models import GameServer, Room, RoomMember, RoomTombstone, Match, MatchArtifact, MatchParticipant, MatchReplay
 
 INTERNAL_HEADERS = {"X-Internal-Secret": settings.internal_api_secret}
 
@@ -601,5 +604,100 @@ async def test_finalize_with_replay_archive_json(client: AsyncClient, db_session
         assert replay.storage_uri == f"local_file://{mid}.json"
         replay_file = tmp_path / f"{mid}.json"
         assert replay_file.read_text(encoding="utf-8") == replay_archive_json
+    finally:
+        settings.replay_storage_dir = old_replay_storage_dir
+
+
+@pytest.mark.asyncio
+async def test_upload_round_artifacts_persists_latest_save_and_snapshot(client: AsyncClient, db_session: AsyncSession, tmp_path):
+    old_replay_storage_dir = settings.replay_storage_dir
+    settings.replay_storage_dir = str(tmp_path)
+    try:
+        archive_json = '{"round":1}'
+        png_bytes = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+        )
+        resp = await client.post("/internal/matches/round_artifacts", json={
+            "room_code": "art001",
+            "round_number": 1,
+            "snapshot_kind": "round_end",
+            "state_hash": "hash-1",
+            "archive_json": archive_json,
+            "archive_checksum": hashlib.sha256(archive_json.encode("utf-8")).hexdigest(),
+            "archive_size_bytes": len(archive_json.encode("utf-8")),
+            "map_snapshot_png_base64": base64.b64encode(png_bytes).decode("ascii"),
+            "map_snapshot_checksum": hashlib.sha256(png_bytes).hexdigest(),
+            "map_snapshot_size_bytes": len(png_bytes),
+        }, headers=INTERNAL_HEADERS)
+        assert resp.status_code == 200
+
+        artifacts = (await db_session.execute(
+            select(MatchArtifact).where(MatchArtifact.room_code == "ART001")
+        )).scalars().all()
+        assert len(artifacts) == 2
+        autosave = next(item for item in artifacts if item.artifact_type == "autosave_latest")
+        snapshot = next(item for item in artifacts if item.artifact_type == "map_snapshot")
+        assert autosave.round_number == 1
+        assert autosave.state_hash == "hash-1"
+        assert snapshot.round_number == 1
+        assert snapshot.mime_type == "image/png"
+        assert (tmp_path / "artifacts" / "rooms" / "ART001" / "latest_autosave.json").read_text(encoding="utf-8") == archive_json
+        assert (tmp_path / "artifacts" / "rooms" / "ART001" / "map_snapshots" / "round_0001_round_end.png").read_bytes() == png_bytes
+
+        next_archive_json = '{"round":2}'
+        second = await client.post("/internal/matches/round_artifacts", json={
+            "room_code": "ART001",
+            "round_number": 2,
+            "snapshot_kind": "round_end",
+            "state_hash": "hash-2",
+            "archive_json": next_archive_json,
+        }, headers=INTERNAL_HEADERS)
+        assert second.status_code == 200
+
+        autosaves = (await db_session.execute(
+            select(MatchArtifact).where(
+                MatchArtifact.room_code == "ART001",
+                MatchArtifact.artifact_type == "autosave_latest",
+            )
+        )).scalars().all()
+        assert len(autosaves) == 1
+        assert autosaves[0].round_number == 2
+        assert autosaves[0].state_hash == "hash-2"
+        assert (tmp_path / "artifacts" / "rooms" / "ART001" / "latest_autosave.json").read_text(encoding="utf-8") == next_archive_json
+    finally:
+        settings.replay_storage_dir = old_replay_storage_dir
+
+
+@pytest.mark.asyncio
+async def test_finalize_links_uploaded_round_artifacts(client: AsyncClient, db_session: AsyncSession, tmp_path):
+    old_replay_storage_dir = settings.replay_storage_dir
+    settings.replay_storage_dir = str(tmp_path)
+    try:
+        user = await _create_user(client)
+        upload = await client.post("/internal/matches/round_artifacts", json={
+            "room_code": "LINK01",
+            "round_number": 3,
+            "snapshot_kind": "game_over",
+            "archive_json": '{"round":3}',
+        }, headers=INTERNAL_HEADERS)
+        assert upload.status_code == 200
+
+        resp = await client.post("/internal/matches/finalize", json={
+            "room_code": "link01",
+            "status": "completed",
+            "player_count": 1,
+            "participants": [
+                {"user_id": user["user_id"], "role": "player", "seat_index": 0, "result": "win"},
+            ],
+        }, headers=INTERNAL_HEADERS)
+        assert resp.status_code == 200
+        mid = resp.json()["match_id"]
+
+        artifacts = (await db_session.execute(
+            select(MatchArtifact).where(MatchArtifact.room_code == "LINK01")
+        )).scalars().all()
+        assert len(artifacts) == 1
+        assert artifacts[0].match_id == mid
+        assert artifacts[0].snapshot_kind == "game_over"
     finally:
         settings.replay_storage_dir = old_replay_storage_dir

@@ -12,8 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.db import get_db
-from app.models import Match, MatchParticipant, MatchReplay
-from app.replay_storage import get_local_replay_path, parse_local_replay_filename
+from app.models import Match, MatchParticipant, MatchReplay, MatchArtifact
+from app.replay_storage import (
+    get_local_artifact_path,
+    get_local_replay_path,
+    parse_local_artifact_relative_path,
+    parse_local_replay_filename,
+)
 
 router = APIRouter(prefix="/v1/matches", tags=["matches"])
 
@@ -69,6 +74,23 @@ class MatchSummary(BaseModel):
     ended_at: Optional[str]
     duration_sec: Optional[int]
     participants: list[ParticipantInfo]
+    latest_save_round: Optional[int] = None
+    map_snapshot_count: int = 0
+
+
+class MatchArtifactInfo(BaseModel):
+    id: str
+    artifact_type: str
+    snapshot_kind: Optional[str]
+    round_number: int
+    state_hash: Optional[str]
+    storage_uri: str
+    download_url: str
+    mime_type: str
+    checksum: Optional[str]
+    size_bytes: Optional[int]
+    created_at: str
+    updated_at: Optional[str]
 
 
 class MatchDetail(MatchSummary):
@@ -78,6 +100,8 @@ class MatchDetail(MatchSummary):
     final_hash: Optional[str]
     summary: Optional[GameSummary]
     has_replay: bool
+    latest_save: Optional[MatchArtifactInfo] = None
+    map_snapshots: list[MatchArtifactInfo] = Field(default_factory=list)
 
 
 class ReplayInfo(BaseModel):
@@ -108,6 +132,12 @@ def _safe_int(value: object) -> int:
     except (TypeError, ValueError):
         return 0
     return max(0, n)
+
+
+def _to_iso(value) -> Optional[str]:
+    if value is None:
+        return None
+    return value.isoformat()
 
 
 def _parse_optional_int(value: object) -> Optional[int]:
@@ -256,6 +286,44 @@ def _to_public_replay_uri(match_id: str, storage_uri: str) -> str:
     if parse_local_replay_filename(storage_uri) is not None:
         return f"/v1/matches/{match_id}/replay/download"
     return storage_uri
+
+
+def _to_public_artifact_uri(match_id: str, artifact: MatchArtifact) -> str:
+    if parse_local_artifact_relative_path(artifact.storage_uri) is None:
+        return str(artifact.storage_uri)
+    if str(artifact.artifact_type) == "autosave_latest":
+        return f"/v1/matches/{match_id}/autosave/download"
+    return f"/v1/matches/{match_id}/map-snapshots/{artifact.id}/download"
+
+
+def _build_artifact_info(match_id: str, artifact: MatchArtifact) -> MatchArtifactInfo:
+    public_uri = _to_public_artifact_uri(match_id, artifact)
+    return MatchArtifactInfo(
+        id=str(artifact.id),
+        artifact_type=str(artifact.artifact_type),
+        snapshot_kind=str(artifact.snapshot_kind) if artifact.snapshot_kind else None,
+        round_number=int(artifact.round_number or 0),
+        state_hash=str(artifact.state_hash) if artifact.state_hash else None,
+        storage_uri=public_uri,
+        download_url=public_uri,
+        mime_type=str(artifact.mime_type or "application/octet-stream"),
+        checksum=str(artifact.checksum) if artifact.checksum else None,
+        size_bytes=artifact.size_bytes,
+        created_at=_to_iso(artifact.created_at) or "",
+        updated_at=_to_iso(artifact.updated_at),
+    )
+
+
+async def _require_match_for_participant(db: AsyncSession, match_id: str, user_id: str) -> Match:
+    part = (await db.execute(
+        select(MatchParticipant).where(MatchParticipant.match_id == match_id, MatchParticipant.user_id == user_id)
+    )).scalar_one_or_none()
+    if not part:
+        raise HTTPException(403, "not a participant")
+    match = (await db.execute(select(Match).where(Match.match_id == match_id))).scalar_one_or_none()
+    if not match:
+        raise HTTPException(404, "match not found")
+    return match
 
 
 def _pick_int(sources: list[dict], keys: tuple[str, ...]) -> int:
@@ -519,6 +587,17 @@ async def list_matches(
         str(replay.match_id): _load_local_replay_logo_overrides(replay.storage_uri)
         for replay in replay_rows
     }
+    artifact_rows = (
+        await db.execute(select(MatchArtifact).where(MatchArtifact.match_id.in_(match_ids)))
+    ).scalars().all()
+    latest_save_round_by_match_id: dict[str, int] = {}
+    map_snapshot_count_by_match_id: dict[str, int] = {}
+    for artifact in artifact_rows:
+        mid = str(artifact.match_id)
+        if str(artifact.artifact_type) == "autosave_latest":
+            latest_save_round_by_match_id[mid] = int(artifact.round_number or 0)
+        elif str(artifact.artifact_type) == "map_snapshot":
+            map_snapshot_count_by_match_id[mid] = map_snapshot_count_by_match_id.get(mid, 0) + 1
     parts_by_match: dict[str, list[ParticipantInfo]] = {}
     for p in parts:
         parts_by_match.setdefault(p.match_id, []).append(
@@ -535,6 +614,8 @@ async def list_matches(
             ended_at=m.ended_at.isoformat() if m.ended_at else None,
             duration_sec=m.duration_sec,
             participants=parts_by_match.get(m.match_id, []),
+            latest_save_round=latest_save_round_by_match_id.get(m.match_id),
+            map_snapshot_count=map_snapshot_count_by_match_id.get(m.match_id, 0),
         ) for m in rows
     ]
 
@@ -557,6 +638,18 @@ async def get_match(match_id: str, session_id: str = Query(...), db: AsyncSessio
     replay = (await db.execute(
         select(MatchReplay).where(MatchReplay.match_id == match_id)
     )).scalar_one_or_none()
+    artifacts = (await db.execute(
+        select(MatchArtifact)
+        .where(MatchArtifact.match_id == match_id)
+        .order_by(MatchArtifact.round_number.asc(), MatchArtifact.created_at.asc())
+    )).scalars().all()
+    latest_save: Optional[MatchArtifactInfo] = None
+    map_snapshots: list[MatchArtifactInfo] = []
+    for artifact in artifacts:
+        if str(artifact.artifact_type) == "autosave_latest":
+            latest_save = _build_artifact_info(match_id, artifact)
+        elif str(artifact.artifact_type) == "map_snapshot":
+            map_snapshots.append(_build_artifact_info(match_id, artifact))
     replay_logo_overrides = _load_local_replay_logo_overrides(replay.storage_uri) if replay else {}
     participants = [_build_participant(p, replay_logo_overrides) for p in parts]
     return MatchDetail(
@@ -568,6 +661,9 @@ async def get_match(match_id: str, session_id: str = Query(...), db: AsyncSessio
         schema_version=match.schema_version, game_version=match.game_version,
         final_hash=match.final_hash, summary=_parse_summary(match.summary_json),
         participants=participants, has_replay=replay is not None,
+        latest_save=latest_save, map_snapshots=map_snapshots,
+        latest_save_round=latest_save.round_number if latest_save else None,
+        map_snapshot_count=len(map_snapshots),
     )
 
 
@@ -615,4 +711,66 @@ async def download_replay(match_id: str, session_id: str = Query(...), db: Async
     storage_uri = str(replay.storage_uri or "").strip()
     if storage_uri == "":
         raise HTTPException(404, "replay uri missing")
+    return RedirectResponse(storage_uri, status_code=307)
+
+
+@router.get("/{match_id}/autosave/download")
+async def download_autosave(match_id: str, session_id: str = Query(...), db: AsyncSession = Depends(get_db)):
+    sess = await get_current_user(db=db, session_id=session_id)
+    match = await _require_match_for_participant(db, match_id, sess.user_id)
+    artifact = (await db.execute(
+        select(MatchArtifact).where(
+            MatchArtifact.match_id == match_id,
+            MatchArtifact.artifact_type == "autosave_latest",
+        )
+    )).scalar_one_or_none()
+    if not artifact:
+        raise HTTPException(404, "autosave not found")
+    return _download_artifact_response(
+        artifact,
+        f"{match.room_code or match_id}-latest-autosave.json",
+    )
+
+
+@router.get("/{match_id}/map-snapshots/{artifact_id}/download")
+async def download_map_snapshot(
+    match_id: str,
+    artifact_id: str,
+    session_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    sess = await get_current_user(db=db, session_id=session_id)
+    match = await _require_match_for_participant(db, match_id, sess.user_id)
+    artifact = (await db.execute(
+        select(MatchArtifact).where(
+            MatchArtifact.match_id == match_id,
+            MatchArtifact.id == artifact_id,
+            MatchArtifact.artifact_type == "map_snapshot",
+        )
+    )).scalar_one_or_none()
+    if not artifact:
+        raise HTTPException(404, "map snapshot not found")
+    filename = "%s-round-%04d-%s.png" % (
+        str(match.room_code or match_id),
+        int(artifact.round_number or 0),
+        str(artifact.snapshot_kind or "snapshot"),
+    )
+    return _download_artifact_response(artifact, filename)
+
+
+def _download_artifact_response(artifact: MatchArtifact, filename: str):
+    relative_path = parse_local_artifact_relative_path(artifact.storage_uri)
+    if relative_path is not None:
+        path = get_local_artifact_path(relative_path)
+        if not path.exists() or not path.is_file():
+            raise HTTPException(404, "artifact file missing")
+        return FileResponse(
+            path,
+            media_type=str(artifact.mime_type or "application/octet-stream"),
+            filename=filename,
+        )
+
+    storage_uri = str(artifact.storage_uri or "").strip()
+    if storage_uri == "":
+        raise HTTPException(404, "artifact uri missing")
     return RedirectResponse(storage_uri, status_code=307)

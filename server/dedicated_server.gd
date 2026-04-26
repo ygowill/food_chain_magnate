@@ -13,6 +13,7 @@ const PERSIST_INTERVAL_SEC := 2.0
 const ROOM_DIRECTORY_SYNC_DEBOUNCE_SEC := 0.2
 
 const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
+const MapSnapshotRendererClass = preload("res://server/map_snapshot_renderer.gd")
 const RoomPersistenceStoreClass = preload("res://server/room_persistence_store.gd")
 const ServerIdentityStoreClass = preload("res://server/server_identity_store.gd")
 
@@ -147,10 +148,10 @@ func _setup_round_autosave() -> void:
 	if not NetClient.server_round_autosave_requested.is_connected(cb):
 		NetClient.server_round_autosave_requested.connect(cb)
 
-func _on_server_round_autosave_requested(room_code: String, completed_round_number: int, state_hash: String) -> void:
-	_persist_round_autosave(room_code, completed_round_number, state_hash)
+func _on_server_round_autosave_requested(room_code: String, completed_round_number: int, state_hash: String, snapshot_kind: String = "round_end") -> void:
+	call_deferred("_persist_round_autosave", room_code, completed_round_number, state_hash, snapshot_kind)
 
-func _persist_round_autosave(room_code: String, completed_round_number: int, state_hash: String) -> void:
+func _persist_round_autosave(room_code: String, completed_round_number: int, state_hash: String, snapshot_kind: String = "round_end") -> void:
 	if _room_persistence_store == null:
 		return
 	if NetClient == null or NetClient._room_manager == null or not is_instance_valid(NetClient._room_manager):
@@ -160,6 +161,7 @@ func _persist_round_autosave(room_code: String, completed_round_number: int, sta
 	var code := str(room_code).strip_edges().to_upper()
 	if code.is_empty():
 		return
+	var kind := _normalize_round_snapshot_kind(snapshot_kind)
 	var room = NetClient._room_manager.rooms.get(code, null)
 	if room == null:
 		GameLog.warn("DedicatedServer", "Round autosave skipped: room not found %s" % code)
@@ -180,23 +182,123 @@ func _persist_round_autosave(room_code: String, completed_round_number: int, sta
 		code,
 		Dictionary(archive_val).duplicate(true),
 		int(completed_round_number),
-		str(state_hash).strip_edges()
+		str(state_hash).strip_edges(),
+		kind
 	)
 	if not save_r.ok:
 		GameLog.warn("DedicatedServer", "Round autosave write failed room=%s err=%s" % [code, save_r.error])
 		return
 	var save_info: Dictionary = Dictionary(save_r.value).duplicate(true) if save_r.value is Dictionary else {}
+	var map_snapshot_png := PackedByteArray()
+	var state = room.game_engine.get_state()
+	if state != null:
+		var render_r: Result = MapSnapshotRendererClass.render_state_png(state)
+		if render_r.ok and render_r.value is Dictionary:
+			map_snapshot_png = PackedByteArray(Dictionary(render_r.value).get("png_bytes", PackedByteArray()))
+			if not map_snapshot_png.is_empty() and _room_persistence_store.has_method("save_round_map_snapshot_png"):
+				var png_save_r: Result = _room_persistence_store.save_round_map_snapshot_png(
+					code,
+					map_snapshot_png,
+					int(completed_round_number),
+					kind
+				)
+				if not png_save_r.ok:
+					GameLog.warn("DedicatedServer", "Round map snapshot write failed room=%s err=%s" % [code, png_save_r.error])
+		else:
+			GameLog.warn("DedicatedServer", "Round map snapshot render failed room=%s err=%s" % [code, render_r.error])
+	var upload_r: Result = await _upload_round_artifacts(
+		code,
+		int(completed_round_number),
+		kind,
+		str(state_hash).strip_edges(),
+		str(save_info.get("json_text", "")),
+		map_snapshot_png
+	)
+	if not upload_r.ok:
+		GameLog.warn("DedicatedServer", "Round artifacts upload failed room=%s err=%s" % [code, upload_r.error])
 	GameLog.info(
 		"DedicatedServer",
-		"Round autosave saved room=%s completed_round=%d path=%s bytes=%d"
+		"Round autosave saved room=%s completed_round=%d kind=%s path=%s bytes=%d snapshot_bytes=%d"
 			% [
 				code,
 				int(completed_round_number),
+				kind,
 				str(save_info.get("path", "")),
 				int(save_info.get("json_bytes", 0)),
+				map_snapshot_png.size(),
 			]
 	)
 	_persist_rooms()
+
+func _upload_round_artifacts(
+	room_code: String,
+	completed_round_number: int,
+	snapshot_kind: String,
+	state_hash: String,
+	archive_json: String,
+	map_snapshot_png: PackedByteArray
+) -> Result:
+	if _backend_url.is_empty() or _internal_api_secret.is_empty():
+		return Result.failure("round artifacts upload missing backend/internal secret")
+
+	var body_dict: Dictionary = {
+		"room_code": str(room_code).strip_edges().to_upper(),
+		"round_number": int(completed_round_number),
+		"snapshot_kind": _normalize_round_snapshot_kind(snapshot_kind),
+		"state_hash": str(state_hash).strip_edges(),
+	}
+	var archive_text := str(archive_json)
+	if not archive_text.strip_edges().is_empty():
+		var archive_bytes := archive_text.to_utf8_buffer()
+		body_dict["archive_json"] = archive_text
+		body_dict["archive_checksum"] = _sha256_hex(archive_bytes)
+		body_dict["archive_size_bytes"] = archive_bytes.size()
+	if not map_snapshot_png.is_empty():
+		body_dict["map_snapshot_png_base64"] = Marshalls.raw_to_base64(map_snapshot_png)
+		body_dict["map_snapshot_checksum"] = _sha256_hex(map_snapshot_png)
+		body_dict["map_snapshot_size_bytes"] = map_snapshot_png.size()
+	if not body_dict.has("archive_json") and not body_dict.has("map_snapshot_png_base64"):
+		return Result.failure("round artifacts upload payload empty")
+
+	var base := str(_backend_url)
+	if base.ends_with("/"):
+		base = base.trim_suffix("/")
+	var url := base + "/internal/matches/round_artifacts"
+	var headers := [
+		"Content-Type: application/json",
+		"X-Internal-Secret: " + _internal_api_secret,
+	]
+	var http := HTTPRequest.new()
+	add_child(http)
+	var err := http.request(url, headers, HTTPClient.METHOD_POST, JSON.stringify(body_dict))
+	if err != OK:
+		http.queue_free()
+		return Result.failure("round artifacts upload request_failed err=%s url=%s" % [str(err), url])
+	var result: Array = await http.request_completed
+	http.queue_free()
+	var response_code: int = int(result[1]) if result.size() > 1 else 0
+	if response_code < 200 or response_code >= 300:
+		var response_body := PackedByteArray(result[3]).get_string_from_utf8() if result.size() > 3 else ""
+		return Result.failure("round artifacts upload failed status=%d body=%s" % [response_code, _safe_log_text(response_body, 240)])
+	return Result.success()
+
+func _sha256_hex(bytes: PackedByteArray) -> String:
+	var ctx := HashingContext.new()
+	ctx.start(HashingContext.HASH_SHA256)
+	ctx.update(bytes)
+	return ctx.finish().hex_encode()
+
+func _normalize_round_snapshot_kind(snapshot_kind: String) -> String:
+	var kind := str(snapshot_kind).strip_edges()
+	if kind == "game_over":
+		return "game_over"
+	return "round_end"
+
+func _safe_log_text(text: String, max_len: int) -> String:
+	var t := str(text).strip_edges()
+	if t.length() <= max_len:
+		return t
+	return t.substr(0, max_len) + "..."
 
 func _sync_room_directory_snapshot(snapshot: Dictionary) -> Result:
 	if _backend_url.is_empty() or _internal_api_secret.is_empty() or _game_server_id.is_empty():
