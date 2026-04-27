@@ -540,6 +540,37 @@ func _get_rollback_last_disabled_reason() -> String:
 		return "已结束回合，请使用提议回滚"
 	return ""
 
+func _is_online_room_host() -> bool:
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return false
+	var room_state: Dictionary = Dictionary(NetContext.room_state)
+	var self_seat := int(room_state.get("self_seat_index", -1))
+	var host_seat := int(room_state.get("host_seat_index", -2))
+	if self_seat >= 0 and host_seat >= 0:
+		return self_seat == host_seat
+	return false
+
+func _get_rollback_proposal_disabled_reason() -> String:
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return "仅联机模式可用"
+	if _game_state == null:
+		return "状态未就绪"
+	if int(OnlinePhaseInteractionClass.get_online_local_player_id(_game_state, -1)) < 0:
+		return "联机身份未就绪"
+	if not _is_online_room_host():
+		return "只有房主可以发起回滚提议"
+	var proposal_val = NetContext.room_state.get("rollback_proposal", null)
+	if proposal_val is Dictionary and not Dictionary(proposal_val).is_empty():
+		return "已有回滚提议待处理"
+	if Globals == null or Globals.current_game_engine == null or not (Globals.current_game_engine is GameEngine):
+		return "游戏引擎未就绪"
+	var engine: GameEngine = Globals.current_game_engine
+	if int(engine.current_command_index) < 0:
+		return "没有可回滚的操作"
+	if int(engine.current_command_index) >= int(engine.command_history.size()):
+		return "历史索引异常"
+	return ""
+
 func get_flow_controls_config() -> Dictionary:
 	var skip_sub_visible := _flow_skip_step_visible and _visible_action_ids.has(ActionIdsClass.SKIP_SUB_PHASE)
 	var skip_visible := _flow_confirm_end_visible and _visible_action_ids.has(ActionIdsClass.SKIP)
@@ -554,6 +585,9 @@ func get_flow_controls_config() -> Dictionary:
 	var rollback_last_visible := NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT
 	var rollback_last_reason := _get_rollback_last_disabled_reason() if rollback_last_visible else ""
 	var rollback_last_enabled := rollback_last_visible and rollback_last_reason.is_empty()
+	var rollback_proposal_visible := rollback_last_visible and _is_online_room_host()
+	var rollback_proposal_reason := _get_rollback_proposal_disabled_reason() if rollback_proposal_visible else ""
+	var rollback_proposal_enabled := rollback_proposal_visible and rollback_proposal_reason.is_empty()
 
 	return {
 		"confirm_end": {
@@ -574,6 +608,13 @@ func get_flow_controls_config() -> Dictionary:
 			"enabled": rollback_last_enabled,
 			"disabled_reason": rollback_last_reason,
 			"action_id": "rollback_last_command",
+		},
+		"rollback_proposal": {
+			"visible": rollback_proposal_visible,
+			"text": "提议回滚",
+			"enabled": rollback_proposal_enabled,
+			"disabled_reason": rollback_proposal_reason,
+			"action_id": "rollback_proposal",
 		},
 		"rewind": {
 			"enabled": rewind_enabled,

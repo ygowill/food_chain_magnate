@@ -301,6 +301,16 @@ func handle_rpc_rollback_last_command(request: Dictionary) -> void:
 	if _server != null and is_instance_valid(_server):
 		_server.handle_rpc_rollback_last_command(request)
 
+func handle_rpc_request_rollback_proposal(request: Dictionary) -> void:
+	_ensure_modules()
+	if _server != null and is_instance_valid(_server):
+		_server.handle_rpc_request_rollback_proposal(request)
+
+func handle_rpc_vote_rollback_proposal(request: Dictionary) -> void:
+	_ensure_modules()
+	if _server != null and is_instance_valid(_server):
+		_server.handle_rpc_vote_rollback_proposal(request)
+
 func handle_rpc_request_full_archive_export(request: Dictionary) -> void:
 	_ensure_modules()
 	if _server != null and is_instance_valid(_server):

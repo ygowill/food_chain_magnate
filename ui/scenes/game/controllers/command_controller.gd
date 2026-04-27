@@ -7,6 +7,7 @@ const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_a
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
+const RollbackProposalDialogClass = preload("res://ui/dialogs/rollback_proposal_dialog.gd")
 
 const AUTO_MANDATORY_ACTION_IDS := {
 	ActionIdsClass.SET_PRICE: true,
@@ -17,12 +18,14 @@ const AUTO_MANDATORY_ACTION_IDS := {
 var _get_game_engine: Callable = Callable()
 var _update_ui: Callable = Callable()
 var _show_confirm: Callable = Callable()
+var _host: Node = null
 
 var _timeline_controller: Object = null
 var _panel_controller: Object = null
 var _online_resync_controller: Object = null
 var _game_log_panel: Control = null
 var _tutorial_match_runtime = null
+var _rollback_proposal_dialog: Object = null
 
 func _init(
 	get_game_engine: Callable,
@@ -31,11 +34,13 @@ func _init(
 	timeline_controller: Object,
 	panel_controller: Object,
 	game_log_panel: Control,
-	tutorial_match_runtime = null
+	tutorial_match_runtime = null,
+	host: Node = null
 ) -> void:
 	_get_game_engine = get_game_engine
 	_update_ui = update_ui
 	_show_confirm = show_confirm
+	_host = host
 	_timeline_controller = timeline_controller
 	_panel_controller = panel_controller
 	_game_log_panel = game_log_panel
@@ -52,6 +57,10 @@ func dispose() -> void:
 	if _tutorial_match_runtime != null and _tutorial_match_runtime.has_method("dispose"):
 		_tutorial_match_runtime.dispose()
 	_tutorial_match_runtime = null
+	if _rollback_proposal_dialog != null and is_instance_valid(_rollback_proposal_dialog):
+		_rollback_proposal_dialog.queue_free()
+	_rollback_proposal_dialog = null
+	_host = null
 
 func set_online_resync_controller(controller: Object) -> void:
 	_online_resync_controller = controller
@@ -149,6 +158,134 @@ func rollback_last_command() -> void:
 			"回退",
 			"取消"
 		)
+
+func propose_rollback() -> void:
+	var game_engine: GameEngine = _get_engine()
+	if game_engine == null:
+		return
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		GameLog.warn("Game", "提议回滚仅支持联机模式")
+		return
+	if not _is_online_room_host():
+		GameLog.warn("Game", "只有房主可以选择回滚时间点并发起提议")
+		return
+	if is_instance_valid(_timeline_controller) and _timeline_controller.has_method("is_replay_mode_active") and bool(_timeline_controller.call("is_replay_mode_active")):
+		GameLog.warn("Game", "回放模式下无法提议回滚")
+		return
+
+	var current_index := int(game_engine.current_command_index)
+	if current_index < 0:
+		GameLog.warn("Game", "提议回滚失败：没有可回滚的操作")
+		return
+	if current_index >= int(game_engine.command_history.size()):
+		GameLog.warn("Game", "提议回滚失败：当前索引超出历史 current=%d history=%d" % [current_index, int(game_engine.command_history.size())])
+		return
+
+	var options := _build_rollback_proposal_target_options(game_engine, current_index)
+	if options.is_empty():
+		GameLog.warn("Game", "提议回滚失败：没有可选择的回滚时间点")
+		return
+	var dialog: Object = _ensure_rollback_proposal_dialog()
+	if dialog == null:
+		_on_rollback_proposal_target_selected(current_index - 1)
+		return
+	if dialog.has_method("open_for_targets"):
+		dialog.call("open_for_targets", options)
+	else:
+		_on_rollback_proposal_target_selected(current_index - 1)
+
+func _ensure_rollback_proposal_dialog() -> Object:
+	if _rollback_proposal_dialog != null and is_instance_valid(_rollback_proposal_dialog):
+		return _rollback_proposal_dialog
+	if _host == null or not is_instance_valid(_host):
+		return null
+	_rollback_proposal_dialog = RollbackProposalDialogClass.new()
+	_host.add_child(_rollback_proposal_dialog)
+	var selected_cb := Callable(self, "_on_rollback_proposal_target_selected")
+	var cancelled_cb := Callable(self, "_on_rollback_proposal_cancelled")
+	if _rollback_proposal_dialog.has_signal("target_selected"):
+		var selected_signal := Signal(_rollback_proposal_dialog, &"target_selected")
+		if not selected_signal.is_connected(selected_cb):
+			selected_signal.connect(selected_cb)
+	if _rollback_proposal_dialog.has_signal("cancelled"):
+		var cancelled_signal := Signal(_rollback_proposal_dialog, &"cancelled")
+		if not cancelled_signal.is_connected(cancelled_cb):
+			cancelled_signal.connect(cancelled_cb)
+	return _rollback_proposal_dialog
+
+func _build_rollback_proposal_target_options(game_engine: GameEngine, current_index: int) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if game_engine == null:
+		return out
+	for target_index in range(int(current_index) - 1, -2, -1):
+		var steps := int(current_index) - int(target_index)
+		var target_label := _describe_rollback_target(game_engine, int(target_index))
+		out.append({
+			"target_index": int(target_index),
+			"label": "撤销 %d 步，回滚到 %s" % [steps, target_label],
+		})
+	return out
+
+func _describe_rollback_target(game_engine: GameEngine, target_index: int) -> String:
+	if target_index < 0:
+		return "对局开始前"
+	if game_engine == null or target_index >= int(game_engine.command_history.size()):
+		return "#%d 后" % int(target_index)
+	var cmd_val = game_engine.command_history[target_index]
+	if not (cmd_val is Command):
+		return "#%d 后" % int(target_index)
+	var cmd: Command = cmd_val
+	var action_name := str(cmd.action_id).strip_edges()
+	if action_name.is_empty():
+		action_name = "未知动作"
+	return "#%d 后（P%d %s）" % [int(target_index), int(cmd.actor) + 1, action_name]
+
+func _is_online_room_host() -> bool:
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return false
+	var room_state: Dictionary = Dictionary(NetContext.room_state)
+	var self_seat := int(room_state.get("self_seat_index", -1))
+	var host_seat := int(room_state.get("host_seat_index", -2))
+	if self_seat >= 0 and host_seat >= 0:
+		return self_seat == host_seat
+	var host_peer_id := int(room_state.get("host_peer_id", 0))
+	if host_peer_id <= 0 or _host == null or not is_instance_valid(_host):
+		return false
+	var mp := _host.multiplayer
+	if mp == null:
+		return false
+	return int(mp.get_unique_id()) == host_peer_id
+
+func _on_rollback_proposal_target_selected(target_index: int) -> void:
+	var game_engine: GameEngine = _get_engine()
+	if game_engine == null:
+		return
+	var current_index := int(game_engine.current_command_index)
+	if int(target_index) >= current_index:
+		return
+	var steps := current_index - int(target_index)
+	var target_label := _describe_rollback_target(game_engine, int(target_index))
+	if _show_confirm.is_valid():
+		_show_confirm.call(
+			"提议回滚",
+			"确定要向其他玩家发起回滚投票吗？\n目标时间点：%s\n将撤销 %d 步操作。\n全部其他玩家同意后会立即执行回滚。" % [target_label, steps],
+			Callable(self, "_confirm_propose_rollback").bind(int(target_index)),
+			Callable(),
+			"发起投票",
+			"取消"
+		)
+
+func _on_rollback_proposal_cancelled() -> void:
+	pass
+
+func _confirm_propose_rollback(target_index: int) -> void:
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return
+	if _online_resync_controller == null or not is_instance_valid(_online_resync_controller):
+		GameLog.warn("Game", "提议回滚失败：联机同步控制器未就绪")
+		return
+	if _online_resync_controller.has_method("begin_rollback_proposal_request"):
+		_online_resync_controller.call("begin_rollback_proposal_request", int(target_index))
 
 func _confirm_rollback_last_command(target_index: int) -> void:
 	var game_engine: GameEngine = _get_engine()

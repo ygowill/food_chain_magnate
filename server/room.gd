@@ -74,6 +74,7 @@ var _pending_start_payload: Dictionary = {}
 var _pending_start_target_peer_ids: Array[int] = []
 var _pending_start_ready_peer_ids: Dictionary = {}
 var _pending_start_error: String = ""
+var _pending_rollback_proposal: Dictionary = {}
 
 func to_persistence_dict(include_runtime_membership: bool = false) -> Result:
 	var persisted_status := str(status)
@@ -1686,12 +1687,20 @@ func to_room_state_dict() -> Dictionary:
 	var bootstrap := get_pending_start_summary()
 	if not bootstrap.is_empty():
 		state["bootstrap"] = bootstrap
+	if not _pending_rollback_proposal.is_empty():
+		state["rollback_proposal"] = _public_rollback_proposal_payload()
 	return state
 
 func to_room_state_dict_for_peer(peer_id: int) -> Dictionary:
 	var state := to_room_state_dict()
 	state["self_seat_index"] = get_seat_index_for_peer(peer_id)
 	state["self_role"] = get_role_for_peer(peer_id)
+	if state.get("rollback_proposal", null) is Dictionary:
+		var proposal: Dictionary = Dictionary(state.get("rollback_proposal", {})).duplicate(true)
+		var self_pid := int(player_id_by_peer_id.get(peer_id, player_id_by_peer_id.get(str(peer_id), -1)))
+		proposal["self_player_id"] = self_pid
+		proposal["self_vote"] = bool(Dictionary(proposal.get("votes", {})).get(self_pid, false))
+		state["rollback_proposal"] = proposal
 	if state.get("bootstrap", null) is Dictionary:
 		var bootstrap: Dictionary = Dictionary(state.get("bootstrap", {})).duplicate(true)
 		bootstrap["self_ready"] = bool(_pending_start_ready_peer_ids.get(peer_id, false))
@@ -2023,6 +2032,7 @@ func rollback_to_command_index(
 	var checkpoint_r: Result = _reset_recovery_store_from_current_engine(str(reason).strip_edges() if not str(reason).strip_edges().is_empty() else "rollback")
 	if not checkpoint_r.ok:
 		return Result.failure("reset recovery store failed: %s" % checkpoint_r.error)
+	_pending_rollback_proposal = {}
 	_touch()
 	return Result.success(out)
 
@@ -2071,6 +2081,125 @@ func rollback_last_command_for_player(include_archive: bool = true, player_id: i
 		out["rolled_back_action_id"] = str(cmd.action_id)
 		rollback_r.value = out
 	return rollback_r
+
+func create_rollback_proposal(
+	proposal_id: String,
+	proposer_peer_id: int,
+	proposer_player_id: int,
+	target_index: int,
+	reason: String = "proposal_rollback"
+) -> Result:
+	if status != STATUS_IN_GAME:
+		return Result.failure("Room is not in game")
+	if game_engine == null:
+		return Result.failure("Room engine missing")
+	if int(proposer_peer_id) != int(host_peer_id):
+		return Result.failure("Only room host can propose rollback")
+	if not _pending_rollback_proposal.is_empty():
+		return Result.failure("Rollback proposal already pending")
+
+	var target := int(target_index)
+	var before_index := int(game_engine.current_command_index)
+	if target < -1:
+		return Result.failure("target_index invalid: %d" % target)
+	if target >= before_index:
+		return Result.failure("target_index must be before current index: target=%d current=%d" % [target, before_index])
+	if target >= int(game_engine.command_history.size()):
+		return Result.failure("target_index outside history: target=%d history=%d" % [target, int(game_engine.command_history.size())])
+
+	var proposer_pid := int(proposer_player_id)
+	var required: Array[int] = []
+	for peer_id in get_player_peer_ids():
+		var pid := int(player_id_by_peer_id.get(peer_id, player_id_by_peer_id.get(str(peer_id), -1)))
+		if pid < 0 or pid == proposer_pid:
+			continue
+		if not required.has(pid):
+			required.append(pid)
+	required.sort()
+
+	var votes := {}
+	votes[proposer_pid] = true
+	var rid := str(proposal_id).strip_edges()
+	if rid.is_empty():
+		rid = "rollback_%d" % int(Time.get_ticks_msec())
+	_pending_rollback_proposal = {
+		"proposal_id": rid,
+		"proposer_peer_id": int(proposer_peer_id),
+		"proposer_player_id": proposer_pid,
+		"target_index": target,
+		"before_index": before_index,
+		"history_size_at_proposal": int(game_engine.command_history.size()),
+		"reason": str(reason).strip_edges(),
+		"created_at_ms": int(Time.get_ticks_msec()),
+		"required_player_ids": required,
+		"votes": votes,
+	}
+	_touch()
+	return Result.success(_public_rollback_proposal_payload())
+
+func vote_rollback_proposal(proposal_id: String, voter_player_id: int, approve: bool) -> Result:
+	if _pending_rollback_proposal.is_empty():
+		return Result.failure("No rollback proposal pending")
+	var pid := int(voter_player_id)
+	var current_id := str(_pending_rollback_proposal.get("proposal_id", "")).strip_edges()
+	if current_id != str(proposal_id).strip_edges():
+		return Result.failure("Rollback proposal id mismatch")
+	if pid == int(_pending_rollback_proposal.get("proposer_player_id", -1)):
+		return Result.failure("Proposer vote is already recorded")
+	var required: Array = Array(_pending_rollback_proposal.get("required_player_ids", []))
+	if not required.has(pid):
+		return Result.failure("Player is not required to vote")
+	if not bool(approve):
+		var rejected := _public_rollback_proposal_payload()
+		rejected["status"] = "rejected"
+		rejected["rejected_by_player_id"] = pid
+		_pending_rollback_proposal = {}
+		_touch()
+		return Result.success(rejected)
+
+	var votes: Dictionary = Dictionary(_pending_rollback_proposal.get("votes", {})).duplicate(true)
+	votes[pid] = true
+	_pending_rollback_proposal["votes"] = votes
+	var approved := true
+	for required_pid in required:
+		if not bool(votes.get(int(required_pid), false)):
+			approved = false
+			break
+	var out := _public_rollback_proposal_payload()
+	out["status"] = "approved" if approved else "pending"
+	_touch()
+	return Result.success(out)
+
+func consume_pending_rollback_proposal() -> Dictionary:
+	var out := _pending_rollback_proposal.duplicate(true)
+	_pending_rollback_proposal = {}
+	_touch()
+	return out
+
+func clear_pending_rollback_proposal() -> void:
+	if _pending_rollback_proposal.is_empty():
+		return
+	_pending_rollback_proposal = {}
+	_touch()
+
+func has_pending_rollback_proposal() -> bool:
+	return not _pending_rollback_proposal.is_empty()
+
+func _public_rollback_proposal_payload() -> Dictionary:
+	if _pending_rollback_proposal.is_empty():
+		return {}
+	return {
+		"proposal_id": str(_pending_rollback_proposal.get("proposal_id", "")).strip_edges(),
+		"proposer_player_id": int(_pending_rollback_proposal.get("proposer_player_id", -1)),
+		"target_index": int(_pending_rollback_proposal.get("target_index", -1)),
+		"before_index": int(_pending_rollback_proposal.get("before_index", -1)),
+		"history_size_at_proposal": int(_pending_rollback_proposal.get("history_size_at_proposal", -1)),
+		"reason": str(_pending_rollback_proposal.get("reason", "")).strip_edges(),
+		"created_at_ms": int(_pending_rollback_proposal.get("created_at_ms", 0)),
+		"required_player_ids": Array(_pending_rollback_proposal.get("required_player_ids", [])).duplicate(),
+		"votes": Dictionary(_pending_rollback_proposal.get("votes", {})).duplicate(true),
+		"status": "pending",
+	}
 
 func get_seat_index_for_peer(peer_id: int) -> int:
 	if _seat_by_player_peer_id.has(peer_id):

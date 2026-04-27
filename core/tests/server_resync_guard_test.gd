@@ -40,6 +40,11 @@ static func run() -> Result:
 		_reset_net_context()
 		return rollback_last_r
 
+	var rollback_proposal_r := _run_rollback_proposal_case()
+	if not rollback_proposal_r.ok:
+		_reset_net_context()
+		return rollback_proposal_r
+
 	var rate_limit_r := _run_rate_limit_case()
 	_reset_net_context()
 	if not rate_limit_r.ok:
@@ -328,6 +333,120 @@ static func _run_rollback_last_command_case() -> Result:
 		return Result.failure("rollback last 后 history_size 错误: got=%d want=%d" % [int(engine.command_history.size()), before_index + 1])
 	return Result.success()
 
+static func _run_rollback_proposal_case() -> Result:
+	var setup_r := _build_in_game_room_setup()
+	if not setup_r.ok:
+		return setup_r
+	var setup: Dictionary = Dictionary(setup_r.value)
+	var room = setup.get("room", null)
+	if room == null or room.game_engine == null:
+		return Result.failure("rollback proposal case 缺少 room/engine")
+	var engine = room.game_engine
+	var state = engine.get_state()
+	if state == null:
+		return Result.failure("rollback proposal case state 为空")
+	var actor := int(state.get_current_player_id())
+	var host_peer_id := int(room.host_peer_id)
+	if host_peer_id <= 0:
+		return Result.failure("rollback proposal case 缺少 host peer")
+
+	var before_index := int(engine.current_command_index)
+	var cmd := CommandClass.create("select_reserve_card", actor, {"selected_index": 0})
+	var exec_r: Result = engine.execute_command(cmd)
+	if not exec_r.ok:
+		return Result.failure("rollback proposal case 执行命令失败: %s" % exec_r.error)
+	var proposed_from_index := int(engine.current_command_index)
+	if proposed_from_index != before_index + 1:
+		return Result.failure("rollback proposal case 准备历史失败 before=%d current=%d" % [before_index, proposed_from_index])
+
+	var mock_net := _MockNetClient.new(setup.get("room_manager", null), 16 * 1024 * 1024)
+	var server = ServerLogicClass.new()
+	server.setup(mock_net)
+
+	mock_net.multiplayer.remote_sender_id = 11
+	server.handle_rpc_request_rollback_proposal({
+		"request_id": "req_proposal_non_host",
+		"target_index": before_index,
+	})
+	if _find_request_rejected(mock_net.sent, 11, "req_proposal_non_host", "rollback_proposal_failed") < 0:
+		return Result.failure("非房主不应能创建回滚提议: %s" % str(mock_net.sent))
+	if int(engine.current_command_index) != proposed_from_index:
+		return Result.failure("非房主提议不应修改时间线")
+
+	mock_net.sent.clear()
+	mock_net.multiplayer.remote_sender_id = host_peer_id
+	server.handle_rpc_request_rollback_proposal({
+		"request_id": "req_proposal",
+		"target_index": before_index,
+	})
+
+	var p2_state_idx := _find_sent_method(mock_net.sent, 11, "rpc_room_state")
+	if p2_state_idx < 0:
+		return Result.failure("创建提议后应广播 room_state 给 P2: %s" % str(mock_net.sent))
+	var state_payload_val = Dictionary(mock_net.sent[p2_state_idx]).get("payload", null)
+	if not (state_payload_val is Dictionary):
+		return Result.failure("rollback proposal room_state payload 类型错误")
+	var state_payload: Dictionary = Dictionary(state_payload_val)
+	var proposal_val = state_payload.get("rollback_proposal", null)
+	if not (proposal_val is Dictionary):
+		return Result.failure("room_state 应包含 rollback_proposal: %s" % str(state_payload))
+	var proposal: Dictionary = Dictionary(proposal_val)
+	if str(proposal.get("proposal_id", "")) != "req_proposal":
+		return Result.failure("proposal_id 错误: %s" % str(proposal))
+	if int(proposal.get("target_index", -999)) != before_index:
+		return Result.failure("proposal target 错误: %s" % str(proposal))
+	if int(proposal.get("before_index", -999)) != proposed_from_index:
+		return Result.failure("proposal before_index 错误: %s" % str(proposal))
+	if bool(proposal.get("self_vote", true)):
+		return Result.failure("P2 在投票前 self_vote 应为 false: %s" % str(proposal))
+
+	mock_net.sent.clear()
+	mock_net.multiplayer.remote_sender_id = 11
+	server.handle_rpc_action_request({
+		"request_id": "req_action_while_proposal",
+		"action_id": "select_reserve_card",
+		"params": {"selected_index": 0},
+	})
+	if _find_request_rejected(mock_net.sent, 11, "req_action_while_proposal", "rollback_proposal_pending") < 0:
+		return Result.failure("回滚提议待投票时应拒绝新动作: %s" % str(mock_net.sent))
+
+	mock_net.sent.clear()
+	mock_net.multiplayer.remote_sender_id = 11
+	server.handle_rpc_vote_rollback_proposal({
+		"request_id": "req_vote",
+		"proposal_id": "req_proposal",
+		"approve": true,
+	})
+
+	for target_peer_id in Array(room.get_peer_ids()):
+		var pid := int(target_peer_id)
+		if _find_sent_method(mock_net.sent, pid, "rpc_rollback_meta") < 0:
+			return Result.failure("提议回滚通过后应广播 rpc_rollback_meta 给 peer=%d: %s" % [pid, str(mock_net.sent)])
+	var meta_idx := _find_sent_method(mock_net.sent, host_peer_id, "rpc_rollback_meta")
+	if meta_idx < 0:
+		return Result.failure("提议回滚缺少 host meta: %s" % str(mock_net.sent))
+	var payload_val = Dictionary(mock_net.sent[meta_idx]).get("payload", null)
+	if not (payload_val is Dictionary):
+		return Result.failure("提议回滚 meta payload 类型错误: %s" % str(mock_net.sent[meta_idx]))
+	var payload: Dictionary = Dictionary(payload_val)
+	if str(payload.get("reason", "")) != "proposal_rollback":
+		return Result.failure("提议回滚 reason 错误: %s" % str(payload))
+	if str(payload.get("proposal_id", "")) != "req_proposal":
+		return Result.failure("提议回滚 proposal_id 错误: %s" % str(payload))
+	if int(payload.get("target_index", -999)) != before_index:
+		return Result.failure("提议回滚 target 错误: got=%d want=%d payload=%s" % [int(payload.get("target_index", -999)), before_index, str(payload)])
+	if int(engine.current_command_index) != before_index:
+		return Result.failure("提议回滚后 engine current_index 错误: got=%d want=%d" % [int(engine.current_command_index), before_index])
+	if int(engine.command_history.size()) != before_index + 1:
+		return Result.failure("提议回滚后 history_size 错误: got=%d want=%d" % [int(engine.command_history.size()), before_index + 1])
+	var last_state_idx := _find_last_sent_method(mock_net.sent, 11, "rpc_room_state")
+	if last_state_idx < 0:
+		return Result.failure("提议回滚完成后应广播 room_state")
+	var last_state_val = Dictionary(mock_net.sent[last_state_idx]).get("payload", null)
+	if last_state_val is Dictionary and Dictionary(last_state_val).has("rollback_proposal"):
+		return Result.failure("提议回滚完成后 pending proposal 应清空: %s" % str(last_state_val))
+	return Result.success()
+
 static func _prepare_restructuring_actor_scope_history(room) -> Result:
 	if room == null or room.game_engine == null:
 		return Result.failure("actor scope setup 缺少 engine")
@@ -419,6 +538,16 @@ static func _build_in_game_room_setup() -> Result:
 
 static func _find_sent_method(sent: Array[Dictionary], peer_id: int, method: String) -> int:
 	for i in range(sent.size()):
+		var item: Dictionary = Dictionary(sent[i])
+		if int(item.get("peer_id", -1)) != int(peer_id):
+			continue
+		if str(item.get("method", "")) != str(method):
+			continue
+		return i
+	return -1
+
+static func _find_last_sent_method(sent: Array[Dictionary], peer_id: int, method: String) -> int:
+	for i in range(sent.size() - 1, -1, -1):
 		var item: Dictionary = Dictionary(sent[i])
 		if int(item.get("peer_id", -1)) != int(peer_id):
 			continue

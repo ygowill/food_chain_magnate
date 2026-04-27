@@ -17,10 +17,12 @@ static func run() -> Result:
 	tree.root.add_child(host)
 
 	var prev_mode = NetContext.mode
+	var prev_local_player_id := int(NetContext.local_player_id)
 	var prev_room_state := Dictionary(NetContext.room_state).duplicate(true)
 	var prev_connected := bool(NetClient._client_transport_connected)
 
 	NetContext.mode = NetContext.Mode.ONLINE_CLIENT
+	NetContext.local_player_id = 1
 	NetContext.room_state = {
 		"room_code": "ROOMRS",
 		"status": "InGame",
@@ -60,12 +62,12 @@ static func run() -> Result:
 	if apply_failure_harness.request_resync_calls != 1:
 		apply_failure_controller.dispose()
 		host.queue_free()
-		_restore(prev_mode, prev_room_state, prev_connected)
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
 		return Result.failure("命令回放失败后应立刻请求 resync: %d" % apply_failure_harness.request_resync_calls)
 	if not apply_failure_controller.is_resync_in_progress():
 		apply_failure_controller.dispose()
 		host.queue_free()
-		_restore(prev_mode, prev_room_state, prev_connected)
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
 		return Result.failure("命令回放失败后应进入同步中状态")
 	apply_failure_controller.dispose()
 
@@ -93,26 +95,26 @@ static func run() -> Result:
 	if first_request_id.is_empty():
 		controller.dispose()
 		host.queue_free()
-		_restore(prev_mode, prev_room_state, prev_connected)
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
 		return Result.failure("完整 resync 应记录 request_id")
 	if not controller.is_resync_in_progress():
 		controller.dispose()
 		host.queue_free()
-		_restore(prev_mode, prev_room_state, prev_connected)
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
 		return Result.failure("发送 resync 后应进入同步中状态")
 	if harness.request_resync_force_flags.size() != 1 or bool(harness.request_resync_force_flags[0]):
 		controller.dispose()
 		host.queue_free()
-		_restore(prev_mode, prev_room_state, prev_connected)
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
 		return Result.failure("普通 resync 不应携带 force_snapshot")
 	controller._on_online_request_rejected(first_request_id, "resync_archive_too_large", "too large")
 	if controller.is_resync_in_progress():
 		host.queue_free()
-		_restore(prev_mode, prev_room_state, prev_connected)
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
 		return Result.failure("resync 被拒绝后不应继续卡在同步中")
 	if not str(controller._resync_request_id).strip_edges().is_empty():
 		host.queue_free()
-		_restore(prev_mode, prev_room_state, prev_connected)
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
 		return Result.failure("resync 被拒绝后应清理 request_id")
 
 	controller._request_online_resync("forced_rate_limit")
@@ -120,22 +122,22 @@ static func run() -> Result:
 	if second_request_id.is_empty():
 		controller.dispose()
 		host.queue_free()
-		_restore(prev_mode, prev_room_state, prev_connected)
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
 		return Result.failure("第二次 resync 也应记录 request_id")
 	controller._on_online_request_rejected(second_request_id, "resync_rate_limited", "slow down")
 	if controller.is_resync_in_progress():
 		host.queue_free()
-		_restore(prev_mode, prev_room_state, prev_connected)
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
 		return Result.failure("resync_rate_limited 后不应继续卡在同步中")
 	if harness.request_resync_calls != 2:
 		controller.dispose()
 		host.queue_free()
-		_restore(prev_mode, prev_room_state, prev_connected)
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
 		return Result.failure("request_resync 调用次数错误: %d" % harness.request_resync_calls)
 	if harness.update_ui_calls < 2:
 		controller.dispose()
 		host.queue_free()
-		_restore(prev_mode, prev_room_state, prev_connected)
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
 		return Result.failure("拒绝 resync 后应刷新 UI: %d" % harness.update_ui_calls)
 
 	controller._resync_in_progress = true
@@ -143,26 +145,51 @@ static func run() -> Result:
 	if harness.request_resync_calls != 3:
 		controller.dispose()
 		host.queue_free()
-		_restore(prev_mode, prev_room_state, prev_connected)
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
 		return Result.failure("delta 失败后应立刻发起 snapshot fallback: %d" % harness.request_resync_calls)
 	if harness.request_resync_force_flags.size() != 3 or not bool(harness.request_resync_force_flags[2]):
 		controller.dispose()
 		host.queue_free()
-		_restore(prev_mode, prev_room_state, prev_connected)
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
 		return Result.failure("delta 失败后的 fallback 应携带 force_snapshot")
 	if not controller.is_resync_in_progress():
 		controller.dispose()
 		host.queue_free()
-		_restore(prev_mode, prev_room_state, prev_connected)
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
 		return Result.failure("delta 失败后重新发起 snapshot fallback 时应保持同步中状态")
+
+	controller._resync_in_progress = false
+	var confirm_count_before_proposal := int(harness.show_confirm_calls)
+	controller._on_online_room_state_updated_for_rollback_proposal({
+		"rollback_proposal": {
+			"proposal_id": "proposal_popup",
+			"proposer_player_id": 0,
+			"target_index": 2,
+			"before_index": 5,
+			"required_player_ids": [1],
+			"votes": {0: true},
+			"self_vote": false,
+		},
+	})
+	if harness.show_confirm_calls != confirm_count_before_proposal + 1:
+		controller.dispose()
+		host.queue_free()
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
+		return Result.failure("收到回滚提议后应弹出投票确认框: before=%d after=%d" % [confirm_count_before_proposal, harness.show_confirm_calls])
+	if str(harness.last_confirm_body).find("命令 #2 后") < 0 or str(harness.last_confirm_body).find("撤销 3 步") < 0:
+		controller.dispose()
+		host.queue_free()
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
+		return Result.failure("投票确认框应明确目标时间点和撤销步数: %s" % str(harness.last_confirm_body))
 
 	controller.dispose()
 	host.queue_free()
-	_restore(prev_mode, prev_room_state, prev_connected)
+	_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
 	return Result.success()
 
-static func _restore(prev_mode, prev_room_state: Dictionary, prev_connected: bool) -> void:
+static func _restore(prev_mode, prev_local_player_id: int, prev_room_state: Dictionary, prev_connected: bool) -> void:
 	NetContext.mode = prev_mode
+	NetContext.local_player_id = int(prev_local_player_id)
 	NetContext.room_state = prev_room_state.duplicate(true)
 	NetClient._client_transport_connected = prev_connected
 
@@ -174,6 +201,10 @@ class _Harness:
 	var request_resync_force_flags: Array[bool] = []
 	var update_ui_calls: int = 0
 	var show_confirm_calls: int = 0
+	var last_confirm_title: String = ""
+	var last_confirm_body: String = ""
+	var last_confirm_ok: String = ""
+	var last_confirm_close: String = ""
 
 	func _init(engine = null) -> void:
 		_engine = engine
@@ -191,6 +222,10 @@ class _Harness:
 
 	func show_confirm(_title: String, _body: String, _confirmed: Callable, _cancelled: Callable, _ok: String, _close: String) -> void:
 		show_confirm_calls += 1
+		last_confirm_title = str(_title)
+		last_confirm_body = str(_body)
+		last_confirm_ok = str(_ok)
+		last_confirm_close = str(_close)
 
 class _FailingEngine:
 	extends RefCounted

@@ -1631,6 +1631,9 @@ func handle_rpc_action_request(request: Dictionary) -> void:
 	if room.game_engine == null:
 		send_request_rejected(peer_id, request_id, "engine_missing", "Room engine missing")
 		return
+	if room.has_method("has_pending_rollback_proposal") and bool(room.has_pending_rollback_proposal()):
+		send_request_rejected(peer_id, request_id, "rollback_proposal_pending", "Rollback proposal pending")
+		return
 
 	var actor_id := _resolve_actor_id_for_peer(room, peer_id)
 	if actor_id < 0:
@@ -1794,6 +1797,10 @@ func _broadcast_rollback_meta(peer_id: int, request_id: String, room, payload: D
 		out["rolled_back_index"] = int(payload.get("rolled_back_index", -1))
 	if payload.has("rolled_back_action_id"):
 		out["rolled_back_action_id"] = str(payload.get("rolled_back_action_id", "")).strip_edges()
+	if payload.has("proposal_id"):
+		out["proposal_id"] = str(payload.get("proposal_id", "")).strip_edges()
+	if payload.has("proposer_player_id"):
+		out["proposer_player_id"] = int(payload.get("proposer_player_id", -1))
 	GameLog.warn(
 		"NetClient",
 		"Rollback prepared %s reason=%s actor=%d target=%d before=%d history=%d noop=%s state_hash=%s %s"
@@ -1928,6 +1935,119 @@ func handle_rpc_rollback_last_command(request: Dictionary) -> void:
 		return
 
 	_broadcast_rollback_meta(peer_id, request_id, room, Dictionary(rr.value), actor_id, "undo_last_command")
+	broadcast_room_state(room)
+
+func handle_rpc_request_rollback_proposal(request: Dictionary) -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
+		return
+
+	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
+	var request_id := str(request.get("request_id", ""))
+	var target_index := int(request.get("target_index", -999))
+	GameLog.warn("NetClient", "RX RollbackProposal %s target=%d" % [_request_tag(peer_id, request_id), target_index])
+	var room = _net._room_manager.get_room_by_peer(peer_id)
+	if room == null:
+		send_request_rejected(peer_id, request_id, "not_in_room", "Not in room")
+		return
+	if str(room.status) != "InGame":
+		send_request_rejected(peer_id, request_id, "not_in_game", "Room not in game")
+		return
+	if room.game_engine == null:
+		send_request_rejected(peer_id, request_id, "engine_missing", "Room engine missing")
+		return
+	var actor_id := _resolve_actor_id_for_peer(room, peer_id)
+	if actor_id < 0:
+		send_request_rejected(peer_id, request_id, "spectator_readonly", "Spectator cannot propose rollback")
+		return
+	if not room.has_method("create_rollback_proposal"):
+		send_request_rejected(peer_id, request_id, "not_supported", "Room does not support rollback proposal")
+		return
+
+	var proposal_r: Result = room.create_rollback_proposal(
+		request_id,
+		peer_id,
+		actor_id,
+		target_index,
+		str(request.get("reason", "proposal_rollback")).strip_edges()
+	)
+	if not proposal_r.ok:
+		send_request_rejected(peer_id, request_id, "rollback_proposal_failed", proposal_r.error)
+		return
+	broadcast_room_state(room)
+	var proposal: Dictionary = Dictionary(proposal_r.value) if proposal_r.value is Dictionary else {}
+	if Array(proposal.get("required_player_ids", [])).is_empty():
+		_execute_approved_rollback_proposal(peer_id, request_id, str(proposal.get("proposal_id", request_id)), room, proposal)
+
+func handle_rpc_vote_rollback_proposal(request: Dictionary) -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
+		return
+
+	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
+	var request_id := str(request.get("request_id", ""))
+	var proposal_id := str(request.get("proposal_id", "")).strip_edges()
+	var approve := bool(request.get("approve", false))
+	GameLog.warn(
+		"NetClient",
+		"RX RollbackProposalVote %s proposal=%s approve=%s"
+			% [_request_tag(peer_id, request_id), _safe_text(proposal_id), str(approve)]
+	)
+	var room = _net._room_manager.get_room_by_peer(peer_id)
+	if room == null:
+		send_request_rejected(peer_id, request_id, "not_in_room", "Not in room")
+		return
+	if str(room.status) != "InGame":
+		send_request_rejected(peer_id, request_id, "not_in_game", "Room not in game")
+		return
+	var actor_id := _resolve_actor_id_for_peer(room, peer_id)
+	if actor_id < 0:
+		send_request_rejected(peer_id, request_id, "spectator_readonly", "Spectator cannot vote rollback")
+		return
+	if not room.has_method("vote_rollback_proposal"):
+		send_request_rejected(peer_id, request_id, "not_supported", "Room does not support rollback proposal vote")
+		return
+
+	var vote_r: Result = room.vote_rollback_proposal(proposal_id, actor_id, approve)
+	if not vote_r.ok:
+		send_request_rejected(peer_id, request_id, "rollback_vote_failed", vote_r.error)
+		return
+	var proposal: Dictionary = Dictionary(vote_r.value) if vote_r.value is Dictionary else {}
+	var status := str(proposal.get("status", "pending")).strip_edges()
+	if status == "rejected":
+		broadcast_room_state(room)
+		return
+	if status != "approved":
+		broadcast_room_state(room)
+		return
+	_execute_approved_rollback_proposal(peer_id, request_id, proposal_id, room, proposal)
+
+func _execute_approved_rollback_proposal(peer_id: int, request_id: String, proposal_id: String, room, proposal: Dictionary) -> void:
+	if room == null or room.game_engine == null:
+		return
+	var before_index := int(proposal.get("before_index", -1))
+	if int(room.game_engine.current_command_index) != before_index:
+		if room.has_method("clear_pending_rollback_proposal"):
+			room.clear_pending_rollback_proposal()
+		broadcast_room_state(room)
+		send_request_rejected(peer_id, request_id, "rollback_proposal_stale", "Rollback proposal is stale")
+		return
+	var target_index := int(proposal.get("target_index", -1))
+	var proposer_pid := int(proposal.get("proposer_player_id", -1))
+	var rr: Result = room.rollback_to_command_index(target_index, false, proposer_pid, "proposal_rollback")
+	if not rr.ok:
+		if room.has_method("clear_pending_rollback_proposal"):
+			room.clear_pending_rollback_proposal()
+		broadcast_room_state(room)
+		send_request_rejected(peer_id, request_id, "rollback_failed", rr.error)
+		return
+	if rr.value is Dictionary:
+		var payload: Dictionary = Dictionary(rr.value).duplicate(true)
+		payload["proposal_id"] = proposal_id
+		payload["proposer_player_id"] = proposer_pid
+		_broadcast_rollback_meta(peer_id, proposal_id, room, payload, proposer_pid, "proposal_rollback")
 	broadcast_room_state(room)
 
 func handle_rpc_request_full_archive_export(request: Dictionary) -> void:

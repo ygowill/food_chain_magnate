@@ -12,14 +12,17 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 @onready var confirm_end_button: Button = $ConfirmEndButton
 @onready var skip_step_button: Button = $SkipStepButton
 @onready var rollback_last_button: Button = $RollbackLastButton
+@onready var rollback_proposal_button: Button = $RollbackProposalButton
 @onready var rewind_button: Button = $RewindButton
 
 var _confirm_end_disabled_reason: String = ""
 var _skip_step_disabled_reason: String = ""
 var _rollback_last_disabled_reason: String = ""
+var _rollback_proposal_disabled_reason: String = ""
 var _confirm_end_action_id: String = "skip"
 var _skip_step_action_id: String = "skip_sub_phase"
 var _rollback_last_action_id: String = "rollback_last_command"
+var _rollback_proposal_action_id: String = "rollback_proposal"
 var _rewind_action_id: String = "rewind_to_turn_start"
 var _last_flow_config_signature: Dictionary = {}
 var _has_applied_flow_config_signature: bool = false
@@ -36,6 +39,8 @@ func _build_ui() -> void:
 		UiStylesClass.apply_button_secondary(skip_step_button)
 	if is_instance_valid(rollback_last_button):
 		UiStylesClass.apply_button_secondary(rollback_last_button)
+	if is_instance_valid(rollback_proposal_button):
+		UiStylesClass.apply_button_secondary(rollback_proposal_button)
 	if is_instance_valid(rewind_button):
 		UiStylesClass.apply_button_secondary(rewind_button)
 
@@ -52,6 +57,10 @@ func _connect_signals() -> void:
 		UiSignalHelpersClass.safe_connect(rollback_last_button, "pressed", _on_rollback_last_pressed)
 		UiSignalHelpersClass.safe_connect(rollback_last_button, "mouse_entered", _on_rollback_last_mouse_entered)
 		UiSignalHelpersClass.safe_connect(rollback_last_button, "mouse_exited", _on_rollback_last_mouse_exited)
+	if is_instance_valid(rollback_proposal_button):
+		UiSignalHelpersClass.safe_connect(rollback_proposal_button, "pressed", _on_rollback_proposal_pressed)
+		UiSignalHelpersClass.safe_connect(rollback_proposal_button, "mouse_entered", _on_rollback_proposal_mouse_entered)
+		UiSignalHelpersClass.safe_connect(rollback_proposal_button, "mouse_exited", _on_rollback_proposal_mouse_exited)
 	if is_instance_valid(rewind_button):
 		UiSignalHelpersClass.safe_connect(rewind_button, "pressed", _on_rewind_pressed)
 
@@ -61,16 +70,19 @@ func apply_flow_config(config: Dictionary) -> void:
 	#   "confirm_end": {"visible": bool, "text": String, "enabled": bool, "disabled_reason": String, "action_id": String},
 	#   "skip_step": {"visible": bool, "text": String, "enabled": bool, "disabled_reason": String, "action_id": String},
 	#   "rollback_last": {"visible": bool, "text": String, "enabled": bool, "disabled_reason": String, "action_id": String},
+	#   "rollback_proposal": {"visible": bool, "text": String, "enabled": bool, "disabled_reason": String, "action_id": String},
 	#   "rewind": {"visible": bool, "enabled": bool, "action_id": String}
 	# }
 	var ce: Dictionary = Dictionary(config.get("confirm_end", {}))
 	var ss: Dictionary = Dictionary(config.get("skip_step", {}))
 	var rb: Dictionary = Dictionary(config.get("rollback_last", {}))
+	var rp: Dictionary = Dictionary(config.get("rollback_proposal", {}))
 	var rw: Dictionary = Dictionary(config.get("rewind", {}))
-	var signature := _build_flow_config_signature(ce, ss, rb, rw)
+	var signature := _build_flow_config_signature(ce, ss, rb, rp, rw)
 	var controls_ready := is_instance_valid(confirm_end_button) \
 		and is_instance_valid(skip_step_button) \
 		and is_instance_valid(rollback_last_button) \
+		and is_instance_valid(rollback_proposal_button) \
 		and is_instance_valid(rewind_button)
 	if controls_ready and _has_applied_flow_config_signature and signature == _last_flow_config_signature:
 		return
@@ -114,6 +126,19 @@ func apply_flow_config(config: Dictionary) -> void:
 		else:
 			rollback_last_button.tooltip_text = "撤销你刚刚执行的上一条操作"
 
+	if is_instance_valid(rollback_proposal_button):
+		rollback_proposal_button.visible = bool(rp.get("visible", false))
+		rollback_proposal_button.text = str(rp.get("text", "提议回滚"))
+		rollback_proposal_button.disabled = not bool(rp.get("enabled", true))
+		_rollback_proposal_action_id = str(rp.get("action_id", "rollback_proposal")).strip_edges()
+		if _rollback_proposal_action_id.is_empty():
+			_rollback_proposal_action_id = "rollback_proposal"
+		_rollback_proposal_disabled_reason = str(rp.get("disabled_reason", "")).strip_edges()
+		if rollback_proposal_button.disabled and not _rollback_proposal_disabled_reason.is_empty():
+			rollback_proposal_button.tooltip_text = "不可用：%s" % _rollback_proposal_disabled_reason
+		else:
+			rollback_proposal_button.tooltip_text = "房主选择时间点并发起全员回滚投票"
+
 	if is_instance_valid(rewind_button):
 		rewind_button.visible = bool(rw.get("visible", true))
 		rewind_button.disabled = not bool(rw.get("enabled", true))
@@ -125,10 +150,11 @@ func apply_flow_config(config: Dictionary) -> void:
 		_has_applied_flow_config_signature = true
 		_flow_config_apply_count += 1
 
-func _build_flow_config_signature(ce: Dictionary, ss: Dictionary, rb: Dictionary, rw: Dictionary) -> Dictionary:
+func _build_flow_config_signature(ce: Dictionary, ss: Dictionary, rb: Dictionary, rp: Dictionary, rw: Dictionary) -> Dictionary:
 	var confirm_reason := str(ce.get("disabled_reason", "")).strip_edges()
 	var skip_reason := str(ss.get("disabled_reason", "")).strip_edges()
 	var rollback_reason := str(rb.get("disabled_reason", "")).strip_edges()
+	var proposal_reason := str(rp.get("disabled_reason", "")).strip_edges()
 	return {
 		"confirm_end": {
 			"visible": bool(ce.get("visible", false)),
@@ -151,6 +177,13 @@ func _build_flow_config_signature(ce: Dictionary, ss: Dictionary, rb: Dictionary
 			"disabled_reason": rollback_reason,
 			"action_id": str(rb.get("action_id", "rollback_last_command")).strip_edges(),
 		},
+		"rollback_proposal": {
+			"visible": bool(rp.get("visible", false)),
+			"text": str(rp.get("text", "提议回滚")),
+			"enabled": bool(rp.get("enabled", true)),
+			"disabled_reason": proposal_reason,
+			"action_id": str(rp.get("action_id", "rollback_proposal")).strip_edges(),
+		},
 		"rewind": {
 			"visible": bool(rw.get("visible", true)),
 			"enabled": bool(rw.get("enabled", true)),
@@ -169,6 +202,9 @@ func _on_skip_step_pressed() -> void:
 
 func _on_rollback_last_pressed() -> void:
 	action_requested.emit(_rollback_last_action_id, {})
+
+func _on_rollback_proposal_pressed() -> void:
+	action_requested.emit(_rollback_proposal_action_id, {})
 
 func _on_rewind_pressed() -> void:
 	action_requested.emit(_rewind_action_id, {})
@@ -196,3 +232,11 @@ func _on_rollback_last_mouse_entered() -> void:
 func _on_rollback_last_mouse_exited() -> void:
 	if rollback_last_button != null and is_instance_valid(rollback_last_button) and (not rollback_last_button.disabled):
 		rollback_last_button.tooltip_text = "撤销你刚刚执行的上一条操作"
+
+func _on_rollback_proposal_mouse_entered() -> void:
+	if rollback_proposal_button != null and is_instance_valid(rollback_proposal_button) and rollback_proposal_button.disabled and not _rollback_proposal_disabled_reason.is_empty():
+		rollback_proposal_button.tooltip_text = "不可用：%s" % _rollback_proposal_disabled_reason
+
+func _on_rollback_proposal_mouse_exited() -> void:
+	if rollback_proposal_button != null and is_instance_valid(rollback_proposal_button) and (not rollback_proposal_button.disabled):
+		rollback_proposal_button.tooltip_text = "房主选择时间点并发起全员回滚投票"

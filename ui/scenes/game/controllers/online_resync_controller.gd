@@ -42,6 +42,8 @@ var _reconnect_transport_connected: bool = false
 var _reconnect_restore_completed: bool = false
 var _reconnect_attempt_failed: bool = false
 var _reconnect_attempt_failure_reason: String = ""
+var _active_rollback_proposal_id: String = ""
+var _handled_rollback_proposal_ids: Dictionary = {}
 
 func _init(
 	host: Node,
@@ -85,6 +87,8 @@ func dispose() -> void:
 	_action_request_ids.clear()
 	_resync_request_id = ""
 	_request_live_log_timeline_refresh = Callable()
+	_active_rollback_proposal_id = ""
+	_handled_rollback_proposal_ids.clear()
 
 func is_resync_in_progress() -> bool:
 	return _resync_in_progress
@@ -222,6 +226,18 @@ func begin_rollback_last_command_request() -> bool:
 	_online_schedule_resync_timeout(_resync_ticket, _rollback_request_id)
 	return true
 
+func begin_rollback_proposal_request(target_index: int) -> bool:
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return false
+	if _resync_in_progress:
+		return false
+	if NetClient == null or not NetClient.is_online_client_connected():
+		GameLog.warn("Game", "联机模式下提议回滚失败：未连接到服务器")
+		return false
+	var request_id := NetClient.request_rollback_proposal(int(target_index), "proposal_rollback")
+	GameLog.warn("Game", "联机请求提议回滚 request_id=%s target=%d" % [str(request_id), int(target_index)])
+	return true
+
 func _get_engine():
 	if not _get_game_engine.is_valid():
 		return null
@@ -243,6 +259,7 @@ func _setup_online_client_bindings() -> void:
 	var cb_applied := Callable(self, "_on_online_command_applied")
 	var cb_archive := Callable(self, "_on_online_resync_archive_received")
 	var cb_rollback_meta := Callable(self, "_on_online_rollback_meta")
+	var cb_room_state := Callable(self, "_on_online_room_state_updated_for_rollback_proposal")
 	var cb_delta_applied := Callable(self, "_on_online_resync_delta_applied")
 	var cb_delta_failed := Callable(self, "_on_online_resync_delta_failed")
 	var cb_rejected := Callable(self, "_on_online_request_rejected")
@@ -254,6 +271,8 @@ func _setup_online_client_bindings() -> void:
 		NetClient.resync_archive_received.connect(cb_archive)
 	if not NetClient.rollback_meta_received.is_connected(cb_rollback_meta):
 		NetClient.rollback_meta_received.connect(cb_rollback_meta)
+	if not NetClient.room_state_updated.is_connected(cb_room_state):
+		NetClient.room_state_updated.connect(cb_room_state)
 	if not NetClient.resync_delta_applied.is_connected(cb_delta_applied):
 		NetClient.resync_delta_applied.connect(cb_delta_applied)
 	if not NetClient.resync_delta_failed.is_connected(cb_delta_failed):
@@ -273,6 +292,7 @@ func _setup_online_client_bindings() -> void:
 	elif pending_rollback_meta is Dictionary and not pending_rollback_meta.is_empty():
 		_resync_in_progress = true
 		_on_online_rollback_meta(Dictionary(pending_rollback_meta))
+	_on_online_room_state_updated_for_rollback_proposal(NetContext.room_state)
 
 func _disconnect_netclient_signals() -> void:
 	if NetClient == null:
@@ -280,6 +300,7 @@ func _disconnect_netclient_signals() -> void:
 	var cb_applied := Callable(self, "_on_online_command_applied")
 	var cb_archive := Callable(self, "_on_online_resync_archive_received")
 	var cb_rollback_meta := Callable(self, "_on_online_rollback_meta")
+	var cb_room_state := Callable(self, "_on_online_room_state_updated_for_rollback_proposal")
 	var cb_delta_applied := Callable(self, "_on_online_resync_delta_applied")
 	var cb_delta_failed := Callable(self, "_on_online_resync_delta_failed")
 	var cb_rejected := Callable(self, "_on_online_request_rejected")
@@ -291,6 +312,8 @@ func _disconnect_netclient_signals() -> void:
 		NetClient.resync_archive_received.disconnect(cb_archive)
 	if NetClient.rollback_meta_received.is_connected(cb_rollback_meta):
 		NetClient.rollback_meta_received.disconnect(cb_rollback_meta)
+	if NetClient.room_state_updated.is_connected(cb_room_state):
+		NetClient.room_state_updated.disconnect(cb_room_state)
 	if NetClient.resync_delta_applied.is_connected(cb_delta_applied):
 		NetClient.resync_delta_applied.disconnect(cb_delta_applied)
 	if NetClient.resync_delta_failed.is_connected(cb_delta_failed):
@@ -301,6 +324,70 @@ func _disconnect_netclient_signals() -> void:
 		NetClient.connected.disconnect(cb_connected)
 	if NetClient.disconnected.is_connected(cb_disconnected):
 		NetClient.disconnected.disconnect(cb_disconnected)
+
+func _on_online_room_state_updated_for_rollback_proposal(room_state: Dictionary) -> void:
+	_maybe_show_rollback_proposal(Dictionary(room_state))
+
+func _maybe_show_rollback_proposal(room_state: Dictionary) -> void:
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return
+	var proposal_val = room_state.get("rollback_proposal", null)
+	if not (proposal_val is Dictionary):
+		_active_rollback_proposal_id = ""
+		return
+	var proposal: Dictionary = Dictionary(proposal_val)
+	if proposal.is_empty():
+		_active_rollback_proposal_id = ""
+		return
+	var proposal_id := str(proposal.get("proposal_id", "")).strip_edges()
+	if proposal_id.is_empty():
+		return
+	var local_pid := int(NetContext.local_player_id)
+	if local_pid < 0:
+		return
+	if local_pid == int(proposal.get("proposer_player_id", -1)):
+		return
+	if bool(proposal.get("self_vote", false)):
+		return
+	if bool(_handled_rollback_proposal_ids.get(proposal_id, false)):
+		return
+	if _active_rollback_proposal_id == proposal_id:
+		return
+	if not _show_confirm.is_valid():
+		return
+	_active_rollback_proposal_id = proposal_id
+	var proposer_pid := int(proposal.get("proposer_player_id", -1))
+	var target_index := int(proposal.get("target_index", -1))
+	var before_index := int(proposal.get("before_index", -1))
+	var steps := maxi(0, before_index - target_index)
+	var target_label := "对局开始前"
+	if target_index >= 0:
+		target_label = "命令 #%d 后" % target_index
+	_show_confirm.call(
+		"是否同意回滚",
+		"房主 P%d 提议回滚到%s。\n当前目标会撤销 %d 步操作。\n全部其他玩家同意后会立即执行回滚。" % [proposer_pid + 1, target_label, steps],
+		Callable(self, "_confirm_rollback_proposal_vote").bind(proposal_id),
+		Callable(self, "_reject_rollback_proposal_vote").bind(proposal_id),
+		"同意回滚",
+		"拒绝"
+	)
+
+func _confirm_rollback_proposal_vote(proposal_id: String) -> void:
+	_submit_rollback_proposal_vote(proposal_id, true)
+
+func _reject_rollback_proposal_vote(proposal_id: String) -> void:
+	_submit_rollback_proposal_vote(proposal_id, false)
+
+func _submit_rollback_proposal_vote(proposal_id: String, approve: bool) -> void:
+	var pid := str(proposal_id).strip_edges()
+	if pid.is_empty():
+		return
+	_handled_rollback_proposal_ids[pid] = true
+	if _active_rollback_proposal_id == pid:
+		_active_rollback_proposal_id = ""
+	if NetClient == null or not NetClient.has_method("vote_rollback_proposal"):
+		return
+	NetClient.vote_rollback_proposal(pid, bool(approve))
 
 func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> void:
 	var engine = _get_engine()

@@ -589,6 +589,44 @@ func request_rollback_last_command() -> String:
 	)
 	return request_id
 
+func request_rollback_proposal(target_index: int, reason: String = "proposal_rollback") -> String:
+	var request_id := _next_request_id()
+	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return request_id
+	if not is_online_client_connected():
+		return request_id
+	var payload := {
+		"request_id": request_id,
+		"target_index": int(target_index),
+		"reason": str(reason).strip_edges(),
+	}
+	rpc_id(1, "rpc_request_rollback_proposal", payload)
+	GameLog.warn(
+		"NetClient",
+		"TX RollbackProposal request_id=%s room=%s target=%d"
+			% [request_id, _safe_room_code(NetContext.room_state), int(target_index)]
+	)
+	return request_id
+
+func vote_rollback_proposal(proposal_id: String, approve: bool) -> String:
+	var request_id := _next_request_id()
+	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return request_id
+	if not is_online_client_connected():
+		return request_id
+	var payload := {
+		"request_id": request_id,
+		"proposal_id": str(proposal_id).strip_edges(),
+		"approve": bool(approve),
+	}
+	rpc_id(1, "rpc_vote_rollback_proposal", payload)
+	GameLog.warn(
+		"NetClient",
+		"TX RollbackProposalVote request_id=%s proposal=%s approve=%s"
+			% [request_id, _safe_text(str(proposal_id)), str(bool(approve))]
+	)
+	return request_id
+
 func request_full_archive_export() -> String:
 	var request_id := _next_request_id()
 	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
@@ -726,6 +764,16 @@ func rpc_rewind_to_turn_start(request: Dictionary) -> void:
 func rpc_rollback_last_command(request: Dictionary) -> void:
 	_ensure_internal()
 	_internal.handle_rpc_rollback_last_command(request)
+
+@rpc("any_peer", "reliable")
+func rpc_request_rollback_proposal(request: Dictionary) -> void:
+	_ensure_internal()
+	_internal.handle_rpc_request_rollback_proposal(request)
+
+@rpc("any_peer", "reliable")
+func rpc_vote_rollback_proposal(request: Dictionary) -> void:
+	_ensure_internal()
+	_internal.handle_rpc_vote_rollback_proposal(request)
 
 @rpc("any_peer", "reliable")
 func rpc_request_full_archive_export(request: Dictionary) -> void:

@@ -260,7 +260,8 @@ static func build(host: Control, refs: Dictionary, callbacks: Dictionary, startu
 		timeline_controller,
 		panel_controller,
 		game_log_panel,
-		tutorial_match_runtime
+		tutorial_match_runtime,
+		host
 	)
 	out["command_controller"] = command_controller
 

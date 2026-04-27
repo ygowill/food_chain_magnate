@@ -773,9 +773,13 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 			blocked_by_online_turn = true
 
 	if blocked_by_action_panel or blocked_by_online_turn:
-		if str(action_id).strip_edges() == "rollback_last_command":
+		var special_action_id := str(action_id).strip_edges()
+		if special_action_id == "rollback_last_command":
 			if _scene != null and _scene.has_method("rollback_last_command"):
 				_scene.call("rollback_last_command")
+		elif special_action_id == "rollback_proposal":
+			if _scene != null and _scene.has_method("propose_rollback"):
+				_scene.call("propose_rollback")
 		return
 
 	var actor_id := current_player_id
@@ -788,6 +792,14 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 		"rewind_to_turn_start":
 			if _scene != null and _scene.has_method("rewind_to_turn_start"):
 				_scene.call("rewind_to_turn_start")
+			return
+		"rollback_last_command":
+			if _scene != null and _scene.has_method("rollback_last_command"):
+				_scene.call("rollback_last_command")
+			return
+		"rollback_proposal":
+			if _scene != null and _scene.has_method("propose_rollback"):
+				_scene.call("propose_rollback")
 			return
 		"skip_dinnertime_settlement":
 			if _overlay_controller != null and _overlay_controller.has_method("skip_dinnertime_settlement_animation"):

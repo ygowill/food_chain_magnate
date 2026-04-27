@@ -48,6 +48,13 @@ static func run() -> Result:
 			"disabled_reason": "上一条不是你的操作",
 			"action_id": "rollback_last_command",
 		},
+		"rollback_proposal": {
+			"visible": true,
+			"text": "提议回滚",
+			"enabled": true,
+			"disabled_reason": "",
+			"action_id": "rollback_proposal",
+		},
 		"rewind": {
 			"enabled": false,
 		},
@@ -62,8 +69,9 @@ static func run() -> Result:
 	var confirm_button := flow_controls.confirm_end_button
 	var skip_button := flow_controls.skip_step_button
 	var rollback_button := flow_controls.rollback_last_button
+	var proposal_button := flow_controls.rollback_proposal_button
 	var rewind_button := flow_controls.rewind_button
-	if confirm_button == null or skip_button == null or rollback_button == null or rewind_button == null:
+	if confirm_button == null or skip_button == null or rollback_button == null or proposal_button == null or rewind_button == null:
 		await _cleanup(controls, st)
 		return Result.failure("ActionFlowControls 按钮节点缺失")
 
@@ -84,6 +92,12 @@ static func run() -> Result:
 		"text": str(rollback_button.text),
 		"disabled": bool(rollback_button.disabled),
 		"tooltip": str(rollback_button.tooltip_text),
+	}
+	var proposal_state := {
+		"visible": bool(proposal_button.visible),
+		"text": str(proposal_button.text),
+		"disabled": bool(proposal_button.disabled),
+		"tooltip": str(proposal_button.tooltip_text),
 	}
 	var rewind_disabled := bool(rewind_button.disabled)
 
@@ -111,6 +125,12 @@ static func run() -> Result:
 		"disabled": bool(rollback_button.disabled),
 		"tooltip": str(rollback_button.tooltip_text),
 	}
+	var proposal_state_after := {
+		"visible": bool(proposal_button.visible),
+		"text": str(proposal_button.text),
+		"disabled": bool(proposal_button.disabled),
+		"tooltip": str(proposal_button.tooltip_text),
+	}
 	if confirm_state_after != confirm_state:
 		await _cleanup(controls, st)
 		return Result.failure("相同配置后 confirm_end 状态不应变化")
@@ -120,6 +140,9 @@ static func run() -> Result:
 	if rollback_state_after != rollback_state:
 		await _cleanup(controls, st)
 		return Result.failure("相同配置后 rollback_last 状态不应变化")
+	if proposal_state_after != proposal_state:
+		await _cleanup(controls, st)
+		return Result.failure("相同配置后 rollback_proposal 状态不应变化")
 	if bool(rewind_button.disabled) != rewind_disabled:
 		await _cleanup(controls, st)
 		return Result.failure("相同配置后 rewind disabled 不应变化")
@@ -166,6 +189,10 @@ static func run() -> Result:
 			"action_id": "skip_marketing_settlement",
 		},
 		"rollback_last": {
+			"visible": false,
+			"enabled": false,
+		},
+		"rollback_proposal": {
 			"visible": false,
 			"enabled": false,
 		},
