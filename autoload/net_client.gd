@@ -189,8 +189,8 @@ func shutdown(reset_context: bool = true) -> void:
 	_pending_action_perf_by_request_id = {}
 	_pending_action_perf_request_ids.clear()
 	_pending_command_applied_perf_queue.clear()
-	if reset_context and _internal != null and is_instance_valid(_internal) and _internal.has_method("clear_online_resume_dual_engine_state"):
-		_internal.clear_online_resume_dual_engine_state()
+	if reset_context and _internal != null and is_instance_valid(_internal):
+		_internal.clear_online_resume_full_history_state()
 	_refresh_multiplayer_peer_binding()
 	if reset_context:
 		NetContext.reset()
@@ -279,8 +279,8 @@ func request_leave_room() -> String:
 		OnlineSessionCoordinator.mark_resume_terminal("leave_room")
 	clear_pending_online_resync_state()
 	_online_client_engine_room_code = ""
-	if _internal != null and is_instance_valid(_internal) and _internal.has_method("clear_online_resume_dual_engine_state"):
-		_internal.clear_online_resume_dual_engine_state()
+	if _internal != null and is_instance_valid(_internal):
+		_internal.clear_online_resume_full_history_state()
 	rpc_id(1, "rpc_leave_room", payload)
 	GameLog.info("NetClient", "TX LeaveRoom request_id=%s room=%s" % [request_id, _safe_room_code(NetContext.room_state)])
 	NetContext.room_state = {}
@@ -294,8 +294,8 @@ func request_forfeit_and_leave_room() -> String:
 		OnlineSessionCoordinator.mark_resume_terminal("forfeit_and_leave_room")
 	clear_pending_online_resync_state()
 	_online_client_engine_room_code = ""
-	if _internal != null and is_instance_valid(_internal) and _internal.has_method("clear_online_resume_dual_engine_state"):
-		_internal.clear_online_resume_dual_engine_state()
+	if _internal != null and is_instance_valid(_internal):
+		_internal.clear_online_resume_full_history_state()
 	rpc_id(1, "rpc_forfeit_and_leave_room", payload)
 	GameLog.info(
 		"NetClient",
@@ -359,10 +359,13 @@ func take_pending_resume_room_bootstrap() -> Dictionary:
 func clear_pending_resume_room_bootstrap() -> void:
 	_pending_resume_room_bootstrap = {}
 
-func clear_online_resume_dual_engine_state() -> void:
+func clear_online_resume_full_history_state() -> void:
 	_ensure_internal()
-	if _internal != null and is_instance_valid(_internal) and _internal.has_method("clear_online_resume_dual_engine_state"):
-		_internal.clear_online_resume_dual_engine_state()
+	if _internal != null and is_instance_valid(_internal):
+		_internal.clear_online_resume_full_history_state()
+
+func clear_online_resume_dual_engine_state() -> void:
+	clear_online_resume_full_history_state()
 
 func get_online_resume_session_snapshot() -> Dictionary:
 	_ensure_internal()

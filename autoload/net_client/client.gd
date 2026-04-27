@@ -131,7 +131,7 @@ func handle_rpc_room_state(payload: Dictionary) -> void:
 		if _net.has_method("clear_pending_online_resync_state"):
 			_net.clear_pending_online_resync_state()
 		_set_online_client_engine_room_code("")
-		_clear_online_resume_dual_engine_state()
+		_clear_online_resume_full_history_state()
 	NetContext.room_state = payload.duplicate(true)
 	var self_seat_val = NetContext.room_state.get("self_seat_index", null)
 	if self_seat_val is int or self_seat_val is float:
@@ -141,7 +141,7 @@ func handle_rpc_room_state(payload: Dictionary) -> void:
 	var room_status := str(NetContext.room_state.get("status", "")).strip_edges()
 	if room_status != "InGame" and room_status != "Starting":
 		_set_online_client_engine_room_code("")
-		_clear_online_resume_dual_engine_state()
+		_clear_online_resume_full_history_state()
 	_sync_online_resume_state_from_room_state(NetContext.room_state)
 	if Globals != null and Globals.has_method("apply_online_room_state"):
 		Globals.apply_online_room_state(NetContext.room_state)
@@ -221,7 +221,7 @@ func handle_rpc_game_started(payload: Dictionary) -> void:
 
 	var init_r: Result = Result.failure("missing bootstrap")
 	if resume_bootstrap_mode == RESUME_BOOTSTRAP_MODE_FULL_ARCHIVE_SNAPSHOT:
-		_clear_online_resume_dual_engine_state()
+		_clear_online_resume_full_history_state()
 		_pending_resume_full_snapshot_payload = Dictionary(payload).duplicate(true)
 		_pending_resume_full_snapshot_room_code = str(room_code).strip_edges().to_upper()
 		_pending_resume_full_snapshot_local_pid = int(local_pid)
@@ -233,7 +233,7 @@ func handle_rpc_game_started(payload: Dictionary) -> void:
 			18.0
 		))
 		return
-	_clear_online_resume_dual_engine_state()
+	_clear_online_resume_full_history_state()
 	init_r = _initialize_online_client_engine_from_config(config, room_code, local_pid)
 	if not init_r.ok:
 		GameLog.error(
@@ -782,8 +782,11 @@ func _mark_online_client_engine_ready(engine: GameEngine, room_code: String, loc
 		Globals.apply_online_room_state(NetContext.room_state if NetContext != null else {})
 	_set_online_client_engine_room_code(room_code)
 
+func clear_online_resume_full_history_state() -> void:
+	_clear_online_resume_full_history_state()
+
 func clear_online_resume_dual_engine_state() -> void:
-	_clear_online_resume_dual_engine_state()
+	clear_online_resume_full_history_state()
 
 func get_online_resume_session_snapshot() -> Dictionary:
 	return _get_online_resume_session_state().snapshot()
@@ -836,11 +839,11 @@ func _get_online_resume_session_state():
 func _invalidate_full_replay_engine(reason: String) -> void:
 	_online_resume_support.invalidate_full_replay_engine(reason)
 
-func _clear_online_resume_dual_engine_state() -> void:
+func _clear_online_resume_full_history_state() -> void:
 	_pending_resume_full_snapshot_payload = {}
 	_pending_resume_full_snapshot_room_code = ""
 	_pending_resume_full_snapshot_local_pid = -1
-	_online_resume_support.clear_online_resume_dual_engine_state()
+	_online_resume_support.clear_online_resume_full_history_state()
 
 func _emit_resume_full_history_ready() -> void:
 	if _net == null or not is_instance_valid(_net):

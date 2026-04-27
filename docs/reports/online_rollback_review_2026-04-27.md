@@ -117,6 +117,12 @@
 - 保留 `snapshot()` 中 `full_replay_live_tail_*` 与 `has_full_archive_payload` 诊断 key，但固定返回 `0` / `false`，避免外部诊断读取立即断裂。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
 
+### 2026-04-27：收敛 full-history 清理命名
+
+- 新增 `clear_online_resume_full_history_state()` 作为恢复历史状态清理主 API，并更新内部调用与测试引用。
+- 保留 `clear_online_resume_dual_engine_state()` 作为兼容别名，避免外部旧调用立即断裂。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
+
 ### 2026-04-27：抽出 server resync transfer 构造
 
 - 新增 `autoload/net_client/server_resync_transfer_builder.gd`，集中构造 full snapshot、archive snapshot 和 delta resync transfer。

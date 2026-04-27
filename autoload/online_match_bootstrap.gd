@@ -387,8 +387,8 @@ func _cleanup_local_bootstrap_state(room_code: String) -> void:
 	if NetClient != null:
 		if NetClient.has_method("clear_pending_online_resync_state"):
 			NetClient.clear_pending_online_resync_state()
-		if NetClient.has_method("clear_online_resume_dual_engine_state"):
-			NetClient.clear_online_resume_dual_engine_state()
+		if NetClient.has_method("clear_online_resume_full_history_state"):
+			NetClient.clear_online_resume_full_history_state()
 		if str(NetClient.get("_online_client_engine_room_code")).strip_edges().to_upper() == normalized_room_code:
 			should_dispose_runtime_engine = true
 			NetClient.set("_online_client_engine_room_code", "")

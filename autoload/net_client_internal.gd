@@ -67,10 +67,13 @@ func send_client_hello() -> void:
 	if _client != null and is_instance_valid(_client):
 		_client.send_client_hello()
 
-func clear_online_resume_dual_engine_state() -> void:
+func clear_online_resume_full_history_state() -> void:
 	_ensure_modules()
 	if _client != null and is_instance_valid(_client):
-		_client.clear_online_resume_dual_engine_state()
+		_client.clear_online_resume_full_history_state()
+
+func clear_online_resume_dual_engine_state() -> void:
+	clear_online_resume_full_history_state()
 
 func get_online_resume_session_snapshot() -> Dictionary:
 	_ensure_modules()
