@@ -139,7 +139,7 @@ func mark_local_bootstrap_failed(message: String, room_state: Dictionary) -> voi
 		"progress_max": 100.0,
 		"priority": SESSION_PRIORITY,
 	})
-	if not _active_bootstrap_id.is_empty() and NetClient != null and NetClient.has_method("request_match_bootstrap_failed"):
+	if not _active_bootstrap_id.is_empty() and NetClient != null:
 		NetClient.request_match_bootstrap_failed(_active_bootstrap_id, reason)
 
 func on_resume_full_history_ready(payload: Dictionary = {}) -> void:
@@ -312,7 +312,7 @@ func _maybe_send_ready_ack() -> void:
 		return
 	if _active_bootstrap_id.is_empty():
 		return
-	if NetClient == null or not NetClient.has_method("request_match_bootstrap_ready"):
+	if NetClient == null:
 		return
 	NetClient.request_match_bootstrap_ready(_active_bootstrap_id)
 	_ready_request_sent = true
@@ -372,7 +372,7 @@ func _on_local_bootstrap_progress(payload: Dictionary) -> void:
 	_apply_loading_state(state)
 
 func _needs_resume_full_history_before_ready(room_state: Dictionary) -> bool:
-	if NetClient == null or not NetClient.has_method("get_online_resume_session_snapshot"):
+	if NetClient == null:
 		return false
 	return should_wait_for_resume_full_history(
 		room_state,
@@ -385,10 +385,8 @@ func _cleanup_local_bootstrap_state(room_code: String) -> void:
 		return
 	var should_dispose_runtime_engine := false
 	if NetClient != null:
-		if NetClient.has_method("clear_pending_online_resync_state"):
-			NetClient.clear_pending_online_resync_state()
-		if NetClient.has_method("clear_online_resume_full_history_state"):
-			NetClient.clear_online_resume_full_history_state()
+		NetClient.clear_pending_online_resync_state()
+		NetClient.clear_online_resume_full_history_state()
 		if str(NetClient.get("_online_client_engine_room_code")).strip_edges().to_upper() == normalized_room_code:
 			should_dispose_runtime_engine = true
 			NetClient.set("_online_client_engine_room_code", "")

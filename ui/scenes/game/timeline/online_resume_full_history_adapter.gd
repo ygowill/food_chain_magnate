@@ -17,13 +17,13 @@ static func is_applicable() -> bool:
 static func is_ready() -> bool:
 	if not is_applicable():
 		return false
-	if NetClient == null or not NetClient.has_method("get_online_resume_session_snapshot"):
+	if NetClient == null:
 		return false
 	var snapshot: Dictionary = Dictionary(NetClient.get_online_resume_session_snapshot()).duplicate(true)
 	return bool(snapshot.get("full_history_ready", false))
 
 static func get_session_snapshot() -> Dictionary:
-	if NetClient == null or not NetClient.has_method("get_online_resume_session_snapshot"):
+	if NetClient == null:
 		return {}
 	return Dictionary(NetClient.get_online_resume_session_snapshot()).duplicate(true)
 
@@ -36,7 +36,7 @@ static func get_runtime_engine() -> GameEngine:
 	return null
 
 static func get_history_engine() -> GameEngine:
-	if NetClient == null or not NetClient.has_method("get_online_resume_full_history_engine"):
+	if NetClient == null:
 		return null
 	var engine = NetClient.get_online_resume_full_history_engine()
 	if engine is GameEngine:
@@ -44,18 +44,18 @@ static func get_history_engine() -> GameEngine:
 	return null
 
 static func get_cached_history_timeline() -> Dictionary:
-	if NetClient == null or not NetClient.has_method("get_online_resume_full_history_step_timeline"):
+	if NetClient == null:
 		return {}
 	var timeline_val = NetClient.get_online_resume_full_history_step_timeline()
 	return Dictionary(timeline_val).duplicate(false) if (timeline_val is Dictionary) else {}
 
 static func set_cached_history_timeline(timeline: Dictionary) -> void:
-	if NetClient == null or not NetClient.has_method("set_online_resume_full_history_step_timeline"):
+	if NetClient == null:
 		return
 	NetClient.set_online_resume_full_history_step_timeline(Dictionary(timeline).duplicate(false))
 
 static func get_cached_history_timeline_entries() -> Array[Dictionary]:
-	if NetClient == null or not NetClient.has_method("get_online_resume_full_history_step_timeline_entries"):
+	if NetClient == null:
 		return []
 	var entries_val = NetClient.get_online_resume_full_history_step_timeline_entries()
 	var out: Array[Dictionary] = []
@@ -67,7 +67,7 @@ static func get_cached_history_timeline_entries() -> Array[Dictionary]:
 	return out
 
 static func set_cached_history_timeline_entries(entries: Array) -> void:
-	if NetClient == null or not NetClient.has_method("set_online_resume_full_history_step_timeline_entries"):
+	if NetClient == null:
 		return
 	NetClient.set_online_resume_full_history_step_timeline_entries(entries)
 
@@ -77,18 +77,16 @@ static func build_history_timeline(
 	previous_timeline: Dictionary = {},
 	allow_incremental_append: bool = false
 ) -> Result:
+	if NetClient == null:
+		return Result.failure("NetClient 未就绪")
 	var cached_history_timeline: Dictionary = {}
-	if NetClient != null and NetClient.has_method("ensure_online_resume_full_history_timeline_current"):
-		var ensure_timeline_r = NetClient.ensure_online_resume_full_history_timeline_current(bool(allow_incremental_append))
-		if ensure_timeline_r is Result:
-			if not ensure_timeline_r.ok:
-				return ensure_timeline_r
-			if ensure_timeline_r.value is Dictionary:
-				cached_history_timeline = Dictionary(ensure_timeline_r.value).duplicate(true)
-	elif NetClient != null and NetClient.has_method("ensure_online_resume_full_history_current"):
-		var ensure_r = NetClient.ensure_online_resume_full_history_current()
-		if ensure_r is Result and not ensure_r.ok:
-			return ensure_r
+	var ensure_timeline_r = NetClient.ensure_online_resume_full_history_timeline_current(bool(allow_incremental_append))
+	if not (ensure_timeline_r is Result):
+		return Result.failure("ensure_online_resume_full_history_timeline_current 返回值类型错误")
+	if not ensure_timeline_r.ok:
+		return ensure_timeline_r
+	if ensure_timeline_r.value is Dictionary:
+		cached_history_timeline = Dictionary(ensure_timeline_r.value).duplicate(true)
 	var engine := get_history_engine()
 	if engine == null:
 		return Result.failure("full_history_engine 未就绪")

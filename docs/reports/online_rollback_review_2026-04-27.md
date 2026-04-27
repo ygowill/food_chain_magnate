@@ -50,7 +50,7 @@
 - 位置：`autoload/net_client.gd`、`autoload/net_client_internal.gd` 以及部分 client/server glue。
 - 影响：大量 `has_method` 兼容检查适合迁移期，但对当前必须存在的协作者会掩盖 wiring 错误。
 - 风险：真实接线问题可能退化成静默失败或延迟发现。
-- 处理状态：已收敛 `NetClientInternal` 对固定 client/server 模块的动态方法检查；`NetClient` 对外兼容层仍保留部分检查。
+- 处理状态：已收敛 `NetClientInternal`、恢复历史 adapter 和 match bootstrap 对固定 `NetClient` API 的动态方法检查；跨 autoload 协调器与 Room/RoomManager 可选能力仍保留显式检查。
 
 ### P3：timeline refresh deferred callback 命名与实际行为不一致
 
@@ -158,4 +158,11 @@
 - 新增 `autoload/net_client/server_resync_service.gd`，承接 server 侧 resync snapshot/delta 构造、发送、best-effort fallback 和 resync 限流状态。
 - 新增 `autoload/net_client/server_log_format.gd`，让 server 主文件和 resync service 共享 request/room/hash 日志格式。
 - `autoload/net_client/server.gd` 保留业务决策和 RPC handler，减少主文件中的 resync 细节代码。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
+
+### 2026-04-27：收敛恢复历史固定 NetClient API 兜底
+
+- 移除 `OnlineResumeFullHistoryAdapter` 对固定 `NetClient` 恢复历史方法的 `has_method` 检查；缺方法时应 fail-fast，而不是静默返回空 timeline。
+- 移除 `OnlineMatchBootstrap` 对固定 `NetClient` bootstrap / resync 清理方法的 `has_method` 检查。
+- 保留 `NetClient == null` 防护，避免非联机或测试上下文直接崩溃。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
