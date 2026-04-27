@@ -364,9 +364,6 @@ func clear_online_resume_full_history_state() -> void:
 	if _internal != null and is_instance_valid(_internal):
 		_internal.clear_online_resume_full_history_state()
 
-func clear_online_resume_dual_engine_state() -> void:
-	clear_online_resume_full_history_state()
-
 func get_online_resume_session_snapshot() -> Dictionary:
 	_ensure_internal()
 	if _internal != null and is_instance_valid(_internal):

@@ -120,7 +120,7 @@
 ### 2026-04-27：收敛 full-history 清理命名
 
 - 新增 `clear_online_resume_full_history_state()` 作为恢复历史状态清理主 API，并更新内部调用与测试引用。
-- 保留 `clear_online_resume_dual_engine_state()` 作为兼容别名，避免外部旧调用立即断裂。
+- 后续清理已删除旧 `clear_online_resume_dual_engine_state()` 兼容别名。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
 
 ### 2026-04-27：收敛 NetClient 恢复历史 facade 兜底
@@ -145,4 +145,10 @@
 
 - 将联机恢复房缓存 API、状态字段、snapshot key 和相关测试从 `full_replay_*` 迁移到 `full_history_*`。
 - 保留核心回放 API `GameEngine.full_replay()` 及本地 timeline controller 的 replay 术语，不把引擎回放语义误改成联机恢复历史语义。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
+
+### 2026-04-27：删除 dual-engine 清理兼容别名
+
+- 删除 `NetClient`、`NetClientInternal`、client 模块和恢复历史 support 中的 `clear_online_resume_dual_engine_state()` 别名。
+- 当前代码只暴露 `clear_online_resume_full_history_state()`，避免新代码继续引用旧 dual-engine 术语。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。

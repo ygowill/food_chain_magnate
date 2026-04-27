@@ -81,9 +81,6 @@ func set_full_history_step_timeline_entries(entries: Array) -> void:
 func clear_online_resume_full_history_state() -> void:
 	_session_state.reset()
 
-func clear_online_resume_dual_engine_state() -> void:
-	clear_online_resume_full_history_state()
-
 func mark_runtime_engine_as_full_history(engine) -> void:
 	if engine == null:
 		return

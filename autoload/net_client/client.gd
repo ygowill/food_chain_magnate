@@ -785,9 +785,6 @@ func _mark_online_client_engine_ready(engine: GameEngine, room_code: String, loc
 func clear_online_resume_full_history_state() -> void:
 	_clear_online_resume_full_history_state()
 
-func clear_online_resume_dual_engine_state() -> void:
-	clear_online_resume_full_history_state()
-
 func get_online_resume_session_snapshot() -> Dictionary:
 	return _get_online_resume_session_state().snapshot()
 
