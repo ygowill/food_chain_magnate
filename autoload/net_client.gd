@@ -369,53 +369,53 @@ func clear_online_resume_dual_engine_state() -> void:
 
 func get_online_resume_session_snapshot() -> Dictionary:
 	_ensure_internal()
-	if _internal != null and is_instance_valid(_internal) and _internal.has_method("get_online_resume_session_snapshot"):
+	if _internal != null and is_instance_valid(_internal):
 		return Dictionary(_internal.get_online_resume_session_snapshot()).duplicate(true)
 	return {}
 
 func get_online_resume_full_replay_engine():
 	_ensure_internal()
-	if _internal != null and is_instance_valid(_internal) and _internal.has_method("get_online_resume_full_replay_engine"):
+	if _internal != null and is_instance_valid(_internal):
 		return _internal.get_online_resume_full_replay_engine()
 	return null
 
 func ensure_online_resume_full_history_current() -> Result:
 	_ensure_internal()
-	if _internal != null and is_instance_valid(_internal) and _internal.has_method("ensure_online_resume_full_history_current"):
+	if _internal != null and is_instance_valid(_internal):
 		return _internal.ensure_online_resume_full_history_current()
 	return ResultClass.failure("online resume full history unavailable")
 
 func ensure_online_resume_full_history_timeline_current(allow_incremental_append: bool = true) -> Result:
 	_ensure_internal()
-	if _internal != null and is_instance_valid(_internal) and _internal.has_method("ensure_online_resume_full_history_timeline_current"):
+	if _internal != null and is_instance_valid(_internal):
 		return _internal.ensure_online_resume_full_history_timeline_current(bool(allow_incremental_append))
 	return ResultClass.failure("online resume full history timeline unavailable")
 
 func get_online_resume_full_replay_step_timeline() -> Dictionary:
 	_ensure_internal()
-	if _internal != null and is_instance_valid(_internal) and _internal.has_method("get_online_resume_full_replay_step_timeline"):
+	if _internal != null and is_instance_valid(_internal):
 		return Dictionary(_internal.get_online_resume_full_replay_step_timeline()).duplicate(false)
 	return {}
 
 func set_online_resume_full_replay_step_timeline(timeline: Dictionary) -> void:
 	_ensure_internal()
-	if _internal != null and is_instance_valid(_internal) and _internal.has_method("set_online_resume_full_replay_step_timeline"):
+	if _internal != null and is_instance_valid(_internal):
 		_internal.set_online_resume_full_replay_step_timeline(Dictionary(timeline).duplicate(false))
 
 func get_online_resume_full_replay_step_timeline_entries() -> Array[Dictionary]:
 	_ensure_internal()
-	if _internal != null and is_instance_valid(_internal) and _internal.has_method("get_online_resume_full_replay_step_timeline_entries"):
+	if _internal != null and is_instance_valid(_internal):
 		return _internal.get_online_resume_full_replay_step_timeline_entries()
 	return []
 
 func set_online_resume_full_replay_step_timeline_entries(entries: Array) -> void:
 	_ensure_internal()
-	if _internal != null and is_instance_valid(_internal) and _internal.has_method("set_online_resume_full_replay_step_timeline_entries"):
+	if _internal != null and is_instance_valid(_internal):
 		_internal.set_online_resume_full_replay_step_timeline_entries(entries)
 
 func load_archive_for_online_client(engine, archive: Dictionary) -> Result:
 	_ensure_internal()
-	if _internal != null and is_instance_valid(_internal) and _internal.has_method("load_archive_for_online_client"):
+	if _internal != null and is_instance_valid(_internal):
 		return _internal.load_archive_for_online_client(engine, archive)
 	if engine == null:
 		return ResultClass.failure("load archive failed: engine 为空")
@@ -423,18 +423,18 @@ func load_archive_for_online_client(engine, archive: Dictionary) -> Result:
 
 func record_online_resume_runtime_command_applied(cmd_dict: Dictionary, state_hash: String = "") -> void:
 	_ensure_internal()
-	if _internal != null and is_instance_valid(_internal) and _internal.has_method("record_online_resume_runtime_command_applied"):
+	if _internal != null and is_instance_valid(_internal):
 		_internal.record_online_resume_runtime_command_applied(cmd_dict, state_hash)
 
 func map_online_resume_progress_from_engine(engine, checkpoint_id: String = "") -> Dictionary:
 	_ensure_internal()
-	if _internal != null and is_instance_valid(_internal) and _internal.has_method("map_online_resume_progress_from_engine"):
+	if _internal != null and is_instance_valid(_internal):
 		return Dictionary(_internal.map_online_resume_progress_from_engine(engine, checkpoint_id)).duplicate(true)
 	return {}
 
 func mark_runtime_engine_as_full_history(engine) -> void:
 	_ensure_internal()
-	if _internal != null and is_instance_valid(_internal) and _internal.has_method("mark_runtime_engine_as_full_history"):
+	if _internal != null and is_instance_valid(_internal):
 		_internal.mark_runtime_engine_as_full_history(engine)
 
 func request_update_player_profile(profile: Dictionary) -> void:

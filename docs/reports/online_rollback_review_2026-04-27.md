@@ -123,6 +123,12 @@
 - 保留 `clear_online_resume_dual_engine_state()` 作为兼容别名，避免外部旧调用立即断裂。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
 
+### 2026-04-27：收敛 NetClient 恢复历史 facade 兜底
+
+- 移除 `autoload/net_client.gd` 中恢复历史相关 facade 对固定 `_internal` 方法的 `has_method` 检查。
+- 保留 `_internal` 实例有效性检查；固定内部 API 缺失时应 fail-fast。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
+
 ### 2026-04-27：抽出 server resync transfer 构造
 
 - 新增 `autoload/net_client/server_resync_transfer_builder.gd`，集中构造 full snapshot、archive snapshot 和 delta resync transfer。
