@@ -2,7 +2,7 @@
 class_name MatchFinalizeParticipantLogoPayloadTest
 extends RefCounted
 
-const ServerLogicClass = preload("res://autoload/net_client/server.gd")
+const ServerMatchFinalizePayloadBuilderClass = preload("res://autoload/net_client/server_match_finalize_payload_builder.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 
 
@@ -33,7 +33,6 @@ static func run() -> Result:
 	return Result.success()
 
 static func _test_prefers_state_logo_over_seat_profile() -> Result:
-	var server = ServerLogicClass.new()
 	var room := _DummyRoom.new()
 	room._seat_profile_by_seat_index = {
 		0: {
@@ -55,7 +54,7 @@ static func _test_prefers_state_logo_over_seat_profile() -> Result:
 		"inventory": {},
 	}]
 
-	var payload: Dictionary = server._build_participant_score_payload(room, state, 0)
+	var payload: Dictionary = ServerMatchFinalizePayloadBuilderClass.build_participant_score_payload(room, state, 0)
 	if int(payload.get("restaurant_logo_id", -1)) != 4:
 		return Result.failure("结算上报应使用 state.players 中的餐厅 Logo，实际: %s" % str(payload))
 	if str(payload.get("display_name", "")) != "Host":
@@ -63,7 +62,6 @@ static func _test_prefers_state_logo_over_seat_profile() -> Result:
 	return Result.success()
 
 static func _test_sparse_seat_indices_fall_back_to_player_order() -> Result:
-	var server = ServerLogicClass.new()
 	var room := _DummyRoom.new()
 	room._seat_profile_by_seat_index = {
 		1: {"name": "Seat1", "restaurant_logo_id": 0},
@@ -98,7 +96,7 @@ static func _test_sparse_seat_indices_fall_back_to_player_order() -> Result:
 		},
 	]
 
-	var participants: Array = server._build_finalize_participants(room, state, 0)
+	var participants: Array = ServerMatchFinalizePayloadBuilderClass.build_finalize_participants(room, state, 0)
 	if participants.size() != 2:
 		return Result.failure("sparse seats fallback 应保留 2 名参与者，实际: %s" % str(participants))
 
@@ -137,8 +135,8 @@ static func _test_participant_stats_payload_uses_rebuilt_events() -> Result:
 	}
 
 	var state := engine.get_state()
-	var payload_0: Dictionary = ServerLogicClass.new()._build_participant_score_payload(room, state, 0)
-	var payload_1: Dictionary = ServerLogicClass.new()._build_participant_score_payload(room, state, 1)
+	var payload_0: Dictionary = ServerMatchFinalizePayloadBuilderClass.build_participant_score_payload(room, state, 0)
+	var payload_1: Dictionary = ServerMatchFinalizePayloadBuilderClass.build_participant_score_payload(room, state, 1)
 	var stats_0 := Dictionary(payload_0.get("stats", {}))
 	var stats_1 := Dictionary(payload_1.get("stats", {}))
 	var metrics_0 := Dictionary(stats_0.get("metrics", {}))

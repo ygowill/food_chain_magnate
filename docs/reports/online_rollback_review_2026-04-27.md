@@ -43,7 +43,7 @@
 - 位置：`autoload/net_client/client.gd`、`autoload/net_client/server.gd`
 - 影响：server 侧混合平台自动入房、启动、resync、回滚、断线、结算；client 侧混合启动、分片、delta、archive 加载与 index translation。
 - 风险：文件膨胀会增加回归风险，测试定位也更困难。
-- 处理状态：已做多步低风险拆分，server 侧 resync transfer 构造/发送/限流已独立；仍建议继续拆分 server/client 主文件中剩余的大型业务块。
+- 处理状态：已做多步低风险拆分，server 侧 GameStarted payload、resync transfer/service、结算 payload builder 已独立；剩余大文件继续拆分属于后续架构演进，不再作为本轮联机回滚问题阻塞项。
 
 ### P3：过多动态兜底降低 fail-fast 能力
 
@@ -172,3 +172,9 @@
 - 更新 `docs/online/README.md`、`online_resume_fastload_full_history_design_2026-04-14.md` 和 `online_resume_hot_path_rebuild_plan_2026-04-16.md`。
 - 明确旧 `full_replay_*` / dual-engine / fast-start 文档只保留历史上下文，不再作为当前实现依据；当前实现以单 full-engine 与 `full_history_*` API 为准。
 - 验证：文档变更，无需运行 Godot 测试。
+
+### 2026-04-27：抽出 server match finalize payload builder
+
+- 新增 `autoload/net_client/server_match_finalize_payload_builder.gd`，集中构造结算 summary、participant score 和统计 payload。
+- `autoload/net_client/server.gd` 保留结算状态推进、后端提交和重试流程，具体 payload 构造迁出主文件。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
