@@ -31,7 +31,7 @@ var _request_resync: Callable = Callable()
 
 var _resync_in_progress: bool = false
 var _pending_cmds: Array[Dictionary] = [] # [{cmd_dict, state_hash}]
-var _rewind_request_id: String = ""
+var _rollback_request_id: String = ""
 var _resync_request_id: String = ""
 var _resync_ticket: int = 0
 var _action_id_by_request_id: Dictionary = {} # request_id -> action_id
@@ -155,7 +155,7 @@ func _begin_full_resync_request(reason: String, force: bool = false) -> bool:
 	if _resync_in_progress and not force:
 		return false
 	_resync_in_progress = true
-	_rewind_request_id = ""
+	_rollback_request_id = ""
 	var request_id := ""
 	if _request_resync.is_valid():
 		var request_result = _request_resync.call(bool(force))
@@ -195,12 +195,12 @@ func begin_rewind_to_turn_start_request() -> bool:
 	_resync_in_progress = true
 	_resync_request_id = ""
 	var request_id := NetClient.request_rewind_to_turn_start()
-	_rewind_request_id = str(request_id)
+	_rollback_request_id = str(request_id)
 	GameLog.warn("Game", "联机请求回退到回合开始 request_id=%s" % str(request_id))
 	_resync_ticket += 1
 	if _update_ui.is_valid():
 		_update_ui.call()
-	_online_schedule_resync_timeout(_resync_ticket, _rewind_request_id)
+	_online_schedule_resync_timeout(_resync_ticket, _rollback_request_id)
 	return true
 
 func _get_engine():
@@ -223,7 +223,7 @@ func _setup_online_client_bindings() -> void:
 
 	var cb_applied := Callable(self, "_on_online_command_applied")
 	var cb_archive := Callable(self, "_on_online_resync_archive_received")
-	var cb_rewind_meta := Callable(self, "_on_online_rewind_to_turn_start_meta")
+	var cb_rollback_meta := Callable(self, "_on_online_rollback_meta")
 	var cb_delta_applied := Callable(self, "_on_online_resync_delta_applied")
 	var cb_delta_failed := Callable(self, "_on_online_resync_delta_failed")
 	var cb_rejected := Callable(self, "_on_online_request_rejected")
@@ -233,8 +233,8 @@ func _setup_online_client_bindings() -> void:
 		NetClient.command_applied.connect(cb_applied)
 	if not NetClient.resync_archive_received.is_connected(cb_archive):
 		NetClient.resync_archive_received.connect(cb_archive)
-	if not NetClient.rewind_to_turn_start_meta_received.is_connected(cb_rewind_meta):
-		NetClient.rewind_to_turn_start_meta_received.connect(cb_rewind_meta)
+	if not NetClient.rollback_meta_received.is_connected(cb_rollback_meta):
+		NetClient.rollback_meta_received.connect(cb_rollback_meta)
 	if not NetClient.resync_delta_applied.is_connected(cb_delta_applied):
 		NetClient.resync_delta_applied.connect(cb_delta_applied)
 	if not NetClient.resync_delta_failed.is_connected(cb_delta_failed):
@@ -247,20 +247,20 @@ func _setup_online_client_bindings() -> void:
 		NetClient.disconnected.connect(cb_disconnected)
 
 	var pending_archive = NetClient.take_pending_resync_archive()
-	var pending_rewind_meta = NetClient.take_pending_rewind_to_turn_start_meta()
+	var pending_rollback_meta = NetClient.take_pending_rollback_meta()
 	if pending_archive is Dictionary and not pending_archive.is_empty():
 		_resync_in_progress = true
 		_on_online_resync_archive_received(Dictionary(pending_archive))
-	elif pending_rewind_meta is Dictionary and not pending_rewind_meta.is_empty():
+	elif pending_rollback_meta is Dictionary and not pending_rollback_meta.is_empty():
 		_resync_in_progress = true
-		_on_online_rewind_to_turn_start_meta(Dictionary(pending_rewind_meta))
+		_on_online_rollback_meta(Dictionary(pending_rollback_meta))
 
 func _disconnect_netclient_signals() -> void:
 	if NetClient == null:
 		return
 	var cb_applied := Callable(self, "_on_online_command_applied")
 	var cb_archive := Callable(self, "_on_online_resync_archive_received")
-	var cb_rewind_meta := Callable(self, "_on_online_rewind_to_turn_start_meta")
+	var cb_rollback_meta := Callable(self, "_on_online_rollback_meta")
 	var cb_delta_applied := Callable(self, "_on_online_resync_delta_applied")
 	var cb_delta_failed := Callable(self, "_on_online_resync_delta_failed")
 	var cb_rejected := Callable(self, "_on_online_request_rejected")
@@ -270,8 +270,8 @@ func _disconnect_netclient_signals() -> void:
 		NetClient.command_applied.disconnect(cb_applied)
 	if NetClient.resync_archive_received.is_connected(cb_archive):
 		NetClient.resync_archive_received.disconnect(cb_archive)
-	if NetClient.rewind_to_turn_start_meta_received.is_connected(cb_rewind_meta):
-		NetClient.rewind_to_turn_start_meta_received.disconnect(cb_rewind_meta)
+	if NetClient.rollback_meta_received.is_connected(cb_rollback_meta):
+		NetClient.rollback_meta_received.disconnect(cb_rollback_meta)
 	if NetClient.resync_delta_applied.is_connected(cb_delta_applied):
 		NetClient.resync_delta_applied.disconnect(cb_delta_applied)
 	if NetClient.resync_delta_failed.is_connected(cb_delta_failed):
@@ -417,7 +417,7 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 			_reconnect_attempt_failed = true
 			_reconnect_attempt_failure_reason = "联机同步失败：%s" % r.error
 		_resync_in_progress = false
-		_rewind_request_id = ""
+		_rollback_request_id = ""
 		_resync_request_id = ""
 		_pending_cmds.clear()
 		if _update_ui.is_valid():
@@ -440,7 +440,7 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 
 	GameLog.warn("Game", "联机 ResyncArchive 加载完成（命令数=%d）" % int(engine.command_history.size()))
 	_resync_in_progress = false
-	_rewind_request_id = ""
+	_rollback_request_id = ""
 	_resync_request_id = ""
 	if _reset_timeline_state_after_resync.is_valid():
 		_reset_timeline_state_after_resync.call()
@@ -468,7 +468,7 @@ func _on_online_resync_delta_applied(payload: Dictionary) -> void:
 			]
 	)
 	_resync_in_progress = false
-	_rewind_request_id = ""
+	_rollback_request_id = ""
 	_resync_request_id = ""
 	if _reset_timeline_state_after_resync.is_valid():
 		_reset_timeline_state_after_resync.call()
@@ -498,7 +498,7 @@ func _on_online_resync_delta_failed(message: String) -> void:
 		_update_ui.call()
 	_begin_full_resync_request("delta_apply_failed", true)
 
-func _on_online_rewind_to_turn_start_meta(payload: Dictionary) -> void:
+func _on_online_rollback_meta(payload: Dictionary) -> void:
 	var engine = _get_engine()
 	if engine == null:
 		return
@@ -506,8 +506,8 @@ func _on_online_rewind_to_turn_start_meta(payload: Dictionary) -> void:
 		return
 	if NetClient == null or not NetClient.is_online_client_connected():
 		return
-	if NetClient.has_method("clear_pending_rewind_to_turn_start_meta"):
-		NetClient.clear_pending_rewind_to_turn_start_meta()
+	if NetClient.has_method("clear_pending_rollback_meta"):
+		NetClient.clear_pending_rollback_meta()
 
 	var request_id := str(payload.get("request_id", ""))
 	var target_index := int(payload.get("target_index", -999))
@@ -515,8 +515,8 @@ func _on_online_rewind_to_turn_start_meta(payload: Dictionary) -> void:
 	var expected_hash := str(payload.get("state_hash", ""))
 	var noop := bool(payload.get("noop", false))
 
-	if not request_id.is_empty() and request_id == _rewind_request_id:
-		_rewind_request_id = ""
+	if not request_id.is_empty() and request_id == _rollback_request_id:
+		_rollback_request_id = ""
 		_resync_ticket += 1
 
 	_resync_in_progress = true
@@ -594,7 +594,7 @@ func _on_online_rewind_to_turn_start_meta(payload: Dictionary) -> void:
 				return
 
 	_resync_in_progress = false
-	_rewind_request_id = ""
+	_rollback_request_id = ""
 	_resync_request_id = ""
 	if _reset_timeline_state_after_resync.is_valid():
 		_reset_timeline_state_after_resync.call()
@@ -624,7 +624,7 @@ func _on_online_resync_timeout(ticket: int, request_id: String) -> void:
 		return
 	if not _resync_in_progress:
 		return
-	if request_id.is_empty() or _rewind_request_id != request_id:
+	if request_id.is_empty() or _rollback_request_id != request_id:
 		return
 	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
 		return
@@ -730,7 +730,7 @@ func _on_online_request_rejected(request_id: String, code: String, message: Stri
 	GameLog.warn("Game", "联机请求被拒绝 request_id=%s: %s %s" % [str(request_id), code, message])
 	var action_id := _take_action_id_for_request(request_id)
 	var matched_resync_rejection := _resync_in_progress \
-		and _rewind_request_id.is_empty() \
+		and _rollback_request_id.is_empty() \
 		and _is_matching_resync_rejection(request_id, code)
 	if _reconnect_flow_active:
 		if matched_resync_rejection:
@@ -739,10 +739,10 @@ func _on_online_request_rejected(request_id: String, code: String, message: Stri
 		_reconnect_attempt_failed = true
 		_reconnect_attempt_failure_reason = "%s: %s" % [str(code), str(message)]
 		return
-	if _resync_in_progress and not _rewind_request_id.is_empty() and str(request_id) == _rewind_request_id:
+	if _resync_in_progress and not _rollback_request_id.is_empty() and str(request_id) == _rollback_request_id:
 		# 避免“回退请求失败但仍卡在同步中”，导致 ActionPanel 永久禁用与状态不一致。
 		_resync_in_progress = false
-		_rewind_request_id = ""
+		_rollback_request_id = ""
 		_resync_request_id = ""
 		_flush_online_pending_commands_after_resync()
 		if _update_ui.is_valid():

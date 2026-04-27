@@ -167,10 +167,13 @@ func handle_rpc_resync_archive(payload: Dictionary) -> void:
 	if _client != null and is_instance_valid(_client):
 		_client.handle_rpc_resync_archive(payload)
 
-func handle_rpc_rewind_to_turn_start_meta(payload: Dictionary) -> void:
+func handle_rpc_rollback_meta(payload: Dictionary) -> void:
 	_ensure_modules()
 	if _client != null and is_instance_valid(_client):
-		_client.handle_rpc_rewind_to_turn_start_meta(payload)
+		_client.handle_rpc_rollback_meta(payload)
+
+func handle_rpc_rewind_to_turn_start_meta(payload: Dictionary) -> void:
+	handle_rpc_rollback_meta(payload)
 
 func handle_rpc_resync_snapshot_manifest(payload: Dictionary) -> void:
 	_ensure_modules()

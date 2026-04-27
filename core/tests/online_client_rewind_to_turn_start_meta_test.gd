@@ -1,4 +1,4 @@
-# Online client：回退元数据应走独立通道，不再混入 resync archive
+# Online client：回滚元数据应走独立通道，不再混入 resync archive
 class_name OnlineClientRewindToTurnStartMetaTest
 extends RefCounted
 
@@ -27,31 +27,32 @@ static func run() -> Result:
 		"history_size": 4,
 		"state_hash": "hash_after_rewind",
 		"noop": false,
+		"reason": "rewind_turn_start",
 	}
 	var mock_net := _MockNet.new()
 	var client = ClientLogicClass.new()
 	client.setup(mock_net)
-	client.handle_rpc_rewind_to_turn_start_meta(payload)
+	client.handle_rpc_rollback_meta(payload)
 
-	if mock_net.rewind_meta_payloads.size() != 1:
+	if mock_net.rollback_meta_payloads.size() != 1:
 		_restore(prev_mode, prev_room_state)
-		return Result.failure("rewind meta 应发出一次独立信号: %s" % str(mock_net.rewind_meta_payloads))
-	var received: Dictionary = Dictionary(mock_net.rewind_meta_payloads[0]).duplicate(true)
+		return Result.failure("rollback meta 应发出一次独立信号: %s" % str(mock_net.rollback_meta_payloads))
+	var received: Dictionary = Dictionary(mock_net.rollback_meta_payloads[0]).duplicate(true)
 	if str(received.get("request_id", "")) != "req_rewind_meta":
 		_restore(prev_mode, prev_room_state)
-		return Result.failure("rewind meta request_id 错误: %s" % str(received))
+		return Result.failure("rollback meta request_id 错误: %s" % str(received))
 	if int(received.get("target_index", -1)) != 3:
 		_restore(prev_mode, prev_room_state)
-		return Result.failure("rewind meta target_index 错误: %s" % str(received))
+		return Result.failure("rollback meta target_index 错误: %s" % str(received))
 	if int(received.get("history_size", -1)) != 4:
 		_restore(prev_mode, prev_room_state)
-		return Result.failure("rewind meta history_size 错误: %s" % str(received))
+		return Result.failure("rollback meta history_size 错误: %s" % str(received))
 	if mock_net._pending_resync_archive.has("_rewind_to_turn_start"):
 		_restore(prev_mode, prev_room_state)
-		return Result.failure("rewind meta 不应再落到 pending archive: %s" % str(mock_net._pending_resync_archive))
-	if str(mock_net._pending_rewind_to_turn_start_meta.get("request_id", "")) != "req_rewind_meta":
+		return Result.failure("rollback meta 不应再落到 pending archive: %s" % str(mock_net._pending_resync_archive))
+	if str(mock_net._pending_rollback_meta.get("request_id", "")) != "req_rewind_meta":
 		_restore(prev_mode, prev_room_state)
-		return Result.failure("rewind meta 应缓存在独立 pending 区: %s" % str(mock_net._pending_rewind_to_turn_start_meta))
+		return Result.failure("rollback meta 应缓存在独立 pending 区: %s" % str(mock_net._pending_rollback_meta))
 
 	_restore(prev_mode, prev_room_state)
 	return Result.success()
@@ -63,13 +64,14 @@ static func _restore(prev_mode, prev_room_state: Dictionary) -> void:
 class _MockNet:
 	extends RefCounted
 
+	signal rollback_meta_received(payload: Dictionary)
 	signal rewind_to_turn_start_meta_received(payload: Dictionary)
 
 	var _pending_resync_archive: Dictionary = {}
-	var _pending_rewind_to_turn_start_meta: Dictionary = {}
-	var rewind_meta_payloads: Array[Dictionary] = []
+	var _pending_rollback_meta: Dictionary = {}
+	var rollback_meta_payloads: Array[Dictionary] = []
 
 	func _init() -> void:
-		rewind_to_turn_start_meta_received.connect(func(payload: Dictionary) -> void:
-			rewind_meta_payloads.append(Dictionary(payload).duplicate(true))
+		rollback_meta_received.connect(func(payload: Dictionary) -> void:
+			rollback_meta_payloads.append(Dictionary(payload).duplicate(true))
 		)

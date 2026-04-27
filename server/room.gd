@@ -1968,23 +1968,28 @@ func start_game() -> Result:
 		return commit_r
 	return commit_r
 
-func rewind_to_current_player_turn_start(include_archive: bool = true, player_id: int = -1) -> Result:
+func rollback_to_command_index(
+	target_index: int,
+	include_archive: bool = true,
+	player_id: int = -1,
+	reason: String = "rollback"
+) -> Result:
 	if status != STATUS_IN_GAME:
 		return Result.failure("Room is not in game")
 	if game_engine == null:
 		return Result.failure("Room engine missing")
-	if not game_engine.has_method("find_current_player_turn_start_command_index"):
-		return Result.failure("Room engine missing turn-start query")
 
-	var idx_r: Result = game_engine.find_current_player_turn_start_command_index(player_id)
-	if not idx_r.ok:
-		return Result.failure("find_current_player_turn_start_command_index failed: %s" % idx_r.error)
-
-	var target_index := int(idx_r.value)
+	var target := int(target_index)
 	var before_index := int(game_engine.current_command_index)
+	if target < -1:
+		return Result.failure("target_index invalid: %d" % target)
+	if target > before_index:
+		return Result.failure("target_index is in the future: target=%d current=%d" % [target, before_index])
+	if target >= int(game_engine.command_history.size()):
+		return Result.failure("target_index outside history: target=%d history=%d" % [target, int(game_engine.command_history.size())])
 
-	if target_index < before_index:
-		var rewind_r: Result = game_engine.rewind_to_command(target_index)
+	if target < before_index:
+		var rewind_r: Result = game_engine.rewind_to_command(target)
 		if not rewind_r.ok:
 			return Result.failure("rewind_to_command failed: %s" % rewind_r.error)
 		if game_engine.has_method("truncate_future_history"):
@@ -1999,13 +2004,14 @@ func rewind_to_current_player_turn_start(include_archive: bool = true, player_id
 		resolved_player_id = int(state.get_current_player_id())
 
 	var out := {
-		"target_index": target_index,
+		"target_index": target,
 		"before_index": before_index,
 		"current_index": int(game_engine.current_command_index),
 		"history_size": int(game_engine.command_history.size()),
 		"state_hash": state_hash,
-		"noop": target_index >= before_index,
+		"noop": target >= before_index,
 		"player_id": resolved_player_id,
+		"reason": str(reason).strip_edges(),
 	}
 
 	if include_archive:
@@ -2014,11 +2020,25 @@ func rewind_to_current_player_turn_start(include_archive: bool = true, player_id
 			return Result.failure("create_archive failed: %s" % archive_r.error)
 		out["archive"] = Dictionary(archive_r.value).duplicate(true)
 
-	var checkpoint_r: Result = _reset_recovery_store_from_current_engine("rewind")
+	var checkpoint_r: Result = _reset_recovery_store_from_current_engine(str(reason).strip_edges() if not str(reason).strip_edges().is_empty() else "rollback")
 	if not checkpoint_r.ok:
 		return Result.failure("reset recovery store failed: %s" % checkpoint_r.error)
 	_touch()
 	return Result.success(out)
+
+func rewind_to_current_player_turn_start(include_archive: bool = true, player_id: int = -1) -> Result:
+	if status != STATUS_IN_GAME:
+		return Result.failure("Room is not in game")
+	if game_engine == null:
+		return Result.failure("Room engine missing")
+	if not game_engine.has_method("find_current_player_turn_start_command_index"):
+		return Result.failure("Room engine missing turn-start query")
+
+	var idx_r: Result = game_engine.find_current_player_turn_start_command_index(player_id)
+	if not idx_r.ok:
+		return Result.failure("find_current_player_turn_start_command_index failed: %s" % idx_r.error)
+
+	return rollback_to_command_index(int(idx_r.value), include_archive, player_id, "rewind_turn_start")
 
 func get_seat_index_for_peer(peer_id: int) -> int:
 	if _seat_by_player_peer_id.has(peer_id):

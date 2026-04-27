@@ -1,4 +1,4 @@
-# Online client：resync/rewind payload 必须与当前房间一致，避免旧房间数据串入新会话
+# Online client：resync/rollback payload 必须与当前房间一致，避免旧房间数据串入新会话
 class_name OnlineClientResyncRoomIsolationTest
 extends RefCounted
 
@@ -27,7 +27,7 @@ static func run() -> Result:
 	var client = ClientLogicClass.new()
 	client.setup(mock_net)
 
-	client.handle_rpc_rewind_to_turn_start_meta({
+	client.handle_rpc_rollback_meta({
 		"request_id": "rewind_wrong_room",
 		"room_code": "ISO02",
 		"target_index": 1,
@@ -35,13 +35,14 @@ static func run() -> Result:
 		"history_size": 2,
 		"state_hash": "hash_wrong_room",
 		"noop": false,
+		"reason": "rewind_turn_start",
 	})
-	if not mock_net.rewind_meta_payloads.is_empty():
+	if not mock_net.rollback_meta_payloads.is_empty():
 		_restore(prev_mode, prev_room_state, prev_connect_token, prev_resume_state)
-		return Result.failure("wrong-room rewind meta 不应透传: %s" % str(mock_net.rewind_meta_payloads))
-	if not mock_net._pending_rewind_to_turn_start_meta.is_empty():
+		return Result.failure("wrong-room rollback meta 不应透传: %s" % str(mock_net.rollback_meta_payloads))
+	if not mock_net._pending_rollback_meta.is_empty():
 		_restore(prev_mode, prev_room_state, prev_connect_token, prev_resume_state)
-		return Result.failure("wrong-room rewind meta 不应缓存")
+		return Result.failure("wrong-room rollback meta 不应缓存")
 
 	client.handle_rpc_resync_snapshot_manifest({
 		"request_id": "snapshot_wrong_room",
@@ -89,7 +90,7 @@ static func run() -> Result:
 		_restore(prev_mode, prev_room_state, prev_connect_token, prev_resume_state)
 		return Result.failure("connect_token hint 未允许正确房间 snapshot manifest")
 
-	client.handle_rpc_rewind_to_turn_start_meta({
+	client.handle_rpc_rollback_meta({
 		"request_id": "rewind_right_room",
 		"room_code": "TOKEN01",
 		"target_index": 0,
@@ -97,10 +98,11 @@ static func run() -> Result:
 		"history_size": 1,
 		"state_hash": "hash_right_room",
 		"noop": true,
+		"reason": "rewind_turn_start",
 	})
-	if mock_net.rewind_meta_payloads.size() != 1:
+	if mock_net.rollback_meta_payloads.size() != 1:
 		_restore(prev_mode, prev_room_state, prev_connect_token, prev_resume_state)
-		return Result.failure("connect_token hint 未允许正确房间 rewind meta")
+		return Result.failure("connect_token hint 未允许正确房间 rollback meta")
 
 	client.handle_rpc_resync_delta({
 		"request_id": "delta_right_room",
@@ -139,21 +141,22 @@ static func _restore(
 class _MockNet:
 	extends RefCounted
 
+	signal rollback_meta_received(payload: Dictionary)
 	signal rewind_to_turn_start_meta_received(payload: Dictionary)
 	signal resync_delta_applied(payload: Dictionary)
 	signal resync_delta_failed(message: String)
 
-	var _pending_rewind_to_turn_start_meta: Dictionary = {}
+	var _pending_rollback_meta: Dictionary = {}
 	var _pending_resync_snapshot_manifest: Dictionary = {}
 	var _pending_resync_snapshot_chunks: Dictionary = {}
 	var _pending_resync_delta: Dictionary = {}
-	var rewind_meta_payloads: Array[Dictionary] = []
+	var rollback_meta_payloads: Array[Dictionary] = []
 	var delta_applied_payloads: Array[Dictionary] = []
 	var delta_failures: Array[String] = []
 
 	func _init() -> void:
-		rewind_to_turn_start_meta_received.connect(func(payload: Dictionary) -> void:
-			rewind_meta_payloads.append(Dictionary(payload).duplicate(true))
+		rollback_meta_received.connect(func(payload: Dictionary) -> void:
+			rollback_meta_payloads.append(Dictionary(payload).duplicate(true))
 		)
 		resync_delta_applied.connect(func(payload: Dictionary) -> void:
 			delta_applied_payloads.append(Dictionary(payload).duplicate(true))

@@ -190,3 +190,10 @@
 - 新增 `autoload/net_client/client_resync_service.gd`，集中处理客户端 resync snapshot manifest/chunk 拼装、archive pending 状态、delta 缓存与 deterministic replay 应用。
 - `autoload/net_client/client.gd` 保留 RPC 入口、恢复房 bootstrap 回调和 engine lifecycle，resync 细节迁入独立 service。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
+
+### 2026-04-27：抽象通用联机回滚元数据通道
+
+- 新增 `OnlineRoom.rollback_to_command_index()`，把 server 权威 rewind/truncate、state hash、history size 与 recovery store reset 收敛为通用回滚入口。
+- 将原 `rewind_to_turn_start_meta` 链路迁移到 `rollback_meta`，保留旧 RPC/helper 作为兼容别名，后续“回退上一步”和“提议回滚”可复用同一客户端应用逻辑。
+- 更新 `GameOnlineResyncController`、client/server RPC glue 与联机 resync guard 测试，确保回滚元数据不再复用 `rpc_resync_archive`。
+- 验证：`git diff --check` 通过；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180` 通过，`386/386`。

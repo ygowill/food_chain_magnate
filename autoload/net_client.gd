@@ -28,6 +28,7 @@ signal resume_full_history_ready(payload: Dictionary)
 signal full_archive_export_ready(payload: Dictionary)
 signal command_applied(cmd_dict: Dictionary, state_hash: String)
 signal resync_archive_received(archive: Dictionary)
+signal rollback_meta_received(payload: Dictionary)
 signal rewind_to_turn_start_meta_received(payload: Dictionary)
 signal resync_delta_applied(payload: Dictionary)
 signal resync_delta_failed(message: String)
@@ -42,7 +43,7 @@ var _profile_by_peer_id: Dictionary = {} # peer_id -> profile
 var _client_transport_connected: bool = false
 var _request_counter: int = 0
 var _pending_resync_archive: Dictionary = {}
-var _pending_rewind_to_turn_start_meta: Dictionary = {}
+var _pending_rollback_meta: Dictionary = {}
 var _pending_resync_snapshot_manifest: Dictionary = {}
 var _pending_resync_snapshot_chunks: Dictionary = {}
 var _pending_resync_delta: Dictionary = {}
@@ -179,7 +180,7 @@ func shutdown(reset_context: bool = true) -> void:
 	_profile_by_peer_id = {}
 	_client_transport_connected = false
 	_pending_resync_archive = {}
-	_pending_rewind_to_turn_start_meta = {}
+	_pending_rollback_meta = {}
 	_pending_resync_snapshot_manifest = {}
 	_pending_resync_snapshot_chunks = {}
 	_pending_resync_delta = {}
@@ -600,25 +601,31 @@ func clear_pending_resync_archive() -> void:
 		GameLog.debug("NetClient", "clear_pending_resync_archive keys=%s" % str(Array(_pending_resync_archive.keys())))
 	_pending_resync_archive = {}
 
-func take_pending_rewind_to_turn_start_meta() -> Dictionary:
-	var out: Dictionary = _pending_rewind_to_turn_start_meta.duplicate(true)
-	_pending_rewind_to_turn_start_meta = {}
+func take_pending_rollback_meta() -> Dictionary:
+	var out: Dictionary = _pending_rollback_meta.duplicate(true)
+	_pending_rollback_meta = {}
 	if not out.is_empty():
-		GameLog.debug("NetClient", "take_pending_rewind_to_turn_start_meta keys=%s" % str(Array(out.keys())))
+		GameLog.debug("NetClient", "take_pending_rollback_meta keys=%s" % str(Array(out.keys())))
 	return out
 
-func clear_pending_rewind_to_turn_start_meta() -> void:
-	if not _pending_rewind_to_turn_start_meta.is_empty():
+func clear_pending_rollback_meta() -> void:
+	if not _pending_rollback_meta.is_empty():
 		GameLog.debug(
 			"NetClient",
-			"clear_pending_rewind_to_turn_start_meta keys=%s"
-				% str(Array(_pending_rewind_to_turn_start_meta.keys()))
+			"clear_pending_rollback_meta keys=%s"
+				% str(Array(_pending_rollback_meta.keys()))
 		)
-	_pending_rewind_to_turn_start_meta = {}
+	_pending_rollback_meta = {}
+
+func take_pending_rewind_to_turn_start_meta() -> Dictionary:
+	return take_pending_rollback_meta()
+
+func clear_pending_rewind_to_turn_start_meta() -> void:
+	clear_pending_rollback_meta()
 
 func clear_pending_online_resync_state() -> void:
 	var should_log := not _pending_resync_archive.is_empty() \
-		or not _pending_rewind_to_turn_start_meta.is_empty() \
+		or not _pending_rollback_meta.is_empty() \
 		or not _pending_resync_snapshot_manifest.is_empty() \
 		or not _pending_resync_snapshot_chunks.is_empty() \
 		or not _pending_resync_delta.is_empty() \
@@ -626,7 +633,7 @@ func clear_pending_online_resync_state() -> void:
 	if should_log:
 		GameLog.debug("NetClient", "clear_pending_online_resync_state")
 	clear_pending_resync_archive()
-	clear_pending_rewind_to_turn_start_meta()
+	clear_pending_rollback_meta()
 	_pending_resync_snapshot_manifest = {}
 	_pending_resync_snapshot_chunks = {}
 	_pending_resync_delta = {}
@@ -733,9 +740,13 @@ func rpc_resync_archive(payload: Dictionary) -> void:
 	_internal.handle_rpc_resync_archive(payload)
 
 @rpc("authority", "reliable")
-func rpc_rewind_to_turn_start_meta(payload: Dictionary) -> void:
+func rpc_rollback_meta(payload: Dictionary) -> void:
 	_ensure_internal()
-	_internal.handle_rpc_rewind_to_turn_start_meta(payload)
+	_internal.handle_rpc_rollback_meta(payload)
+
+@rpc("authority", "reliable")
+func rpc_rewind_to_turn_start_meta(payload: Dictionary) -> void:
+	rpc_rollback_meta(payload)
 
 @rpc("authority", "reliable")
 func rpc_resync_snapshot_manifest(payload: Dictionary) -> void:

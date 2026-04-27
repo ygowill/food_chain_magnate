@@ -1836,12 +1836,14 @@ func handle_rpc_rewind_to_turn_start(request: Dictionary) -> void:
 		"state_hash": str(payload.get("state_hash", "")),
 		"noop": bool(payload.get("noop", false)),
 		"player_id": actor_id,
+		"reason": str(payload.get("reason", "rewind_turn_start")).strip_edges(),
 	}
 	GameLog.warn(
 		"NetClient",
-		"Rewind prepared %s actor=%d target=%d before=%d history=%d noop=%s state_hash=%s %s"
+		"Rollback prepared %s reason=%s actor=%d target=%d before=%d history=%d noop=%s state_hash=%s %s"
 			% [
 				_request_tag(peer_id, request_id),
+				_safe_text(str(out.get("reason", ""))),
 				actor_id,
 				int(out.get("target_index", -1)),
 				int(out.get("before_index", -1)),
@@ -1858,9 +1860,9 @@ func handle_rpc_rewind_to_turn_start(request: Dictionary) -> void:
 			var target_peer_id := int(pid)
 			if target_peer_id <= 0:
 				continue
-			_net.rpc_id(target_peer_id, "rpc_rewind_to_turn_start_meta", out)
+			_net.rpc_id(target_peer_id, "rpc_rollback_meta", out)
 	else:
-		_net.rpc_id(peer_id, "rpc_rewind_to_turn_start_meta", out)
+		_net.rpc_id(peer_id, "rpc_rollback_meta", out)
 
 	broadcast_room_state(room)
 

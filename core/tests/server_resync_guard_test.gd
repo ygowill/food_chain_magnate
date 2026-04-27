@@ -196,14 +196,14 @@ static func _run_rewind_meta_case() -> Result:
 
 	for target_peer_id in Array(room.get_peer_ids()):
 		var pid := int(target_peer_id)
-		if _find_sent_method(mock_net.sent, pid, "rpc_rewind_to_turn_start_meta") < 0:
-			return Result.failure("rewind 应广播 rpc_rewind_to_turn_start_meta 给 peer=%d: %s" % [pid, str(mock_net.sent)])
+		if _find_sent_method(mock_net.sent, pid, "rpc_rollback_meta") < 0:
+			return Result.failure("rewind 应广播 rpc_rollback_meta 给 peer=%d: %s" % [pid, str(mock_net.sent)])
 		if _find_sent_method(mock_net.sent, pid, "rpc_resync_archive") >= 0:
 			return Result.failure("rewind 元数据不应再复用旧 rpc_resync_archive: %s" % str(mock_net.sent))
 
 	for item in mock_net.sent:
 		var sent_item: Dictionary = Dictionary(item)
-		if str(sent_item.get("method", "")) != "rpc_rewind_to_turn_start_meta":
+		if str(sent_item.get("method", "")) != "rpc_rollback_meta":
 			continue
 		var payload_val = sent_item.get("payload", null)
 		if not (payload_val is Dictionary):
@@ -240,7 +240,7 @@ static func _run_rewind_actor_scope_case() -> Result:
 	mock_net.multiplayer.remote_sender_id = 11
 	server.handle_rpc_rewind_to_turn_start({"request_id": "req_rewind_actor_scope"})
 
-	var idx := _find_sent_method(mock_net.sent, 11, "rpc_rewind_to_turn_start_meta")
+	var idx := _find_sent_method(mock_net.sent, 11, "rpc_rollback_meta")
 	if idx < 0:
 		return Result.failure("actor scope rewind 应发送 meta 给 P2，实际=%s" % str(mock_net.sent))
 	var payload_val = Dictionary(mock_net.sent[idx]).get("payload", null)

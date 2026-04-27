@@ -358,20 +358,21 @@ func handle_rpc_resync_archive(payload: Dictionary) -> void:
 	)
 	_net.resync_archive_received.emit(pending_archive.duplicate(true))
 
-func handle_rpc_rewind_to_turn_start_meta(payload: Dictionary) -> void:
+func handle_rpc_rollback_meta(payload: Dictionary) -> void:
 	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
 		return
-	if not _matches_payload_room_code(payload, "RewindMeta"):
+	if not _matches_payload_room_code(payload, "RollbackMeta"):
 		return
-	_invalidate_full_history_engine("rewind_to_turn_start_meta")
-	var rewind_meta := _translate_rewind_meta_to_runtime(Dictionary(payload).duplicate(true))
-	_set_pending_rewind_to_turn_start_meta(rewind_meta)
-	var pending_meta := _get_pending_rewind_to_turn_start_meta()
+	_invalidate_full_history_engine("rollback_meta")
+	var rollback_meta := _translate_rollback_meta_to_runtime(Dictionary(payload).duplicate(true))
+	_set_pending_rollback_meta(rollback_meta)
+	var pending_meta := _get_pending_rollback_meta()
 	GameLog.warn(
 		"NetClient",
-		"RX RewindMeta request_id=%s target=%d before=%d history=%d noop=%s state_hash=%s"
+		"RX RollbackMeta request_id=%s reason=%s target=%d before=%d history=%d noop=%s state_hash=%s"
 			% [
 				_safe_text(str(pending_meta.get("request_id", ""))),
+				_safe_text(str(pending_meta.get("reason", ""))),
 				int(pending_meta.get("target_index", -1)),
 				int(pending_meta.get("before_index", -1)),
 				int(pending_meta.get("history_size", -1)),
@@ -379,7 +380,12 @@ func handle_rpc_rewind_to_turn_start_meta(payload: Dictionary) -> void:
 				_short_hash(str(pending_meta.get("state_hash", "")))
 			]
 	)
-	_net.rewind_to_turn_start_meta_received.emit(pending_meta.duplicate(true))
+	_net.rollback_meta_received.emit(pending_meta.duplicate(true))
+	if _net.has_signal("rewind_to_turn_start_meta_received"):
+		_net.rewind_to_turn_start_meta_received.emit(pending_meta.duplicate(true))
+
+func handle_rpc_rewind_to_turn_start_meta(payload: Dictionary) -> void:
+	handle_rpc_rollback_meta(payload)
 
 func handle_rpc_resync_snapshot_manifest(payload: Dictionary) -> void:
 	_resync_service.handle_snapshot_manifest(payload)
@@ -958,7 +964,7 @@ func _translate_live_command_dict_to_runtime(cmd_dict: Dictionary) -> Dictionary
 		translated["index"] = int(index_val) - global_start
 	return translated
 
-func _translate_rewind_meta_to_runtime(payload: Dictionary) -> Dictionary:
+func _translate_rollback_meta_to_runtime(payload: Dictionary) -> Dictionary:
 	var translated: Dictionary = Dictionary(payload).duplicate(true)
 	var global_start := _get_runtime_global_command_start_index()
 	if global_start < 0:
@@ -1028,18 +1034,18 @@ func _net_has_signal(signal_name: String) -> bool:
 		return false
 	return (_net as Object).has_signal(signal_name)
 
-func _get_pending_rewind_to_turn_start_meta() -> Dictionary:
+func _get_pending_rollback_meta() -> Dictionary:
 	if _net == null or not is_instance_valid(_net) or not (_net is Object):
 		return {}
-	var meta_val = (_net as Object).get("_pending_rewind_to_turn_start_meta")
+	var meta_val = (_net as Object).get("_pending_rollback_meta")
 	if meta_val is Dictionary:
 		return Dictionary(meta_val)
 	return {}
 
-func _set_pending_rewind_to_turn_start_meta(payload: Dictionary) -> void:
+func _set_pending_rollback_meta(payload: Dictionary) -> void:
 	if _net == null or not is_instance_valid(_net) or not (_net is Object):
 		return
-	(_net as Object).set("_pending_rewind_to_turn_start_meta", Dictionary(payload).duplicate(true))
+	(_net as Object).set("_pending_rollback_meta", Dictionary(payload).duplicate(true))
 
 func _safe_text(value: String) -> String:
 	var out := str(value).strip_edges()
