@@ -149,7 +149,7 @@ static func _run_delta_case() -> Result:
 	if _find_request_rejected(mock_net.sent, 11, "req_force_snapshot", "resync_rate_limited") >= 0:
 		return Result.failure("force_snapshot fallback 不应被 resync_rate_limited 拒绝")
 
-	server._last_resync_request_msec_by_peer.erase(11)
+	server._resync_service.forget_peer(11)
 	mock_net.sent.clear()
 	server.handle_rpc_resync_request({
 		"request_id": "req_snapshot_fallback",

@@ -43,7 +43,7 @@
 - 位置：`autoload/net_client/client.gd`、`autoload/net_client/server.gd`
 - 影响：server 侧混合平台自动入房、启动、resync、回滚、断线、结算；client 侧混合启动、分片、delta、archive 加载与 index translation。
 - 风险：文件膨胀会增加回归风险，测试定位也更困难。
-- 处理状态：已做两步低风险拆分，仍建议继续拆分 server/client 主文件。
+- 处理状态：已做多步低风险拆分，server 侧 resync transfer 构造/发送/限流已独立；仍建议继续拆分 server/client 主文件中剩余的大型业务块。
 
 ### P3：过多动态兜底降低 fail-fast 能力
 
@@ -151,4 +151,11 @@
 
 - 删除 `NetClient`、`NetClientInternal`、client 模块和恢复历史 support 中的 `clear_online_resume_dual_engine_state()` 别名。
 - 当前代码只暴露 `clear_online_resume_full_history_state()`，避免新代码继续引用旧 dual-engine 术语。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
+
+### 2026-04-27：抽出 server resync service
+
+- 新增 `autoload/net_client/server_resync_service.gd`，承接 server 侧 resync snapshot/delta 构造、发送、best-effort fallback 和 resync 限流状态。
+- 新增 `autoload/net_client/server_log_format.gd`，让 server 主文件和 resync service 共享 request/room/hash 日志格式。
+- `autoload/net_client/server.gd` 保留业务决策和 RPC handler，减少主文件中的 resync 细节代码。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
