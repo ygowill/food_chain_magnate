@@ -119,9 +119,9 @@ static func _try_load_single_full_runtime_prebuilt_timeline(
 	var snapshot: Dictionary = Dictionary(NetClient.get_online_resume_session_snapshot()).duplicate(true)
 	if not bool(snapshot.get("single_full_engine_mode", false)):
 		return Result.failure("single_full_engine_mode_disabled")
-	if not bool(snapshot.get("full_replay_step_timeline_ready", false)):
+	if not bool(snapshot.get("full_history_step_timeline_ready", false)):
 		return Result.failure("cached_timeline_missing")
-	if not bool(snapshot.get("full_replay_step_timeline_entries_ready", false)):
+	if not bool(snapshot.get("full_history_step_timeline_entries_ready", false)):
 		return Result.failure("cached_entries_missing")
 	var cached_timeline := OnlineResumeFullHistoryAdapterClass.get_cached_history_timeline()
 	if cached_timeline.is_empty():

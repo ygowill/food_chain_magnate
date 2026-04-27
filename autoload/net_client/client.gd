@@ -307,7 +307,7 @@ func handle_rpc_resync_archive(payload: Dictionary) -> void:
 	if not (archive_val is Dictionary):
 		GameLog.warn("NetClient", "RX ResyncArchive ignored: archive type invalid")
 		return
-	_invalidate_full_replay_engine("live_resync_archive")
+	_invalidate_full_history_engine("live_resync_archive")
 	_set_pending_resync_archive(Dictionary(archive_val))
 	var pending_archive := _get_pending_resync_archive()
 	var room_code := str(payload.get("room_code", _get_expected_online_room_code())).strip_edges().to_upper()
@@ -341,7 +341,7 @@ func handle_rpc_rewind_to_turn_start_meta(payload: Dictionary) -> void:
 		return
 	if not _matches_payload_room_code(payload, "RewindMeta"):
 		return
-	_invalidate_full_replay_engine("rewind_to_turn_start_meta")
+	_invalidate_full_history_engine("rewind_to_turn_start_meta")
 	var rewind_meta := _translate_rewind_meta_to_runtime(Dictionary(payload).duplicate(true))
 	_set_pending_rewind_to_turn_start_meta(rewind_meta)
 	var pending_meta := _get_pending_rewind_to_turn_start_meta()
@@ -365,7 +365,7 @@ func handle_rpc_resync_snapshot_manifest(payload: Dictionary) -> void:
 	var manifest: Dictionary = Dictionary(payload).duplicate(true)
 	if not _matches_payload_room_code(manifest, "ResyncSnapshot manifest"):
 		return
-	_invalidate_full_replay_engine("live_resync_snapshot")
+	_invalidate_full_history_engine("live_resync_snapshot")
 	var transfer_id := str(manifest.get("transfer_id", "")).strip_edges()
 	var chunk_count := int(manifest.get("chunk_count", 0))
 	if transfer_id.is_empty() or chunk_count <= 0:
@@ -791,26 +791,26 @@ func clear_online_resume_dual_engine_state() -> void:
 func get_online_resume_session_snapshot() -> Dictionary:
 	return _get_online_resume_session_state().snapshot()
 
-func get_online_resume_full_replay_engine():
-	return _online_resume_support.get_full_replay_engine()
+func get_online_resume_full_history_engine():
+	return _online_resume_support.get_full_history_engine()
 
 func ensure_online_resume_full_history_current() -> Result:
-	return _online_resume_support.ensure_full_replay_engine_current()
+	return _online_resume_support.ensure_full_history_engine_current()
 
 func ensure_online_resume_full_history_timeline_current(allow_incremental_append: bool = true) -> Result:
-	return _online_resume_support.ensure_full_replay_step_timeline_current(bool(allow_incremental_append))
+	return _online_resume_support.ensure_full_history_step_timeline_current(bool(allow_incremental_append))
 
-func get_online_resume_full_replay_step_timeline() -> Dictionary:
-	return _online_resume_support.get_full_replay_step_timeline()
+func get_online_resume_full_history_step_timeline() -> Dictionary:
+	return _online_resume_support.get_full_history_step_timeline()
 
-func set_online_resume_full_replay_step_timeline(timeline: Dictionary) -> void:
-	_online_resume_support.set_full_replay_step_timeline(timeline)
+func set_online_resume_full_history_step_timeline(timeline: Dictionary) -> void:
+	_online_resume_support.set_full_history_step_timeline(timeline)
 
-func get_online_resume_full_replay_step_timeline_entries() -> Array[Dictionary]:
-	return _online_resume_support.get_full_replay_step_timeline_entries()
+func get_online_resume_full_history_step_timeline_entries() -> Array[Dictionary]:
+	return _online_resume_support.get_full_history_step_timeline_entries()
 
-func set_online_resume_full_replay_step_timeline_entries(entries: Array) -> void:
-	_online_resume_support.set_full_replay_step_timeline_entries(entries)
+func set_online_resume_full_history_step_timeline_entries(entries: Array) -> void:
+	_online_resume_support.set_full_history_step_timeline_entries(entries)
 
 func load_archive_for_online_client(engine, archive: Dictionary) -> Result:
 	if not (engine is GameEngine):
@@ -836,8 +836,8 @@ func map_online_resume_progress_from_engine(engine, checkpoint_id: String = "") 
 func _get_online_resume_session_state():
 	return _online_resume_support.get_session_state()
 
-func _invalidate_full_replay_engine(reason: String) -> void:
-	_online_resume_support.invalidate_full_replay_engine(reason)
+func _invalidate_full_history_engine(reason: String) -> void:
+	_online_resume_support.invalidate_full_history_engine(reason)
 
 func _clear_online_resume_full_history_state() -> void:
 	_pending_resume_full_snapshot_payload = {}

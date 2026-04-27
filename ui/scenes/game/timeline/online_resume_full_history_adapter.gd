@@ -20,7 +20,7 @@ static func is_ready() -> bool:
 	if NetClient == null or not NetClient.has_method("get_online_resume_session_snapshot"):
 		return false
 	var snapshot: Dictionary = Dictionary(NetClient.get_online_resume_session_snapshot()).duplicate(true)
-	return bool(snapshot.get("full_replay_ready", false))
+	return bool(snapshot.get("full_history_ready", false))
 
 static func get_session_snapshot() -> Dictionary:
 	if NetClient == null or not NetClient.has_method("get_online_resume_session_snapshot"):
@@ -36,28 +36,28 @@ static func get_runtime_engine() -> GameEngine:
 	return null
 
 static func get_history_engine() -> GameEngine:
-	if NetClient == null or not NetClient.has_method("get_online_resume_full_replay_engine"):
+	if NetClient == null or not NetClient.has_method("get_online_resume_full_history_engine"):
 		return null
-	var engine = NetClient.get_online_resume_full_replay_engine()
+	var engine = NetClient.get_online_resume_full_history_engine()
 	if engine is GameEngine:
 		return engine
 	return null
 
 static func get_cached_history_timeline() -> Dictionary:
-	if NetClient == null or not NetClient.has_method("get_online_resume_full_replay_step_timeline"):
+	if NetClient == null or not NetClient.has_method("get_online_resume_full_history_step_timeline"):
 		return {}
-	var timeline_val = NetClient.get_online_resume_full_replay_step_timeline()
+	var timeline_val = NetClient.get_online_resume_full_history_step_timeline()
 	return Dictionary(timeline_val).duplicate(false) if (timeline_val is Dictionary) else {}
 
 static func set_cached_history_timeline(timeline: Dictionary) -> void:
-	if NetClient == null or not NetClient.has_method("set_online_resume_full_replay_step_timeline"):
+	if NetClient == null or not NetClient.has_method("set_online_resume_full_history_step_timeline"):
 		return
-	NetClient.set_online_resume_full_replay_step_timeline(Dictionary(timeline).duplicate(false))
+	NetClient.set_online_resume_full_history_step_timeline(Dictionary(timeline).duplicate(false))
 
 static func get_cached_history_timeline_entries() -> Array[Dictionary]:
-	if NetClient == null or not NetClient.has_method("get_online_resume_full_replay_step_timeline_entries"):
+	if NetClient == null or not NetClient.has_method("get_online_resume_full_history_step_timeline_entries"):
 		return []
-	var entries_val = NetClient.get_online_resume_full_replay_step_timeline_entries()
+	var entries_val = NetClient.get_online_resume_full_history_step_timeline_entries()
 	var out: Array[Dictionary] = []
 	if entries_val is Array:
 		for entry_val in entries_val:
@@ -67,9 +67,9 @@ static func get_cached_history_timeline_entries() -> Array[Dictionary]:
 	return out
 
 static func set_cached_history_timeline_entries(entries: Array) -> void:
-	if NetClient == null or not NetClient.has_method("set_online_resume_full_replay_step_timeline_entries"):
+	if NetClient == null or not NetClient.has_method("set_online_resume_full_history_step_timeline_entries"):
 		return
-	NetClient.set_online_resume_full_replay_step_timeline_entries(entries)
+	NetClient.set_online_resume_full_history_step_timeline_entries(entries)
 
 static func build_history_timeline(
 	game_log_panel: Object,
@@ -91,7 +91,7 @@ static func build_history_timeline(
 			return ensure_r
 	var engine := get_history_engine()
 	if engine == null:
-		return Result.failure("full_replay_engine 未就绪")
+		return Result.failure("full_history_engine 未就绪")
 
 	var current_count := int(engine.command_history.size())
 	if cached_history_timeline.is_empty():
@@ -115,11 +115,11 @@ static func build_history_timeline(
 	if not baseline_timeline.is_empty():
 		var cached_processed_count := StepTimelineHelpersClass.read_processed_command_count(baseline_timeline)
 		var snapshot := get_session_snapshot()
-		var cached_entry_count := int(snapshot.get("full_replay_step_timeline_entry_count", -1))
+		var cached_entry_count := int(snapshot.get("full_history_step_timeline_entry_count", -1))
 		var cached_entries_processed_count := int(
-			snapshot.get("full_replay_step_timeline_entries_processed_command_count", -1)
+			snapshot.get("full_history_step_timeline_entries_processed_command_count", -1)
 		)
-		var can_use_cached_entries := bool(snapshot.get("full_replay_step_timeline_entries_ready", false)) \
+		var can_use_cached_entries := bool(snapshot.get("full_history_step_timeline_entries_ready", false)) \
 			and cached_entries_processed_count == cached_processed_count
 		if cached_processed_count >= current_count:
 			_emit_resume_cache_event("resume_cache.used_prebuilt_timeline", {
@@ -275,9 +275,9 @@ static func _emit_resume_cache_event(event: String, fields: Dictionary = {}) -> 
 	var snapshot := get_session_snapshot()
 	var out: Dictionary = {
 		"room_code": str(snapshot.get("runtime_room_code", "")).strip_edges().to_upper(),
-		"full_replay_ready": bool(snapshot.get("full_replay_ready", false)),
-		"cached_timeline_ready": bool(snapshot.get("full_replay_step_timeline_ready", false)),
-		"full_replay_command_count": int(snapshot.get("full_replay_command_count", -1)),
+		"full_history_ready": bool(snapshot.get("full_history_ready", false)),
+		"cached_timeline_ready": bool(snapshot.get("full_history_step_timeline_ready", false)),
+		"full_history_command_count": int(snapshot.get("full_history_command_count", -1)),
 	}
 	for key in fields.keys():
 		out[str(key)] = fields[key]

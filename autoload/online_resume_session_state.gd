@@ -8,21 +8,21 @@ var runtime_engine: GameEngine = null
 var runtime_room_code: String = ""
 var runtime_local_player_id: int = -1
 
-var full_replay_engine: GameEngine = null
-var full_replay_engine_ready: bool = false
-var full_replay_room_code: String = ""
+var full_history_engine: GameEngine = null
+var full_history_engine_ready: bool = false
+var full_history_room_code: String = ""
 var full_archive_meta: Dictionary = {}
 var runtime_anchor: Dictionary = {}
 var full_history_source_mode: String = SOURCE_MODE_NONE
 var single_full_engine_mode: bool = false
 var last_full_history_error: String = ""
-var full_replay_step_timeline: Dictionary = {}
-var full_replay_step_timeline_entries: Array[Dictionary] = []
-var full_replay_step_timeline_entries_processed_command_count: int = -1
+var full_history_step_timeline: Dictionary = {}
+var full_history_step_timeline_entries: Array[Dictionary] = []
+var full_history_step_timeline_entries_processed_command_count: int = -1
 var _runtime_state_hash_cache_signature: Dictionary = {}
 var _runtime_state_hash_cache_value: String = ""
-var _full_replay_state_hash_cache_signature: Dictionary = {}
-var _full_replay_state_hash_cache_value: String = ""
+var _full_history_state_hash_cache_signature: Dictionary = {}
+var _full_history_state_hash_cache_value: String = ""
 
 func reset() -> void:
 	clear_runtime()
@@ -44,44 +44,44 @@ func bind_runtime(engine: GameEngine, room_code: String, local_player_id: int) -
 	runtime_local_player_id = int(local_player_id)
 	_clear_runtime_state_hash_cache()
 
-func set_full_replay_step_timeline(timeline: Dictionary) -> void:
-	full_replay_step_timeline = Dictionary(timeline).duplicate(false) if (timeline is Dictionary) else {}
-	if full_replay_step_timeline.is_empty():
-		full_replay_step_timeline_entries.clear()
-		full_replay_step_timeline_entries_processed_command_count = -1
+func set_full_history_step_timeline(timeline: Dictionary) -> void:
+	full_history_step_timeline = Dictionary(timeline).duplicate(false) if (timeline is Dictionary) else {}
+	if full_history_step_timeline.is_empty():
+		full_history_step_timeline_entries.clear()
+		full_history_step_timeline_entries_processed_command_count = -1
 
-func get_full_replay_step_timeline() -> Dictionary:
-	return full_replay_step_timeline.duplicate(false)
+func get_full_history_step_timeline() -> Dictionary:
+	return full_history_step_timeline.duplicate(false)
 
-func has_full_replay_step_timeline() -> bool:
-	return not full_replay_step_timeline.is_empty()
+func has_full_history_step_timeline() -> bool:
+	return not full_history_step_timeline.is_empty()
 
-func set_full_replay_step_timeline_entries(entries: Array, processed_command_count: int = -1) -> void:
-	full_replay_step_timeline_entries.clear()
+func set_full_history_step_timeline_entries(entries: Array, processed_command_count: int = -1) -> void:
+	full_history_step_timeline_entries.clear()
 	if entries is Array:
 		for entry_val in entries:
 			if not (entry_val is Dictionary):
 				continue
-			full_replay_step_timeline_entries.append(Dictionary(entry_val).duplicate(false))
-	full_replay_step_timeline_entries_processed_command_count = int(processed_command_count)
+			full_history_step_timeline_entries.append(Dictionary(entry_val).duplicate(false))
+	full_history_step_timeline_entries_processed_command_count = int(processed_command_count)
 
-func get_full_replay_step_timeline_entries() -> Array[Dictionary]:
+func get_full_history_step_timeline_entries() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	for entry_val in full_replay_step_timeline_entries:
+	for entry_val in full_history_step_timeline_entries:
 		if not (entry_val is Dictionary):
 			continue
 		out.append(Dictionary(entry_val).duplicate(false))
 	return out
 
-func has_full_replay_step_timeline_entries() -> bool:
-	return int(full_replay_step_timeline_entries_processed_command_count) >= 0
+func has_full_history_step_timeline_entries() -> bool:
+	return int(full_history_step_timeline_entries_processed_command_count) >= 0
 
-func get_full_replay_step_timeline_entries_processed_command_count() -> int:
-	return int(full_replay_step_timeline_entries_processed_command_count)
+func get_full_history_step_timeline_entries_processed_command_count() -> int:
+	return int(full_history_step_timeline_entries_processed_command_count)
 
 func snapshot() -> Dictionary:
 	var runtime_hash := _get_cached_engine_state_hash(runtime_engine, true)
-	var full_hash := _get_cached_engine_state_hash(full_replay_engine, false)
+	var full_hash := _get_cached_engine_state_hash(full_history_engine, false)
 	return {
 		"runtime_room_code": runtime_room_code,
 		"runtime_local_player_id": runtime_local_player_id,
@@ -90,18 +90,18 @@ func snapshot() -> Dictionary:
 		"runtime_command_count": int(runtime_engine.command_history.size()) if runtime_engine != null else 0,
 		"runtime_state_hash": runtime_hash,
 		"runtime_anchor": runtime_anchor.duplicate(true),
-		"full_replay_room_code": full_replay_room_code,
-		"full_replay_ready": full_replay_engine_ready,
-		"full_replay_command_count": int(full_replay_engine.command_history.size()) if full_replay_engine != null else 0,
-		"full_replay_state_hash": full_hash,
-		"full_replay_live_tail_count": 0,
-		"full_replay_live_tail_applied_count": 0,
-		"full_replay_live_tail_pending_count": 0,
-		"full_replay_step_timeline_ready": not full_replay_step_timeline.is_empty(),
-		"full_replay_step_timeline_entries_ready": has_full_replay_step_timeline_entries(),
-		"full_replay_step_timeline_entry_count": int(full_replay_step_timeline_entries.size()),
-		"full_replay_step_timeline_entries_processed_command_count": int(
-			full_replay_step_timeline_entries_processed_command_count
+		"full_history_room_code": full_history_room_code,
+		"full_history_ready": full_history_engine_ready,
+		"full_history_command_count": int(full_history_engine.command_history.size()) if full_history_engine != null else 0,
+		"full_history_state_hash": full_hash,
+		"full_history_live_tail_count": 0,
+		"full_history_live_tail_applied_count": 0,
+		"full_history_live_tail_pending_count": 0,
+		"full_history_step_timeline_ready": not full_history_step_timeline.is_empty(),
+		"full_history_step_timeline_entries_ready": has_full_history_step_timeline_entries(),
+		"full_history_step_timeline_entry_count": int(full_history_step_timeline_entries.size()),
+		"full_history_step_timeline_entries_processed_command_count": int(
+			full_history_step_timeline_entries_processed_command_count
 		),
 		"full_history_source_mode": full_history_source_mode,
 		"single_full_engine_mode": bool(single_full_engine_mode),
@@ -111,31 +111,31 @@ func snapshot() -> Dictionary:
 	}
 
 func _reset_full_history_state() -> void:
-	full_replay_engine = null
-	full_replay_engine_ready = false
-	full_replay_room_code = ""
+	full_history_engine = null
+	full_history_engine_ready = false
+	full_history_room_code = ""
 	full_archive_meta = {}
 	full_history_source_mode = SOURCE_MODE_NONE
 	single_full_engine_mode = false
 	last_full_history_error = ""
-	full_replay_step_timeline = {}
-	full_replay_step_timeline_entries.clear()
-	full_replay_step_timeline_entries_processed_command_count = -1
-	_clear_full_replay_state_hash_cache()
+	full_history_step_timeline = {}
+	full_history_step_timeline_entries.clear()
+	full_history_step_timeline_entries_processed_command_count = -1
+	_clear_full_history_state_hash_cache()
 
 func _get_cached_engine_state_hash(engine: GameEngine, is_runtime_engine: bool) -> String:
 	if engine == null:
 		if bool(is_runtime_engine):
 			_clear_runtime_state_hash_cache()
 		else:
-			_clear_full_replay_state_hash_cache()
+			_clear_full_history_state_hash_cache()
 		return ""
 	var state = engine.get_state()
 	if state == null or not state.has_method("compute_hash"):
 		if bool(is_runtime_engine):
 			_clear_runtime_state_hash_cache()
 		else:
-			_clear_full_replay_state_hash_cache()
+			_clear_full_history_state_hash_cache()
 		return ""
 
 	var signature := _build_engine_state_hash_signature(engine, state)
@@ -146,11 +146,11 @@ func _get_cached_engine_state_hash(engine: GameEngine, is_runtime_engine: bool) 
 		_runtime_state_hash_cache_value = str(state.compute_hash())
 		return _runtime_state_hash_cache_value
 
-	if _full_replay_state_hash_cache_signature == signature:
-		return _full_replay_state_hash_cache_value
-	_full_replay_state_hash_cache_signature = signature
-	_full_replay_state_hash_cache_value = str(state.compute_hash())
-	return _full_replay_state_hash_cache_value
+	if _full_history_state_hash_cache_signature == signature:
+		return _full_history_state_hash_cache_value
+	_full_history_state_hash_cache_signature = signature
+	_full_history_state_hash_cache_value = str(state.compute_hash())
+	return _full_history_state_hash_cache_value
 
 func _build_engine_state_hash_signature(engine: GameEngine, state) -> Dictionary:
 	return {
@@ -164,6 +164,6 @@ func _clear_runtime_state_hash_cache() -> void:
 	_runtime_state_hash_cache_signature.clear()
 	_runtime_state_hash_cache_value = ""
 
-func _clear_full_replay_state_hash_cache() -> void:
-	_full_replay_state_hash_cache_signature.clear()
-	_full_replay_state_hash_cache_value = ""
+func _clear_full_history_state_hash_cache() -> void:
+	_full_history_state_hash_cache_signature.clear()
+	_full_history_state_hash_cache_value = ""

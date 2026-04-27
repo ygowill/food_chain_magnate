@@ -145,7 +145,7 @@ step 的基本字段由 helper 构建（`gameplay/replay/step_timeline_build/hel
 当前适配层已经进入**兼容收敛阶段**。新的恢复房启动模型不再长期维护双实例，而是：
 
 - 常态 live engine 直接使用完整历史 engine
-- `full_replay_engine` 字段保留为兼容命名，但在恢复房单引擎模式下与 live engine 指向同一实例
+- `full_history_engine` 字段保留为兼容命名，但在恢复房单引擎模式下与 live engine 指向同一实例
 - 适配层更多承担：
   - 复用 prebuilt timeline / entries cache
   - 保持现有 Replay / History View / seek API 不必一次性全部改名
@@ -153,8 +153,8 @@ step 的基本字段由 helper 构建（`gameplay/replay/step_timeline_build/hel
 当前实现要点：
 
 1. 从 `OnlineResumeSessionState` 读取：
-  - `full_replay_step_timeline`
-  - `full_replay_step_timeline_entries`
+  - `full_history_step_timeline`
+  - `full_history_step_timeline_entries`
 2. 在 `previous_timeline` 与 `cached_timeline` 之间选择更合适的 baseline
 3. 当 processed command count 一致时，优先复用 prebuilt entries
 4. 当只新增尾部命令时，优先走 incremental append

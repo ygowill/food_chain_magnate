@@ -81,10 +81,10 @@ func get_online_resume_session_snapshot() -> Dictionary:
 		return Dictionary(_client.get_online_resume_session_snapshot()).duplicate(true)
 	return {}
 
-func get_online_resume_full_replay_engine():
+func get_online_resume_full_history_engine():
 	_ensure_modules()
 	if _client != null and is_instance_valid(_client):
-		return _client.get_online_resume_full_replay_engine()
+		return _client.get_online_resume_full_history_engine()
 	return null
 
 func ensure_online_resume_full_history_current() -> Result:
@@ -99,27 +99,27 @@ func ensure_online_resume_full_history_timeline_current(allow_incremental_append
 		return _client.ensure_online_resume_full_history_timeline_current(bool(allow_incremental_append))
 	return Result.failure("online resume full history timeline unavailable")
 
-func get_online_resume_full_replay_step_timeline() -> Dictionary:
+func get_online_resume_full_history_step_timeline() -> Dictionary:
 	_ensure_modules()
 	if _client != null and is_instance_valid(_client):
-		return Dictionary(_client.get_online_resume_full_replay_step_timeline()).duplicate(false)
+		return Dictionary(_client.get_online_resume_full_history_step_timeline()).duplicate(false)
 	return {}
 
-func set_online_resume_full_replay_step_timeline(timeline: Dictionary) -> void:
+func set_online_resume_full_history_step_timeline(timeline: Dictionary) -> void:
 	_ensure_modules()
 	if _client != null and is_instance_valid(_client):
-		_client.set_online_resume_full_replay_step_timeline(Dictionary(timeline).duplicate(false))
+		_client.set_online_resume_full_history_step_timeline(Dictionary(timeline).duplicate(false))
 
-func get_online_resume_full_replay_step_timeline_entries() -> Array[Dictionary]:
+func get_online_resume_full_history_step_timeline_entries() -> Array[Dictionary]:
 	_ensure_modules()
 	if _client != null and is_instance_valid(_client):
-		return _client.get_online_resume_full_replay_step_timeline_entries()
+		return _client.get_online_resume_full_history_step_timeline_entries()
 	return []
 
-func set_online_resume_full_replay_step_timeline_entries(entries: Array) -> void:
+func set_online_resume_full_history_step_timeline_entries(entries: Array) -> void:
 	_ensure_modules()
 	if _client != null and is_instance_valid(_client):
-		_client.set_online_resume_full_replay_step_timeline_entries(entries)
+		_client.set_online_resume_full_history_step_timeline_entries(entries)
 
 func load_archive_for_online_client(engine, archive: Dictionary) -> Result:
 	_ensure_modules()

@@ -5,12 +5,12 @@
 
 ## 背景
 
-恢复房此前采用“`runtime_engine` 快启动 + `full_replay_engine` 后台补齐”的双轨方案，目标是缩短进入对局时间。
+恢复房此前采用“`runtime_engine` 快启动 + `full_history_engine` 后台补齐”的双轨方案，目标是缩短进入对局时间。
 
 该方案虽解决了部分启动卡顿，但也持续带来以下问题：
 
 - 启动、日志、时间线、seek、resync 需要同时维护两套历史坐标。
-- `runtime_anchor`、`live_tail`、`full_replay_step_timeline`、`full_replay_step_timeline_entries` 之间存在一致性维护成本。
+- `runtime_anchor`、`live_tail`、`full_history_step_timeline`、`full_history_step_timeline_entries` 之间存在一致性维护成本。
 - 尽管 P0 已把 live 读源切回 `runtime_engine`，但恢复房链路仍长期保留“双轨兼容层”，隐藏复杂度较高。
 - 用户明确接受：恢复房进入可更慢，但需要进度可读、日志完整、行为简单稳定。
 
@@ -31,20 +31,20 @@
 
 ### D4.2 `live == full`
 
-恢复房常态下不再维护独立的 `runtime_engine` / `full_replay_engine` 双实例。
+恢复房常态下不再维护独立的 `runtime_engine` / `full_history_engine` 双实例。
 
 当前实现收敛为：
 
 - 常态 live engine：完整历史 engine。
-- `OnlineResumeSessionState` 仍保留 `full_replay_*` 字段，用于兼容现有调用点；但在恢复房单引擎模式下，它们与当前 live engine 指向同一实例。
+- `OnlineResumeSessionState` 仍保留 `full_history_*` 字段，用于兼容现有调用点；但在恢复房单引擎模式下，它们与当前 live engine 指向同一实例。
 - `runtime_anchor.global_command_start_index = 0`，恢复房命令坐标不再做短链映射。
 
 ### D4.3 启动时预构建日志 / timeline cache，避免进场后二次大 rebuild
 
 完整 archive 本地回放完成后，立即预构建：
 
-- `full_replay_step_timeline`
-- `full_replay_step_timeline_entries`
+- `full_history_step_timeline`
+- `full_history_step_timeline_entries`
 
 进入游戏场景后，live 日志优先复用这份 prebuilt cache，而不是再次 full rebuild。
 

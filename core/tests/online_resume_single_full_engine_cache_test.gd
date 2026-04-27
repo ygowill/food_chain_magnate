@@ -82,7 +82,7 @@ static func run() -> Result:
 		return _restore_and_fail(prev_mode, prev_local_player_id, prev_local_role, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state, prev_engine, prev_is_game_active, "bootstrap 后缺少 runtime engine")
 
 	var snapshot_before: Dictionary = client.get_online_resume_session_snapshot()
-	if int(snapshot_before.get("full_replay_live_tail_count", -1)) != 0:
+	if int(snapshot_before.get("full_history_live_tail_count", -1)) != 0:
 		return _restore_and_fail(prev_mode, prev_local_player_id, prev_local_role, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state, prev_engine, prev_is_game_active, "single full-engine 模式不应预存 live tail")
 
 	var actor_id := int(runtime_engine.get_state().get_current_player_id())
@@ -95,17 +95,17 @@ static func run() -> Result:
 	client.record_online_resume_runtime_command_applied(cmd.to_dict(), state_hash)
 
 	var snapshot_after_record: Dictionary = client.get_online_resume_session_snapshot()
-	if int(snapshot_after_record.get("full_replay_live_tail_count", -1)) != 0:
+	if int(snapshot_after_record.get("full_history_live_tail_count", -1)) != 0:
 		return _restore_and_fail(prev_mode, prev_local_player_id, prev_local_role, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state, prev_engine, prev_is_game_active, "single full-engine 模式下 record_online_resume_runtime_command_applied 不应再积累 live tail")
 
 	var ensure_r := client.ensure_online_resume_full_history_timeline_current(true)
 	if not ensure_r.ok:
 		return _restore_and_fail(prev_mode, prev_local_player_id, prev_local_role, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state, prev_engine, prev_is_game_active, "刷新单引擎 timeline cache 失败: %s" % ensure_r.error)
 
-	var cached_timeline: Dictionary = client.get_online_resume_full_replay_step_timeline()
+	var cached_timeline: Dictionary = client.get_online_resume_full_history_step_timeline()
 	if int(StepTimelineHelpersClass.read_processed_command_count(cached_timeline)) != int(runtime_engine.command_history.size()):
 		return _restore_and_fail(prev_mode, prev_local_player_id, prev_local_role, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state, prev_engine, prev_is_game_active, "timeline cache 未追平到当前 full engine")
-	if client.get_online_resume_full_replay_engine() != runtime_engine:
+	if client.get_online_resume_full_history_engine() != runtime_engine:
 		return _restore_and_fail(prev_mode, prev_local_player_id, prev_local_role, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state, prev_engine, prev_is_game_active, "刷新 cache 后 full engine 不应与 runtime engine 分离")
 
 	_restore(prev_mode, prev_local_player_id, prev_local_role, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state, prev_engine, prev_is_game_active)

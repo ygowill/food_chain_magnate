@@ -151,8 +151,8 @@ sequenceDiagram
 ### 3. 预构建缓存
 
 - 启动后立即预构建：
-  - `full_replay_step_timeline`
-  - `full_replay_step_timeline_entries`
+  - `full_history_step_timeline`
+  - `full_history_step_timeline_entries`
 - 这些字段仍保留在 `OnlineResumeSessionState` 中，但语义已从“双轨 full-side cache”收敛为“单 full-engine cache”
 
 ## OnlineResumeSessionState
@@ -162,17 +162,17 @@ sequenceDiagram
 这是当前恢复房状态的中心存储，主要持有：
 
 - `runtime_engine`（在恢复房单引擎模式下，它就是完整历史 live engine）
-- `full_replay_engine`（兼容字段，当前与 `runtime_engine` 指向同一实例）
+- `full_history_engine`（兼容字段，当前与 `runtime_engine` 指向同一实例）
 - `runtime_anchor`（恢复房单引擎模式下固定从 `0` 开始）
-- `full_replay_step_timeline`
-- `full_replay_step_timeline_entries`
+- `full_history_step_timeline`
+- `full_history_step_timeline_entries`
 - `single_full_engine_mode`
 
 补充说明：
 
-- `snapshot()` 现在会基于 engine/state signature 缓存 `runtime_state_hash` / `full_replay_state_hash`
+- `snapshot()` 现在会基于 engine/state signature 缓存 `runtime_state_hash` / `full_history_state_hash`
 - `single_full_engine_mode=true` 时表示恢复房已完成“完整 archive 本地回放 + cache 预构建”
-- `full_replay_step_timeline_entries` 用于避免进入游戏场景后再次 full rebuild 日志 entries
+- `full_history_step_timeline_entries` 用于避免进入游戏场景后再次 full rebuild 日志 entries
 
 ## 恢复房进入策略
 

@@ -270,7 +270,7 @@ static func run() -> Result:
 			"本地 bootstrap 进度中应包含历史回放阶段"
 		)
 
-	var full_engine = client.get_online_resume_full_replay_engine()
+	var full_engine = client.get_online_resume_full_history_engine()
 	if full_engine != runtime_engine:
 		return _restore_and_fail(
 			prev_mode,
@@ -303,7 +303,7 @@ static func run() -> Result:
 			prev_is_game_active,
 			"session snapshot 应标记 single_full_engine_mode"
 		)
-	if not bool(session_snapshot.get("full_replay_step_timeline_ready", false)):
+	if not bool(session_snapshot.get("full_history_step_timeline_ready", false)):
 		return _restore_and_fail(
 			prev_mode,
 			prev_local_player_id,
@@ -318,7 +318,7 @@ static func run() -> Result:
 			prev_is_game_active,
 			"single full-engine bootstrap 后应直接预构建 step timeline cache"
 		)
-	if not bool(session_snapshot.get("full_replay_step_timeline_entries_ready", false)):
+	if not bool(session_snapshot.get("full_history_step_timeline_entries_ready", false)):
 		return _restore_and_fail(
 			prev_mode,
 			prev_local_player_id,
@@ -348,7 +348,7 @@ static func run() -> Result:
 			prev_is_game_active,
 			"runtime_command_count 应等于完整历史长度"
 		)
-	if int(session_snapshot.get("full_replay_command_count", -1)) != full_history_size:
+	if int(session_snapshot.get("full_history_command_count", -1)) != full_history_size:
 		return _restore_and_fail(
 			prev_mode,
 			prev_local_player_id,
@@ -361,10 +361,10 @@ static func run() -> Result:
 			prev_resume_state,
 			prev_engine,
 			prev_is_game_active,
-			"full_replay_command_count 应等于完整历史长度"
+			"full_history_command_count 应等于完整历史长度"
 		)
 
-	var cached_timeline: Dictionary = client.get_online_resume_full_replay_step_timeline()
+	var cached_timeline: Dictionary = client.get_online_resume_full_history_step_timeline()
 	if int(StepTimelineHelpersClass.read_processed_command_count(cached_timeline)) != full_history_size:
 		return _restore_and_fail(
 			prev_mode,

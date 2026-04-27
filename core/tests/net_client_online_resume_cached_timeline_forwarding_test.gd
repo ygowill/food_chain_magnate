@@ -7,14 +7,14 @@ const OnlineResumeFullHistoryAdapterClass = preload("res://ui/scenes/game/timeli
 static func run() -> Result:
 	if NetClient == null:
 		return Result.failure("NetClient autoload missing")
-	if not NetClient.has_method("get_online_resume_full_replay_step_timeline"):
-		return Result.failure("NetClient 缺少 get_online_resume_full_replay_step_timeline()")
-	if not NetClient.has_method("set_online_resume_full_replay_step_timeline"):
-		return Result.failure("NetClient 缺少 set_online_resume_full_replay_step_timeline()")
-	if not NetClient.has_method("get_online_resume_full_replay_step_timeline_entries"):
-		return Result.failure("NetClient 缺少 get_online_resume_full_replay_step_timeline_entries()")
-	if not NetClient.has_method("set_online_resume_full_replay_step_timeline_entries"):
-		return Result.failure("NetClient 缺少 set_online_resume_full_replay_step_timeline_entries()")
+	if not NetClient.has_method("get_online_resume_full_history_step_timeline"):
+		return Result.failure("NetClient 缺少 get_online_resume_full_history_step_timeline()")
+	if not NetClient.has_method("set_online_resume_full_history_step_timeline"):
+		return Result.failure("NetClient 缺少 set_online_resume_full_history_step_timeline()")
+	if not NetClient.has_method("get_online_resume_full_history_step_timeline_entries"):
+		return Result.failure("NetClient 缺少 get_online_resume_full_history_step_timeline_entries()")
+	if not NetClient.has_method("set_online_resume_full_history_step_timeline_entries"):
+		return Result.failure("NetClient 缺少 set_online_resume_full_history_step_timeline_entries()")
 	if NetClient.has_signal("resume_fast_start_ready"):
 		return Result.failure("NetClient 不应再暴露 resume_fast_start_ready 信号")
 
@@ -45,8 +45,8 @@ static func run() -> Result:
 		],
 	}
 
-	NetClient.set_online_resume_full_replay_step_timeline(cached_timeline)
-	NetClient.set_online_resume_full_replay_step_timeline_entries([
+	NetClient.set_online_resume_full_history_step_timeline(cached_timeline)
+	NetClient.set_online_resume_full_history_step_timeline_entries([
 		{
 			"message": "玩家1: 测试日志",
 			"step_index": 0,
@@ -57,7 +57,7 @@ static func run() -> Result:
 		},
 	])
 
-	var read_back := NetClient.get_online_resume_full_replay_step_timeline()
+	var read_back := NetClient.get_online_resume_full_history_step_timeline()
 	if Dictionary(read_back.get("_build_meta", {})).get("processed_command_count", -1) != 248:
 		NetClient.clear_online_resume_full_history_state()
 		return Result.failure("NetClient 读取的 cached timeline processed_command_count 错误")
@@ -81,7 +81,7 @@ static func run() -> Result:
 		NetClient.clear_online_resume_full_history_state()
 		return Result.failure("cached timeline 深层字段在 autoload 转发后丢失")
 
-	var read_back_entries := NetClient.get_online_resume_full_replay_step_timeline_entries()
+	var read_back_entries := NetClient.get_online_resume_full_history_step_timeline_entries()
 	if not (read_back_entries is Array) or Array(read_back_entries).size() != 1:
 		NetClient.clear_online_resume_full_history_state()
 		return Result.failure("NetClient 读取的 cached timeline entries 数量错误")

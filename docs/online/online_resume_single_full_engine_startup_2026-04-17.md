@@ -36,7 +36,7 @@
 
 为了兼容现有调用点：
 
-- `OnlineResumeSessionState.full_replay_engine` 暂时仍保留
+- `OnlineResumeSessionState.full_history_engine` 暂时仍保留
 - 但在恢复房单引擎模式下，它与当前 live engine 指向同一实例
 
 ### 2.3 日志与时间线
@@ -45,8 +45,8 @@
 
 启动期在本地 archive replay 完成后，立即构建：
 
-- `full_replay_step_timeline`
-- `full_replay_step_timeline_entries`
+- `full_history_step_timeline`
+- `full_history_step_timeline_entries`
 
 #### 进入游戏后
 
@@ -163,7 +163,7 @@
 - 只更新当前单一 full engine
 - `record_online_resume_runtime_command_applied()` 在单引擎模式下不得再积累 `live_tail`
 - `ensure_online_resume_full_history_timeline_current(true)` 应基于现有 cached timeline 做 append / refresh
-- 禁止重新回到“双轨同步推进 full_replay_engine”的旧模式
+- 禁止重新回到“双轨同步推进 full_history_engine”的旧模式
 
 ### 5.3 等待态自动打开日志，但必须采用“轻量显示 + 分帧挂载”
 
@@ -228,7 +228,7 @@
 
 本轮重构优先收敛**实际运行路径**，并保留部分兼容 API：
 
-- `get_online_resume_full_replay_engine()`
+- `get_online_resume_full_history_engine()`
 - `ensure_online_resume_full_history_current()`
 - `ensure_online_resume_full_history_timeline_current()`
 
@@ -246,7 +246,7 @@
 - 恢复房 bootstrap 改为完整 snapshot，不再走 fast-start signal
 - `game_started` 延迟到 archive + timeline cache 完成后再发出
 - session snapshot 标记 `single_full_engine_mode = true`
-- `full_replay_engine == runtime_engine`
+- `full_history_engine == runtime_engine`
 - `record_online_resume_runtime_command_applied()` 不再积累 live tail
 - cached timeline 能在单引擎模式下继续增量追平
 - 恢复房 bootstrap gate 只有在 full engine + timeline cache 完成后才放行

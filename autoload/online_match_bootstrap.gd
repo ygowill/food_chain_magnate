@@ -247,9 +247,9 @@ static func should_wait_for_resume_full_history(room_state: Dictionary, session_
 		return true
 	if not bool(snapshot.get("runtime_ready", false)):
 		return true
-	if not bool(snapshot.get("full_replay_ready", false)):
+	if not bool(snapshot.get("full_history_ready", false)):
 		return true
-	if not bool(snapshot.get("full_replay_step_timeline_ready", false)):
+	if not bool(snapshot.get("full_history_step_timeline_ready", false)):
 		return true
 	return false
 

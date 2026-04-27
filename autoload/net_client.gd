@@ -373,10 +373,10 @@ func get_online_resume_session_snapshot() -> Dictionary:
 		return Dictionary(_internal.get_online_resume_session_snapshot()).duplicate(true)
 	return {}
 
-func get_online_resume_full_replay_engine():
+func get_online_resume_full_history_engine():
 	_ensure_internal()
 	if _internal != null and is_instance_valid(_internal):
-		return _internal.get_online_resume_full_replay_engine()
+		return _internal.get_online_resume_full_history_engine()
 	return null
 
 func ensure_online_resume_full_history_current() -> Result:
@@ -391,27 +391,27 @@ func ensure_online_resume_full_history_timeline_current(allow_incremental_append
 		return _internal.ensure_online_resume_full_history_timeline_current(bool(allow_incremental_append))
 	return ResultClass.failure("online resume full history timeline unavailable")
 
-func get_online_resume_full_replay_step_timeline() -> Dictionary:
+func get_online_resume_full_history_step_timeline() -> Dictionary:
 	_ensure_internal()
 	if _internal != null and is_instance_valid(_internal):
-		return Dictionary(_internal.get_online_resume_full_replay_step_timeline()).duplicate(false)
+		return Dictionary(_internal.get_online_resume_full_history_step_timeline()).duplicate(false)
 	return {}
 
-func set_online_resume_full_replay_step_timeline(timeline: Dictionary) -> void:
+func set_online_resume_full_history_step_timeline(timeline: Dictionary) -> void:
 	_ensure_internal()
 	if _internal != null and is_instance_valid(_internal):
-		_internal.set_online_resume_full_replay_step_timeline(Dictionary(timeline).duplicate(false))
+		_internal.set_online_resume_full_history_step_timeline(Dictionary(timeline).duplicate(false))
 
-func get_online_resume_full_replay_step_timeline_entries() -> Array[Dictionary]:
+func get_online_resume_full_history_step_timeline_entries() -> Array[Dictionary]:
 	_ensure_internal()
 	if _internal != null and is_instance_valid(_internal):
-		return _internal.get_online_resume_full_replay_step_timeline_entries()
+		return _internal.get_online_resume_full_history_step_timeline_entries()
 	return []
 
-func set_online_resume_full_replay_step_timeline_entries(entries: Array) -> void:
+func set_online_resume_full_history_step_timeline_entries(entries: Array) -> void:
 	_ensure_internal()
 	if _internal != null and is_instance_valid(_internal):
-		_internal.set_online_resume_full_replay_step_timeline_entries(entries)
+		_internal.set_online_resume_full_history_step_timeline_entries(entries)
 
 func load_archive_for_online_client(engine, archive: Dictionary) -> Result:
 	_ensure_internal()

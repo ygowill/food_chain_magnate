@@ -63,7 +63,7 @@
 
 1. 先修会导致错误联机状态的行为问题。
 2. 每次变更保持小范围，并在本文件记录变更。
-3. 恢复房主链路以 single full-engine startup 为准，旧 dual-engine 仅作为明确隔离的兼容路径。
+3. 恢复房主链路以 single full-engine startup 为准，旧 dual-engine 不再作为可执行恢复路径。
 4. 涉及 GDScript 修改时保持 tab 缩进，不做无关格式化。
 
 ## 变更记录
@@ -106,7 +106,7 @@
 ### 2026-04-27：隔离 legacy dual-engine / live-tail 语义
 
 - 在 `autoload/online_resume_session_state.gd` 中新增 full-history source mode 常量，并标注 `full_archive` / live-tail 字段为 legacy dual-engine 兼容状态。
-- 移除 `OnlineResumeSessionState` 中未被代码引用的 `has_full_archive_payload()` 和 `get_pending_full_replay_live_tail_commands()`。
+- 移除 `OnlineResumeSessionState` 中未被代码引用的 `has_full_archive_payload()` 和 `get_pending_full_history_live_tail_commands()`。
 - 将 `autoload/net_client_online_resume_support.gd` 中旧 archive-payload full replay 构建、live-tail replay 和命令应用 helper 重命名为 `legacy` 路径，明确当前恢复房主链路应使用 `single_full_engine_mode`。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
 
@@ -114,7 +114,7 @@
 
 - 删除 `autoload/net_client_online_resume_support.gd` 中旧 archive-payload full replay 构建、live-tail 缓存、live-tail replay 和 delta `_full_history_entries` 记录路径。
 - 精简 `autoload/online_resume_session_state.gd`，移除 `full_archive`、`full_history_generation`、live-tail 命令数组及相关 mutator。
-- 保留 `snapshot()` 中 `full_replay_live_tail_*` 与 `has_full_archive_payload` 诊断 key，但固定返回 `0` / `false`，避免外部诊断读取立即断裂。
+- 保留 `snapshot()` 中 `full_history_live_tail_*` 与 `has_full_archive_payload` 诊断 key，但固定返回 `0` / `false`，避免外部诊断读取立即断裂。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
 
 ### 2026-04-27：收敛 full-history 清理命名
@@ -139,4 +139,10 @@
 
 - 移除 `autoload/net_client_internal.gd` 中对固定 `_client` / `_server` 模块方法的 `has_method` 检查。
 - 保留实例有效性检查；模块由 preload 创建，缺方法应在开发期直接暴露，而不是静默跳过。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
+
+### 2026-04-27：迁移恢复历史命名到 full-history
+
+- 将联机恢复房缓存 API、状态字段、snapshot key 和相关测试从 `full_replay_*` 迁移到 `full_history_*`。
+- 保留核心回放 API `GameEngine.full_replay()` 及本地 timeline controller 的 replay 术语，不把引擎回放语义误改成联机恢复历史语义。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。

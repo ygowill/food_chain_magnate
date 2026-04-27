@@ -13,8 +13,8 @@ static func run() -> Result:
 	var waiting_snapshot := {
 		"runtime_room_code": "ROOM88",
 		"single_full_engine_mode": false,
-		"full_replay_ready": false,
-		"full_replay_step_timeline_ready": false,
+		"full_history_ready": false,
+		"full_history_step_timeline_ready": false,
 	}
 	if not OnlineMatchBootstrapClass.should_wait_for_resume_full_history({
 		"room_code": "ROOM88",
@@ -25,8 +25,8 @@ static func run() -> Result:
 	var no_timeline_snapshot := waiting_snapshot.duplicate(true)
 	no_timeline_snapshot["single_full_engine_mode"] = true
 	no_timeline_snapshot["runtime_ready"] = true
-	no_timeline_snapshot["full_replay_ready"] = true
-	no_timeline_snapshot["full_replay_step_timeline_ready"] = false
+	no_timeline_snapshot["full_history_ready"] = true
+	no_timeline_snapshot["full_history_step_timeline_ready"] = false
 	if not OnlineMatchBootstrapClass.should_wait_for_resume_full_history({
 		"room_code": "ROOM88",
 		"room_mode": "resume_archive",
@@ -34,7 +34,7 @@ static func run() -> Result:
 		return Result.failure("恢复房在时间线缓存未完成前仍应等待")
 
 	var ready_snapshot := no_timeline_snapshot.duplicate(true)
-	ready_snapshot["full_replay_step_timeline_ready"] = true
+	ready_snapshot["full_history_step_timeline_ready"] = true
 	if OnlineMatchBootstrapClass.should_wait_for_resume_full_history({
 		"room_code": "ROOM88",
 		"room_mode": "resume_archive",

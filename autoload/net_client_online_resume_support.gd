@@ -1,5 +1,5 @@
 # NetClient：联机恢复房完整历史缓存支持
-# 目标：把恢复房 full-history timeline / entries cache 与兼容态收口到独立模块。
+# 目标：把恢复房 full-history engine、timeline 与 entries cache 收口到独立模块。
 extends RefCounted
 
 const OnlineResumeSessionStateClass = preload("res://autoload/online_resume_session_state.gd")
@@ -29,54 +29,54 @@ func get_session_state():
 func snapshot() -> Dictionary:
 	return _session_state.snapshot()
 
-func get_full_replay_engine():
-	return _session_state.full_replay_engine
+func get_full_history_engine():
+	return _session_state.full_history_engine
 
-func ensure_full_replay_engine_current() -> Result:
+func ensure_full_history_engine_current() -> Result:
 	if bool(_session_state.single_full_engine_mode):
 		var runtime_engine: GameEngine = _session_state.runtime_engine
 		if runtime_engine == null or runtime_engine.get_state() == null:
 			return Result.failure("single_full_engine runtime 未就绪")
-		_session_state.full_replay_engine = runtime_engine
-		_session_state.full_replay_engine_ready = true
+		_session_state.full_history_engine = runtime_engine
+		_session_state.full_history_engine_ready = true
 		return Result.success(runtime_engine)
-	var full_engine: GameEngine = _session_state.full_replay_engine
-	if not _session_state.full_replay_engine_ready or full_engine == null or full_engine.get_state() == null:
-		return Result.failure("full_replay_engine 未就绪")
+	var full_engine: GameEngine = _session_state.full_history_engine
+	if not _session_state.full_history_engine_ready or full_engine == null or full_engine.get_state() == null:
+		return Result.failure("full_history_engine 未就绪")
 	return Result.success(full_engine)
 
-func ensure_full_replay_step_timeline_current(allow_incremental_append: bool = true) -> Result:
-	var ensure_r := ensure_full_replay_engine_current()
+func ensure_full_history_step_timeline_current(allow_incremental_append: bool = true) -> Result:
+	var ensure_r := ensure_full_history_engine_current()
 	if not ensure_r.ok:
 		return ensure_r
-	var full_engine: GameEngine = _session_state.full_replay_engine
+	var full_engine: GameEngine = _session_state.full_history_engine
 	if bool(_session_state.single_full_engine_mode):
 		full_engine = _session_state.runtime_engine
 	if full_engine == null or full_engine.get_state() == null:
-		return Result.failure("full_replay_engine 未就绪")
-	var cached_timeline := _session_state.get_full_replay_step_timeline()
+		return Result.failure("full_history_engine 未就绪")
+	var cached_timeline := _session_state.get_full_history_step_timeline()
 	var cached_processed := StepTimelineHelpersClass.read_processed_command_count(cached_timeline)
 	var command_count := int(full_engine.command_history.size())
 	if cached_timeline.is_empty() or cached_processed < command_count:
-		var cache_r := _refresh_full_replay_step_timeline_cache(full_engine, bool(allow_incremental_append))
+		var cache_r := _refresh_full_history_step_timeline_cache(full_engine, bool(allow_incremental_append))
 		if not cache_r.ok:
 			return cache_r
-	return Result.success(_session_state.get_full_replay_step_timeline())
+	return Result.success(_session_state.get_full_history_step_timeline())
 
-func get_full_replay_step_timeline() -> Dictionary:
-	return _session_state.get_full_replay_step_timeline()
+func get_full_history_step_timeline() -> Dictionary:
+	return _session_state.get_full_history_step_timeline()
 
-func set_full_replay_step_timeline(timeline: Dictionary) -> void:
-	_session_state.set_full_replay_step_timeline(timeline)
+func set_full_history_step_timeline(timeline: Dictionary) -> void:
+	_session_state.set_full_history_step_timeline(timeline)
 
-func get_full_replay_step_timeline_entries() -> Array[Dictionary]:
-	return _session_state.get_full_replay_step_timeline_entries()
+func get_full_history_step_timeline_entries() -> Array[Dictionary]:
+	return _session_state.get_full_history_step_timeline_entries()
 
-func set_full_replay_step_timeline_entries(entries: Array) -> void:
+func set_full_history_step_timeline_entries(entries: Array) -> void:
 	var processed_count := StepTimelineHelpersClass.read_processed_command_count(
-		_session_state.get_full_replay_step_timeline()
+		_session_state.get_full_history_step_timeline()
 	)
-	_session_state.set_full_replay_step_timeline_entries(entries, processed_count)
+	_session_state.set_full_history_step_timeline_entries(entries, processed_count)
 
 func clear_online_resume_full_history_state() -> void:
 	_session_state.reset()
@@ -123,9 +123,9 @@ func prepare_single_full_engine_runtime(
 		"global_command_start_index": 0,
 		"global_command_end_index": int(engine.current_command_index),
 	}
-	_session_state.full_replay_engine = engine
-	_session_state.full_replay_engine_ready = true
-	_session_state.full_replay_room_code = normalized_room_code
+	_session_state.full_history_engine = engine
+	_session_state.full_history_engine_ready = true
+	_session_state.full_history_room_code = normalized_room_code
 	_session_state.full_archive_meta = Dictionary(archive_meta).duplicate(true)
 	_session_state.full_history_source_mode = OnlineResumeSessionStateClass.SOURCE_MODE_SINGLE_FULL_ENGINE
 	_session_state.single_full_engine_mode = true
@@ -133,12 +133,12 @@ func prepare_single_full_engine_runtime(
 	if not bool(build_timeline_cache):
 		OnlinePerfTraceClass.end_span(span, {
 			"ok": true,
-			"timeline_cached": bool(_session_state.has_full_replay_step_timeline()),
+			"timeline_cached": bool(_session_state.has_full_history_step_timeline()),
 			"single_full_engine_mode": true,
 		})
 		return Result.success(_session_state.snapshot())
-	_session_state.set_full_replay_step_timeline({})
-	var cache_r := _refresh_full_replay_step_timeline_cache(engine, false)
+	_session_state.set_full_history_step_timeline({})
+	var cache_r := _refresh_full_history_step_timeline_cache(engine, false)
 	if not cache_r.ok:
 		_session_state.last_full_history_error = str(cache_r.error)
 		OnlinePerfTraceClass.end_span(span, {
@@ -149,8 +149,8 @@ func prepare_single_full_engine_runtime(
 		return cache_r
 	OnlinePerfTraceClass.end_span(span, {
 		"ok": true,
-		"timeline_cached": bool(_session_state.has_full_replay_step_timeline()),
-		"timeline_entry_count": int(_session_state.full_replay_step_timeline_entries.size()),
+		"timeline_cached": bool(_session_state.has_full_history_step_timeline()),
+		"timeline_entry_count": int(_session_state.full_history_step_timeline_entries.size()),
 		"single_full_engine_mode": true,
 	})
 	return Result.success(_session_state.snapshot())
@@ -179,14 +179,14 @@ func map_online_resume_progress_from_engine(engine, checkpoint_id: String = "") 
 		out["checkpoint_id"] = normalized_checkpoint_id
 	return out
 
-func invalidate_full_replay_engine(reason: String) -> void:
-	if not _session_state.full_replay_engine_ready and _session_state.last_full_history_error.is_empty():
+func invalidate_full_history_engine(reason: String) -> void:
+	if not _session_state.full_history_engine_ready and _session_state.last_full_history_error.is_empty():
 		return
 	var room_code = _session_state.runtime_room_code
 	_session_state.clear_full_history()
 	GameLog.warn(
 		"NetClient",
-		"Online resume full_replay_engine invalidated room=%s reason=%s"
+		"Online resume full_history_engine invalidated room=%s reason=%s"
 			% [_safe_text_value(room_code), _safe_text_value(str(reason))]
 	)
 
@@ -200,17 +200,17 @@ func record_online_resume_full_history_command(cmd_dict: Dictionary, state_hash:
 		"single_full_engine_mode": bool(_session_state.single_full_engine_mode),
 	})
 
-func _refresh_full_replay_step_timeline_cache(engine: GameEngine, allow_incremental_append: bool = false) -> Result:
+func _refresh_full_history_step_timeline_cache(engine: GameEngine, allow_incremental_append: bool = false) -> Result:
 	if engine == null or engine.get_state() == null:
-		return Result.failure("full_replay_engine 未就绪")
+		return Result.failure("full_history_engine 未就绪")
 
-	var previous_timeline := _session_state.get_full_replay_step_timeline()
+	var previous_timeline := _session_state.get_full_history_step_timeline()
 	var previous_processed_count := StepTimelineHelpersClass.read_processed_command_count(previous_timeline)
 	_emit_resume_cache_event("resume_cache.timeline_cache_refresh.start", {
 		"allow_incremental_append": bool(allow_incremental_append),
 		"previous_timeline_ready": bool(not previous_timeline.is_empty()),
 		"previous_processed_command_count": int(previous_processed_count),
-		"full_replay_command_count": int(engine.command_history.size()),
+		"full_history_command_count": int(engine.command_history.size()),
 	})
 	if bool(allow_incremental_append) and not previous_timeline.is_empty():
 		var append_r: Result = StepTimelineBuildClass.append_from_existing(engine, previous_timeline)
@@ -221,8 +221,8 @@ func _refresh_full_replay_step_timeline_cache(engine: GameEngine, allow_incremen
 				var append_timeline: Dictionary = Dictionary(append_timeline_val).duplicate(false)
 				var next_entries: Array[Dictionary] = []
 				var append_applied := bool(append_info.get("append_applied", false))
-				var cached_entries_ready := _session_state.has_full_replay_step_timeline_entries()
-				var previous_entries := _session_state.get_full_replay_step_timeline_entries()
+				var cached_entries_ready := _session_state.has_full_history_step_timeline_entries()
+				var previous_entries := _session_state.get_full_history_step_timeline_entries()
 				if append_applied and cached_entries_ready:
 					var appended_events_val = append_info.get("appended_events", [])
 					var appended_events: Array = appended_events_val if (appended_events_val is Array) else []
@@ -236,7 +236,7 @@ func _refresh_full_replay_step_timeline_cache(engine: GameEngine, allow_incremen
 					var append_events_val = append_timeline.get("events", [])
 					var append_events_all: Array = append_events_val if (append_events_val is Array) else []
 					next_entries = GameTimelineLogEntriesBuilderClass.build(append_events_all)
-				_store_full_replay_step_timeline_cache(append_timeline, next_entries)
+				_store_full_history_step_timeline_cache(append_timeline, next_entries)
 				_emit_resume_cache_event("resume_cache.timeline_cache_refresh.done", {
 					"mode": "append" if append_applied else "reuse",
 					"allow_incremental_append": bool(allow_incremental_append),
@@ -254,7 +254,7 @@ func _refresh_full_replay_step_timeline_cache(engine: GameEngine, allow_incremen
 		_emit_resume_cache_event("resume_cache.timeline_cache_refresh.append_failed_fallback_full", {
 			"allow_incremental_append": bool(allow_incremental_append),
 			"previous_processed_command_count": int(previous_processed_count),
-			"full_replay_command_count": int(engine.command_history.size()),
+			"full_history_command_count": int(engine.command_history.size()),
 			"append_ok": bool(append_r.ok),
 			"append_error": str(append_r.error),
 		})
@@ -265,7 +265,7 @@ func _refresh_full_replay_step_timeline_cache(engine: GameEngine, allow_incremen
 			"mode": "full_rebuild",
 			"allow_incremental_append": bool(allow_incremental_append),
 			"previous_processed_command_count": int(previous_processed_count),
-			"full_replay_command_count": int(engine.command_history.size()),
+			"full_history_command_count": int(engine.command_history.size()),
 			"error": str(build_r.error),
 		})
 		return build_r
@@ -274,7 +274,7 @@ func _refresh_full_replay_step_timeline_cache(engine: GameEngine, allow_incremen
 			"mode": "full_rebuild",
 			"allow_incremental_append": bool(allow_incremental_append),
 			"previous_processed_command_count": int(previous_processed_count),
-			"full_replay_command_count": int(engine.command_history.size()),
+			"full_history_command_count": int(engine.command_history.size()),
 			"error": "step timeline cache build 返回类型错误",
 		})
 		return Result.failure("step timeline cache build 返回类型错误")
@@ -283,7 +283,7 @@ func _refresh_full_replay_step_timeline_cache(engine: GameEngine, allow_incremen
 	var events_val = timeline.get("events", [])
 	var events: Array = events_val if (events_val is Array) else []
 	var entries := GameTimelineLogEntriesBuilderClass.build(events)
-	_store_full_replay_step_timeline_cache(timeline, entries)
+	_store_full_history_step_timeline_cache(timeline, entries)
 	_emit_resume_cache_event("resume_cache.timeline_cache_refresh.done", {
 		"mode": "full_rebuild",
 		"allow_incremental_append": bool(allow_incremental_append),
@@ -316,25 +316,25 @@ func _emit_resume_cache_event(event: String, fields: Dictionary = {}) -> void:
 		return
 	var out: Dictionary = {
 		"room_code": str(_session_state.runtime_room_code).strip_edges().to_upper(),
-		"full_replay_ready": bool(_session_state.full_replay_engine_ready),
-		"cached_timeline_ready": bool(_session_state.has_full_replay_step_timeline()),
+		"full_history_ready": bool(_session_state.full_history_engine_ready),
+		"cached_timeline_ready": bool(_session_state.has_full_history_step_timeline()),
 		"cached_timeline_processed_command_count": int(
-			_session_state.full_replay_step_timeline.get("_build_meta", {}).get("processed_command_count", -1)
+			_session_state.full_history_step_timeline.get("_build_meta", {}).get("processed_command_count", -1)
 		),
-		"cached_timeline_entries_ready": bool(_session_state.has_full_replay_step_timeline_entries()),
-		"cached_timeline_entry_count": int(_session_state.full_replay_step_timeline_entries.size()),
+		"cached_timeline_entries_ready": bool(_session_state.has_full_history_step_timeline_entries()),
+		"cached_timeline_entry_count": int(_session_state.full_history_step_timeline_entries.size()),
 		"cached_timeline_entries_processed_command_count": int(
-			_session_state.get_full_replay_step_timeline_entries_processed_command_count()
+			_session_state.get_full_history_step_timeline_entries_processed_command_count()
 		),
 	}
 	for key in fields.keys():
 		out[str(key)] = fields[key]
 	OnlinePerfTraceClass.emit_event(str(event).strip_edges(), out)
 
-func _store_full_replay_step_timeline_cache(timeline: Dictionary, entries: Array) -> void:
+func _store_full_history_step_timeline_cache(timeline: Dictionary, entries: Array) -> void:
 	var normalized_timeline := Dictionary(timeline).duplicate(false) if (timeline is Dictionary) else {}
-	_session_state.set_full_replay_step_timeline(normalized_timeline)
-	_session_state.set_full_replay_step_timeline_entries(
+	_session_state.set_full_history_step_timeline(normalized_timeline)
+	_session_state.set_full_history_step_timeline_entries(
 		entries,
 		StepTimelineHelpersClass.read_processed_command_count(normalized_timeline)
 	)
