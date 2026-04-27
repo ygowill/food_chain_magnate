@@ -3,7 +3,6 @@ extends RefCounted
 
 const SOURCE_MODE_NONE := "none"
 const SOURCE_MODE_SINGLE_FULL_ENGINE := "single_full_engine"
-const SOURCE_MODE_LEGACY_ARCHIVE_PAYLOAD := "archive_payload"
 
 var runtime_engine: GameEngine = null
 var runtime_room_code: String = ""
@@ -12,18 +11,11 @@ var runtime_local_player_id: int = -1
 var full_replay_engine: GameEngine = null
 var full_replay_engine_ready: bool = false
 var full_replay_room_code: String = ""
-
-# Legacy dual-engine compatibility state. New resume archive startup should use
-# SOURCE_MODE_SINGLE_FULL_ENGINE and keep full_replay_engine == runtime_engine.
-var full_archive: Dictionary = {}
 var full_archive_meta: Dictionary = {}
 var runtime_anchor: Dictionary = {}
 var full_history_source_mode: String = SOURCE_MODE_NONE
 var single_full_engine_mode: bool = false
 var last_full_history_error: String = ""
-var full_history_generation: int = 0
-var full_replay_live_tail_commands: Array[Dictionary] = []
-var full_replay_live_tail_applied_count: int = 0
 var full_replay_step_timeline: Dictionary = {}
 var full_replay_step_timeline_entries: Array[Dictionary] = []
 var full_replay_step_timeline_entries_processed_command_count: int = -1
@@ -44,48 +36,13 @@ func clear_runtime() -> void:
 	_clear_runtime_state_hash_cache()
 
 func clear_full_history() -> void:
-	_reset_full_history_state(false)
+	_reset_full_history_state()
 
 func bind_runtime(engine: GameEngine, room_code: String, local_player_id: int) -> void:
 	runtime_engine = engine
 	runtime_room_code = str(room_code).strip_edges().to_upper()
 	runtime_local_player_id = int(local_player_id)
 	_clear_runtime_state_hash_cache()
-
-func begin_full_history_build(
-	room_code: String,
-	archive: Dictionary,
-	anchor: Dictionary,
-	archive_meta: Dictionary,
-	source_mode: String,
-	preserve_live_tail: bool = false
-) -> int:
-	_reset_full_history_state(bool(preserve_live_tail))
-	full_replay_room_code = str(room_code).strip_edges().to_upper()
-	full_archive = Dictionary(archive).duplicate(true)
-	full_archive_meta = Dictionary(archive_meta).duplicate(true)
-	runtime_anchor = Dictionary(anchor).duplicate(true)
-	full_history_source_mode = str(source_mode).strip_edges()
-	return full_history_generation
-
-func mark_full_replay_engine_ready(engine: GameEngine, generation: int) -> bool:
-	if int(generation) != int(full_history_generation):
-		return false
-	full_replay_engine = engine
-	full_replay_engine_ready = engine != null and engine.get_state() != null
-	full_replay_live_tail_applied_count = full_replay_live_tail_commands.size()
-	last_full_history_error = ""
-	_clear_full_replay_state_hash_cache()
-	return full_replay_engine_ready
-
-func mark_full_history_error(message: String, generation: int) -> bool:
-	if int(generation) != int(full_history_generation):
-		return false
-	full_replay_engine = null
-	full_replay_engine_ready = false
-	last_full_history_error = str(message).strip_edges()
-	_clear_full_replay_state_hash_cache()
-	return true
 
 func set_full_replay_step_timeline(timeline: Dictionary) -> void:
 	full_replay_step_timeline = Dictionary(timeline).duplicate(false) if (timeline is Dictionary) else {}
@@ -122,25 +79,6 @@ func has_full_replay_step_timeline_entries() -> bool:
 func get_full_replay_step_timeline_entries_processed_command_count() -> int:
 	return int(full_replay_step_timeline_entries_processed_command_count)
 
-func mark_full_replay_live_tail_applied(count: int) -> void:
-	full_replay_live_tail_applied_count = clampi(int(count), 0, full_replay_live_tail_commands.size())
-
-func append_full_replay_live_tail_command(cmd_dict: Dictionary, state_hash: String = "") -> void:
-	if cmd_dict.is_empty():
-		return
-	full_replay_live_tail_commands.append({
-		"cmd_dict": Dictionary(cmd_dict).duplicate(true),
-		"state_hash": str(state_hash).strip_edges(),
-	})
-
-func get_full_replay_live_tail_commands() -> Array[Dictionary]:
-	var out: Array[Dictionary] = []
-	for item_val in full_replay_live_tail_commands:
-		if not (item_val is Dictionary):
-			continue
-		out.append(Dictionary(item_val).duplicate(true))
-	return out
-
 func snapshot() -> Dictionary:
 	var runtime_hash := _get_cached_engine_state_hash(runtime_engine, true)
 	var full_hash := _get_cached_engine_state_hash(full_replay_engine, false)
@@ -156,9 +94,9 @@ func snapshot() -> Dictionary:
 		"full_replay_ready": full_replay_engine_ready,
 		"full_replay_command_count": int(full_replay_engine.command_history.size()) if full_replay_engine != null else 0,
 		"full_replay_state_hash": full_hash,
-		"full_replay_live_tail_count": full_replay_live_tail_commands.size(),
-		"full_replay_live_tail_applied_count": int(full_replay_live_tail_applied_count),
-		"full_replay_live_tail_pending_count": maxi(0, int(full_replay_live_tail_commands.size()) - int(full_replay_live_tail_applied_count)),
+		"full_replay_live_tail_count": 0,
+		"full_replay_live_tail_applied_count": 0,
+		"full_replay_live_tail_pending_count": 0,
 		"full_replay_step_timeline_ready": not full_replay_step_timeline.is_empty(),
 		"full_replay_step_timeline_entries_ready": has_full_replay_step_timeline_entries(),
 		"full_replay_step_timeline_entry_count": int(full_replay_step_timeline_entries.size()),
@@ -168,16 +106,14 @@ func snapshot() -> Dictionary:
 		"full_history_source_mode": full_history_source_mode,
 		"single_full_engine_mode": bool(single_full_engine_mode),
 		"full_archive_meta": full_archive_meta.duplicate(true),
-		"has_full_archive_payload": not full_archive.is_empty(),
+		"has_full_archive_payload": false,
 		"last_full_history_error": last_full_history_error,
 	}
 
-func _reset_full_history_state(preserve_live_tail: bool) -> void:
-	full_history_generation += 1
+func _reset_full_history_state() -> void:
 	full_replay_engine = null
 	full_replay_engine_ready = false
 	full_replay_room_code = ""
-	full_archive = {}
 	full_archive_meta = {}
 	full_history_source_mode = SOURCE_MODE_NONE
 	single_full_engine_mode = false
@@ -185,10 +121,7 @@ func _reset_full_history_state(preserve_live_tail: bool) -> void:
 	full_replay_step_timeline = {}
 	full_replay_step_timeline_entries.clear()
 	full_replay_step_timeline_entries_processed_command_count = -1
-	full_replay_live_tail_applied_count = 0
 	_clear_full_replay_state_hash_cache()
-	if not bool(preserve_live_tail):
-		full_replay_live_tail_commands.clear()
 
 func _get_cached_engine_state_hash(engine: GameEngine, is_runtime_engine: bool) -> String:
 	if engine == null:

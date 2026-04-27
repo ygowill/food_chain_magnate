@@ -34,9 +34,9 @@
 ### P3：旧 dual-engine / live-tail 恢复代码仍混在主路径附近
 
 - 位置：`autoload/net_client_online_resume_support.gd`、`autoload/online_resume_session_state.gd`
-- 影响：文档已经确定恢复房使用 single full-engine startup，但代码仍保留 `full_replay_engine`、`full_replay_live_tail_commands`、`runtime_anchor` 等迁移期模型。
+- 影响：文档已经确定恢复房使用 single full-engine startup，但早期代码仍保留过 archive-payload dual-engine / live-tail 迁移模型。
 - 风险：维护者需要同时理解新旧两套语义，后续修改容易误触旧路径。
-- 处理状态：已做第一步隔离命名与未使用 API 清理；旧兼容字段仍保留，后续可继续删除。
+- 处理状态：已删除旧 archive-payload / live-tail 可执行路径；snapshot 中仍保留固定为 0/false 的兼容诊断字段。
 
 ### P3：联机 client/server 文件职责过宽
 
@@ -108,6 +108,13 @@
 - 在 `autoload/online_resume_session_state.gd` 中新增 full-history source mode 常量，并标注 `full_archive` / live-tail 字段为 legacy dual-engine 兼容状态。
 - 移除 `OnlineResumeSessionState` 中未被代码引用的 `has_full_archive_payload()` 和 `get_pending_full_replay_live_tail_commands()`。
 - 将 `autoload/net_client_online_resume_support.gd` 中旧 archive-payload full replay 构建、live-tail replay 和命令应用 helper 重命名为 `legacy` 路径，明确当前恢复房主链路应使用 `single_full_engine_mode`。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
+
+### 2026-04-27：删除旧 dual-engine / live-tail 执行路径
+
+- 删除 `autoload/net_client_online_resume_support.gd` 中旧 archive-payload full replay 构建、live-tail 缓存、live-tail replay 和 delta `_full_history_entries` 记录路径。
+- 精简 `autoload/online_resume_session_state.gd`，移除 `full_archive`、`full_history_generation`、live-tail 命令数组及相关 mutator。
+- 保留 `snapshot()` 中 `full_replay_live_tail_*` 与 `has_full_archive_payload` 诊断 key，但固定返回 `0` / `false`，避免外部诊断读取立即断裂。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
 
 ### 2026-04-27：抽出 server resync transfer 构造

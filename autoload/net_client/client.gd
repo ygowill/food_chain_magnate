@@ -38,12 +38,9 @@ func _configure_online_resume_support() -> void:
 	if _online_resume_support == null or not is_instance_valid(_online_resume_support):
 		_online_resume_support = NetClientOnlineResumeSupportClass.new()
 	_online_resume_support.setup(_net, {
-		"load_archive_for_online_client": Callable(self, "_load_archive_for_online_client"),
-		"mark_online_client_engine_ready": Callable(self, "_mark_online_client_engine_ready"),
 		"sync_online_resume_progress": Callable(self, "_sync_online_resume_progress"),
 		"get_online_client_engine_room_code": Callable(self, "_get_online_client_engine_room_code"),
 		"safe_text": Callable(self, "_safe_text"),
-		"short_hash": Callable(self, "_short_hash"),
 		"net_has_signal": Callable(self, "_net_has_signal"),
 	})
 
@@ -477,13 +474,9 @@ func handle_rpc_resync_snapshot_chunk(payload: Dictionary) -> void:
 func handle_rpc_resync_delta(payload: Dictionary) -> void:
 	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
 		return
-	var original_payload: Dictionary = Dictionary(payload).duplicate(true)
-	var delta_payload: Dictionary = _translate_resync_delta_to_runtime(original_payload)
+	var delta_payload: Dictionary = _translate_resync_delta_to_runtime(Dictionary(payload).duplicate(true))
 	if not _matches_payload_room_code(delta_payload, "ResyncDelta"):
 		return
-	var original_entries_val = original_payload.get("entries", null)
-	if original_entries_val is Array:
-		delta_payload["_full_history_entries"] = Array(original_entries_val).duplicate(true)
 	if _get_active_resume_engine() == null:
 		_set_pending_resync_delta(delta_payload)
 		GameLog.warn(
@@ -1124,9 +1117,6 @@ func _translate_resync_delta_to_runtime(payload: Dictionary) -> Dictionary:
 		translated["entries"] = mapped_entries
 	return translated
 
-func _record_online_resume_full_history_entries(entries: Array, origin: String) -> void:
-	_online_resume_support.record_online_resume_full_history_entries(entries, origin)
-
 func _get_online_client_engine_room_code() -> String:
 	if _net == null or not is_instance_valid(_net) or not (_net is Object):
 		return ""
@@ -1305,9 +1295,6 @@ func _apply_resync_delta(payload: Dictionary) -> void:
 		return
 
 	_sync_online_resume_progress(engine, checkpoint_id)
-	var full_history_entries_val = payload.get("_full_history_entries", null)
-	if full_history_entries_val is Array:
-		_record_online_resume_full_history_entries(Array(full_history_entries_val), "resync_delta")
 	GameLog.warn(
 		"NetClient",
 		"RX ResyncDelta applied from=%d to=%d entries=%d final_hash=%s"
