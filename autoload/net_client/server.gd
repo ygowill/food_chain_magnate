@@ -12,7 +12,7 @@ const ConnectTokenClass = preload("res://core/utils/connect_token.gd")
 const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
 const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 const ResyncSnapshotTransferClass = preload("res://core/utils/resync_snapshot_transfer.gd")
-const RESUME_BOOTSTRAP_MODE_FULL_ARCHIVE_SNAPSHOT := "full_archive_snapshot"
+const GameStartedPayloadsClass = preload("res://autoload/net_client/game_started_payloads.gd")
 const GameOverWinnerRulesClass = preload("res://core/rules/game_over_winner_rules.gd")
 const ResultClass = preload("res://core/types/result.gd")
 const DEFAULT_PLATFORM_BACKEND_URL := "http://127.0.0.1:8000"
@@ -1614,13 +1614,7 @@ func _platform_auto_join(
 			if not prepared_fallback_r.ok:
 				return ResultClass.failure(prepared_fallback_r.error)
 			prepared_resume_transfer = Dictionary(prepared_fallback_r.value).duplicate(true)
-		var game_started_payload := {
-			"player_id_by_peer_id": room.player_id_by_peer_id.duplicate(true),
-			"config": room.config.duplicate(true),
-			"local_player_id": room.get_seat_index_for_peer(peer_id) if room.has_method("get_seat_index_for_peer") else -1,
-		}
-		if room.has_method("is_resume_archive_room") and room.is_resume_archive_room():
-			game_started_payload["resume_bootstrap_mode"] = RESUME_BOOTSTRAP_MODE_FULL_ARCHIVE_SNAPSHOT
+		var game_started_payload := GameStartedPayloadsClass.build_for_room_peer(room, peer_id)
 		_net.rpc_id(peer_id, "rpc_game_started", game_started_payload)
 		var resume_r: Result = _dispatch_prepared_resume_transfer(
 			peer_id,
@@ -1831,13 +1825,7 @@ func handle_rpc_join_room(request: Dictionary) -> void:
 			% [_request_tag(peer_id, request_id), _safe_text(role), _room_brief(room)]
 	)
 	if str(room.status) == "InGame" and room.game_engine != null:
-		var payload := {
-			"player_id_by_peer_id": room.player_id_by_peer_id.duplicate(true),
-			"config": room.config.duplicate(true),
-			"local_player_id": room.get_seat_index_for_peer(peer_id) if room.has_method("get_seat_index_for_peer") else -1,
-		}
-		if room.has_method("is_resume_archive_room") and room.is_resume_archive_room():
-			payload["resume_bootstrap_mode"] = RESUME_BOOTSTRAP_MODE_FULL_ARCHIVE_SNAPSHOT
+		var payload := GameStartedPayloadsClass.build_for_room_peer(room, peer_id)
 		_net.rpc_id(peer_id, "rpc_game_started", payload)
 		var transfer_to_send := in_game_resync_snapshot_transfer
 		if transfer_to_send.is_empty():
@@ -2291,8 +2279,7 @@ func handle_rpc_start_game(request: Dictionary) -> void:
 	for pid in room.get_peer_ids():
 		var per_peer_payload := payload.duplicate(true)
 		per_peer_payload["local_player_id"] = room.get_seat_index_for_peer(int(pid)) if room.has_method("get_seat_index_for_peer") else -1
-		if room.has_method("is_resume_archive_room") and room.is_resume_archive_room():
-			per_peer_payload["resume_bootstrap_mode"] = RESUME_BOOTSTRAP_MODE_FULL_ARCHIVE_SNAPSHOT
+		GameStartedPayloadsClass.mark_resume_archive_bootstrap(per_peer_payload, room)
 		_net.rpc_id(int(pid), "rpc_game_started", per_peer_payload)
 		if not resume_start_snapshot_transfer.is_empty():
 			_send_prebuilt_resync_snapshot(int(pid), request_id, room, resume_start_snapshot_transfer, "start_game_resume_archive")

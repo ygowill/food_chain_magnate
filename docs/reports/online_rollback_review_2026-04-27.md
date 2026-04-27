@@ -43,7 +43,7 @@
 - 位置：`autoload/net_client/client.gd`、`autoload/net_client/server.gd`
 - 影响：server 侧混合平台自动入房、启动、resync、回滚、断线、结算；client 侧混合启动、分片、delta、archive 加载与 index translation。
 - 风险：文件膨胀会增加回归风险，测试定位也更困难。
-- 处理状态：待改善。
+- 处理状态：已做第一步低风险拆分，仍建议继续拆分 server/client 主文件。
 
 ### P3：过多动态兜底降低 fail-fast 能力
 
@@ -82,4 +82,10 @@
 
 - 修改 `ui/scenes/game/controllers/online_resync_controller.gd`：客户端应用服务端命令失败时立即触发 `_request_online_resync("command_apply_failed")`。
 - 扩展 `core/tests/game_online_resync_request_rejection_test.gd`，用失败 engine 覆盖命令 replay 失败路径，断言 controller 会请求 resync 并进入同步中状态。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
+
+### 2026-04-27：抽出 GameStarted payload 构造 helper
+
+- 新增 `autoload/net_client/game_started_payloads.gd`，集中构造 server 侧 `rpc_game_started` payload，并统一恢复房 `resume_bootstrap_mode = "full_archive_snapshot"` 标记。
+- 调整 `autoload/net_client/server.gd` 的 platform auto-join、join in-game、start-game 三条路径使用同一个 helper，降低三条路径后续再次漂移的风险。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
