@@ -1,6 +1,10 @@
 class_name OnlineResumeSessionState
 extends RefCounted
 
+const SOURCE_MODE_NONE := "none"
+const SOURCE_MODE_SINGLE_FULL_ENGINE := "single_full_engine"
+const SOURCE_MODE_LEGACY_ARCHIVE_PAYLOAD := "archive_payload"
+
 var runtime_engine: GameEngine = null
 var runtime_room_code: String = ""
 var runtime_local_player_id: int = -1
@@ -8,10 +12,13 @@ var runtime_local_player_id: int = -1
 var full_replay_engine: GameEngine = null
 var full_replay_engine_ready: bool = false
 var full_replay_room_code: String = ""
+
+# Legacy dual-engine compatibility state. New resume archive startup should use
+# SOURCE_MODE_SINGLE_FULL_ENGINE and keep full_replay_engine == runtime_engine.
 var full_archive: Dictionary = {}
 var full_archive_meta: Dictionary = {}
 var runtime_anchor: Dictionary = {}
-var full_history_source_mode: String = "none"
+var full_history_source_mode: String = SOURCE_MODE_NONE
 var single_full_engine_mode: bool = false
 var last_full_history_error: String = ""
 var full_history_generation: int = 0
@@ -80,9 +87,6 @@ func mark_full_history_error(message: String, generation: int) -> bool:
 	_clear_full_replay_state_hash_cache()
 	return true
 
-func has_full_archive_payload() -> bool:
-	return not full_archive.is_empty()
-
 func set_full_replay_step_timeline(timeline: Dictionary) -> void:
 	full_replay_step_timeline = Dictionary(timeline).duplicate(false) if (timeline is Dictionary) else {}
 	if full_replay_step_timeline.is_empty():
@@ -137,19 +141,6 @@ func get_full_replay_live_tail_commands() -> Array[Dictionary]:
 		out.append(Dictionary(item_val).duplicate(true))
 	return out
 
-func get_pending_full_replay_live_tail_commands(start_index: int = -1) -> Array[Dictionary]:
-	var out: Array[Dictionary] = []
-	var start := int(start_index)
-	if start < 0:
-		start = int(full_replay_live_tail_applied_count)
-	start = clampi(start, 0, full_replay_live_tail_commands.size())
-	for idx in range(start, full_replay_live_tail_commands.size()):
-		var item_val = full_replay_live_tail_commands[idx]
-		if not (item_val is Dictionary):
-			continue
-		out.append(Dictionary(item_val).duplicate(true))
-	return out
-
 func snapshot() -> Dictionary:
 	var runtime_hash := _get_cached_engine_state_hash(runtime_engine, true)
 	var full_hash := _get_cached_engine_state_hash(full_replay_engine, false)
@@ -188,7 +179,7 @@ func _reset_full_history_state(preserve_live_tail: bool) -> void:
 	full_replay_room_code = ""
 	full_archive = {}
 	full_archive_meta = {}
-	full_history_source_mode = "none"
+	full_history_source_mode = SOURCE_MODE_NONE
 	single_full_engine_mode = false
 	last_full_history_error = ""
 	full_replay_step_timeline = {}

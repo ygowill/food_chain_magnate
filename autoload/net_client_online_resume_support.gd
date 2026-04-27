@@ -89,17 +89,20 @@ func ensure_full_replay_engine_current() -> Result:
 	if room_code.is_empty():
 		room_code = str(_session_state.runtime_room_code).strip_edges().to_upper()
 
+	# Legacy dual-engine fallback kept only for old archive_payload state.
+	# The current resume archive startup path should already be in single_full_engine_mode.
 	if not _session_state.full_replay_engine_ready or full_engine == null or full_engine.get_state() == null:
-		if _session_state.full_history_source_mode != "archive_payload" or _session_state.full_archive.is_empty():
+		if _session_state.full_history_source_mode != OnlineResumeSessionStateClass.SOURCE_MODE_LEGACY_ARCHIVE_PAYLOAD \
+			or _session_state.full_archive.is_empty():
 			return Result.failure("full_replay_engine 未就绪")
-		var build_r := _build_full_replay_engine_for_generation(room_code, generation, false, true)
+		var build_r := _build_legacy_full_replay_engine_for_generation(room_code, generation, false, true)
 		if not build_r.ok:
 			return build_r
 		full_engine = _session_state.full_replay_engine
 		if full_engine == null or full_engine.get_state() == null:
 			return Result.failure("full_replay_engine 构建后仍未就绪")
 
-	var tail_r := _replay_pending_full_replay_live_tail(full_engine, generation)
+	var tail_r := _replay_pending_legacy_full_replay_live_tail(full_engine, generation)
 	if not tail_r.ok:
 		return tail_r
 	return Result.success(full_engine)
@@ -184,7 +187,7 @@ func prepare_single_full_engine_runtime(
 	_session_state.full_replay_room_code = normalized_room_code
 	_session_state.full_archive = {}
 	_session_state.full_archive_meta = Dictionary(archive_meta).duplicate(true)
-	_session_state.full_history_source_mode = "single_full_engine"
+	_session_state.full_history_source_mode = OnlineResumeSessionStateClass.SOURCE_MODE_SINGLE_FULL_ENGINE
 	_session_state.single_full_engine_mode = true
 	_session_state.last_full_history_error = ""
 	_session_state.full_replay_live_tail_commands.clear()
@@ -238,7 +241,7 @@ func map_online_resume_progress_from_engine(engine, checkpoint_id: String = "") 
 		out["checkpoint_id"] = normalized_checkpoint_id
 	return out
 
-func _build_full_replay_engine_for_generation(
+func _build_legacy_full_replay_engine_for_generation(
 	room_code: String,
 	generation: int,
 	build_timeline_cache: bool,
@@ -307,9 +310,9 @@ func _build_full_replay_engine_for_generation(
 		)
 		return Result.failure(str(prepare_r.error))
 
-	var replay_tail_r: Result = replay_full_replay_live_tail(engine, generation)
+	var replay_tail_r: Result = _replay_legacy_full_replay_live_tail_from_start(engine, generation)
 	if not replay_tail_r.ok:
-		_session_state.mark_full_history_error("replay_full_replay_live_tail failed: %s" % replay_tail_r.error, generation)
+		_session_state.mark_full_history_error("legacy live tail replay failed: %s" % replay_tail_r.error, generation)
 		_emit_resume_cache_event("resume_cache.startup_full_build.failed", {
 			"room_code": normalized_room_code,
 			"generation": generation,
@@ -413,7 +416,8 @@ func record_online_resume_full_history_command(cmd_dict: Dictionary, state_hash:
 			"command_index": int(cmd_dict.get("index", -1)),
 		})
 		return
-	if _session_state.full_history_source_mode != "archive_payload" and _session_state.full_archive.is_empty():
+	if _session_state.full_history_source_mode != OnlineResumeSessionStateClass.SOURCE_MODE_LEGACY_ARCHIVE_PAYLOAD \
+		and _session_state.full_archive.is_empty():
 		return
 	_session_state.append_full_replay_live_tail_command(cmd_dict, state_hash)
 	_emit_resume_cache_event("resume_cache.live_tail.recorded", {
@@ -525,10 +529,10 @@ func _refresh_full_replay_step_timeline_cache(engine: GameEngine, allow_incremen
 		"append_applied": false,
 	}).with_warnings(build_r.warnings)
 
-func replay_full_replay_live_tail(engine: GameEngine, generation: int) -> Result:
-	return _replay_pending_full_replay_live_tail(engine, generation, 0)
+func _replay_legacy_full_replay_live_tail_from_start(engine: GameEngine, generation: int) -> Result:
+	return _replay_pending_legacy_full_replay_live_tail(engine, generation, 0)
 
-func _replay_pending_full_replay_live_tail(
+func _replay_pending_legacy_full_replay_live_tail(
 	engine: GameEngine,
 	generation: int,
 	start_index: int = -1
@@ -548,7 +552,7 @@ func _replay_pending_full_replay_live_tail(
 			continue
 		var item: Dictionary = Dictionary(item_val)
 		var cmd_dict: Dictionary = Dictionary(item.get("cmd_dict", {})).duplicate(true)
-		var apply_r: Result = apply_full_history_command_to_engine(
+		var apply_r: Result = _apply_legacy_full_history_command_to_engine(
 			engine,
 			cmd_dict,
 			str(item.get("state_hash", "")).strip_edges()
@@ -558,7 +562,7 @@ func _replay_pending_full_replay_live_tail(
 	_session_state.mark_full_replay_live_tail_applied(tail_commands.size())
 	return Result.success()
 
-func apply_full_history_command_to_engine(engine: GameEngine, cmd_dict: Dictionary, expected_state_hash: String) -> Result:
+func _apply_legacy_full_history_command_to_engine(engine: GameEngine, cmd_dict: Dictionary, expected_state_hash: String) -> Result:
 	if engine == null:
 		return Result.failure("engine 为空")
 	if cmd_dict.is_empty():

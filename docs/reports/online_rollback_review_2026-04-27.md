@@ -36,7 +36,7 @@
 - 位置：`autoload/net_client_online_resume_support.gd`、`autoload/online_resume_session_state.gd`
 - 影响：文档已经确定恢复房使用 single full-engine startup，但代码仍保留 `full_replay_engine`、`full_replay_live_tail_commands`、`runtime_anchor` 等迁移期模型。
 - 风险：维护者需要同时理解新旧两套语义，后续修改容易误触旧路径。
-- 处理状态：待改善。
+- 处理状态：已做第一步隔离命名与未使用 API 清理；旧兼容字段仍保留，后续可继续删除。
 
 ### P3：联机 client/server 文件职责过宽
 
@@ -101,4 +101,11 @@
 
 - 移除 `ui/scenes/game/controllers/online_resync_controller.gd` 中没有真实 deferred 语义的 `_request_live_log_timeline_refresh_deferred`。
 - 保留原有刷新行为：命令 replay 成功后仍调用 `_request_live_log_timeline_refresh`。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
+
+### 2026-04-27：隔离 legacy dual-engine / live-tail 语义
+
+- 在 `autoload/online_resume_session_state.gd` 中新增 full-history source mode 常量，并标注 `full_archive` / live-tail 字段为 legacy dual-engine 兼容状态。
+- 移除 `OnlineResumeSessionState` 中未被代码引用的 `has_full_archive_payload()` 和 `get_pending_full_replay_live_tail_commands()`。
+- 将 `autoload/net_client_online_resume_support.gd` 中旧 archive-payload full replay 构建、live-tail replay 和命令应用 helper 重命名为 `legacy` 路径，明确当前恢复房主链路应使用 `single_full_engine_mode`。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
