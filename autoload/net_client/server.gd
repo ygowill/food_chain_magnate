@@ -11,8 +11,8 @@ const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const ConnectTokenClass = preload("res://core/utils/connect_token.gd")
 const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
 const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
-const ResyncSnapshotTransferClass = preload("res://core/utils/resync_snapshot_transfer.gd")
 const GameStartedPayloadsClass = preload("res://autoload/net_client/game_started_payloads.gd")
+const ServerResyncTransferBuilderClass = preload("res://autoload/net_client/server_resync_transfer_builder.gd")
 const GameOverWinnerRulesClass = preload("res://core/rules/game_over_winner_rules.gd")
 const ResultClass = preload("res://core/types/result.gd")
 const DEFAULT_PLATFORM_BACKEND_URL := "http://127.0.0.1:8000"
@@ -105,47 +105,11 @@ func _get_resync_delta_max_commands() -> int:
 	return DEFAULT_RESYNC_DELTA_MAX_COMMANDS
 
 func _build_full_resync_snapshot_transfer(room) -> Result:
-	if room == null:
-		return Result.failure("Room missing")
-	if room.game_engine == null:
-		return Result.failure("Room engine missing")
-
-	var archive_r = room.game_engine.create_archive()
-	if not archive_r.ok:
-		return Result.failure("create_archive failed: %s" % archive_r.error)
-
-	var archive: Dictionary = Dictionary(archive_r.value).duplicate(true)
-	var transfer_id := "%s_%d_%d" % [
-		_safe_text(str(room.room_code).to_upper()),
-		int(room.game_engine.command_history.size()),
-		int(Time.get_ticks_msec()),
-	]
-	var chunk_r: Result = ResyncSnapshotTransferClass.build_snapshot_transfer(
-		archive,
-		transfer_id,
+	return ServerResyncTransferBuilderClass.build_full_snapshot_transfer(
+		room,
 		_get_resync_snapshot_chunk_size_bytes(),
 		_get_resync_snapshot_max_chunks()
 	)
-	if not chunk_r.ok:
-		return Result.failure("Resync archive too large (%s)" % str(chunk_r.error))
-
-	var state_hash := ""
-	var state = room.game_engine.get_state()
-	if state != null and state.has_method("compute_hash"):
-		state_hash = str(state.compute_hash())
-
-	var chunk_payload: Dictionary = Dictionary(chunk_r.value)
-	var manifest: Dictionary = Dictionary(chunk_payload.get("manifest", {})).duplicate(true)
-	manifest["room_code"] = str(room.room_code).strip_edges().to_upper()
-	return Result.success({
-		"manifest": manifest,
-		"chunks": Array(chunk_payload.get("chunks", [])).duplicate(true),
-		"payload_bytes": int(chunk_payload.get("total_bytes", 0)),
-		"chunk_count": int(chunk_payload.get("chunk_count", 0)),
-		"archive_hash": str(chunk_payload.get("archive_hash", "")),
-		"history_size": int(room.game_engine.command_history.size()),
-		"state_hash": state_hash,
-	})
 
 func _build_archive_resync_snapshot_transfer(
 	room_code: String,
@@ -153,41 +117,19 @@ func _build_archive_resync_snapshot_transfer(
 	history_size: int = -1,
 	state_hash: String = ""
 ) -> Result:
-	if archive.is_empty():
-		return Result.failure("Archive missing")
-	var transfer_id := "%s_resume_%d" % [
-		_safe_text(str(room_code).to_upper()),
-		int(Time.get_ticks_msec()),
-	]
-	var chunk_r: Result = ResyncSnapshotTransferClass.build_snapshot_transfer(
-		Dictionary(archive).duplicate(true),
-		transfer_id,
+	return ServerResyncTransferBuilderClass.build_archive_snapshot_transfer(
+		room_code,
+		archive,
+		int(history_size),
+		state_hash,
 		_get_resync_snapshot_chunk_size_bytes(),
 		_get_resync_snapshot_max_chunks()
 	)
-	if not chunk_r.ok:
-		return Result.failure("Resync archive too large (%s)" % str(chunk_r.error))
-
-	var chunk_payload: Dictionary = Dictionary(chunk_r.value)
-	var manifest: Dictionary = Dictionary(chunk_payload.get("manifest", {})).duplicate(true)
-	manifest["room_code"] = str(room_code).strip_edges().to_upper()
-	return Result.success({
-		"manifest": manifest,
-		"chunks": Array(chunk_payload.get("chunks", [])).duplicate(true),
-		"payload_bytes": int(chunk_payload.get("total_bytes", 0)),
-		"chunk_count": int(chunk_payload.get("chunk_count", 0)),
-		"archive_hash": str(chunk_payload.get("archive_hash", "")),
-		"history_size": int(history_size),
-		"state_hash": str(state_hash).strip_edges(),
-	})
 
 func _build_delta_resync_transfer(room, resume_cursor: Dictionary) -> Result:
-	if room == null:
-		return Result.failure("Room missing")
-	if not room.has_method("build_delta_resume_payload"):
-		return Result.failure("Room delta resume missing")
-	return room.build_delta_resume_payload(
-		Dictionary(resume_cursor).duplicate(true),
+	return ServerResyncTransferBuilderClass.build_delta_transfer(
+		room,
+		resume_cursor,
 		_get_resync_delta_max_commands(),
 		_get_resync_delta_soft_limit_bytes()
 	)

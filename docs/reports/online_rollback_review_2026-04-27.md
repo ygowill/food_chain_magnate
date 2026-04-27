@@ -43,7 +43,7 @@
 - 位置：`autoload/net_client/client.gd`、`autoload/net_client/server.gd`
 - 影响：server 侧混合平台自动入房、启动、resync、回滚、断线、结算；client 侧混合启动、分片、delta、archive 加载与 index translation。
 - 风险：文件膨胀会增加回归风险，测试定位也更困难。
-- 处理状态：已做第一步低风险拆分，仍建议继续拆分 server/client 主文件。
+- 处理状态：已做两步低风险拆分，仍建议继续拆分 server/client 主文件。
 
 ### P3：过多动态兜底降低 fail-fast 能力
 
@@ -108,4 +108,10 @@
 - 在 `autoload/online_resume_session_state.gd` 中新增 full-history source mode 常量，并标注 `full_archive` / live-tail 字段为 legacy dual-engine 兼容状态。
 - 移除 `OnlineResumeSessionState` 中未被代码引用的 `has_full_archive_payload()` 和 `get_pending_full_replay_live_tail_commands()`。
 - 将 `autoload/net_client_online_resume_support.gd` 中旧 archive-payload full replay 构建、live-tail replay 和命令应用 helper 重命名为 `legacy` 路径，明确当前恢复房主链路应使用 `single_full_engine_mode`。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
+
+### 2026-04-27：抽出 server resync transfer 构造
+
+- 新增 `autoload/net_client/server_resync_transfer_builder.gd`，集中构造 full snapshot、archive snapshot 和 delta resync transfer。
+- `autoload/net_client/server.gd` 保留策略选择、发送和日志职责，transfer 具体构造委托给 helper，减少 server 主文件中的纯构造逻辑。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
