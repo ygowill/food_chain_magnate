@@ -43,7 +43,7 @@
 - 位置：`autoload/net_client/client.gd`、`autoload/net_client/server.gd`
 - 影响：server 侧混合平台自动入房、启动、resync、回滚、断线、结算；client 侧混合启动、分片、delta、archive 加载与 index translation。
 - 风险：文件膨胀会增加回归风险，测试定位也更困难。
-- 处理状态：已做多步低风险拆分，server 侧 GameStarted payload、resync transfer/service、断线 grace service、结算 payload builder 已独立；剩余大文件继续拆分属于后续架构演进。
+- 处理状态：已做多步低风险拆分，server 侧 GameStarted payload、resync transfer/service、断线 grace service、结算 payload builder 已独立；client 侧 resync snapshot/delta service 已独立；剩余大文件继续拆分属于后续架构演进。
 
 ### P3：过多动态兜底降低 fail-fast 能力
 
@@ -183,4 +183,10 @@
 
 - 新增 `autoload/net_client/server_disconnect_grace_service.gd`，集中管理断线 grace ticket、定时器、Lobby 重连席位释放和 InGame 超时自动 forfeit。
 - `autoload/net_client/server.gd` 保留 peer disconnect / reconnect 入口与业务回调，断线 grace 内部状态迁出主文件。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
+
+### 2026-04-27：抽出 client resync service
+
+- 新增 `autoload/net_client/client_resync_service.gd`，集中处理客户端 resync snapshot manifest/chunk 拼装、archive pending 状态、delta 缓存与 deterministic replay 应用。
+- `autoload/net_client/client.gd` 保留 RPC 入口、恢复房 bootstrap 回调和 engine lifecycle，resync 细节迁入独立 service。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
