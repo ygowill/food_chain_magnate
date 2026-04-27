@@ -29,6 +29,46 @@ static func run() -> Result:
 	}
 	NetClient._client_transport_connected = true
 
+	var apply_failure_harness := _Harness.new(_FailingEngine.new())
+	var apply_failure_controller = ControllerClass.new(
+		host,
+		null,
+		Callable(apply_failure_harness, "get_engine"),
+		Callable(),
+		Callable(),
+		Callable(apply_failure_harness, "update_ui"),
+		Callable(),
+		Callable(apply_failure_harness, "show_confirm"),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(apply_failure_harness, "request_resync")
+	)
+	apply_failure_controller._on_online_command_applied({
+		"index": 0,
+		"action_id": "forced_apply_failure",
+		"actor": 0,
+		"params": {},
+		"phase": "test",
+		"sub_phase": "",
+		"timestamp": 1,
+		"metadata": {},
+	}, "unused_hash")
+	if apply_failure_harness.request_resync_calls != 1:
+		apply_failure_controller.dispose()
+		host.queue_free()
+		_restore(prev_mode, prev_room_state, prev_connected)
+		return Result.failure("命令回放失败后应立刻请求 resync: %d" % apply_failure_harness.request_resync_calls)
+	if not apply_failure_controller.is_resync_in_progress():
+		apply_failure_controller.dispose()
+		host.queue_free()
+		_restore(prev_mode, prev_room_state, prev_connected)
+		return Result.failure("命令回放失败后应进入同步中状态")
+	apply_failure_controller.dispose()
+
 	var harness := _Harness.new()
 	var controller = ControllerClass.new(
 		host,
@@ -129,10 +169,17 @@ static func _restore(prev_mode, prev_room_state: Dictionary, prev_connected: boo
 class _Harness:
 	extends RefCounted
 
+	var _engine = null
 	var request_resync_calls: int = 0
 	var request_resync_force_flags: Array[bool] = []
 	var update_ui_calls: int = 0
 	var show_confirm_calls: int = 0
+
+	func _init(engine = null) -> void:
+		_engine = engine
+
+	func get_engine():
+		return _engine
 
 	func request_resync(force_snapshot: bool = false) -> String:
 		request_resync_calls += 1
@@ -144,3 +191,11 @@ class _Harness:
 
 	func show_confirm(_title: String, _body: String, _confirmed: Callable, _cancelled: Callable, _ok: String, _close: String) -> void:
 		show_confirm_calls += 1
+
+class _FailingEngine:
+	extends RefCounted
+
+	var command_history: Array = []
+
+	func execute_command(_cmd, _is_replay: bool = false) -> Result:
+		return Result.failure("forced apply failure")

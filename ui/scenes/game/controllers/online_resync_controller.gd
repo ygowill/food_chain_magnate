@@ -325,6 +325,7 @@ func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> voi
 	var apply_end_mono_usec := OnlinePerfTraceClass.now_mono_usec()
 	if not r.ok:
 		GameLog.error("Game", "联机回放命令失败: %s" % r.error)
+		_request_online_resync("command_apply_failed")
 		return
 	var apply_done_meta := {
 		"request_id": str(perf_meta.get("request_id", "")),

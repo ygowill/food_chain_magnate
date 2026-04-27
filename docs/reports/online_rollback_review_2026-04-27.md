@@ -29,7 +29,7 @@
 - 位置：`ui/scenes/game/controllers/online_resync_controller.gd`
 - 影响：`engine.execute_command(cmd, true)` 失败时只记录日志并返回。
 - 风险：客户端可能停留在落后或不一致状态，直到后续其他校验才发现。
-- 处理状态：待修复。
+- 处理状态：已修复。
 
 ### P3：旧 dual-engine / live-tail 恢复代码仍混在主路径附近
 
@@ -76,4 +76,10 @@
 
 - 调整 `autoload/net_client/client.gd` 的 snapshot chunk 汇总逻辑：pending resume 分支完成 bootstrap 后只 emit 一次 `resync_archive_received`；普通 resync 分支在本地 archive bootstrap 后 emit。
 - 扩展 `core/tests/online_resume_full_snapshot_bootstrap_test.gd`，断言完整快照 bootstrap 后 `resync_archive_received` 只发出一次。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
+
+### 2026-04-27：命令回放失败后主动 resync
+
+- 修改 `ui/scenes/game/controllers/online_resync_controller.gd`：客户端应用服务端命令失败时立即触发 `_request_online_resync("command_apply_failed")`。
+- 扩展 `core/tests/game_online_resync_request_rejection_test.gd`，用失败 engine 覆盖命令 replay 失败路径，断言 controller 会请求 resync 并进入同步中状态。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
