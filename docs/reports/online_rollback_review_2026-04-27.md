@@ -22,7 +22,7 @@
 - 位置：`autoload/net_client/client.gd`
 - 影响：pending resume snapshot 分支内已经 emit `resync_archive_received`，函数末尾又无条件 emit 一次。
 - 风险：UI/controller 可能重复加载 archive、重复刷新日志时间线或触发额外恢复流程。
-- 处理状态：待修复。
+- 处理状态：已修复。
 
 ### P2：客户端应用服务端命令失败后没有主动 resync
 
@@ -70,4 +70,10 @@
 
 - 修复 `autoload/net_client/server.gd` 中 `_platform_auto_join()` 的 InGame `rpc_game_started` payload：当房间是 `resume_archive` 时附带 `resume_bootstrap_mode = "full_archive_snapshot"`。
 - 扩展 `core/tests/platform_connect_token_auto_join_test.gd`，覆盖恢复房已经进入 InGame 后同一玩家通过平台 token 重连的路径，断言收到 snapshot manifest/chunk 且 `rpc_game_started` 带完整快照启动标记。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
+
+### 2026-04-27：修复完整快照恢复重复信号
+
+- 调整 `autoload/net_client/client.gd` 的 snapshot chunk 汇总逻辑：pending resume 分支完成 bootstrap 后只 emit 一次 `resync_archive_received`；普通 resync 分支在本地 archive bootstrap 后 emit。
+- 扩展 `core/tests/online_resume_full_snapshot_bootstrap_test.gd`，断言完整快照 bootstrap 后 `resync_archive_received` 只发出一次。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。

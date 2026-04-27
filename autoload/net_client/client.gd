@@ -463,6 +463,7 @@ func handle_rpc_resync_snapshot_chunk(payload: Dictionary) -> void:
 		_try_apply_pending_resync_delta()
 	else:
 		_try_bootstrap_online_client_engine_from_archive(archive)
+		_net.resync_archive_received.emit(archive.duplicate(true))
 	GameLog.warn(
 		"NetClient",
 		"RX ResyncSnapshot assembled transfer_id=%s chunks=%d total_bytes=%d"
@@ -472,7 +473,6 @@ func handle_rpc_resync_snapshot_chunk(payload: Dictionary) -> void:
 				int(manifest.get("total_bytes", -1)),
 			]
 	)
-	_net.resync_archive_received.emit(archive.duplicate(true))
 
 func handle_rpc_resync_delta(payload: Dictionary) -> void:
 	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:

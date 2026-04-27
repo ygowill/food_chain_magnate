@@ -231,6 +231,21 @@ static func run() -> Result:
 			prev_is_game_active,
 			"完整快照 bootstrap 后应发出一次 resume_full_history_ready"
 		)
+	if mock_net.resync_archives.size() != 1:
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_local_role,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			"完整快照 bootstrap 后应只发出一次 resync_archive_received"
+		)
 	var has_replay_progress := false
 	for payload_val in mock_net.progress_payloads:
 		if not (payload_val is Dictionary):
