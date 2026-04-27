@@ -50,7 +50,7 @@
 - 位置：`autoload/net_client.gd`、`autoload/net_client_internal.gd` 以及部分 client/server glue。
 - 影响：大量 `has_method` 兼容检查适合迁移期，但对当前必须存在的协作者会掩盖 wiring 错误。
 - 风险：真实接线问题可能退化成静默失败或延迟发现。
-- 处理状态：待改善。
+- 处理状态：已收敛 `NetClientInternal` 对固定 client/server 模块的动态方法检查；`NetClient` 对外兼容层仍保留部分检查。
 
 ### P3：timeline refresh deferred callback 命名与实际行为不一致
 
@@ -114,4 +114,10 @@
 
 - 新增 `autoload/net_client/server_resync_transfer_builder.gd`，集中构造 full snapshot、archive snapshot 和 delta resync transfer。
 - `autoload/net_client/server.gd` 保留策略选择、发送和日志职责，transfer 具体构造委托给 helper，减少 server 主文件中的纯构造逻辑。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
+
+### 2026-04-27：收敛 NetClientInternal 动态兜底
+
+- 移除 `autoload/net_client_internal.gd` 中对固定 `_client` / `_server` 模块方法的 `has_method` 检查。
+- 保留实例有效性检查；模块由 preload 创建，缺方法应在开发期直接暴露，而不是静默跳过。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。

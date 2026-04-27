@@ -69,58 +69,58 @@ func send_client_hello() -> void:
 
 func clear_online_resume_dual_engine_state() -> void:
 	_ensure_modules()
-	if _client != null and is_instance_valid(_client) and _client.has_method("clear_online_resume_dual_engine_state"):
+	if _client != null and is_instance_valid(_client):
 		_client.clear_online_resume_dual_engine_state()
 
 func get_online_resume_session_snapshot() -> Dictionary:
 	_ensure_modules()
-	if _client != null and is_instance_valid(_client) and _client.has_method("get_online_resume_session_snapshot"):
+	if _client != null and is_instance_valid(_client):
 		return Dictionary(_client.get_online_resume_session_snapshot()).duplicate(true)
 	return {}
 
 func get_online_resume_full_replay_engine():
 	_ensure_modules()
-	if _client != null and is_instance_valid(_client) and _client.has_method("get_online_resume_full_replay_engine"):
+	if _client != null and is_instance_valid(_client):
 		return _client.get_online_resume_full_replay_engine()
 	return null
 
 func ensure_online_resume_full_history_current() -> Result:
 	_ensure_modules()
-	if _client != null and is_instance_valid(_client) and _client.has_method("ensure_online_resume_full_history_current"):
+	if _client != null and is_instance_valid(_client):
 		return _client.ensure_online_resume_full_history_current()
 	return Result.failure("online resume full history unavailable")
 
 func ensure_online_resume_full_history_timeline_current(allow_incremental_append: bool = true) -> Result:
 	_ensure_modules()
-	if _client != null and is_instance_valid(_client) and _client.has_method("ensure_online_resume_full_history_timeline_current"):
+	if _client != null and is_instance_valid(_client):
 		return _client.ensure_online_resume_full_history_timeline_current(bool(allow_incremental_append))
 	return Result.failure("online resume full history timeline unavailable")
 
 func get_online_resume_full_replay_step_timeline() -> Dictionary:
 	_ensure_modules()
-	if _client != null and is_instance_valid(_client) and _client.has_method("get_online_resume_full_replay_step_timeline"):
+	if _client != null and is_instance_valid(_client):
 		return Dictionary(_client.get_online_resume_full_replay_step_timeline()).duplicate(false)
 	return {}
 
 func set_online_resume_full_replay_step_timeline(timeline: Dictionary) -> void:
 	_ensure_modules()
-	if _client != null and is_instance_valid(_client) and _client.has_method("set_online_resume_full_replay_step_timeline"):
+	if _client != null and is_instance_valid(_client):
 		_client.set_online_resume_full_replay_step_timeline(Dictionary(timeline).duplicate(false))
 
 func get_online_resume_full_replay_step_timeline_entries() -> Array[Dictionary]:
 	_ensure_modules()
-	if _client != null and is_instance_valid(_client) and _client.has_method("get_online_resume_full_replay_step_timeline_entries"):
+	if _client != null and is_instance_valid(_client):
 		return _client.get_online_resume_full_replay_step_timeline_entries()
 	return []
 
 func set_online_resume_full_replay_step_timeline_entries(entries: Array) -> void:
 	_ensure_modules()
-	if _client != null and is_instance_valid(_client) and _client.has_method("set_online_resume_full_replay_step_timeline_entries"):
+	if _client != null and is_instance_valid(_client):
 		_client.set_online_resume_full_replay_step_timeline_entries(entries)
 
 func load_archive_for_online_client(engine, archive: Dictionary) -> Result:
 	_ensure_modules()
-	if _client != null and is_instance_valid(_client) and _client.has_method("load_archive_for_online_client"):
+	if _client != null and is_instance_valid(_client):
 		return _client.load_archive_for_online_client(engine, archive)
 	if engine == null:
 		return Result.failure("load archive failed: engine 为空")
@@ -128,18 +128,18 @@ func load_archive_for_online_client(engine, archive: Dictionary) -> Result:
 
 func record_online_resume_runtime_command_applied(cmd_dict: Dictionary, state_hash: String = "") -> void:
 	_ensure_modules()
-	if _client != null and is_instance_valid(_client) and _client.has_method("record_online_resume_runtime_command_applied"):
+	if _client != null and is_instance_valid(_client):
 		_client.record_online_resume_runtime_command_applied(cmd_dict, state_hash)
 
 func map_online_resume_progress_from_engine(engine, checkpoint_id: String = "") -> Dictionary:
 	_ensure_modules()
-	if _client != null and is_instance_valid(_client) and _client.has_method("map_online_resume_progress_from_engine"):
+	if _client != null and is_instance_valid(_client):
 		return Dictionary(_client.map_online_resume_progress_from_engine(engine, checkpoint_id)).duplicate(true)
 	return {}
 
 func mark_runtime_engine_as_full_history(engine) -> void:
 	_ensure_modules()
-	if _client != null and is_instance_valid(_client) and _client.has_method("mark_runtime_engine_as_full_history"):
+	if _client != null and is_instance_valid(_client):
 		_client.mark_runtime_engine_as_full_history(engine)
 
 func handle_rpc_room_state(payload: Dictionary) -> void:
@@ -194,7 +194,7 @@ func handle_rpc_request_rejected(payload: Dictionary) -> void:
 
 func handle_rpc_full_archive_export_ready(payload: Dictionary) -> void:
 	_ensure_modules()
-	if _client != null and is_instance_valid(_client) and _client.has_method("handle_rpc_full_archive_export_ready"):
+	if _client != null and is_instance_valid(_client):
 		_client.handle_rpc_full_archive_export_ready(payload)
 
 func send_request_rejected(peer_id: int, request_id: String, code: String, message: String) -> void:
@@ -270,12 +270,12 @@ func handle_rpc_start_game(request: Dictionary) -> void:
 
 func handle_rpc_match_bootstrap_ready(request: Dictionary) -> void:
 	_ensure_modules()
-	if _server != null and is_instance_valid(_server) and _server.has_method("handle_rpc_match_bootstrap_ready"):
+	if _server != null and is_instance_valid(_server):
 		_server.handle_rpc_match_bootstrap_ready(request)
 
 func handle_rpc_match_bootstrap_failed(request: Dictionary) -> void:
 	_ensure_modules()
-	if _server != null and is_instance_valid(_server) and _server.has_method("handle_rpc_match_bootstrap_failed"):
+	if _server != null and is_instance_valid(_server):
 		_server.handle_rpc_match_bootstrap_failed(request)
 
 func handle_rpc_action_request(request: Dictionary) -> void:
@@ -295,7 +295,7 @@ func handle_rpc_rewind_to_turn_start(request: Dictionary) -> void:
 
 func handle_rpc_request_full_archive_export(request: Dictionary) -> void:
 	_ensure_modules()
-	if _server != null and is_instance_valid(_server) and _server.has_method("handle_rpc_request_full_archive_export"):
+	if _server != null and is_instance_valid(_server):
 		_server.handle_rpc_request_full_archive_export(request)
 
 func broadcast_command_applied(room, cmd) -> void:
