@@ -773,6 +773,9 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 			blocked_by_online_turn = true
 
 	if blocked_by_action_panel or blocked_by_online_turn:
+		if str(action_id).strip_edges() == "rollback_last_command":
+			if _scene != null and _scene.has_method("rollback_last_command"):
+				_scene.call("rollback_last_command")
 		return
 
 	var actor_id := current_player_id

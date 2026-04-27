@@ -203,6 +203,25 @@ func begin_rewind_to_turn_start_request() -> bool:
 	_online_schedule_resync_timeout(_resync_ticket, _rollback_request_id)
 	return true
 
+func begin_rollback_last_command_request() -> bool:
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return false
+	if _resync_in_progress:
+		return false
+	if NetClient == null or not NetClient.is_online_client_connected():
+		GameLog.warn("Game", "联机模式下回退上一步失败：未连接到服务器")
+		return false
+	_resync_in_progress = true
+	_resync_request_id = ""
+	var request_id := NetClient.request_rollback_last_command()
+	_rollback_request_id = str(request_id)
+	GameLog.warn("Game", "联机请求回退上一步 request_id=%s" % str(request_id))
+	_resync_ticket += 1
+	if _update_ui.is_valid():
+		_update_ui.call()
+	_online_schedule_resync_timeout(_resync_ticket, _rollback_request_id)
+	return true
+
 func _get_engine():
 	if not _get_game_engine.is_valid():
 		return null

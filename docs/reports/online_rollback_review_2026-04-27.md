@@ -197,3 +197,11 @@
 - 将原 `rewind_to_turn_start_meta` 链路迁移到 `rollback_meta`，保留旧 RPC/helper 作为兼容别名，后续“回退上一步”和“提议回滚”可复用同一客户端应用逻辑。
 - 更新 `GameOnlineResyncController`、client/server RPC glue 与联机 resync guard 测试，确保回滚元数据不再复用 `rpc_resync_archive`。
 - 验证：`git diff --check` 通过；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180` 通过，`386/386`。
+
+### 2026-04-27：新增联机回退上一步
+
+- 新增 `rpc_rollback_last_command` / `request_rollback_last_command`，由 server 权威校验并复用 `rollback_meta` 广播给全房间客户端。
+- `OnlineRoom.rollback_last_command_for_player()` 只回退当前时间线最后一条命令；server 要求上一条命令属于发起玩家，并拒绝 `end_turn` / `skip` 这类已经结束回合的操作，避免绕过后续“提议回滚”权限模型。
+- 在 `ActionFlowControls` 增加“回退上一步”按钮；`GameCommandController` 负责确认弹窗、联机请求与本地兜底回退。
+- 扩展 `ServerResyncGuardTest` 与 `ActionFlowControlsNoopTest`，覆盖 server rollback meta 广播和新增按钮配置的 noop 行为。
+- 验证：`git diff --check` 通过；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180` 通过，`386/386`。

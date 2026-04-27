@@ -22,10 +22,17 @@ layout_mode = 2
 size_flags_horizontal = 3
 text = "跳过"
 
+[node name="RollbackLastButton" type="Button" parent="."]
+visible = false
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "回退上一步"
+tooltip_text = "撤销你刚刚执行的上一条操作"
+
 [node name="RewindButton" type="Button" parent="."]
 custom_minimum_size = Vector2(0, 34)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "回退到当前玩家回合开始"
 tooltip_text = "撤销当前玩家回合内操作并回到回合开始"
-

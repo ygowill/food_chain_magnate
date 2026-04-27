@@ -510,6 +510,36 @@ func is_globally_disabled() -> bool:
 func get_visible_action_ids() -> Array[String]:
 	return _visible_action_ids.duplicate()
 
+func _get_rollback_last_disabled_reason() -> String:
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return "仅联机模式可用"
+	if _game_state == null:
+		return "状态未就绪"
+	if _globally_disabled:
+		return _globally_disabled_reason if not _globally_disabled_reason.is_empty() else "当前不可操作"
+
+	var local_pid := int(OnlinePhaseInteractionClass.get_online_local_player_id(_game_state, -1))
+	if local_pid < 0:
+		return "联机身份未就绪"
+	if Globals == null or Globals.current_game_engine == null or not (Globals.current_game_engine is GameEngine):
+		return "游戏引擎未就绪"
+
+	var engine: GameEngine = Globals.current_game_engine
+	var current_index := int(engine.current_command_index)
+	if current_index < 0:
+		return "没有可回退的操作"
+	if current_index >= int(engine.command_history.size()):
+		return "历史索引异常"
+	var cmd_val = engine.command_history[current_index]
+	if not (cmd_val is Command):
+		return "上一条命令异常"
+	var cmd: Command = cmd_val
+	if int(cmd.actor) != local_pid:
+		return "上一条不是你的操作"
+	if str(cmd.action_id) == ActionIdsClass.END_TURN or str(cmd.action_id) == ActionIdsClass.SKIP:
+		return "已结束回合，请使用提议回滚"
+	return ""
+
 func get_flow_controls_config() -> Dictionary:
 	var skip_sub_visible := _flow_skip_step_visible and _visible_action_ids.has(ActionIdsClass.SKIP_SUB_PHASE)
 	var skip_visible := _flow_confirm_end_visible and _visible_action_ids.has(ActionIdsClass.SKIP)
@@ -521,6 +551,9 @@ func get_flow_controls_config() -> Dictionary:
 
 	# rewind：无 state 或全局禁用时不可用（与旧 ActionPanel 一致）
 	var rewind_enabled := (_game_state != null) and (not _globally_disabled)
+	var rollback_last_visible := NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT
+	var rollback_last_reason := _get_rollback_last_disabled_reason() if rollback_last_visible else ""
+	var rollback_last_enabled := rollback_last_visible and rollback_last_reason.is_empty()
 
 	return {
 		"confirm_end": {
@@ -534,6 +567,13 @@ func get_flow_controls_config() -> Dictionary:
 			"text": _get_skip_sub_phase_display_name(),
 			"enabled": skip_sub_enabled,
 			"disabled_reason": skip_sub_reason,
+		},
+		"rollback_last": {
+			"visible": rollback_last_visible,
+			"text": "回退上一步",
+			"enabled": rollback_last_enabled,
+			"disabled_reason": rollback_last_reason,
+			"action_id": "rollback_last_command",
 		},
 		"rewind": {
 			"enabled": rewind_enabled,

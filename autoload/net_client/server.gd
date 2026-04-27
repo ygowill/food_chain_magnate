@@ -1775,58 +1775,10 @@ func handle_rpc_resync_request(_request: Dictionary) -> void:
 	var resume_payload: Dictionary = Dictionary(resume_r.value)
 	_resync_service.remember_transfer_mode(peer_id, str(resume_payload.get("mode", "")))
 
-func handle_rpc_rewind_to_turn_start(request: Dictionary) -> void:
-	if _net == null or not is_instance_valid(_net):
-		return
-	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
-		return
-
-	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
-	var request_id := str(request.get("request_id", ""))
-	GameLog.warn("NetClient", "RX RewindToTurnStart %s" % _request_tag(peer_id, request_id))
-	var room = _net._room_manager.get_room_by_peer(peer_id)
-	if room == null:
-		send_request_rejected(peer_id, request_id, "not_in_room", "Not in room")
-		return
-	if str(room.status) != "InGame":
-		send_request_rejected(peer_id, request_id, "not_in_game", "Room not in game")
-		return
-	if room.game_engine == null:
-		send_request_rejected(peer_id, request_id, "engine_missing", "Room engine missing")
-		return
-
-	# Spectator：只读，不允许发起回退（避免影响对局）
-	var actor_id := -1
-	if room.player_id_by_peer_id.has(peer_id):
-		actor_id = int(room.player_id_by_peer_id.get(peer_id, -1))
-	elif room.player_id_by_peer_id.has(str(peer_id)):
-		actor_id = int(room.player_id_by_peer_id.get(str(peer_id), -1))
-	if actor_id < 0:
-		send_request_rejected(peer_id, request_id, "spectator_readonly", "Spectator cannot request rewind")
-		return
-
-	# 非同时阶段仅允许当前玩家；同时阶段使用发起 peer 对应的玩家作为回退主体。
-	var state = room.game_engine.get_state()
-	if state == null:
-		send_request_rejected(peer_id, request_id, "state_missing", "Room state missing")
-		return
-	if not OnlinePhaseInteractionClass.can_player_request_rewind_in_online_phase(state, actor_id):
-		send_request_rejected(peer_id, request_id, "not_current_player", "Only the acting player can request rewind")
-		return
-
-	if not room.has_method("rewind_to_current_player_turn_start"):
-		send_request_rejected(peer_id, request_id, "not_supported", "Room does not support rewind")
-		return
-
-	var rr = room.rewind_to_current_player_turn_start(false, actor_id)
-	if not rr.ok:
-		send_request_rejected(peer_id, request_id, "rewind_failed", rr.error)
-		return
-	if not (rr.value is Dictionary):
-		send_request_rejected(peer_id, request_id, "rewind_failed", "rewind result type invalid")
-		return
-
-	var payload: Dictionary = Dictionary(rr.value)
+func _broadcast_rollback_meta(peer_id: int, request_id: String, room, payload: Dictionary, actor_id: int, fallback_reason: String) -> void:
+	var reason := str(payload.get("reason", fallback_reason)).strip_edges()
+	if reason.is_empty():
+		reason = str(fallback_reason).strip_edges()
 	var out := {
 		"request_id": request_id,
 		"room_code": str(room.room_code).strip_edges().to_upper(),
@@ -1836,8 +1788,12 @@ func handle_rpc_rewind_to_turn_start(request: Dictionary) -> void:
 		"state_hash": str(payload.get("state_hash", "")),
 		"noop": bool(payload.get("noop", false)),
 		"player_id": actor_id,
-		"reason": str(payload.get("reason", "rewind_turn_start")).strip_edges(),
+		"reason": reason,
 	}
+	if payload.has("rolled_back_index"):
+		out["rolled_back_index"] = int(payload.get("rolled_back_index", -1))
+	if payload.has("rolled_back_action_id"):
+		out["rolled_back_action_id"] = str(payload.get("rolled_back_action_id", "")).strip_edges()
 	GameLog.warn(
 		"NetClient",
 		"Rollback prepared %s reason=%s actor=%d target=%d before=%d history=%d noop=%s state_hash=%s %s"
@@ -1864,6 +1820,114 @@ func handle_rpc_rewind_to_turn_start(request: Dictionary) -> void:
 	else:
 		_net.rpc_id(peer_id, "rpc_rollback_meta", out)
 
+func handle_rpc_rewind_to_turn_start(request: Dictionary) -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
+		return
+
+	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
+	var request_id := str(request.get("request_id", ""))
+	GameLog.warn("NetClient", "RX RewindToTurnStart %s" % _request_tag(peer_id, request_id))
+	var room = _net._room_manager.get_room_by_peer(peer_id)
+	if room == null:
+		send_request_rejected(peer_id, request_id, "not_in_room", "Not in room")
+		return
+	if str(room.status) != "InGame":
+		send_request_rejected(peer_id, request_id, "not_in_game", "Room not in game")
+		return
+	if room.game_engine == null:
+		send_request_rejected(peer_id, request_id, "engine_missing", "Room engine missing")
+		return
+
+	# Spectator：只读，不允许发起回退（避免影响对局）
+	var actor_id := _resolve_actor_id_for_peer(room, peer_id)
+	if actor_id < 0:
+		send_request_rejected(peer_id, request_id, "spectator_readonly", "Spectator cannot request rewind")
+		return
+
+	# 非同时阶段仅允许当前玩家；同时阶段使用发起 peer 对应的玩家作为回退主体。
+	var state = room.game_engine.get_state()
+	if state == null:
+		send_request_rejected(peer_id, request_id, "state_missing", "Room state missing")
+		return
+	if not OnlinePhaseInteractionClass.can_player_request_rewind_in_online_phase(state, actor_id):
+		send_request_rejected(peer_id, request_id, "not_current_player", "Only the acting player can request rewind")
+		return
+
+	if not room.has_method("rewind_to_current_player_turn_start"):
+		send_request_rejected(peer_id, request_id, "not_supported", "Room does not support rewind")
+		return
+
+	var rr = room.rewind_to_current_player_turn_start(false, actor_id)
+	if not rr.ok:
+		send_request_rejected(peer_id, request_id, "rewind_failed", rr.error)
+		return
+	if not (rr.value is Dictionary):
+		send_request_rejected(peer_id, request_id, "rewind_failed", "rewind result type invalid")
+		return
+
+	_broadcast_rollback_meta(peer_id, request_id, room, Dictionary(rr.value), actor_id, "rewind_turn_start")
+
+	broadcast_room_state(room)
+
+func handle_rpc_rollback_last_command(request: Dictionary) -> void:
+	if _net == null or not is_instance_valid(_net):
+		return
+	if NetContext.mode != NetContext.Mode.ONLINE_SERVER:
+		return
+
+	var peer_id: int = int(_net.multiplayer.get_remote_sender_id())
+	var request_id := str(request.get("request_id", ""))
+	GameLog.warn("NetClient", "RX RollbackLastCommand %s" % _request_tag(peer_id, request_id))
+	var room = _net._room_manager.get_room_by_peer(peer_id)
+	if room == null:
+		send_request_rejected(peer_id, request_id, "not_in_room", "Not in room")
+		return
+	if str(room.status) != "InGame":
+		send_request_rejected(peer_id, request_id, "not_in_game", "Room not in game")
+		return
+	if room.game_engine == null:
+		send_request_rejected(peer_id, request_id, "engine_missing", "Room engine missing")
+		return
+
+	var actor_id := _resolve_actor_id_for_peer(room, peer_id)
+	if actor_id < 0:
+		send_request_rejected(peer_id, request_id, "spectator_readonly", "Spectator cannot request rollback")
+		return
+
+	var state = room.game_engine.get_state()
+	if state == null:
+		send_request_rejected(peer_id, request_id, "state_missing", "Room state missing")
+		return
+	var current_index := int(room.game_engine.current_command_index)
+	if current_index < 0 or current_index >= int(room.game_engine.command_history.size()):
+		send_request_rejected(peer_id, request_id, "rollback_failed", "No command to rollback")
+		return
+	var cmd_val = room.game_engine.command_history[current_index]
+	if not (cmd_val is Command):
+		send_request_rejected(peer_id, request_id, "rollback_failed", "Last command type invalid")
+		return
+	var cmd: Command = cmd_val
+	if int(cmd.actor) != actor_id:
+		send_request_rejected(peer_id, request_id, "not_last_actor", "Only the player who made the last command can roll it back")
+		return
+	if str(cmd.action_id) == ActionIdsClass.END_TURN or str(cmd.action_id) == ActionIdsClass.SKIP:
+		send_request_rejected(peer_id, request_id, "turn_already_ended", "Ended turns require a rollback proposal")
+		return
+	if not room.has_method("rollback_last_command_for_player"):
+		send_request_rejected(peer_id, request_id, "not_supported", "Room does not support rollback")
+		return
+
+	var rr = room.rollback_last_command_for_player(false, actor_id)
+	if not rr.ok:
+		send_request_rejected(peer_id, request_id, "rollback_failed", rr.error)
+		return
+	if not (rr.value is Dictionary):
+		send_request_rejected(peer_id, request_id, "rollback_failed", "rollback result type invalid")
+		return
+
+	_broadcast_rollback_meta(peer_id, request_id, room, Dictionary(rr.value), actor_id, "undo_last_command")
 	broadcast_room_state(room)
 
 func handle_rpc_request_full_archive_export(request: Dictionary) -> void:

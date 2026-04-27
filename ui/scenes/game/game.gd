@@ -828,6 +828,10 @@ func rewind_to_turn_start() -> void:
 	if _command_controller != null and _command_controller.has_method("rewind_to_turn_start"):
 		_command_controller.rewind_to_turn_start()
 
+func rollback_last_command() -> void:
+	if _command_controller != null and _command_controller.has_method("rollback_last_command"):
+		_command_controller.rollback_last_command()
+
 func _execute_command(command: Command) -> Result:
 	if _command_controller != null and _command_controller.has_method("execute_command"):
 		var r_val = _command_controller.execute_command(command)

@@ -2040,6 +2040,38 @@ func rewind_to_current_player_turn_start(include_archive: bool = true, player_id
 
 	return rollback_to_command_index(int(idx_r.value), include_archive, player_id, "rewind_turn_start")
 
+func rollback_last_command_for_player(include_archive: bool = true, player_id: int = -1) -> Result:
+	if status != STATUS_IN_GAME:
+		return Result.failure("Room is not in game")
+	if game_engine == null:
+		return Result.failure("Room engine missing")
+
+	var before_index := int(game_engine.current_command_index)
+	if before_index < 0:
+		return Result.failure("No command to rollback")
+	if before_index >= int(game_engine.command_history.size()):
+		return Result.failure("current_index outside history: current=%d history=%d" % [before_index, int(game_engine.command_history.size())])
+
+	var cmd_val = game_engine.command_history[before_index]
+	if not (cmd_val is Command):
+		return Result.failure("last command type invalid")
+	var cmd: Command = cmd_val
+	var actor_id := int(cmd.actor)
+	var requested_player_id := int(player_id)
+	if requested_player_id >= 0 and actor_id != requested_player_id:
+		return Result.failure("Last command belongs to player %d, not player %d" % [actor_id, requested_player_id])
+
+	var rollback_r: Result = rollback_to_command_index(before_index - 1, include_archive, requested_player_id, "undo_last_command")
+	if not rollback_r.ok:
+		return rollback_r
+	if rollback_r.value is Dictionary:
+		var out: Dictionary = Dictionary(rollback_r.value).duplicate(true)
+		out["rolled_back_index"] = before_index
+		out["rolled_back_actor"] = actor_id
+		out["rolled_back_action_id"] = str(cmd.action_id)
+		rollback_r.value = out
+	return rollback_r
+
 func get_seat_index_for_peer(peer_id: int) -> int:
 	if _seat_by_player_peer_id.has(peer_id):
 		return int(_seat_by_player_peer_id.get(peer_id, -1))

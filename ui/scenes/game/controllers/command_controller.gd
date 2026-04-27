@@ -1,5 +1,5 @@
 # Game scene：命令执行/阶段推进控制器
-# 负责：本地/联机命令执行、回退到回合开始、SKIP 前强制动作自动补完、发薪日拦截提示。
+# 负责：本地/联机命令执行、回退上一步、回退到回合开始、SKIP 前强制动作自动补完、发薪日拦截提示。
 class_name GameCommandController
 extends RefCounted
 
@@ -96,6 +96,89 @@ func rewind_to_turn_start() -> void:
 			"回退",
 			"取消"
 		)
+
+func rollback_last_command() -> void:
+	var game_engine: GameEngine = _get_engine()
+	if game_engine == null:
+		return
+	if is_instance_valid(_timeline_controller) and _timeline_controller.has_method("is_replay_mode_active") and bool(_timeline_controller.call("is_replay_mode_active")):
+		GameLog.warn("Game", "回放模式下无法回退上一步")
+		return
+
+	var current_index := int(game_engine.current_command_index)
+	if current_index < 0:
+		return
+	if current_index >= int(game_engine.command_history.size()):
+		GameLog.warn("Game", "回退上一步失败：当前索引超出历史 current=%d history=%d" % [current_index, int(game_engine.command_history.size())])
+		return
+
+	var state := game_engine.get_state()
+	if state == null:
+		return
+	var pid := int(state.get_current_player_id())
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		pid = int(OnlinePhaseInteractionClass.get_online_local_player_id(state, pid))
+		if pid < 0:
+			GameLog.warn("Game", "联机模式下回退上一步失败：身份未就绪")
+			return
+
+	var cmd_val = game_engine.command_history[current_index]
+	if not (cmd_val is Command):
+		GameLog.warn("Game", "回退上一步失败：上一条命令类型错误")
+		return
+	var cmd: Command = cmd_val
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT and int(cmd.actor) != pid:
+		GameLog.warn("Game", "联机模式下只能回退自己的上一条操作（last_actor=%d local=%d）" % [int(cmd.actor), pid])
+		return
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT \
+			and (str(cmd.action_id) == ActionIdsClass.END_TURN or str(cmd.action_id) == ActionIdsClass.SKIP):
+		GameLog.warn("Game", "联机模式下已结束回合，需使用提议回滚")
+		return
+
+	var target_index := current_index - 1
+	var action_name := str(cmd.action_id).strip_edges()
+	if action_name.is_empty():
+		action_name = "未知动作"
+
+	if _show_confirm.is_valid():
+		_show_confirm.call(
+			"回退上一步",
+			"确定要撤销上一条操作吗？\n动作：%s\n玩家：P%d" % [action_name, int(cmd.actor) + 1],
+			Callable(self, "_confirm_rollback_last_command").bind(target_index),
+			Callable(),
+			"回退",
+			"取消"
+		)
+
+func _confirm_rollback_last_command(target_index: int) -> void:
+	var game_engine: GameEngine = _get_engine()
+	if game_engine == null:
+		return
+
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		if _online_resync_controller == null or not is_instance_valid(_online_resync_controller):
+			GameLog.warn("Game", "联机模式下回退上一步失败：控制器未就绪")
+			return
+		if _online_resync_controller.has_method("is_resync_in_progress") and bool(_online_resync_controller.call("is_resync_in_progress")):
+			return
+		if _online_resync_controller.has_method("begin_rollback_last_command_request"):
+			_online_resync_controller.call("begin_rollback_last_command_request")
+		return
+
+	var result := game_engine.rewind_to_command(int(target_index))
+	if not result.ok:
+		GameLog.warn("Game", "回退上一步失败: %s" % result.error)
+	else:
+		if game_engine.has_method("truncate_future_history"):
+			game_engine.truncate_future_history()
+		if is_instance_valid(_timeline_controller):
+			if _timeline_controller.has_method("set_timeline_edit_mode_active"):
+				_timeline_controller.call("set_timeline_edit_mode_active", true)
+			if _timeline_controller.has_method("request_force_full_panel_sync_next_update"):
+				_timeline_controller.call("request_force_full_panel_sync_next_update")
+			if _timeline_controller.has_method("apply_live_log_timeline_from_engine"):
+				_timeline_controller.call("apply_live_log_timeline_from_engine", true)
+	_request_ui_refresh()
 
 func _confirm_rewind_to_turn_start(target_index: int) -> void:
 	var game_engine: GameEngine = _get_engine()

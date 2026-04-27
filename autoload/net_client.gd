@@ -576,6 +576,19 @@ func request_rewind_to_turn_start() -> String:
 	)
 	return request_id
 
+func request_rollback_last_command() -> String:
+	var request_id := _next_request_id()
+	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return request_id
+	if not is_online_client_connected():
+		return request_id
+	rpc_id(1, "rpc_rollback_last_command", {"request_id": request_id})
+	GameLog.warn(
+		"NetClient",
+		"TX RollbackLastCommand request_id=%s room=%s" % [request_id, _safe_room_code(NetContext.room_state)]
+	)
+	return request_id
+
 func request_full_archive_export() -> String:
 	var request_id := _next_request_id()
 	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
@@ -708,6 +721,11 @@ func rpc_resync_request(_request: Dictionary) -> void:
 func rpc_rewind_to_turn_start(request: Dictionary) -> void:
 	_ensure_internal()
 	_internal.handle_rpc_rewind_to_turn_start(request)
+
+@rpc("any_peer", "reliable")
+func rpc_rollback_last_command(request: Dictionary) -> void:
+	_ensure_internal()
+	_internal.handle_rpc_rollback_last_command(request)
 
 @rpc("any_peer", "reliable")
 func rpc_request_full_archive_export(request: Dictionary) -> void:

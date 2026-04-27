@@ -35,6 +35,11 @@ static func run() -> Result:
 		_reset_net_context()
 		return rewind_actor_scope_r
 
+	var rollback_last_r := _run_rollback_last_command_case()
+	if not rollback_last_r.ok:
+		_reset_net_context()
+		return rollback_last_r
+
 	var rate_limit_r := _run_rate_limit_case()
 	_reset_net_context()
 	if not rate_limit_r.ok:
@@ -258,6 +263,69 @@ static func _run_rewind_actor_scope_case() -> Result:
 		return Result.failure("actor scope rewind 后 engine current_index 错误: got=%d want=%d" % [int(room.game_engine.current_command_index), expected_target])
 	if int(room.game_engine.command_history.size()) != expected_target + 1:
 		return Result.failure("actor scope rewind 后 history_size 错误: got=%d want=%d" % [int(room.game_engine.command_history.size()), expected_target + 1])
+	return Result.success()
+
+static func _run_rollback_last_command_case() -> Result:
+	var setup_r := _build_in_game_room_setup()
+	if not setup_r.ok:
+		return setup_r
+	var setup: Dictionary = Dictionary(setup_r.value)
+	var room = setup.get("room", null)
+	if room == null or room.game_engine == null:
+		return Result.failure("rollback last case 缺少 room/engine")
+	var engine = room.game_engine
+	var state = engine.get_state()
+	if state == null:
+		return Result.failure("rollback last case state 为空")
+	var actor := int(state.get_current_player_id())
+	var peer_id := -1
+	for peer_key in Dictionary(room.player_id_by_peer_id).keys():
+		if int(room.player_id_by_peer_id.get(peer_key, -1)) != actor:
+			continue
+		peer_id = int(peer_key)
+		break
+	if peer_id <= 0:
+		return Result.failure("rollback last case 找不到 actor peer actor=%d map=%s" % [actor, str(room.player_id_by_peer_id)])
+
+	var before_index := int(engine.current_command_index)
+	var cmd := CommandClass.create("select_reserve_card", actor, {"selected_index": 0})
+	var exec_r: Result = engine.execute_command(cmd)
+	if not exec_r.ok:
+		return Result.failure("rollback last case 执行命令失败: %s" % exec_r.error)
+	var rolled_back_index := int(engine.current_command_index)
+	if rolled_back_index != before_index + 1:
+		return Result.failure("rollback last case 准备历史失败 before=%d current=%d" % [before_index, rolled_back_index])
+
+	var mock_net := _MockNetClient.new(setup.get("room_manager", null), 16 * 1024 * 1024)
+	var server = ServerLogicClass.new()
+	server.setup(mock_net)
+
+	mock_net.multiplayer.remote_sender_id = peer_id
+	server.handle_rpc_rollback_last_command({"request_id": "req_rollback_last"})
+
+	for target_peer_id in Array(room.get_peer_ids()):
+		var pid := int(target_peer_id)
+		if _find_sent_method(mock_net.sent, pid, "rpc_rollback_meta") < 0:
+			return Result.failure("rollback last 应广播 rpc_rollback_meta 给 peer=%d: %s" % [pid, str(mock_net.sent)])
+	var idx := _find_sent_method(mock_net.sent, peer_id, "rpc_rollback_meta")
+	if idx < 0:
+		return Result.failure("rollback last 缺少发起者 meta: %s" % str(mock_net.sent))
+	var payload_val = Dictionary(mock_net.sent[idx]).get("payload", null)
+	if not (payload_val is Dictionary):
+		return Result.failure("rollback last payload 类型错误: %s" % str(mock_net.sent[idx]))
+	var payload: Dictionary = Dictionary(payload_val)
+	if str(payload.get("reason", "")) != "undo_last_command":
+		return Result.failure("rollback last reason 错误: %s" % str(payload))
+	if int(payload.get("target_index", -999)) != before_index:
+		return Result.failure("rollback last target 错误: got=%d want=%d payload=%s" % [int(payload.get("target_index", -999)), before_index, str(payload)])
+	if int(payload.get("rolled_back_index", -999)) != rolled_back_index:
+		return Result.failure("rollback last rolled_back_index 错误: %s" % str(payload))
+	if str(payload.get("rolled_back_action_id", "")) != "select_reserve_card":
+		return Result.failure("rollback last rolled_back_action_id 错误: %s" % str(payload))
+	if int(engine.current_command_index) != before_index:
+		return Result.failure("rollback last 后 engine current_index 错误: got=%d want=%d" % [int(engine.current_command_index), before_index])
+	if int(engine.command_history.size()) != before_index + 1:
+		return Result.failure("rollback last 后 history_size 错误: got=%d want=%d" % [int(engine.command_history.size()), before_index + 1])
 	return Result.success()
 
 static func _prepare_restructuring_actor_scope_history(room) -> Result:

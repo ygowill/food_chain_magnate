@@ -41,6 +41,13 @@ static func run() -> Result:
 			"enabled": true,
 			"disabled_reason": "",
 		},
+		"rollback_last": {
+			"visible": true,
+			"text": "回退上一步",
+			"enabled": false,
+			"disabled_reason": "上一条不是你的操作",
+			"action_id": "rollback_last_command",
+		},
 		"rewind": {
 			"enabled": false,
 		},
@@ -54,8 +61,9 @@ static func run() -> Result:
 
 	var confirm_button := flow_controls.confirm_end_button
 	var skip_button := flow_controls.skip_step_button
+	var rollback_button := flow_controls.rollback_last_button
 	var rewind_button := flow_controls.rewind_button
-	if confirm_button == null or skip_button == null or rewind_button == null:
+	if confirm_button == null or skip_button == null or rollback_button == null or rewind_button == null:
 		await _cleanup(controls, st)
 		return Result.failure("ActionFlowControls 按钮节点缺失")
 
@@ -70,6 +78,12 @@ static func run() -> Result:
 		"text": str(skip_button.text),
 		"disabled": bool(skip_button.disabled),
 		"tooltip": str(skip_button.tooltip_text),
+	}
+	var rollback_state := {
+		"visible": bool(rollback_button.visible),
+		"text": str(rollback_button.text),
+		"disabled": bool(rollback_button.disabled),
+		"tooltip": str(rollback_button.tooltip_text),
 	}
 	var rewind_disabled := bool(rewind_button.disabled)
 
@@ -91,12 +105,21 @@ static func run() -> Result:
 		"disabled": bool(skip_button.disabled),
 		"tooltip": str(skip_button.tooltip_text),
 	}
+	var rollback_state_after := {
+		"visible": bool(rollback_button.visible),
+		"text": str(rollback_button.text),
+		"disabled": bool(rollback_button.disabled),
+		"tooltip": str(rollback_button.tooltip_text),
+	}
 	if confirm_state_after != confirm_state:
 		await _cleanup(controls, st)
 		return Result.failure("相同配置后 confirm_end 状态不应变化")
 	if skip_state_after != skip_state:
 		await _cleanup(controls, st)
 		return Result.failure("相同配置后 skip_step 状态不应变化")
+	if rollback_state_after != rollback_state:
+		await _cleanup(controls, st)
+		return Result.failure("相同配置后 rollback_last 状态不应变化")
 	if bool(rewind_button.disabled) != rewind_disabled:
 		await _cleanup(controls, st)
 		return Result.failure("相同配置后 rewind disabled 不应变化")
@@ -141,6 +164,10 @@ static func run() -> Result:
 			"enabled": true,
 			"disabled_reason": "",
 			"action_id": "skip_marketing_settlement",
+		},
+		"rollback_last": {
+			"visible": false,
+			"enabled": false,
 		},
 		"rewind": {
 			"visible": false,
