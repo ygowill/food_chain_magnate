@@ -15,7 +15,7 @@
 - 位置：`autoload/net_client/server.gd`
 - 影响：`_platform_auto_join()` 在 InGame 房间内发送 `rpc_game_started` 时没有附带 `resume_bootstrap_mode = "full_archive_snapshot"`。
 - 风险：客户端可能按普通新局路径提前发出 `game_started`，绕过恢复房必须等待完整历史快照的约束。
-- 处理状态：待修复。
+- 处理状态：已修复。
 
 ### P2：完整快照分片恢复路径重复发出 `resync_archive_received`
 
@@ -65,3 +65,9 @@
 
 - 新增本报告，记录已确认问题、风险等级和后续修复原则。
 - 验证：文档变更，无需运行 Godot 测试。
+
+### 2026-04-27：修复 InGame 恢复房 platform auto-join 启动标记
+
+- 修复 `autoload/net_client/server.gd` 中 `_platform_auto_join()` 的 InGame `rpc_game_started` payload：当房间是 `resume_archive` 时附带 `resume_bootstrap_mode = "full_archive_snapshot"`。
+- 扩展 `core/tests/platform_connect_token_auto_join_test.gd`，覆盖恢复房已经进入 InGame 后同一玩家通过平台 token 重连的路径，断言收到 snapshot manifest/chunk 且 `rpc_game_started` 带完整快照启动标记。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。

@@ -547,6 +547,43 @@ static func _run_resume_archive_auto_join_scenario() -> Result:
 	if int(room.game_engine.current_command_index) != selected_index:
 		return Result.failure("恢复房开局 current_command_index 错误: %d vs %d" % [int(room.game_engine.current_command_index), selected_index])
 
+	var reconnect_payload := {
+		"user_id": "u_resume_player",
+		"room_code": room_code,
+		"role": "player",
+		"display_name": "ResumeP2Reconnect",
+		"seat_index": 1,
+		"generation": 2,
+		"exp": int(Time.get_unix_time_from_system()) + 3600,
+	}
+	var reconnect_token_r: Result = ConnectTokenClass.create_token(reconnect_payload, server.connect_token_secret_override)
+	if not reconnect_token_r.ok:
+		return Result.failure("create_token(resume ingame reconnect) 失败: %s" % reconnect_token_r.error)
+
+	mock_net.multiplayer.remote_sender_id = 32
+	server.handle_rpc_client_hello({
+		"request_id": "r_resume_ingame_reconnect",
+		"protocol_version": NetContext.PROTOCOL_VERSION,
+		"game_version": "0.0.0",
+		"schema_version": 0,
+		"player_profile": {"name": "ResumeP2ReconnectLocal", "color_index": 2, "restaurant_logo_id": -1},
+		"connect_token": str(reconnect_token_r.value),
+	})
+
+	if str(rm.peer_to_room.get(32, "")) != room_code:
+		return Result.failure("恢复房 InGame 自动重连后 peer_to_room 未绑定到 %s" % room_code)
+	if int(room.player_id_by_peer_id.get(32, -1)) != 1:
+		return Result.failure("恢复房 InGame 自动重连后 seat 1 未绑定到新 peer")
+	if _find_sent_method(mock_net.sent, 32, "rpc_game_started") < 0:
+		return Result.failure("恢复房 InGame 自动重连应收到 rpc_game_started")
+	if _find_sent_method(mock_net.sent, 32, "rpc_resync_snapshot_manifest") < 0:
+		return Result.failure("恢复房 InGame 自动重连应收到 snapshot manifest")
+	if _find_sent_method(mock_net.sent, 32, "rpc_resync_snapshot_chunk") < 0:
+		return Result.failure("恢复房 InGame 自动重连应收到 snapshot chunk")
+	var reconnect_game_started := _get_sent_payload(mock_net.sent, 32, "rpc_game_started")
+	if str(reconnect_game_started.get("resume_bootstrap_mode", "")).strip_edges() != "full_archive_snapshot":
+		return Result.failure("恢复房 InGame 自动重连的 rpc_game_started 应标记 full_archive_snapshot bootstrap mode")
+
 	return Result.success()
 
 static func _run_resume_archive_auto_assign_scenario() -> Result:

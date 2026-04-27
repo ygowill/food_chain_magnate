@@ -1614,11 +1614,14 @@ func _platform_auto_join(
 			if not prepared_fallback_r.ok:
 				return ResultClass.failure(prepared_fallback_r.error)
 			prepared_resume_transfer = Dictionary(prepared_fallback_r.value).duplicate(true)
-		_net.rpc_id(peer_id, "rpc_game_started", {
+		var game_started_payload := {
 			"player_id_by_peer_id": room.player_id_by_peer_id.duplicate(true),
 			"config": room.config.duplicate(true),
 			"local_player_id": room.get_seat_index_for_peer(peer_id) if room.has_method("get_seat_index_for_peer") else -1,
-		})
+		}
+		if room.has_method("is_resume_archive_room") and room.is_resume_archive_room():
+			game_started_payload["resume_bootstrap_mode"] = RESUME_BOOTSTRAP_MODE_FULL_ARCHIVE_SNAPSHOT
+		_net.rpc_id(peer_id, "rpc_game_started", game_started_payload)
 		var resume_r: Result = _dispatch_prepared_resume_transfer(
 			peer_id,
 			request_id,
