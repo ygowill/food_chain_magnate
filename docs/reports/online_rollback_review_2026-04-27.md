@@ -52,6 +52,13 @@
 - 风险：真实接线问题可能退化成静默失败或延迟发现。
 - 处理状态：待改善。
 
+### P3：timeline refresh deferred callback 命名与实际行为不一致
+
+- 位置：`ui/scenes/game/controllers/online_resync_controller.gd`
+- 影响：`_request_live_log_timeline_refresh_deferred` 实际上和 `_request_live_log_timeline_refresh` 指向同一个 callback，并没有真正 deferred。
+- 风险：读代码时会误以为存在两条刷新策略，实际只是重复分支。
+- 处理状态：已清理。
+
 ## 修复原则
 
 1. 先修会导致错误联机状态的行为问题。
@@ -88,4 +95,10 @@
 
 - 新增 `autoload/net_client/game_started_payloads.gd`，集中构造 server 侧 `rpc_game_started` payload，并统一恢复房 `resume_bootstrap_mode = "full_archive_snapshot"` 标记。
 - 调整 `autoload/net_client/server.gd` 的 platform auto-join、join in-game、start-game 三条路径使用同一个 helper，降低三条路径后续再次漂移的风险。
+- 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
+
+### 2026-04-27：清理 timeline refresh 冗余 callback
+
+- 移除 `ui/scenes/game/controllers/online_resync_controller.gd` 中没有真实 deferred 语义的 `_request_live_log_timeline_refresh_deferred`。
+- 保留原有刷新行为：命令 replay 成功后仍调用 `_request_live_log_timeline_refresh`。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
