@@ -166,3 +166,9 @@
 - 移除 `OnlineMatchBootstrap` 对固定 `NetClient` bootstrap / resync 清理方法的 `has_method` 检查。
 - 保留 `NetClient == null` 防护，避免非联机或测试上下文直接崩溃。
 - 验证：`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests` 通过，`386/386`。
+
+### 2026-04-27：标注旧恢复房双轨文档为历史归档
+
+- 更新 `docs/online/README.md`、`online_resume_fastload_full_history_design_2026-04-14.md` 和 `online_resume_hot_path_rebuild_plan_2026-04-16.md`。
+- 明确旧 `full_replay_*` / dual-engine / fast-start 文档只保留历史上下文，不再作为当前实现依据；当前实现以单 full-engine 与 `full_history_*` API 为准。
+- 验证：文档变更，无需运行 Godot 测试。

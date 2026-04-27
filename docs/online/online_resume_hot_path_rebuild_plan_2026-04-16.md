@@ -1,8 +1,8 @@
 # 联机恢复房热路径重构方案（2026-04-16）
 
-> 历史文档：本文记录的是“双轨时代”的热路径收敛结论。当前恢复房启动策略已进一步收敛为“单 full-engine 启动”，见 `docs/online/online_resume_single_full_engine_startup_2026-04-17.md`。
+> 只读历史归档：本文记录的是“双轨时代”的热路径收敛结论。当前恢复房启动策略已进一步收敛为“单 full-engine 启动”，见 `docs/online/online_resume_single_full_engine_startup_2026-04-17.md`。文中的 `full_replay_*` 术语保留为历史上下文，不代表当前 `full_history_*` 字段/API。
 
-状态：**P0 第一阶段已落地，持续收敛中**。
+状态：**已被后续单 full-engine 方案收敛，不再作为当前实现计划**。
 
 本文落盘本轮结论，目标不是立即修补某个卡点，而是明确：
 

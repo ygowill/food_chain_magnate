@@ -1,8 +1,14 @@
 # 联机恢复房：快加载 + 完整历史双轨设计（D 完整版，2026-04-14）
 
-> 历史文档：该双轨方案已被 `docs/online/online_resume_single_full_engine_startup_2026-04-17.md` 中的“单 full-engine 启动”方案取代。保留本文用于记录当时的权衡、术语与演进背景。
+> 只读历史归档：该双轨方案已被 `docs/online/online_resume_single_full_engine_startup_2026-04-17.md` 中的“单 full-engine 启动”方案取代。本文保留旧 `full_replay_*` / `full_replay_engine` 术语，仅用于记录当时权衡；不要按本文新增或恢复当前实现字段。
 
-状态：**部分实施，持续演进中**。
+状态：**已被取代，不再作为实现依据**。
+
+当前实现基准：
+
+- 恢复房启动使用完整 archive snapshot，本地加载后才进入对局；
+- 联机恢复历史字段/API 使用 `full_history_*` 命名；
+- 旧 dual-engine / live-tail 可执行路径已删除。
 
 实现更新（2026-04-17）：
 
