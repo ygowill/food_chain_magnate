@@ -86,6 +86,87 @@ static func _format_staff_usage_badge(remaining: int, capacity: int) -> String:
 		return ""
 	return "%d/%d" % [maxi(0, remaining), safe_capacity]
 
+static func _extract_marketing_type_ids_from_marketer(marketer: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	var seen := {}
+	var marketing_types_val = marketer.get("marketing_types", [])
+	if marketing_types_val is Array:
+		for type_val in Array(marketing_types_val):
+			var type_id := str(type_val).strip_edges()
+			if type_id.is_empty() or seen.has(type_id):
+				continue
+			seen[type_id] = true
+			out.append(type_id)
+
+	var legacy_type := str(marketer.get("type", "")).strip_edges()
+	if not legacy_type.is_empty() and not seen.has(legacy_type):
+		seen[legacy_type] = true
+		out.append(legacy_type)
+
+	out.sort()
+	return out
+
+static func _normalize_marketer_entries(marketers: Array[Dictionary]) -> Array[Dictionary]:
+	var by_key: Dictionary = {}
+	var order: Array[String] = []
+	var legacy_index := 0
+
+	for marketer_val in marketers:
+		if not (marketer_val is Dictionary):
+			continue
+		var marketer: Dictionary = marketer_val
+		var staff_id := int(marketer.get("staff_id", -1))
+		var emp_id := str(marketer.get("employee_type", marketer.get("id", ""))).strip_edges()
+		if emp_id.is_empty():
+			continue
+		var key := ""
+		if staff_id > 0:
+			key = "staff:%d" % staff_id
+		else:
+			legacy_index += 1
+			key = "legacy:%s:%d" % [emp_id, legacy_index]
+
+		var type_ids := _extract_marketing_type_ids_from_marketer(marketer)
+		if type_ids.is_empty():
+			continue
+
+		if not by_key.has(key):
+			var entry := marketer.duplicate(true)
+			entry["employee_type"] = emp_id
+			entry["id"] = emp_id
+			entry["marketing_types"] = type_ids
+			entry.erase("type")
+			by_key[key] = entry
+			order.append(key)
+			continue
+
+		var existing: Dictionary = by_key[key]
+		var merged_seen := {}
+		var merged_types: Array[String] = []
+		var existing_types_val = existing.get("marketing_types", [])
+		if existing_types_val is Array:
+			for existing_type_val in Array(existing_types_val):
+				var existing_type := str(existing_type_val).strip_edges()
+				if existing_type.is_empty() or merged_seen.has(existing_type):
+					continue
+				merged_seen[existing_type] = true
+				merged_types.append(existing_type)
+		for type_id2 in type_ids:
+			if merged_seen.has(type_id2):
+				continue
+			merged_seen[type_id2] = true
+			merged_types.append(type_id2)
+		merged_types.sort()
+		existing["marketing_types"] = merged_types
+		by_key[key] = existing
+
+	var out: Array[Dictionary] = []
+	for key2 in order:
+		var entry_val = by_key.get(key2, null)
+		if entry_val is Dictionary:
+			out.append(Dictionary(entry_val).duplicate(true))
+	return out
+
 func set_visual_modules(modules: Array[String]) -> void:
 	_icon_cache.set_visual_modules(modules)
 	_rebuild_type_buttons()
@@ -111,22 +192,23 @@ func _on_panel_ready() -> void:
 	_setup_rotation_controls()
 	_update_rotation_section()
 	_rebuild_product_buttons()
-	_rebuild_type_buttons()
 	_rebuild_marketer_options()
-	_rebuild_board_buttons()
+	_rebuild_type_buttons()
+	_sync_selected_type_after_data_change(true)
 	_update_target_display()
 	_update_confirm_state()
 
 func set_available_marketers(marketers: Array[Dictionary]) -> void:
-	_available_marketers = marketers.duplicate(true)
-	_rebuild_type_buttons()
+	_available_marketers = _normalize_marketer_entries(marketers)
 	_rebuild_marketer_options()
+	_rebuild_type_buttons()
+	_sync_selected_type_after_data_change(true)
 	_update_confirm_state()
 
 func set_available_boards(boards_by_type: Dictionary) -> void:
 	_available_boards_by_type = boards_by_type.duplicate(true)
 	_rebuild_type_buttons()
-	_rebuild_board_buttons()
+	_sync_selected_type_after_data_change(true)
 	_update_confirm_state()
 
 func set_map_selection_callback(callback: Callable) -> void:
@@ -173,15 +255,13 @@ func _rebuild_type_buttons() -> void:
 		return
 
 	var build_r: Dictionary = MarketingPanelTypeSpecsBuilderClass.build_type_specs(
-		_available_marketers,
+		_get_type_specs_marketers(),
 		_available_boards_by_type,
 		MARKETING_TYPES,
 		MARKETING_TYPE_NAME_OVERRIDES
 	)
 	var specs_val = build_r.get("specs", [])
 	var specs: Array = specs_val if (specs_val is Array) else []
-	var available_val = build_r.get("available_type_ids", [])
-	var available_type_ids: Array[String] = available_val if (available_val is Array) else []
 
 	for spec_val in specs:
 		if not (spec_val is Dictionary):
@@ -204,34 +284,99 @@ func _rebuild_type_buttons() -> void:
 		btn.type_selected.connect(_on_type_selected)
 		type_container.add_child(btn)
 		_type_buttons[type_id] = btn
-	
-	# 若当前没有选择任何类型，且仅有一个可用类型：自动选中它，减少一次点击（manual_cases 常用）。
-	if _selected_type.is_empty() and available_type_ids.size() == 1:
-		_on_type_selected(str(available_type_ids[0]))
+
+	_sync_type_button_selection()
 
 func _on_type_selected(type_id: String) -> void:
-	_selected_type = type_id
+	_select_type(type_id)
+
+func _select_type(type_id: String) -> void:
+	var next_type := str(type_id).strip_edges()
+	if next_type.is_empty():
+		return
+
+	_selected_type = next_type
 	_selected_target = Vector2i(-1, -1)
-	_selected_employee_type = ""
-	_selected_staff_id = -1
 	_selected_board_number = 0
-	_selected_duration = 1
 	_selected_axis = ""
 	_update_rotation_section()
 	clear_error()
 
-	for tid in _type_buttons.keys():
-		var btn = _type_buttons[tid]
-		if is_instance_valid(btn):
-			btn.set_selected(tid == type_id)
-
-	_rebuild_marketer_options()
+	_sync_type_button_selection()
 	_rebuild_board_buttons()
 	_update_target_display()
 	_update_confirm_state()
 
-	# 请求地图选择
-	_request_map_selection_refresh()
+func _get_type_specs_marketers() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if _selected_staff_id > 0:
+		var selected_key := "staff:%d" % _selected_staff_id
+		var selected_info: Dictionary = Dictionary(_marketer_info_by_key.get(selected_key, {}))
+		if not selected_info.is_empty():
+			out.append(selected_info.duplicate(true))
+			return out
+		for marketer_val in _available_marketers:
+			if not (marketer_val is Dictionary):
+				continue
+			var marketer: Dictionary = marketer_val
+			if int(marketer.get("staff_id", -1)) == _selected_staff_id:
+				out.append(marketer.duplicate(true))
+				return out
+
+	for marketer_val2 in _available_marketers:
+		if marketer_val2 is Dictionary:
+			out.append(Dictionary(marketer_val2).duplicate(true))
+	return out
+
+func _get_available_type_ids_for_current_selection() -> Array[String]:
+	var out: Array[String] = []
+	var build_r: Dictionary = MarketingPanelTypeSpecsBuilderClass.build_type_specs(
+		_get_type_specs_marketers(),
+		_available_boards_by_type,
+		MARKETING_TYPES,
+		MARKETING_TYPE_NAME_OVERRIDES
+	)
+	var available_val = build_r.get("available_type_ids", [])
+	if available_val is Array:
+		for type_val in Array(available_val):
+			var type_id := str(type_val).strip_edges()
+			if type_id.is_empty():
+				continue
+			out.append(type_id)
+	return out
+
+func _sync_type_button_selection() -> void:
+	for tid in _type_buttons.keys():
+		var btn = _type_buttons[tid]
+		if is_instance_valid(btn):
+			btn.set_selected(str(tid) == _selected_type)
+
+func _sync_selected_type_after_data_change(auto_select_single: bool) -> void:
+	var available_type_ids := _get_available_type_ids_for_current_selection()
+	var selected_is_valid := false
+	for type_id in available_type_ids:
+		if type_id == _selected_type:
+			selected_is_valid = true
+			break
+
+	if not selected_is_valid:
+		_selected_type = ""
+		_selected_board_number = 0
+		_selected_target = Vector2i(-1, -1)
+		_selected_axis = ""
+
+	if _selected_type.is_empty() and auto_select_single and available_type_ids.size() == 1:
+		_select_type(str(available_type_ids[0]))
+		return
+
+	_sync_type_button_selection()
+	_update_rotation_section()
+	if _selected_type.is_empty():
+		_clear_board_buttons()
+	else:
+		_rebuild_board_buttons()
+	_update_target_display()
+	_update_confirm_state()
 
 func _rebuild_marketer_options() -> void:
 	var previous_staff_id := _selected_staff_id
@@ -240,11 +385,6 @@ func _rebuild_marketer_options() -> void:
 	_selected_staff_id = -1
 
 	if marketer_option == null:
-		return
-
-	if _selected_type.is_empty():
-		marketer_option.clear()
-		_clear_duration_buttons()
 		return
 
 	var items: Array[Dictionary] = []
@@ -258,17 +398,6 @@ func _rebuild_marketer_options() -> void:
 		var staff_id := int(marketer.get("staff_id", -1))
 		var emp_id := str(marketer.get("employee_type", marketer.get("id", ""))).strip_edges()
 		if staff_id <= 0 or emp_id.is_empty():
-			continue
-		var type_id := str(marketer.get("type", "")).strip_edges()
-		var supports_type := (type_id == _selected_type)
-		if not supports_type:
-			var marketing_types_val = marketer.get("marketing_types", [])
-			if marketing_types_val is Array:
-				for t_val in Array(marketing_types_val):
-					if str(t_val).strip_edges() == _selected_type:
-						supports_type = true
-						break
-		if not supports_type:
 			continue
 		var key := "staff:%d" % staff_id
 		var remaining := int(marketer.get("remaining", 0))
@@ -300,6 +429,8 @@ func _rebuild_marketer_options() -> void:
 		_apply_selected_marketer_by_key(selected_key)
 	else:
 		marketer_option.clear()
+		_selected_employee_type = ""
+		_selected_staff_id = -1
 		_clear_duration_buttons()
 
 func _apply_selected_marketer_by_key(item_key: String) -> void:
@@ -406,6 +537,10 @@ func _request_map_selection_refresh() -> void:
 	if not _map_callback.is_valid():
 		return
 	if _selected_type.is_empty():
+		return
+	if _selected_employee_type.is_empty():
+		return
+	if _selected_board_number <= 0:
 		return
 	_map_callback.call(_selected_type, _selected_employee_type, _selected_board_number, _selected_rotation)
 
@@ -619,10 +754,11 @@ func _on_marketer_selected(employee_type: String) -> void:
 	_apply_selected_marketer_by_key(key)
 	_selected_target = Vector2i(-1, -1)
 	_selected_axis = ""
+	clear_error()
+	_rebuild_type_buttons()
+	_sync_selected_type_after_data_change(true)
 	_update_target_display()
 	_update_confirm_state()
-	clear_error()
-	_request_map_selection_refresh()
 
 func _get_employee_def_for_card(employee_type: String) -> Dictionary:
 	var emp_id := str(employee_type).strip_edges()
@@ -708,8 +844,11 @@ func _update_target_display() -> void:
 	if target_label == null:
 		return
 
-	if _selected_type.is_empty():
-		target_label.text = "请先选择营销类型"
+	if _selected_employee_type.is_empty():
+		target_label.text = "请先选择营销员"
+		target_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
+	elif _selected_type.is_empty():
+		target_label.text = "请选择营销类型"
 		target_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
 	elif _selected_target == Vector2i(-1, -1):
 		target_label.text = "请在地图上选择目标位置"
@@ -727,7 +866,7 @@ func _update_target_display() -> void:
 		target_label.add_theme_color_override("font_color", Color(0.28, 0.55, 0.22, 1))
 
 	if range_info_label != null:
-		if _selected_type.is_empty():
+		if _selected_employee_type.is_empty() or _selected_type.is_empty():
 			range_info_label.text = ""
 		else:
 			var lines: Array[String] = []

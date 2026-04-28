@@ -113,10 +113,19 @@ func _build_refresh_context(state: GameState) -> Dictionary:
 		var remaining := int(entry.get("remaining", 0))
 		if remaining > 0:
 			has_marketer = true
+		var type_tokens: Array[String] = []
+		var marketing_types_val = entry.get("marketing_types", [])
+		if marketing_types_val is Array:
+			for type_val in Array(marketing_types_val):
+				var type_id := str(type_val).strip_edges()
+				if type_id.is_empty():
+					continue
+				type_tokens.append(type_id)
+		type_tokens.sort()
 		marketer_tokens.append("%d|%s|%s|%d|%d" % [
 			int(entry.get("staff_id", -1)),
 			str(entry.get("employee_type", entry.get("id", ""))).strip_edges(),
-			str(entry.get("type", "")).strip_edges(),
+			",".join(type_tokens),
 			int(entry.get("max_duration", 0)),
 			remaining,
 		])
@@ -195,15 +204,23 @@ func _build_marketing_marketer_entries(state: GameState, current_player_id: int,
 		var marketing_types_val = provider.get("marketing_types", [])
 		if not (marketing_types_val is Array):
 			continue
+		if int(provider.get("remaining", 0)) <= 0:
+			continue
+		var marketing_types: Array[String] = []
+		var seen := {}
 		for type_val in Array(marketing_types_val):
 			var type_id := str(type_val).strip_edges()
-			if type_id.is_empty():
+			if type_id.is_empty() or seen.has(type_id):
 				continue
-			if int(provider.get("remaining", 0)) <= 0:
-				continue
-			var entry := provider.duplicate(true)
-			entry["type"] = type_id
-			out.append(entry)
+			seen[type_id] = true
+			marketing_types.append(type_id)
+		if marketing_types.is_empty():
+			continue
+		marketing_types.sort()
+		var entry := provider.duplicate(true)
+		entry["marketing_types"] = marketing_types
+		entry.erase("type")
+		out.append(entry)
 	return out
 
 func _build_available_marketing_boards_by_type(state: GameState) -> Dictionary:

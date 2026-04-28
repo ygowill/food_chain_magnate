@@ -51,21 +51,6 @@ horizontal_scroll_mode = 0
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="TypeSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox"]
-layout_mode = 2
-theme_override_constants/separation = 6
-
-[node name="SectionLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TypeSection"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 14
-theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 1)
-text = "选择营销类型"
-
-[node name="TypeContainer" type="HFlowContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TypeSection"]
-layout_mode = 2
-theme_override_constants/h_separation = 10
-theme_override_constants/v_separation = 10
-
 [node name="MarketerSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox"]
 layout_mode = 2
 theme_override_constants/separation = 6
@@ -82,6 +67,21 @@ theme_override_constants/h_separation = 10
 theme_override_constants/v_separation = 10
 script = ExtResource("2_employee_picker")
 card_display_scale = 1.25
+
+[node name="TypeSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SectionLabel" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TypeSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 1)
+text = "选择营销类型"
+
+[node name="TypeContainer" type="HFlowContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TypeSection"]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 10
 
 [node name="BoardSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/ContentVBox"]
 layout_mode = 2
