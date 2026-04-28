@@ -43,19 +43,20 @@ static func run() -> Result:
 		},
 		"rollback_last": {
 			"visible": true,
-			"text": "回退上一步",
+			"text": "回退一步",
 			"enabled": false,
 			"disabled_reason": "上一条不是你的操作",
 			"action_id": "rollback_last_command",
 		},
 		"rollback_proposal": {
 			"visible": true,
-			"text": "提议回滚",
+			"text": "提议回退",
 			"enabled": true,
 			"disabled_reason": "",
 			"action_id": "rollback_proposal",
 		},
 		"rewind": {
+			"text": "回退到回合开始",
 			"enabled": false,
 		},
 	}
@@ -68,12 +69,19 @@ static func run() -> Result:
 
 	var confirm_button := flow_controls.confirm_end_button
 	var skip_button := flow_controls.skip_step_button
+	var rollback_row := flow_controls.rollback_row
 	var rollback_button := flow_controls.rollback_last_button
 	var proposal_button := flow_controls.rollback_proposal_button
 	var rewind_button := flow_controls.rewind_button
-	if confirm_button == null or skip_button == null or rollback_button == null or proposal_button == null or rewind_button == null:
+	if confirm_button == null or skip_button == null or rollback_row == null or rollback_button == null or proposal_button == null or rewind_button == null:
 		await _cleanup(controls, st)
 		return Result.failure("ActionFlowControls 按钮节点缺失")
+	if rollback_row.get_child_count() < 3 \
+			or rollback_row.get_child(0) != rollback_button \
+			or rollback_row.get_child(1) != rewind_button \
+			or rollback_row.get_child(2) != proposal_button:
+		await _cleanup(controls, st)
+		return Result.failure("回退按钮应按 回退一步/回退到回合开始/提议回退 顺序放在同一行")
 
 	var confirm_state := {
 		"visible": bool(confirm_button.visible),
@@ -99,7 +107,11 @@ static func run() -> Result:
 		"disabled": bool(proposal_button.disabled),
 		"tooltip": str(proposal_button.tooltip_text),
 	}
-	var rewind_disabled := bool(rewind_button.disabled)
+	var rewind_state := {
+		"visible": bool(rewind_button.visible),
+		"text": str(rewind_button.text),
+		"disabled": bool(rewind_button.disabled),
+	}
 
 	flow_controls.apply_flow_config(cfg.duplicate(true))
 	var second_apply_count := int(flow_controls.get_flow_config_apply_count())
@@ -131,6 +143,11 @@ static func run() -> Result:
 		"disabled": bool(proposal_button.disabled),
 		"tooltip": str(proposal_button.tooltip_text),
 	}
+	var rewind_state_after := {
+		"visible": bool(rewind_button.visible),
+		"text": str(rewind_button.text),
+		"disabled": bool(rewind_button.disabled),
+	}
 	if confirm_state_after != confirm_state:
 		await _cleanup(controls, st)
 		return Result.failure("相同配置后 confirm_end 状态不应变化")
@@ -143,9 +160,9 @@ static func run() -> Result:
 	if proposal_state_after != proposal_state:
 		await _cleanup(controls, st)
 		return Result.failure("相同配置后 rollback_proposal 状态不应变化")
-	if bool(rewind_button.disabled) != rewind_disabled:
+	if rewind_state_after != rewind_state:
 		await _cleanup(controls, st)
-		return Result.failure("相同配置后 rewind disabled 不应变化")
+		return Result.failure("相同配置后 rewind 状态不应变化")
 
 	var changed_cfg := cfg.duplicate(true)
 	changed_cfg["skip_step"] = {
