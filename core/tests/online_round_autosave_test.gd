@@ -44,6 +44,10 @@ static func run() -> Result:
 	if not render_r.ok:
 		return render_r
 
+	var terminal_export_r := _test_game_over_autosave_can_export_after_room_marked_ended()
+	if not terminal_export_r.ok:
+		return terminal_export_r
+
 	return Result.success()
 
 static func _test_cleanup_to_restructuring_requests_round_autosave() -> Result:
@@ -172,6 +176,60 @@ static func _test_map_snapshot_renderer_outputs_png() -> Result:
 	var png_path := str(store.get_round_map_snapshot_path("render01", 2, "game_over"))
 	if not FileAccess.file_exists(png_path):
 		return Result.failure("地图截图未写入: %s" % png_path)
+	return Result.success()
+
+static func _test_game_over_autosave_can_export_after_room_marked_ended() -> Result:
+	var room_code := "TERM01"
+	var rm := RoomManagerClass.new()
+	var cfg := {
+		"desired_player_count": 2,
+		"seed_mode": "fixed",
+		"seed": 12345,
+		"allow_spectators": true,
+		"enabled_modules_v2": [],
+		"modules_v2_base_dir": GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR,
+	}
+	var create_r: Result = rm.create_room_with_code(
+		20,
+		{"name": "Host", "color_index": 0, "restaurant_logo_id": -1, "user_id": "u_terminal_host"},
+		room_code,
+		cfg
+	)
+	if not create_r.ok:
+		return Result.failure("terminal create_room_with_code 失败: %s" % create_r.error)
+	var join_r: Result = rm.join_room(
+		21,
+		{"name": "Player2", "color_index": 1, "restaurant_logo_id": -1, "user_id": "u_terminal_p2"},
+		room_code,
+		""
+	)
+	if not join_r.ok:
+		return Result.failure("terminal join_room 失败: %s" % join_r.error)
+
+	var room = rm.rooms.get(room_code, null)
+	if room == null:
+		return Result.failure("terminal room missing after setup")
+	var start_r: Result = room.start_game()
+	if not start_r.ok:
+		return Result.failure("terminal start_game 失败: %s" % start_r.error)
+	var state = room.game_engine.get_state()
+	if state == null:
+		return Result.failure("terminal state missing after start")
+	state.phase = DefsClass.PHASE_GAME_OVER
+	room.status = "Ended"
+
+	var strict_r: Result = room.build_full_authority_archive_export()
+	if strict_r.ok:
+		return Result.failure("Ended 房间的普通 full archive export 不应绕过状态门禁")
+
+	var terminal_r: Result = room.build_full_authority_archive_export(true)
+	if not terminal_r.ok:
+		return Result.failure("终局自动截图应允许 Ended 房间导出 archive: %s" % terminal_r.error)
+	var export_info: Dictionary = Dictionary(terminal_r.value) if terminal_r.value is Dictionary else {}
+	if str(export_info.get("room_code", "")) != room_code:
+		return Result.failure("terminal export room_code 错误: %s" % str(export_info))
+	if not (export_info.get("archive", null) is Dictionary):
+		return Result.failure("terminal export archive 类型错误: %s" % str(export_info))
 	return Result.success()
 
 static func _test_round_autosave_store_writes_standard_archive_and_overwrites() -> Result:

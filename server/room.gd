@@ -1156,8 +1156,8 @@ func build_effective_resume_start_archive() -> Result:
 		"final_hash": _prepared_resume_start_final_hash,
 	}).with_warnings(prepared_r.warnings)
 
-func build_full_authority_archive_export() -> Result:
-	if status != STATUS_IN_GAME:
+func build_full_authority_archive_export(allow_ended_terminal_export: bool = false) -> Result:
+	if status != STATUS_IN_GAME and not (allow_ended_terminal_export and status == STATUS_ENDED):
 		return Result.failure("Room is not in game")
 	if game_engine == null:
 		return Result.failure("Room engine missing")
