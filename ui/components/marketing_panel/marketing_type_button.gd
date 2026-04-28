@@ -16,34 +16,34 @@ var _selected: bool = false
 var _icon_label: Label
 var _icon_rect: TextureRect
 var _name_label: Label
-var _count_label: Label
 
 func _ready() -> void:
 	_build_ui()
 
 func _build_ui() -> void:
-	custom_minimum_size = Vector2(110, 84)
+	custom_minimum_size = Vector2(118, 84)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
+	vbox.add_theme_constant_override("separation", 6)
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	add_child(vbox)
 
 	# 图标（贴图优先，缺失则回退文字）
 	var icon_slot := Control.new()
-	icon_slot.custom_minimum_size = Vector2(36, 36)
+	icon_slot.custom_minimum_size = Vector2(78, 52)
 	vbox.add_child(icon_slot)
 
 	_icon_rect = TextureRect.new()
 	_icon_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon_slot.add_child(_icon_rect)
 
 	_icon_label = Label.new()
 	_icon_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_icon_label.add_theme_font_size_override("font_size", 28)
+	_icon_label.add_theme_font_size_override("font_size", 30)
 	_icon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_icon_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_icon_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -53,13 +53,8 @@ func _build_ui() -> void:
 	_name_label = Label.new()
 	_name_label.add_theme_font_size_override("font_size", 12)
 	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_name_label.clip_text = true
 	vbox.add_child(_name_label)
-
-	# 数量
-	_count_label = Label.new()
-	_count_label.add_theme_font_size_override("font_size", 11)
-	_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(_count_label)
 
 	update_display()
 	_update_style()
@@ -92,19 +87,6 @@ func update_display() -> void:
 			_name_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
 		else:
 			_name_label.add_theme_color_override("font_color", Color(0.6, 0.5, 0.5, 1))
-
-	if _count_label != null:
-		if is_available:
-			_count_label.text = "员工:%d  板件:%d" % [marketer_count, board_count]
-			_count_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1))
-		else:
-			if marketer_count <= 0:
-				_count_label.text = "无可用员工"
-			elif board_count <= 0:
-				_count_label.text = "无可用板件"
-			else:
-				_count_label.text = "不可用"
-			_count_label.add_theme_color_override("font_color", Color(0.6, 0.5, 0.5, 1))
 
 func set_selected(selected: bool) -> void:
 	_selected = selected

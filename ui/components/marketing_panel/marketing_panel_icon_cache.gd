@@ -60,7 +60,7 @@ func get_marketing_icon_texture(type_id: String, target_size: Vector2i) -> Textu
 		return null
 
 	var base_tex = _skin.get_marketing_texture(type_key)
-	var scaled := _scale_texture_to_square_cover(base_tex, target_size)
+	var scaled := _scale_texture_to_square(base_tex, target_size)
 	_marketing_type_icon_cache[key] = scaled
 	return scaled
 

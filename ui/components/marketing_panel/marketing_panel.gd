@@ -34,8 +34,8 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 # 营销面板内的产品图标目标尺寸（方形，居中）。
 const PRODUCT_ICON_SIZE := Vector2i(32, 32)
-# 营销类型按钮中的图标（板件图）使用统一的方形尺寸，避免不同贴图尺寸导致布局/观感异常。
-const MARKETING_TYPE_ICON_SIZE := Vector2i(36, 36)
+# 营销类型按钮中的图标（板件图）使用统一尺寸完整显示，避免不同贴图尺寸导致布局/观感异常。
+const MARKETING_TYPE_ICON_SIZE := Vector2i(72, 52)
 
 # 营销类型定义（用于 UI 文案与范围提示；具体可用性由外部传入）
 const MARKETING_TYPES: Array[Dictionary] = [

@@ -6,6 +6,19 @@ extends RefCounted
 const MarketingPanelClass = preload("res://ui/components/marketing_panel/marketing_panel.gd")
 const MarketingPanelScene = preload("res://ui/components/marketing_panel/marketing_panel.tscn")
 const EmployeePickerClass = preload("res://ui/components/employee_picker/employee_picker.gd")
+const MarketingPanelIconCacheClass = preload("res://ui/components/marketing_panel/marketing_panel_icon_cache.gd")
+const MarketingTypeButtonClass = preload("res://ui/components/marketing_panel/marketing_type_button.gd")
+
+class FakeMarketingSkin:
+	extends RefCounted
+
+	var texture: Texture2D
+
+	func _init(p_texture: Texture2D) -> void:
+		texture = p_texture
+
+	func get_marketing_texture(_type_id: String) -> Texture2D:
+		return texture
 
 static func run() -> Result:
 	var r1 := _case_module_type_visible()
@@ -23,6 +36,12 @@ static func run() -> Result:
 	var r5 := _case_scene_flow_containers_expand_horizontally()
 	if not r5.ok:
 		return r5
+	var r6 := _case_type_button_hides_availability_counts()
+	if not r6.ok:
+		return r6
+	var r7 := _case_marketing_icon_cache_contains_full_texture()
+	if not r7.ok:
+		return r7
 	return Result.success({})
 
 static func _case_module_type_visible() -> Result:
@@ -213,6 +232,71 @@ static func _case_scene_flow_containers_expand_horizontally() -> Result:
 
 	_safe_free(panel)
 	return Result.success({})
+
+static func _case_type_button_hides_availability_counts() -> Result:
+	var btn = MarketingTypeButtonClass.new()
+	btn.type_id = "billboard"
+	btn.type_def = {"id": "billboard", "name": "广告牌", "icon": "B", "color": Color.WHITE}
+	btn.is_available = true
+	btn.marketer_count = 3
+	btn.board_count = 4
+	btn._build_ui()
+
+	var label_texts := _collect_label_texts(btn)
+	for text in label_texts:
+		if text.contains("员工") or text.contains("板件") or text.contains("不可用"):
+			_safe_free(btn)
+			return Result.failure("营销类型按钮不应显示员工/板件/可用性统计文本，实际标签: %s" % str(label_texts))
+
+	if btn._icon_rect == null:
+		_safe_free(btn)
+		return Result.failure("营销类型按钮应创建 TextureRect 图标节点")
+	if int(btn._icon_rect.expand_mode) != int(TextureRect.EXPAND_IGNORE_SIZE):
+		_safe_free(btn)
+		return Result.failure("营销类型按钮图标应忽略贴图原始尺寸以填入图标槽，实际 expand_mode=%s" % str(btn._icon_rect.expand_mode))
+	if int(btn._icon_rect.stretch_mode) != int(TextureRect.STRETCH_KEEP_ASPECT_CENTERED):
+		_safe_free(btn)
+		return Result.failure("营销类型按钮图标应完整等比居中显示，实际 stretch_mode=%s" % str(btn._icon_rect.stretch_mode))
+
+	_safe_free(btn)
+	return Result.success({})
+
+static func _case_marketing_icon_cache_contains_full_texture() -> Result:
+	var img := Image.create(80, 20, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	for y in range(20):
+		for x in range(8):
+			img.set_pixel(x, y, Color(1, 0, 0, 1))
+			img.set_pixel(79 - x, y, Color(0, 1, 0, 1))
+
+	var source_tex := ImageTexture.create_from_image(img)
+	var cache = MarketingPanelIconCacheClass.new()
+	cache._skin = FakeMarketingSkin.new(source_tex)
+	var scaled: Texture2D = cache.get_marketing_icon_texture("wide_test", Vector2i(40, 40))
+	if scaled == null:
+		return Result.failure("营销类型图标缓存应返回缩放后的贴图")
+
+	var out := scaled.get_image()
+	if out == null or out.is_empty():
+		return Result.failure("营销类型图标缩放结果应可读取像素")
+	if out.get_size() != Vector2i(40, 40):
+		return Result.failure("营销类型图标缩放结果尺寸应为 40x40，实际: %s" % str(out.get_size()))
+
+	var left_edge_alpha := out.get_pixel(0, 20).a
+	var right_edge_alpha := out.get_pixel(39, 20).a
+	if left_edge_alpha <= 0.1 or right_edge_alpha <= 0.1:
+		return Result.failure("营销类型图标应完整保留宽图左右边缘，实际 alpha=(%s, %s)" % [str(left_edge_alpha), str(right_edge_alpha)])
+
+	return Result.success({})
+
+static func _collect_label_texts(node: Node) -> Array[String]:
+	var out: Array[String] = []
+	if node is Label:
+		out.append(str((node as Label).text))
+	for child in node.get_children():
+		if child is Node:
+			out.append_array(_collect_label_texts(child))
+	return out
 
 static func _safe_free(node) -> void:
 	if node == null or not is_instance_valid(node):
