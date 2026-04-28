@@ -35,6 +35,7 @@ const UiLobbyistsPiecePrefixContractTestClass = preload("res://ui/scenes/tests/u
 const UiMapOptionalPieceIdsContractTestClass = preload("res://ui/scenes/tests/ui_map_optional_piece_ids_contract_test.gd")
 const UiMapOverlayPrivateStateContractTestClass = preload("res://ui/scenes/tests/ui_map_overlay_private_state_contract_test.gd")
 const MilestonePanelEffectTextContractTestClass = preload("res://ui/scenes/tests/milestone_panel_effect_text_contract_test.gd")
+const MilestoneFullScreenViewCardStateTestClass = preload("res://ui/scenes/tests/milestone_full_screen_view_card_state_test.gd")
 const UiModuleSelectorHardcodedModuleIdsContractTestClass = preload("res://ui/scenes/tests/ui_module_selector_hardcoded_module_ids_contract_test.gd")
 const UiBasePiecesLogoHardRefContractTestClass = preload("res://ui/scenes/tests/ui_base_pieces_logo_hard_ref_contract_test.gd")
 const UiModulesBaseDirContractTestClass = preload("res://ui/scenes/tests/ui_modules_base_dir_contract_test.gd")

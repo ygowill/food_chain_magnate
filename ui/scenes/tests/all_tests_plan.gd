@@ -179,6 +179,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.MilestonePanelEffectTextContractTestClass.run(),
 		},
 		{
+			"name": "MilestoneFullScreenViewCardStateTest",
+			"fn": func() -> Result: return await TestRefs.MilestoneFullScreenViewCardStateTestClass.run(),
+		},
+		{
 			"name": "UiModuleSelectorHardcodedModuleIdsContractTest",
 			"fn": func() -> Result: return TestRefs.UiModuleSelectorHardcodedModuleIdsContractTestClass.run(),
 		},
