@@ -82,6 +82,21 @@ static func run() -> Result:
 		_clear_event_bus_history()
 		return Result.failure("GameOverPanel should be visible when phase=GameOver (even if timeline is read-only)")
 
+	if not end_panels.game_over_panel.has_signal("closed_requested"):
+		scene.free()
+		_clear_event_bus_history()
+		return Result.failure("GameOverPanel 缺少关闭信号")
+	end_panels.game_over_panel.emit_signal("closed_requested")
+	if bool(end_panels.game_over_panel.visible):
+		scene.free()
+		_clear_event_bus_history()
+		return Result.failure("关闭结算面板后应隐藏 GameOverPanel")
+	end_panels.sync(state)
+	if bool(end_panels.game_over_panel.visible):
+		scene.free()
+		_clear_event_bus_history()
+		return Result.failure("关闭结算面板后，同一 GameOver 状态不应被 sync 重新弹出")
+
 	scene.free()
 	_clear_event_bus_history()
 	return Result.success()

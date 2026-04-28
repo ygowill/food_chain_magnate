@@ -92,6 +92,7 @@ func on_menu_pressed() -> void:
 		var can_open_val = _can_open_menu.call()
 		if can_open_val is bool and not bool(can_open_val):
 			return
+	_sync_quit_to_menu_button_text()
 	if is_instance_valid(_menu_debug_controller) and _menu_debug_controller.has_method("open_menu"):
 		_menu_debug_controller.call("open_menu")
 	elif is_instance_valid(_menu_dialog):
@@ -149,21 +150,53 @@ func on_replay_pressed() -> void:
 
 func on_quit_to_menu_pressed() -> void:
 	on_menu_dialog_close_requested()
+	var title := "返回主菜单"
 	var message := "确定要返回主菜单吗？\n未保存的进度将丢失。"
 	var confirm_text := "确认"
-	if is_instance_valid(_menu_debug_controller) and _menu_debug_controller.has_method("will_forfeit_online_match_on_quit"):
+	if _is_online_game_over_return_to_lobby():
+		title = "返回房间列表"
+		message = "游戏已结束，确定要离开当前对局并返回房间列表吗？"
+		confirm_text = "返回房间列表"
+	elif _is_game_over():
+		message = "游戏已结束，确定要返回主菜单吗？"
+		confirm_text = "返回主菜单"
+	elif is_instance_valid(_menu_debug_controller) and _menu_debug_controller.has_method("will_forfeit_online_match_on_quit"):
 		var will_forfeit_val = _menu_debug_controller.call("will_forfeit_online_match_on_quit")
 		if will_forfeit_val is bool and bool(will_forfeit_val):
 			message = "确定要返回主菜单吗？\n这将会认输并退出当前联机对局。"
 			confirm_text = "认输并退出"
 	show_confirm(
-		"返回主菜单",
+		title,
 		message,
 		Callable(self, "_confirm_quit_to_menu"),
 		Callable(self, "_cancel_quit_to_menu"),
 		confirm_text,
 		"取消"
 	)
+
+func _sync_quit_to_menu_button_text() -> void:
+	if not is_instance_valid(_menu_dialog):
+		return
+	var quit_button = _menu_dialog.get_node_or_null("VBoxContainer/QuitToMenuButton")
+	if quit_button == null or not (quit_button is Button):
+		return
+	(quit_button as Button).text = "返回房间列表" if _is_online_game_over_return_to_lobby() else "返回主菜单"
+
+func _is_online_game_over_return_to_lobby() -> bool:
+	if not is_instance_valid(_menu_debug_controller):
+		return false
+	if not _menu_debug_controller.has_method("is_online_game_over_return_to_lobby"):
+		return false
+	var value = _menu_debug_controller.call("is_online_game_over_return_to_lobby")
+	return value is bool and bool(value)
+
+func _is_game_over() -> bool:
+	if not is_instance_valid(_menu_debug_controller):
+		return false
+	if not _menu_debug_controller.has_method("is_game_over"):
+		return false
+	var value = _menu_debug_controller.call("is_game_over")
+	return value is bool and bool(value)
 
 func show_confirm(title: String, message: String, on_confirm: Callable, on_cancel: Callable = Callable(), confirm_text: String = "确认", cancel_text: String = "取消") -> void:
 	if _confirm_dialog_scene == null:
@@ -219,6 +252,7 @@ func _confirm_quit_to_menu() -> void:
 		SceneManager.goto_main_menu()
 
 func _cancel_quit_to_menu() -> void:
+	_sync_quit_to_menu_button_text()
 	if is_instance_valid(_menu_debug_controller) and _menu_debug_controller.has_method("open_menu"):
 		_menu_debug_controller.call("open_menu")
 	elif is_instance_valid(_menu_dialog):

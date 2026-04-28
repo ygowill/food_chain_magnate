@@ -30,6 +30,25 @@ static func run() -> Result:
 		_cleanup(panel)
 		return Result.failure("ReturnButton 文案未更新，实际: %s" % str((btn as Button).text))
 
+	var close_btn = panel.get_node_or_null("CenterContainer/Panel/MarginContainer/VBoxContainer/ButtonRow/CloseButton")
+	if close_btn == null or not (close_btn is Button):
+		_cleanup(panel)
+		return Result.failure("CloseButton 缺失")
+	if str((close_btn as Button).text) != "继续查看":
+		_cleanup(panel)
+		return Result.failure("CloseButton 文案错误，实际: %s" % str((close_btn as Button).text))
+	if not panel.has_signal("closed_requested"):
+		_cleanup(panel)
+		return Result.failure("GameOverPanel 缺少 closed_requested 信号")
+	var closed_events: Array[String] = []
+	panel.closed_requested.connect(func() -> void:
+		closed_events.append("closed")
+	)
+	(close_btn as Button).emit_signal("pressed")
+	if closed_events.size() != 1:
+		_cleanup(panel)
+		return Result.failure("点击 CloseButton 应发出 closed_requested")
+
 	_cleanup(panel)
 	return Result.success({})
 

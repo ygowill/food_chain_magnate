@@ -10,6 +10,7 @@ const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 signal return_to_menu_requested()
 signal play_again_requested()
 signal save_replay_requested()
+signal closed_requested()
 
 @onready var title_label: Label = $CenterContainer/Panel/MarginContainer/VBoxContainer/TitleLabel
 @onready var rankings_container: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBoxContainer/RankingsContainer
@@ -17,6 +18,7 @@ signal save_replay_requested()
 @onready var return_btn: Button = $CenterContainer/Panel/MarginContainer/VBoxContainer/ButtonRow/ReturnButton
 @onready var play_again_btn: Button = $CenterContainer/Panel/MarginContainer/VBoxContainer/ButtonRow/PlayAgainButton
 @onready var save_replay_btn: Button = $CenterContainer/Panel/MarginContainer/VBoxContainer/ButtonRow/SaveReplayButton
+@onready var close_btn: Button = $CenterContainer/Panel/MarginContainer/VBoxContainer/ButtonRow/CloseButton
 
 var _final_state: GameState = null
 var _player_rankings: Array[Dictionary] = []
@@ -37,11 +39,14 @@ func _ready() -> void:
 		play_again_btn.pressed.connect(_on_play_again_pressed)
 	if save_replay_btn != null:
 		save_replay_btn.pressed.connect(_on_save_replay_pressed)
+	if close_btn != null:
+		close_btn.pressed.connect(_on_close_pressed)
 
 	# 应用 Diner Poster 风格
 	UiStylesClass.apply_dialog_surface($CenterContainer/Panel)
 	UiStylesClass.apply_button_primary(play_again_btn)
 	UiStylesClass.apply_button_secondary(save_replay_btn)
+	UiStylesClass.apply_button_secondary(close_btn)
 	UiStylesClass.apply_button_secondary(return_btn)
 
 	if _pending_final_state_refresh:
@@ -247,6 +252,9 @@ func _on_play_again_pressed() -> void:
 
 func _on_save_replay_pressed() -> void:
 	save_replay_requested.emit()
+
+func _on_close_pressed() -> void:
+	closed_requested.emit()
 
 func _ensure_skin() -> void:
 	if _final_state == null:

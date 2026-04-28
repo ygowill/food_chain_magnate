@@ -30,6 +30,7 @@ var bank_break_panel = null
 
 var _game_over_replay_save_path: String = ""
 var _online_game_over_leave_pending: bool = false
+var _game_over_panel_dismissed: bool = false
 
 func _init(
 	scene,
@@ -51,6 +52,7 @@ func _init(
 func dispose() -> void:
 	_disconnect_online_game_over_leave_signals()
 	_online_game_over_leave_pending = false
+	_game_over_panel_dismissed = false
 	_deps = {}
 
 func _get_net_client():
@@ -84,6 +86,9 @@ func reset_bank_break_tracking(state: GameState) -> void:
 
 func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	_sync_payday_panel(state, force_full_refresh)
+	var is_game_over_state := state != null and str(state.phase) == DefsClass.PHASE_GAME_OVER
+	if not is_game_over_state:
+		_game_over_panel_dismissed = false
 
 	var suppress_game_over_modal := false
 	if _scene != null and _scene.has_method("should_suppress_game_over_modal"):
@@ -118,7 +123,7 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 			bank_break_panel.visible = false
 		# 例外：手动回放导致的“只读时间线”下，若真实对局已到 GameOver，
 		# 仍应允许展示 GameOver 面板（提供返回主菜单/再来一局入口），避免软锁。
-		if not suppress_game_over_modal and not is_replay_mode and state != null and str(state.phase) == DefsClass.PHASE_GAME_OVER:
+		if not suppress_game_over_modal and not is_replay_mode and is_game_over_state and not _game_over_panel_dismissed:
 			_show_game_over()
 		elif is_instance_valid(game_over_panel):
 			game_over_panel.visible = false
@@ -130,12 +135,15 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 		reset_bank_break_tracking(state)
 		if is_instance_valid(bank_break_panel):
 			bank_break_panel.visible = false
-		if is_instance_valid(game_over_panel) and state != null and state.phase != DefsClass.PHASE_GAME_OVER:
+		if is_instance_valid(game_over_panel) and not is_game_over_state:
 			game_over_panel.visible = false
 
 	_check_bank_break(state)
-	if state != null and state.phase == DefsClass.PHASE_GAME_OVER:
+	if is_game_over_state:
 		if suppress_game_over_modal:
+			if is_instance_valid(game_over_panel):
+				game_over_panel.visible = false
+		elif _game_over_panel_dismissed:
 			if is_instance_valid(game_over_panel):
 				game_over_panel.visible = false
 		else:
@@ -373,6 +381,8 @@ func _show_game_over() -> void:
 		game_over_panel.return_to_menu_requested.connect(_on_game_over_return)
 		game_over_panel.play_again_requested.connect(_on_game_over_play_again)
 		game_over_panel.save_replay_requested.connect(_on_game_over_save_replay)
+		if game_over_panel.has_signal("closed_requested"):
+			game_over_panel.closed_requested.connect(_on_game_over_closed)
 		_scene.add_child(game_over_panel)
 
 	if game_over_panel.has_method("set_final_state"):
@@ -447,6 +457,13 @@ func _on_game_over_return() -> void:
 	var scene_manager = _get_scene_manager()
 	if scene_manager != null and scene_manager.has_method("goto_main_menu"):
 		scene_manager.goto_main_menu()
+
+func _on_game_over_closed() -> void:
+	_game_over_panel_dismissed = true
+	if is_instance_valid(game_over_panel):
+		game_over_panel.visible = false
+	if _refresh_ui.is_valid():
+		_refresh_ui.call()
 
 func _begin_online_game_over_leave_to_lobby() -> void:
 	if _online_game_over_leave_pending:
