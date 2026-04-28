@@ -3,6 +3,7 @@
 class_name GameMenuDebugController
 extends RefCounted
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ONLINE_FORFEIT_QUIT_TIMEOUT_SEC := 4.0
 
 var _scene = null
@@ -11,6 +12,7 @@ var _deps: Dictionary = {}
 var _online_quit_pending: bool = false
 var _online_quit_request_id: String = ""
 var _online_quit_ticket: int = 0
+var _online_game_over_leave_pending: bool = false
 
 func _init(scene, menu_dialog, deps: Dictionary = {}) -> void:
 	_scene = scene
@@ -19,8 +21,10 @@ func _init(scene, menu_dialog, deps: Dictionary = {}) -> void:
 
 func dispose() -> void:
 	_disconnect_online_quit_signals()
+	_disconnect_online_game_over_leave_signals()
 	_online_quit_pending = false
 	_online_quit_request_id = ""
+	_online_game_over_leave_pending = false
 
 func open_menu() -> void:
 	GameLog.info("Game", "打开游戏菜单")
@@ -84,7 +88,10 @@ static func cleanup_online_state_before_quit(net_client_override = null) -> void
 		NetContext.reset()
 
 func quit_to_menu() -> void:
-	GameLog.info("Game", "返回主菜单")
+	GameLog.info("Game", "返回房间列表" if _is_online_game_over_return_to_lobby() else "返回主菜单")
+	if _is_online_game_over_return_to_lobby():
+		_begin_online_game_over_leave_to_lobby()
+		return
 	if _should_forfeit_online_match_before_quit():
 		_begin_online_forfeit_quit_to_menu()
 		return
@@ -93,8 +100,16 @@ func quit_to_menu() -> void:
 func will_forfeit_online_match_on_quit() -> bool:
 	return _should_forfeit_online_match_before_quit()
 
+func is_game_over() -> bool:
+	return _is_game_over()
+
+func is_online_game_over_return_to_lobby() -> bool:
+	return _is_online_game_over_return_to_lobby()
+
 func _should_forfeit_online_match_before_quit() -> bool:
-	if _online_quit_pending:
+	if _online_quit_pending or _online_game_over_leave_pending:
+		return false
+	if _is_game_over():
 		return false
 	if NetContext == null or int(NetContext.mode) != int(NetContext.Mode.ONLINE_CLIENT):
 		return false
@@ -107,6 +122,21 @@ func _should_forfeit_online_match_before_quit() -> bool:
 	if net == null or not net.has_method("is_online_client_connected"):
 		return false
 	return bool(net.is_online_client_connected())
+
+func _is_game_over() -> bool:
+	if _scene == null or not (_scene is Object):
+		return false
+	var scene_obj: Object = _scene
+	var engine = scene_obj.get("game_engine")
+	if engine == null or not engine.has_method("get_state"):
+		return false
+	var state = engine.get_state()
+	if state == null:
+		return false
+	return str(state.phase) == DefsClass.PHASE_GAME_OVER
+
+func _is_online_game_over_return_to_lobby() -> bool:
+	return NetContext != null and int(NetContext.mode) == int(NetContext.Mode.ONLINE_CLIENT) and _is_game_over()
 
 func _begin_online_forfeit_quit_to_menu() -> void:
 	var net = _get_net_client()
@@ -139,11 +169,11 @@ func _connect_online_quit_signals() -> void:
 	var cb_room_state := Callable(self, "_on_online_quit_room_state_updated")
 	var cb_rejected := Callable(self, "_on_online_quit_request_rejected")
 	var cb_disconnected := Callable(self, "_on_online_quit_disconnected")
-	if not net.room_state_updated.is_connected(cb_room_state):
+	if net.has_signal("room_state_updated") and not net.room_state_updated.is_connected(cb_room_state):
 		net.room_state_updated.connect(cb_room_state)
-	if not net.request_rejected.is_connected(cb_rejected):
+	if net.has_signal("request_rejected") and not net.request_rejected.is_connected(cb_rejected):
 		net.request_rejected.connect(cb_rejected)
-	if not net.disconnected.is_connected(cb_disconnected):
+	if net.has_signal("disconnected") and not net.disconnected.is_connected(cb_disconnected):
 		net.disconnected.connect(cb_disconnected)
 
 func _disconnect_online_quit_signals() -> void:
@@ -153,11 +183,11 @@ func _disconnect_online_quit_signals() -> void:
 	var cb_room_state := Callable(self, "_on_online_quit_room_state_updated")
 	var cb_rejected := Callable(self, "_on_online_quit_request_rejected")
 	var cb_disconnected := Callable(self, "_on_online_quit_disconnected")
-	if net.room_state_updated.is_connected(cb_room_state):
+	if net.has_signal("room_state_updated") and net.room_state_updated.is_connected(cb_room_state):
 		net.room_state_updated.disconnect(cb_room_state)
-	if net.request_rejected.is_connected(cb_rejected):
+	if net.has_signal("request_rejected") and net.request_rejected.is_connected(cb_rejected):
 		net.request_rejected.disconnect(cb_rejected)
-	if net.disconnected.is_connected(cb_disconnected):
+	if net.has_signal("disconnected") and net.disconnected.is_connected(cb_disconnected):
 		net.disconnected.disconnect(cb_disconnected)
 
 func _schedule_online_quit_timeout(ticket: int) -> void:
@@ -216,6 +246,60 @@ func _fail_online_forfeit_quit_to_menu(reason: String) -> void:
 	GameLog.warn("Game", "联机主动退出回退为本地清理: %s" % str(reason))
 	_finalize_quit_to_menu()
 
+func _begin_online_game_over_leave_to_lobby() -> void:
+	if _online_game_over_leave_pending:
+		return
+	_online_game_over_leave_pending = true
+	close_menu()
+	_connect_online_game_over_leave_signals()
+	_show_loading("正在返回房间列表...")
+	var net = _get_net_client()
+	if net != null and net.has_method("request_leave_room"):
+		net.request_leave_room()
+		if _online_game_over_leave_pending and _is_online_game_over_room_cleared(NetContext.room_state if NetContext != null else {}):
+			_complete_online_game_over_leave_to_lobby()
+		return
+	_complete_online_game_over_leave_to_lobby()
+
+func _connect_online_game_over_leave_signals() -> void:
+	var net = _get_net_client()
+	if net == null or not net.has_signal("room_state_updated"):
+		return
+	var cb_room_state := Callable(self, "_on_online_game_over_leave_room_state_updated")
+	if not net.room_state_updated.is_connected(cb_room_state):
+		net.room_state_updated.connect(cb_room_state)
+
+func _disconnect_online_game_over_leave_signals() -> void:
+	var net = _get_net_client()
+	if net == null or not net.has_signal("room_state_updated"):
+		return
+	var cb_room_state := Callable(self, "_on_online_game_over_leave_room_state_updated")
+	if net.room_state_updated.is_connected(cb_room_state):
+		net.room_state_updated.disconnect(cb_room_state)
+
+func _on_online_game_over_leave_room_state_updated(room_state: Dictionary) -> void:
+	if not _online_game_over_leave_pending:
+		return
+	if not _is_online_game_over_room_cleared(room_state):
+		return
+	_complete_online_game_over_leave_to_lobby()
+
+func _is_online_game_over_room_cleared(room_state: Dictionary) -> bool:
+	return str(room_state.get("room_code", "")).strip_edges().is_empty()
+
+func _complete_online_game_over_leave_to_lobby() -> void:
+	if not _online_game_over_leave_pending:
+		return
+	_online_game_over_leave_pending = false
+	_disconnect_online_game_over_leave_signals()
+	var globals = _get_globals()
+	if globals != null and globals.has_method("reset_game_config"):
+		globals.reset_game_config()
+	_hide_loading()
+	var scene_manager = _get_scene_manager()
+	if scene_manager != null and scene_manager.has_method("goto_online_lobby"):
+		scene_manager.goto_online_lobby()
+
 func _show_loading(message: String) -> void:
 	var scene_manager = _get_scene_manager()
 	if scene_manager != null and scene_manager.has_method("show_loading"):
@@ -228,8 +312,10 @@ func _hide_loading() -> void:
 
 func _finalize_quit_to_menu() -> void:
 	_disconnect_online_quit_signals()
+	_disconnect_online_game_over_leave_signals()
 	_online_quit_pending = false
 	_online_quit_request_id = ""
+	_online_game_over_leave_pending = false
 	_hide_loading()
 	cleanup_online_state_before_quit(_get_net_client())
 	var globals = _get_globals()

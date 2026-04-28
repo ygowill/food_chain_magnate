@@ -3,6 +3,8 @@ class_name GameOverOnlineReturnFlowTest
 extends RefCounted
 
 const EndPanelsClass = preload("res://ui/scenes/game/panel/end_panels.gd")
+const MenuDebugControllerClass = preload("res://ui/scenes/game/menu/debug_controller.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run() -> Result:
 	if NetContext == null:
@@ -72,6 +74,66 @@ static func run() -> Result:
 		_restore(prev_mode, prev_local_player_id, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state)
 		return Result.failure("完成跳转后应解除 room_state_updated 监听")
 
+	NetContext.room_state = {
+		"room_code": "FLOW02",
+		"status": "InGame",
+	}
+	var menu_state := GameState.new()
+	menu_state.phase = DefsClass.PHASE_GAME_OVER
+	var mock_game_scene := _MockGameScene.new(menu_state)
+	var mock_menu_net := _MockNetClient.new()
+	var mock_menu_scene_manager := _MockSceneManager.new()
+	var mock_menu_globals := _MockGlobals.new()
+	var menu_controller = MenuDebugControllerClass.new(mock_game_scene, null, {
+		"net_client": mock_menu_net,
+		"scene_manager": mock_menu_scene_manager,
+		"globals": mock_menu_globals,
+	})
+
+	if not menu_controller.is_online_game_over_return_to_lobby():
+		menu_controller.dispose()
+		_restore(prev_mode, prev_local_player_id, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state)
+		return Result.failure("GameOver 后右上角菜单应识别返回目标为房间列表")
+	if menu_controller.will_forfeit_online_match_on_quit():
+		menu_controller.dispose()
+		_restore(prev_mode, prev_local_player_id, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state)
+		return Result.failure("GameOver 后右上角菜单返回不应触发认输流程")
+
+	menu_controller.quit_to_menu()
+	if mock_menu_net.request_leave_room_calls != 1:
+		menu_controller.dispose()
+		_restore(prev_mode, prev_local_player_id, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state)
+		return Result.failure("GameOver 后右上角菜单应请求一次 leave_room")
+	if mock_menu_scene_manager.goto_online_lobby_count != 0:
+		menu_controller.dispose()
+		_restore(prev_mode, prev_local_player_id, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state)
+		return Result.failure("右上角菜单 leave_room 尚未确认前不应立即跳转联机大厅")
+	if not mock_menu_net.room_state_updated.is_connected(Callable(menu_controller, "_on_online_game_over_leave_room_state_updated")):
+		menu_controller.dispose()
+		_restore(prev_mode, prev_local_player_id, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state)
+		return Result.failure("右上角菜单 GameOver 返回后应监听 room_state_updated 等待离房确认")
+
+	mock_menu_net.emit_signal("room_state_updated", {"room_code": "FLOW02", "status": "InGame"})
+	if mock_menu_scene_manager.goto_online_lobby_count != 0:
+		menu_controller.dispose()
+		_restore(prev_mode, prev_local_player_id, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state)
+		return Result.failure("右上角菜单收到非空 room_state 时不应提前跳转联机大厅")
+
+	mock_menu_net.emit_signal("room_state_updated", {})
+	if mock_menu_scene_manager.goto_online_lobby_count != 1:
+		menu_controller.dispose()
+		_restore(prev_mode, prev_local_player_id, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state)
+		return Result.failure("右上角菜单收到空 room_state 后应跳转联机大厅")
+	if mock_menu_globals.reset_game_config_calls != 1:
+		menu_controller.dispose()
+		_restore(prev_mode, prev_local_player_id, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state)
+		return Result.failure("右上角菜单返回大厅前应重置游戏配置")
+	if mock_menu_net.room_state_updated.is_connected(Callable(menu_controller, "_on_online_game_over_leave_room_state_updated")):
+		menu_controller.dispose()
+		_restore(prev_mode, prev_local_player_id, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state)
+		return Result.failure("右上角菜单完成跳转后应解除 room_state_updated 监听")
+
+	menu_controller.dispose()
 	panels.dispose()
 	_restore(prev_mode, prev_local_player_id, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state)
 	return Result.success()
@@ -120,6 +182,25 @@ class _MockGlobals:
 
 	func reset_game_config() -> void:
 		reset_game_config_calls += 1
+
+class _MockGameScene:
+	extends RefCounted
+
+	var game_engine = null
+
+	func _init(state: GameState) -> void:
+		game_engine = _MockGameEngine.new(state)
+
+class _MockGameEngine:
+	extends RefCounted
+
+	var _state: GameState = null
+
+	func _init(state: GameState) -> void:
+		_state = state
+
+	func get_state() -> GameState:
+		return _state
 
 class _MockNetClient:
 	extends RefCounted
