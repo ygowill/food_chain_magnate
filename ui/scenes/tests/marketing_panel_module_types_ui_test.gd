@@ -4,6 +4,7 @@ class_name MarketingPanelModuleTypesUiTest
 extends RefCounted
 
 const MarketingPanelClass = preload("res://ui/components/marketing_panel/marketing_panel.gd")
+const MarketingPanelScene = preload("res://ui/components/marketing_panel/marketing_panel.tscn")
 const EmployeePickerClass = preload("res://ui/components/employee_picker/employee_picker.gd")
 
 static func run() -> Result:
@@ -19,6 +20,9 @@ static func run() -> Result:
 	var r4 := _case_single_multitype_marketer_renders_once_and_filters_types()
 	if not r4.ok:
 		return r4
+	var r5 := _case_scene_flow_containers_expand_horizontally()
+	if not r5.ok:
+		return r5
 	return Result.success({})
 
 static func _case_module_type_visible() -> Result:
@@ -166,6 +170,46 @@ static func _case_single_multitype_marketer_renders_once_and_filters_types() -> 
 	if int(panel._selected_staff_id) != 31:
 		_safe_free(panel)
 		return Result.failure("选择营销类型后应保留先选的营销员 staff_id=31，实际: %s" % str(panel._selected_staff_id))
+
+	_safe_free(panel)
+	return Result.success({})
+
+static func _case_scene_flow_containers_expand_horizontally() -> Result:
+	var panel: Node = MarketingPanelScene.instantiate()
+	if panel == null or not is_instance_valid(panel):
+		return Result.failure("MarketingPanel scene instantiate failed")
+	if not (panel is Control):
+		_safe_free(panel)
+		return Result.failure("MarketingPanel scene root should be Control")
+	var root: Control = panel
+	if root.custom_minimum_size.x < 450.0:
+		_safe_free(panel)
+		return Result.failure("MarketingPanel 应提供稳定横向宽度，实际 custom_minimum_size=%s" % str(root.custom_minimum_size))
+
+	var paths: Array[String] = [
+		"MarginContainer/VBoxContainer",
+		"MarginContainer/VBoxContainer/ScrollContainer",
+		"MarginContainer/VBoxContainer/ScrollContainer/ContentVBox",
+		"MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/MarketerSection",
+		"MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/MarketerSection/MarketerOption",
+		"MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TypeSection",
+		"MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/TypeSection/TypeContainer",
+		"MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/BoardSection",
+		"MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/BoardSection/BoardFlow",
+		"MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ProductSection",
+		"MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/ProductSection/ProductFlow",
+		"MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/DurationSection",
+		"MarginContainer/VBoxContainer/ScrollContainer/ContentVBox/DurationSection/DurationFlow",
+	]
+	for path in paths:
+		var node: Node = panel.get_node_or_null(path)
+		if node == null or not (node is Control):
+			_safe_free(panel)
+			return Result.failure("MarketingPanel 横向布局节点缺失: %s" % path)
+		var control: Control = node
+		if int(control.size_flags_horizontal) != int(Control.SIZE_EXPAND_FILL):
+			_safe_free(panel)
+			return Result.failure("MarketingPanel %s 应横向填充以支持 HFlow 横排换行，实际: %s" % [path, str(control.size_flags_horizontal)])
 
 	_safe_free(panel)
 	return Result.success({})
