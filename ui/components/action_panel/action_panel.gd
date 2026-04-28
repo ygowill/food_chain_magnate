@@ -537,7 +537,7 @@ func _get_rollback_last_disabled_reason() -> String:
 	if int(cmd.actor) != local_pid:
 		return "上一条不是你的操作"
 	if str(cmd.action_id) == ActionIdsClass.END_TURN or str(cmd.action_id) == ActionIdsClass.SKIP:
-		return "已结束回合，请使用提议回滚"
+		return "已结束回合，请使用提议回退"
 	return ""
 
 func _is_online_room_host() -> bool:
@@ -604,19 +604,20 @@ func get_flow_controls_config() -> Dictionary:
 		},
 		"rollback_last": {
 			"visible": rollback_last_visible,
-			"text": "回退上一步",
+			"text": "回退一步",
 			"enabled": rollback_last_enabled,
 			"disabled_reason": rollback_last_reason,
 			"action_id": "rollback_last_command",
 		},
 		"rollback_proposal": {
 			"visible": rollback_proposal_visible,
-			"text": "提议回滚",
+			"text": "提议回退",
 			"enabled": rollback_proposal_enabled,
 			"disabled_reason": rollback_proposal_reason,
 			"action_id": "rollback_proposal",
 		},
 		"rewind": {
+			"text": "回退到回合开始",
 			"enabled": rewind_enabled,
 		},
 	}

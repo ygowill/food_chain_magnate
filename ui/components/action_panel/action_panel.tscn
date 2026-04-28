@@ -297,5 +297,5 @@ theme_override_constants/separation = 8
 custom_minimum_size = Vector2(0, 34)
 layout_mode = 2
 size_flags_horizontal = 3
-text = "回退到当前玩家回合开始"
+text = "回退到回合开始"
 tooltip_text = "撤销当前玩家回合内操作并回到回合开始"

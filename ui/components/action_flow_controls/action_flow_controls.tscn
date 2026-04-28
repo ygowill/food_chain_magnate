@@ -22,25 +22,31 @@ layout_mode = 2
 size_flags_horizontal = 3
 text = "跳过"
 
-[node name="RollbackLastButton" type="Button" parent="."]
+[node name="RollbackRow" type="HBoxContainer" parent="."]
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="RollbackLastButton" type="Button" parent="RollbackRow"]
 visible = false
 custom_minimum_size = Vector2(0, 34)
 layout_mode = 2
 size_flags_horizontal = 3
-text = "回退上一步"
+text = "回退一步"
 tooltip_text = "撤销你刚刚执行的上一条操作"
 
-[node name="RollbackProposalButton" type="Button" parent="."]
+[node name="RewindButton" type="Button" parent="RollbackRow"]
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "回退到回合开始"
+tooltip_text = "撤销当前玩家回合内操作并回到回合开始"
+
+[node name="RollbackProposalButton" type="Button" parent="RollbackRow"]
 visible = false
 custom_minimum_size = Vector2(0, 34)
 layout_mode = 2
 size_flags_horizontal = 3
-text = "提议回滚"
+text = "提议回退"
 tooltip_text = "房主选择时间点并发起全员回滚投票"
-
-[node name="RewindButton" type="Button" parent="."]
-custom_minimum_size = Vector2(0, 34)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "回退到当前玩家回合开始"
-tooltip_text = "撤销当前玩家回合内操作并回到回合开始"

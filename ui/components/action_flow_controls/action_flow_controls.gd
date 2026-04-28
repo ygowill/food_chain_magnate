@@ -11,9 +11,10 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
 @onready var confirm_end_button: Button = $ConfirmEndButton
 @onready var skip_step_button: Button = $SkipStepButton
-@onready var rollback_last_button: Button = $RollbackLastButton
-@onready var rollback_proposal_button: Button = $RollbackProposalButton
-@onready var rewind_button: Button = $RewindButton
+@onready var rollback_row: HBoxContainer = $RollbackRow
+@onready var rollback_last_button: Button = $RollbackRow/RollbackLastButton
+@onready var rewind_button: Button = $RollbackRow/RewindButton
+@onready var rollback_proposal_button: Button = $RollbackRow/RollbackProposalButton
 
 var _confirm_end_disabled_reason: String = ""
 var _skip_step_disabled_reason: String = ""
@@ -81,6 +82,7 @@ func apply_flow_config(config: Dictionary) -> void:
 	var signature := _build_flow_config_signature(ce, ss, rb, rp, rw)
 	var controls_ready := is_instance_valid(confirm_end_button) \
 		and is_instance_valid(skip_step_button) \
+		and is_instance_valid(rollback_row) \
 		and is_instance_valid(rollback_last_button) \
 		and is_instance_valid(rollback_proposal_button) \
 		and is_instance_valid(rewind_button)
@@ -115,7 +117,7 @@ func apply_flow_config(config: Dictionary) -> void:
 
 	if is_instance_valid(rollback_last_button):
 		rollback_last_button.visible = bool(rb.get("visible", false))
-		rollback_last_button.text = str(rb.get("text", "回退上一步"))
+		rollback_last_button.text = str(rb.get("text", "回退一步"))
 		rollback_last_button.disabled = not bool(rb.get("enabled", true))
 		_rollback_last_action_id = str(rb.get("action_id", "rollback_last_command")).strip_edges()
 		if _rollback_last_action_id.is_empty():
@@ -128,7 +130,7 @@ func apply_flow_config(config: Dictionary) -> void:
 
 	if is_instance_valid(rollback_proposal_button):
 		rollback_proposal_button.visible = bool(rp.get("visible", false))
-		rollback_proposal_button.text = str(rp.get("text", "提议回滚"))
+		rollback_proposal_button.text = str(rp.get("text", "提议回退"))
 		rollback_proposal_button.disabled = not bool(rp.get("enabled", true))
 		_rollback_proposal_action_id = str(rp.get("action_id", "rollback_proposal")).strip_edges()
 		if _rollback_proposal_action_id.is_empty():
@@ -141,10 +143,20 @@ func apply_flow_config(config: Dictionary) -> void:
 
 	if is_instance_valid(rewind_button):
 		rewind_button.visible = bool(rw.get("visible", true))
+		rewind_button.text = str(rw.get("text", "回退到回合开始"))
 		rewind_button.disabled = not bool(rw.get("enabled", true))
 		_rewind_action_id = str(rw.get("action_id", "rewind_to_turn_start")).strip_edges()
 		if _rewind_action_id.is_empty():
 			_rewind_action_id = "rewind_to_turn_start"
+	if is_instance_valid(rollback_row):
+		var rollback_row_visible := false
+		if is_instance_valid(rollback_last_button):
+			rollback_row_visible = rollback_row_visible or bool(rollback_last_button.visible)
+		if is_instance_valid(rewind_button):
+			rollback_row_visible = rollback_row_visible or bool(rewind_button.visible)
+		if is_instance_valid(rollback_proposal_button):
+			rollback_row_visible = rollback_row_visible or bool(rollback_proposal_button.visible)
+		rollback_row.visible = rollback_row_visible
 	if controls_ready:
 		_last_flow_config_signature = signature
 		_has_applied_flow_config_signature = true
@@ -172,20 +184,21 @@ func _build_flow_config_signature(ce: Dictionary, ss: Dictionary, rb: Dictionary
 		},
 		"rollback_last": {
 			"visible": bool(rb.get("visible", false)),
-			"text": str(rb.get("text", "回退上一步")),
+			"text": str(rb.get("text", "回退一步")),
 			"enabled": bool(rb.get("enabled", true)),
 			"disabled_reason": rollback_reason,
 			"action_id": str(rb.get("action_id", "rollback_last_command")).strip_edges(),
 		},
 		"rollback_proposal": {
 			"visible": bool(rp.get("visible", false)),
-			"text": str(rp.get("text", "提议回滚")),
+			"text": str(rp.get("text", "提议回退")),
 			"enabled": bool(rp.get("enabled", true)),
 			"disabled_reason": proposal_reason,
 			"action_id": str(rp.get("action_id", "rollback_proposal")).strip_edges(),
 		},
 		"rewind": {
 			"visible": bool(rw.get("visible", true)),
+			"text": str(rw.get("text", "回退到回合开始")),
 			"enabled": bool(rw.get("enabled", true)),
 			"action_id": str(rw.get("action_id", "rewind_to_turn_start")).strip_edges(),
 		},
