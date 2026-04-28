@@ -113,14 +113,14 @@ func get_employee_tree_panel():
 func peek_employee_tree_panel():
 	return _employee_tree_panel
 
-func show_milestone_full_screen_view(state: GameState, map_skin) -> void:
+func show_milestone_full_screen_view(state: GameState, map_skin, viewer_player_id: int = -1) -> void:
 	if state == null:
 		return
 	_ensure_milestone_full_screen_view()
 	if not is_instance_valid(_milestone_full_screen_view):
 		return
 	if _milestone_full_screen_view.has_method("open_with_state"):
-		_milestone_full_screen_view.call("open_with_state", state, map_skin)
+		_milestone_full_screen_view.call("open_with_state", state, map_skin, viewer_player_id)
 
 	# 覆盖全屏（不使用居中弹窗布局）
 	if _scene != null and _milestone_full_screen_view is Control:

@@ -120,7 +120,7 @@ func show_milestone_panel() -> void:
 	if state == null:
 		return
 	if _views_controller != null:
-		_views_controller.show_milestone_full_screen_view(state, _get_current_map_skin())
+		_views_controller.show_milestone_full_screen_view(state, _get_current_map_skin(), _get_milestone_viewer_player_id(state))
 
 func show_reserve_area_panel() -> void:
 	if _scene == null:
@@ -183,6 +183,16 @@ func toggle_employee_tree() -> void:
 
 func get_view_player_id() -> int:
 	return _view_player_id
+
+func _get_milestone_viewer_player_id(state: GameState) -> int:
+	if state == null:
+		return -1
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		var local_pid := int(NetContext.local_player_id)
+		if local_pid >= 0 and local_pid < state.players.size():
+			return local_pid
+		return -1
+	return _get_effective_view_player_id(state, _view_player_id)
 
 func _get_effective_view_player_id(state: GameState, requested_view_id: int) -> int:
 	if state == null:

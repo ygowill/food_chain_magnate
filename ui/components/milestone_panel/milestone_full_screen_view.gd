@@ -1,6 +1,6 @@
 # 里程碑全屏视图（TopBar）
-# - 每行 3 列，居中展示全部里程碑卡片
-# - 展示已获得/未获得状态，并在卡片右下角显示获得者玩家餐厅 logo
+# - 响应式多列布局，居中展示全部里程碑卡片
+# - 展示已获得/可获得状态，并在卡片底部显示获得者玩家餐厅 logo
 # - ESC 关闭；关闭不改变左/右侧面板显示状态（仅隐藏自身）
 class_name MilestoneFullScreenView
 extends Control
@@ -21,8 +21,8 @@ const MilestonePanelClass = preload("res://ui/components/milestone_panel/milesto
 const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
-const MAX_COLUMNS := 5
-const CARD_MIN_WIDTH := 220
+const MAX_COLUMNS := 4
+const CARD_MIN_WIDTH := 300
 
 # 里程碑分类色板（与 left_panel_milestones_controller 保持一致）
 const PALETTE_PURPLE := Color(0.69, 0.57, 0.77, 1.0)
@@ -155,15 +155,15 @@ func set_skin(skin) -> void:
 	# 允许外部（例如 MapCanvas）注入已构建的 MapSkin，避免重复 build 导致卡顿。
 	_skin = skin
 
-func prime_with_state(state: GameState, skin_override = null) -> void:
+func prime_with_state(state: GameState, skin_override = null, viewer_player_id: int = -1) -> void:
 	# 进入对局后后台预热；不会阻塞首帧交互。
-	begin_background_build(state, skin_override)
+	begin_background_build(state, skin_override, viewer_player_id)
 
-func begin_background_build(state: GameState, skin_override = null) -> void:
+func begin_background_build(state: GameState, skin_override = null, viewer_player_id: int = -1) -> void:
 	if state == null:
 		return
 	_pending_state = state
-	_viewer_player_id = _resolve_viewer_player_id(state)
+	_viewer_player_id = _resolve_viewer_player_id(state, viewer_player_id)
 
 	if skin_override != null:
 		set_skin(skin_override)
@@ -202,10 +202,10 @@ func begin_background_build(state: GameState, skin_override = null) -> void:
 
 	call_deferred("_run_background_rebuild", milestone_ids, claimed_by, pool_counts, logo_textures, round_number, ids_key, sync_key)
 
-func sync_from_state(state: GameState, skin_override = null, force_rebuild: bool = false) -> void:
+func sync_from_state(state: GameState, skin_override = null, force_rebuild: bool = false, viewer_player_id: int = -1) -> void:
 	if state == null:
 		return
-	_viewer_player_id = _resolve_viewer_player_id(state)
+	_viewer_player_id = _resolve_viewer_player_id(state, viewer_player_id)
 
 	# 仅用于格式化少量文案（例如 CFO 加成百分比），不需要 deep duplicate；避免首次打开里程碑面板卡顿。
 	_rules = state.rules if (state.rules is Dictionary) else {}
@@ -238,10 +238,10 @@ func sync_from_state(state: GameState, skin_override = null, force_rebuild: bool
 
 	_update_from_state(state)
 
-func open_with_state(state: GameState, skin_override = null) -> void:
+func open_with_state(state: GameState, skin_override = null, viewer_player_id: int = -1) -> void:
 	_opened = true
 	visible = true
-	begin_background_build(state, skin_override)
+	begin_background_build(state, skin_override, viewer_player_id)
 
 func request_close() -> void:
 	if not visible:
@@ -273,13 +273,20 @@ func _ensure_formatter() -> void:
 	# 复用 MilestonePanel 的效果文案格式化逻辑；该实例不入树，仅作为 formatter 使用。
 	_formatter = MilestonePanelClass.new()
 
-func _resolve_viewer_player_id(state: GameState) -> int:
+func _resolve_viewer_player_id(state: GameState, requested_viewer_player_id: int = -1) -> int:
 	if state == null:
 		return -1
 	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
 		var pid := int(NetContext.local_player_id)
 		if pid >= 0 and pid < state.players.size():
 			return pid
+		return -1
+	var requested := int(requested_viewer_player_id)
+	if requested >= 0 and requested < state.players.size():
+		return requested
+	var current := int(state.get_current_player_id())
+	if current >= 0 and current < state.players.size():
+		return current
 	return -1
 
 func _ensure_skin_for_state(state: GameState) -> void:
@@ -407,7 +414,7 @@ func _compute_sync_key(state: GameState) -> String:
 			milestones_key = ",".join(ms_list)
 		players_parts.append("%s:%s" % [logo_str, milestones_key])
 
-	return "%s|%s|%s|%s" % [round_key, modules_key, pool_key, "|".join(players_parts)]
+	return "%s|%s|%s|viewer=%d|%s" % [round_key, modules_key, pool_key, _viewer_player_id, "|".join(players_parts)]
 
 func _rebuild_from_state(state: GameState) -> void:
 	if grid == null:
@@ -645,6 +652,7 @@ class MilestoneCard extends PanelContainer:
 	var _name_label: Label
 	var _desc_label: Label
 	var _status_label: Label
+	var _expires_label: Label
 	var _icons_row: HBoxContainer
 
 	func _ready() -> void:
@@ -697,7 +705,7 @@ class MilestoneCard extends PanelContainer:
 		_update_display()
 
 	func _build_ui() -> void:
-		custom_minimum_size = Vector2(220, 160)
+		custom_minimum_size = Vector2(300, 210)
 
 		# IMPORTANT: never mutate a theme-shared StyleBox (would affect unrelated UI).
 		_ensure_panel_style()
@@ -709,7 +717,7 @@ class MilestoneCard extends PanelContainer:
 
 		# --- 头部色彩条 ---
 		_header_panel = Panel.new()
-		_header_panel.custom_minimum_size = Vector2(0, 28)
+		_header_panel.custom_minimum_size = Vector2(0, 38)
 		_header_style = StyleBoxFlat.new()
 		_header_style.bg_color = accent_color
 		_header_style.corner_radius_top_left = 4
@@ -720,16 +728,17 @@ class MilestoneCard extends PanelContainer:
 		outer_vbox.add_child(_header_panel)
 
 		var header_margin := MarginContainer.new()
-		header_margin.add_theme_constant_override("margin_left", 8)
-		header_margin.add_theme_constant_override("margin_right", 8)
+		header_margin.add_theme_constant_override("margin_left", 12)
+		header_margin.add_theme_constant_override("margin_right", 12)
 		header_margin.add_theme_constant_override("margin_top", 0)
 		header_margin.add_theme_constant_override("margin_bottom", 0)
 		header_margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		_header_panel.add_child(header_margin)
 
 		_name_label = Label.new()
+		_name_label.name = "NameLabel"
 		_name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_name_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(13) if Globals != null else 13)
+		_name_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(16) if Globals != null else 16)
 		_name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		_name_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		# 头部文字颜色在 _update_header_text_color 中根据亮度设置
@@ -737,36 +746,60 @@ class MilestoneCard extends PanelContainer:
 
 		# --- 正文区域 ---
 		var body_margin := MarginContainer.new()
-		body_margin.add_theme_constant_override("margin_left", 10)
-		body_margin.add_theme_constant_override("margin_top", 8)
-		body_margin.add_theme_constant_override("margin_right", 10)
-		body_margin.add_theme_constant_override("margin_bottom", 8)
+		body_margin.add_theme_constant_override("margin_left", 14)
+		body_margin.add_theme_constant_override("margin_top", 12)
+		body_margin.add_theme_constant_override("margin_right", 14)
+		body_margin.add_theme_constant_override("margin_bottom", 12)
 		body_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		outer_vbox.add_child(body_margin)
 
 		var body_vbox := VBoxContainer.new()
-		body_vbox.add_theme_constant_override("separation", 4)
+		body_vbox.add_theme_constant_override("separation", 8)
 		body_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		body_margin.add_child(body_vbox)
 
 		_desc_label = Label.new()
+		_desc_label.name = "DescLabel"
 		_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_desc_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(11) if Globals != null else 11)
+		_desc_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(14) if Globals != null else 14)
 		_desc_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1.0))
-		_desc_label.max_lines_visible = 4
+		_desc_label.max_lines_visible = 5
 		_desc_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		_desc_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		body_vbox.add_child(_desc_label)
 
+		var footer_vbox := VBoxContainer.new()
+		footer_vbox.name = "FooterVBox"
+		footer_vbox.add_theme_constant_override("separation", 3)
+		body_vbox.add_child(footer_vbox)
+
+		var status_row := HBoxContainer.new()
+		status_row.name = "StatusRow"
+		status_row.add_theme_constant_override("separation", 8)
+		footer_vbox.add_child(status_row)
+
 		_status_label = Label.new()
-		_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_status_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(11) if Globals != null else 11)
-		body_vbox.add_child(_status_label)
+		_status_label.name = "StatusLabel"
+		_status_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+		_status_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(16) if Globals != null else 16)
+		_status_label.add_theme_constant_override("outline_size", 1)
+		_status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_status_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		status_row.add_child(_status_label)
 
 		_icons_row = HBoxContainer.new()
+		_icons_row.name = "OwnerLogoRow"
 		_icons_row.alignment = BoxContainer.ALIGNMENT_END
-		_icons_row.add_theme_constant_override("separation", 6)
-		body_vbox.add_child(_icons_row)
+		_icons_row.add_theme_constant_override("separation", 7)
+		_icons_row.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		status_row.add_child(_icons_row)
+
+		_expires_label = Label.new()
+		_expires_label.name = "ExpiresLabel"
+		_expires_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_expires_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(12) if Globals != null else 12)
+		_expires_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1.0))
+		footer_vbox.add_child(_expires_label)
 
 	func _update_header_text_color() -> void:
 		if _name_label == null:
@@ -839,16 +872,24 @@ class MilestoneCard extends PanelContainer:
 			CardStatus.CLAIMED:
 				status_text = "已获得"
 			_:
-				status_text = "不可获得"
+				if _viewer_player_id >= 0 and not _owners.is_empty() and not _owners.has(_viewer_player_id):
+					status_text = "他人已获得"
+				else:
+					status_text = "不可获得"
 
 		if _status_label != null:
-			_status_label.text = status_text + ("\n" + expires_text if not expires_text.is_empty() else "")
+			_status_label.text = status_text
 			var color := Color(0.5, 0.45, 0.35, 1.0)
 			if status == CardStatus.OBTAINABLE:
 				color = Color(0.83, 0.63, 0.23, 1.0)
 			elif status == CardStatus.CLAIMED:
 				color = Color(0.28, 0.55, 0.22, 1.0)
 			_status_label.add_theme_color_override("font_color", color)
+			_status_label.add_theme_color_override("font_outline_color", color)
+
+		if _expires_label != null:
+			_expires_label.text = expires_text
+			_expires_label.visible = not expires_text.is_empty()
 
 		if _icons_row != null:
 			for child in _icons_row.get_children():
@@ -860,12 +901,13 @@ class MilestoneCard extends PanelContainer:
 				var tex: Texture2D = tex_val if tex_val is Texture2D else null
 
 				var icon := TextureRect.new()
-				icon.custom_minimum_size = Vector2(24, 24)
+				icon.custom_minimum_size = Vector2(32, 32)
 				icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 				icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 				icon.texture = tex
 				icon.tooltip_text = Globals.get_player_name(pid) if Globals != null else ("玩家%d" % (pid + 1))
 				_icons_row.add_child(icon)
+			_icons_row.visible = not _owners.is_empty()
 
 		_update_style(status)
 
