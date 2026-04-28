@@ -78,13 +78,6 @@ static func build_game_ui_tour_steps(targets: Dictionary) -> Array:
 	_append_step_if_target_available(
 		steps,
 		targets,
-		"left_activity_feed",
-		"底部活动流会滚动显示最近事件",
-		"这里会保留最近几条关键日志，方便你快速回忆刚刚发生了什么。想看完整记录时，再去打开右侧日志按钮。"
-	)
-	_append_step_if_target_available(
-		steps,
-		targets,
 		"map_view",
 		"地图是你的主战场",
 		"选地、送货、营销和员工部署，都会围绕这块地图展开。"
@@ -108,7 +101,7 @@ static func build_game_ui_tour_steps(targets: Dictionary) -> Array:
 		targets,
 		"toolbar_log_button",
 		"日志按钮可以展开完整过程",
-		"如果你想确认某一步到底发生了什么，优先打开这里。它比左侧的简短活动流更完整，也更适合回看结算细节。"
+		"如果你想确认某一步到底发生了什么，优先打开这里。它适合回看完整结算细节。"
 	)
 	_append_step_if_target_available(
 		steps,

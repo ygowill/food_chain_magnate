@@ -173,15 +173,6 @@ func apply_ui_layout() -> void:
 		_left_panel.visible = true
 		if is_instance_valid(_game_log_panel):
 			_game_log_panel.visible = false
-			if _left_panel.has_method("bind_game_log_panel"):
-				_left_panel.call("bind_game_log_panel", _game_log_panel)
-			elif _left_panel.has_method("attach_game_log_panel"):
-				_left_panel.call("attach_game_log_panel", _game_log_panel)
-		if _scene != null and is_instance_valid(_scene) and _left_panel.has_signal("logs_requested"):
-			var sig := Signal(_left_panel, &"logs_requested")
-			var cb := Callable(_scene, "_on_left_panel_logs_requested")
-			if not sig.is_connected(cb):
-				sig.connect(cb)
 
 	if is_instance_valid(_bottom_panel):
 		_bottom_panel.visible = false

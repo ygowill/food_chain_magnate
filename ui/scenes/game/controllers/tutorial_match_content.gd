@@ -94,13 +94,6 @@ static func build_game_ui_tour_steps(targets: Dictionary) -> Array:
 	_append_step_if_target_available(
 		steps,
 		targets,
-		"left_activity_feed",
-		"最近事件会显示在这里",
-		"这里保留最近几条关键记录，方便你快速回忆刚刚发生了什么。若要追完整的结算链，请再打开右侧日志。"
-	)
-	_append_step_if_target_available(
-		steps,
-		targets,
 		"map_view",
 		"地图区域",
 		"房屋、道路、餐厅和广告都会在地图上共同作用。只要你在判断需求、距离、扩张或竞争关系，都需要回到地图查看。"

@@ -72,7 +72,6 @@ func get_targets(target_key: String = "") -> Dictionary:
 		"left_inventory_section": _get_left_panel_tutorial_target("MarginContainer/MainVBox/DualColumnArea/LeftColumn/InventorySection"),
 		"left_employee_scroll": _get_left_panel_tutorial_target("MarginContainer/MainVBox/DualColumnArea/LeftColumn/EmployeesScroll"),
 		"left_milestones_section": _get_left_panel_tutorial_target("MarginContainer/MainVBox/DualColumnArea/RightColumn/MilestonesSection"),
-		"left_activity_feed": _get_left_panel_tutorial_target("MarginContainer/MainVBox/ActivityFeed"),
 		"toolbar": _toolbar,
 		"turn_order_track": _turn_order_track,
 		"toolbar_employee_tree_button": _get_toolbar_tutorial_target("EmployeeTreeButton"),

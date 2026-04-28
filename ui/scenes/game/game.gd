@@ -864,9 +864,6 @@ func _unhandled_input(event: InputEvent) -> void:
 func _on_log_button_pressed() -> void:
 	toggle_game_log()
 
-func _on_left_panel_logs_requested() -> void:
-	toggle_game_log()
-
 func _on_milestones_button_pressed() -> void:
 	show_milestone_panel()
 
