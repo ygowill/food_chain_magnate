@@ -1,7 +1,6 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://ui/components/left_panel/left_panel.gd" id="1_left_panel"]
-[ext_resource type="Texture2D" path="res://assets/ui/icons/kenney/game/menu_list.png" id="2_menu_list"]
 
 [node name="LeftPanel" type="Control"]
 custom_minimum_size = Vector2(460, 0)
@@ -255,43 +254,3 @@ vertical_scroll_mode = 1
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 2
-
-[node name="ActivityFeed" type="PanelContainer" parent="MarginContainer/MainVBox"]
-custom_minimum_size = Vector2(0, 60)
-layout_mode = 2
-
-[node name="ActivityMargin" type="MarginContainer" parent="MarginContainer/MainVBox/ActivityFeed"]
-layout_mode = 2
-theme_override_constants/margin_left = 8
-theme_override_constants/margin_top = 4
-theme_override_constants/margin_right = 8
-theme_override_constants/margin_bottom = 4
-
-[node name="ActivityHBox" type="HBoxContainer" parent="MarginContainer/MainVBox/ActivityFeed/ActivityMargin"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="ActivityVBox" type="VBoxContainer" parent="MarginContainer/MainVBox/ActivityFeed/ActivityMargin/ActivityHBox"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 2
-
-[node name="ActivityLine1" type="Label" parent="MarginContainer/MainVBox/ActivityFeed/ActivityMargin/ActivityHBox/ActivityVBox"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 14
-theme_override_colors/font_color = Color(0.17, 0.13, 0.09, 1)
-text = "暂无活动记录"
-
-[node name="ActivityLine2" type="Label" parent="MarginContainer/MainVBox/ActivityFeed/ActivityMargin/ActivityHBox/ActivityVBox"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 14
-theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 1)
-text = ""
-
-[node name="ViewLogsButton" type="Button" parent="MarginContainer/MainVBox/ActivityFeed/ActivityMargin/ActivityHBox"]
-layout_mode = 2
-size_flags_vertical = 0
-theme_override_constants/icon_max_width = 16
-icon = ExtResource("2_menu_list")
-text = "完整日志"
-flat = false

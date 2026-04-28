@@ -16,7 +16,6 @@ const REQUIRED_MAIN_KEYS: Array[String] = [
 	"left_inventory_section",
 	"left_employee_scroll",
 	"left_milestones_section",
-	"left_activity_feed",
 	"toolbar",
 	"toolbar_employee_tree_button",
 	"toolbar_log_button",

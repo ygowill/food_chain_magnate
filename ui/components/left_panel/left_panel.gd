@@ -4,15 +4,11 @@
 # - 双栏区域：
 #   - 左栏：公司结构（员工标签）、手牌
 #   - 右栏：库存、里程碑
-# - 活动流：最近2条日志，"完整日志"按钮
 class_name LeftPanel
 extends Control
 
-signal logs_requested()
-
 const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const LeftPanelEmployeeIconsControllerClass = preload("res://ui/components/left_panel/left_panel_employee_icons_controller.gd")
-const LeftPanelTurnLogControllerClass = preload("res://ui/components/left_panel/left_panel_turn_log_controller.gd")
 const LeftPanelSummaryControllerClass = preload("res://ui/components/left_panel/left_panel_summary_controller.gd")
 const LeftPanelMilestonesControllerClass = preload("res://ui/components/left_panel/left_panel_milestones_controller.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
@@ -59,12 +55,6 @@ const STATUS_BADGE_ICON_NAME := "StatusBadgeIcon"
 @onready var milestones_scroll: ScrollContainer = $MarginContainer/MainVBox/DualColumnArea/RightColumn/MilestonesSection/MilestonesScroll
 @onready var milestones_list: VBoxContainer = $MarginContainer/MainVBox/DualColumnArea/RightColumn/MilestonesSection/MilestonesScroll/MilestonesList
 
-# === 活动流 ===
-@onready var activity_feed: PanelContainer = $MarginContainer/MainVBox/ActivityFeed
-@onready var activity_line1: Label = $MarginContainer/MainVBox/ActivityFeed/ActivityMargin/ActivityHBox/ActivityVBox/ActivityLine1
-@onready var activity_line2: Label = $MarginContainer/MainVBox/ActivityFeed/ActivityMargin/ActivityHBox/ActivityVBox/ActivityLine2
-@onready var view_logs_button: Button = $MarginContainer/MainVBox/ActivityFeed/ActivityMargin/ActivityHBox/ViewLogsButton
-
 var cash_overrides: Dictionary = {}  # {player_id: int -> cash: int}
 var _game_state: GameState = null
 var _player_count: int = 0
@@ -79,13 +69,11 @@ var _player_restaurant_logo_ids: Dictionary = {} # player_id -> logo_id
 var _fallback_logo_ids: Array[int] = []
 
 var _tab_buttons: Array[Button] = []
-var _attached_log_panel: Node = null
 var _attached_hand_area: Node = null
 var _attached_company_structure: Node = null
 var _last_phase: String = ""
 
 var _employee_icons_controller = null
-var _turn_log_controller = null
 var _summary_controller = null
 var _milestones_controller = null
 var _logo_snapshot: Dictionary = {}
@@ -100,9 +88,6 @@ func _ready() -> void:
 	_refresh()
 
 func _connect_signals() -> void:
-	if is_instance_valid(view_logs_button):
-		if not view_logs_button.pressed.is_connected(_on_view_logs_pressed):
-			view_logs_button.pressed.connect(_on_view_logs_pressed)
 	if NetClient != null:
 		var cb := Callable(self, "_on_room_state_updated")
 		if not NetClient.room_state_updated.is_connected(cb):
@@ -113,11 +98,6 @@ func _ensure_controllers() -> void:
 		_employee_icons_controller = LeftPanelEmployeeIconsControllerClass.new()
 	if _employee_icons_controller != null and is_instance_valid(_employee_icons_controller):
 		_employee_icons_controller.setup(self)
-
-	if _turn_log_controller == null or not is_instance_valid(_turn_log_controller):
-		_turn_log_controller = LeftPanelTurnLogControllerClass.new()
-	if _turn_log_controller != null and is_instance_valid(_turn_log_controller):
-		_turn_log_controller.setup(self)
 
 	if _summary_controller == null or not is_instance_valid(_summary_controller):
 		_summary_controller = LeftPanelSummaryControllerClass.new()
@@ -169,43 +149,17 @@ func _apply_visual_styles() -> void:
 		milestones_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		milestones_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 
-	# 活动流
-	if is_instance_valid(activity_feed):
-		UiStylesClass.apply_panel_poster_alt(activity_feed)
-	if is_instance_valid(activity_line1):
-		UiStylesClass.apply_label_dark(activity_line1)
-		activity_line1.autowrap_mode = TextServer.AUTOWRAP_OFF
-		activity_line1.max_lines_visible = 1
-		activity_line1.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-		activity_line1.clip_text = true
-	if is_instance_valid(activity_line2):
-		UiStylesClass.apply_label_hint_dark(activity_line2)
-		activity_line2.autowrap_mode = TextServer.AUTOWRAP_OFF
-		activity_line2.max_lines_visible = 1
-		activity_line2.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-		activity_line2.clip_text = true
-	if is_instance_valid(view_logs_button):
-		UiStylesClass.apply_button_secondary(view_logs_button)
-		view_logs_button.flat = false
-		view_logs_button.focus_mode = Control.FOCUS_NONE
-		view_logs_button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		view_logs_button.expand_icon = false
-		view_logs_button.add_theme_constant_override("icon_max_width", 16)
-		view_logs_button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-
 func apply_font_settings() -> void:
 	var fs_name := 17
 	var fs_cash := 22
 	var fs_metrics := 14
 	var fs_section := 18
-	var fs_activity := 14
 	var fs_overview := 18
 	if Globals != null:
 		fs_name = int(Globals.get_scaled_font_size(17))
 		fs_cash = int(Globals.get_scaled_font_size(22))
 		fs_metrics = int(Globals.get_scaled_font_size(14))
 		fs_section = int(Globals.get_scaled_font_size(18))
-		fs_activity = int(Globals.get_scaled_font_size(14))
 		fs_overview = int(Globals.get_scaled_font_size(18))
 
 	if is_instance_valid(overview_header):
@@ -231,12 +185,6 @@ func apply_font_settings() -> void:
 		inventory_header.add_theme_font_size_override("font_size", fs_section)
 	if is_instance_valid(milestones_header):
 		milestones_header.add_theme_font_size_override("font_size", fs_section)
-	if is_instance_valid(activity_line1):
-		activity_line1.add_theme_font_size_override("font_size", fs_activity)
-	if is_instance_valid(activity_line2):
-		activity_line2.add_theme_font_size_override("font_size", fs_activity)
-	if is_instance_valid(view_logs_button):
-		view_logs_button.add_theme_font_size_override("font_size", fs_activity)
 
 func set_game_state(state: GameState) -> void:
 	_game_state = state
@@ -295,24 +243,10 @@ func set_view_player(player_id: int) -> void:
 		_employee_icons_controller.refresh()
 	if _milestones_controller != null and is_instance_valid(_milestones_controller):
 		_milestones_controller.refresh()
-	if _turn_log_controller != null and is_instance_valid(_turn_log_controller):
-		_turn_log_controller.refresh()
 
-func select_tab(tab_id: String) -> void:
+func select_tab(_tab_id: String) -> void:
 	# 兼容旧接口（双栏布局不再有 TabContainer）
-	match tab_id:
-		"logs":
-			logs_requested.emit()
-
-func bind_game_log_panel(panel: Node) -> void:
-	_ensure_controllers()
-	if panel == null or not is_instance_valid(panel):
-		return
-	if _turn_log_controller != null and is_instance_valid(_turn_log_controller):
-		_turn_log_controller.bind_log_panel(panel)
-
-func attach_game_log_panel(panel: Node) -> void:
-	bind_game_log_panel(panel)
+	pass
 
 func attach_hand_area(_panel: Node) -> void:
 	pass  # 新布局不需要 reparent
@@ -535,8 +469,6 @@ func _refresh() -> void:
 	if _milestones_controller != null and is_instance_valid(_milestones_controller):
 		_milestones_controller.refresh()
 	_update_tab_styles()
-	if _turn_log_controller != null and is_instance_valid(_turn_log_controller):
-		_turn_log_controller.refresh()
 
 func set_cash_overrides(overrides: Dictionary) -> void:
 	if overrides == null:
@@ -946,6 +878,3 @@ func _on_overview_card_gui_input(event: InputEvent, player_id: int) -> void:
 	if not UiPointerInputClass.is_primary_press(event):
 		return
 	set_view_player(player_id)
-
-func _on_view_logs_pressed() -> void:
-	logs_requested.emit()
