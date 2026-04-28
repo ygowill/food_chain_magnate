@@ -365,7 +365,7 @@ func _maybe_show_rollback_proposal(room_state: Dictionary) -> void:
 		target_label = "命令 #%d 后" % target_index
 	_show_confirm.call(
 		"是否同意回滚",
-		"房主 P%d 提议回滚到%s。\n当前目标会撤销 %d 步操作。\n全部其他玩家同意后会立即执行回滚。" % [proposer_pid + 1, target_label, steps],
+		"玩家 P%d 提议回滚到%s。\n当前目标会撤销 %d 步操作。\n全部其他玩家同意后会立即执行回滚。" % [proposer_pid + 1, target_label, steps],
 		Callable(self, "_confirm_rollback_proposal_vote").bind(proposal_id),
 		Callable(self, "_reject_rollback_proposal_vote").bind(proposal_id),
 		"同意回滚",

@@ -166,9 +166,6 @@ func propose_rollback() -> void:
 	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
 		GameLog.warn("Game", "提议回滚仅支持联机模式")
 		return
-	if not _is_online_room_host():
-		GameLog.warn("Game", "只有房主可以选择回滚时间点并发起提议")
-		return
 	if is_instance_valid(_timeline_controller) and _timeline_controller.has_method("is_replay_mode_active") and bool(_timeline_controller.call("is_replay_mode_active")):
 		GameLog.warn("Game", "回放模式下无法提议回滚")
 		return
@@ -222,39 +219,14 @@ func _build_rollback_proposal_target_options(game_engine: GameEngine, current_in
 		var target_label := _describe_rollback_target(game_engine, int(target_index))
 		out.append({
 			"target_index": int(target_index),
-			"label": "撤销 %d 步，回滚到 %s" % [steps, target_label],
+			"label": "撤销 %d 步，回滚到%s" % [steps, target_label],
 		})
 	return out
 
 func _describe_rollback_target(game_engine: GameEngine, target_index: int) -> String:
 	if target_index < 0:
 		return "对局开始前"
-	if game_engine == null or target_index >= int(game_engine.command_history.size()):
-		return "#%d 后" % int(target_index)
-	var cmd_val = game_engine.command_history[target_index]
-	if not (cmd_val is Command):
-		return "#%d 后" % int(target_index)
-	var cmd: Command = cmd_val
-	var action_name := str(cmd.action_id).strip_edges()
-	if action_name.is_empty():
-		action_name = "未知动作"
-	return "#%d 后（P%d %s）" % [int(target_index), int(cmd.actor) + 1, action_name]
-
-func _is_online_room_host() -> bool:
-	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
-		return false
-	var room_state: Dictionary = Dictionary(NetContext.room_state)
-	var self_seat := int(room_state.get("self_seat_index", -1))
-	var host_seat := int(room_state.get("host_seat_index", -2))
-	if self_seat >= 0 and host_seat >= 0:
-		return self_seat == host_seat
-	var host_peer_id := int(room_state.get("host_peer_id", 0))
-	if host_peer_id <= 0 or _host == null or not is_instance_valid(_host):
-		return false
-	var mp := _host.multiplayer
-	if mp == null:
-		return false
-	return int(mp.get_unique_id()) == host_peer_id
+	return "命令 #%d 后" % int(target_index)
 
 func _on_rollback_proposal_target_selected(target_index: int) -> void:
 	var game_engine: GameEngine = _get_engine()
@@ -267,7 +239,7 @@ func _on_rollback_proposal_target_selected(target_index: int) -> void:
 	var target_label := _describe_rollback_target(game_engine, int(target_index))
 	if _show_confirm.is_valid():
 		_show_confirm.call(
-			"提议回滚",
+			"提议回退",
 			"确定要向其他玩家发起回滚投票吗？\n目标时间点：%s\n将撤销 %d 步操作。\n全部其他玩家同意后会立即执行回滚。" % [target_label, steps],
 			Callable(self, "_confirm_propose_rollback").bind(int(target_index)),
 			Callable(),
