@@ -1,5 +1,5 @@
 # GameEngine 存档恢复辅助
-# 负责：联机恢复导入时，允许尾部回放失败的存档截断到最后可回放前缀。
+# 负责：导入旧联机存档时补齐在线确认 marker；联机恢复可额外截断到最后可回放前缀。
 extends RefCounted
 
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
@@ -92,6 +92,47 @@ static func load_for_online_resume(archive: Dictionary, allow_prefix_recovery: b
 		}).with_warnings(repair_warnings).with_warnings(full_load.warnings).with_warnings(load_r.warnings).with_warnings(recovered_archive_r.warnings).with_warning(warning)
 
 	return Result.failure("存档无法截断到任何可回放点：%s" % full_load.error).with_warnings(repair_warnings).with_warnings(full_load.warnings)
+
+static func load_file_for_replay_import(path: String) -> Result:
+	var archive_result := ArchiveClass.load_archive_from_file(path)
+	if not archive_result.ok:
+		return archive_result
+	var archive: Dictionary = Dictionary(archive_result.value).duplicate(true)
+	return load_for_replay_import(archive)
+
+static func load_for_replay_import(archive: Dictionary) -> Result:
+	if archive.is_empty():
+		return Result.failure("replay archive missing")
+
+	var original_archive := Dictionary(archive).duplicate(true)
+	var repair_info := _repair_online_confirm_markers_for_replay(original_archive)
+	var load_archive: Dictionary = Dictionary(repair_info.get("archive", original_archive)).duplicate(true)
+	var repair_warnings: Array[String] = Array(repair_info.get("warnings", []), TYPE_STRING, "", null)
+	var repaired_markers: Array[String] = Array(repair_info.get("repaired_markers", []), TYPE_STRING, "", null)
+	var engine = _new_engine()
+	var load_r: Result = engine.load_from_archive(load_archive.duplicate(true))
+	if not load_r.ok:
+		return Result.failure(str(load_r.error)).with_warnings(repair_warnings).with_warnings(load_r.warnings)
+
+	var out_archive := load_archive
+	var archive_warnings: Array[String] = []
+	if not repaired_markers.is_empty():
+		var archive_r := _create_recovered_archive(engine, load_archive)
+		if not archive_r.ok:
+			return archive_r.with_warnings(load_r.warnings).with_warnings(repair_warnings)
+		out_archive = Dictionary(archive_r.value).duplicate(true)
+		archive_warnings.append_array(archive_r.warnings)
+
+	return Result.success({
+		"archive": out_archive,
+		"engine": engine,
+		"truncated": false,
+		"original_command_count": _get_command_count(original_archive),
+		"recovered_command_count": _get_command_count(original_archive),
+		"failed_command_index": -1,
+		"original_error": "",
+		"repaired_online_confirm_markers": repaired_markers.duplicate(),
+	}).with_warnings(repair_warnings).with_warnings(load_r.warnings).with_warnings(archive_warnings)
 
 static func _repair_online_confirm_markers_for_replay(archive: Dictionary) -> Dictionary:
 	var out := Dictionary(archive).duplicate(true)

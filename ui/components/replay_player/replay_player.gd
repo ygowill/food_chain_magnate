@@ -3,6 +3,7 @@
 class_name ReplayPlayer
 extends PanelContainer
 
+const ArchiveRecoveryClass = preload("res://core/engine/game_engine/archive_recovery.gd")
 const ModuleUiMetadataBootstrapClass = preload("res://gameplay/module_ui_metadata_bootstrap.gd")
 
 signal state_changed(command_index: int, state: GameState)
@@ -343,18 +344,26 @@ func load_from_file(file_path: String) -> Result:
 
 	_clear_error()
 
-	var engine := GameEngine.new()
-	var load_result := engine.load_from_file(file_path)
+	var load_result: Result = ArchiveRecoveryClass.load_file_for_replay_import(file_path)
 	if not load_result.ok:
 		_set_error(load_result.error)
 		error_occurred.emit(load_result.error)
 		return load_result
+	var info: Dictionary = Dictionary(load_result.value) if load_result.value is Dictionary else {}
+	var engine_val = info.get("engine", null)
+	if not (engine_val is GameEngine):
+		var type_error := "回放载入失败：engine 类型错误"
+		var failure := Result.failure(type_error)
+		_set_error(type_error)
+		error_occurred.emit(type_error)
+		return failure
+	var engine: GameEngine = engine_val
 
 	_loaded_file_path = file_path
 	var result := load_from_engine(engine)
 	if result.ok:
 		_refresh_available_files()
-	return result
+	return result.with_warnings(load_result.warnings)
 
 func get_game_engine() -> GameEngine:
 	return _game_engine

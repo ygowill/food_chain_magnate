@@ -2,6 +2,7 @@ class_name OnlineResumeArchiveRecoveryTest
 extends RefCounted
 
 const ArchiveRecoveryClass = preload("res://core/engine/game_engine/archive_recovery.gd")
+const ArchiveClass = preload("res://core/engine/game_engine/archive.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
@@ -20,6 +21,12 @@ static func run() -> Result:
 	var repair_marker_r := _run_repair_missing_marketing_marker_case()
 	if not repair_marker_r.ok:
 		return repair_marker_r
+	var replay_import_r := _run_replay_import_repairs_missing_marketing_marker_case()
+	if not replay_import_r.ok:
+		return replay_import_r
+	var replay_import_tail_r := _run_replay_import_rejects_bad_tail_case()
+	if not replay_import_tail_r.ok:
+		return replay_import_tail_r
 	var recover_r := _run_recover_bad_tail_command_case()
 	if not recover_r.ok:
 		return recover_r
@@ -180,6 +187,60 @@ static func _build_missing_marketing_marker_archive() -> Result:
 	initial["rules"] = rules
 	archive["initial_state"] = initial
 	return Result.success(archive)
+
+static func _run_replay_import_repairs_missing_marketing_marker_case() -> Result:
+	var archive_r := _build_missing_marketing_marker_archive()
+	if not archive_r.ok:
+		return archive_r
+	var bad_archive: Dictionary = Dictionary(archive_r.value).duplicate(true)
+
+	var direct_engine := GameEngineClass.new()
+	var direct_load: Result = direct_engine.load_from_archive(bad_archive)
+	if direct_load.ok:
+		return Result.failure("缺少 marketing marker 的回放存档不应能直接完整加载")
+
+	var import_r: Result = ArchiveRecoveryClass.load_for_replay_import(bad_archive)
+	if not import_r.ok:
+		return Result.failure("回放导入修补缺失 marketing marker 后仍加载失败: %s" % import_r.error)
+	var info: Dictionary = Dictionary(import_r.value)
+	if bool(info.get("truncated", true)):
+		return Result.failure("回放导入不应截断命令历史: %s" % str(info))
+	var repaired_markers: Array = Array(info.get("repaired_online_confirm_markers", []))
+	if not repaired_markers.has(ONLINE_MARKETING_CONFIRM_KEY):
+		return Result.failure("回放导入应记录 marketing marker 修补: %s" % str(info))
+	var engine = info.get("engine", null)
+	if engine == null or not is_instance_valid(engine) or not engine.has_method("get_state"):
+		return Result.failure("回放导入结果缺少 engine")
+	var imported_commands_val = engine.get("command_history")
+	if not (imported_commands_val is Array):
+		return Result.failure("回放导入结果 command_history 类型错误")
+	var imported_commands: Array = imported_commands_val
+	if imported_commands.size() != 3:
+		return Result.failure("回放导入应保留完整命令历史，实际命令数: %d" % imported_commands.size())
+
+	var tmp_path := "user://replay_import_missing_marketing_marker.json"
+	var save_r: Result = ArchiveClass.save_archive_to_file(bad_archive, tmp_path)
+	if not save_r.ok:
+		return Result.failure("写入回放导入测试存档失败: %s" % save_r.error)
+	var file_import_r: Result = ArchiveRecoveryClass.load_file_for_replay_import(tmp_path)
+	if not file_import_r.ok:
+		return Result.failure("回放文件导入修补缺失 marketing marker 后仍加载失败: %s" % file_import_r.error)
+
+	return Result.success()
+
+static func _run_replay_import_rejects_bad_tail_case() -> Result:
+	var bad_r := _build_corrupted_tail_archive()
+	if not bad_r.ok:
+		return bad_r
+	var bad_info: Dictionary = Dictionary(bad_r.value)
+	var archive: Dictionary = Dictionary(bad_info.get("archive", {})).duplicate(true)
+
+	var import_r: Result = ArchiveRecoveryClass.load_for_replay_import(archive)
+	if import_r.ok:
+		return Result.failure("回放导入不应截断损坏尾部命令并返回成功")
+	if str(import_r.error).is_empty():
+		return Result.failure("回放导入坏尾部失败时应返回错误信息")
+	return Result.success()
 
 static func _run_recover_bad_tail_command_case() -> Result:
 	var bad_r := _build_corrupted_tail_archive()

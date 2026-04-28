@@ -2,6 +2,8 @@
 # 负责：回放文件装载、进入前日志快照捕获、以及退出后的日志恢复。
 extends RefCounted
 
+const ArchiveRecoveryClass = preload("res://core/engine/game_engine/archive_recovery.gd")
+
 static func capture_original_log_entries(game_log_panel: Object, replay_mode_active: bool) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if bool(replay_mode_active):
@@ -23,11 +25,14 @@ static func capture_original_log_entries(game_log_panel: Object, replay_mode_act
 static func load_engine_from_file(file_path: String) -> Result:
 	if str(file_path).is_empty():
 		return Result.failure("file_path 为空")
-	var engine := GameEngine.new()
-	var load_result: Result = engine.load_from_file(file_path)
+	var load_result: Result = ArchiveRecoveryClass.load_file_for_replay_import(file_path)
 	if not load_result.ok:
 		return Result.failure(str(load_result.error))
-	return Result.success(engine)
+	var info: Dictionary = Dictionary(load_result.value) if load_result.value is Dictionary else {}
+	var engine_val = info.get("engine", null)
+	if not (engine_val is GameEngine):
+		return Result.failure("回放载入失败：engine 类型错误")
+	return Result.success(engine_val).with_warnings(load_result.warnings)
 
 static func move_engine_to_latest_state(engine: GameEngine) -> Result:
 	if engine == null:
