@@ -365,25 +365,14 @@ static func _run_rollback_proposal_case() -> Result:
 
 	mock_net.multiplayer.remote_sender_id = 11
 	server.handle_rpc_request_rollback_proposal({
-		"request_id": "req_proposal_non_host",
-		"target_index": before_index,
-	})
-	if _find_request_rejected(mock_net.sent, 11, "req_proposal_non_host", "rollback_proposal_failed") < 0:
-		return Result.failure("非房主不应能创建回滚提议: %s" % str(mock_net.sent))
-	if int(engine.current_command_index) != proposed_from_index:
-		return Result.failure("非房主提议不应修改时间线")
-
-	mock_net.sent.clear()
-	mock_net.multiplayer.remote_sender_id = host_peer_id
-	server.handle_rpc_request_rollback_proposal({
 		"request_id": "req_proposal",
 		"target_index": before_index,
 	})
 
-	var p2_state_idx := _find_sent_method(mock_net.sent, 11, "rpc_room_state")
-	if p2_state_idx < 0:
-		return Result.failure("创建提议后应广播 room_state 给 P2: %s" % str(mock_net.sent))
-	var state_payload_val = Dictionary(mock_net.sent[p2_state_idx]).get("payload", null)
+	var host_state_idx := _find_sent_method(mock_net.sent, host_peer_id, "rpc_room_state")
+	if host_state_idx < 0:
+		return Result.failure("非房主创建提议后应广播 room_state 给 host: %s" % str(mock_net.sent))
+	var state_payload_val = Dictionary(mock_net.sent[host_state_idx]).get("payload", null)
 	if not (state_payload_val is Dictionary):
 		return Result.failure("rollback proposal room_state payload 类型错误")
 	var state_payload: Dictionary = Dictionary(state_payload_val)
@@ -398,20 +387,22 @@ static func _run_rollback_proposal_case() -> Result:
 	if int(proposal.get("before_index", -999)) != proposed_from_index:
 		return Result.failure("proposal before_index 错误: %s" % str(proposal))
 	if bool(proposal.get("self_vote", true)):
-		return Result.failure("P2 在投票前 self_vote 应为 false: %s" % str(proposal))
+		return Result.failure("host 在投票前 self_vote 应为 false: %s" % str(proposal))
+	if int(proposal.get("proposer_player_id", -1)) != 1:
+		return Result.failure("非房主提议应记录 proposer_player_id=P2: %s" % str(proposal))
 
 	mock_net.sent.clear()
-	mock_net.multiplayer.remote_sender_id = 11
+	mock_net.multiplayer.remote_sender_id = host_peer_id
 	server.handle_rpc_action_request({
 		"request_id": "req_action_while_proposal",
 		"action_id": "select_reserve_card",
 		"params": {"selected_index": 0},
 	})
-	if _find_request_rejected(mock_net.sent, 11, "req_action_while_proposal", "rollback_proposal_pending") < 0:
+	if _find_request_rejected(mock_net.sent, host_peer_id, "req_action_while_proposal", "rollback_proposal_pending") < 0:
 		return Result.failure("回滚提议待投票时应拒绝新动作: %s" % str(mock_net.sent))
 
 	mock_net.sent.clear()
-	mock_net.multiplayer.remote_sender_id = 11
+	mock_net.multiplayer.remote_sender_id = host_peer_id
 	server.handle_rpc_vote_rollback_proposal({
 		"request_id": "req_vote",
 		"proposal_id": "req_proposal",
@@ -433,6 +424,8 @@ static func _run_rollback_proposal_case() -> Result:
 		return Result.failure("提议回滚 reason 错误: %s" % str(payload))
 	if str(payload.get("proposal_id", "")) != "req_proposal":
 		return Result.failure("提议回滚 proposal_id 错误: %s" % str(payload))
+	if int(payload.get("proposer_player_id", -1)) != 1:
+		return Result.failure("提议回滚 proposer_player_id 错误: %s" % str(payload))
 	if int(payload.get("target_index", -999)) != before_index:
 		return Result.failure("提议回滚 target 错误: got=%d want=%d payload=%s" % [int(payload.get("target_index", -999)), before_index, str(payload)])
 	if int(engine.current_command_index) != before_index:

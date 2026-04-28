@@ -2093,8 +2093,6 @@ func create_rollback_proposal(
 		return Result.failure("Room is not in game")
 	if game_engine == null:
 		return Result.failure("Room engine missing")
-	if int(proposer_peer_id) != int(host_peer_id):
-		return Result.failure("Only room host can propose rollback")
 	if not _pending_rollback_proposal.is_empty():
 		return Result.failure("Rollback proposal already pending")
 

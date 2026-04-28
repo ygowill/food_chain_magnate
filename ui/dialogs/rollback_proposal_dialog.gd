@@ -43,7 +43,7 @@ func _build_ui() -> void:
 	add_child(center)
 
 	_dialog_panel = PanelContainer.new()
-	_dialog_panel.custom_minimum_size = Vector2(560, 460)
+	_dialog_panel.custom_minimum_size = Vector2(620, 460)
 	_dialog_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	center.add_child(_dialog_panel)
 
@@ -56,10 +56,11 @@ func _build_ui() -> void:
 
 	var root := VBoxContainer.new()
 	root.add_theme_constant_override("separation", 12)
+	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.add_child(root)
 
 	_title_label = Label.new()
-	_title_label.text = "提议回滚"
+	_title_label.text = "提议回退"
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.add_theme_font_size_override("font_size", 18)
 	root.add_child(_title_label)
@@ -67,6 +68,7 @@ func _build_ui() -> void:
 	_message_label = Label.new()
 	_message_label.text = "选择要回滚到的时间点。投票弹窗会明确显示该时间点，全部其他玩家同意后立即执行。"
 	_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_message_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	root.add_child(_message_label)
 
 	_target_list = ItemList.new()

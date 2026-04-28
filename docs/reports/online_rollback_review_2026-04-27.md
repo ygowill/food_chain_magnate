@@ -206,11 +206,17 @@
 - 扩展 `ServerResyncGuardTest` 与 `ActionFlowControlsNoopTest`，覆盖 server rollback meta 广播和新增按钮配置的 noop 行为。
 - 验证：`git diff --check` 通过；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180` 通过，`386/386`。
 
-### 2026-04-27：新增房主提议回滚投票
+### 2026-04-27：新增玩家提议回滚投票
 
-- 新增 `rpc_request_rollback_proposal` / `rpc_vote_rollback_proposal`：房主在发起提议时选择明确 `target_index`，server 将该目标点写入 `room_state.rollback_proposal` 并广播给所有客户端。
+- 新增 `rpc_request_rollback_proposal` / `rpc_vote_rollback_proposal`：玩家在发起提议时选择明确 `target_index`，server 将该目标点写入 `room_state.rollback_proposal` 并广播给所有客户端。
 - 投票规则为“除提议者外的全部玩家同意”：任一 required voter 拒绝会清空 pending proposal；全部同意后 server 自动执行 `rollback_to_command_index()`，并通过 `rollback_meta` 广播实际回滚结果。
 - 提议待投票期间 server 拒绝新的普通动作请求，避免投票目标点在确认过程中被后续命令污染；如果时间线已经漂移，批准阶段也会拒绝 stale proposal。
-- UI 上仅房主显示“提议回滚”入口，弹出目标时间点列表；其他玩家收到 `rollback_proposal` room state 后弹出“同意回滚/拒绝”确认框，弹窗中明确目标命令索引与撤销步数。
-- 扩展 `ServerResyncGuardTest`、`GameOnlineResyncRequestRejectionTest` 与 `ActionFlowControlsNoopTest`，覆盖房主权限、pending 期间动作拒绝、投票后 meta 广播、投票弹窗目标文案以及新增按钮 noop 行为。
+- UI 上所有玩家都显示“提议回退”入口，弹出目标时间点列表；其他玩家收到 `rollback_proposal` room state 后弹出“同意回滚/拒绝”确认框，弹窗中明确目标命令索引与撤销步数。
+- 扩展 `ServerResyncGuardTest`、`GameOnlineResyncRequestRejectionTest` 与 `ActionFlowControlsNoopTest`，覆盖非房主提议、pending 期间动作拒绝、投票后 meta 广播、投票弹窗目标文案以及新增按钮 noop 行为。
+- 验证：`git diff --check` 通过；`godot --headless --script res://tools/check_compile.gd` 通过，`files=1100`；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180` 通过，`386/386`。
+
+### 2026-04-28：修正提议回退入口与弹窗溢出
+
+- 移除 server / ActionPanel / CommandController 对“仅房主可提议回滚”的限制，改为任意在线玩家都可发起提议，投票仍要求除提议者外的其他玩家全员同意。
+- 缩短回滚目标列表文本为固定格式（如“回滚到命令 #N 后”），并扩大提议弹窗宽度与说明文本横向约束，避免长 action id 造成选项文字溢出容器。
 - 验证：`git diff --check` 通过；`godot --headless --script res://tools/check_compile.gd` 通过，`files=1100`；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 180` 通过，`386/386`。
