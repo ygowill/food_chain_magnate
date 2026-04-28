@@ -27,11 +27,13 @@ func _build_ui() -> void:
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 6)
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(vbox)
 
 	# 图标（贴图优先，缺失则回退文字）
 	var icon_slot := Control.new()
 	icon_slot.custom_minimum_size = Vector2(78, 52)
+	icon_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(icon_slot)
 
 	_icon_rect = TextureRect.new()
@@ -54,6 +56,7 @@ func _build_ui() -> void:
 	_name_label.add_theme_font_size_override("font_size", 12)
 	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_name_label.clip_text = true
+	_name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(_name_label)
 
 	update_display()

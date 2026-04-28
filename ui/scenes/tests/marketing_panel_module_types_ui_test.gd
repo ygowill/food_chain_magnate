@@ -258,6 +258,11 @@ static func _case_type_button_hides_availability_counts() -> Result:
 		_safe_free(btn)
 		return Result.failure("营销类型按钮图标应完整等比居中显示，实际 stretch_mode=%s" % str(btn._icon_rect.stretch_mode))
 
+	var blocking_child := _find_mouse_blocking_descendant(btn)
+	if blocking_child != "":
+		_safe_free(btn)
+		return Result.failure("营销类型按钮子控件不应截获点击事件，阻塞节点: %s" % blocking_child)
+
 	_safe_free(btn)
 	return Result.success({})
 
@@ -297,6 +302,17 @@ static func _collect_label_texts(node: Node) -> Array[String]:
 		if child is Node:
 			out.append_array(_collect_label_texts(child))
 	return out
+
+static func _find_mouse_blocking_descendant(node: Node) -> String:
+	for child in node.get_children():
+		if child is Control:
+			var control: Control = child
+			if int(control.mouse_filter) != int(Control.MOUSE_FILTER_IGNORE):
+				return str(child.name)
+		var nested := _find_mouse_blocking_descendant(child)
+		if not nested.is_empty():
+			return "%s/%s" % [str(child.name), nested]
+	return ""
 
 static func _safe_free(node) -> void:
 	if node == null or not is_instance_valid(node):
