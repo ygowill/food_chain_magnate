@@ -20,6 +20,8 @@ const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const MilestonePanelClass = preload("res://ui/components/milestone_panel/milestone_panel.gd")
 const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const CheckmarkIconClass = preload("res://ui/components/left_panel/checkmark_icon.gd")
+const StatusCrossTexture: Texture2D = preload("res://assets/ui/icons/kenney/game/close_cross.png")
 
 const MAX_COLUMNS := 4
 const CARD_MIN_WIDTH := 300
@@ -652,6 +654,9 @@ class MilestoneCard extends PanelContainer:
 	var _name_label: Label
 	var _desc_label: Label
 	var _status_label: Label
+	var _status_icon_slot: CenterContainer
+	var _status_check_icon: Control
+	var _status_cross_icon: TextureRect
 	var _expires_label: Label
 	var _icons_row: HBoxContainer
 
@@ -778,6 +783,27 @@ class MilestoneCard extends PanelContainer:
 		status_row.add_theme_constant_override("separation", 8)
 		footer_vbox.add_child(status_row)
 
+		_status_icon_slot = CenterContainer.new()
+		_status_icon_slot.name = "StatusIconSlot"
+		_status_icon_slot.custom_minimum_size = Vector2(38, 38)
+		_status_icon_slot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		_status_icon_slot.visible = false
+		status_row.add_child(_status_icon_slot)
+
+		_status_check_icon = CheckmarkIconClass.new()
+		_status_check_icon.name = "StatusCheckIcon"
+		_status_check_icon.custom_minimum_size = Vector2(34, 34)
+		_status_icon_slot.add_child(_status_check_icon)
+
+		_status_cross_icon = TextureRect.new()
+		_status_cross_icon.name = "StatusCrossIcon"
+		_status_cross_icon.custom_minimum_size = Vector2(32, 32)
+		_status_cross_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_status_cross_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		_status_cross_icon.texture = StatusCrossTexture
+		_status_cross_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_status_icon_slot.add_child(_status_cross_icon)
+
 		_status_label = Label.new()
 		_status_label.name = "StatusLabel"
 		_status_label.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -785,7 +811,13 @@ class MilestoneCard extends PanelContainer:
 		_status_label.add_theme_constant_override("outline_size", 1)
 		_status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_status_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_status_label.visible = false
 		status_row.add_child(_status_label)
+
+		var status_spacer := Control.new()
+		status_spacer.name = "StatusSpacer"
+		status_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		status_row.add_child(status_spacer)
 
 		_icons_row = HBoxContainer.new()
 		_icons_row.name = "OwnerLogoRow"
@@ -878,7 +910,8 @@ class MilestoneCard extends PanelContainer:
 					status_text = "不可获得"
 
 		if _status_label != null:
-			_status_label.text = status_text
+			_status_label.text = ""
+			_status_label.visible = false
 			var color := Color(0.5, 0.45, 0.35, 1.0)
 			if status == CardStatus.OBTAINABLE:
 				color = Color(0.83, 0.63, 0.23, 1.0)
@@ -886,6 +919,7 @@ class MilestoneCard extends PanelContainer:
 				color = Color(0.28, 0.55, 0.22, 1.0)
 			_status_label.add_theme_color_override("font_color", color)
 			_status_label.add_theme_color_override("font_outline_color", color)
+			_update_status_icon(status, color, status_text)
 
 		if _expires_label != null:
 			_expires_label.text = expires_text
@@ -910,6 +944,23 @@ class MilestoneCard extends PanelContainer:
 			_icons_row.visible = not _owners.is_empty()
 
 		_update_style(status)
+
+	func _update_status_icon(status: int, color: Color, status_text: String) -> void:
+		if _status_icon_slot == null:
+			return
+		var show_check := status == CardStatus.CLAIMED
+		var show_cross := status == CardStatus.UNOBTAINABLE
+		_status_icon_slot.visible = show_check or show_cross
+		_status_icon_slot.tooltip_text = status_text
+
+		if _status_check_icon != null and is_instance_valid(_status_check_icon):
+			_status_check_icon.visible = show_check
+			_status_check_icon.set("color", color)
+			_status_check_icon.tooltip_text = status_text
+		if _status_cross_icon != null and is_instance_valid(_status_cross_icon):
+			_status_cross_icon.visible = show_cross
+			_status_cross_icon.modulate = color
+			_status_cross_icon.tooltip_text = status_text
 
 	func _strip_id_suffix(raw_name: String) -> String:
 		var s := str(raw_name).strip_edges()

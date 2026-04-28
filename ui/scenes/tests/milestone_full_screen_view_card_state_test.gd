@@ -27,27 +27,46 @@ static func run() -> Result:
 		return _finish(Result.failure("MilestoneCard 缺少 StatusLabel"), card)
 	var status_label: Label = status_label_val
 
+	var status_icon_slot_val = card.get("_status_icon_slot")
+	if not (status_icon_slot_val is CenterContainer):
+		return _finish(Result.failure("MilestoneCard 缺少 StatusIconSlot"), card)
+	var status_icon_slot: CenterContainer = status_icon_slot_val
+
+	var status_check_icon_val = card.get("_status_check_icon")
+	if not (status_check_icon_val is Control):
+		return _finish(Result.failure("MilestoneCard 缺少 StatusCheckIcon"), card)
+	var status_check_icon: Control = status_check_icon_val
+
+	var status_cross_icon_val = card.get("_status_cross_icon")
+	if not (status_cross_icon_val is TextureRect):
+		return _finish(Result.failure("MilestoneCard 缺少 StatusCrossIcon"), card)
+	var status_cross_icon: TextureRect = status_cross_icon_val
+
 	var icons_row_val = card.get("_icons_row")
 	if not (icons_row_val is HBoxContainer):
 		return _finish(Result.failure("MilestoneCard 缺少 OwnerLogoRow"), card)
 	var icons_row: HBoxContainer = icons_row_val
 
-	if status_label.get_parent() != icons_row.get_parent():
-		return _finish(Result.failure("状态文案与餐厅 logo 应位于同一行"), card)
+	if status_icon_slot.get_parent() != icons_row.get_parent():
+		return _finish(Result.failure("状态图标与餐厅 logo 应位于同一行"), card)
 
 	var min_size: Vector2 = card.custom_minimum_size
 	if min_size.x < 300.0 or min_size.y < 210.0:
 		return _finish(Result.failure("里程碑卡片尺寸过小: %s" % str(min_size)), card)
 
-	if status_label.get_theme_font_size("font_size") < 16:
-		return _finish(Result.failure("状态文案字号过小: %d" % status_label.get_theme_font_size("font_size")), card)
-	if status_label.get_theme_constant("outline_size") < 1:
-		return _finish(Result.failure("状态文案缺少加粗描边"), card)
+	if status_icon_slot.custom_minimum_size.x < 38.0 or status_icon_slot.custom_minimum_size.y < 38.0:
+		return _finish(Result.failure("状态图标槽尺寸过小: %s" % str(status_icon_slot.custom_minimum_size)), card)
+	if status_label.visible:
+		return _finish(Result.failure("状态文字应被图标替代，不应可见"), card)
 
 	card.set_state([0], 0, 1, 1)
 	await st.process_frame
-	if str(status_label.text) != "他人已获得":
-		return _finish(Result.failure("他人已获得且不可获得时文案错误: %s" % str(status_label.text)), card)
+	if not status_icon_slot.visible:
+		return _finish(Result.failure("他人已获得且不可获得时应显示叉图标"), card)
+	if status_check_icon.visible:
+		return _finish(Result.failure("他人已获得且不可获得时不应显示对钩图标"), card)
+	if not status_cross_icon.visible:
+		return _finish(Result.failure("他人已获得且不可获得时应显示叉图标"), card)
 	if card.modulate.a > 0.85:
 		return _finish(Result.failure("他人已获得且不可获得时卡片应灰化: alpha=%.2f" % card.modulate.a), card)
 	if icons_row.get_child_count() < 1:
@@ -55,15 +74,21 @@ static func run() -> Result:
 
 	card.set_state([1], 0, 1, 1)
 	await st.process_frame
-	if str(status_label.text) != "已获得":
-		return _finish(Result.failure("当前玩家已获得时文案错误: %s" % str(status_label.text)), card)
+	if not status_icon_slot.visible:
+		return _finish(Result.failure("当前玩家已获得时应显示对钩图标"), card)
+	if not status_check_icon.visible:
+		return _finish(Result.failure("当前玩家已获得时应显示对钩图标"), card)
+	if status_cross_icon.visible:
+		return _finish(Result.failure("当前玩家已获得时不应显示叉图标"), card)
 	if card.modulate.a < 0.99:
 		return _finish(Result.failure("当前玩家已获得时卡片不应灰化: alpha=%.2f" % card.modulate.a), card)
 
 	card.set_state([], 1, 1, 1)
 	await st.process_frame
-	if str(status_label.text) != "可获得":
-		return _finish(Result.failure("当前玩家可获得时文案错误: %s" % str(status_label.text)), card)
+	if status_icon_slot.visible:
+		return _finish(Result.failure("当前玩家可获得时不应显示状态图标"), card)
+	if status_check_icon.visible or status_cross_icon.visible:
+		return _finish(Result.failure("当前玩家可获得时不应显示对钩或叉图标"), card)
 	if card.modulate.a < 0.99:
 		return _finish(Result.failure("当前玩家可获得时卡片不应灰化: alpha=%.2f" % card.modulate.a), card)
 
