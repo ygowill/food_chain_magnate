@@ -169,7 +169,7 @@ func _persist_round_autosave(room_code: String, completed_round_number: int, sta
 	if not room.has_method("build_full_authority_archive_export"):
 		GameLog.warn("DedicatedServer", "Round autosave skipped: room export missing %s" % code)
 		return
-	var export_r: Result = room.build_full_authority_archive_export()
+	var export_r: Result = room.build_full_authority_archive_export(kind == "game_over")
 	if not export_r.ok:
 		GameLog.warn("DedicatedServer", "Round autosave export failed room=%s err=%s" % [code, export_r.error])
 		return
