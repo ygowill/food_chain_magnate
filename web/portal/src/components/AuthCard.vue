@@ -38,17 +38,14 @@ defineProps<{
   min-height: 100vh;
   position: relative;
   padding: 40px 20px;
+  background: var(--fcm-page-bg);
 }
 
 .auth-page__bg {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background:
-    radial-gradient(ellipse at 30% 20%, rgba(201, 160, 32, 0.06) 0%, transparent 60%),
-    radial-gradient(ellipse at 70% 80%, rgba(186, 59, 46, 0.05) 0%, transparent 60%),
-    repeating-conic-gradient(rgba(43, 33, 23, 0.025) 0% 25%, transparent 0% 50%) 0 0 / 48px 48px,
-    radial-gradient(ellipse at center, transparent 40%, rgba(18, 13, 8, 0.12) 100%);
+  background: linear-gradient(180deg, rgba(18, 13, 8, 0.02), rgba(18, 13, 8, 0.08));
   z-index: 0;
 }
 

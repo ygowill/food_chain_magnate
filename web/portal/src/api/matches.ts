@@ -99,14 +99,22 @@ export interface MatchArtifactInfo {
   updated_at: string | null
 }
 
+function requireSessionId(sessionId: string): string {
+  const normalized = String(sessionId || '').trim()
+  if (!normalized) {
+    throw new Error('login required')
+  }
+  return normalized
+}
+
 export function listMatches(sessionId: string) {
-  return client.get<MatchSummary[]>('/matches', { params: { session_id: sessionId } })
+  return client.get<MatchSummary[]>('/matches', { params: { session_id: requireSessionId(sessionId) } })
 }
 
 export function getMatch(matchId: string, sessionId: string) {
-  return client.get<MatchDetail>(`/matches/${matchId}`, { params: { session_id: sessionId } })
+  return client.get<MatchDetail>(`/matches/${matchId}`, { params: { session_id: requireSessionId(sessionId) } })
 }
 
 export function getReplay(matchId: string, sessionId: string) {
-  return client.get<ReplayInfo>(`/matches/${matchId}/replay`, { params: { session_id: sessionId } })
+  return client.get<ReplayInfo>(`/matches/${matchId}/replay`, { params: { session_id: requireSessionId(sessionId) } })
 }

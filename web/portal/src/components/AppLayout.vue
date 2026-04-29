@@ -11,7 +11,7 @@
             <svg class="app-nav__icon" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a.75.75 0 01.6.3l7 9.5A.75.75 0 0117 13H3a.75.75 0 01-.6-1.2l7-9.5A.75.75 0 0110 2zm-4.47 14h8.94a.75.75 0 010 1.5H5.53a.75.75 0 010-1.5z"/></svg>
             游戏
           </router-link>
-          <router-link to="/matches" class="app-nav__link">
+          <router-link v-if="auth.isLoggedIn" to="/matches" class="app-nav__link">
             <svg class="app-nav__icon" viewBox="0 0 20 20" fill="currentColor"><path d="M2 4.5A2.5 2.5 0 014.5 2h11A2.5 2.5 0 0118 4.5v11a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 012 15.5v-11zm2.5-1a1 1 0 00-1 1v11a1 1 0 001 1h11a1 1 0 001-1v-11a1 1 0 00-1-1h-11zM6 7h8v1.5H6V7zm0 3h8v1.5H6V10zm0 3h5v1.5H6V13z"/></svg>
             对局历史
           </router-link>
@@ -103,6 +103,7 @@ async function handleLogout() {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background: var(--fcm-page-bg);
 }
 
 .app-nav {

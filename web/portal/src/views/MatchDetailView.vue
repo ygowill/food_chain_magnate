@@ -13,6 +13,11 @@
     </div>
 
     <div v-loading="loading">
+      <div v-if="loadError" class="info-card">
+        <h3 class="card-title">无法查看对局</h3>
+        <span class="empty-hint">{{ loadError }}</span>
+      </div>
+      <template v-else>
       <div class="info-card">
         <h3 class="card-title">基本信息</h3>
         <el-descriptions :column="2" border size="small">
@@ -239,6 +244,7 @@
         </div>
         <el-button v-else type="primary" size="small" @click="loadReplay">加载回放信息</el-button>
       </div>
+      </template>
     </div>
   </AppLayout>
 </template>
@@ -261,6 +267,7 @@ const auth = useAuthStore()
 const match = ref<MatchDetail | null>(null)
 const replay = ref<ReplayInfo | null>(null)
 const loading = ref(false)
+const loadError = ref('')
 const selectedSnapshotId = ref<string | null>(null)
 
 const matchId = route.params.id as string
@@ -374,6 +381,10 @@ function snapshotKindLabel(kind: string | null | undefined): string {
 }
 
 async function loadReplay() {
+  if (!auth.isLoggedIn) {
+    router.replace({ name: 'login', query: { redirect: `/matches/${matchId}` } })
+    return
+  }
   try {
     const { data } = await getReplay(matchId, auth.sessionId)
     replay.value = data
@@ -457,7 +468,20 @@ function downloadSelectedSnapshot() {
 }
 
 onMounted(async () => {
+  if (!auth.isLoggedIn) {
+    router.replace({ name: 'login', query: { redirect: `/matches/${matchId}` } })
+    return
+  }
+  if (auth.user == null) {
+    await auth.fetchUser()
+  }
+  if (!auth.isLoggedIn) {
+    router.replace({ name: 'login', query: { redirect: `/matches/${matchId}` } })
+    return
+  }
+
   loading.value = true
+  loadError.value = ''
   try {
     const { data } = await getMatch(matchId, auth.sessionId)
     match.value = data
@@ -466,6 +490,7 @@ onMounted(async () => {
   } catch {
     match.value = null
     selectedSnapshotId.value = null
+    loadError.value = '只能查看你参与过的对局，或当前登录状态已失效。'
   }
   loading.value = false
 })

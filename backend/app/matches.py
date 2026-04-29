@@ -566,7 +566,7 @@ def _build_participant(
 
 @router.get("", response_model=list[MatchSummary])
 async def list_matches(
-    session_id: str = Query(...),
+    session_id: str = Query(""),
     db: AsyncSession = Depends(get_db),
 ):
     sess = await get_current_user(db=db, session_id=session_id)
@@ -574,10 +574,13 @@ async def list_matches(
         select(Match)
         .join(MatchParticipant, MatchParticipant.match_id == Match.match_id)
         .where(MatchParticipant.user_id == sess.user_id)
+        .distinct()
         .order_by(Match.created_at.desc())
     )
     rows = (await db.execute(stmt)).scalars().all()
     match_ids = [m.match_id for m in rows]
+    if not match_ids:
+        return []
     parts_stmt = select(MatchParticipant).where(MatchParticipant.match_id.in_(match_ids))
     parts = (await db.execute(parts_stmt)).scalars().all()
     replay_rows = (
@@ -621,17 +624,9 @@ async def list_matches(
 
 
 @router.get("/{match_id}", response_model=MatchDetail)
-async def get_match(match_id: str, session_id: str = Query(...), db: AsyncSession = Depends(get_db)):
+async def get_match(match_id: str, session_id: str = Query(""), db: AsyncSession = Depends(get_db)):
     sess = await get_current_user(db=db, session_id=session_id)
-    # Check participant
-    part = (await db.execute(
-        select(MatchParticipant).where(MatchParticipant.match_id == match_id, MatchParticipant.user_id == sess.user_id)
-    )).scalar_one_or_none()
-    if not part:
-        raise HTTPException(403, "not a participant")
-    match = (await db.execute(select(Match).where(Match.match_id == match_id))).scalar_one_or_none()
-    if not match:
-        raise HTTPException(404, "match not found")
+    match = await _require_match_for_participant(db, match_id, sess.user_id)
     parts = (await db.execute(
         select(MatchParticipant).where(MatchParticipant.match_id == match_id)
     )).scalars().all()
@@ -668,13 +663,9 @@ async def get_match(match_id: str, session_id: str = Query(...), db: AsyncSessio
 
 
 @router.get("/{match_id}/replay", response_model=ReplayInfo)
-async def get_replay(match_id: str, session_id: str = Query(...), db: AsyncSession = Depends(get_db)):
+async def get_replay(match_id: str, session_id: str = Query(""), db: AsyncSession = Depends(get_db)):
     sess = await get_current_user(db=db, session_id=session_id)
-    part = (await db.execute(
-        select(MatchParticipant).where(MatchParticipant.match_id == match_id, MatchParticipant.user_id == sess.user_id)
-    )).scalar_one_or_none()
-    if not part:
-        raise HTTPException(403, "not a participant")
+    await _require_match_for_participant(db, match_id, sess.user_id)
     replay = (await db.execute(
         select(MatchReplay).where(MatchReplay.match_id == match_id)
     )).scalar_one_or_none()
@@ -687,13 +678,9 @@ async def get_replay(match_id: str, session_id: str = Query(...), db: AsyncSessi
 
 
 @router.get("/{match_id}/replay/download")
-async def download_replay(match_id: str, session_id: str = Query(...), db: AsyncSession = Depends(get_db)):
+async def download_replay(match_id: str, session_id: str = Query(""), db: AsyncSession = Depends(get_db)):
     sess = await get_current_user(db=db, session_id=session_id)
-    part = (await db.execute(
-        select(MatchParticipant).where(MatchParticipant.match_id == match_id, MatchParticipant.user_id == sess.user_id)
-    )).scalar_one_or_none()
-    if not part:
-        raise HTTPException(403, "not a participant")
+    await _require_match_for_participant(db, match_id, sess.user_id)
 
     replay = (await db.execute(
         select(MatchReplay).where(MatchReplay.match_id == match_id)
@@ -715,7 +702,7 @@ async def download_replay(match_id: str, session_id: str = Query(...), db: Async
 
 
 @router.get("/{match_id}/autosave/download")
-async def download_autosave(match_id: str, session_id: str = Query(...), db: AsyncSession = Depends(get_db)):
+async def download_autosave(match_id: str, session_id: str = Query(""), db: AsyncSession = Depends(get_db)):
     sess = await get_current_user(db=db, session_id=session_id)
     match = await _require_match_for_participant(db, match_id, sess.user_id)
     artifact = (await db.execute(
@@ -736,7 +723,7 @@ async def download_autosave(match_id: str, session_id: str = Query(...), db: Asy
 async def download_map_snapshot(
     match_id: str,
     artifact_id: str,
-    session_id: str = Query(...),
+    session_id: str = Query(""),
     db: AsyncSession = Depends(get_db),
 ):
     sess = await get_current_user(db=db, session_id=session_id)

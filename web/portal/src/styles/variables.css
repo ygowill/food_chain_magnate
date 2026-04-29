@@ -18,6 +18,10 @@
   --fcm-surface: rgb(247, 240, 219);
   --fcm-surface-alt: rgba(235, 224, 199, 0.98);
   --fcm-wall-bg: rgb(237, 224, 191);
+  --fcm-page-bg:
+    linear-gradient(180deg, rgba(43, 33, 23, 0.04) 0%, rgba(43, 33, 23, 0) 40%),
+    repeating-conic-gradient(rgba(43, 33, 23, 0.03) 0% 25%, transparent 0% 50%) 0 0 / 40px 40px,
+    var(--fcm-wall-bg);
   --fcm-cream: #faf5e8;
   --fcm-field-bg: rgba(242, 232, 209, 0.9);
   --fcm-field-bg-disabled: rgba(235, 224, 199, 0.7);

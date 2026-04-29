@@ -133,6 +133,12 @@ async def test_list_matches_empty(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_list_matches_requires_session(client: AsyncClient):
+    resp = await client.get("/v1/matches")
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_list_matches(client: AsyncClient, db_session: AsyncSession):
     user = await _create_user(client)
     await _seed_match(db_session, user["user_id"])
@@ -143,6 +149,22 @@ async def test_list_matches(client: AsyncClient, db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
+async def test_list_matches_only_current_user_participation(client: AsyncClient, db_session: AsyncSession):
+    user1 = await _create_user(client)
+    user2 = await _create_user(client)
+    own_match_id = await _seed_match(db_session, user1["user_id"])
+    other_match_id = await _seed_match(db_session, user2["user_id"])
+
+    resp = await client.get("/v1/matches", params={"session_id": user1["session_id"]})
+
+    assert resp.status_code == 200
+    match_ids = {item["match_id"] for item in resp.json()}
+    assert own_match_id in match_ids
+    assert other_match_id not in match_ids
+    assert len(match_ids) == 1
+
+
+@pytest.mark.asyncio
 async def test_get_match_detail(client: AsyncClient, db_session: AsyncSession):
     user = await _create_user(client)
     mid = await _seed_match(db_session, user["user_id"])
@@ -150,6 +172,14 @@ async def test_get_match_detail(client: AsyncClient, db_session: AsyncSession):
     assert resp.status_code == 200
     assert resp.json()["match_id"] == mid
     assert resp.json()["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_get_match_detail_requires_session(client: AsyncClient, db_session: AsyncSession):
+    user = await _create_user(client)
+    mid = await _seed_match(db_session, user["user_id"])
+    resp = await client.get(f"/v1/matches/{mid}")
+    assert resp.status_code == 401
 
 
 @pytest.mark.asyncio

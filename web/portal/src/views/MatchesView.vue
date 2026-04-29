@@ -139,6 +139,18 @@ function participantDisplays(match: MatchSummary): Array<{ name: string; logoUrl
 }
 
 onMounted(async () => {
+  if (!auth.isLoggedIn) {
+    router.replace({ name: 'login', query: { redirect: '/matches' } })
+    return
+  }
+  if (auth.user == null) {
+    await auth.fetchUser()
+  }
+  if (!auth.isLoggedIn) {
+    router.replace({ name: 'login', query: { redirect: '/matches' } })
+    return
+  }
+
   loading.value = true
   try {
     const { data } = await listMatches(auth.sessionId)

@@ -134,10 +134,7 @@ function openGame() {
 <style scoped>
 .home {
   margin: -32px calc(50% - 50vw);
-  background:
-    linear-gradient(180deg, rgba(43, 33, 23, 0.04) 0%, rgba(43, 33, 23, 0) 40%),
-    repeating-conic-gradient(rgba(43, 33, 23, 0.03) 0% 25%, transparent 0% 50%) 0 0 / 40px 40px,
-    var(--fcm-wall-bg);
+  background: var(--fcm-page-bg);
 }
 
 /* ---- Hero ---- */
