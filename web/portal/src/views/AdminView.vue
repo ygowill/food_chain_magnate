@@ -1,7 +1,10 @@
 <template>
   <AppLayout>
     <div class="page-header">
-      <h2 class="page-title">管理后台</h2>
+      <div class="page-title-row">
+        <h2 class="page-title">管理后台</h2>
+        <el-tag size="small" type="info">权限：{{ adminRoleLabel }}</el-tag>
+      </div>
       <div class="page-title-line" />
     </div>
 
@@ -40,7 +43,7 @@
             <el-button text :disabled="selectedUserIds.length === 0" @click="clearUserSelection">清空选择</el-button>
             <span class="selection-count">已选 {{ selectedUserIds.length }}</span>
             <el-button
-              :disabled="selectedUserIds.length === 0 || !bulkUserStatus"
+              :disabled="selectedUserIds.length === 0 || !bulkUserStatus || !canOperateAdmin"
               @click="handleBatchUpdateUserStatus"
             >
               批量改状态
@@ -48,7 +51,7 @@
             <el-button
               type="danger"
               plain
-              :disabled="selectedUserIds.length === 0"
+              :disabled="selectedUserIds.length === 0 || !canSuperAdmin"
               @click="handleBatchDeleteUsers"
             >
               批量删除用户
@@ -78,7 +81,12 @@
             <el-table-column label="状态" width="220">
               <template #default="{ row }">
                 <div class="inline-row">
-                  <el-select v-model="userStatusDraft[row.user_id]" size="small" class="status-select">
+                  <el-select
+                    v-model="userStatusDraft[row.user_id]"
+                    size="small"
+                    class="status-select"
+                    :disabled="!canOperateAdmin"
+                  >
                     <el-option label="active" value="active" />
                     <el-option label="disabled" value="disabled" />
                     <el-option label="banned" value="banned" />
@@ -86,7 +94,7 @@
                   <el-button
                     size="small"
                     @click="saveUserStatus(row)"
-                    :disabled="userStatusDraft[row.user_id] === row.status"
+                    :disabled="!canOperateAdmin || userStatusDraft[row.user_id] === row.status"
                   >
                     保存
                   </el-button>
@@ -150,7 +158,7 @@
             <el-button text :disabled="selectedRoomCodes.length === 0" @click="clearRoomSelection">清空选择</el-button>
             <span class="selection-count">已选 {{ selectedRoomCodes.length }}</span>
             <el-button
-              :disabled="selectedRoomCodes.length === 0"
+              :disabled="selectedRoomCodes.length === 0 || !canOperateAdmin"
               @click="handleBatchEndRooms"
             >
               批量结束
@@ -158,7 +166,7 @@
             <el-button
               type="danger"
               plain
-              :disabled="selectedRoomCodes.length === 0"
+              :disabled="selectedRoomCodes.length === 0 || !canSuperAdmin"
               @click="handleBatchDeleteRooms"
             >
               批量删除房间
@@ -202,7 +210,7 @@
                     size="small"
                     type="danger"
                     plain
-                    :disabled="row.status === 'Ended'"
+                    :disabled="row.status === 'Ended' || !canOperateAdmin"
                     @click="handleEndRoom(row)"
                   >
                     结束
@@ -317,7 +325,7 @@
             <el-button
               type="danger"
               plain
-              :disabled="selectedMatchIds.length === 0"
+              :disabled="selectedMatchIds.length === 0 || !canSuperAdmin"
               @click="handleBatchDeleteMatches"
             >
               批量删除对局
@@ -335,7 +343,30 @@
             <el-table-column prop="room_code" label="房间号" width="120">
               <template #default="{ row }">{{ row.room_code || '-' }}</template>
             </el-table-column>
-            <el-table-column prop="status" label="状态" width="110" />
+            <el-table-column label="状态" width="220">
+              <template #default="{ row }">
+                <div class="inline-row">
+                  <el-select
+                    v-model="matchStatusDraft[row.match_id]"
+                    size="small"
+                    class="match-status-select"
+                    :disabled="!canOperateAdmin"
+                  >
+                    <el-option label="in_progress" value="in_progress" />
+                    <el-option label="completed" value="completed" />
+                    <el-option label="failed" value="failed" />
+                    <el-option label="abandoned" value="abandoned" />
+                  </el-select>
+                  <el-button
+                    size="small"
+                    :disabled="!canOperateAdmin || matchStatusDraft[row.match_id] === row.status"
+                    @click="saveMatchStatus(row)"
+                  >
+                    保存
+                  </el-button>
+                </div>
+              </template>
+            </el-table-column>
             <el-table-column prop="player_count" label="玩家数" width="80" />
             <el-table-column prop="participant_count" label="参与人数" width="90" />
             <el-table-column label="回放" width="80">
@@ -348,7 +379,7 @@
               <template #default="{ row }">
                 <div class="inline-row">
                   <el-button size="small" @click="router.push(`/matches/${row.match_id}`)">查看</el-button>
-                  <el-button size="small" type="danger" plain @click="handleDeleteMatch(row)">删除</el-button>
+                  <el-button size="small" type="danger" plain :disabled="!canSuperAdmin" @click="handleDeleteMatch(row)">删除</el-button>
                 </div>
               </template>
             </el-table-column>
@@ -475,7 +506,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -518,6 +549,14 @@ const CROSS_PAGE_SELECT_SIZE = 200
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const adminRoleLabel = computed(() => {
+  if (auth.adminRole === 'superadmin') return '超级管理员'
+  if (auth.adminRole === 'operator') return '运营管理员'
+  if (auth.adminRole === 'viewer') return '只读管理员'
+  return '未授权'
+})
+const canOperateAdmin = computed(() => auth.canOperateAdmin)
+const canSuperAdmin = computed(() => auth.canSuperAdmin)
 
 const activeTab = ref<AdminTab>('users')
 const errorMessage = ref('')
@@ -613,6 +652,18 @@ function parseServerOnlineFilter(): boolean | undefined {
   if (serverOnlineFilter.value === 'true') return true
   if (serverOnlineFilter.value === 'false') return false
   return undefined
+}
+
+function requireOperatorPermission(): boolean {
+  if (canOperateAdmin.value) return true
+  ElMessage.error('需要运营管理员权限')
+  return false
+}
+
+function requireSuperAdminPermission(): boolean {
+  if (canSuperAdmin.value) return true
+  ElMessage.error('需要超级管理员权限')
+  return false
 }
 
 function summarizeBatchResult(prefix: string, result: BatchActionResult): string {
@@ -924,6 +975,7 @@ function handleUsersPageChange(page: number) {
 }
 
 async function saveUserStatus(user: AdminUserSummary) {
+  if (!requireOperatorPermission()) return
   const nextStatus = userStatusDraft.value[user.user_id]
   if (!nextStatus || nextStatus === user.status) return
   try {
@@ -951,6 +1003,7 @@ async function openUserDetail(user: AdminUserSummary) {
 }
 
 async function handleBatchUpdateUserStatus() {
+  if (!requireOperatorPermission()) return
   const userIds = [...selectedUserIds.value]
   const status = bulkUserStatus.value.trim()
   if (userIds.length === 0 || !status) return
@@ -978,6 +1031,7 @@ async function handleBatchUpdateUserStatus() {
 }
 
 async function handleBatchDeleteUsers() {
+  if (!requireSuperAdminPermission()) return
   const userIds = [...selectedUserIds.value]
   if (userIds.length === 0) return
   try {
@@ -1067,6 +1121,7 @@ async function openRoomDetail(room: AdminRoomSummary) {
 }
 
 async function handleEndRoom(room: AdminRoomSummary) {
+  if (!requireOperatorPermission()) return
   try {
     await ElMessageBox.confirm(`确认结束房间 ${room.room_code}？`, '确认操作', {
       type: 'warning',
@@ -1086,6 +1141,7 @@ async function handleEndRoom(room: AdminRoomSummary) {
 }
 
 async function handleBatchEndRooms() {
+  if (!requireOperatorPermission()) return
   const roomCodes = [...selectedRoomCodes.value]
   if (roomCodes.length === 0) return
   try {
@@ -1108,6 +1164,7 @@ async function handleBatchEndRooms() {
 }
 
 async function handleBatchDeleteRooms() {
+  if (!requireSuperAdminPermission()) return
   const roomCodes = [...selectedRoomCodes.value]
   if (roomCodes.length === 0) return
   try {
@@ -1206,6 +1263,7 @@ function handleMatchesPageChange(page: number) {
 }
 
 async function saveMatchStatus(match: AdminMatchSummary) {
+  if (!requireOperatorPermission()) return
   const nextStatus = matchStatusDraft.value[match.match_id]
   if (!nextStatus || nextStatus === match.status) return
   try {
@@ -1218,6 +1276,7 @@ async function saveMatchStatus(match: AdminMatchSummary) {
 }
 
 async function handleDeleteMatch(match: AdminMatchSummary) {
+  if (!requireSuperAdminPermission()) return
   try {
     await ElMessageBox.confirm(`确认删除对局 ${match.match_id}？此操作不可撤销。`, '确认删除', {
       type: 'warning',
@@ -1237,6 +1296,7 @@ async function handleDeleteMatch(match: AdminMatchSummary) {
 }
 
 async function handleBatchDeleteMatches() {
+  if (!requireSuperAdminPermission()) return
   const matchIds = [...selectedMatchIds.value]
   if (matchIds.length === 0) return
   try {
@@ -1317,8 +1377,15 @@ onMounted(async () => {
   margin-bottom: 24px;
 }
 
+.page-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
 .page-title {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 22px;
   font-weight: 700;
   color: var(--fcm-text-primary);

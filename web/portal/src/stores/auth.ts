@@ -17,6 +17,7 @@ const DISPLAY_NAME_KEY = 'fcm_display_name'
 const DEVICE_ID_KEY = 'fcm_device_id'
 const EMAIL_KEY = 'fcm_email'
 const IS_ADMIN_KEY = 'fcm_is_admin'
+const ADMIN_ROLE_KEY = 'fcm_admin_role'
 const CREATED_AT_KEY = 'fcm_created_at'
 const LEGACY_EMAIL_VERIFIED_KEY = 'fcm_email_verified'
 const LEGACY_EMAIL_VERIFICATION_PENDING_KEY = 'fcm_email_verification_pending'
@@ -28,6 +29,7 @@ const SHARED_AUTH_KEYS = new Set([
   DISPLAY_NAME_KEY,
   EMAIL_KEY,
   IS_ADMIN_KEY,
+  ADMIN_ROLE_KEY,
   CREATED_AT_KEY,
 ])
 
@@ -39,6 +41,9 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isLoggedIn = computed(() => !!sessionId.value)
   const isAdmin = computed(() => !!user.value?.is_admin)
+  const adminRole = computed(() => user.value?.admin_role || '')
+  const canOperateAdmin = computed(() => adminRole.value === 'operator' || adminRole.value === 'superadmin')
+  const canSuperAdmin = computed(() => adminRole.value === 'superadmin')
 
   function applySession(nextSessionId: string) {
     sessionId.value = nextSessionId
@@ -55,11 +60,12 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem(DISPLAY_NAME_KEY, data.display_name || '')
   }
 
-  function syncStoredAccountDetails(data: Pick<MeResponse, 'email' | 'is_admin' | 'created_at'>) {
+  function syncStoredAccountDetails(data: Pick<MeResponse, 'email' | 'is_admin' | 'admin_role' | 'created_at'>) {
     localStorage.setItem(EMAIL_KEY, data.email || '')
     localStorage.removeItem(LEGACY_EMAIL_VERIFIED_KEY)
     localStorage.removeItem(LEGACY_EMAIL_VERIFICATION_PENDING_KEY)
     localStorage.setItem(IS_ADMIN_KEY, String(!!data.is_admin))
+    localStorage.setItem(ADMIN_ROLE_KEY, data.admin_role || '')
     localStorage.setItem(CREATED_AT_KEY, data.created_at || '')
   }
 
@@ -71,6 +77,7 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem(LEGACY_EMAIL_VERIFIED_KEY)
     localStorage.removeItem(LEGACY_EMAIL_VERIFICATION_PENDING_KEY)
     localStorage.removeItem(IS_ADMIN_KEY)
+    localStorage.removeItem(ADMIN_ROLE_KEY)
     localStorage.removeItem(CREATED_AT_KEY)
   }
 
@@ -96,6 +103,7 @@ export const useAuthStore = defineStore('auth', () => {
     syncStoredAccountDetails({
       email: null,
       is_admin: false,
+      admin_role: null,
       created_at: '',
     })
   }
@@ -193,6 +201,9 @@ export const useAuthStore = defineStore('auth', () => {
     user,
     isLoggedIn,
     isAdmin,
+    adminRole,
+    canOperateAdmin,
+    canSuperAdmin,
     login,
     register,
     guestLogin,

@@ -9,7 +9,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_user, has_admin_access_configured, is_admin_user
+from app.auth import (
+    ADMIN_ROLE_OPERATOR,
+    ADMIN_ROLE_SUPERADMIN,
+    ADMIN_ROLE_VIEWER,
+    get_admin_role,
+    get_current_user,
+    has_admin_access_configured,
+)
 from app.config import settings
 from app.db import get_db
 from app.models import AuthIdentity, GameServer, Match, MatchArtifact, MatchParticipant, MatchReplay, Room, RoomMember, RoomTombstone, Session, User
@@ -23,6 +30,11 @@ from app.replay_storage import (
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
 GAME_SERVER_HEALTH_WINDOW_SECONDS = 75
 ACTIVE_ROOM_STATUSES = ("Lobby", "Starting", "InGame")
+ADMIN_ROLE_RANK = {
+    ADMIN_ROLE_VIEWER: 1,
+    ADMIN_ROLE_OPERATOR: 2,
+    ADMIN_ROLE_SUPERADMIN: 3,
+}
 
 
 def _to_iso(value: Optional[datetime]) -> Optional[str]:
@@ -77,16 +89,41 @@ def _parse_room_config(config_json: Optional[str]) -> dict:
     return parsed if isinstance(parsed, dict) else {"value": parsed}
 
 
-async def _require_admin_session(
+async def _require_admin_role(
+    required_role: str,
     session_id: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ) -> Session:
     sess = await get_current_user(db=db, session_id=session_id)
     if not has_admin_access_configured():
         raise HTTPException(status_code=403, detail="admin disabled")
-    if not await is_admin_user(db, sess.user_id):
+    role = await get_admin_role(db, sess.user_id)
+    if role is None:
         raise HTTPException(status_code=403, detail="admin only")
+    if ADMIN_ROLE_RANK.get(role, 0) < ADMIN_ROLE_RANK.get(required_role, 0):
+        raise HTTPException(status_code=403, detail=f"admin role {required_role} required")
     return sess
+
+
+async def _require_admin_session(
+    session_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+) -> Session:
+    return await _require_admin_role(ADMIN_ROLE_VIEWER, session_id=session_id, db=db)
+
+
+async def _require_admin_operator_session(
+    session_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+) -> Session:
+    return await _require_admin_role(ADMIN_ROLE_OPERATOR, session_id=session_id, db=db)
+
+
+async def _require_admin_superadmin_session(
+    session_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+) -> Session:
+    return await _require_admin_role(ADMIN_ROLE_SUPERADMIN, session_id=session_id, db=db)
 
 
 class AdminUserSummary(BaseModel):
@@ -629,7 +666,7 @@ async def get_user_detail(
 async def update_user_status(
     user_id: str,
     payload: AdminUserStatusUpdateRequest,
-    _status: Session = Depends(_require_admin_session),
+    _status: Session = Depends(_require_admin_operator_session),
     db: AsyncSession = Depends(get_db),
 ):
     new_status = str(payload.status or "").strip().lower()
@@ -686,7 +723,7 @@ async def update_user_status(
 @router.post("/users/batch/status", response_model=BatchActionResult)
 async def batch_update_user_status(
     payload: AdminBatchUserStatusRequest,
-    _status: Session = Depends(_require_admin_session),
+    _status: Session = Depends(_require_admin_operator_session),
     db: AsyncSession = Depends(get_db),
 ):
     normalized_user_ids = _normalize_non_empty_items(payload.user_ids)
@@ -718,7 +755,7 @@ async def batch_update_user_status(
 @router.post("/users/batch/delete", response_model=BatchActionResult)
 async def batch_delete_users(
     payload: AdminBatchUserDeleteRequest,
-    _status: Session = Depends(_require_admin_session),
+    _status: Session = Depends(_require_admin_superadmin_session),
     db: AsyncSession = Depends(get_db),
 ):
     normalized_user_ids = _normalize_non_empty_items(payload.user_ids)
@@ -959,7 +996,7 @@ async def get_room_detail(
 @router.post("/rooms/batch/end", response_model=BatchActionResult)
 async def batch_end_rooms(
     payload: AdminBatchRoomRequest,
-    _status: Session = Depends(_require_admin_session),
+    _status: Session = Depends(_require_admin_operator_session),
     db: AsyncSession = Depends(get_db),
 ):
     normalized_room_codes = _normalize_non_empty_items(payload.room_codes)
@@ -992,7 +1029,7 @@ async def batch_end_rooms(
 @router.post("/rooms/batch/delete", response_model=BatchActionResult)
 async def batch_delete_rooms(
     payload: AdminBatchRoomRequest,
-    _status: Session = Depends(_require_admin_session),
+    _status: Session = Depends(_require_admin_superadmin_session),
     db: AsyncSession = Depends(get_db),
 ):
     normalized_room_codes = _normalize_non_empty_items(payload.room_codes)
@@ -1015,7 +1052,7 @@ async def batch_delete_rooms(
 @router.post("/rooms/{room_code}/end", response_model=AdminRoomSummary)
 async def end_room(
     room_code: str,
-    _status: Session = Depends(_require_admin_session),
+    _status: Session = Depends(_require_admin_operator_session),
     db: AsyncSession = Depends(get_db),
 ):
     room = (await db.execute(select(Room).where(Room.room_code == room_code))).scalar_one_or_none()
@@ -1228,7 +1265,7 @@ async def list_matches(
 async def update_match_status(
     match_id: str,
     payload: AdminMatchStatusUpdateRequest,
-    _status: Session = Depends(_require_admin_session),
+    _status: Session = Depends(_require_admin_operator_session),
     db: AsyncSession = Depends(get_db),
 ):
     new_status = str(payload.status or "").strip()
@@ -1264,7 +1301,7 @@ async def update_match_status(
 @router.post("/matches/batch/delete", response_model=BatchActionResult)
 async def batch_delete_matches(
     payload: AdminBatchMatchDeleteRequest,
-    _status: Session = Depends(_require_admin_session),
+    _status: Session = Depends(_require_admin_superadmin_session),
     db: AsyncSession = Depends(get_db),
 ):
     normalized_match_ids = _normalize_non_empty_items(payload.match_ids)
@@ -1287,7 +1324,7 @@ async def batch_delete_matches(
 @router.delete("/matches/{match_id}", response_model=SimpleOkResponse)
 async def delete_match_by_id(
     match_id: str,
-    _status: Session = Depends(_require_admin_session),
+    _status: Session = Depends(_require_admin_superadmin_session),
     db: AsyncSession = Depends(get_db),
 ):
     deleted_match_ids = await _delete_matches_by_ids(db, [match_id])

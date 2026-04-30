@@ -58,16 +58,18 @@ async def _seed_room_and_match(
 
 
 @pytest.mark.asyncio
-async def test_admin_requires_allowlist(client: AsyncClient):
+async def test_admin_requires_allowlist(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
     user = await _create_user(client)
-    old_admin_user_ids = settings.admin_user_ids
-    settings.admin_user_ids = ""
-    try:
-        resp = await client.get("/v1/admin/users", params={"session_id": user["session_id"]})
-        assert resp.status_code == 403
-        assert resp.json()["detail"] == "admin disabled"
-    finally:
-        settings.admin_user_ids = old_admin_user_ids
+    monkeypatch.setattr(settings, "admin_user_ids", "")
+    monkeypatch.setattr(settings, "admin_viewer_user_ids", "")
+    monkeypatch.setattr(settings, "admin_operator_user_ids", "")
+    monkeypatch.setattr(settings, "admin_superadmin_user_ids", "")
+    monkeypatch.setattr(settings, "admin_email", "")
+    monkeypatch.setattr(settings, "admin_password", "")
+
+    resp = await client.get("/v1/admin/users", params={"session_id": user["session_id"]})
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == "admin disabled"
 
 
 @pytest.mark.asyncio
@@ -76,6 +78,9 @@ async def test_admin_env_credentials_enable_admin_access(client: AsyncClient, mo
     monkeypatch.setattr(settings, "admin_email", "admin-env@fcm.test")
     monkeypatch.setattr(settings, "admin_password", "env-secret")
     monkeypatch.setattr(settings, "admin_display_name", "EnvAdmin")
+    monkeypatch.setattr(settings, "admin_viewer_user_ids", "")
+    monkeypatch.setattr(settings, "admin_operator_user_ids", "")
+    monkeypatch.setattr(settings, "admin_superadmin_user_ids", "")
 
     login = await client.post("/v1/auth/login", json={
         "email": "admin-env@fcm.test",
@@ -88,13 +93,73 @@ async def test_admin_env_credentials_enable_admin_access(client: AsyncClient, mo
 
 
 @pytest.mark.asyncio
+async def test_admin_roles_gate_mutations(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    viewer = await _create_user(client)
+    operator = await _create_user(client)
+    superadmin = await _create_user(client)
+    target = await _create_user(client)
+
+    monkeypatch.setattr(settings, "admin_email", "")
+    monkeypatch.setattr(settings, "admin_password", "")
+    monkeypatch.setattr(settings, "admin_user_ids", "")
+    monkeypatch.setattr(settings, "admin_viewer_user_ids", viewer["user_id"])
+    monkeypatch.setattr(settings, "admin_operator_user_ids", operator["user_id"])
+    monkeypatch.setattr(settings, "admin_superadmin_user_ids", superadmin["user_id"])
+
+    list_resp = await client.get("/v1/admin/users", params={"session_id": viewer["session_id"]})
+    assert list_resp.status_code == 200
+
+    viewer_update = await client.put(
+        f"/v1/admin/users/{target['user_id']}/status",
+        params={"session_id": viewer["session_id"]},
+        json={"status": "disabled"},
+    )
+    assert viewer_update.status_code == 403
+    assert viewer_update.json()["detail"] == "admin role operator required"
+
+    operator_update = await client.put(
+        f"/v1/admin/users/{target['user_id']}/status",
+        params={"session_id": operator["session_id"]},
+        json={"status": "disabled"},
+    )
+    assert operator_update.status_code == 200
+    assert operator_update.json()["status"] == "disabled"
+
+    operator_delete = await client.post(
+        "/v1/admin/users/batch/delete",
+        params={"session_id": operator["session_id"]},
+        json={"user_ids": [target["user_id"]]},
+    )
+    assert operator_delete.status_code == 403
+    assert operator_delete.json()["detail"] == "admin role superadmin required"
+
+    superadmin_delete = await client.post(
+        "/v1/admin/users/batch/delete",
+        params={"session_id": superadmin["session_id"]},
+        json={"user_ids": [target["user_id"]]},
+    )
+    assert superadmin_delete.status_code == 200
+    assert superadmin_delete.json()["affected"] == 1
+
+
+@pytest.mark.asyncio
 async def test_admin_endpoints_manage_entities(client: AsyncClient, db_session: AsyncSession, tmp_path: Path):
     admin_user = await _create_user(client)
     normal_user = await _create_user(client)
 
     old_admin_user_ids = settings.admin_user_ids
+    old_admin_viewer_user_ids = settings.admin_viewer_user_ids
+    old_admin_operator_user_ids = settings.admin_operator_user_ids
+    old_admin_superadmin_user_ids = settings.admin_superadmin_user_ids
+    old_admin_email = settings.admin_email
+    old_admin_password = settings.admin_password
     old_replay_storage_dir = settings.replay_storage_dir
     settings.admin_user_ids = admin_user["user_id"]
+    settings.admin_viewer_user_ids = ""
+    settings.admin_operator_user_ids = ""
+    settings.admin_superadmin_user_ids = ""
+    settings.admin_email = ""
+    settings.admin_password = ""
     settings.replay_storage_dir = str(tmp_path)
     try:
         admin_me = await client.get("/v1/auth/me", params={"session_id": admin_user["session_id"]})
@@ -259,6 +324,11 @@ async def test_admin_endpoints_manage_entities(client: AsyncClient, db_session: 
         assert all(item["match_id"] != match_id for item in matches_after_delete.json()["items"])
     finally:
         settings.admin_user_ids = old_admin_user_ids
+        settings.admin_viewer_user_ids = old_admin_viewer_user_ids
+        settings.admin_operator_user_ids = old_admin_operator_user_ids
+        settings.admin_superadmin_user_ids = old_admin_superadmin_user_ids
+        settings.admin_email = old_admin_email
+        settings.admin_password = old_admin_password
         settings.replay_storage_dir = old_replay_storage_dir
 
 
@@ -270,8 +340,18 @@ async def test_admin_batch_endpoints_manage_entities(client: AsyncClient, db_ses
     user_c = await _create_user(client)
 
     old_admin_user_ids = settings.admin_user_ids
+    old_admin_viewer_user_ids = settings.admin_viewer_user_ids
+    old_admin_operator_user_ids = settings.admin_operator_user_ids
+    old_admin_superadmin_user_ids = settings.admin_superadmin_user_ids
+    old_admin_email = settings.admin_email
+    old_admin_password = settings.admin_password
     old_replay_storage_dir = settings.replay_storage_dir
     settings.admin_user_ids = admin_user["user_id"]
+    settings.admin_viewer_user_ids = ""
+    settings.admin_operator_user_ids = ""
+    settings.admin_superadmin_user_ids = ""
+    settings.admin_email = ""
+    settings.admin_password = ""
     settings.replay_storage_dir = str(tmp_path)
     try:
         room_code_a, match_id_a = await _seed_room_and_match(
@@ -362,4 +442,9 @@ async def test_admin_batch_endpoints_manage_entities(client: AsyncClient, db_ses
         assert user_b["user_id"] not in remaining_user_ids
     finally:
         settings.admin_user_ids = old_admin_user_ids
+        settings.admin_viewer_user_ids = old_admin_viewer_user_ids
+        settings.admin_operator_user_ids = old_admin_operator_user_ids
+        settings.admin_superadmin_user_ids = old_admin_superadmin_user_ids
+        settings.admin_email = old_admin_email
+        settings.admin_password = old_admin_password
         settings.replay_storage_dir = old_replay_storage_dir

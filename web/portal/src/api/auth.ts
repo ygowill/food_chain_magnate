@@ -13,6 +13,7 @@ export interface MeResponse {
   email: string | null
   is_guest: boolean
   is_admin: boolean
+  admin_role: string | null
   created_at: string
 }
 

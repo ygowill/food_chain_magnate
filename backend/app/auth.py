@@ -21,6 +21,9 @@ _DISPLAY_NAME_MAX_LEN = 24
 _GUEST_NAME_PREFIX = "游客#"
 _ACCOUNT_NAME_PREFIX = "账号#"
 _DEFAULT_NAME_SUFFIX = "0000"
+ADMIN_ROLE_VIEWER = "viewer"
+ADMIN_ROLE_OPERATOR = "operator"
+ADMIN_ROLE_SUPERADMIN = "superadmin"
 
 
 class GuestRequest(BaseModel):
@@ -58,6 +61,7 @@ class MeResponse(BaseModel):
     email: Optional[str]
     is_guest: bool
     is_admin: bool
+    admin_role: Optional[str] = None
     created_at: str
 
 
@@ -175,9 +179,25 @@ def _is_legacy_password_hash(credential_hash: str) -> bool:
     return credential_hash.count("$") == 1 and not credential_hash.startswith("pbkdf2_sha256$")
 
 
-def _parse_admin_user_ids() -> set[str]:
-    raw = str(settings.admin_user_ids or "")
+def _parse_user_id_list(raw_value: str) -> set[str]:
+    raw = str(raw_value or "")
     return {item.strip() for item in raw.split(",") if item.strip()}
+
+
+def _parse_admin_user_ids() -> set[str]:
+    return _parse_user_id_list(settings.admin_user_ids)
+
+
+def _parse_admin_viewer_user_ids() -> set[str]:
+    return _parse_user_id_list(settings.admin_viewer_user_ids)
+
+
+def _parse_admin_operator_user_ids() -> set[str]:
+    return _parse_user_id_list(settings.admin_operator_user_ids)
+
+
+def _parse_admin_superadmin_user_ids() -> set[str]:
+    return _parse_user_id_list(settings.admin_superadmin_user_ids)
 
 
 def _configured_admin_email() -> str:
@@ -189,16 +209,34 @@ def _configured_admin_password() -> str:
 
 
 def has_admin_access_configured() -> bool:
-    if _parse_admin_user_ids():
+    if (
+        _parse_admin_user_ids()
+        or _parse_admin_viewer_user_ids()
+        or _parse_admin_operator_user_ids()
+        or _parse_admin_superadmin_user_ids()
+    ):
         return True
     return _configured_admin_email() != "" and _configured_admin_password().strip() != ""
 
 
+def _user_id_matches(user_id: str, user_ids: set[str]) -> bool:
+    return "*" in user_ids or user_id in user_ids
+
+
+def get_admin_role_for_user_id(user_id: str) -> Optional[str]:
+    if _user_id_matches(user_id, _parse_admin_superadmin_user_ids()):
+        return ADMIN_ROLE_SUPERADMIN
+    if _user_id_matches(user_id, _parse_admin_user_ids()):
+        return ADMIN_ROLE_SUPERADMIN
+    if _user_id_matches(user_id, _parse_admin_operator_user_ids()):
+        return ADMIN_ROLE_OPERATOR
+    if _user_id_matches(user_id, _parse_admin_viewer_user_ids()):
+        return ADMIN_ROLE_VIEWER
+    return None
+
+
 def is_admin_user_id(user_id: str) -> bool:
-    admin_user_ids = _parse_admin_user_ids()
-    if not admin_user_ids:
-        return False
-    return "*" in admin_user_ids or user_id in admin_user_ids
+    return get_admin_role_for_user_id(user_id) is not None
 
 
 async def _get_user_by_id(db: AsyncSession, user_id: str) -> Optional[User]:
@@ -321,15 +359,22 @@ async def _ensure_display_name_available(
 
 
 async def is_admin_user(db: AsyncSession, user_id: str) -> bool:
-    if is_admin_user_id(user_id):
-        return True
+    return await get_admin_role(db, user_id) is not None
+
+
+async def get_admin_role(db: AsyncSession, user_id: str) -> Optional[str]:
+    configured_role = get_admin_role_for_user_id(user_id)
+    if configured_role is not None:
+        return configured_role
     configured_email = _configured_admin_email()
-    if configured_email == "":
-        return False
+    if configured_email == "" or _configured_admin_password().strip() == "":
+        return None
     email_identity = await _get_email_identity_by_user(db, user_id)
     if email_identity is None:
-        return False
-    return str(email_identity.provider_user_id) == configured_email
+        return None
+    if str(email_identity.provider_user_id) == configured_email:
+        return ADMIN_ROLE_SUPERADMIN
+    return None
 
 
 def _is_reserved_admin_email(email: str) -> bool:
@@ -539,12 +584,14 @@ async def get_me(session_id: str = "", db: AsyncSession = Depends(get_db)):
     if changed and display_name != old_display_name:
         await db.commit()
 
+    admin_role = await get_admin_role(db, user.user_id)
     return MeResponse(
         user_id=user.user_id,
         display_name=display_name,
         email=email_identity.provider_user_id if email_identity else None,
         is_guest=is_guest,
-        is_admin=await is_admin_user(db, user.user_id),
+        is_admin=admin_role is not None,
+        admin_role=admin_role,
         created_at=user.created_at.isoformat(),
     )
 

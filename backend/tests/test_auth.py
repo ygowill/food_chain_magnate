@@ -132,6 +132,9 @@ async def test_admin_env_login_bootstraps_account_without_registration(client: A
     monkeypatch.setattr(auth_module.settings, "admin_password", "super-secret")
     monkeypatch.setattr(auth_module.settings, "admin_display_name", "SystemAdmin")
     monkeypatch.setattr(auth_module.settings, "admin_user_ids", "")
+    monkeypatch.setattr(auth_module.settings, "admin_viewer_user_ids", "")
+    monkeypatch.setattr(auth_module.settings, "admin_operator_user_ids", "")
+    monkeypatch.setattr(auth_module.settings, "admin_superadmin_user_ids", "")
     resp = await client.post("/v1/auth/login", json={"email": "admin@fcm.test", "password": "super-secret"})
     assert resp.status_code == 200
     assert resp.json()["display_name"] == "SystemAdmin"
@@ -139,7 +142,37 @@ async def test_admin_env_login_bootstraps_account_without_registration(client: A
     me = await client.get("/v1/auth/me", params={"session_id": resp.json()["session_id"]})
     assert me.status_code == 200
     assert me.json()["is_admin"] is True
+    assert me.json()["admin_role"] == "superadmin"
     assert me.json()["email"] == "admin@fcm.test"
+
+
+@pytest.mark.asyncio
+async def test_me_returns_admin_role_from_allowlist(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    viewer = await client.post("/v1/auth/guest", json={"device_id": "role-viewer"})
+    operator = await client.post("/v1/auth/guest", json={"device_id": "role-operator"})
+    legacy_admin = await client.post("/v1/auth/guest", json={"device_id": "role-legacy-admin"})
+
+    monkeypatch.setattr(auth_module.settings, "admin_email", "")
+    monkeypatch.setattr(auth_module.settings, "admin_password", "")
+    monkeypatch.setattr(auth_module.settings, "admin_viewer_user_ids", viewer.json()["user_id"])
+    monkeypatch.setattr(auth_module.settings, "admin_operator_user_ids", operator.json()["user_id"])
+    monkeypatch.setattr(auth_module.settings, "admin_superadmin_user_ids", "")
+    monkeypatch.setattr(auth_module.settings, "admin_user_ids", legacy_admin.json()["user_id"])
+
+    viewer_me = await client.get("/v1/auth/me", params={"session_id": viewer.json()["session_id"]})
+    assert viewer_me.status_code == 200
+    assert viewer_me.json()["is_admin"] is True
+    assert viewer_me.json()["admin_role"] == "viewer"
+
+    operator_me = await client.get("/v1/auth/me", params={"session_id": operator.json()["session_id"]})
+    assert operator_me.status_code == 200
+    assert operator_me.json()["is_admin"] is True
+    assert operator_me.json()["admin_role"] == "operator"
+
+    legacy_me = await client.get("/v1/auth/me", params={"session_id": legacy_admin.json()["session_id"]})
+    assert legacy_me.status_code == 200
+    assert legacy_me.json()["is_admin"] is True
+    assert legacy_me.json()["admin_role"] == "superadmin"
 
 
 @pytest.mark.asyncio
