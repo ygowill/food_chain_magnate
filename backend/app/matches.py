@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_user
+from app.auth import get_current_user, has_admin_access_configured, is_admin_user
 from app.db import get_db
 from app.models import Match, MatchParticipant, MatchReplay, MatchArtifact
 from app.replay_storage import (
@@ -326,6 +326,25 @@ async def _require_match_for_participant(db: AsyncSession, match_id: str, user_i
     return match
 
 
+async def _require_match_for_participant_or_admin(db: AsyncSession, match_id: str, user_id: str) -> Match:
+    part = (await db.execute(
+        select(MatchParticipant).where(MatchParticipant.match_id == match_id, MatchParticipant.user_id == user_id)
+    )).scalar_one_or_none()
+    if part:
+        match = (await db.execute(select(Match).where(Match.match_id == match_id))).scalar_one_or_none()
+        if not match:
+            raise HTTPException(404, "match not found")
+        return match
+
+    if has_admin_access_configured() and await is_admin_user(db, user_id):
+        match = (await db.execute(select(Match).where(Match.match_id == match_id))).scalar_one_or_none()
+        if not match:
+            raise HTTPException(404, "match not found")
+        return match
+
+    raise HTTPException(403, "not a participant")
+
+
 def _pick_int(sources: list[dict], keys: tuple[str, ...]) -> int:
     for src in sources:
         for key in keys:
@@ -626,7 +645,7 @@ async def list_matches(
 @router.get("/{match_id}", response_model=MatchDetail)
 async def get_match(match_id: str, session_id: str = Query(""), db: AsyncSession = Depends(get_db)):
     sess = await get_current_user(db=db, session_id=session_id)
-    match = await _require_match_for_participant(db, match_id, sess.user_id)
+    match = await _require_match_for_participant_or_admin(db, match_id, sess.user_id)
     parts = (await db.execute(
         select(MatchParticipant).where(MatchParticipant.match_id == match_id)
     )).scalars().all()
@@ -665,7 +684,7 @@ async def get_match(match_id: str, session_id: str = Query(""), db: AsyncSession
 @router.get("/{match_id}/replay", response_model=ReplayInfo)
 async def get_replay(match_id: str, session_id: str = Query(""), db: AsyncSession = Depends(get_db)):
     sess = await get_current_user(db=db, session_id=session_id)
-    await _require_match_for_participant(db, match_id, sess.user_id)
+    await _require_match_for_participant_or_admin(db, match_id, sess.user_id)
     replay = (await db.execute(
         select(MatchReplay).where(MatchReplay.match_id == match_id)
     )).scalar_one_or_none()
@@ -680,7 +699,7 @@ async def get_replay(match_id: str, session_id: str = Query(""), db: AsyncSessio
 @router.get("/{match_id}/replay/download")
 async def download_replay(match_id: str, session_id: str = Query(""), db: AsyncSession = Depends(get_db)):
     sess = await get_current_user(db=db, session_id=session_id)
-    await _require_match_for_participant(db, match_id, sess.user_id)
+    await _require_match_for_participant_or_admin(db, match_id, sess.user_id)
 
     replay = (await db.execute(
         select(MatchReplay).where(MatchReplay.match_id == match_id)
@@ -704,7 +723,7 @@ async def download_replay(match_id: str, session_id: str = Query(""), db: AsyncS
 @router.get("/{match_id}/autosave/download")
 async def download_autosave(match_id: str, session_id: str = Query(""), db: AsyncSession = Depends(get_db)):
     sess = await get_current_user(db=db, session_id=session_id)
-    match = await _require_match_for_participant(db, match_id, sess.user_id)
+    match = await _require_match_for_participant_or_admin(db, match_id, sess.user_id)
     artifact = (await db.execute(
         select(MatchArtifact).where(
             MatchArtifact.match_id == match_id,
@@ -727,7 +746,7 @@ async def download_map_snapshot(
     db: AsyncSession = Depends(get_db),
 ):
     sess = await get_current_user(db=db, session_id=session_id)
-    match = await _require_match_for_participant(db, match_id, sess.user_id)
+    match = await _require_match_for_participant_or_admin(db, match_id, sess.user_id)
     artifact = (await db.execute(
         select(MatchArtifact).where(
             MatchArtifact.match_id == match_id,

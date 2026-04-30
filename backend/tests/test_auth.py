@@ -1,7 +1,9 @@
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.auth as auth_module
+from app.models import User
 
 
 @pytest.mark.asyncio
@@ -104,6 +106,24 @@ async def test_login_wrong_password(client: AsyncClient):
 async def test_login_nonexistent_email(client: AsyncClient):
     resp = await client.post("/v1/auth/login", json={"email": "no@b.com", "password": "x"})
     assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_disabled_user_cannot_login_or_use_existing_session(client: AsyncClient, db_session: AsyncSession):
+    reg = await client.post("/v1/auth/register", json={"email": "disabled@b.com", "password": "secret"})
+    assert reg.status_code == 200
+    user = await db_session.get(User, reg.json()["user_id"])
+    assert user is not None
+    user.status = "disabled"
+    await db_session.commit()
+
+    login = await client.post("/v1/auth/login", json={"email": "disabled@b.com", "password": "secret"})
+    assert login.status_code == 403
+    assert login.json()["detail"] == "user disabled"
+
+    me = await client.get("/v1/auth/me", params={"session_id": reg.json()["session_id"]})
+    assert me.status_code == 403
+    assert me.json()["detail"] == "user disabled"
 
 
 @pytest.mark.asyncio

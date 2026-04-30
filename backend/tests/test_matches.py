@@ -318,6 +318,24 @@ async def test_get_match_forbidden(client: AsyncClient, db_session: AsyncSession
 
 
 @pytest.mark.asyncio
+async def test_admin_can_view_non_participant_match(client: AsyncClient, db_session: AsyncSession):
+    owner = await _create_user(client)
+    admin = await _create_user(client)
+    mid = await _seed_match(db_session, owner["user_id"])
+    old_admin_user_ids = settings.admin_user_ids
+    settings.admin_user_ids = admin["user_id"]
+    try:
+        detail = await client.get(f"/v1/matches/{mid}", params={"session_id": admin["session_id"]})
+        assert detail.status_code == 200
+        assert detail.json()["match_id"] == mid
+
+        replay = await client.get(f"/v1/matches/{mid}/replay", params={"session_id": admin["session_id"]})
+        assert replay.status_code == 200
+    finally:
+        settings.admin_user_ids = old_admin_user_ids
+
+
+@pytest.mark.asyncio
 async def test_get_replay(client: AsyncClient, db_session: AsyncSession):
     user = await _create_user(client)
     mid = await _seed_match(db_session, user["user_id"])

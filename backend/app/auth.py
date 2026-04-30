@@ -205,6 +205,17 @@ async def _get_user_by_id(db: AsyncSession, user_id: str) -> Optional[User]:
     return (await db.execute(select(User).where(User.user_id == user_id))).scalar_one_or_none()
 
 
+def _require_active_user(user: User) -> None:
+    status = str(user.status or "active").strip().lower()
+    if status == "active":
+        return
+    if status == "disabled":
+        raise HTTPException(403, "user disabled")
+    if status == "banned":
+        raise HTTPException(403, "user banned")
+    raise HTTPException(403, "user inactive")
+
+
 async def _get_email_identity_by_email(db: AsyncSession, email: str) -> Optional[AuthIdentity]:
     return (await db.execute(
         select(AuthIdentity).where(
@@ -366,6 +377,10 @@ async def get_current_user(
     sess = (await db.execute(stmt)).scalar_one_or_none()
     if not sess:
         raise HTTPException(401, "invalid or expired session")
+    user = await _get_user_by_id(db, sess.user_id)
+    if user is None:
+        raise HTTPException(401, "invalid or expired session")
+    _require_active_user(user)
     return sess
 
 
@@ -387,6 +402,8 @@ async def guest_login(req: GuestRequest, db: AsyncSession = Depends(get_db)):
             user = User(user_id=identity.user_id)
             db.add(user)
             await db.flush()
+        else:
+            _require_active_user(user)
     else:
         user = User()
         db.add(user)
@@ -443,6 +460,7 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
         user, identity = await _ensure_configured_admin_account(db, email)
         if user is None or identity is None:
             raise HTTPException(401, "invalid email or password")
+        _require_active_user(user)
         sess = _new_session(identity.user_id)
         db.add(sess)
         payload = await _build_auth_payload(db, user, sess.session_id)
@@ -459,6 +477,7 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     user = await _get_user_by_id(db, identity.user_id)
     if user is None:
         raise HTTPException(404, "user not found")
+    _require_active_user(user)
     sess = _new_session(identity.user_id)
     db.add(sess)
     payload = await _build_auth_payload(db, user, sess.session_id)
