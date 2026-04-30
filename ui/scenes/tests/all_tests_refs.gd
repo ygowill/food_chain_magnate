@@ -268,6 +268,7 @@ const ActionPanelGuidedActionPlaceholderTestClass = preload("res://ui/scenes/tes
 const GameLogDockControllerTimelineSyncTestClass = preload("res://ui/scenes/tests/game_log_dock_controller_timeline_sync_test.gd")
 const RightPanelDockControllerReplaceVisiblePanelTestClass = preload("res://ui/scenes/tests/right_panel_dock_controller_replace_visible_panel_test.gd")
 const GamePanelControllerAutoOpenOverLogTestClass = preload("res://ui/scenes/tests/game_panel_controller_auto_open_over_log_test.gd")
+const GameTimelineZeroCommandSnapshotTestClass = preload("res://ui/scenes/tests/game_timeline_zero_command_snapshot_test.gd")
 const LogRestoreAfterLoadTestClass = preload("res://ui/scenes/tests/log_restore_after_load_test.gd")
 const GameLogPanelReplayToggleAvailabilityTestClass = preload("res://ui/scenes/tests/game_log_panel_replay_toggle_availability_test.gd")
 const GameLogPanelStepTimelineAppendTestClass = preload("res://ui/scenes/tests/game_log_panel_step_timeline_append_test.gd")
