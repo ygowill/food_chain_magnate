@@ -7,9 +7,9 @@ extends HFlowContainer
 signal employee_selected(employee_id: String)
 
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
-const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const EMPLOYEE_REGISTRY_SCRIPT_PATH := "res://core/data/employee_registry.gd"
 
-@export var card_variant: EmployeeCard.CardVariant = EmployeeCard.CardVariant.COMPACT
+@export_enum("COMPACT", "FULL") var card_variant: int = EmployeeCardClass.CardVariant.COMPACT
 @export var card_display_scale: float = 1.0
 
 var selected_employee_id: String = ""
@@ -30,6 +30,8 @@ func clear() -> void:
 func set_items(items: Array[Dictionary], selected_id: String = "") -> void:
 	clear()
 	var desired := str(selected_id).strip_edges()
+	var employee_registry = null
+	var employee_registry_checked := false
 
 	for item_val in items:
 		if not (item_val is Dictionary):
@@ -68,10 +70,14 @@ func set_items(items: Array[Dictionary], selected_id: String = "") -> void:
 		var def_val = item.get("employee_def", null)
 		if def_val is Dictionary:
 			emp_def = Dictionary(def_val).duplicate(true)
-		elif EmployeeRegistryClass.is_loaded():
-			var reg_def_val = EmployeeRegistryClass.get_def(emp_id)
-			if reg_def_val != null and reg_def_val.has_method("to_dict"):
-				emp_def = reg_def_val.to_dict()
+		else:
+			if not employee_registry_checked:
+				employee_registry = _load_employee_registry()
+				employee_registry_checked = true
+			if employee_registry != null:
+				var reg_def_val = employee_registry.call("get_def", emp_id)
+				if reg_def_val != null and reg_def_val.has_method("to_dict"):
+					emp_def = reg_def_val.to_dict()
 		if emp_def.is_empty():
 			emp_def = {"id": emp_id, "name": emp_id}
 
@@ -102,6 +108,16 @@ func set_items(items: Array[Dictionary], selected_id: String = "") -> void:
 			selected_employee_id = desired if not selected_item_key.is_empty() else ""
 
 	_apply_selection()
+
+func _load_employee_registry():
+	var registry = load(EMPLOYEE_REGISTRY_SCRIPT_PATH)
+	if registry == null:
+		return null
+	if not registry.has_method("is_loaded") or not registry.has_method("get_def"):
+		return null
+	if not bool(registry.call("is_loaded")):
+		return null
+	return registry
 
 func set_selected(employee_id: String) -> void:
 	var desired := str(employee_id).strip_edges()
@@ -202,13 +218,13 @@ class EmployeePickerItem extends Control:
 	var employee_def: Dictionary = {}
 	var badge_text: String = ""
 	var tag_text: String = ""
-	var card_variant: int = EmployeeCard.CardVariant.COMPACT
+	var card_variant: int = EmployeeCardClass.CardVariant.COMPACT
 	var card_scale: float = 1.0
 
 	var _enabled: bool = true
 	var _selected: bool = false
 
-	var _card: EmployeeCard = null
+	var _card = null
 	var _tag_panel: PanelContainer = null
 	var _tag_label: Label = null
 	var _badge_panel: PanelContainer = null
@@ -226,7 +242,7 @@ class EmployeePickerItem extends Control:
 	func _build_ui() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var s := clampf(float(card_scale), 0.5, 2.0)
-		var base_size := EmployeeCard.FULL_SIZE if int(card_variant) == int(EmployeeCard.CardVariant.FULL) else EmployeeCard.COMPACT_SIZE
+		var base_size: Vector2 = EmployeeCardClass.FULL_SIZE if int(card_variant) == int(EmployeeCardClass.CardVariant.FULL) else EmployeeCardClass.COMPACT_SIZE
 		var badge_h := int(round(float(BADGE_BAR_HEIGHT) * s))
 		# FlowContainer 布局依赖子控件的 minimum size。EmployeeCard 的 min size 不会自动上推到父 Control。
 		# 这里额外预留顶部 badge 区域，避免数量/步数标记遮挡卡片标题（issue_tracker #34 / #ui-polish-10）。

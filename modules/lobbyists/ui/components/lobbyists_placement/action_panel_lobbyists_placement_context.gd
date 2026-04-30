@@ -1,9 +1,8 @@
 extends VBoxContainer
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const EmployeePickerClass = preload("res://ui/components/employee_picker/employee_picker.gd")
 
-const EMPLOYEE_PICKER_SCRIPT_PATH := "res://ui/components/employee_picker/employee_picker.gd"
-const PIECE_PICKER_BUTTON_SCRIPT_PATH := "res://ui/components/action_panel/piece_picker_button.gd"
 const ROTATE_CCW_ICON_PATH := "res://assets/ui/icons/kenney/board/arrow_counterclockwise.png"
 const ROTATE_CW_ICON_PATH := "res://assets/ui/icons/kenney/board/arrow_clockwise.png"
 
@@ -66,15 +65,14 @@ func _build_ui() -> void:
 	UiStylesClass.apply_label_dark(employee_label)
 	_employee_row.add_child(employee_label)
 
-	_employee_picker = _instantiate_control(EMPLOYEE_PICKER_SCRIPT_PATH)
-	if _employee_picker != null:
-		_employee_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		_employee_picker.add_theme_constant_override("h_separation", 10)
-		_employee_picker.add_theme_constant_override("v_separation", 10)
-		_employee_picker.set("card_display_scale", 1.25)
-		_employee_row.add_child(_employee_picker)
-		if _employee_picker.has_signal("employee_selected"):
-			_employee_picker.employee_selected.connect(_on_employee_picker_selected)
+	_employee_picker = EmployeePickerClass.new()
+	_employee_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_employee_picker.add_theme_constant_override("h_separation", 10)
+	_employee_picker.add_theme_constant_override("v_separation", 10)
+	_employee_picker.set("card_display_scale", 1.25)
+	_employee_row.add_child(_employee_picker)
+	if _employee_picker.has_signal("employee_selected"):
+		_employee_picker.employee_selected.connect(_on_employee_picker_selected)
 
 	var effect_label := Label.new()
 	effect_label.text = "选择效果"
@@ -185,17 +183,6 @@ func _build_ui() -> void:
 	add_child(_confirm_button)
 	_confirm_button.pressed.connect(_on_confirm_pressed)
 
-func _instantiate_control(script_path: String):
-	var script = load(str(script_path).strip_edges())
-	if script == null:
-		return null
-	var instance = script.new()
-	if not (instance is Control):
-		if instance is Object:
-			instance.free()
-		return null
-	return instance
-
 func _add_button_icon(button: Button, texture_path: String) -> void:
 	if button == null:
 		return
@@ -263,27 +250,42 @@ func _sync_piece_section() -> void:
 		return
 
 	var selected := str(_safe_call("get_selected_piece", "")).strip_edges()
-	var rotation := int(_safe_call("get_selected_rotation", 0))
 	var group := ButtonGroup.new()
 	group.allow_unpress = false
 	for pid in pieces:
-		var label := str(_safe_call("get_piece_display_label", pid, [pid])).strip_edges()
-		var btn = _instantiate_control(PIECE_PICKER_BUTTON_SCRIPT_PATH)
-		var has_piece_picker := btn != null
-		if btn == null:
-			btn = Button.new()
-			btn.text = label if not label.is_empty() else pid
-			UiStylesClass.apply_button_secondary(btn)
-		if has_piece_picker:
-			btn.set("piece_id", pid)
-		if has_piece_picker and btn.has_method("set_piece_rotation"):
-			btn.call("set_piece_rotation", rotation)
-		if btn is BaseButton:
-			(btn as BaseButton).button_group = group
-			(btn as BaseButton).button_pressed = (pid == selected)
-			(btn as BaseButton).pressed.connect(_on_piece_pressed.bind(pid))
+		var label := _piece_button_label(pid)
+		var btn := Button.new()
+		btn.text = label
+		btn.toggle_mode = true
+		btn.clip_text = true
+		btn.custom_minimum_size = Vector2(74, 34)
+		btn.button_group = group
+		btn.set_pressed_no_signal(pid == selected)
+		UiStylesClass.apply_button_secondary(btn)
+		btn.pressed.connect(_on_piece_pressed.bind(pid))
 		btn.tooltip_text = label if not label.is_empty() else pid
 		_piece_flow.add_child(btn)
+
+func _piece_button_label(piece_id: String) -> String:
+	var pid := str(piece_id).strip_edges()
+	var label := str(_safe_call("get_piece_display_label", pid, [pid])).strip_edges()
+	if label.is_empty():
+		label = pid
+	match pid:
+		"lobbyists_road_straight":
+			return "短道路"
+		"lobbyists_road_long":
+			return "长道路"
+		"lobbyists_road_l":
+			return "转角道路"
+		"lobbyists_park_line":
+			return "直线公园"
+		"lobbyists_park_t":
+			return "T形公园"
+		"lobbyists_park_l":
+			return "转角公园"
+		_:
+			return label
 
 func _sync_rotation() -> void:
 	var rot := int(_safe_call("get_selected_rotation", 0))

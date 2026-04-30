@@ -147,8 +147,12 @@ func set_mode_availability(availability: Dictionary) -> void:
 	_emit_highlight_request()
 	ui_state_changed.emit()
 
-func set_available_employee_items(items: Array[Dictionary]) -> void:
-	_staff_picker_state.set_items(items)
+func set_available_employee_items(items: Array) -> void:
+	var normalized_items: Array[Dictionary] = []
+	for item_val in items:
+		if item_val is Dictionary:
+			normalized_items.append(Dictionary(item_val))
+	_staff_picker_state.set_items(normalized_items)
 	_update_ui()
 	ui_state_changed.emit()
 
@@ -182,7 +186,7 @@ func set_available_piece_sets(piece_sets: Dictionary) -> void:
 	_emit_highlight_request()
 	ui_state_changed.emit()
 
-func set_available_pieces_for_mode(action_id: String, piece_ids: Array[String]) -> void:
+func set_available_pieces_for_mode(action_id: String, piece_ids: Array) -> void:
 	var aid := _normalize_mode(action_id)
 	_piece_sets[aid] = _normalize_piece_ids(piece_ids)
 	_ensure_selected_piece_for_mode(aid)
@@ -191,7 +195,7 @@ func set_available_pieces_for_mode(action_id: String, piece_ids: Array[String]) 
 	_emit_highlight_request()
 	ui_state_changed.emit()
 
-func set_available_pieces(piece_ids: Array[String]) -> void:
+func set_available_pieces(piece_ids: Array) -> void:
 	set_available_pieces_for_mode(_mode, piece_ids)
 
 func set_selected_piece(piece_id: String) -> void:

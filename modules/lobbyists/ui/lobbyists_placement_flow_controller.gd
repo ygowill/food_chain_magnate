@@ -101,7 +101,6 @@ func _show_overlay(state, action_id: String, params: Dictionary) -> void:
 	_overlay.visible = true
 	if _map_controller.has_method("set_piece_placement_overlay"):
 		_map_controller.set_piece_placement_overlay(_overlay)
-	_bind_action_panel_context(_overlay)
 
 	_sync_overlay_from_state(state, actor_id)
 	if _overlay.has_method("set_mode"):
@@ -117,6 +116,7 @@ func _show_overlay(state, action_id: String, params: Dictionary) -> void:
 	elif params.has("employee_type") and _overlay.has_method("set_selected_employee"):
 		_overlay.call("set_selected_employee", str(params.get("employee_type", "")))
 
+	_bind_action_panel_context(_overlay)
 	_refresh_map_selection(true)
 
 func _ensure_overlay() -> void:
@@ -402,6 +402,7 @@ func _build_lobbyist_employee_items(state, player_id: int) -> Array[Dictionary]:
 			"staff_id": staff_id,
 			"id": employee_type,
 			"employee_type": employee_type,
+			"employee_def": _get_lobbyist_employee_def(employee_type),
 			"capacity": capacity,
 			"used": used_for_staff,
 			"remaining": maxi(0, capacity - used_for_staff),
@@ -413,6 +414,27 @@ func _build_lobbyist_employee_items(state, player_id: int) -> Array[Dictionary]:
 
 func _is_lobbyist_employee(employee_type: String) -> bool:
 	return str(employee_type).strip_edges() == EMPLOYEE_LOBBYIST
+
+func _get_lobbyist_employee_def(employee_type: String) -> Dictionary:
+	var emp_id := str(employee_type).strip_edges()
+	if emp_id != EMPLOYEE_LOBBYIST:
+		return {"id": emp_id, "name": emp_id}
+	return {
+		"id": EMPLOYEE_LOBBYIST,
+		"name": "提案人",
+		"description": "在工作时间放置一块道路（建设中）或一块公园",
+		"salary": true,
+		"unique": false,
+		"role": "special",
+		"manager_slots": 0,
+		"range": {
+			"type": "road",
+			"value": 2,
+		},
+		"train_to": [],
+		"train_capacity": 0,
+		"tags": ["entry_level"],
+	}
 
 func _resolve_active_staff_id_for_employee(employee_type: String, employee_index: int, active_staff_ids: Array, registry: Dictionary, used_staff_ids: Dictionary) -> int:
 	if employee_index >= 0 and employee_index < active_staff_ids.size():
