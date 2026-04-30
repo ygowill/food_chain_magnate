@@ -260,7 +260,7 @@ func _ready() -> void:
 
 	PerfTraceClass.end_span(span_layout)
 
-	if not _should_defer_local_game_init(startup_direct_resume):
+	if not startup_replay_from_main_menu and not _should_defer_local_game_init(startup_direct_resume):
 		var span_init_game := PerfTraceClass.begin_span("game:_initialize_game")
 		_initialize_game()
 		PerfTraceClass.end_span(span_init_game)

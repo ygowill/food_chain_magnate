@@ -458,7 +458,8 @@ func _sync_action_panel_context(force_refresh: bool = false) -> void:
 	var next_overlay = overlay if (overlay != null and is_instance_valid(overlay)) else null
 	if not bool(force_refresh):
 		if next_overlay != null and _action_panel_context_bound and next_overlay == _last_action_panel_context_overlay:
-			return
+			if _is_action_panel_context_visible():
+				return
 		if next_overlay == null and not _action_panel_context_bound:
 			return
 
@@ -541,6 +542,16 @@ func _has_active_context_overlay() -> bool:
 				overlay = _placement_overlays.piece_placement_overlay
 	return overlay != null and is_instance_valid(overlay)
 
+func _is_action_panel_context_visible() -> bool:
+	if _scene == null:
+		return false
+	if not is_instance_valid(_scene.action_panel):
+		return false
+	var context_val = _scene.action_panel.get("context_panel")
+	if context_val is Control:
+		return bool((context_val as Control).visible)
+	return true
+
 func _get_active_right_panel_docked_panel() -> Control:
 	if _scene == null:
 		return null
@@ -587,6 +598,7 @@ func _auto_open_guided_action_ui(state: GameState) -> void:
 
 	# 优先：若当前动作 UI 已打开且仍为该动作，不重复 show（避免 hide_all/选点被重置）
 	if guided == _last_guided_action_id and _is_action_ui_open_for_action_id(guided):
+		_sync_action_panel_context()
 		return
 
 	_open_action_ui_for_action_id(guided)
