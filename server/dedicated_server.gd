@@ -443,10 +443,57 @@ func _sync_room_directory_snapshot(snapshot: Dictionary) -> Result:
 	if not (parsed is Dictionary):
 		return Result.success(snapshot)
 	var response_dict: Dictionary = Dictionary(parsed)
+	var skipped_val: Variant = response_dict.get("skipped_ended_room_codes", null)
+	if skipped_val is Array:
+		_prune_remote_ended_rooms(Array(skipped_val), "room_directory_sync")
 	var accepted_val: Variant = response_dict.get("accepted_room_codes", null)
 	if not (accepted_val is Array):
 		return Result.success(snapshot)
 	return Result.success(_filter_snapshot_by_room_codes(snapshot, Array(accepted_val)))
+
+func _prune_remote_ended_rooms(room_codes: Array, source: String) -> void:
+	if room_codes.is_empty():
+		return
+	if NetClient == null or not is_instance_valid(NetClient):
+		return
+	if NetClient._room_manager == null or not is_instance_valid(NetClient._room_manager):
+		return
+	if not NetClient._room_manager.has_method("force_remove_room"):
+		return
+
+	var removed_codes: Array[String] = []
+	var notified_peer_ids: Array[int] = []
+	for code_val in room_codes:
+		var code := str(code_val).strip_edges().to_upper()
+		if code.is_empty():
+			continue
+		var remove_r: Result = NetClient._room_manager.force_remove_room(code)
+		if not remove_r.ok:
+			GameLog.warn("DedicatedServer", "Prune remote-ended room failed code=%s source=%s error=%s" % [code, source, remove_r.error])
+			continue
+		var remove_info: Dictionary = Dictionary(remove_r.value) if remove_r.value is Dictionary else {}
+		if not bool(remove_info.get("removed", false)):
+			continue
+		removed_codes.append(code)
+		var peer_ids_val: Variant = remove_info.get("peer_ids", [])
+		if peer_ids_val is Array:
+			for peer_val in Array(peer_ids_val):
+				var peer_id := int(peer_val)
+				if peer_id <= 0:
+					continue
+				if not notified_peer_ids.has(peer_id):
+					notified_peer_ids.append(peer_id)
+				NetClient.rpc_id(peer_id, "rpc_room_state", NetClient._empty_room_state())
+
+	if removed_codes.is_empty():
+		return
+	NetClient._broadcast_room_list("")
+	_persist_rooms()
+	GameLog.info(
+		"DedicatedServer",
+		"Pruned remote-ended rooms source=%s rooms=%s notified_peers=%d"
+			% [source, ",".join(removed_codes), notified_peer_ids.size()]
+	)
 
 func _setup_room_directory_sync() -> void:
 	if _room_directory_sync_timer == null or not is_instance_valid(_room_directory_sync_timer):
@@ -635,3 +682,12 @@ func _send_heartbeat() -> void:
 	if response_code < 200 or response_code >= 300:
 		if not room_codes.is_empty():
 			GameLog.warn("DedicatedServer", "Heartbeat failed status=%d url=%s" % [response_code, url])
+		return
+
+	var body_text := PackedByteArray(result[3]).get_string_from_utf8() if result.size() > 3 else ""
+	var parsed: Variant = JSON.parse_string(body_text)
+	if not (parsed is Dictionary):
+		return
+	var ended_val: Variant = Dictionary(parsed).get("ended_room_codes", null)
+	if ended_val is Array:
+		_prune_remote_ended_rooms(Array(ended_val), "heartbeat")

@@ -72,4 +72,24 @@ static func run() -> Result:
 	if not jr2.ok:
 		return Result.failure("JoinRoom(无密码) 失败: %s" % jr2.error)
 
+	var fr: Result = rm.force_remove_room(room_code2.to_lower())
+	if not fr.ok:
+		return Result.failure("ForceRemoveRoom 失败: %s" % fr.error)
+	var force_info: Dictionary = Dictionary(fr.value)
+	if not bool(force_info.get("removed", false)):
+		return Result.failure("ForceRemoveRoom 预期 removed=true")
+	var removed_peer_ids: Array = Array(force_info.get("peer_ids", []))
+	if removed_peer_ids.size() != 2 or not removed_peer_ids.has(30) or not removed_peer_ids.has(31):
+		return Result.failure("ForceRemoveRoom peer_ids 错误: %s" % str(removed_peer_ids))
+	if rm.rooms.has(room_code2):
+		return Result.failure("ForceRemoveRoom 后 rooms 仍包含 room_code=%s" % room_code2)
+	if rm.peer_to_room.has(30) or rm.peer_to_room.has(31):
+		return Result.failure("ForceRemoveRoom 后 peer_to_room 未清理")
+
+	var fr_missing: Result = rm.force_remove_room("NOPE01")
+	if not fr_missing.ok:
+		return Result.failure("ForceRemoveRoom(不存在房间) 应幂等成功: %s" % fr_missing.error)
+	if bool(Dictionary(fr_missing.value).get("removed", true)):
+		return Result.failure("ForceRemoveRoom(不存在房间) 预期 removed=false")
+
 	return Result.success()

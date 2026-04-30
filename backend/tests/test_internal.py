@@ -528,9 +528,23 @@ async def test_heartbeat_does_not_revive_ended_room_even_if_room_code_reported(c
         "room_codes": ["HBEAT2"],
     }, headers=INTERNAL_HEADERS)
     assert resp.status_code == 200
+    assert resp.json()["ended_room_codes"] == ["HBEAT2"]
 
     room_after = (await db_session.execute(select(Room).where(Room.room_code == "HBEAT2"))).scalar_one()
     assert room_after.status == "Ended"
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_reports_tombstoned_room_code_for_server_prune(client: AsyncClient, db_session: AsyncSession):
+    db_session.add(RoomTombstone(room_code="HBTOMB"))
+    await db_session.commit()
+
+    resp = await client.post("/internal/game_servers/heartbeat", json={
+        "game_server_id": "gs-hb-tombstone-1",
+        "room_codes": ["hbtomb"],
+    }, headers=INTERNAL_HEADERS)
+    assert resp.status_code == 200
+    assert resp.json()["ended_room_codes"] == ["HBTOMB"]
 
 
 @pytest.mark.asyncio

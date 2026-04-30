@@ -62,6 +62,15 @@ class HeartbeatRequest(BaseModel):
 @router.post("/game_servers/heartbeat", dependencies=[Depends(_require_internal_secret)])
 async def heartbeat(req: HeartbeatRequest, db: AsyncSession = Depends(get_db)):
     now = datetime.now(timezone.utc)
+    reported_room_codes: list[str] = []
+    seen_reported_room_codes: set[str] = set()
+    for raw_code in req.room_codes:
+        room_code = str(raw_code).strip().upper()
+        if not room_code or room_code in seen_reported_room_codes:
+            continue
+        seen_reported_room_codes.add(room_code)
+        reported_room_codes.append(room_code)
+    ended_room_codes: list[str] = []
     gs = (await db.execute(
         select(GameServer).where(GameServer.game_server_id == req.game_server_id)
     )).scalar_one_or_none()
@@ -77,9 +86,17 @@ async def heartbeat(req: HeartbeatRequest, db: AsyncSession = Depends(get_db)):
         ))
 
     # Mark alive rooms (refresh updated_at, claim ownership).
-    if req.room_codes:
-        rooms = (await db.execute(select(Room).where(Room.room_code.in_(req.room_codes)))).scalars().all()
+    if reported_room_codes:
+        tombstones = (await db.execute(
+            select(RoomTombstone.room_code).where(RoomTombstone.room_code.in_(reported_room_codes))
+        )).scalars().all()
+        tombstone_codes = {str(room_code).strip().upper() for room_code in tombstones}
+        rooms = (await db.execute(select(Room).where(Room.room_code.in_(reported_room_codes)))).scalars().all()
         for r in rooms:
+            room_code = str(r.room_code).strip().upper()
+            if room_code in tombstone_codes:
+                ended_room_codes.append(room_code)
+                continue
             r.game_server_id = req.game_server_id
             if str(req.ws_url or "").strip():
                 r.ws_url = str(req.ws_url).strip()
@@ -88,15 +105,20 @@ async def heartbeat(req: HeartbeatRequest, db: AsyncSession = Depends(get_db)):
             # in-memory room codes can resurrect finished rooms into the directory.
             if r.status == "Pending":
                 r.status = "Lobby"
+            elif r.status == "Ended":
+                ended_room_codes.append(room_code)
             r.updated_at = now
+        for room_code in reported_room_codes:
+            if room_code in tombstone_codes and room_code not in ended_room_codes:
+                ended_room_codes.append(room_code)
 
     # GC: rooms previously on this game server but no longer present -> Ended.
     stmt = select(Room).where(
         Room.game_server_id == req.game_server_id,
         Room.status.in_(ACTIVE_ROOM_STATUSES),
     )
-    if req.room_codes:
-        stmt = stmt.where(~Room.room_code.in_(req.room_codes))
+    if reported_room_codes:
+        stmt = stmt.where(~Room.room_code.in_(reported_room_codes))
     stale = (await db.execute(stmt)).scalars().all()
     stale_room_ids: list[str] = []
     for r in stale:
@@ -106,7 +128,7 @@ async def heartbeat(req: HeartbeatRequest, db: AsyncSession = Depends(get_db)):
     await _mark_room_members_left(db, stale_room_ids, now, "ended")
 
     await db.commit()
-    return {"ok": True}
+    return {"ok": True, "ended_room_codes": ended_room_codes}
 
 
 class ActiveRoomOut(BaseModel):

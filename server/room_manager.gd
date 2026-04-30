@@ -580,6 +580,38 @@ func leave_room(peer_id: int) -> Result:
 		"room_state": room.to_room_state_dict(),
 	})
 
+func force_remove_room(room_code: String) -> Result:
+	var code := str(room_code).strip_edges().to_upper()
+	if code.is_empty():
+		return Result.failure("Missing room_code", Result.ErrorCode.MISSING_PARAMS)
+
+	var room = rooms.get(code, null)
+	var peer_ids: Array[int] = []
+	if room != null and room.has_method("get_peer_ids"):
+		for peer_val in Array(room.get_peer_ids()):
+			var peer_id := int(peer_val)
+			if peer_id > 0 and not peer_ids.has(peer_id):
+				peer_ids.append(peer_id)
+
+	for peer_id_val in peer_to_room.keys():
+		var mapped_code := str(peer_to_room.get(peer_id_val, "")).strip_edges().to_upper()
+		if mapped_code != code:
+			continue
+		var mapped_peer_id := int(peer_id_val)
+		if mapped_peer_id > 0 and not peer_ids.has(mapped_peer_id):
+			peer_ids.append(mapped_peer_id)
+
+	for peer_id in peer_ids:
+		peer_to_room.erase(peer_id)
+
+	rooms.erase(code)
+	return Result.success({
+		"room_code": code,
+		"room": room,
+		"removed": room != null or not peer_ids.is_empty(),
+		"peer_ids": peer_ids,
+	})
+
 func disconnect_peer(peer_id: int) -> Result:
 	if not peer_to_room.has(peer_id):
 		return Result.success({
