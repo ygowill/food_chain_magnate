@@ -479,7 +479,9 @@ func start_replay_from_file(file_path: String) -> void:
 	if started_from_main_menu and Globals != null and Globals.has_method("sync_runtime_config_from_engine"):
 		Globals.sync_runtime_config_from_engine(engine)
 
-	if replay_load_playable:
+	# 零命令 archive 是手工状态快照，没有可回放日志；按只读回放打开会把右栏切到空日志面板。
+	var should_enter_playable := bool(replay_load_playable) or engine.command_history.is_empty()
+	if should_enter_playable:
 		var to_latest := GameTimelineReplaySessionSupportClass.move_engine_to_latest_state(engine)
 		if not to_latest.ok:
 			GameLog.error("Game", "回放载入后进入可操作模式失败: %s" % to_latest.error)

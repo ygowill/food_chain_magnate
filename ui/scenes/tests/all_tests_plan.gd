@@ -1087,6 +1087,10 @@ static func build_tests(host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.GamePanelControllerAutoOpenOverLogTestClass.run(),
 			},
 			{
+				"name": "GameTimelineZeroCommandSnapshotTest",
+				"fn": func() -> Result: return TestRefs.GameTimelineZeroCommandSnapshotTestClass.run(),
+			},
+			{
 				"name": "LogRestoreAfterLoadTest",
 				"fn": func() -> Result: return TestRefs.LogRestoreAfterLoadTestClass.run(),
 			},
