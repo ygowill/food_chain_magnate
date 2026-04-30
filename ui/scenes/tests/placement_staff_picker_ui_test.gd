@@ -15,21 +15,31 @@ class _FakeGameScene:
 	extends Control
 
 	var game_engine: GameEngine = null
+	var action_panel = null
 
 class _MapControllerSpy:
 	extends RefCounted
 
 	var house_overlay = null
+	var piece_overlay = null
+	var mode: String = ""
 	var clear_selection_count: int = 0
 
 	func begin_selection(_mode: String, _params: Dictionary = {}) -> void:
-		pass
+		mode = str(_mode)
 
 	func clear_selection() -> void:
 		clear_selection_count += 1
+		mode = ""
+
+	func get_mode() -> String:
+		return mode
 
 	func set_house_placement_overlay(overlay) -> void:
 		house_overlay = overlay
+
+	func set_piece_placement_overlay(overlay) -> void:
+		piece_overlay = overlay
 
 	func on_house_preview_requested(_action_id: String, _position: Vector2i, _rotation: int) -> void:
 		pass
@@ -44,6 +54,15 @@ class _MapControllerSpy:
 		pass
 
 	func on_house_garden_preview_cleared() -> void:
+		pass
+
+	func on_piece_preview_requested(_action_id: String, _position: Vector2i, _rotation: int, _piece_id: String = "") -> void:
+		pass
+
+	func on_piece_preview_cleared() -> void:
+		pass
+
+	func on_piece_highlight_requested(_action_id: String, _rotation: int, _piece_id: String = "") -> void:
 		pass
 
 class _OverlayControllerSpy:
@@ -90,6 +109,9 @@ static func run() -> Result:
 	if not r.ok:
 		return r
 	r = await _case_house_confirm_keeps_context_and_marks_used_staff()
+	if not r.ok:
+		return r
+	r = await _case_lobbyists_context_uses_custom_layout()
 	if not r.ok:
 		return r
 	return Result.success({})
@@ -439,6 +461,61 @@ static func _case_house_confirm_keeps_context_and_marks_used_staff() -> Result:
 
 	return await _finish_overlay_case(Result.success({}), overlays, scene, action_panel, engine, st)
 
+static func _case_lobbyists_context_uses_custom_layout() -> Result:
+	var tree = Engine.get_main_loop()
+	if not (tree is SceneTree):
+		return Result.failure("MainLoop 不是 SceneTree（无法运行 Lobbyists UI 测试）")
+	var st: SceneTree = tree
+	var host := st.current_scene
+	if host == null or not is_instance_valid(host):
+		return Result.failure("current_scene 为空（无法挂载 Lobbyists UI 测试节点）")
+	if ActionPanelScene == null:
+		return Result.failure("预加载 action_panel.tscn 失败（PackedScene 为空）")
+
+	var scene := _FakeGameScene.new()
+	host.add_child(scene)
+	scene.visible = true
+
+	var engine := GameEngine.new()
+	var load_result := engine.load_from_file(ProjectSettings.globalize_path("res://testdata/saves/manual_cases/employees/lobbyist.json"))
+	if not load_result.ok:
+		return await _finish_overlay_case(Result.failure("加载 lobbyist 手工存档失败: %s" % load_result.error), null, scene, null, engine, st)
+	scene.game_engine = engine
+
+	var action_panel = ActionPanelScene.instantiate()
+	if action_panel == null or not is_instance_valid(action_panel):
+		return await _finish_overlay_case(Result.failure("实例化 ActionPanel 失败"), null, scene, action_panel, engine, st)
+	scene.action_panel = action_panel
+	scene.add_child(action_panel)
+	(action_panel as Control).visible = true
+	await st.process_frame
+
+	if not (action_panel is ActionPanel):
+		return await _finish_overlay_case(Result.failure("实例不是 ActionPanel"), null, scene, action_panel, engine, st)
+	var panel: ActionPanel = action_panel
+	panel.set_display_context(engine.get_state(), engine.get_state().get_current_player_id())
+	panel.set_action_registry(engine.get_action_registry())
+	await st.process_frame
+
+	var map_controller := _MapControllerSpy.new()
+	var overlay_controller := _OverlayControllerSpy.new()
+	var overlays = PlacementOverlaysClass.new(scene, map_controller, overlay_controller, Callable(), Callable())
+	if not bool(overlays.try_show_module_action_overlay("place_lobbyists_road", {})):
+		return await _finish_overlay_case(Result.failure("PlacementOverlays 未处理 place_lobbyists_road"), overlays, scene, action_panel, engine, st)
+	await st.process_frame
+
+	if not panel.context_panel.visible:
+		return await _finish_overlay_case(Result.failure("绑定说客 overlay 后 ContextPanel 应可见"), overlays, scene, action_panel, engine, st)
+	if panel.custom_context_container.get_child_count() <= 0:
+		return await _finish_overlay_case(Result.failure("ContextPanel 应挂载说客自定义 UI"), overlays, scene, action_panel, engine, st)
+
+	var text := _collect_visible_text(panel.custom_context_container)
+	for expected in ["选择员工", "选择效果", "放置道路", "放置公园", "选择板块", "短道路"]:
+		if not text.has(expected):
+			return await _finish_overlay_case(Result.failure("说客 Context 缺少文本：%s，实际=%s" % [expected, str(text)]), overlays, scene, action_panel, engine, st)
+
+	return await _finish_overlay_case(Result.success({}), overlays, scene, action_panel, engine, st)
+
 static func _find_valid_house_plan(engine: GameEngine, actor: int, staff_id: int) -> Dictionary:
 	if engine == null:
 		return {}
@@ -481,6 +558,27 @@ static func _find_staff_picker_item(items: Array[Dictionary], staff_id: int) -> 
 		if int(item.get("staff_id", -1)) == staff_id:
 			return item
 	return {}
+
+static func _collect_visible_text(root: Node) -> Array[String]:
+	var out: Array[String] = []
+	_collect_visible_text_recursive(root, out)
+	return out
+
+static func _collect_visible_text_recursive(node: Node, out: Array[String]) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if node is Control and not (node as Control).visible:
+		return
+	if node is Label:
+		var label_text := str((node as Label).text).strip_edges()
+		if not label_text.is_empty():
+			out.append(label_text)
+	elif node is Button:
+		var button_text := str((node as Button).text).strip_edges()
+		if not button_text.is_empty():
+			out.append(button_text)
+	for child in node.get_children():
+		_collect_visible_text_recursive(child, out)
 
 static func _finish_restaurant_context_case(result: Result, overlay: Node, action_panel: Node, st: SceneTree) -> Result:
 	if action_panel != null and is_instance_valid(action_panel):

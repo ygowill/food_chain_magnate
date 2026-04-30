@@ -139,10 +139,48 @@ func _validate_map_structures(map_data: Dictionary, res_path: String) -> Result:
 
 func _validate_manual_case_specifics(engine: GameEngine, res_path: String) -> Result:
 	match res_path:
+		"res://testdata/saves/manual_cases/employees/lobbyist.json":
+			return _validate_lobbyist_case(engine, res_path)
 		"res://testdata/saves/manual_cases/employees/regional_manager.json":
 			return _validate_regional_manager_move_case(engine, res_path)
 		_:
 			return Result.success()
+
+func _validate_lobbyist_case(engine: GameEngine, res_path: String) -> Result:
+	if engine == null:
+		return Result.failure("lobbyist case engine 为空")
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("lobbyist case state 为空")
+	if str(state.phase) != "Working" or str(state.sub_phase) != "Lobbyists":
+		return Result.failure("lobbyist case 应停在 Working/Lobbyists，实际: %s/%s" % [str(state.phase), str(state.sub_phase)])
+
+	var actor := int(state.get_current_player_id())
+	if actor != 0:
+		return Result.failure("lobbyist case 当前玩家应为 0，实际: %d" % actor)
+
+	var passed_val = state.round_state.get("sub_phase_passed", null)
+	if not (passed_val is Dictionary):
+		return Result.failure("lobbyist case 缺少 round_state.sub_phase_passed")
+	var passed: Dictionary = passed_val
+	var actor_passed := false
+	if passed.has(actor):
+		actor_passed = bool(passed.get(actor))
+	elif passed.has(str(actor)):
+		actor_passed = bool(passed.get(str(actor)))
+	else:
+		return Result.failure("lobbyist case sub_phase_passed 缺少玩家 0")
+	if actor_passed:
+		return Result.failure("lobbyist case 玩家 0 不应已跳过 Lobbyists 子阶段")
+
+	var player := state.get_player(actor)
+	if not Array(player.get("employees", [])).has("lobbyist"):
+		return Result.failure("lobbyist case 玩家 0 在岗员工缺少 lobbyist")
+
+	var initiatable: Array[String] = engine.action_registry.get_player_initiatable_actions(state, actor)
+	if not initiatable.has("place_lobbyists_road"):
+		return Result.failure("lobbyist case place_lobbyists_road 应可启动，实际: %s" % str(initiatable))
+	return Result.success()
 
 func _validate_regional_manager_move_case(engine: GameEngine, res_path: String) -> Result:
 	if engine == null:
