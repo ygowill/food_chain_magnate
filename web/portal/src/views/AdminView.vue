@@ -254,23 +254,9 @@
                 <el-tag size="small" :type="serverTagType(row)">{{ row.online ? '在线' : '离线' }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="状态" width="210">
+            <el-table-column label="状态" width="110">
               <template #default="{ row }">
-                <div class="inline-row">
-                  <el-select v-model="matchStatusDraft[row.match_id]" size="small" class="match-status-select">
-                    <el-option label="in_progress" value="in_progress" />
-                    <el-option label="completed" value="completed" />
-                    <el-option label="failed" value="failed" />
-                    <el-option label="abandoned" value="abandoned" />
-                  </el-select>
-                  <el-button
-                    size="small"
-                    :disabled="matchStatusDraft[row.match_id] === row.status"
-                    @click="saveMatchStatus(row)"
-                  >
-                    保存
-                  </el-button>
-                </div>
+                <el-tag size="small" type="info">{{ row.status }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column prop="active_room_count" label="活跃房间" width="100" />
