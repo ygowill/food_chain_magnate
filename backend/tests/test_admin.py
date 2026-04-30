@@ -1,12 +1,15 @@
 from pathlib import Path
 import random
+from datetime import datetime, timezone
+from typing import Optional
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models import Match, MatchParticipant, MatchReplay, Room, RoomMember
+from app.models import GameServer, Match, MatchParticipant, MatchReplay, Room, RoomMember
 
 
 async def _create_user(client: AsyncClient) -> dict:
@@ -20,10 +23,12 @@ async def _seed_room_and_match(
     spectator_user_id: str,
     replay_storage_dir: Path,
     room_code: str = "ADMIN1",
+    game_server_id: Optional[str] = None,
 ) -> tuple[str, str]:
     room = Room(
         room_code=room_code,
         owner_user_id=owner_user_id,
+        game_server_id=game_server_id,
         status="Lobby",
         join_policy="public",
         ws_url="ws://localhost:7000",
@@ -100,12 +105,21 @@ async def test_admin_endpoints_manage_entities(client: AsyncClient, db_session: 
         assert normal_me.status_code == 200
         assert normal_me.json()["is_admin"] is False
 
+        db_session.add(GameServer(
+            game_server_id="gs-admin-1",
+            ws_url="ws://localhost:7000",
+            last_heartbeat_at=datetime.now(timezone.utc),
+            status="healthy",
+        ))
+        await db_session.commit()
+
         room_code, match_id = await _seed_room_and_match(
             db_session,
             owner_user_id=normal_user["user_id"],
             spectator_user_id=admin_user["user_id"],
             replay_storage_dir=tmp_path,
             room_code="ADMIN1",
+            game_server_id="gs-admin-1",
         )
 
         forbidden = await client.get("/v1/admin/users", params={"session_id": normal_user["session_id"]})
@@ -114,8 +128,20 @@ async def test_admin_endpoints_manage_entities(client: AsyncClient, db_session: 
 
         list_users_resp = await client.get("/v1/admin/users", params={"session_id": admin_user["session_id"]})
         assert list_users_resp.status_code == 200
-        users = list_users_resp.json()
+        users_payload = list_users_resp.json()
+        assert users_payload["total"] >= 2
+        users = users_payload["items"]
         assert any(item["user_id"] == normal_user["user_id"] for item in users)
+
+        user_detail_resp = await client.get(
+            f"/v1/admin/users/{normal_user['user_id']}",
+            params={"session_id": admin_user["session_id"]},
+        )
+        assert user_detail_resp.status_code == 200
+        user_detail = user_detail_resp.json()
+        assert user_detail["user"]["user_id"] == normal_user["user_id"]
+        assert any(identity["provider"] == "guest" for identity in user_detail["identities"])
+        assert any(session["active"] is True for session in user_detail["sessions"])
 
         update_status_resp = await client.put(
             f"/v1/admin/users/{normal_user['user_id']}/status",
@@ -127,9 +153,37 @@ async def test_admin_endpoints_manage_entities(client: AsyncClient, db_session: 
 
         rooms_resp = await client.get("/v1/admin/rooms", params={"session_id": admin_user["session_id"]})
         assert rooms_resp.status_code == 200
-        room = next(item for item in rooms_resp.json() if item["room_code"] == room_code)
+        rooms_payload = rooms_resp.json()
+        assert rooms_payload["total"] >= 1
+        room = next(item for item in rooms_payload["items"] if item["room_code"] == room_code)
         assert room["player_count"] == 1
         assert room["spectator_count"] == 1
+        assert room["game_server_id"] == "gs-admin-1"
+        assert room["server_status"] == "healthy"
+        assert room["server_last_heartbeat_at"] is not None
+        assert room["server_online"] is True
+
+        filtered_rooms_resp = await client.get(
+            "/v1/admin/rooms",
+            params={
+                "session_id": admin_user["session_id"],
+                "owner_user_id": normal_user["user_id"],
+                "game_server_id": "gs-admin-1",
+            },
+        )
+        assert filtered_rooms_resp.status_code == 200
+        filtered_rooms_payload = filtered_rooms_resp.json()
+        assert filtered_rooms_payload["total"] == 1
+        assert filtered_rooms_payload["items"][0]["room_code"] == room_code
+
+        user_detail_after_room_resp = await client.get(
+            f"/v1/admin/users/{normal_user['user_id']}",
+            params={"session_id": admin_user["session_id"]},
+        )
+        assert user_detail_after_room_resp.status_code == 200
+        user_detail_after_room = user_detail_after_room_resp.json()
+        assert user_detail_after_room["recent_rooms"][0]["room_code"] == room_code
+        assert user_detail_after_room["recent_matches"][0]["match_id"] == match_id
 
         end_room_resp = await client.post(
             f"/v1/admin/rooms/{room_code}/end",
@@ -137,10 +191,17 @@ async def test_admin_endpoints_manage_entities(client: AsyncClient, db_session: 
         )
         assert end_room_resp.status_code == 200
         assert end_room_resp.json()["status"] == "Ended"
+        ended_room = (await db_session.execute(select(Room).where(Room.room_code == room_code))).scalar_one()
+        ended_members = (await db_session.execute(
+            select(RoomMember).where(RoomMember.room_id == ended_room.room_id)
+        )).scalars().all()
+        assert all(member.left_at is not None for member in ended_members)
 
         matches_resp = await client.get("/v1/admin/matches", params={"session_id": admin_user["session_id"]})
         assert matches_resp.status_code == 200
-        match = next(item for item in matches_resp.json() if item["match_id"] == match_id)
+        matches_payload = matches_resp.json()
+        assert matches_payload["total"] >= 1
+        match = next(item for item in matches_payload["items"] if item["match_id"] == match_id)
         assert match["has_replay"] is True
         assert match["participant_count"] == 2
 
@@ -154,7 +215,7 @@ async def test_admin_endpoints_manage_entities(client: AsyncClient, db_session: 
 
         matches_after_delete = await client.get("/v1/admin/matches", params={"session_id": admin_user["session_id"]})
         assert matches_after_delete.status_code == 200
-        assert all(item["match_id"] != match_id for item in matches_after_delete.json())
+        assert all(item["match_id"] != match_id for item in matches_after_delete.json()["items"])
     finally:
         settings.admin_user_ids = old_admin_user_ids
         settings.replay_storage_dir = old_replay_storage_dir
@@ -255,7 +316,7 @@ async def test_admin_batch_endpoints_manage_entities(client: AsyncClient, db_ses
 
         users_after_delete = await client.get("/v1/admin/users", params={"session_id": admin_user["session_id"]})
         assert users_after_delete.status_code == 200
-        remaining_user_ids = {item["user_id"] for item in users_after_delete.json()}
+        remaining_user_ids = {item["user_id"] for item in users_after_delete.json()["items"]}
         assert user_a["user_id"] not in remaining_user_ids
         assert user_b["user_id"] not in remaining_user_ids
     finally:
