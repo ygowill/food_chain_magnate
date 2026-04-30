@@ -27,8 +27,8 @@ const ROAD_OVERLAYS := LobbyistsRoadOverlaysClass.ROAD_OVERLAYS
 
 func _init() -> void:
 	action_id = "place_lobbyists_road"
-	display_name = "说客：放置道路（建设中）"
-	description = "放置一块建设中的道路，并在相邻道路上放置 roadworks 标记"
+	display_name = "使用说客"
+	description = "选择一名说客，放置建设中的道路或公园"
 	requires_actor = true
 	is_mandatory = false
 	ui_piece_ids = ROAD_PIECES.duplicate()

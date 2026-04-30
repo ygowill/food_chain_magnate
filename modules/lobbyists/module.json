@@ -15,6 +15,7 @@
 		],
 		"ui": {
 			"placement_overlays": [
+				"res://modules/lobbyists/ui/lobbyists_placement_flow_controller.gd",
 				"res://modules/lobbyists/ui/lobbyists_extra_tile_flow_controller.gd"
 			],
 			"map_interaction_modes": [
@@ -24,6 +25,7 @@
 				}
 			],
 			"hidden_action_ids": [
+				"place_lobbyists_park",
 				"place_lobbyists_extra_map_tile",
 				"skip_lobbyists_extra_map_tile"
 			],
