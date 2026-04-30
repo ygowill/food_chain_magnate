@@ -220,6 +220,63 @@
           </div>
         </el-tab-pane>
 
+        <el-tab-pane label="服务器管理" name="servers">
+          <div class="toolbar">
+            <el-input
+              v-model="serverIdFilter"
+              placeholder="按服务器ID筛选"
+              clearable
+              class="toolbar-input"
+              @keyup.enter="refreshServers"
+            />
+            <el-select v-model="serverOnlineFilter" placeholder="在线筛选" clearable class="toolbar-select">
+              <el-option label="在线" value="true" />
+              <el-option label="离线" value="false" />
+            </el-select>
+            <el-select v-model="serverStatusFilter" placeholder="状态筛选" clearable class="toolbar-select">
+              <el-option label="healthy" value="healthy" />
+              <el-option label="draining" value="draining" />
+              <el-option label="offline" value="offline" />
+            </el-select>
+            <el-button type="primary" @click="refreshServers">刷新</el-button>
+          </div>
+          <el-table
+            :data="servers"
+            v-loading="loadingServers"
+            class="fcm-table"
+          >
+            <el-table-column prop="game_server_id" label="服务器ID" min-width="220" />
+            <el-table-column label="在线" width="90">
+              <template #default="{ row }">
+                <el-tag size="small" :type="serverTagType(row)">{{ row.online ? '在线' : '离线' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="110" />
+            <el-table-column prop="active_room_count" label="活跃房间" width="100" />
+            <el-table-column label="房间分布" min-width="170">
+              <template #default="{ row }">
+                Lobby {{ row.lobby_room_count }} / Starting {{ row.starting_room_count }} / InGame {{ row.in_game_room_count }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="ws_url" label="WS 地址" min-width="240">
+              <template #default="{ row }">{{ row.ws_url || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="最后心跳" min-width="180">
+              <template #default="{ row }">{{ formatTime(row.last_heartbeat_at) }}</template>
+            </el-table-column>
+          </el-table>
+          <div class="pager">
+            <el-pagination
+              background
+              layout="total, prev, pager, next, jumper"
+              :total="serversTotal"
+              :page-size="PAGE_SIZE"
+              :current-page="serversPage"
+              @current-change="handleServersPageChange"
+            />
+          </div>
+        </el-tab-pane>
+
         <el-tab-pane label="对局管理" name="matches">
           <div class="toolbar">
             <el-input
@@ -386,18 +443,20 @@ import {
   deleteAdminMatch,
   endAdminRoom,
   getAdminUserDetail,
+  listAdminGameServers,
   listAdminMatches,
   listAdminRooms,
   listAdminUsers,
   updateAdminUserStatus,
   type BatchActionResult,
   type AdminMatchSummary,
+  type AdminGameServerSummary,
   type AdminRoomSummary,
   type AdminUserDetail,
   type AdminUserSummary,
 } from '../api/admin'
 
-type AdminTab = 'users' | 'rooms' | 'matches'
+type AdminTab = 'users' | 'rooms' | 'servers' | 'matches'
 type SelectTableRef = {
   clearSelection: () => void
   toggleRowSelection: (row: unknown, selected?: boolean) => void
@@ -442,6 +501,15 @@ const roomsPage = ref(1)
 const roomsHasNext = ref(false)
 const roomsTotal = ref(0)
 
+const servers = ref<AdminGameServerSummary[]>([])
+const loadingServers = ref(false)
+const serverIdFilter = ref('')
+const serverStatusFilter = ref('')
+const serverOnlineFilter = ref('')
+const serversPage = ref(1)
+const serversHasNext = ref(false)
+const serversTotal = ref(0)
+
 const matches = ref<AdminMatchSummary[]>([])
 const loadingMatches = ref(false)
 const matchRoomCodeFilter = ref('')
@@ -477,6 +545,16 @@ function parseMatchReplayFilter(): boolean | undefined {
 function roomServerTagType(room: AdminRoomSummary): 'success' | 'warning' | 'info' {
   if (!room.game_server_id) return 'info'
   return room.server_online ? 'success' : 'warning'
+}
+
+function serverTagType(server: AdminGameServerSummary): 'success' | 'warning' {
+  return server.online ? 'success' : 'warning'
+}
+
+function parseServerOnlineFilter(): boolean | undefined {
+  if (serverOnlineFilter.value === 'true') return true
+  if (serverOnlineFilter.value === 'false') return false
+  return undefined
 }
 
 function summarizeBatchResult(prefix: string, result: BatchActionResult): string {
@@ -697,7 +775,7 @@ function normalizePage(value: unknown): number {
 
 function loadStateFromRouteQuery() {
   const tabValue = String(route.query.tab ?? '')
-  if (tabValue === 'users' || tabValue === 'rooms' || tabValue === 'matches') {
+  if (tabValue === 'users' || tabValue === 'rooms' || tabValue === 'servers' || tabValue === 'matches') {
     activeTab.value = tabValue
   }
 
@@ -711,6 +789,11 @@ function loadStateFromRouteQuery() {
   roomGameServerFilter.value = String(route.query.r_server ?? '')
   roomsPage.value = normalizePage(route.query.r_page)
 
+  serverIdFilter.value = String(route.query.s_id ?? '')
+  serverStatusFilter.value = String(route.query.s_status ?? '')
+  serverOnlineFilter.value = String(route.query.s_online ?? '')
+  serversPage.value = normalizePage(route.query.s_page)
+
   matchRoomCodeFilter.value = String(route.query.m_code ?? '')
   matchParticipantFilter.value = String(route.query.m_user ?? '')
   matchStatusFilter.value = String(route.query.m_status ?? '')
@@ -723,6 +806,7 @@ function syncRouteQuery() {
     tab: activeTab.value,
     u_page: String(usersPage.value),
     r_page: String(roomsPage.value),
+    s_page: String(serversPage.value),
     m_page: String(matchesPage.value),
   }
   if (userQuery.value.trim()) query.u_q = userQuery.value.trim()
@@ -731,6 +815,9 @@ function syncRouteQuery() {
   if (roomStatusFilter.value.trim()) query.r_status = roomStatusFilter.value.trim()
   if (roomOwnerFilter.value.trim()) query.r_owner = roomOwnerFilter.value.trim()
   if (roomGameServerFilter.value.trim()) query.r_server = roomGameServerFilter.value.trim()
+  if (serverIdFilter.value.trim()) query.s_id = serverIdFilter.value.trim()
+  if (serverStatusFilter.value.trim()) query.s_status = serverStatusFilter.value.trim()
+  if (serverOnlineFilter.value.trim()) query.s_online = serverOnlineFilter.value.trim()
   if (matchRoomCodeFilter.value.trim()) query.m_code = matchRoomCodeFilter.value.trim()
   if (matchParticipantFilter.value.trim()) query.m_user = matchParticipantFilter.value.trim()
   if (matchStatusFilter.value.trim()) query.m_status = matchStatusFilter.value.trim()
@@ -862,6 +949,7 @@ async function handleBatchDeleteUsers() {
     clearMatchSelection()
     await loadUsers()
     await loadRooms({ page: 1 })
+    await loadServers({ page: 1 })
     await loadMatches({ page: 1 })
   } catch (error: any) {
     ElMessage.error(resolveErrorMessage(error, '批量删除用户失败'))
@@ -968,6 +1056,40 @@ async function handleBatchDeleteRooms() {
   }
 }
 
+async function loadServers(options: { page?: number; syncQuery?: boolean } = {}) {
+  if (options.page != null) {
+    serversPage.value = Math.max(1, options.page)
+  }
+  loadingServers.value = true
+  errorMessage.value = ''
+  try {
+    const { data } = await listAdminGameServers(auth.sessionId, {
+      game_server_id: serverIdFilter.value.trim() || undefined,
+      status: serverStatusFilter.value.trim() || undefined,
+      online: parseServerOnlineFilter(),
+      limit: PAGE_SIZE,
+      offset: (serversPage.value - 1) * PAGE_SIZE,
+    })
+    servers.value = data.items
+    serversTotal.value = data.total
+    serversHasNext.value = (serversPage.value * PAGE_SIZE) < data.total
+  } catch (error: any) {
+    servers.value = []
+    serversHasNext.value = false
+    serversTotal.value = 0
+    errorMessage.value = resolveErrorMessage(error, '加载服务器数据失败')
+  } finally {
+    loadingServers.value = false
+  }
+  if (options.syncQuery !== false) {
+    syncRouteQuery()
+  }
+}
+
+function handleServersPageChange(page: number) {
+  void loadServers({ page })
+}
+
 async function loadMatches(options: { page?: number; syncQuery?: boolean } = {}) {
   if (options.page != null) {
     matchesPage.value = Math.max(1, options.page)
@@ -1056,6 +1178,10 @@ function refreshRooms() {
   void loadRooms({ page: 1 })
 }
 
+function refreshServers() {
+  void loadServers({ page: 1 })
+}
+
 function refreshMatches() {
   clearMatchSelection()
   void loadMatches({ page: 1 })
@@ -1070,11 +1196,15 @@ async function loadCurrentTab(options: { syncQuery?: boolean } = {}) {
     await loadRooms(options)
     return
   }
+  if (activeTab.value === 'servers') {
+    await loadServers(options)
+    return
+  }
   await loadMatches(options)
 }
 
 function handleTabChange(name: string | number) {
-  if (name === 'users' || name === 'rooms' || name === 'matches') {
+  if (name === 'users' || name === 'rooms' || name === 'servers' || name === 'matches') {
     activeTab.value = name
   } else {
     activeTab.value = 'users'

@@ -1,6 +1,6 @@
 from pathlib import Path
 import random
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import pytest
@@ -175,6 +175,29 @@ async def test_admin_endpoints_manage_entities(client: AsyncClient, db_session: 
         filtered_rooms_payload = filtered_rooms_resp.json()
         assert filtered_rooms_payload["total"] == 1
         assert filtered_rooms_payload["items"][0]["room_code"] == room_code
+
+        db_session.add(GameServer(
+            game_server_id="gs-admin-old",
+            ws_url="ws://localhost:7001",
+            last_heartbeat_at=datetime.now(timezone.utc) - timedelta(seconds=120),
+            status="healthy",
+        ))
+        await db_session.commit()
+
+        servers_resp = await client.get("/v1/admin/game_servers", params={"session_id": admin_user["session_id"]})
+        assert servers_resp.status_code == 200
+        servers_payload = servers_resp.json()
+        assert servers_payload["total"] >= 2
+        active_server = next(item for item in servers_payload["items"] if item["game_server_id"] == "gs-admin-1")
+        assert active_server["online"] is True
+        assert active_server["active_room_count"] == 1
+
+        offline_servers_resp = await client.get(
+            "/v1/admin/game_servers",
+            params={"session_id": admin_user["session_id"], "online": False},
+        )
+        assert offline_servers_resp.status_code == 200
+        assert any(item["game_server_id"] == "gs-admin-old" for item in offline_servers_resp.json()["items"])
 
         user_detail_after_room_resp = await client.get(
             f"/v1/admin/users/{normal_user['user_id']}",

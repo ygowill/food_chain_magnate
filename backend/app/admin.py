@@ -21,6 +21,7 @@ from app.replay_storage import (
 
 router = APIRouter(prefix="/v1/admin", tags=["admin"])
 GAME_SERVER_HEALTH_WINDOW_SECONDS = 75
+ACTIVE_ROOM_STATUSES = ("Lobby", "Starting", "InGame")
 
 
 def _to_iso(value: Optional[datetime]) -> Optional[str]:
@@ -167,6 +168,25 @@ class AdminRoomSummary(BaseModel):
 
 class AdminRoomListResponse(BaseModel):
     items: list[AdminRoomSummary] = Field(default_factory=list)
+    total: int
+    limit: int
+    offset: int
+
+
+class AdminGameServerSummary(BaseModel):
+    game_server_id: str
+    ws_url: Optional[str]
+    status: str
+    last_heartbeat_at: str
+    online: bool
+    active_room_count: int
+    lobby_room_count: int
+    starting_room_count: int
+    in_game_room_count: int
+
+
+class AdminGameServerListResponse(BaseModel):
+    items: list[AdminGameServerSummary] = Field(default_factory=list)
     total: int
     limit: int
     offset: int
@@ -936,6 +956,79 @@ async def end_room(
         spectator_count=int(spectator_count or 0),
         created_at=_to_iso(room.created_at) or "",
         updated_at=_to_iso(room.updated_at) or "",
+    )
+
+
+@router.get("/game_servers", response_model=AdminGameServerListResponse)
+async def list_game_servers(
+    _status: Session = Depends(_require_admin_session),
+    db: AsyncSession = Depends(get_db),
+    game_server_id: Optional[str] = None,
+    status: Optional[str] = None,
+    online: Optional[bool] = None,
+    limit: int = 50,
+    offset: int = 0,
+):
+    lim = _normalize_limit(limit)
+    off = _normalize_offset(offset)
+    healthy_cutoff = _healthy_game_server_cutoff()
+    conditions = []
+    game_server_id_text = str(game_server_id or "").strip()
+    if game_server_id_text:
+        conditions.append(GameServer.game_server_id.contains(game_server_id_text))
+    status_text = str(status or "").strip()
+    if status_text:
+        conditions.append(GameServer.status == status_text)
+    if online is True:
+        conditions.append(GameServer.last_heartbeat_at >= healthy_cutoff)
+    elif online is False:
+        conditions.append(GameServer.last_heartbeat_at < healthy_cutoff)
+
+    stmt = select(GameServer)
+    count_stmt = select(func.count()).select_from(GameServer)
+    if conditions:
+        stmt = stmt.where(*conditions)
+        count_stmt = count_stmt.where(*conditions)
+    total = int((await db.execute(count_stmt)).scalar_one() or 0)
+    stmt = stmt.order_by(GameServer.last_heartbeat_at.desc()).offset(off).limit(lim)
+    servers = (await db.execute(stmt)).scalars().all()
+    if not servers:
+        return AdminGameServerListResponse(items=[], total=total, limit=lim, offset=off)
+
+    server_ids = [str(server.game_server_id) for server in servers]
+    room_rows = (await db.execute(
+        select(Room.game_server_id, Room.status, func.count())
+        .where(Room.game_server_id.in_(server_ids))
+        .group_by(Room.game_server_id, Room.status)
+    )).all()
+    counts_by_server: dict[str, dict[str, int]] = {}
+    for server_id, room_status, count_val in room_rows:
+        sid = str(server_id)
+        if sid not in counts_by_server:
+            counts_by_server[sid] = {}
+        counts_by_server[sid][str(room_status)] = int(count_val)
+
+    return AdminGameServerListResponse(
+        items=[
+            AdminGameServerSummary(
+                game_server_id=str(server.game_server_id),
+                ws_url=str(server.ws_url) if server.ws_url else None,
+                status=str(server.status),
+                last_heartbeat_at=_to_iso(server.last_heartbeat_at) or "",
+                online=_is_game_server_online(server, healthy_cutoff),
+                active_room_count=sum(
+                    int(counts_by_server.get(str(server.game_server_id), {}).get(room_status, 0))
+                    for room_status in ACTIVE_ROOM_STATUSES
+                ),
+                lobby_room_count=int(counts_by_server.get(str(server.game_server_id), {}).get("Lobby", 0)),
+                starting_room_count=int(counts_by_server.get(str(server.game_server_id), {}).get("Starting", 0)),
+                in_game_room_count=int(counts_by_server.get(str(server.game_server_id), {}).get("InGame", 0)),
+            )
+            for server in servers
+        ],
+        total=total,
+        limit=lim,
+        offset=off,
     )
 
 

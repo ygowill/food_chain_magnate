@@ -69,6 +69,18 @@ export interface AdminRoomSummary {
   updated_at: string
 }
 
+export interface AdminGameServerSummary {
+  game_server_id: string
+  ws_url: string | null
+  status: string
+  last_heartbeat_at: string
+  online: boolean
+  active_room_count: number
+  lobby_room_count: number
+  starting_room_count: number
+  in_game_room_count: number
+}
+
 export interface AdminMatchSummary {
   match_id: string
   room_code: string | null
@@ -150,6 +162,10 @@ export function batchDeleteAdminRooms(sessionId: string, roomCodes: string[]) {
     { room_codes: roomCodes },
     { params: { session_id: sessionId } },
   )
+}
+
+export function listAdminGameServers(sessionId: string, params: { game_server_id?: string; status?: string; online?: boolean; limit?: number; offset?: number } = {}) {
+  return client.get<AdminListResponse<AdminGameServerSummary>>('/admin/game_servers', { params: { session_id: sessionId, ...params } })
 }
 
 export function listAdminMatches(sessionId: string, params: { status?: string; room_code?: string; participant_user_id?: string; has_replay?: boolean; limit?: number; offset?: number } = {}) {
