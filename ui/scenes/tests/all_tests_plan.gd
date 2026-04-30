@@ -1088,7 +1088,7 @@ static func build_tests(host) -> Array[Dictionary]:
 			},
 			{
 				"name": "GameTimelineZeroCommandSnapshotTest",
-				"fn": func() -> Result: return TestRefs.GameTimelineZeroCommandSnapshotTestClass.run(),
+				"fn": func() -> Result: return await TestRefs.GameTimelineZeroCommandSnapshotTestClass.run(),
 			},
 			{
 				"name": "LogRestoreAfterLoadTest",
