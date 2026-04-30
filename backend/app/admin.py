@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -63,6 +64,17 @@ def _is_session_active(session: Session, now: datetime) -> bool:
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
     return expires_at > now
+
+
+def _parse_room_config(config_json: Optional[str]) -> dict:
+    text = str(config_json or "").strip()
+    if not text:
+        return {}
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return {"_raw": text}
+    return parsed if isinstance(parsed, dict) else {"value": parsed}
 
 
 async def _require_admin_session(
@@ -173,6 +185,23 @@ class AdminRoomListResponse(BaseModel):
     offset: int
 
 
+class AdminRoomMemberSummary(BaseModel):
+    user_id: str
+    display_name: Optional[str]
+    role: str
+    seat_index: Optional[int]
+    member_status: str
+    generation: int
+    joined_at: str
+    left_at: Optional[str]
+
+
+class AdminRoomDetailResponse(BaseModel):
+    room: AdminRoomSummary
+    config: dict
+    members: list[AdminRoomMemberSummary] = Field(default_factory=list)
+
+
 class AdminGameServerSummary(BaseModel):
     game_server_id: str
     ws_url: Optional[str]
@@ -217,6 +246,10 @@ class AdminBatchRoomRequest(BaseModel):
 
 class AdminBatchMatchDeleteRequest(BaseModel):
     match_ids: list[str] = Field(default_factory=list)
+
+
+class AdminMatchStatusUpdateRequest(BaseModel):
+    status: str
 
 
 class SimpleOkResponse(BaseModel):
@@ -851,6 +884,78 @@ async def list_rooms(
     )
 
 
+@router.get("/rooms/{room_code}", response_model=AdminRoomDetailResponse)
+async def get_room_detail(
+    room_code: str,
+    _status: Session = Depends(_require_admin_session),
+    db: AsyncSession = Depends(get_db),
+):
+    normalized_room_code = str(room_code or "").strip().upper()
+    room = (await db.execute(select(Room).where(Room.room_code == normalized_room_code))).scalar_one_or_none()
+    if room is None:
+        raise HTTPException(status_code=404, detail="room not found")
+
+    player_count = int((await db.execute(
+        select(func.count()).select_from(RoomMember).where(
+            RoomMember.room_id == room.room_id,
+            RoomMember.left_at.is_(None),
+            RoomMember.seat_index.is_not(None),
+        )
+    )).scalar_one() or 0)
+    spectator_count = int((await db.execute(
+        select(func.count()).select_from(RoomMember).where(
+            RoomMember.room_id == room.room_id,
+            RoomMember.left_at.is_(None),
+            RoomMember.role == "spectator",
+        )
+    )).scalar_one() or 0)
+    server = None
+    if room.game_server_id:
+        server = (await db.execute(
+            select(GameServer).where(GameServer.game_server_id == str(room.game_server_id))
+        )).scalar_one_or_none()
+    healthy_cutoff = _healthy_game_server_cutoff()
+
+    member_rows = (await db.execute(
+        select(RoomMember, User)
+        .outerjoin(User, User.user_id == RoomMember.user_id)
+        .where(RoomMember.room_id == room.room_id)
+        .order_by(RoomMember.left_at.is_not(None), RoomMember.seat_index.asc(), RoomMember.joined_at.asc())
+    )).all()
+
+    return AdminRoomDetailResponse(
+        room=AdminRoomSummary(
+            room_code=str(room.room_code),
+            status=str(room.status),
+            owner_user_id=str(room.owner_user_id),
+            join_policy=str(room.join_policy),
+            game_server_id=str(room.game_server_id) if room.game_server_id else None,
+            ws_url=str(room.ws_url) if room.ws_url else None,
+            server_status=str(server.status) if server is not None else None,
+            server_last_heartbeat_at=_to_iso(server.last_heartbeat_at) if server is not None else None,
+            server_online=_is_game_server_online(server, healthy_cutoff),
+            player_count=player_count,
+            spectator_count=spectator_count,
+            created_at=_to_iso(room.created_at) or "",
+            updated_at=_to_iso(room.updated_at) or "",
+        ),
+        config=_parse_room_config(room.config_json),
+        members=[
+            AdminRoomMemberSummary(
+                user_id=str(member.user_id),
+                display_name=str(user.display_name) if user is not None and user.display_name else None,
+                role=str(member.role),
+                seat_index=member.seat_index,
+                member_status=str(member.member_status),
+                generation=int(member.generation or 1),
+                joined_at=_to_iso(member.joined_at) or "",
+                left_at=_to_iso(member.left_at),
+            )
+            for member, user in member_rows
+        ],
+    )
+
+
 @router.post("/rooms/batch/end", response_model=BatchActionResult)
 async def batch_end_rooms(
     payload: AdminBatchRoomRequest,
@@ -1116,6 +1221,43 @@ async def list_matches(
         total=total,
         limit=lim,
         offset=off,
+    )
+
+
+@router.put("/matches/{match_id}/status", response_model=AdminMatchSummary)
+async def update_match_status(
+    match_id: str,
+    payload: AdminMatchStatusUpdateRequest,
+    _status: Session = Depends(_require_admin_session),
+    db: AsyncSession = Depends(get_db),
+):
+    new_status = str(payload.status or "").strip()
+    allowed_status = {"in_progress", "completed", "failed", "abandoned"}
+    if new_status not in allowed_status:
+        raise HTTPException(status_code=400, detail="status must be one of: in_progress|completed|failed|abandoned")
+
+    match = (await db.execute(select(Match).where(Match.match_id == match_id))).scalar_one_or_none()
+    if match is None:
+        raise HTTPException(status_code=404, detail="match not found")
+    match.status = new_status
+    await db.commit()
+
+    participant_count = int((await db.execute(
+        select(func.count()).select_from(MatchParticipant).where(MatchParticipant.match_id == match_id)
+    )).scalar_one() or 0)
+    replay_row = (await db.execute(
+        select(MatchReplay.match_id).where(MatchReplay.match_id == match_id)
+    )).scalar_one_or_none()
+    return AdminMatchSummary(
+        match_id=str(match.match_id),
+        room_code=str(match.room_code) if match.room_code else None,
+        status=str(match.status),
+        player_count=int(match.player_count or 0),
+        participant_count=participant_count,
+        has_replay=replay_row is not None,
+        started_at=_to_iso(match.started_at),
+        ended_at=_to_iso(match.ended_at),
+        created_at=_to_iso(match.created_at) or "",
     )
 
 

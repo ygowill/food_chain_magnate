@@ -69,6 +69,23 @@ export interface AdminRoomSummary {
   updated_at: string
 }
 
+export interface AdminRoomMemberSummary {
+  user_id: string
+  display_name: string | null
+  role: string
+  seat_index: number | null
+  member_status: string
+  generation: number
+  joined_at: string
+  left_at: string | null
+}
+
+export interface AdminRoomDetail {
+  room: AdminRoomSummary
+  config: Record<string, unknown>
+  members: AdminRoomMemberSummary[]
+}
+
 export interface AdminGameServerSummary {
   game_server_id: string
   ws_url: string | null
@@ -144,6 +161,10 @@ export function listAdminRooms(sessionId: string, params: { status?: string; roo
   return client.get<AdminListResponse<AdminRoomSummary>>('/admin/rooms', { params: { session_id: sessionId, ...params } })
 }
 
+export function getAdminRoomDetail(sessionId: string, roomCode: string) {
+  return client.get<AdminRoomDetail>(`/admin/rooms/${roomCode}`, { params: { session_id: sessionId } })
+}
+
 export function endAdminRoom(sessionId: string, roomCode: string) {
   return client.post<AdminRoomSummary>(`/admin/rooms/${roomCode}/end`, {}, { params: { session_id: sessionId } })
 }
@@ -174,6 +195,14 @@ export function listAdminMatches(sessionId: string, params: { status?: string; r
 
 export function deleteAdminMatch(sessionId: string, matchId: string) {
   return client.delete<{ ok: boolean }>(`/admin/matches/${matchId}`, { params: { session_id: sessionId } })
+}
+
+export function updateAdminMatchStatus(sessionId: string, matchId: string, status: string) {
+  return client.put<AdminMatchSummary>(
+    `/admin/matches/${matchId}/status`,
+    { status },
+    { params: { session_id: sessionId } },
+  )
 }
 
 export function batchDeleteAdminMatches(sessionId: string, matchIds: string[]) {

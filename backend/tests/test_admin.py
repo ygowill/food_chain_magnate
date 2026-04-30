@@ -208,6 +208,16 @@ async def test_admin_endpoints_manage_entities(client: AsyncClient, db_session: 
         assert user_detail_after_room["recent_rooms"][0]["room_code"] == room_code
         assert user_detail_after_room["recent_matches"][0]["match_id"] == match_id
 
+        room_detail_resp = await client.get(
+            f"/v1/admin/rooms/{room_code}",
+            params={"session_id": admin_user["session_id"]},
+        )
+        assert room_detail_resp.status_code == 200
+        room_detail = room_detail_resp.json()
+        assert room_detail["room"]["room_code"] == room_code
+        assert len(room_detail["members"]) == 2
+        assert room_detail["config"] == {}
+
         end_room_resp = await client.post(
             f"/v1/admin/rooms/{room_code}/end",
             params={"session_id": admin_user["session_id"]},
@@ -227,6 +237,14 @@ async def test_admin_endpoints_manage_entities(client: AsyncClient, db_session: 
         match = next(item for item in matches_payload["items"] if item["match_id"] == match_id)
         assert match["has_replay"] is True
         assert match["participant_count"] == 2
+
+        update_match_status_resp = await client.put(
+            f"/v1/admin/matches/{match_id}/status",
+            params={"session_id": admin_user["session_id"]},
+            json={"status": "failed"},
+        )
+        assert update_match_status_resp.status_code == 200
+        assert update_match_status_resp.json()["status"] == "failed"
 
         delete_match_resp = await client.delete(
             f"/v1/admin/matches/{match_id}",

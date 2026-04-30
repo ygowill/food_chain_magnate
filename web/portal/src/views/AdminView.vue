@@ -194,17 +194,20 @@
             <el-table-column label="更新时间" min-width="180">
               <template #default="{ row }">{{ formatTime(row.updated_at) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="120">
+            <el-table-column label="操作" width="180">
               <template #default="{ row }">
-                <el-button
-                  size="small"
-                  type="danger"
-                  plain
-                  :disabled="row.status === 'Ended'"
-                  @click="handleEndRoom(row)"
-                >
-                  结束房间
-                </el-button>
+                <div class="inline-row">
+                  <el-button size="small" @click="openRoomDetail(row)">详情</el-button>
+                  <el-button
+                    size="small"
+                    type="danger"
+                    plain
+                    :disabled="row.status === 'Ended'"
+                    @click="handleEndRoom(row)"
+                  >
+                    结束
+                  </el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -251,7 +254,25 @@
                 <el-tag size="small" :type="serverTagType(row)">{{ row.online ? '在线' : '离线' }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="status" label="状态" width="110" />
+            <el-table-column label="状态" width="210">
+              <template #default="{ row }">
+                <div class="inline-row">
+                  <el-select v-model="matchStatusDraft[row.match_id]" size="small" class="match-status-select">
+                    <el-option label="in_progress" value="in_progress" />
+                    <el-option label="completed" value="completed" />
+                    <el-option label="failed" value="failed" />
+                    <el-option label="abandoned" value="abandoned" />
+                  </el-select>
+                  <el-button
+                    size="small"
+                    :disabled="matchStatusDraft[row.match_id] === row.status"
+                    @click="saveMatchStatus(row)"
+                  >
+                    保存
+                  </el-button>
+                </div>
+              </template>
+            </el-table-column>
             <el-table-column prop="active_room_count" label="活跃房间" width="100" />
             <el-table-column label="房间分布" min-width="170">
               <template #default="{ row }">
@@ -424,6 +445,46 @@
         </template>
       </div>
     </el-drawer>
+
+    <el-drawer
+      v-model="roomDetailOpen"
+      :title="roomDetail?.room.room_code || '房间详情'"
+      size="620px"
+      destroy-on-close
+    >
+      <div v-loading="loadingRoomDetail" class="detail-drawer">
+        <template v-if="roomDetail">
+          <el-descriptions :column="1" border size="small">
+            <el-descriptions-item label="房间号">{{ roomDetail.room.room_code }}</el-descriptions-item>
+            <el-descriptions-item label="状态">{{ roomDetail.room.status }}</el-descriptions-item>
+            <el-descriptions-item label="房主">{{ roomDetail.room.owner_user_id }}</el-descriptions-item>
+            <el-descriptions-item label="服务器">{{ roomDetail.room.game_server_id || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="服务器在线">{{ roomDetail.room.server_online ? '在线' : '离线/未分配' }}</el-descriptions-item>
+            <el-descriptions-item label="WS 地址">{{ roomDetail.room.ws_url || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="更新时间">{{ formatTime(roomDetail.room.updated_at) }}</el-descriptions-item>
+          </el-descriptions>
+
+          <h3 class="drawer-section-title">成员</h3>
+          <el-table :data="roomDetail.members" size="small" class="fcm-table">
+            <el-table-column prop="user_id" label="用户ID" min-width="190" />
+            <el-table-column label="昵称" min-width="110">
+              <template #default="{ row }">{{ row.display_name || '-' }}</template>
+            </el-table-column>
+            <el-table-column prop="role" label="角色" width="90" />
+            <el-table-column prop="seat_index" label="座位" width="70">
+              <template #default="{ row }">{{ row.seat_index ?? '-' }}</template>
+            </el-table-column>
+            <el-table-column prop="member_status" label="成员状态" width="100" />
+            <el-table-column label="离开时间" min-width="150">
+              <template #default="{ row }">{{ formatTime(row.left_at) }}</template>
+            </el-table-column>
+          </el-table>
+
+          <h3 class="drawer-section-title">配置</h3>
+          <pre class="json-block">{{ formatJson(roomDetail.config) }}</pre>
+        </template>
+      </div>
+    </el-drawer>
   </AppLayout>
 </template>
 
@@ -442,15 +503,18 @@ import {
   batchUpdateAdminUsersStatus,
   deleteAdminMatch,
   endAdminRoom,
+  getAdminRoomDetail,
   getAdminUserDetail,
   listAdminGameServers,
   listAdminMatches,
   listAdminRooms,
   listAdminUsers,
+  updateAdminMatchStatus,
   updateAdminUserStatus,
   type BatchActionResult,
   type AdminMatchSummary,
   type AdminGameServerSummary,
+  type AdminRoomDetail,
   type AdminRoomSummary,
   type AdminUserDetail,
   type AdminUserSummary,
@@ -500,6 +564,9 @@ const selectingAllRooms = ref(false)
 const roomsPage = ref(1)
 const roomsHasNext = ref(false)
 const roomsTotal = ref(0)
+const roomDetailOpen = ref(false)
+const loadingRoomDetail = ref(false)
+const roomDetail = ref<AdminRoomDetail | null>(null)
 
 const servers = ref<AdminGameServerSummary[]>([])
 const loadingServers = ref(false)
@@ -517,6 +584,7 @@ const matchParticipantFilter = ref('')
 const matchStatusFilter = ref<string>('')
 const matchReplayFilter = ref<string>('')
 const selectedMatchIds = ref<string[]>([])
+const matchStatusDraft = ref<Record<string, string>>({})
 const matchesTableRef = ref<SelectTableRef | null>(null)
 const selectingAllMatches = ref(false)
 const matchesPage = ref(1)
@@ -534,6 +602,10 @@ function resolveErrorMessage(error: any, fallback: string): string {
 function formatTime(value: string | null | undefined): string {
   if (!value) return '-'
   return new Date(value).toLocaleString('zh-CN')
+}
+
+function formatJson(value: unknown): string {
+  return JSON.stringify(value ?? {}, null, 2)
 }
 
 function parseMatchReplayFilter(): boolean | undefined {
@@ -993,6 +1065,21 @@ function handleRoomsPageChange(page: number) {
   void loadRooms({ page })
 }
 
+async function openRoomDetail(room: AdminRoomSummary) {
+  roomDetailOpen.value = true
+  loadingRoomDetail.value = true
+  roomDetail.value = null
+  try {
+    const { data } = await getAdminRoomDetail(auth.sessionId, room.room_code)
+    roomDetail.value = data
+  } catch (error: any) {
+    ElMessage.error(resolveErrorMessage(error, '加载房间详情失败'))
+    roomDetailOpen.value = false
+  } finally {
+    loadingRoomDetail.value = false
+  }
+}
+
 async function handleEndRoom(room: AdminRoomSummary) {
   try {
     await ElMessageBox.confirm(`确认结束房间 ${room.room_code}？`, '确认操作', {
@@ -1108,6 +1195,11 @@ async function loadMatches(options: { page?: number; syncQuery?: boolean } = {})
     matches.value = data.items
     matchesTotal.value = data.total
     matchesHasNext.value = (matchesPage.value * PAGE_SIZE) < data.total
+    const draft: Record<string, string> = {}
+    for (const match of data.items) {
+      draft[match.match_id] = match.status
+    }
+    matchStatusDraft.value = draft
     await applyMatchSelectionToTable()
   } catch (error: any) {
     matches.value = []
@@ -1125,6 +1217,18 @@ async function loadMatches(options: { page?: number; syncQuery?: boolean } = {})
 
 function handleMatchesPageChange(page: number) {
   void loadMatches({ page })
+}
+
+async function saveMatchStatus(match: AdminMatchSummary) {
+  const nextStatus = matchStatusDraft.value[match.match_id]
+  if (!nextStatus || nextStatus === match.status) return
+  try {
+    await updateAdminMatchStatus(auth.sessionId, match.match_id, nextStatus)
+    ElMessage.success('对局状态已更新')
+    await loadMatches()
+  } catch (error: any) {
+    ElMessage.error(resolveErrorMessage(error, '更新对局状态失败'))
+  }
 }
 
 async function handleDeleteMatch(match: AdminMatchSummary) {
@@ -1311,6 +1415,23 @@ onMounted(async () => {
 
 .status-select {
   width: 110px;
+}
+
+.match-status-select {
+  width: 120px;
+}
+
+.json-block {
+  max-height: 240px;
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--fcm-field-border);
+  border-radius: var(--fcm-radius, 6px);
+  background: var(--fcm-surface-alt);
+  color: var(--fcm-text-primary);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .pager {
