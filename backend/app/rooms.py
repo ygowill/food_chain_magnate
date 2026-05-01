@@ -14,6 +14,7 @@ from app.config import settings
 from app.connect_token import issue_connect_token
 from app.db import get_db
 from app.models import GameServer, Room, RoomMember, Session, User
+from app.room_config import RoomConfigParseError, parse_room_config_json
 
 router = APIRouter(prefix="/v1/rooms", tags=["rooms"])
 
@@ -99,19 +100,22 @@ async def _get_active_room_member(db: AsyncSession, room_id: str, user_id: str) 
     )).scalar_one_or_none()
 
 
-def _parse_room_config_json(config_json: Optional[str]) -> dict:
-    import json
-
-    raw = str(config_json or "").strip()
-    if raw == "":
-        return {}
+def _parse_request_room_config_json(config_json: Optional[str]) -> dict:
     try:
-        parsed = json.loads(raw)
-    except Exception:
-        return {}
-    if not isinstance(parsed, dict):
-        return {}
-    return dict(parsed)
+        return parse_room_config_json(config_json, "config_json")
+    except RoomConfigParseError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _parse_stored_room_config_json(config_json: Optional[str], room_code: str = "") -> dict:
+    source = "room.config_json"
+    code = str(room_code or "").strip().upper()
+    if code:
+        source = "room %s config_json" % code
+    try:
+        return parse_room_config_json(config_json, source)
+    except RoomConfigParseError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 def _is_resume_room_config(config: dict) -> bool:
@@ -192,7 +196,7 @@ def _issue_member_connect_token(
 ) -> str:
     current_generation = max(1, int(member.generation or 1))
     member.generation = current_generation + 1
-    room_cfg = _parse_room_config_json(room.config_json)
+    room_cfg = _parse_stored_room_config_json(room.config_json, room.room_code)
     effective_config_json = config_json
     if effective_config_json is None and _is_resume_room_config(room_cfg):
         effective_config_json = str(room.config_json or "{}")
@@ -301,10 +305,9 @@ async def list_rooms(
             if str(display_name or "").strip()
         }
 
-    import json
     out: list[RoomSummary] = []
     for r in rooms:
-        cfg = _parse_room_config_json(r.config_json)
+        cfg = _parse_stored_room_config_json(r.config_json, r.room_code)
 
         desired = int(cfg.get("desired_player_count", 0) or 0)
         allow_spectators = bool(cfg.get("allow_spectators", True))
@@ -339,7 +342,7 @@ async def create_room(req: CreateRoomRequest, db: AsyncSession = Depends(get_db)
     if not preferred_ws_url:
         preferred_ws_url = _resolve_default_ws_url()
 
-    room_cfg = _parse_room_config_json(req.config_json)
+    room_cfg = _parse_request_room_config_json(req.config_json)
     is_resume_room = _is_resume_room_config(room_cfg)
 
     from app.auth import _hash_password
@@ -401,7 +404,7 @@ async def join_room(room_code: str, req: JoinRequest, db: AsyncSession = Depends
             raise HTTPException(403, "wrong password")
     _, room_ws_url = await _resolve_room_connection_target(db, room)
 
-    room_cfg = _parse_room_config_json(room.config_json)
+    room_cfg = _parse_stored_room_config_json(room.config_json, room.room_code)
     is_resume_room = _is_resume_room_config(room_cfg)
 
     # Check already joined
@@ -518,7 +521,7 @@ async def resume_room(room_code: str, req: ResumeRequest, db: AsyncSession = Dep
         raise HTTPException(409, "room already ended")
     _, room_ws_url = await _resolve_room_connection_target(db, room)
 
-    room_cfg = _parse_room_config_json(room.config_json)
+    room_cfg = _parse_stored_room_config_json(room.config_json, room.room_code)
     is_resume_room = _is_resume_room_config(room_cfg)
 
     existing = await _get_active_room_member(db, room.room_id, sess.user_id)
@@ -591,14 +594,8 @@ async def spectate_room(room_code: str, req: JoinRequest, db: AsyncSession = Dep
     if str(room.status) != "InGame":
         raise HTTPException(409, "room is not in game")
 
-    allow_spectators = True
-    if room.config_json:
-        import json
-        try:
-            cfg = json.loads(room.config_json)
-            allow_spectators = bool((cfg or {}).get("allow_spectators", True))
-        except Exception:
-            allow_spectators = True
+    cfg = _parse_stored_room_config_json(room.config_json, room.room_code)
+    allow_spectators = bool(cfg.get("allow_spectators", True))
     if not allow_spectators:
         raise HTTPException(403, "spectators not allowed")
 

@@ -82,6 +82,24 @@ async def test_create_room(client: AsyncClient, db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
+async def test_create_room_rejects_invalid_config_json(client: AsyncClient):
+    user = await _create_user(client)
+    invalid_resp = await client.post("/v1/rooms", json={
+        "session_id": user["session_id"],
+        "config_json": "{",
+    })
+    assert invalid_resp.status_code == 400
+    assert "config_json" in str(invalid_resp.json().get("detail", ""))
+
+    non_object_resp = await client.post("/v1/rooms", json={
+        "session_id": user["session_id"],
+        "config_json": "[]",
+    })
+    assert non_object_resp.status_code == 400
+    assert "JSON object" in str(non_object_resp.json().get("detail", ""))
+
+
+@pytest.mark.asyncio
 async def test_create_room_uses_configured_default_ws_url(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
     import app.rooms as rooms_module
 
@@ -724,6 +742,42 @@ async def test_spectate_room_rejects_when_disabled(client: AsyncClient):
     spectator = await _create_user(client)
     resp = await client.post(f"/v1/rooms/{code}/spectate", json={"session_id": spectator["session_id"]})
     assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_spectate_room_rejects_corrupt_config_json(client: AsyncClient, db_session: AsyncSession):
+    host = await _create_user(client)
+    create = await client.post("/v1/rooms", json={
+        "session_id": host["session_id"],
+        "config_json": "{\"desired_player_count\":2,\"allow_spectators\":true}",
+    })
+    code = create.json()["room_code"]
+    sync = await client.post(
+        "/internal/game_servers/gs-spectate-corrupt-config-1/rooms/sync",
+        headers=INTERNAL_HEADERS,
+        json={
+            "rooms": [
+                {
+                    "room_code": code,
+                    "owner_user_id": host["user_id"],
+                    "status": "InGame",
+                    "join_policy": "public",
+                    "config_json": "{\"desired_player_count\":2,\"allow_spectators\":true}",
+                    "members": [{"user_id": host["user_id"], "role": "host", "seat_index": 0}],
+                }
+            ],
+        },
+    )
+    assert sync.status_code == 200
+
+    room = (await db_session.execute(select(Room).where(Room.room_code == code))).scalar_one()
+    room.config_json = "{"
+    await db_session.commit()
+
+    spectator = await _create_user(client)
+    resp = await client.post(f"/v1/rooms/{code}/spectate", json={"session_id": spectator["session_id"]})
+    assert resp.status_code == 409
+    assert "config_json" in str(resp.json().get("detail", ""))
 
 
 @pytest.mark.asyncio

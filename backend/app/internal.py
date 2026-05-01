@@ -16,6 +16,7 @@ from app.config import settings
 from app.db import get_db
 from app.models import GameServer, Room, RoomMember, RoomTombstone, Match, MatchParticipant, MatchReplay, MatchArtifact
 from app.replay_storage import save_local_match_artifact, save_local_replay_archive
+from app.room_config import RoomConfigParseError, parse_room_config_json
 
 router = APIRouter(prefix="/internal", tags=["internal"])
 ACTIVE_ROOM_STATUSES = ("Lobby", "Starting", "InGame")
@@ -189,6 +190,12 @@ async def sync_room_directory(game_server_id: str, req: RoomDirectorySyncRequest
     server_ws_url = str(req.ws_url or "").strip() or None
     accepted_room_codes: list[str] = []
     skipped_ended_room_codes: list[str] = []
+
+    for index, item in enumerate(req.rooms):
+        try:
+            parse_room_config_json(item.config_json, f"rooms[{index}].config_json")
+        except RoomConfigParseError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     gs = (await db.execute(
         select(GameServer).where(GameServer.game_server_id == game_server_id)

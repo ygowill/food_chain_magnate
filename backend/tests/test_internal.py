@@ -25,6 +25,27 @@ async def test_internal_requires_secret(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_sync_room_directory_rejects_invalid_config_json(client: AsyncClient, db_session: AsyncSession):
+    resp = await client.post("/internal/game_servers/gs-sync-bad-config/rooms/sync", json={
+        "rooms": [
+            {
+                "room_code": "BADCFG",
+                "owner_user_id": "u_host_bad_cfg",
+                "status": "InGame",
+                "join_policy": "public",
+                "config_json": "{",
+                "members": [{"user_id": "u_host_bad_cfg", "role": "host", "seat_index": 0}],
+            }
+        ],
+    }, headers=INTERNAL_HEADERS)
+    assert resp.status_code == 400
+    assert "rooms[0].config_json" in str(resp.json().get("detail", ""))
+
+    room = (await db_session.execute(select(Room).where(Room.room_code == "BADCFG"))).scalar_one_or_none()
+    assert room is None
+
+
+@pytest.mark.asyncio
 async def test_heartbeat_creates_server(client: AsyncClient, db_session: AsyncSession):
     resp = await client.post("/internal/game_servers/heartbeat", json={
         "game_server_id": "gs-1",

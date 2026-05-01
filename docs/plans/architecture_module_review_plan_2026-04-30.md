@@ -2475,3 +2475,31 @@
 结论：
 
 - 已完成该 P2 strict 化：平台 API 客户端不再把坏 JSON 响应降级为成功空对象，调用方可以明确感知后端协议错误。
+
+### Fix 40：后端房间 config_json 解析失败不再回退为空配置
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 9 `[P2] 后端房间配置解析失败会退回 {}，可能把坏配置解释成非恢复房或允许观战`。
+
+改动：
+
+- `backend/app/room_config.py`：新增严格房间配置解析 helper；空配置仍表示 `{}`，但非法 JSON 或非对象 JSON 会抛出 `RoomConfigParseError`。
+- `backend/app/rooms.py`：创建房间时拒绝非法 `config_json`；读取已持久化房间配置时若发现损坏，join/resume/spectate/list/token 入口返回显式错误，不再按默认普通房间配置继续执行。
+- `backend/app/rooms.py`：观战入口不再用 `except Exception: allow_spectators = True`，坏配置会阻断观战而不是默认允许。
+- `backend/app/internal.py`：内部房间目录同步在写入数据库前预校验每个 `rooms[i].config_json`，坏配置返回 400，避免污染后端房间目录。
+- `backend/tests/test_rooms.py`、`backend/tests/test_internal.py`：新增创建房间拒绝非法配置、内部同步拒绝非法配置、持久化坏配置不得允许观战的契约测试。
+
+验证：
+
+- `python3 -m py_compile backend/app/room_config.py backend/app/rooms.py backend/app/internal.py backend/tests/test_rooms.py backend/tests/test_internal.py`：PASS。
+- `pytest tests/test_rooms.py::test_create_room_rejects_invalid_config_json tests/test_rooms.py::test_spectate_room_rejects_corrupt_config_json tests/test_internal.py::test_sync_room_directory_rejects_invalid_config_json -q`：PASS，`3 passed`。
+- `pytest -q`（backend 目录）：PASS，`119 passed`。
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：后端不再把损坏或错误类型的房间配置解释为空配置，恢复房识别与观战权限不会被坏 JSON 兜底绕过。
