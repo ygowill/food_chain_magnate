@@ -14,6 +14,8 @@ signal auto_fill_requested()
 @onready var auto_fill_button: Button = $Panel/MarginContainer/VBoxContainer/ButtonRow/AutoFillButton
 
 const RESTRUCTURING_HAND_TARGET_WIDTH := 460.0 # fits 3 compact cards/row with margins (issue_tracker #45)
+const RESTRUCTURING_PANEL_TARGET_SIZE := Vector2(4096.0, 2160.0)
+const RESTRUCTURING_FALLBACK_VIEWPORT_SIZE := Vector2(1280.0, 720.0)
 const _MAX_SPLIT_ADJUST_ATTEMPTS := 6
 
 var _hand_area: Node = null
@@ -38,7 +40,8 @@ func _ready() -> void:
 			auto_fill_button.pressed.connect(_on_auto_fill_pressed)
 
 func open(_covered_rect: Rect2) -> void:
-	super.open(_covered_rect)
+	_prepare_near_fullscreen_panel()
+	super.open(_resolve_near_fullscreen_cover_rect(_covered_rect))
 	if is_instance_valid(hand_host):
 		hand_host.custom_minimum_size.x = RESTRUCTURING_HAND_TARGET_WIDTH
 	_queue_apply_split_target_width()
@@ -118,6 +121,34 @@ func _on_player_button_pressed(player_id: int) -> void:
 func set_content_visible(visible: bool) -> void:
 	if is_instance_valid(split):
 		split.visible = bool(visible)
+
+func _prepare_near_fullscreen_panel() -> void:
+	var panel_node: Control = panel
+	if not is_instance_valid(panel_node):
+		var n = get_node_or_null("Panel")
+		if n is Control:
+			panel_node = n
+	if not is_instance_valid(panel_node):
+		return
+
+	panel_node.custom_minimum_size = RESTRUCTURING_PANEL_TARGET_SIZE
+	panel_node.size = RESTRUCTURING_PANEL_TARGET_SIZE
+
+func _resolve_near_fullscreen_cover_rect(covered_rect: Rect2) -> Rect2:
+	var full_size := Vector2.ZERO
+	var parent_node := get_parent()
+	if parent_node is Control:
+		var parent_control := parent_node as Control
+		full_size = parent_control.size
+	if (full_size.x <= 1.0 or full_size.y <= 1.0) and is_inside_tree():
+		full_size = get_viewport_rect().size
+	if full_size.x <= 1.0 or full_size.y <= 1.0:
+		full_size = Vector2(
+			maxf(covered_rect.size.x, RESTRUCTURING_FALLBACK_VIEWPORT_SIZE.x),
+			maxf(covered_rect.size.y, RESTRUCTURING_FALLBACK_VIEWPORT_SIZE.y)
+		)
+
+	return Rect2(Vector2.ZERO, full_size)
 
 func _queue_apply_split_target_width() -> void:
 	_split_adjust_attempts = 0

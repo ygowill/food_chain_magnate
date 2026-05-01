@@ -1,6 +1,6 @@
 # 重组界面布局回归测试（UI 属性测试）
 # 覆盖 issue_tracker #25：
-# - RestructuringModal 使用传入覆盖区并居中显示
+# - RestructuringModal 使用接近全屏的覆盖区并居中显示
 # - HandArea 在重组模式仅显示 reserve（不显示 active/busy）
 # - CompanyStructure 下属卡槽使用 4 列网格（多行）
 class_name RestructuringLayoutTest
@@ -115,19 +115,19 @@ static func run() -> Result:
 	if company.has_method("_ready"):
 		company.call("_ready")
 
-	# open 应使用 covered_rect，保持与其它居中弹窗一致的浮层行为。
+	# open 应使用近全屏覆盖区，以便重组时尽量展开公司结构。
 	var covered := Rect2(Vector2(10, 10), Vector2(100, 100))
 	modal.open(covered)
-	if modal.position != covered.position:
+	if modal.position != Vector2.ZERO:
 		_safe_free(modal)
 		_safe_free(hand)
 		_safe_free(company)
-		return Result.failure("RestructuringModal.position=%s (期望 %s)" % [str(modal.position), str(covered.position)])
-	if not modal.size.is_equal_approx(covered.size):
+		return Result.failure("RestructuringModal.position=%s (期望 Vector2.ZERO)" % str(modal.position))
+	if modal.size.x < 1200.0 or modal.size.y < 680.0:
 		_safe_free(modal)
 		_safe_free(hand)
 		_safe_free(company)
-		return Result.failure("RestructuringModal.size=%s (期望 covered.size=%s)" % [str(modal.size), str(covered.size)])
+		return Result.failure("RestructuringModal.size=%s (期望接近全屏)" % str(modal.size))
 
 	# Split children should expand vertically, otherwise CompanyStructure.ManagerScroll may be squeezed to 0 height.
 	# (issue_tracker #44)
