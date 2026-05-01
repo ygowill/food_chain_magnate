@@ -1487,7 +1487,7 @@
   - 证据：`modules/lobbyists/ui/lobbyists_placement_flow_controller.gd` 新增 523 行；其中 `_show_overlay`、`_refresh_map_selection`、`_on_placement_confirmed`、`_build_lobbyist_employee_items`、`_bind_action_panel_context` 均在同一文件内。证据：`modules/lobbyists/ui/lobbyists_placement_flow_controller.gd:82-120`、`161-235`、`274-292`、`371-413`。
   - 风险：这是模块 UI 层可以接受的短期整合，但后续如果继续增加 park/road/extra-tile 规则、online 约束和 staff usage，它会很快变成模块内的第二个 GamePanel controller。
   - 建议：若继续扩展，拆出 `LobbyistsPlacementViewModel`（从 state 派生员工/可选 pieces）、`LobbyistsPlacementCommandBuilder`（构造 command params）、`LobbyistsPlacementActionPanelBinder`（绑定 context）三类 helper。
-  - 状态：Fix 58 已先拆出 `LobbyistsPlacementCommandBuilder`，把 action 归一化、参数校验与 Command 创建从 flow controller 中移出。
+  - 状态：Fix 58 已先拆出 `LobbyistsPlacementCommandBuilder`；Fix 73 继续拆出 `LobbyistsPlacementViewModel` 与 `LobbyistsPlacementActionPanelBinder`，flow controller 从 449 行降到 345 行，保留生命周期/地图交互/命令执行职责。
 
 暂不列为问题：
 
@@ -3293,3 +3293,27 @@
 结论：
 
 - 该 P2 在当前代码中已完成，不需要额外运行时代码改动；本次更新仅把审查文档从旧证据状态修正为当前实现状态。
+
+### Fix 73：Lobbyists placement flow controller 拆出 ViewModel 与 ActionPanel Binder
+
+日期：2026-05-01
+
+对应问题：
+
+- main 增量 `[P3] Lobbyists placement flow controller 新增 523 行，集中处理 manifest UI 扩展、员工列表派生、地图高亮/预览、命令构造、ActionPanel context 绑定与 refresh`。
+
+改动：
+
+- 新增 `modules/lobbyists/ui/lobbyists_placement_view_model.gd`，集中负责从 state/action registry 派生可用 road/park piece sets、mode availability 与 lobbyist employee items。
+- 新增 `modules/lobbyists/ui/lobbyists_placement_action_panel_binder.gd`，集中负责 ActionPanel context overlay 的 bind/clear。
+- `modules/lobbyists/ui/lobbyists_placement_flow_controller.gd`：移除员工列表派生、piece set 派生、mode availability 判断与 ActionPanel bind/clear 细节；控制器保留 overlay 生命周期、地图 selection/preview/highlight、命令执行与成功后刷新。
+- flow controller 从 449 行降到 345 行；加上 Fix 58 的 command builder 后，该 P3 建议中的三类 helper 已全部落地。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1123`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`392/392`。
+
+结论：
+
+- 已完成该 P3 的模块 UI 结构收敛：Lobbyists 主放置控制器不再直接承载 ViewModel 派生、命令构造和 ActionPanel context 绑定三个独立职责，后续 road/park 扩展可以优先落在对应 helper 中。

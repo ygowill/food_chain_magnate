@@ -2,13 +2,13 @@ extends RefCounted
 
 const LobbyistsPlacementOverlayClass = preload("res://modules/lobbyists/ui/components/lobbyists_placement/lobbyists_placement_overlay.gd")
 const LobbyistsPlacementCommandBuilderClass = preload("res://modules/lobbyists/ui/lobbyists_placement_command_builder.gd")
-const LobbyistsStaffUsageClass = preload("res://modules/lobbyists/actions/lobbyists_staff_usage.gd")
+const LobbyistsPlacementViewModelClass = preload("res://modules/lobbyists/ui/lobbyists_placement_view_model.gd")
+const LobbyistsPlacementActionPanelBinderClass = preload("res://modules/lobbyists/ui/lobbyists_placement_action_panel_binder.gd")
 
 const ACTION_ROAD := "place_lobbyists_road"
 const ACTION_PARK := "place_lobbyists_park"
 const PHASE_WORKING := "Working"
 const SUB_PHASE_LOBBYISTS := "Lobbyists"
-const EMPLOYEE_LOBBYIST := "lobbyist"
 
 var _scene = null
 var _map_controller = null
@@ -39,7 +39,7 @@ func dispose() -> void:
 func hide() -> void:
 	if is_instance_valid(_overlay):
 		_overlay.visible = false
-	_clear_action_panel_context()
+	LobbyistsPlacementActionPanelBinderClass.clear(_scene)
 	if _map_controller != null and _map_controller.has_method("set_piece_placement_overlay"):
 		_map_controller.set_piece_placement_overlay(null)
 	if _map_controller != null and _map_controller.has_method("get_mode") and str(_map_controller.get_mode()) == "piece_placement":
@@ -69,7 +69,7 @@ func sync(state, force_full_refresh: bool = false) -> void:
 		hide()
 		return
 	var actor_id := _get_actor_id_for_state(state)
-	if actor_id < 0 or not _is_overlay_allowed(state):
+	if actor_id < 0 or not LobbyistsPlacementViewModelClass.is_overlay_allowed(state):
 		hide()
 		return
 	_sync_overlay_from_state(state, actor_id)
@@ -85,7 +85,7 @@ func _show_overlay(state, action_id: String, params: Dictionary) -> void:
 	var actor_id := _get_actor_id_for_state(state)
 	if actor_id < 0:
 		return
-	if not _is_overlay_allowed(state):
+	if not LobbyistsPlacementViewModelClass.is_overlay_allowed(state):
 		_show_toast("当前不在 Working/Lobbyists，无法使用说客")
 		return
 
@@ -115,7 +115,7 @@ func _show_overlay(state, action_id: String, params: Dictionary) -> void:
 	elif params.has("employee_type") and _overlay.has_method("set_selected_employee"):
 		_overlay.call("set_selected_employee", str(params.get("employee_type", "")))
 
-	_bind_action_panel_context(_overlay)
+	LobbyistsPlacementActionPanelBinderClass.bind(_scene, _overlay)
 	_refresh_map_selection(true)
 
 func _ensure_overlay() -> void:
@@ -142,19 +142,14 @@ func _sync_overlay_from_state(state, actor_id: int) -> void:
 	if not is_instance_valid(_overlay):
 		return
 
-	var piece_sets := {
-		ACTION_ROAD: _get_executor_piece_ids(ACTION_ROAD),
-		ACTION_PARK: _get_executor_piece_ids(ACTION_PARK),
-	}
+	var game_engine = _scene.game_engine if (_scene != null and _scene.game_engine != null) else null
+	var model := LobbyistsPlacementViewModelClass.build(state, game_engine, actor_id)
 	if _overlay.has_method("set_available_piece_sets"):
-		_overlay.call("set_available_piece_sets", piece_sets)
+		_overlay.call("set_available_piece_sets", Dictionary(model.get("piece_sets", {})))
 	if _overlay.has_method("set_mode_availability"):
-		_overlay.call("set_mode_availability", {
-			ACTION_ROAD: _is_action_allowed_by_phase(state, ACTION_ROAD),
-			ACTION_PARK: _is_action_allowed_by_phase(state, ACTION_PARK),
-		})
+		_overlay.call("set_mode_availability", Dictionary(model.get("mode_availability", {})))
 	if _overlay.has_method("set_available_employee_items"):
-		_overlay.call("set_available_employee_items", _build_lobbyist_employee_items(state, actor_id))
+		_overlay.call("set_available_employee_items", Array(model.get("employee_items", [])))
 	_select_first_enabled_lobbyist_if_needed()
 
 func _refresh_map_selection(force_begin: bool = false) -> void:
@@ -257,7 +252,7 @@ func _after_command_success(actor_id: int) -> void:
 func _close_overlay_and_refresh() -> void:
 	if is_instance_valid(_overlay):
 		_overlay.visible = false
-	_clear_action_panel_context()
+	LobbyistsPlacementActionPanelBinderClass.clear(_scene)
 	if _map_controller != null:
 		if _map_controller.has_method("set_piece_placement_overlay"):
 			_map_controller.set_piece_placement_overlay(null)
@@ -268,20 +263,6 @@ func _close_overlay_and_refresh() -> void:
 
 func _on_overlay_cancelled() -> void:
 	_close_overlay_and_refresh()
-
-func _bind_action_panel_context(overlay: Node) -> void:
-	if _scene == null or not is_instance_valid(_scene):
-		return
-	var action_panel = _scene.get("action_panel")
-	if action_panel != null and is_instance_valid(action_panel) and action_panel.has_method("bind_context_overlay"):
-		action_panel.call("bind_context_overlay", overlay)
-
-func _clear_action_panel_context() -> void:
-	if _scene == null or not is_instance_valid(_scene):
-		return
-	var action_panel = _scene.get("action_panel")
-	if action_panel != null and is_instance_valid(action_panel) and action_panel.has_method("clear_context_overlay"):
-		action_panel.call("clear_context_overlay")
 
 func _request_scene_ui_refresh_deferred() -> void:
 	if _scene == null or not is_instance_valid(_scene):
@@ -295,23 +276,6 @@ func _show_toast(message: String) -> void:
 
 func _normalize_action(action_id: String) -> String:
 	return LobbyistsPlacementCommandBuilderClass.normalize_action(action_id)
-
-func _is_overlay_allowed(state) -> bool:
-	if state == null:
-		return false
-	return str(state.phase) == PHASE_WORKING and str(state.sub_phase) == SUB_PHASE_LOBBYISTS
-
-func _is_action_allowed_by_phase(state, action_id: String) -> bool:
-	if state == null or _scene == null or _scene.game_engine == null:
-		return false
-	var ex = _scene.game_engine.get_action_registry().get_executor(action_id)
-	if ex == null:
-		return false
-	if ex.allowed_phases is Array and not Array(ex.allowed_phases).is_empty() and not Array(ex.allowed_phases).has(state.phase):
-		return false
-	if ex.allowed_sub_phases is Array and not Array(ex.allowed_sub_phases).is_empty() and not Array(ex.allowed_sub_phases).has(state.sub_phase):
-		return false
-	return true
 
 func _get_actor_id_for_state(state) -> int:
 	if state == null:
@@ -329,74 +293,6 @@ func _get_net_context():
 	if _scene == null or not is_instance_valid(_scene) or not (_scene is Node):
 		return null
 	return (_scene as Node).get_node_or_null("/root/NetContext")
-
-func _get_executor_piece_ids(action_id: String) -> Array[String]:
-	var out: Array[String] = []
-	if _scene == null or _scene.game_engine == null:
-		return out
-	var ex = _scene.game_engine.get_action_registry().get_executor(action_id)
-	if ex == null:
-		return out
-	var ids_val = ex.ui_piece_ids
-	if ids_val is Array:
-		var seen := {}
-		for v in Array(ids_val):
-			var s := str(v).strip_edges()
-			if s.is_empty() or seen.has(s):
-				continue
-			seen[s] = true
-			out.append(s)
-	return out
-
-func _build_lobbyist_employee_items(state, player_id: int) -> Array[Dictionary]:
-	var out: Array[Dictionary] = []
-	if state == null:
-		return out
-
-	var providers_read := LobbyistsStaffUsageClass.try_get_lobbyists_for_working(state, player_id)
-	if not providers_read.ok:
-		return out
-	for provider_val in Array(providers_read.value):
-		if not (provider_val is Dictionary):
-			continue
-		var provider: Dictionary = provider_val
-		var employee_type := str(provider.get("employee_type", provider.get("id", ""))).strip_edges()
-		if employee_type.is_empty():
-			continue
-		out.append({
-			"staff_id": int(provider.get("staff_id", -1)),
-			"id": employee_type,
-			"employee_type": employee_type,
-			"employee_def": _get_lobbyist_employee_def(employee_type),
-			"capacity": int(provider.get("capacity", 0)),
-			"used": int(provider.get("used", 0)),
-			"remaining": int(provider.get("remaining", 0)),
-			"can_place_lobbyists_road": true,
-			"can_place_lobbyists_park": true,
-		})
-
-	return out
-
-func _get_lobbyist_employee_def(employee_type: String) -> Dictionary:
-	var emp_id := str(employee_type).strip_edges()
-	if emp_id != EMPLOYEE_LOBBYIST:
-		return {"id": emp_id, "name": emp_id}
-	return {
-		"id": EMPLOYEE_LOBBYIST,
-		"name": "提案人",
-		"description": "在工作时间放置一块道路（建设中）或一块公园",
-		"salary": true,
-		"unique": false,
-		"role": "special",
-		"manager_slots": 0,
-		"range": {
-			"type": "road",
-			"value": 2,
-		},
-		"train_to": [],
-		"train_capacity": 0,
-		"tags": ["entry_level"],
-	}
 
 func _select_first_enabled_lobbyist_if_needed() -> void:
 	if not is_instance_valid(_overlay):
