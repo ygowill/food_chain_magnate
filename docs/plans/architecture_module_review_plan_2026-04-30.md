@@ -2251,3 +2251,29 @@
 结论：
 
 - 教学相关用户设置入口和设置保存路径已清空；规则教学仍通过主菜单入口写入一次性运行时标记串联 Setup/Game，不再通过设置或历史配置键影响普通模式、回放和加载路径。
+
+### Fix 31：lobbyists 模块私有 map state 改为显式初始化与 strict runtime
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 7 `[P2] lobbyists/rural_marketeers 模块私有状态边界仍存在初始化、运行期访问和 UI 兜底混杂` 中的 lobbyists 部分。
+- 具体问题：`lobbyists` 在重组 hook 中自动写入 `road_graph_connect_parallel_lanes`、供应、`lobbyists_pending_roads`、`lobbyists_roadworks_markers`；`place_lobbyists_road` apply 路径也会在缺失 pending/markers 时自动创建 `{}`/`[]`，掩盖模块初始化缺失或存档损坏。
+
+改动：
+
+- `modules/lobbyists/rules/entry.gd`：新增 `register_state_initializer("%s:init_state")`，在新局初始化 `road_graph_connect_parallel_lanes=true`、road/park supply、`lobbyists_pending_roads=[]`、`lobbyists_roadworks_markers={}`。
+- `modules/lobbyists/rules/entry.gd`：`_on_restructuring_before_enter(...)` 改为 strict runtime 访问；缺失或错误类型的 parallel-lanes marker、supply、pending roads、roadwork markers 直接失败，不再自动补默认值。
+- `modules/lobbyists/actions/place_lobbyists_road_action.gd`：`_apply_changes(...)` 在任何结构、marker、pending、supply mutation 前要求 `lobbyists_roadworks_markers` 为 Dictionary、`lobbyists_pending_roads` 为 Array；缺失/错类型直接失败，不再创建空容器。
+- `core/tests/lobbyists_supply_state_access_test.gd`：把“重组 hook 初始化缺失 supply”的旧契约迁移到 state initializer；新增重组 hook 缺失 supply/pending/markers/parallel-lanes 的 fail-fast 用例。
+- `core/tests/lobbyists_road_state_access_test.gd`：新增 road action 缺失 pending/markers 时失败且无 partial mutation 的回归测试。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成 lobbyists 部分 strict 化：模块私有 map state 由 initializer 明确创建，运行期规则和 action 不再承担隐式修复。UI overlay provider 的 best-effort 展示逻辑本次未改，它只负责把已存在的私有状态转换成可视 overlay，不再作为权威规则入口。

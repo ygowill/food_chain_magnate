@@ -32,7 +32,13 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_apply_changes_fails_fast_without_partial_mutation(seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 8})
+	r = _test_apply_changes_fails_fast_on_missing_roadwork_markers(seed_val)
+	if not r.ok:
+		return r
+	r = _test_apply_changes_fails_fast_on_missing_pending_roads(seed_val)
+	if not r.ok:
+		return r
+	return Result.success({"cases": 10})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -201,6 +207,83 @@ static func _test_apply_changes_fails_fast_without_partial_mutation(seed_val: in
 	var err := str(result.error)
 	if err.find("state.map.%s" % supply_key) < 0:
 		return Result.failure("错误信息应包含 state.map.%s，实际: %s" % [supply_key, err])
+	for pos in piece_cells:
+		var cell: Dictionary = CellsClass.get_cell(state, pos)
+		var structure_val = cell.get("structure", null)
+		if structure_val is Dictionary and not (structure_val as Dictionary).is_empty():
+			return Result.failure("失败时不应提前写入 structure: %s" % str(pos))
+	var pending_val = state.map.get(ActionClass.PENDING_ROADS_KEY, null)
+	if pending_val is Array and not (pending_val as Array).is_empty():
+		return Result.failure("失败时不应提前写入 pending roads")
+	var markers_val = state.map.get(ActionClass.ROADWORK_MARKERS_KEY, null)
+	if markers_val is Dictionary and not (markers_val as Dictionary).is_empty():
+		return Result.failure("失败时不应提前写入 roadwork markers")
+	return Result.success()
+
+static func _test_apply_changes_fails_fast_on_missing_roadwork_markers(seed_val: int) -> Result:
+	var state_r := _make_ready_state(seed_val)
+	if not state_r.ok:
+		return Result.failure("初始化失败(case9): %s" % state_r.error)
+	var state: GameState = state_r.value
+	var setup := _prepare_valid_apply_case(state)
+	if not setup.ok:
+		return setup
+	var data: Dictionary = setup.value
+	var supply_key := str(data.get("supply_key", ""))
+	var initial_supply := int(state.map.get(supply_key, -1))
+	state.map.erase(ActionClass.ROADWORK_MARKERS_KEY)
+
+	var action = ActionClass.new()
+	var result := action._apply_changes(state, data["command"])
+	if result.ok:
+		return Result.failure("缺失 roadwork markers 时 _apply_changes 应失败")
+	var err := str(result.error)
+	if err.find("state.map.%s" % ActionClass.ROADWORK_MARKERS_KEY) < 0:
+		return Result.failure("错误信息应包含 state.map.%s，实际: %s" % [ActionClass.ROADWORK_MARKERS_KEY, err])
+	return _assert_no_apply_mutation(state, data, initial_supply)
+
+static func _test_apply_changes_fails_fast_on_missing_pending_roads(seed_val: int) -> Result:
+	var state_r := _make_ready_state(seed_val)
+	if not state_r.ok:
+		return Result.failure("初始化失败(case10): %s" % state_r.error)
+	var state: GameState = state_r.value
+	var setup := _prepare_valid_apply_case(state)
+	if not setup.ok:
+		return setup
+	var data: Dictionary = setup.value
+	var supply_key := str(data.get("supply_key", ""))
+	var initial_supply := int(state.map.get(supply_key, -1))
+	state.map.erase(ActionClass.PENDING_ROADS_KEY)
+
+	var action = ActionClass.new()
+	var result := action._apply_changes(state, data["command"])
+	if result.ok:
+		return Result.failure("缺失 pending roads 时 _apply_changes 应失败")
+	var err := str(result.error)
+	if err.find("state.map.%s" % ActionClass.PENDING_ROADS_KEY) < 0:
+		return Result.failure("错误信息应包含 state.map.%s，实际: %s" % [ActionClass.PENDING_ROADS_KEY, err])
+	return _assert_no_apply_mutation(state, data, initial_supply)
+
+static func _prepare_valid_apply_case(state: GameState) -> Result:
+	var cmd_r := _find_valid_command(state)
+	if not cmd_r.ok:
+		return cmd_r
+	var command: Command = cmd_r.value
+	var piece_cells_r := _get_piece_cells(command)
+	if not piece_cells_r.ok:
+		return piece_cells_r
+	var piece_id := str(command.params.get("piece_id", ""))
+	return Result.success({
+		"command": command,
+		"piece_cells": piece_cells_r.value,
+		"supply_key": "%s_supply_remaining" % piece_id,
+	})
+
+static func _assert_no_apply_mutation(state: GameState, data: Dictionary, initial_supply: int) -> Result:
+	var piece_cells: Array[Vector2i] = data["piece_cells"]
+	var supply_key := str(data.get("supply_key", ""))
+	if int(state.map.get(supply_key, -1)) != initial_supply:
+		return Result.failure("失败时不应消耗 supply，%s=%s" % [supply_key, str(state.map.get(supply_key, null))])
 	for pos in piece_cells:
 		var cell: Dictionary = CellsClass.get_cell(state, pos)
 		var structure_val = cell.get("structure", null)

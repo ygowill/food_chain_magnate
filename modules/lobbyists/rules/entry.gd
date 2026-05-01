@@ -38,6 +38,7 @@ const PENDING_ROADS_KEY := LobbyistsRoadOverlaysClass.PENDING_ROADS_KEY
 const ROADWORK_MARKERS_KEY := LobbyistsRoadOverlaysClass.ROADWORK_MARKERS_KEY
 const EXTRA_TILE_PENDING_KEY := "lobbyists_extra_tile_pending"
 const EXTRA_TILE_LAST_PLACED_KEY := "lobbyists_extra_tile_last_placed"
+const PARALLEL_LANES_KEY := "road_graph_connect_parallel_lanes"
 
 const EFFECT_ID_ROADWORKS_DISTANCE := "%s:dinnertime:distance_delta:roadworks" % MODULE_ID
 const EFFECT_ID_PARK_BONUS := "%s:dinnertime:sale_house_bonus:park" % MODULE_ID
@@ -46,6 +47,7 @@ const STATE_SCHEMA_ID_EXTRA_TILE_PENDING := "lobbyists:round_state_int_keys:lobb
 
 func register(registrar) -> Result:
 	var steps: Array[Callable] = [
+		Callable(registrar, "register_state_initializer").bind("%s:init_state" % MODULE_ID, Callable(self, "_init_state"), 50),
 		Callable(registrar, "register_working_sub_phase_insertion").bind("Lobbyists", "PlaceHouses", "PlaceRestaurants", 100),
 		Callable(registrar, "register_working_sub_phase_hook").bind("Lobbyists", HookType.BEFORE_EXIT, Callable(self, "_on_lobbyists_before_exit"), 0),
 		Callable(registrar, "register_phase_hook").bind(Phase.RESTRUCTURING, HookType.BEFORE_ENTER, Callable(self, "_on_restructuring_before_enter"), 0),
@@ -92,6 +94,51 @@ func register(registrar) -> Result:
 	var r_hint3: Result = registrar.register_piece_ui_hint("lobbyists_park_tile_z", {"kind": "park"}, 100)
 	if not r_hint3.ok:
 		return r_hint3
+	return Result.success()
+
+func _init_state(state: GameState, _rng_manager) -> Result:
+	var map_read := MapStateAccessClass.require_map(state, "%s:init_state" % MODULE_ID)
+	if not map_read.ok:
+		return map_read
+	var map: Dictionary = map_read.value
+
+	var parallel_val = map.get(PARALLEL_LANES_KEY, null)
+	if parallel_val != null and not (parallel_val is bool):
+		return Result.failure("%s:init_state: state.map.%s 类型错误（期望 bool）" % [MODULE_ID, PARALLEL_LANES_KEY])
+	map[PARALLEL_LANES_KEY] = true
+
+	for piece_id in ROAD_SUPPLY_BY_PIECE_ID.keys():
+		var supply_key := "%s_supply_remaining" % str(piece_id)
+		if not map.has(supply_key):
+			map[supply_key] = int(ROAD_SUPPLY_BY_PIECE_ID[piece_id])
+		var supply_read := MapStateAccessClass.require_int_field(state, supply_key, "%s:init_state" % MODULE_ID)
+		if not supply_read.ok:
+			return supply_read
+		if int(supply_read.value) < 0:
+			return Result.failure("%s:init_state: state.map.%s 不能为负数: %d" % [MODULE_ID, supply_key, int(supply_read.value)])
+
+	for park_piece_id in PARK_SUPPLY_BY_PIECE_ID.keys():
+		var park_supply_key := "%s_supply_remaining" % str(park_piece_id)
+		if not map.has(park_supply_key):
+			map[park_supply_key] = int(PARK_SUPPLY_BY_PIECE_ID[park_piece_id])
+		var park_supply_read := MapStateAccessClass.require_int_field(state, park_supply_key, "%s:init_state" % MODULE_ID)
+		if not park_supply_read.ok:
+			return park_supply_read
+		if int(park_supply_read.value) < 0:
+			return Result.failure("%s:init_state: state.map.%s 不能为负数: %d" % [MODULE_ID, park_supply_key, int(park_supply_read.value)])
+
+	if not map.has(PENDING_ROADS_KEY):
+		map[PENDING_ROADS_KEY] = []
+	var pending_read := MapStateAccessClass.require_array_field(state, PENDING_ROADS_KEY, "%s:init_state" % MODULE_ID)
+	if not pending_read.ok:
+		return pending_read
+
+	if not map.has(ROADWORK_MARKERS_KEY):
+		map[ROADWORK_MARKERS_KEY] = {}
+	var markers_read := MapStateAccessClass.require_dict_field(state, ROADWORK_MARKERS_KEY, "%s:init_state" % MODULE_ID)
+	if not markers_read.ok:
+		return markers_read
+
 	return Result.success()
 
 func _build_reserve_supply_counts(_state: GameState) -> Dictionary:
@@ -201,61 +248,35 @@ func _on_restructuring_before_enter(state: GameState) -> Result:
 	if not (state.map is Dictionary):
 		return Result.failure("%s: state.map 类型错误（期望 Dictionary）" % MODULE_ID)
 
-	# Lobbyists rule: parallel adjacent road lanes are connected.
-	var opt_key := "road_graph_connect_parallel_lanes"
-	var should_invalidate := false
-	var opt_val = state.map.get(opt_key, null)
-	if opt_val == null:
-		should_invalidate = true
-	elif opt_val is bool:
-		should_invalidate = not bool(opt_val)
-	elif opt_val is int:
-		should_invalidate = int(opt_val) == 0
-	elif opt_val is float:
-		var f: float = float(opt_val)
-		if f == floor(f):
-			should_invalidate = int(f) == 0
-		else:
-			return Result.failure("%s: state.map.%s 类型错误（期望 bool/int）" % [MODULE_ID, opt_key])
-	else:
-		return Result.failure("%s: state.map.%s 类型错误（期望 bool/int）" % [MODULE_ID, opt_key])
-	if should_invalidate:
-		state.map[opt_key] = true
-		RoadGraphCacheClass.invalidate_road_graph(state)
+	if not state.map.has(PARALLEL_LANES_KEY) or not (state.map[PARALLEL_LANES_KEY] is bool):
+		return Result.failure("%s: state.map.%s 缺失或类型错误（期望 bool）" % [MODULE_ID, PARALLEL_LANES_KEY])
+	if not bool(state.map[PARALLEL_LANES_KEY]):
+		return Result.failure("%s: state.map.%s 必须为 true" % [MODULE_ID, PARALLEL_LANES_KEY])
 
 	for piece_id in ROAD_SUPPLY_BY_PIECE_ID.keys():
 		var supply_key := "%s_supply_remaining" % str(piece_id)
-		var supply_read := MapStateAccessClass.require_optional_int_field_or_default(
-			state,
-			supply_key,
-			int(ROAD_SUPPLY_BY_PIECE_ID[piece_id]),
-			MODULE_ID
-		)
+		var supply_read := MapStateAccessClass.require_int_field(state, supply_key, MODULE_ID)
 		if not supply_read.ok:
 			return supply_read
 		var supply_remaining: int = int(supply_read.value)
 		if supply_remaining < 0:
 			return Result.failure("%s: state.map.%s 不能为负数: %d" % [MODULE_ID, supply_key, supply_remaining])
-		state.map[supply_key] = supply_remaining
 
 	for park_piece_id in PARK_SUPPLY_BY_PIECE_ID.keys():
 		var park_supply_key := "%s_supply_remaining" % str(park_piece_id)
-		var park_supply_read := MapStateAccessClass.require_optional_int_field_or_default(
-			state,
-			park_supply_key,
-			int(PARK_SUPPLY_BY_PIECE_ID[park_piece_id]),
-			MODULE_ID
-		)
+		var park_supply_read := MapStateAccessClass.require_int_field(state, park_supply_key, MODULE_ID)
 		if not park_supply_read.ok:
 			return park_supply_read
 		var park_supply_remaining: int = int(park_supply_read.value)
 		if park_supply_remaining < 0:
 			return Result.failure("%s: state.map.%s 不能为负数: %d" % [MODULE_ID, park_supply_key, park_supply_remaining])
-		state.map[park_supply_key] = park_supply_remaining
-	if not state.map.has(PENDING_ROADS_KEY):
-		state.map[PENDING_ROADS_KEY] = []
-	if not state.map.has(ROADWORK_MARKERS_KEY):
-		state.map[ROADWORK_MARKERS_KEY] = {}
+
+	var pending_read := MapStateAccessClass.require_array_field(state, PENDING_ROADS_KEY, MODULE_ID)
+	if not pending_read.ok:
+		return pending_read
+	var markers_read := MapStateAccessClass.require_dict_field(state, ROADWORK_MARKERS_KEY, MODULE_ID)
+	if not markers_read.ok:
+		return markers_read
 
 	# 全局效果：roadworks 距离惩罚 + park 单价加成
 	var add_roadworks := GlobalEffectListClass.add_to_map(state, EFFECT_ID_ROADWORKS_DISTANCE)

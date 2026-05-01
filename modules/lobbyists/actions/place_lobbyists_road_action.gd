@@ -162,14 +162,20 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var piece_def: PieceDef = PieceRegistryClass.get_def(piece_id)
 	var piece_cells: Array[Vector2i] = piece_def.get_world_cells(anchor_pos, rotation)
 
+	var markers_read := MapStateAccessClass.require_dict_field(state, ROADWORK_MARKERS_KEY, "place_lobbyists_road")
+	if not markers_read.ok:
+		return markers_read
+	var markers: Dictionary = markers_read.value
+	var pending_read := MapStateAccessClass.require_array_field(state, PENDING_ROADS_KEY, "place_lobbyists_road")
+	if not pending_read.ok:
+		return pending_read
+	var pending_roads: Array = pending_read.value
+
 	var overlay: Dictionary = ROAD_OVERLAYS[piece_id]
 	var seg_entries: Array = overlay["segments"]
 	var arrows: Array = overlay["arrows"]
 
 	# roadworks markers：对每个箭头指向的“已有道路格”放置 marker
-	if not state.map.has(ROADWORK_MARKERS_KEY) or not (state.map[ROADWORK_MARKERS_KEY] is Dictionary):
-		state.map[ROADWORK_MARKERS_KEY] = {}
-	var markers: Dictionary = state.map[ROADWORK_MARKERS_KEY]
 	var placed_markers: Array[Vector2i] = []
 	for a_i in range(arrows.size()):
 		var a: Dictionary = arrows[a_i]
@@ -211,9 +217,6 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 			"dynamic": true,
 		}
 
-	if not state.map.has(PENDING_ROADS_KEY) or not (state.map[PENDING_ROADS_KEY] is Array):
-		state.map[PENDING_ROADS_KEY] = []
-	var pending_roads: Array = state.map[PENDING_ROADS_KEY]
 	pending_roads.append({
 		"owner": player_id,
 		"piece_id": piece_id,
