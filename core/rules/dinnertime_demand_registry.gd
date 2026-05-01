@@ -10,9 +10,6 @@ extends RefCounted
 #   - null：不提供额外方案
 #   - Array[Dictionary]：variant 列表
 #
-# 兼容（legacy）：
-#   也允许直接返回 Array[Dictionary] 或 null（但无法返回失败原因/警告）。
-#
 # variant 结构：
 #   {
 #     "id": String,
@@ -153,24 +150,19 @@ static func get_variants(state: GameState, house_id: String, house: Dictionary, 
 			return Result.failure("DinnertimeDemandRegistry: provider.callback 无效")
 
 		var r = cb.call(state, house_id, house, base_required)
-		if r == null:
-			continue
+		if not (r is Result):
+			return Result.failure("DinnertimeDemandRegistry: provider 返回类型错误（期望 Result）: %s" % provider_id)
 
 		var variants_any: Array = []
-		if r is Result:
-			var rr: Result = r
-			if not rr.ok:
-				return Result.failure("DinnertimeDemandRegistry: provider 失败: %s: %s" % [provider_id, rr.error])
-			all_warnings.append_array(rr.warnings)
-			if rr.value == null:
-				continue
-			if not (rr.value is Array):
-				return Result.failure("DinnertimeDemandRegistry: provider Result.value 类型错误（期望 Array）: %s" % provider_id)
-			variants_any = rr.value
-		elif r is Array:
-			variants_any = r
-		else:
-			return Result.failure("DinnertimeDemandRegistry: provider 返回类型错误（期望 Array 或 Result）: %s" % provider_id)
+		var rr: Result = r
+		if not rr.ok:
+			return Result.failure("DinnertimeDemandRegistry: provider 失败: %s: %s" % [provider_id, rr.error])
+		all_warnings.append_array(rr.warnings)
+		if rr.value == null:
+			continue
+		if not (rr.value is Array):
+			return Result.failure("DinnertimeDemandRegistry: provider Result.value 类型错误（期望 Array）: %s" % provider_id)
+		variants_any = rr.value
 
 		for j in range(variants_any.size()):
 			var v_val = variants_any[j]

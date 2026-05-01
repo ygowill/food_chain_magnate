@@ -2054,3 +2054,26 @@
 结论：
 
 - 已完成该 P2 边界整改：core 不再保存具体模块的储备供给兜底配置；模块供给数量由各模块通过 UI metadata provider 暴露，ReserveArea 只消费通用 provider 输出。
+
+### Fix 23：Dinnertime demand provider 只接受 Result 返回值
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 5 `[P2] DinnertimeDemandRegistry 仍长期支持 legacy provider 返回 Array 或 null，当前模块也在使用该兼容路径`。
+
+改动：
+
+- `core/rules/dinnertime_demand_registry.gd`：`get_variants(...)` 不再接受 provider 直接返回 `Array` 或 `null`；provider 必须返回 `Result`，`Result.value == null` 仍表示不提供额外方案，`Result.value` 非 Array 时失败。
+- `modules/noodles/rules/entry.gd`、`modules/sushi/rules/entry.gd`、`modules/kimchi/rules/entry.gd`：dinnertime demand provider 改为返回 `Result.success(Array[Dictionary])`；输入契约错误改为 `Result.failure(...)`，不再用空数组吞掉。
+- `core/tests/dinnertime_demand_registry_v2_test.gd`：契约测试从“接受 Result + legacy Array”改为“只接受 Result，直接 Array/null/其他类型均失败”。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：模块 demand provider 的失败原因可通过 `Result.failure` 明确传播，错误返回值不再被 registry 当作 legacy 兼容路径继续执行。

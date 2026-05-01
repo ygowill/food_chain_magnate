@@ -29,22 +29,22 @@ func register(registrar) -> Result:
 
 	return Result.success()
 
-func _get_demand_variants(_state: GameState, _house_id: String, house: Dictionary, base_required: Dictionary) -> Array[Dictionary]:
+func _get_demand_variants(_state: GameState, _house_id: String, house: Dictionary, base_required: Dictionary) -> Result:
 	var variants: Array[Dictionary] = []
 	if base_required == null or not (base_required is Dictionary):
-		return variants
+		return Result.failure("%s: demand_variants: base_required 类型错误（期望 Dictionary）" % MODULE_ID)
 	if house == null or not (house is Dictionary):
-		return variants
+		return Result.failure("%s: demand_variants: house 类型错误（期望 Dictionary）" % MODULE_ID)
 	if not bool(house.get("has_garden", false)):
-		return variants
+		return Result.success(variants)
 	if base_required.has("coffee"):
-		return variants
+		return Result.success(variants)
 
 	var total := DemandVariantHelpersClass.sum_required_counts(base_required)
 	if total <= 0:
-		return variants
+		return Result.success(variants)
 
 	var v := DemandVariantHelpersClass.build_replace_all_variant(MODULE_ID, PRODUCT_ID, total, 30)
 	if not v.is_empty():
 		variants.append(v)
-	return variants
+	return Result.success(variants)

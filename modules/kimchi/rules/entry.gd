@@ -108,16 +108,16 @@ func register(registrar) -> Result:
 
 	return Result.success()
 
-func _get_demand_variants(_state: GameState, _house_id: String, house: Dictionary, base_required: Dictionary) -> Array[Dictionary]:
+func _get_demand_variants(_state: GameState, _house_id: String, house: Dictionary, base_required: Dictionary) -> Result:
 	if base_required == null or not (base_required is Dictionary):
-		return []
+		return Result.failure("%s: demand_variants: base_required 类型错误（期望 Dictionary）" % MODULE_ID)
 	if base_required.is_empty():
-		return []
+		return Result.success([] as Array[Dictionary])
 	if house == null or not (house is Dictionary):
-		return []
+		return Result.failure("%s: demand_variants: house 类型错误（期望 Dictionary）" % MODULE_ID)
 	# coffee 不可被替代/叠加进 kimchi 套餐
 	if base_required.has("coffee"):
-		return []
+		return Result.success([] as Array[Dictionary])
 
 	var out: Array[Dictionary] = []
 
@@ -156,7 +156,7 @@ func _get_demand_variants(_state: GameState, _house_id: String, house: Dictionar
 			},
 		})
 
-	return out
+	return Result.success(out)
 
 func _on_cleanup_enter_before_primary(state: GameState, _phase_manager) -> Result:
 	if state == null:
