@@ -4,5 +4,6 @@
 	"version": "1.0.0",
 	"dependencies": [],
 	"conflicts": [],
-	"entry_script": ""
+	"entry_script": "",
+	"provides": {}
 }

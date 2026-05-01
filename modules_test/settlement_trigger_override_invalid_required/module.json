@@ -3,10 +3,10 @@
   "name": "Settlement Trigger Override Invalid Required",
   "version": "0.1.0",
   "schema_version": 1,
-  "depends_on": [
+  "dependencies": [
     "base_rules"
   ],
-  "conflicts_with": [],
+  "conflicts": [],
   "entry_script": "res://modules_test/settlement_trigger_override_invalid_required/rules/entry.gd",
-  "content": {}
+  "provides": {}
 }

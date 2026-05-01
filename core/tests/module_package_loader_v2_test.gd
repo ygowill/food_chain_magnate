@@ -34,6 +34,10 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	if not (mm.provides is Dictionary):
 		return Result.failure("manifest.provides 类型错误（期望 Dictionary）")
 
+	var missing_required_r := _test_missing_required_manifest_fields()
+	if not missing_required_r.ok:
+		return missing_required_r
+
 	var bad_schema := {
 		"schema_version": 999,
 		"id": "x",
@@ -69,4 +73,24 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	if loaded_missing.ok:
 		return Result.failure("存在缺少 module.json 的目录时应失败")
 
+	return Result.success()
+
+static func _test_missing_required_manifest_fields() -> Result:
+	var base_manifest := {
+		"schema_version": 1,
+		"id": "strict_module",
+		"version": "0.1.0",
+		"dependencies": [],
+		"conflicts": [],
+		"entry_script": "",
+		"provides": {}
+	}
+	for field_name in ["dependencies", "conflicts", "entry_script", "provides"]:
+		var data: Dictionary = base_manifest.duplicate(true)
+		data.erase(field_name)
+		var parsed := ModuleManifestClass.from_dict(data)
+		if parsed.ok:
+			return Result.failure("module.json 缺少 %s 时应失败" % field_name)
+		if str(parsed.error).find(field_name) < 0:
+			return Result.failure("缺少 %s 的错误信息应包含字段名，实际: %s" % [field_name, parsed.error])
 	return Result.success()

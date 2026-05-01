@@ -2102,3 +2102,27 @@
 结论：
 
 - 已完成该 P2 strict 化：模块 action availability override 不能再指向未知或不可达的阶段/子阶段；override 配置结构错误也会在 action registry wiring 阶段失败暴露。
+
+### Fix 25：module.json manifest 必须显式声明 schema 字段
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 5 `[P2] module.json 解析器对多个 schema 字段使用默认值，可能掩盖 manifest 漏字段`。
+
+改动：
+
+- `core/modules/v2/module_manifest.gd`：`dependencies`、`conflicts`、`entry_script`、`provides` 改为必需字段；字段可以显式为空数组、空字符串或空字典，但缺字段或 `null` 会在 manifest 解析阶段失败，不再自动补默认值。
+- `core/tests/module_package_loader_v2_test.gd`：新增缺少必需字段的负例，固定 strict manifest 契约。
+- `core/tests/module_plan_builder_v2_test.gd`、`modules_test/*/module.json`、`core/tests/fixtures/modules_v2_*/*/module.json`：测试模块与 fixture manifest 迁移到当前 schema，显式写出 `dependencies/conflicts/entry_script/provides`。
+- `docs/architecture/60-modules-v2.md`：补充当前 schema 的 requiredness 说明，区分“显式为空”和“字段缺失”。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：首次运行因 `ModulePlanBuilderV2Test` 内联 manifest 缺少 `provides` 失败；补齐后重跑 PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：新模块 manifest 漏写关键 schema 字段会在加载模块包时立即失败；纯内容模块仍可通过显式 `entry_script: ""` 与 `provides: {}` 表达无规则入口/无额外声明。

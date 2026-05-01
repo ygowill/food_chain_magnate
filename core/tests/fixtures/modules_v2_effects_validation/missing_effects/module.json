@@ -4,6 +4,7 @@
 	"version": "0.1.0",
 	"priority": 100,
 	"dependencies": ["base_rules"],
-	"conflicts": []
+	"conflicts": [],
+	"entry_script": "",
+	"provides": {}
 }
-

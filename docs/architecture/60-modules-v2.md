@@ -162,6 +162,8 @@ manifest 解析器：`core/modules/v2/module_manifest.gd`
 - `entry_script`
 - `provides`
 
+`schema_version`、`id`、`version`、`dependencies`、`conflicts`、`entry_script`、`provides` 均为显式字段；`dependencies/conflicts/provides` 可以显式为空，`entry_script` 可以为空字符串表示纯内容模块，但缺字段会被 manifest 解析器拒绝。`name` 与 `priority` 仍保留兼容默认值。
+
 其中 `provides.ui.*` 目前会被 UI 直接读取，用于隐藏动作、注册地图交互模式、放置 overlay、模块选择器分组与 setup 约束。
 
 ## RulesetV2：模块可注册的扩展点（节选）

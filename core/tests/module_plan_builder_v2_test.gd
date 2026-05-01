@@ -13,7 +13,8 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 		"priority": 100,
 		"dependencies": [],
 		"conflicts": [],
-		"entry_script": ""
+		"entry_script": "",
+		"provides": {}
 	})
 	if not alpha_read.ok:
 		return Result.failure("alpha manifest 解析失败: %s" % alpha_read.error)
@@ -25,7 +26,8 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 		"priority": 200,
 		"dependencies": ["alpha"],
 		"conflicts": [],
-		"entry_script": ""
+		"entry_script": "",
+		"provides": {}
 	})
 	if not beta_read.ok:
 		return Result.failure("beta manifest 解析失败: %s" % beta_read.error)
@@ -48,7 +50,8 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 		"version": "1.0.0",
 		"dependencies": [],
 		"conflicts": ["b"],
-		"entry_script": ""
+		"entry_script": "",
+		"provides": {}
 	})
 	var conflict_b_read := ModuleManifestClass.from_dict({
 		"schema_version": 1,
@@ -56,7 +59,8 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 		"version": "1.0.0",
 		"dependencies": [],
 		"conflicts": [],
-		"entry_script": ""
+		"entry_script": "",
+		"provides": {}
 	})
 	if not conflict_a_read.ok or not conflict_b_read.ok:
 		return Result.failure("conflict manifests 解析失败")
@@ -74,7 +78,8 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 		"version": "1.0.0",
 		"dependencies": ["b"],
 		"conflicts": [],
-		"entry_script": ""
+		"entry_script": "",
+		"provides": {}
 	})
 	var cycle_b_read := ModuleManifestClass.from_dict({
 		"schema_version": 1,
@@ -82,7 +87,8 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 		"version": "1.0.0",
 		"dependencies": ["a"],
 		"conflicts": [],
-		"entry_script": ""
+		"entry_script": "",
+		"provides": {}
 	})
 	if not cycle_a_read.ok or not cycle_b_read.ok:
 		return Result.failure("cycle manifests 解析失败")
@@ -100,7 +106,8 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 		"version": "1.0.0",
 		"dependencies": ["missing"],
 		"conflicts": [],
-		"entry_script": ""
+		"entry_script": "",
+		"provides": {}
 	})
 	if not missing_dep_read.ok:
 		return Result.failure("missing_dep manifest 解析失败")
@@ -116,4 +123,3 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 		return Result.failure("重复 requested_module_ids 时应失败")
 
 	return Result.success()
-

@@ -5,6 +5,6 @@
 	"priority": 50,
 	"dependencies": [],
 	"conflicts": [],
-	"entry_script": "res://core/tests/fixtures/modules_v2_effects_validation/base_rules/rules/entry.gd"
+	"entry_script": "res://core/tests/fixtures/modules_v2_effects_validation/base_rules/rules/entry.gd",
+	"provides": {}
 }
-

@@ -66,33 +66,47 @@ static func from_dict(data: Dictionary) -> Result:
 		return priority_read
 	out.priority = int(priority_read.value)
 
-	var deps_val = data.get("dependencies", [])
-	var deps_read = Result.success([]) if deps_val == null else DataParseHelpersClass.parse_string_array(deps_val, "dependencies", true)
+	var deps_val_read := _require_field(data, "dependencies")
+	if not deps_val_read.ok:
+		return deps_val_read
+	var deps_val = deps_val_read.value
+	var deps_read := DataParseHelpersClass.parse_string_array(deps_val, "dependencies", true)
 	if not deps_read.ok:
 		return deps_read
 	out.dependencies = deps_read.value
 
-	var conflicts_val = data.get("conflicts", [])
-	var conflicts_read = Result.success([]) if conflicts_val == null else DataParseHelpersClass.parse_string_array(conflicts_val, "conflicts", true)
+	var conflicts_val_read := _require_field(data, "conflicts")
+	if not conflicts_val_read.ok:
+		return conflicts_val_read
+	var conflicts_val = conflicts_val_read.value
+	var conflicts_read := DataParseHelpersClass.parse_string_array(conflicts_val, "conflicts", true)
 	if not conflicts_read.ok:
 		return conflicts_read
 	out.conflicts = conflicts_read.value
 
-	var entry_val = data.get("entry_script", "")
+	var entry_val_read := _require_field(data, "entry_script")
+	if not entry_val_read.ok:
+		return entry_val_read
+	var entry_val = entry_val_read.value
 	var entry_read := DataParseHelpersClass.parse_string(entry_val, "entry_script", true)
 	if not entry_read.ok:
 		return entry_read
 	out.entry_script = entry_read.value
 
-	var provides_val = data.get("provides", {})
-	if provides_val == null:
-		out.provides = {}
-	elif not (provides_val is Dictionary):
+	var provides_val_read := _require_field(data, "provides")
+	if not provides_val_read.ok:
+		return provides_val_read
+	var provides_val = provides_val_read.value
+	if not (provides_val is Dictionary):
 		return Result.failure("provides 类型错误（期望 Dictionary）")
-	else:
-		out.provides = provides_val.duplicate(true)
+	out.provides = provides_val.duplicate(true)
 
 	return Result.success(out)
+
+static func _require_field(data: Dictionary, field_name: String) -> Result:
+	if not data.has(field_name):
+		return Result.failure("module.json.%s 缺失" % field_name)
+	return Result.success(data.get(field_name, null))
 
 func to_dict() -> Dictionary:
 	return {

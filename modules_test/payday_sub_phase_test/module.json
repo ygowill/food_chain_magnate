@@ -3,10 +3,10 @@
   "name": "Payday SubPhase Test",
   "version": "0.1.0",
   "schema_version": 1,
-  "depends_on": [
+  "dependencies": [
     "base_rules"
   ],
-  "conflicts_with": [],
+  "conflicts": [],
   "entry_script": "res://modules_test/payday_sub_phase_test/rules/entry.gd",
-  "content": {}
+  "provides": {}
 }
