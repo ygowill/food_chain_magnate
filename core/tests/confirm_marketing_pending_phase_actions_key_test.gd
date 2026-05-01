@@ -7,18 +7,18 @@ const ConfirmMarketingActionClass = preload("res://gameplay/actions/confirm_mark
 const ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY := "online_marketing_confirmed_players"
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
-	var legacy_r := _case_legacy_global_confirm(player_count, seed_val)
+	var legacy_r := _case_legacy_global_confirm_rejected(player_count, seed_val)
 	if not legacy_r.ok:
 		return legacy_r
 	var online_like_r := _case_per_player_confirm(player_count, seed_val)
 	if not online_like_r.ok:
 		return online_like_r
-	var recover_r := _case_confirmed_players_recovers_missing_pending(player_count, seed_val)
-	if not recover_r.ok:
-		return recover_r
+	var missing_pending_r := _case_confirmed_players_rejects_missing_pending(player_count, seed_val)
+	if not missing_pending_r.ok:
+		return missing_pending_r
 	return Result.success()
 
-static func _case_legacy_global_confirm(player_count: int, seed_val: int) -> Result:
+static func _case_legacy_global_confirm_rejected(player_count: int, seed_val: int) -> Result:
 	var state_read := _build_marketing_state(player_count, seed_val)
 	if not state_read.ok:
 		return state_read
@@ -30,10 +30,12 @@ static func _case_legacy_global_confirm(player_count: int, seed_val: int) -> Res
 	var action := ConfirmMarketingActionClass.new()
 	var cmd := Command.create_system("confirm_marketing")
 	var new_state_r: Result = action.compute_new_state(state, cmd)
-	if not new_state_r.ok:
-		return Result.failure("legacy confirm_marketing 计算新状态失败: %s" % new_state_r.error)
+	if new_state_r.ok:
+		return Result.failure("legacy global confirm_marketing pending 应被拒绝")
+	if str(new_state_r.error).find("legacy global") < 0:
+		return Result.failure("legacy global confirm_marketing 错误信息不明确: %s" % new_state_r.error)
 
-	return _assert_marketing_pending_phase_key_cleared(new_state_r.value, "legacy")
+	return Result.success()
 
 static func _case_per_player_confirm(player_count: int, seed_val: int) -> Result:
 	var state_read := _build_marketing_state(player_count, seed_val)
@@ -80,7 +82,7 @@ static func _case_per_player_confirm(player_count: int, seed_val: int) -> Result
 
 	return _assert_marketing_pending_phase_key_cleared(second_r.value, "per_player")
 
-static func _case_confirmed_players_recovers_missing_pending(player_count: int, seed_val: int) -> Result:
+static func _case_confirmed_players_rejects_missing_pending(player_count: int, seed_val: int) -> Result:
 	if player_count < 2:
 		return Result.success()
 	var state_read := _build_marketing_state(player_count, seed_val)
@@ -96,38 +98,19 @@ static func _case_confirmed_players_recovers_missing_pending(player_count: int, 
 			{"kind": "confirm_marketing", "player_id": 0},
 		],
 	}
+	var pending_before := str(state.round_state.get("pending_phase_actions", null))
+	var confirmed_before := str(state.round_state.get(ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY, null))
 
 	var action := ConfirmMarketingActionClass.new()
 	var first_r: Result = action.compute_new_state(state, Command.create("confirm_marketing", 0, {}))
-	if not first_r.ok:
-		return Result.failure("recover_missing_pending confirm_marketing(0) 失败: %s" % first_r.error)
-
-	var first_state: GameState = first_r.value
-	if not (first_state.round_state is Dictionary):
-		return Result.failure("recover_missing_pending 第一次确认后 round_state 类型错误（期望 Dictionary）")
-	var rs: Dictionary = first_state.round_state
-	var ppa_val = rs.get("pending_phase_actions", null)
-	if not (ppa_val is Dictionary):
-		return Result.failure("recover_missing_pending 第一次确认后 pending_phase_actions 类型错误（期望 Dictionary）")
-	var ppa: Dictionary = ppa_val
-	if not ppa.has(DefsClass.PHASE_MARKETING):
-		return Result.failure("recover_missing_pending 应恢复其它玩家的待确认项，但 Marketing key 缺失")
-	var list_val = ppa.get(DefsClass.PHASE_MARKETING, null)
-	if not (list_val is Array):
-		return Result.failure("recover_missing_pending pending_phase_actions[Marketing] 类型错误（期望 Array）")
-	var list: Array = list_val
-	if list.size() != player_count - 1:
-		return Result.failure(
-			"recover_missing_pending 恢复后的待确认数量错误（期望 %d，实际 %d）"
-				% [player_count - 1, list.size()]
-		)
-	for pid in range(1, player_count):
-		if not _list_has_player_pending_confirm(list, pid):
-			return Result.failure("recover_missing_pending 应包含 player_id=%d 的待确认项，实际: %s" % [pid, str(list)])
-
-	var second_r: Result = action.compute_new_state(first_state, Command.create("confirm_marketing", 1, {}))
-	if not second_r.ok:
-		return Result.failure("recover_missing_pending confirm_marketing(1) 失败: %s" % second_r.error)
+	if first_r.ok:
+		return Result.failure("confirmed_players 与 pending 不一致时不应恢复 missing pending")
+	if str(first_r.error).find("缺少未确认玩家 pending") < 0:
+		return Result.failure("missing pending 错误信息不明确: %s" % first_r.error)
+	if str(state.round_state.get("pending_phase_actions", null)) != pending_before:
+		return Result.failure("失败时不应改写 pending_phase_actions")
+	if str(state.round_state.get(ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY, null)) != confirmed_before:
+		return Result.failure("失败时不应改写 online_marketing_confirmed_players")
 	return Result.success()
 
 static func _build_marketing_state(player_count: int, seed_val: int) -> Result:
@@ -155,14 +138,3 @@ static func _assert_marketing_pending_phase_key_cleared(state: GameState, case_n
 	if ppa.has("marketing"):
 		return Result.failure("%s: confirm_marketing 不应写入 pending_phase_actions[marketing]（大小写错误）" % case_name)
 	return Result.success()
-
-static func _list_has_player_pending_confirm(list: Array, player_id: int) -> bool:
-	for item_val in list:
-		if not (item_val is Dictionary):
-			continue
-		var item: Dictionary = item_val
-		if str(item.get("kind", "")) != "confirm_marketing":
-			continue
-		if int(item.get("player_id", -1)) == player_id:
-			return true
-	return false

@@ -1648,3 +1648,30 @@
 
 - 已完成 confirmed_players 损坏重建路径的 strict 化：缺失字段表示新进入 confirm gate，可以初始化；损坏字段表示状态不可信，必须失败。
 - confirm action 中 legacy global pending 与 missing pending recovery 仍是单独 P2 问题，尚未在本次提交中改动。
+
+### Fix 7：confirm_dinnertime/confirm_marketing 拒绝 legacy pending 与 missing pending recovery
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 7 `[P2] Dinnertime/Marketing confirm action 仍保留 legacy global pending 和 confirmed_players 长度恢复路径`。
+- Step 10 `[P2] confirm 测试把 legacy global confirm 与 missing pending recovery 固定为成功行为`。
+
+改动：
+
+- `gameplay/actions/confirm_dinnertime_action.gd`、`gameplay/actions/confirm_marketing_action.gd`：legacy global pending（`["confirm_*"]`）不再被接受；validate/apply 均直接失败。
+- 两个 confirm action 的 `online_*_confirmed_players` 长度不等于玩家数时改为失败，不再返回空数组触发 fallback。
+- 两个 confirm action 在 confirmed_players 存在时要求 pending list 与 confirmed 状态一致：未确认玩家必须有 per-player pending；已确认玩家不得仍在 pending；重复或越界 player_id 直接失败。
+- apply 阶段不再用 confirmed_players 重建 pending list，而是只移除本次 actor 对应的既有 pending，防止“缺 pending”被恢复成看似正常的状态。
+- `core/tests/confirm_dinnertime_pending_phase_actions_key_test.gd`、`core/tests/confirm_marketing_pending_phase_actions_key_test.gd`：原 legacy/recovery 成功用例改为负例，断言失败时不改写 pending 与 confirmed state。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成 confirm action 层面的 P2 strict 化：旧格式 pending 与 confirmed/pending 不一致不再被默默修复。
+- 如果以后需要导入旧 archive，应放到显式 migration/recovery 路径中处理，而不是常规 action 执行路径。

@@ -28,7 +28,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if pending.is_empty():
 		return Result.failure("当前无需确认晚餐结算")
 	if _is_legacy_global_confirm_pending(pending):
-		return Result.success()
+		return Result.failure("round_state.pending_phase_actions[Dinnertime] 不再支持 legacy global confirm")
 
 	var actor_read := _read_actor_id(command)
 	if not actor_read.ok:
@@ -44,6 +44,9 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if confirmed_read.value is Array:
 		var confirmed: Array = confirmed_read.value
 		if confirmed.size() == state.players.size():
+			var pending_match_r := _validate_pending_matches_confirmed_players(pending, confirmed)
+			if not pending_match_r.ok:
+				return pending_match_r
 			if actor_id >= 0 and actor_id < confirmed.size() and bool(confirmed[actor_id]):
 				return Result.failure("玩家 %d 当前无需确认晚餐结算" % actor_id)
 	if not bool(pending_update.get("has_actor_pending", false)):
@@ -57,9 +60,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var pending: Array = pending_read.value
 
 	if _is_legacy_global_confirm_pending(pending):
-		return RoundStatePendingPhaseActionsClass.set_phase_pending_players(
-			state.round_state, DefsClass.PHASE_DINNERTIME, [], KIND_CONFIRM_DINNERTIME
-		)
+		return Result.failure("round_state.pending_phase_actions[Dinnertime] 不再支持 legacy global confirm")
 
 	var actor_read := _read_actor_id(command)
 	if not actor_read.ok:
@@ -78,14 +79,16 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if confirmed_read.value is Array:
 		var confirmed: Array = confirmed_read.value
 		if confirmed.size() == state.players.size():
+			var pending_match_r := _validate_pending_matches_confirmed_players(pending, confirmed)
+			if not pending_match_r.ok:
+				return pending_match_r
 			if actor_id < 0 or actor_id >= confirmed.size():
 				return Result.failure("玩家 %d 当前无需确认晚餐结算" % actor_id)
 			if bool(confirmed[actor_id]):
 				return Result.failure("玩家 %d 当前无需确认晚餐结算" % actor_id)
 			confirmed[actor_id] = true
-			var remaining_by_confirmed := _build_pending_from_confirmed_players(confirmed)
 			var set_pending := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
-				state.round_state, DefsClass.PHASE_DINNERTIME, remaining_by_confirmed, KIND_CONFIRM_DINNERTIME
+				state.round_state, DefsClass.PHASE_DINNERTIME, pending_update.get("remaining", []), KIND_CONFIRM_DINNERTIME
 			)
 			if not set_pending.ok:
 				return set_pending
@@ -169,7 +172,7 @@ static func _read_online_dinnertime_confirmed_players(state: GameState) -> Resul
 		return Result.failure("round_state.%s 类型错误（期望 Array）" % ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY)
 	var raw: Array = Array(val)
 	if raw.size() != state.players.size():
-		return Result.success([])
+		return Result.failure("round_state.%s 长度错误（期望 %d，实际 %d）" % [ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, state.players.size(), raw.size()])
 	var out: Array = []
 	for i in range(raw.size()):
 		var v = raw[i]
@@ -187,16 +190,35 @@ static func _read_online_dinnertime_confirmed_players(state: GameState) -> Resul
 		return Result.failure("round_state.%s[%d] 类型错误（期望 bool/int/float）" % [ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, i])
 	return Result.success(out)
 
-static func _build_pending_from_confirmed_players(confirmed: Array) -> Array:
-	var remaining: Array[Dictionary] = []
-	for pid in range(confirmed.size()):
-		if bool(confirmed[pid]):
+static func _validate_pending_matches_confirmed_players(pending: Array, confirmed: Array) -> Result:
+	var pending_by_player := {}
+	for i in range(pending.size()):
+		var item_val = pending[i]
+		if not (item_val is Dictionary):
+			return Result.failure("round_state.pending_phase_actions[Dinnertime][%d] 类型错误（期望 Dictionary）" % i)
+		var item: Dictionary = item_val
+		var kind_read := _read_pending_kind(item, i)
+		if not kind_read.ok:
+			return kind_read
+		if str(kind_read.value) != KIND_CONFIRM_DINNERTIME:
 			continue
-		remaining.append({
-			"kind": KIND_CONFIRM_DINNERTIME,
-			"player_id": pid,
-		})
-	return remaining
+		var pid_read := _read_pending_confirm_player_id(item, i)
+		if not pid_read.ok:
+			return pid_read
+		var pid := int(pid_read.value)
+		if pid < 0 or pid >= confirmed.size():
+			return Result.failure("round_state.pending_phase_actions[Dinnertime][%d].player_id 越界: %d" % [i, pid])
+		if pending_by_player.has(pid):
+			return Result.failure("round_state.pending_phase_actions[Dinnertime] 重复 player_id: %d" % pid)
+		pending_by_player[pid] = true
+	for pid2 in range(confirmed.size()):
+		var is_confirmed := bool(confirmed[pid2])
+		var has_pending := pending_by_player.has(pid2)
+		if is_confirmed and has_pending:
+			return Result.failure("round_state.pending_phase_actions[Dinnertime] 已确认玩家仍在 pending: %d" % pid2)
+		if not is_confirmed and not has_pending:
+			return Result.failure("round_state.pending_phase_actions[Dinnertime] 缺少未确认玩家 pending: %d" % pid2)
+	return Result.success()
 
 static func _read_pending_kind(item: Dictionary, index: int) -> Result:
 	var kind_val = item.get("kind", null)
