@@ -77,6 +77,42 @@ static func run() -> Result:
 		_restore(prev_mode, prev_room_state)
 		return Result.failure("组装完成后应缓存 pending archive")
 
+	var bad_mock_net := _MockNet.new()
+	var bad_client = ClientLogicClass.new()
+	bad_client.setup(bad_mock_net)
+	var bad_chunks: Array = []
+	for chunk_val in chunks:
+		bad_chunks.append(Dictionary(chunk_val).duplicate(true))
+	var bad_chunk: Dictionary = Dictionary(bad_chunks[0]).duplicate(true)
+	var bad_bytes := PackedByteArray(bad_chunk.get("bytes", PackedByteArray()))
+	if bad_bytes.is_empty():
+		_restore(prev_mode, prev_room_state)
+		return Result.failure("测试 chunk bytes 不能为空")
+	bad_bytes[0] = int(bad_bytes[0] + 1) % 256
+	bad_chunk["bytes"] = bad_bytes
+	bad_chunks[0] = bad_chunk
+	bad_client.handle_rpc_resync_snapshot_manifest(manifest.duplicate(true))
+	for bad_chunk_val in bad_chunks:
+		bad_client.handle_rpc_resync_snapshot_chunk(Dictionary(bad_chunk_val))
+	if bad_mock_net.archive_payloads.size() != 0:
+		_restore(prev_mode, prev_room_state)
+		return Result.failure("坏 snapshot 不应发出 archive_received: %s" % str(bad_mock_net.archive_payloads))
+	if bad_mock_net.resync_failures.size() != 1:
+		_restore(prev_mode, prev_room_state)
+		return Result.failure("坏 snapshot 应发出一次 resync failure: %s" % str(bad_mock_net.resync_failures))
+	if str(bad_mock_net.resync_failures[0]).find("分片组装失败") < 0:
+		_restore(prev_mode, prev_room_state)
+		return Result.failure("坏 snapshot failure 应包含组装失败原因: %s" % str(bad_mock_net.resync_failures[0]))
+	if not bad_mock_net._pending_resync_snapshot_manifest.is_empty():
+		_restore(prev_mode, prev_room_state)
+		return Result.failure("坏 snapshot 失败后应清理 pending manifest")
+	if not bad_mock_net._pending_resync_snapshot_chunks.is_empty():
+		_restore(prev_mode, prev_room_state)
+		return Result.failure("坏 snapshot 失败后应清理 pending chunks")
+	if not bad_mock_net.resume_force_snapshot_requested:
+		_restore(prev_mode, prev_room_state)
+		return Result.failure("坏 snapshot 失败后应请求下一次 resume 强制 snapshot")
+
 	_restore(prev_mode, prev_room_state)
 	return Result.success()
 
@@ -88,13 +124,22 @@ class _MockNet:
 	extends RefCounted
 
 	signal resync_archive_received(archive: Dictionary)
+	signal resync_delta_failed(message: String)
 
 	var _pending_resync_archive: Dictionary = {}
 	var _pending_resync_snapshot_manifest: Dictionary = {}
 	var _pending_resync_snapshot_chunks: Dictionary = {}
 	var archive_payloads: Array[Dictionary] = []
+	var resync_failures: Array[String] = []
+	var resume_force_snapshot_requested: bool = false
 
 	func _init() -> void:
 		resync_archive_received.connect(func(archive: Dictionary) -> void:
 			archive_payloads.append(Dictionary(archive).duplicate(true))
 		)
+		resync_delta_failed.connect(func(message: String) -> void:
+			resync_failures.append(str(message))
+		)
+
+	func request_resume_force_snapshot_once() -> void:
+		resume_force_snapshot_requested = true

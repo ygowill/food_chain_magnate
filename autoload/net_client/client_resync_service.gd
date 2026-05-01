@@ -117,7 +117,7 @@ func handle_snapshot_chunk(payload: Dictionary) -> void:
 	var assemble_r: Result = ResyncSnapshotTransferClass.assemble_snapshot(manifest, chunks)
 	clear_pending_snapshot_state()
 	if not assemble_r.ok:
-		GameLog.error("NetClient", "ResyncSnapshot assemble failed: %s" % assemble_r.error)
+		_emit_delta_failure("snapshot 恢复失败：分片组装失败（%s）" % assemble_r.error)
 		return
 	var archive: Dictionary = Dictionary(assemble_r.value).duplicate(true)
 	set_pending_archive(archive)

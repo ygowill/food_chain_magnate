@@ -2528,3 +2528,26 @@
 结论：
 
 - 已完成该 P2 strict 化：resync 后积压命令的坏 envelope 或本地执行失败不会被当作可跳过项处理，客户端会立即请求强制快照，避免以不可信本地状态继续刷新 UI。
+
+### Fix 42：snapshot 分片组装失败进入恢复失败通道
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 9 `[P2] 客户端 snapshot 分片组装失败只记录 error，不发失败信号或 force resync，恢复等待可能只能靠超时退出`。
+- Step 10 `[P2] Snapshot assemble failure 没有测试 failure signal 或 retry`。
+
+改动：
+
+- `autoload/net_client/client_resync_service.gd`：`ResyncSnapshotTransfer.assemble_snapshot(...)` 失败后不再只写日志返回；现在复用 `resync_delta_failed` 失败通道，并调用 `request_resume_force_snapshot_once()`，让恢复状态机和 Game resync controller 能立即进入重试/失败处理。
+- `core/tests/online_client_resync_snapshot_chunk_test.gd`：新增损坏 chunk hash 的负例，要求坏 snapshot 不发 `resync_archive_received`，必须发出一次恢复失败信号，清理 pending manifest/chunks，并请求下一次恢复强制 snapshot。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：损坏的 snapshot 分片不会让客户端只靠超时脱离恢复等待；失败会通过既有 resync failure channel 传播，并明确要求后续恢复走强制快照。
