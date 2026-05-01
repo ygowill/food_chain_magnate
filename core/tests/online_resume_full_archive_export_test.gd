@@ -6,6 +6,7 @@ const ClientLogicClass = preload("res://autoload/net_client/client.gd")
 const ServerLogicClass = preload("res://autoload/net_client/server.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
+const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const RoomManagerClass = preload("res://server/room_manager.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 
@@ -323,6 +324,9 @@ static func _build_long_resume_archive() -> Result:
 	var init_r: Result = engine.initialize(2, 12345, [], GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR)
 	if not init_r.ok:
 		return Result.failure("initialize failed: %s" % init_r.error)
+	var prepare_r: Result = OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
+	if not prepare_r.ok:
+		return Result.failure("prepare online resume archive failed: %s" % prepare_r.error)
 	var setup_r: Result = TestPhaseUtilsClass.complete_setup(engine)
 	if not setup_r.ok:
 		return Result.failure("complete_setup failed: %s" % setup_r.error)

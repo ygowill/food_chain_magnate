@@ -1149,6 +1149,7 @@
   - 证据：Dinnertime pending guard 会把 missing/invalid/legacy/empty pending 自动修复为 per-player pending，并把坏 `confirmed_players` 重建为 forfeited-only 数组。证据：`core/engine/game_engine/auto_advance_try_step.gd:156-239`、`265-298`。
   - 风险：恢复点校验器既做 validation，又修改权威 state/checkpoint。这样会把 archive schema 缺陷、pending_phase_actions 损坏、confirmed_players 类型错误变成“可恢复”，与 Step 6/7 对 confirm 状态 strict 的目标冲突。
   - 建议：拆成 `validate_resume_point_strict` 与 `migrate_online_resume_archive`。常规恢复只 validate；旧 archive 需要显式 migration，并记录被修改字段。
+  - 状态：Fix 60 已新增 `validate_resume_point_strict(...)`，恢复房启动改用 strict 校验；缺 marker、checkpoint marker 或 Dinnertime pending guard 损坏会拒绝启动，不再在普通恢复房启动路径中修补。
 
 - [P2] Server recovery delta store 是 best-effort：记录失败被静默吞掉，resync 服务再用 full snapshot 兜底，缺少诊断边界。
   - 证据：`record_resume_delta(...)` 如果 `_resume_checkpoint_archive` 为空，会调用 `_reset_recovery_store_from_current_engine("delta_init")`；失败时直接 `return`，没有把错误传回广播链路。证据：`server/room.gd:570-577`。
@@ -2979,3 +2980,27 @@
 结论：
 
 - 已完成该 P2 的第一阶段收紧：server delta store 写入失败现在会成为明确诊断信号，而不是被普通 full snapshot fallback 掩盖。后续若继续拆分，可在 `server_resync_service` 层把 stale cursor、force snapshot 与 recovery store unhealthy 进一步区分为不同 fallback reason。
+
+### Fix 60：恢复房启动使用 strict resume point 校验
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 9 `[P2] Online resume point validator 在常规恢复路径中直接修补 rules、checkpoint 与 Dinnertime pending guard，恢复链路继续承担运行期迁移职责`。
+
+改动：
+
+- `core/engine/game_engine/online_resume_point_validator.gd`：新增 `validate_resume_point_strict(...)`，只校验不修补；要求当前 state 与初始 checkpoint 都显式带有 `online_require_dinnertime_confirm`、`online_require_marketing_confirm` marker。
+- `validate_resume_point_strict(...)` 在 Dinnertime 恢复点调用运行期 strict guard，缺失/错误的 `pending_phase_actions[Dinnertime]` 或 `online_dinnertime_confirmed_players` 会直接失败。
+- `server/room.gd`：恢复房 `_prepare_effective_resume_start_engine(...)` 从 `prepare_and_validate_resume_point(...)` 改为 `validate_resume_point_strict(...)`，普通恢复房启动不再修补 rules/checkpoint/pending guard。
+- 调整恢复房相关测试夹具：合法恢复房测试显式用 `prepare_engine_for_online_resume(...)` 生成在线恢复档；`OnlineResumeStartValidationTest` 改为断言缺失 Dinnertime pending 的恢复房会被拒绝。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1112`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：两轮调整测试夹具后 PASS，`392/392`。
+
+结论：
+
+- 已完成该 P2 的普通恢复路径 strict 化：恢复房启动现在只接受已显式准备好的在线恢复档；旧档/坏档需要走显式准备或迁移入口，不能在常规启动校验中被静默修补。

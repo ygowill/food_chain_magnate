@@ -8,10 +8,9 @@ const ServerLogicClass = preload("res://autoload/net_client/server.gd")
 const RoomManagerClass = preload("res://server/room_manager.gd")
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
+const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const ResyncSnapshotTransferClass = preload("res://core/utils/resync_snapshot_transfer.gd")
-const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
-const ONLINE_MARKETING_CONFIRM_KEY := "online_require_marketing_confirm"
 
 static func run() -> Result:
 	_reset_net_context()
@@ -729,6 +728,9 @@ static func _build_test_archive() -> Result:
 	var init_r: Result = engine.initialize(2, 12345, [], GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR)
 	if not init_r.ok:
 		return Result.failure("初始化恢复测试存档失败: %s" % init_r.error)
+	var prepare_r: Result = OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
+	if not prepare_r.ok:
+		return Result.failure("准备在线恢复测试存档失败: %s" % prepare_r.error)
 	var setup_r: Result = TestPhaseUtilsClass.complete_setup(engine)
 	if not setup_r.ok:
 		return Result.failure("构造恢复测试历史失败: %s" % setup_r.error)
@@ -752,10 +754,6 @@ static func _build_midpoint_resume_archive(base_archive: Dictionary) -> Result:
 	var preview_state = preview_engine.get_state()
 	if preview_state == null:
 		return Result.failure("预览恢复点状态为空")
-	if not (preview_state.rules is Dictionary):
-		preview_state.rules = {}
-	preview_state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
-	preview_state.rules[ONLINE_MARKETING_CONFIRM_KEY] = 1
 	var archive: Dictionary = base_archive.duplicate(true)
 	archive["current_index"] = selected_index
 	var expected_hash := str(preview_state.compute_hash())

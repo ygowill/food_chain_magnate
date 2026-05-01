@@ -96,6 +96,13 @@ static func validate_resume_point(
 	var validate_r: Result = _validate_prepared_resume_point(validation_engine)
 	return validate_r.with_warnings(prepare_r.warnings)
 
+static func validate_resume_point_strict(engine: GameEngine) -> Result:
+	var contract_r := _validate_online_resume_contract(engine)
+	if not contract_r.ok:
+		return contract_r
+	var validate_r: Result = _validate_prepared_resume_point(engine)
+	return validate_r.with_warnings(contract_r.warnings)
+
 static func prepare_and_validate_resume_point(
 	engine: GameEngine,
 	persist_current_state_to_checkpoint: bool = true
@@ -105,6 +112,56 @@ static func prepare_and_validate_resume_point(
 		return prepare_r
 	var validate_r: Result = _validate_prepared_resume_point(engine)
 	return validate_r.with_warnings(prepare_r.warnings)
+
+static func _validate_online_resume_contract(engine: GameEngine) -> Result:
+	if engine == null or not is_instance_valid(engine):
+		return Result.failure("恢复引擎为空")
+	if not engine.has_method("get_state"):
+		return Result.failure("恢复引擎缺少 get_state")
+	var state = engine.get_state()
+	if state == null:
+		return Result.failure("恢复状态为空")
+	if not (state.rules is Dictionary):
+		return Result.failure("online resume strict: state.rules 类型错误（期望 Dictionary）")
+	var rules: Dictionary = state.rules
+	if int(rules.get(ONLINE_DINNERTIME_CONFIRM_KEY, 0)) != 1:
+		return Result.failure("online resume strict: 缺少 %s marker" % ONLINE_DINNERTIME_CONFIRM_KEY)
+	if int(rules.get(ONLINE_MARKETING_CONFIRM_KEY, 0)) != 1:
+		return Result.failure("online resume strict: 缺少 %s marker" % ONLINE_MARKETING_CONFIRM_KEY)
+
+	var checkpoint_r := _validate_initial_checkpoint_online_markers(engine)
+	if not checkpoint_r.ok:
+		return checkpoint_r
+
+	if str(state.phase) == DefsClass.PHASE_DINNERTIME:
+		var guard_r: Result = AutoAdvanceTryStepClass._ensure_online_dinnertime_pending_guard(state)
+		if not guard_r.ok:
+			return guard_r
+
+	return Result.success()
+
+static func _validate_initial_checkpoint_online_markers(engine: GameEngine) -> Result:
+	if engine == null:
+		return Result.failure("online resume strict: engine 为空")
+	if engine.checkpoints.is_empty():
+		return Result.failure("online resume strict: 缺少初始 checkpoint")
+	var checkpoint0_val = engine.checkpoints[0]
+	if not (checkpoint0_val is Dictionary):
+		return Result.failure("online resume strict: checkpoints[0] 类型错误（期望 Dictionary）")
+	var checkpoint0: Dictionary = checkpoint0_val
+	var state_dict_val = checkpoint0.get("state_dict", null)
+	if not (state_dict_val is Dictionary):
+		return Result.failure("online resume strict: checkpoints[0].state_dict 缺失或类型错误")
+	var state_dict: Dictionary = state_dict_val
+	var rules_val = state_dict.get("rules", null)
+	if not (rules_val is Dictionary):
+		return Result.failure("online resume strict: checkpoints[0].state_dict.rules 类型错误（期望 Dictionary）")
+	var rules: Dictionary = rules_val
+	if int(rules.get(ONLINE_DINNERTIME_CONFIRM_KEY, 0)) != 1:
+		return Result.failure("online resume strict: checkpoint 缺少 %s marker" % ONLINE_DINNERTIME_CONFIRM_KEY)
+	if int(rules.get(ONLINE_MARKETING_CONFIRM_KEY, 0)) != 1:
+		return Result.failure("online resume strict: checkpoint 缺少 %s marker" % ONLINE_MARKETING_CONFIRM_KEY)
+	return Result.success()
 
 static func _validate_prepared_resume_point(engine: GameEngine) -> Result:
 	var state = engine.get_state()

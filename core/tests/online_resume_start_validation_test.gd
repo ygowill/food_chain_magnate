@@ -16,14 +16,14 @@ static func run() -> Result:
 	if not reject_r.ok:
 		return reject_r
 
-	var repair_r := _test_repair_dinnertime_resume_point()
-	if not repair_r.ok:
-		return repair_r
+	var reject_dinnertime_r := _test_reject_dinnertime_resume_point_missing_pending()
+	if not reject_dinnertime_r.ok:
+		return reject_dinnertime_r
 
 	return Result.success({
 		"cases": [
 			"reject_game_over_resume_point",
-			"repair_dinnertime_resume_point",
+			"reject_dinnertime_resume_point_missing_pending",
 		],
 	})
 
@@ -37,6 +37,9 @@ static func _test_reject_game_over_resume_point() -> Result:
 		return Result.failure("GameOver 测试 state 为空")
 	state.phase = DefsClass.PHASE_GAME_OVER
 	state.sub_phase = ""
+	var prepare_r: Result = OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
+	if not prepare_r.ok:
+		return Result.failure("GameOver 测试准备在线恢复 marker 失败: %s" % prepare_r.error)
 
 	var archive_r := _build_snapshot_archive_from_engine(engine)
 	if not archive_r.ok:
@@ -78,16 +81,16 @@ static func _test_reject_game_over_resume_point() -> Result:
 		return Result.failure("GameOver 恢复点报错不明确: %s" % build_r.error)
 	return Result.success()
 
-static func _test_repair_dinnertime_resume_point() -> Result:
+static func _test_reject_dinnertime_resume_point_missing_pending() -> Result:
 	_reset_net_context()
 	if NetContext == null:
 		return Result.failure("NetContext autoload missing")
 	NetContext.mode = NetContext.Mode.ONLINE_SERVER
-	var result := _run_dinnertime_resume_point_test_impl()
+	var result := _run_dinnertime_resume_point_missing_pending_test_impl()
 	_reset_net_context()
 	return result
 
-static func _run_dinnertime_resume_point_test_impl() -> Result:
+static func _run_dinnertime_resume_point_missing_pending_test_impl() -> Result:
 	var engine := GameEngineClass.new()
 	var init_r: Result = engine.initialize(2, 12345, [], GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR)
 	if not init_r.ok:
@@ -124,8 +127,7 @@ static func _run_dinnertime_resume_point_test_impl() -> Result:
 		pending_phase_actions = Dictionary(Dictionary(live_state.round_state).get("pending_phase_actions", {})).duplicate(true)
 	pending_phase_actions.erase(DefsClass.PHASE_DINNERTIME)
 	live_state.round_state["pending_phase_actions"] = pending_phase_actions
-	if live_state.round_state is Dictionary and Dictionary(live_state.round_state).has("online_dinnertime_confirmed_players"):
-		live_state.round_state.erase("online_dinnertime_confirmed_players")
+	live_state.round_state["online_dinnertime_confirmed_players"] = [false, false]
 
 	var archive_r := _build_snapshot_archive_from_engine(engine)
 	if not archive_r.ok:
@@ -178,30 +180,11 @@ static func _run_dinnertime_resume_point_test_impl() -> Result:
 		return Result.failure("Dinnertime 测试缺少 room")
 
 	var effective_r: Result = room.build_effective_resume_start_archive()
-	if not effective_r.ok:
-		return Result.failure("build_effective_resume_start_archive(Dinnertime) 失败: %s" % effective_r.error)
-	var effective_info: Dictionary = Dictionary(effective_r.value) if effective_r.value is Dictionary else {}
-	var effective_archive: Dictionary = Dictionary(effective_info.get("archive", {})).duplicate(true)
-	if effective_archive.is_empty():
-		return Result.failure("Dinnertime 有效恢复档为空")
-
-	var probe_engine := GameEngineClass.new()
-	var probe_load_r: Result = probe_engine.load_from_archive(effective_archive)
-	if not probe_load_r.ok:
-		return Result.failure("probe_engine.load_from_archive 失败: %s" % probe_load_r.error)
-	var prepare_r: Result = OnlineResumePointValidatorClass.prepare_engine_for_online_resume(probe_engine)
-	if not prepare_r.ok:
-		return Result.failure("prepare_engine_for_online_resume(probe) 失败: %s" % prepare_r.error)
-	var probe_assert_r := _assert_dinnertime_confirm_pending(probe_engine.get_state(), 2, "probe")
-	if not probe_assert_r.ok:
-		return probe_assert_r
-
-	var start_r: Result = room.start_game()
-	if not start_r.ok:
-		return Result.failure("resume room start_game(Dinnertime) 失败: %s" % start_r.error)
-	if room.game_engine == null or room.game_engine.get_state() == null:
-		return Result.failure("resume room start_game(Dinnertime) 后缺少 game_engine/state")
-	return _assert_dinnertime_confirm_pending(room.game_engine.get_state(), 2, "room.start_game")
+	if effective_r.ok:
+		return Result.failure("缺失 Dinnertime pending 的恢复房不应自动修复并启动")
+	if str(effective_r.error).find("pending_phase_actions[Dinnertime]") == -1:
+		return Result.failure("缺失 Dinnertime pending 的恢复房报错不明确: %s" % effective_r.error)
+	return Result.success()
 
 static func _build_snapshot_archive_from_engine(engine: GameEngine) -> Result:
 	if engine == null or engine.get_state() == null:
