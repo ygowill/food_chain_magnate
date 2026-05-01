@@ -1174,6 +1174,7 @@
   - 证据：`_flush_online_pending_commands_after_resync(...)` 中，pending command 解析失败或执行失败会 `queue.remove_at(i)` 并继续/退出当前循环，没有立即触发 resync；如果队列已空，函数会走到正常 UI 刷新。证据：`ui/scenes/game/controllers/online_resync_controller.gd:744-789`、`811-821`。
   - 风险：同步中收到的 malformed/failed server command 可能被客户端丢弃，直到后续 index/hash 才暴露；如果没有后续命令，客户端可能停在落后一条历史的位置。
   - 建议：pending flush 的解析失败、执行失败应与实时路径一致，立即进入 force resync 或断开恢复，不应删除后继续。
+  - 状态：Fix 67 复核当前 `_flush_online_pending_commands_after_resync(...)` 已在 pending command 解析失败/执行失败时调用 `_request_online_force_resync(...)` 并返回，不再走成功 UI 刷新；`GameOnlineResyncRequestRejectionTest` 已覆盖两类 pending failure。
 
 - [P2] 后端房间配置解析失败会退回 `{}`，可能把坏配置解释成非恢复房或允许观战。
   - 证据：`_parse_room_config_json(...)` 对空字符串、JSON 解析异常、非 dict 都返回 `{}`。证据：`backend/app/rooms.py:102-114`。
@@ -3147,6 +3148,28 @@
 验证：
 
 - Fix 65 过程中已跑 `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`392/392`，包含 `OnlineClientResyncSnapshotChunkTest`。
+
+结论：
+
+- 该 P2 在当前代码中已完成，不需要额外运行时代码改动；本次更新仅把审查文档从旧证据状态修正为当前实现状态。
+
+### Fix 67：复核 pending command flush 失败已改为 force resync
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 9 `[P2] Resync 后的 pending command flush 与实时 command_applied 路径不一致：解析/执行失败会移除 queued command，而不是立即 resync`。
+
+复核结论：
+
+- 当前 `ui/scenes/game/controllers/online_resync_controller.gd` 中 `_flush_online_pending_commands_after_resync(...)` 在 `Command.from_dict(...)` 失败时调用 `_request_online_force_resync("pending_command_parse_failed")` 并返回。
+- 同一函数在 `engine.execute_command(...)` 失败时调用 `_request_online_force_resync("pending_command_apply_failed")` 并返回；失败路径不会继续移除后续 queued command，也不会执行成功路径的 UI refresh。
+- `core/tests/game_online_resync_request_rejection_test.gd` 已覆盖 pending command 解析失败和执行失败，断言两者都会立刻请求 resync、携带 `force_snapshot`，并保持 resync in-progress 状态。
+
+验证：
+
+- Fix 65 过程中已跑 `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`392/392`，包含 `GameOnlineResyncRequestRejectionTest`。
 
 结论：
 
