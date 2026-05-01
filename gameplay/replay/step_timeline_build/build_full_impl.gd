@@ -128,7 +128,7 @@ static func build_full_impl(engine: GameEngine) -> Result:
 		var command_events: Array = executor.generate_events(old_state, state_in, cmd)
 		var cash_events_cmd: Array = CommandRunnerClass.build_player_cash_changed_events(old_state, state_in, cmd)
 		var milestone_events_cmd: Array = CommandRunnerClass.build_milestone_achieved_events(old_state, state_in, cmd)
-		var milestone_filter_r := _filter_out_first_throw_away_milestone_events(milestone_events_cmd, pending_cleanup_throw_away_milestone_events)
+		var milestone_filter_r := _filter_deferred_cleanup_milestone_events(milestone_events_cmd, pending_cleanup_throw_away_milestone_events)
 		if not milestone_filter_r.ok:
 			return milestone_filter_r.with_warnings(warnings)
 		milestone_events_cmd = milestone_filter_r.value
@@ -180,11 +180,10 @@ static func build_full_impl(engine: GameEngine) -> Result:
 					return append_milestone_r.with_warnings(warnings)
 				seq = int(append_milestone_r.value)
 
-			# CleanupDiscard: first_throw_away 必须在所有 choose_fridge_keep（清理库存）之后出现。
 			var cleanup_pending_read := _read_has_pending_cleanup_actions(state_in)
 			if not cleanup_pending_read.ok:
 				return Result.failure("StepTimelineBuild: %s" % cleanup_pending_read.error).with_warnings(warnings)
-			if str(cmd.action_id).strip_edges() == "choose_fridge_keep" and (not bool(cleanup_pending_read.value)) and not pending_cleanup_throw_away_milestone_events.is_empty():
+			if (not bool(cleanup_pending_read.value)) and not pending_cleanup_throw_away_milestone_events.is_empty():
 				var append_cleanup_r := _append_events(events_out, pending_cleanup_throw_away_milestone_events, i, command_step_index, str(state_in.phase), seq)
 				if not append_cleanup_r.ok:
 					return append_cleanup_r.with_warnings(warnings)
@@ -258,7 +257,7 @@ static func build_full_impl(engine: GameEngine) -> Result:
 		pending_marketing_enter_effect_events = []
 		pending_marketing_enter_anchor_command_index = -1
 
-	# 兜底：避免丢失被延后的 cleanup 里程碑（理论上应在最后一次 choose_fridge_keep 或 Cleanup:enter 时刷出）。
+	# 兜底：避免丢失被延后的 cleanup 里程碑（理论上应在最后一次 pending cleanup 动作或 Cleanup:enter 时刷出）。
 	if not pending_cleanup_throw_away_milestone_events.is_empty():
 		var flush_step_index2 := steps.size() - 1
 		if flush_step_index2 >= 0:
@@ -297,8 +296,8 @@ static func _should_attribute_settlement_effects_to_old_phase(engine: GameEngine
 static func _override_events_phase_fields(events: Array[Dictionary], state: GameState) -> Result:
 	return StepTimelineHelpersClass.override_events_phase_fields(events, state)
 
-static func _filter_out_first_throw_away_milestone_events(events: Array[Dictionary], pending: Array[Dictionary]) -> Result:
-	return StepTimelineHelpersClass.filter_out_first_throw_away_milestone_events(events, pending)
+static func _filter_deferred_cleanup_milestone_events(events: Array[Dictionary], pending: Array[Dictionary]) -> Result:
+	return StepTimelineHelpersClass.filter_deferred_cleanup_milestone_events(events, pending)
 
 static func _read_has_pending_cleanup_actions(state: GameState) -> Result:
 	return StepTimelineHelpersClass.read_has_pending_cleanup_actions(state)

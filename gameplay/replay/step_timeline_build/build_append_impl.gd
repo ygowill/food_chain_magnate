@@ -124,7 +124,7 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 		var command_events: Array = executor.generate_events(old_state, state_in, cmd)
 		var cash_events_cmd: Array = CommandRunnerClass.build_player_cash_changed_events(old_state, state_in, cmd)
 		var milestone_events_cmd: Array = CommandRunnerClass.build_milestone_achieved_events(old_state, state_in, cmd)
-		var milestone_filter_r := _filter_out_first_throw_away_milestone_events(
+		var milestone_filter_r := _filter_deferred_cleanup_milestone_events(
 			milestone_events_cmd,
 			pending_cleanup_throw_away_milestone_events
 		)
@@ -183,8 +183,7 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 			var cleanup_pending_read := _read_has_pending_cleanup_actions(state_in)
 			if not cleanup_pending_read.ok:
 				return Result.failure("StepTimelineBuild: %s" % cleanup_pending_read.error).with_warnings(warnings)
-			if str(cmd.action_id).strip_edges() == "choose_fridge_keep" \
-				and (not bool(cleanup_pending_read.value)) \
+			if (not bool(cleanup_pending_read.value)) \
 				and not pending_cleanup_throw_away_milestone_events.is_empty():
 				var append_cleanup_r := _append_events(
 					events_out,
@@ -340,8 +339,8 @@ static func _append_events(
 ) -> Result:
 	return StepTimelineHelpersClass.append_events(out_events, events, command_index, step_index, phase_segment, seq_in)
 
-static func _filter_out_first_throw_away_milestone_events(events: Array[Dictionary], pending: Array[Dictionary]) -> Result:
-	return StepTimelineHelpersClass.filter_out_first_throw_away_milestone_events(events, pending)
+static func _filter_deferred_cleanup_milestone_events(events: Array[Dictionary], pending: Array[Dictionary]) -> Result:
+	return StepTimelineHelpersClass.filter_deferred_cleanup_milestone_events(events, pending)
 
 static func _read_has_pending_cleanup_actions(state: GameState) -> Result:
 	return StepTimelineHelpersClass.read_has_pending_cleanup_actions(state)

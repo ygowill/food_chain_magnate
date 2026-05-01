@@ -2,6 +2,10 @@
 # 用途：从 state 差异推导里程碑达成事件（日志/展示语义）。
 extends RefCounted
 
+const DeferredEventPolicyClass = preload("res://gameplay/replay/step_timeline_build/deferred_event_policy.gd")
+
+const MILESTONE_FIRST_THROW_AWAY := "first_throw_away"
+
 static func build_milestone_achieved_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 	if old_state == null or new_state == null:
@@ -50,17 +54,19 @@ static func build_milestone_achieved_events(old_state: GameState, new_state: Gam
 		added.sort()
 
 		for milestone_id in added:
+			var data := {
+				"player_id": player_id,
+				"milestone_id": milestone_id,
+				"action_id": str(command.action_id),
+				"phase": str(new_state.phase),
+				"sub_phase": str(new_state.sub_phase),
+				"round": int(new_state.round_number),
+			}
+			if milestone_id == MILESTONE_FIRST_THROW_AWAY:
+				data = DeferredEventPolicyClass.mark_cleanup_after_discards(data)
 			events.append({
 				"type": EventBus.EventType.MILESTONE_ACHIEVED,
-				"data": {
-					"player_id": player_id,
-					"milestone_id": milestone_id,
-					"action_id": str(command.action_id),
-					"phase": str(new_state.phase),
-					"sub_phase": str(new_state.sub_phase),
-					"round": int(new_state.round_number),
-				}
+				"data": data,
 			})
 
 	return events
-

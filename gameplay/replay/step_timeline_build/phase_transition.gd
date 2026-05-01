@@ -2,7 +2,7 @@
 # - 拆分 PHASE_CHANGED 前后事件归属
 # - 结算产生的 cash/milestone 事件按触发点归属（兼容 exit+enter 叠加）
 # - Marketing enter effects 延后到离开 Marketing 后输出
-# - CleanupDiscard: first_throw_away 里程碑按“清理库存动作完成后”显示
+# - CleanupDiscard: 带 timeline defer metadata 的清理里程碑按“清理库存动作完成后”显示
 extends RefCounted
 
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
@@ -116,11 +116,11 @@ static func append_phase_transition_events(
 			cash_events_new = cash_events_full
 			milestone_events_new = milestone_events_full
 
-	var old_milestone_filter_r := StepTimelineHelpersClass.filter_out_first_throw_away_milestone_events(milestone_events_old, pending_cleanup_throw_away_milestone_events)
+	var old_milestone_filter_r := StepTimelineHelpersClass.filter_deferred_cleanup_milestone_events(milestone_events_old, pending_cleanup_throw_away_milestone_events)
 	if not old_milestone_filter_r.ok:
 		return old_milestone_filter_r
 	milestone_events_old = old_milestone_filter_r.value
-	var new_milestone_filter_r := StepTimelineHelpersClass.filter_out_first_throw_away_milestone_events(milestone_events_new, pending_cleanup_throw_away_milestone_events)
+	var new_milestone_filter_r := StepTimelineHelpersClass.filter_deferred_cleanup_milestone_events(milestone_events_new, pending_cleanup_throw_away_milestone_events)
 	if not new_milestone_filter_r.ok:
 		return new_milestone_filter_r
 	milestone_events_new = new_milestone_filter_r.value
@@ -189,7 +189,7 @@ static func append_phase_transition_events(
 					return append_new_milestone_r
 				seq = int(append_new_milestone_r.value)
 
-	# CleanupDiscard: 若进入 Cleanup 时无需 pending（无 choose_fridge_keep），则在该 step 末尾刷出 first_throw_away。
+	# CleanupDiscard: 若进入 Cleanup 时无需 pending，则在该 step 末尾刷出延后的清理里程碑。
 	var cleanup_pending_read := StepTimelineHelpersClass.read_has_pending_cleanup_actions(new_state)
 	if not cleanup_pending_read.ok:
 		return Result.failure("StepTimelineBuild: %s" % cleanup_pending_read.error)

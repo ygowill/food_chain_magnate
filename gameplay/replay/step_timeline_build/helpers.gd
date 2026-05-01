@@ -4,6 +4,7 @@ extends RefCounted
 
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
 const TimelineEventHelpersClass = preload("res://gameplay/replay/timeline_event_helpers.gd")
+const DeferredEventPolicyClass = preload("res://gameplay/replay/step_timeline_build/deferred_event_policy.gd")
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
@@ -88,8 +89,8 @@ static func override_events_phase_fields(events: Array[Dictionary], state: GameS
 		out.append(ev)
 	return Result.success(out)
 
-static func filter_out_first_throw_away_milestone_events(events: Array[Dictionary], pending: Array[Dictionary]) -> Result:
-	# 目的：首个丢弃里程碑（first_throw_away）显示顺序应在“清理库存”之后，避免出现在清理动作之前。
+static func filter_deferred_cleanup_milestone_events(events: Array[Dictionary], pending: Array[Dictionary]) -> Result:
+	# 目的：事件 provider 可通过 metadata 标记“清理丢弃后显示”的里程碑；timeline 只消费通用标记。
 	var out: Array[Dictionary] = []
 	if events == null or events.is_empty():
 		return Result.success(out)
@@ -101,9 +102,7 @@ static func filter_out_first_throw_away_milestone_events(events: Array[Dictionar
 		if str(ev.get("type", "")).strip_edges() != EventBus.EventType.MILESTONE_ACHIEVED:
 			out.append(ev)
 			continue
-		var d: Dictionary = Dictionary(ev.get("data"))
-		var mid := str(d.get("milestone_id", "")).strip_edges()
-		if mid == "first_throw_away":
+		if DeferredEventPolicyClass.should_defer_cleanup_after_discards(ev):
 			if pending != null:
 				pending.append(ev)
 			continue

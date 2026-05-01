@@ -60,7 +60,7 @@ static func drain(
 		var phase_events := CommandRunnerClass.build_phase_change_events(before, state_in)
 		var cash_events := CommandRunnerClass.build_player_cash_changed_events(before, state_in, Command.create_system("auto_advance"))
 		var milestone_events := CommandRunnerClass.build_milestone_achieved_events(before, state_in, cmd)
-		var milestone_filter_r := StepTimelineHelpersClass.filter_out_first_throw_away_milestone_events(milestone_events, pending_cleanup_throw_away_milestone_events)
+		var milestone_filter_r := StepTimelineHelpersClass.filter_deferred_cleanup_milestone_events(milestone_events, pending_cleanup_throw_away_milestone_events)
 		if not milestone_filter_r.ok:
 			return milestone_filter_r.with_warnings(warnings)
 		milestone_events = milestone_filter_r.value

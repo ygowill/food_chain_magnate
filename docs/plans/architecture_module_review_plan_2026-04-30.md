@@ -1042,6 +1042,7 @@
   - 证据：构建末尾有两个明确 “兜底”：Marketing enter effects 和 cleanup delayed milestone 若未刷出，则追加到最后一个 step。证据：`gameplay/replay/step_timeline_build/build_full_impl.gd:246-265`、`gameplay/replay/step_timeline_build/build_append_impl.gd:232-262`。
   - 风险：timeline 构建器理解了 `choose_fridge_keep/first_throw_away/Marketing enter effects` 等规则细节，新增模块或调整 settlement 顺序时，UI/replay 层必须同步改；末尾 flush 还可能把事件归属到错误 step，掩盖规则层未提供足够 attribution 的根因。
   - 建议：规则层应在 event metadata 中提供排序/归属信息，例如 `display_after_action_id`、`phase_segment`、`step_anchor`；StepTimeline 只消费通用 metadata。无法归属的 pending event 应触发构建失败或 strict diagnostic，不应自动塞到最后一格。
+  - 状态：Fix 62 已先把 cleanup discard milestone 延后改为事件 metadata 驱动，StepTimeline 不再硬编码 `first_throw_away` / `choose_fridge_keep`；Marketing enter effects 和末尾 flush 的归属策略仍需继续收敛。
 
 - [P2] 增量 timeline 与预构建 entry 的 cache 路径存在 “过滤坏缓存后继续使用” 的行为。
   - 证据：append 构建从 `existing_timeline.steps/events` 只收集 Dictionary entry，非 Dictionary 被跳过。证据：`gameplay/replay/step_timeline_build/build_append_impl.gd:19-28`。
@@ -3027,3 +3028,28 @@
 结论：
 
 - 已完成该 P2 的运行时边界收敛：Game 场景主链路现在有测试防止 EventBus flat log 被重新接入；剩余 `GameEventLogController` 只作为兼容/测试兜底存在，后续可单独清理旧文档和 legacy 测试入口。
+
+### Fix 62：StepTimeline 清理里程碑延后改为事件 metadata 驱动
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 8 `[P2] StepTimeline 构建层硬编码具体规则/动作/里程碑，并在末尾用 flush 兜底补事件` 中的 cleanup delayed milestone 部分。
+
+改动：
+
+- 新增 `gameplay/replay/step_timeline_build/deferred_event_policy.gd`，定义 timeline defer metadata 与 `cleanup_after_discards` 策略。
+- `gameplay/replay/command_runner_event_build/milestone_events.gd`：在规则事件 provider 边界为 `first_throw_away` 里程碑打 `_timeline_defer.kind = cleanup_after_discards` metadata。
+- `gameplay/replay/step_timeline_build/helpers.gd`：移除对具体 `milestone_id` 的识别，改为 `filter_deferred_cleanup_milestone_events(...)` 读取通用 defer metadata。
+- `gameplay/replay/step_timeline_build/build_full_impl.gd` 与 `build_append_impl.gd`：清理里程碑的释放条件改为“pending cleanup 事件已清空”，不再特判 `choose_fridge_keep` action。
+- `gameplay/replay/step_timeline_build/phase_transition.gd` 与 `auto_advance_drain.gd`：复用同一个 metadata helper，避免 phase/auto-advance 分支重新理解具体里程碑。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1113`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`392/392`。
+
+结论：
+
+- 已完成该 P2 中 cleanup 延后里程碑的第一阶段收敛：`first_throw_away` 的展示延后策略现在由事件 metadata 表达，StepTimeline 构建层不再识别具体 milestone/action。剩余 Marketing enter effects 与构建末尾 flush 的归属策略仍需要后续按同一 metadata/strict attribution 方向继续清理。
