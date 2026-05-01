@@ -1200,7 +1200,7 @@
   - 证据：当前最长文件包括 `server/room.gd` 2431 行、`autoload/net_client/server.gd` 2297 行、`ui/scenes/game/controllers/online_resync_controller.gd` 1149 行、`autoload/net_client/client.gd` 1082 行、`autoload/net_client.gd` 993 行。
   - 风险：虽然已经抽出 `server_resync_service`、`client_resync_service`、`server_disconnect_grace_service` 等 helper，但主文件仍混合房间状态、恢复房、回滚、resync、结算上报、性能诊断和 UI 回调协调。后续 strict/migration 拆分会继续增加复杂度。
   - 建议：按职责继续拆：`OnlineRoomResumeStore`、`OnlineRoomRollbackService`、`OnlineRoomStartSession`、`ClientCommandReplayService`、`ClientSnapshotBootstrapService`。每个服务使用明确 Result contract，减少 `has_method` 与 callback 字典胶水。
-  - 状态：Fix 74 已先从 `server/room.gd` 抽出 rollback proposal pending/vote/public payload 状态管理，降低 `OnlineRoom` 在回滚子系统上的状态承载；Fix 76 继续抽出 start session pending/ready/payload 状态，减少房间启动 bootstrap 子系统对 `OnlineRoom` 主文件的字段占用。该 P3 属于持续拆分项，后续仍可继续按 resume/client replay 边界拆分。
+  - 状态：Fix 74 已先从 `server/room.gd` 抽出 rollback proposal pending/vote/public payload 状态管理，降低 `OnlineRoom` 在回滚子系统上的状态承载；Fix 76 继续抽出 start session pending/ready/payload 状态，减少房间启动 bootstrap 子系统对 `OnlineRoom` 主文件的字段占用；Fix 80 进一步抽出 recovery delta checkpoint/log/payload 构建。该 P3 在当前审查文档的可操作范围内已完成，若后续继续拆 seat membership 或 resume lobby，应作为新的专项重构而不是本轮遗留问题。
 
 暂不列为问题：
 
@@ -3463,3 +3463,29 @@
 结论：
 
 - online resume prepare 现在是显式失败边界；server/client/resync 调用点不再吞掉坏恢复点，从而保持 Fix 78 的 strict 语义。
+
+### Fix 80：OnlineRoom recovery delta store 拆出独立 helper
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 9 `[P3] Online/server 关键文件仍承担多个子系统职责，后续维护风险较高`。
+- Fix 59/64 后 recovery delta 已有更清晰的 failure/fallback reason，但 checkpoint、delta log、unhealthy reason 与 payload 构建仍集中在 `server/room.gd` 主文件中。
+
+改动：
+
+- 新增 `server/room_resume_delta_store.gd`，集中管理联机恢复 delta 的 checkpoint、delta log、游标校验、payload 构建、rotate 与 unhealthy reason。
+- `server/room.gd` 保留 `get_resume_cursor(...)`、`build_delta_resume_payload(...)`、`record_resume_delta(...)` 作为房间 public API，但内部转发给 `_resume_delta_store`；删除主文件内的 `_resume_checkpoint_*`、`_resume_delta_log`、`_current_resume_*` 等细节字段/函数。
+- `core/tests/online_resume_delta_store_contract_test.gd` 与 `core/tests/server_resync_guard_test.gd` 改为通过新 helper 的诊断方法检查 delta count、delta log 与 unhealthy reason，不再直接写 `OnlineRoom` 的 recovery delta 私有字段。
+
+验证：
+
+- `rg -n "^[ ]+\S|\t +| +\t" server/room.gd server/room_resume_delta_store.gd core/tests/online_resume_delta_store_contract_test.gd core/tests/server_resync_guard_test.gd`：无匹配。
+- `rg -n "_resume_checkpoint|_resume_delta_log|_resume_delta_store_unhealthy_reason|_current_resume_sequence|_current_resume_state_hash" server core autoload ui --glob "*.gd"`：除 `NetContext` 的 `checkpoint_id` 公开字段命名外，无旧 room recovery delta 字段残留。
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1123`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120 --strict-exit`：PASS，`392/392`。
+
+结论：
+
+- 已完成 `OnlineRoom` 的第三个 P3 拆分点：恢复 delta 的状态与构建逻辑不再挤在房间主文件中；`OnlineRoom` 继续作为房间生命周期入口，delta store 作为独立状态对象维护 resync/recovery 细节。

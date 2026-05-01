@@ -6,6 +6,7 @@ const ArchiveClass = preload("res://core/engine/game_engine/archive.gd")
 const ArchiveRecoveryClass = preload("res://core/engine/game_engine/archive_recovery.gd")
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
+const ResumeDeltaStoreClass = preload("res://server/room_resume_delta_store.gd")
 const RollbackProposalStoreClass = preload("res://server/room_rollback_proposal_store.gd")
 const StartSessionStateClass = preload("res://server/room_start_session_state.gd")
 const DEFAULT_RESTAURANT_LOGO_COUNT := 6
@@ -58,16 +59,10 @@ var _seat_slot_by_index: Dictionary = {} # seat_index -> slot
 var _waiting_member_by_user_id: Dictionary = {} # user_id -> member
 var _waiting_member_by_peer_id: Dictionary = {} # peer_id -> member（运行时视图）
 var _resume_lobby_archive: Dictionary = {}
-var _resume_checkpoint_id: String = ""
-var _resume_checkpoint_sequence: int = 0
-var _resume_checkpoint_state_hash: String = ""
-var _resume_checkpoint_archive: Dictionary = {}
-var _resume_delta_log: Array[Dictionary] = []
-var _resume_delta_store_unhealthy_reason: String = ""
-var _resume_checkpoint_counter: int = 0
 var _prepared_resume_start_engine = null
 var _prepared_resume_start_archive: Dictionary = {}
 var _prepared_resume_start_final_hash: String = ""
+var _resume_delta_store = ResumeDeltaStoreClass.new()
 var _start_session_state = StartSessionStateClass.new()
 var _rollback_proposal_store = RollbackProposalStoreClass.new()
 
@@ -393,174 +388,17 @@ func _prepare_effective_resume_start_engine() -> Result:
 func _touch() -> void:
 	updated_at_ms = int(Time.get_unix_time_from_system() * 1000.0)
 
-func _current_resume_sequence() -> int:
-	if game_engine == null:
-		return 0
-	var history_val = game_engine.get("command_history") if game_engine is Object else null
-	return Array(history_val).size() if history_val is Array else 0
-
-func _current_resume_state_hash() -> String:
-	if game_engine == null or not game_engine.has_method("get_state"):
-		return ""
-	var state = game_engine.get_state()
-	if state == null or not state.has_method("compute_hash"):
-		return ""
-	return str(state.compute_hash())
-
 func _reset_recovery_store_from_current_engine(reason: String = "") -> Result:
-	if status != STATUS_IN_GAME:
-		_resume_checkpoint_id = ""
-		_resume_checkpoint_sequence = 0
-		_resume_checkpoint_state_hash = ""
-		_resume_checkpoint_archive = {}
-		_resume_delta_log.clear()
-		_resume_delta_store_unhealthy_reason = ""
-		return Result.success()
-	if game_engine == null:
-		_resume_delta_store_unhealthy_reason = "Room engine missing"
-		return Result.failure(_resume_delta_store_unhealthy_reason)
-	var archive_r: Result = game_engine.create_archive()
-	if not archive_r.ok:
-		_resume_delta_store_unhealthy_reason = "create_archive failed: %s" % archive_r.error
-		return Result.failure(_resume_delta_store_unhealthy_reason)
-	_resume_checkpoint_counter += 1
-	var suffix := str(reason).strip_edges()
-	if suffix.is_empty():
-		suffix = "checkpoint"
-	_resume_checkpoint_id = "%s_%d_%d" % [suffix, _current_resume_sequence(), _resume_checkpoint_counter]
-	_resume_checkpoint_sequence = _current_resume_sequence()
-	_resume_checkpoint_state_hash = _current_resume_state_hash()
-	_resume_checkpoint_archive = Dictionary(archive_r.value).duplicate(true)
-	_resume_delta_log.clear()
-	_resume_delta_store_unhealthy_reason = ""
-	return Result.success({
-		"checkpoint_id": _resume_checkpoint_id,
-		"sequence": _resume_checkpoint_sequence,
-		"state_hash": _resume_checkpoint_state_hash,
-	})
+	return _resume_delta_store.reset_from_engine(status, STATUS_IN_GAME, game_engine, reason)
 
 func get_resume_cursor() -> Dictionary:
-	return {
-		"checkpoint_id": _resume_checkpoint_id,
-		"last_applied_sequence": _current_resume_sequence(),
-		"last_state_hash": _current_resume_state_hash(),
-	}
+	return _resume_delta_store.get_cursor(game_engine)
 
 func build_delta_resume_payload(cursor: Dictionary, max_commands: int = 0, soft_limit_bytes: int = 0) -> Result:
-	if status != STATUS_IN_GAME:
-		return Result.failure("Room is not in game")
-	if game_engine == null:
-		return Result.failure("Room engine missing")
-	if not _resume_delta_store_unhealthy_reason.strip_edges().is_empty():
-		return Result.failure("recovery store unhealthy: %s" % _resume_delta_store_unhealthy_reason)
-	if cursor.is_empty():
-		return Result.failure("resume cursor missing")
-	if _resume_checkpoint_archive.is_empty():
-		var checkpoint_r: Result = _reset_recovery_store_from_current_engine("resume_init")
-		if not checkpoint_r.ok:
-			return checkpoint_r
-
-	var from_sequence := int(cursor.get("last_applied_sequence", -1))
-	var from_hash := str(cursor.get("last_state_hash", "")).strip_edges()
-	var current_sequence := _current_resume_sequence()
-	var current_hash := _current_resume_state_hash()
-	if from_sequence < 0 or from_sequence > current_sequence:
-		return Result.failure("resume cursor sequence invalid")
-
-	var expected_hash := ""
-	if from_sequence == current_sequence:
-		expected_hash = current_hash
-	elif from_sequence == _resume_checkpoint_sequence:
-		expected_hash = _resume_checkpoint_state_hash
-	else:
-		for item in _resume_delta_log:
-			var entry: Dictionary = Dictionary(item)
-			if int(entry.get("sequence", -1)) != from_sequence:
-				continue
-			expected_hash = str(entry.get("post_state_hash", "")).strip_edges()
-			break
-	if expected_hash.is_empty():
-		return Result.failure("delta gap")
-	if from_hash.is_empty() or expected_hash != from_hash:
-		return Result.failure("resume cursor hash mismatch")
-
-	var entries: Array[Dictionary] = []
-	for item2 in _resume_delta_log:
-		var entry2: Dictionary = Dictionary(item2)
-		if int(entry2.get("sequence", -1)) <= from_sequence:
-			continue
-		entries.append(entry2.duplicate(true))
-	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return int(a.get("sequence", -1)) < int(b.get("sequence", -1))
-	)
-
-	if from_sequence < current_sequence:
-		var expected_sequence := from_sequence + 1
-		for entry3 in entries:
-			if int(entry3.get("sequence", -1)) != expected_sequence:
-				return Result.failure("delta gap")
-			expected_sequence += 1
-		if expected_sequence - 1 != current_sequence:
-			return Result.failure("delta incomplete")
-
-	if max_commands > 0 and entries.size() > max_commands:
-		return Result.failure("delta too long")
-
-	var payload := {
-		"room_code": str(room_code).strip_edges().to_upper(),
-		"checkpoint_id": _resume_checkpoint_id,
-		"from_sequence": from_sequence,
-		"to_sequence": current_sequence,
-		"final_sequence": current_sequence,
-		"final_hash": current_hash,
-		"entries": entries,
-	}
-	var payload_bytes := int(var_to_bytes(payload).size())
-	if soft_limit_bytes > 0 and payload_bytes > soft_limit_bytes:
-		return Result.failure("delta too large")
-
-	return Result.success({
-		"payload": payload,
-		"payload_bytes": payload_bytes,
-		"entry_count": entries.size(),
-		"from_sequence": from_sequence,
-		"to_sequence": current_sequence,
-		"final_hash": current_hash,
-	})
+	return _resume_delta_store.build_payload(room_code, status, STATUS_IN_GAME, game_engine, cursor, max_commands, soft_limit_bytes)
 
 func record_resume_delta(cmd: Command, post_state_hash: String = "") -> Result:
-	if status != STATUS_IN_GAME or game_engine == null or cmd == null:
-		return Result.success({
-			"recorded": false,
-			"reason": "room_not_recordable",
-		})
-	if _resume_checkpoint_archive.is_empty():
-		var checkpoint_r: Result = _reset_recovery_store_from_current_engine("delta_init")
-		if not checkpoint_r.ok:
-			return Result.failure("record_resume_delta: checkpoint init failed: %s" % checkpoint_r.error)
-	var normalized_hash := str(post_state_hash).strip_edges()
-	if normalized_hash.is_empty():
-		normalized_hash = _current_resume_state_hash()
-	if normalized_hash.is_empty():
-		_resume_delta_store_unhealthy_reason = "record_resume_delta: post_state_hash 为空"
-		return Result.failure(_resume_delta_store_unhealthy_reason)
-	var sequence := _current_resume_sequence()
-	_resume_delta_log.append({
-		"sequence": sequence,
-		"cmd": cmd.to_dict(),
-		"post_state_hash": normalized_hash,
-	})
-	if sequence - _resume_checkpoint_sequence >= RESUME_DELTA_ROTATE_COMMAND_THRESHOLD:
-		var rotate_r: Result = _reset_recovery_store_from_current_engine("delta_rotate")
-		if not rotate_r.ok:
-			return Result.failure("record_resume_delta: checkpoint rotate failed: %s" % rotate_r.error)
-	return Result.success({
-		"recorded": true,
-		"sequence": sequence,
-		"post_state_hash": normalized_hash,
-		"delta_count": _resume_delta_log.size(),
-		"checkpoint_id": _resume_checkpoint_id,
-	})
+	return _resume_delta_store.record(status, STATUS_IN_GAME, game_engine, cmd, post_state_hash, RESUME_DELTA_ROTATE_COMMAND_THRESHOLD)
 
 func _make_seat_slot(
 	seat_index: int,

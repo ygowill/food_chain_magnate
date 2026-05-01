@@ -62,7 +62,7 @@ static func _case_checkpoint_init_failure_is_returned() -> Result:
 		return Result.failure("checkpoint init failure should be returned")
 	if not str(record_r.error).contains("checkpoint init failed"):
 		return Result.failure("unexpected init failure error: %s" % record_r.error)
-	if not room._resume_delta_log.is_empty():
+	if room._resume_delta_store.get_delta_count() != 0:
 		return Result.failure("checkpoint init failure should not append delta")
 	return Result.success(record_r.error)
 
@@ -70,19 +70,21 @@ static func _case_success_records_delta() -> Result:
 	var room := RoomClass.new("DR02", 1, "public", "", {"desired_player_count": 2})
 	var engine := _FakeEngine.new()
 	engine.command_history = [Command.create_system("noop")]
+	engine.state._hash = "hash_before"
 	room.status = RoomClass.STATUS_IN_GAME
 	room.game_engine = engine
-	room._resume_checkpoint_archive = {"checkpoint": true}
-	room._resume_checkpoint_sequence = 0
-	room._resume_checkpoint_state_hash = "hash_before"
-	room._resume_checkpoint_id = "manual_0"
+	var checkpoint_r: Result = room._reset_recovery_store_from_current_engine("manual")
+	if not checkpoint_r.ok:
+		return Result.failure("checkpoint setup should succeed: %s" % checkpoint_r.error)
+	engine.state._hash = "hash_after"
 
 	var record_r: Result = room.record_resume_delta(Command.create_system("noop"), "")
 	if not record_r.ok:
 		return Result.failure("record_resume_delta should succeed: %s" % record_r.error)
-	if room._resume_delta_log.size() != 1:
-		return Result.failure("expected one delta entry, got %d" % room._resume_delta_log.size())
-	var entry: Dictionary = room._resume_delta_log[0]
+	var delta_log := room._resume_delta_store.get_delta_log_snapshot()
+	if delta_log.size() != 1:
+		return Result.failure("expected one delta entry, got %d" % delta_log.size())
+	var entry: Dictionary = delta_log[0]
 	if int(entry.get("sequence", -1)) != 1:
 		return Result.failure("unexpected delta sequence: %s" % str(entry.get("sequence", null)))
 	if str(entry.get("post_state_hash", "")) != "hash_after":
@@ -92,21 +94,22 @@ static func _case_success_records_delta() -> Result:
 static func _case_checkpoint_rotate_failure_is_returned() -> Result:
 	var room := RoomClass.new("DR03", 1, "public", "", {"desired_player_count": 2})
 	var engine := _FakeEngine.new()
-	for i in range(RoomClass.RESUME_DELTA_ROTATE_COMMAND_THRESHOLD):
-		engine.command_history.append(Command.create_system("noop"))
-	engine.fail_create_archive = true
+	engine.state._hash = "hash_before"
 	room.status = RoomClass.STATUS_IN_GAME
 	room.game_engine = engine
-	room._resume_checkpoint_archive = {"checkpoint": true}
-	room._resume_checkpoint_sequence = 0
-	room._resume_checkpoint_state_hash = "hash_before"
-	room._resume_checkpoint_id = "manual_0"
+	var checkpoint_r: Result = room._reset_recovery_store_from_current_engine("manual")
+	if not checkpoint_r.ok:
+		return Result.failure("checkpoint setup should succeed: %s" % checkpoint_r.error)
+	for i in range(RoomClass.RESUME_DELTA_ROTATE_COMMAND_THRESHOLD):
+		engine.command_history.append(Command.create_system("noop"))
+	engine.state._hash = "hash_after"
+	engine.fail_create_archive = true
 
 	var record_r: Result = room.record_resume_delta(Command.create_system("noop"), "hash_after")
 	if record_r.ok:
 		return Result.failure("checkpoint rotate failure should be returned")
 	if not str(record_r.error).contains("checkpoint rotate failed"):
 		return Result.failure("unexpected rotate failure error: %s" % record_r.error)
-	if room._resume_delta_log.size() != 1:
+	if room._resume_delta_store.get_delta_count() != 1:
 		return Result.failure("rotate failure should keep the just recorded delta for diagnostics")
 	return Result.success(record_r.error)

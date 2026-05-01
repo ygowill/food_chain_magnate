@@ -197,13 +197,13 @@ static func _run_delta_case() -> Result:
 	if str(mismatch_prepared.get("fallback_reason_code", "")) != "cursor_hash_mismatch":
 		return Result.failure("hash mismatch fallback class 错误: %s" % str(mismatch_prepared))
 
-	room._resume_delta_store_unhealthy_reason = "test recovery store unhealthy"
+	room._resume_delta_store.set_unhealthy_reason("test recovery store unhealthy")
 	var unhealthy_prepared_r: Result = server._resync_service.build_best_effort_resume_transfer(room, {
 		"checkpoint_id": "cp_initial",
 		"last_applied_sequence": 0,
 		"last_state_hash": initial_hash,
 	})
-	room._resume_delta_store_unhealthy_reason = ""
+	room._resume_delta_store.set_unhealthy_reason("")
 	if not unhealthy_prepared_r.ok:
 		return Result.failure("unhealthy recovery store prepared transfer 应回退 snapshot: %s" % unhealthy_prepared_r.error)
 	var unhealthy_prepared: Dictionary = unhealthy_prepared_r.value
