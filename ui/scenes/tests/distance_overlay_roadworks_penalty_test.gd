@@ -42,34 +42,80 @@ static func run(seed_val: int = 12345) -> Result:
 
 	var from_pos: Vector2i = path[0]
 	var to_pos: Vector2i = path[path.size() - 1]
-	var marker_pos: Vector2i = path[1]
+	var interior_marker_pos: Vector2i = path[1]
+	var cases: Array[Dictionary] = [
+		{
+			"name": "interior marker forward",
+			"marker": interior_marker_pos,
+			"from": from_pos,
+			"to": to_pos,
+		},
+		{
+			"name": "start marker forward",
+			"marker": from_pos,
+			"from": from_pos,
+			"to": to_pos,
+		},
+		{
+			"name": "start marker reverse",
+			"marker": from_pos,
+			"from": to_pos,
+			"to": from_pos,
+		},
+		{
+			"name": "end marker forward",
+			"marker": to_pos,
+			"from": from_pos,
+			"to": to_pos,
+		},
+		{
+			"name": "end marker reverse",
+			"marker": to_pos,
+			"from": to_pos,
+			"to": from_pos,
+		},
+	]
 
-	# 注入一个 roadworks marker（不依赖模块逻辑，直接按 key 写入 map）
-	s.map["lobbyists_roadworks_markers"] = {
+	for case_val in cases:
+		var check := _assert_overlay_distance_case(s.map, case_val)
+		if not check.ok:
+			return _finish(check, null, e)
+
+	return _finish(Result.success({}), null, e)
+
+static func _assert_overlay_distance_case(map_data: Dictionary, case_data: Dictionary) -> Result:
+	var marker_pos: Vector2i = Vector2i(case_data.get("marker", Vector2i.ZERO))
+	map_data["lobbyists_roadworks_markers"] = {
 		"%d,%d" % [marker_pos.x, marker_pos.y]: true,
 	}
 
 	var overlay := DistanceOverlayClass.new()
-	overlay.set_map_data(s.map)
+	overlay.set_map_data(map_data)
 	if overlay._road_graph == null:
-		return _finish(Result.failure("DistanceOverlay 未构建 RoadGraph（map_data 缺失关键字段）"), overlay, e)
+		return _finish_overlay_case(Result.failure("DistanceOverlay 未构建 RoadGraph（map_data 缺失关键字段）"), overlay)
 
+	var from_pos: Vector2i = Vector2i(case_data.get("from", Vector2i.ZERO))
+	var to_pos: Vector2i = Vector2i(case_data.get("to", Vector2i.ZERO))
 	var base := int(overlay._road_graph.get_distance(from_pos, to_pos))
 	if base < 0:
-		return _finish(Result.failure("测试期望道路可达（get_distance 返回 -1）"), overlay, e)
+		return _finish_overlay_case(Result.failure("%s: 测试期望道路可达（get_distance 返回 -1）" % str(case_data.get("name", ""))), overlay)
 
 	overlay.show_distances(from_pos, [to_pos])
 	if overlay._paths.is_empty():
-		return _finish(Result.failure("DistanceOverlay 未生成路径数据（_paths 为空）"), overlay, e)
+		return _finish_overlay_case(Result.failure("%s: DistanceOverlay 未生成路径数据（_paths 为空）" % str(case_data.get("name", ""))), overlay)
 
 	var d_val = overlay._paths[0].get("distance", null)
 	if not (d_val is int):
-		return _finish(Result.failure("DistanceOverlay 距离类型错误（期望 int）: %s" % str(d_val)), overlay, e)
+		return _finish_overlay_case(Result.failure("%s: DistanceOverlay 距离类型错误（期望 int）: %s" % [str(case_data.get("name", "")), str(d_val)]), overlay)
 	var d: int = int(d_val)
 	if d != base + 1:
-		return _finish(Result.failure("DistanceOverlay 应包含 roadworks 惩罚：base=%d expected=%d actual=%d" % [base, base + 1, d]), overlay, e)
+		return _finish_overlay_case(Result.failure("%s: DistanceOverlay 应包含 roadworks 惩罚：base=%d expected=%d actual=%d" % [str(case_data.get("name", "")), base, base + 1, d]), overlay)
 
-	return _finish(Result.success({}), overlay, e)
+	return _finish_overlay_case(Result.success({}), overlay)
+
+static func _finish_overlay_case(result: Result, overlay) -> Result:
+	_safe_free(overlay)
+	return result
 
 static func _finish(result: Result, overlay, engine) -> Result:
 	_safe_free(overlay)

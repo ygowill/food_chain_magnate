@@ -567,8 +567,7 @@ func _count_roadworks_penalty(map_data: Dictionary, path_points: Array[Vector2i]
 		if p is Vector2i:
 			marker_set[p] = true
 	var penalty := 0
-	for i in range(1, path_points.size()):
-		var p2: Vector2i = path_points[i]
+	for p2 in path_points:
 		if marker_set.has(p2):
 			penalty += 1
 	return penalty
