@@ -102,8 +102,7 @@ func run(phase: int, point: int, state: GameState, phase_manager) -> Result:
 			]
 			all_warnings.append(msg)
 			AutoloadAccessClass.log_warn("SettlementRegistry", msg)
-			if AutoloadAccessClass.is_debug_mode():
-				return Result.failure(msg).with_warnings(all_warnings)
+			return Result.failure(msg).with_warnings(all_warnings)
 
 	# primary
 	var primary_cb: Callable = primary.get("callback", Callable())
@@ -123,8 +122,7 @@ func run(phase: int, point: int, state: GameState, phase_manager) -> Result:
 		]
 		all_warnings.append(msg2)
 		AutoloadAccessClass.log_warn("SettlementRegistry", msg2)
-		if AutoloadAccessClass.is_debug_mode():
-			return Result.failure(msg2).with_warnings(all_warnings)
+		return Result.failure(msg2).with_warnings(all_warnings)
 
 	# priority >= 100：primary 之后
 	for ext_val in extensions:
@@ -150,8 +148,7 @@ func run(phase: int, point: int, state: GameState, phase_manager) -> Result:
 			]
 			all_warnings.append(msg)
 			AutoloadAccessClass.log_warn("SettlementRegistry", msg)
-			if AutoloadAccessClass.is_debug_mode():
-				return Result.failure(msg).with_warnings(all_warnings)
+			return Result.failure(msg).with_warnings(all_warnings)
 
 	return Result.success().with_warnings(all_warnings)
 
