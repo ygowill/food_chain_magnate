@@ -2856,3 +2856,29 @@
 结论：
 
 - 已完成该 P2 收敛：auto-advance 的推进循环、safety 与快照边界只有一个实现；CommandRunner 与 StepTimeline 仍保留各自必要的事件/时间线投影职责，不再重复维护推进语义。
+
+### Fix 55：headless 测试脚本增加严格退出码模式
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 10 `[P2] tools/run_headless_test.sh 对 Godot 退出码有多处 success fallback，作为测试工具可以理解，但 CI/架构验证需要更明确的严格模式`。
+
+改动：
+
+- `tools/run_headless_test.sh`：新增 `--strict-exit` 参数与 `STRICT_EXIT=1` 环境变量；严格模式要求 Godot 退出码与日志 outcome 同时成功，非 0 退出码不再被 PASS/SUMMARY 或已知 benign shutdown leak warning 兜底吞掉。
+- `tools/run_headless_test.sh`：默认模式保留现有兼容行为，继续允许 macOS/Godot headless 退出阶段已知资源泄漏噪声的非 0 兜底，避免破坏日常本地测试。
+- `tools/run_headless_test.sh`：修正“日志已 PASS 后等待 Godot 退出”的分支，原先 `! wait` 会拿到取反后的状态，可能丢失真实非 0 exit code；现在统一显式捕获真实退出码，再按 strict/default 策略判断。
+- `tools/run_headless_test.sh --help` 文案补充严格模式用法与语义。
+
+验证：
+
+- `bash -n tools/run_headless_test.sh`：PASS。
+- `tools/run_headless_test.sh res://ui/scenes/tests/replay_test.tscn ReplayTest 30 --strict-exit`：PASS。
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1109`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`391/391`。
+
+结论：
+
+- 已完成该 P2 工具改进：日常测试仍兼容 Godot headless 退出噪声；架构/发布验证可显式开启 strict exit，避免“日志看似 PASS 但进程失败”的情况被静默视为成功。

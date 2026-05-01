@@ -4,23 +4,51 @@ set -euo pipefail
 usage() {
 	cat <<'EOF'
 Usage:
-  tools/run_headless_test.sh <scene> [name] [timeout_seconds]
+  tools/run_headless_test.sh <scene> [name] [timeout_seconds] [--strict-exit]
 
 Examples:
   tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
   tools/run_headless_test.sh res://ui/scenes/tests/replay_test.tscn ReplayTest 20
+  STRICT_EXIT=1 tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
 
 Notes:
   - macOS default bash has no `timeout`; this script enforces a hard timeout.
   - Writes logs to .godot/<name>.log and sets HOME to .tmp_home to avoid user:// issues.
   - Defaults to 120 seconds for AllTests and 30 seconds for other test scenes.
+  - `--strict-exit` / `STRICT_EXIT=1` requires Godot's exit code and log outcome to both succeed.
 EOF
 }
 
 SCENE="${1:-}"
-NAME="${2:-}"
-CLI_TIMEOUT_SECONDS="${3:-}"
+shift || true
+NAME=""
+CLI_TIMEOUT_SECONDS=""
 ENV_TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-}"
+STRICT_EXIT_MODE="${STRICT_EXIT:-0}"
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--strict-exit)
+			STRICT_EXIT_MODE=1
+			;;
+		--help|-h)
+			usage
+			exit 0
+			;;
+		*)
+			if [[ -z "$NAME" ]]; then
+				NAME="$1"
+			elif [[ -z "$CLI_TIMEOUT_SECONDS" ]]; then
+				CLI_TIMEOUT_SECONDS="$1"
+			else
+				echo "FAIL unknown extra argument: $1" >&2
+				usage
+				exit 2
+			fi
+			;;
+	esac
+	shift || true
+done
 
 if [[ -z "$SCENE" ]]; then
 	usage
@@ -46,6 +74,17 @@ LOG_DIR="$PROJECT_PATH/.godot"
 LOG_FILE="$LOG_DIR/${NAME}.log"
 
 mkdir -p "$HOME_DIR" "$LOG_DIR"
+
+is_strict_exit() {
+	case "${STRICT_EXIT_MODE:-0}" in
+		1|true|TRUE|yes|YES|on|ON)
+			return 0
+			;;
+		*)
+			return 1
+			;;
+	esac
+}
 
 # Godot 会缓存 `class_name` 全局类名到项目内的 `.godot/global_script_class_cache.cfg`。
 # 当脚本被移动/删除（例如从 core 迁移到 modules）时，该缓存可能残留旧路径，导致：
@@ -117,7 +156,7 @@ if [[ $needs_cache_refresh -eq 1 ]]; then
 	echo "[$NAME] INFO importing project and refreshing Godot caches"
 	HOME="$HOME_DIR" "$GODOT_BIN" --headless --import --quit \
 		--path "$PROJECT_PATH" --log-file "$PREFLIGHT_LOG" >/dev/null 2>&1 || {
-			if can_treat_nonzero_as_success "$PREFLIGHT_LOG"; then
+			if ! is_strict_exit && can_treat_nonzero_as_success "$PREFLIGHT_LOG"; then
 				echo "[$NAME] WARN preflight import exited nonzero with benign shutdown leak warnings; continuing"
 			else
 				echo "[$NAME] FAIL preflight import failed"
@@ -151,7 +190,7 @@ if [[ $needs_import -eq 1 ]]; then
 	: > "$IMPORT_LOG"
 	echo "[$NAME] INFO importing project assets (missing: ${missing_import_path:-unknown})"
 	HOME="$HOME_DIR" "$GODOT_BIN" --headless --import --path "$PROJECT_PATH" --log-file "$IMPORT_LOG" >/dev/null 2>&1 || {
-		if can_treat_nonzero_as_success "$IMPORT_LOG"; then
+		if ! is_strict_exit && can_treat_nonzero_as_success "$IMPORT_LOG"; then
 			echo "[$NAME] WARN import exited nonzero with benign shutdown leak warnings; continuing"
 		else
 			echo "[$NAME] FAIL import failed"
@@ -240,11 +279,13 @@ for ((elapsed=0; elapsed<TIMEOUT_SECONDS; elapsed++)); do
 		fi
 		if kill -0 "$PID" 2>/dev/null; then
 			if wait_for_process_exit "$PID" 20; then
-				if ! wait "$PID"; then
+				if wait "$PID"; then
+					code=0
+				else
 					code=$?
-					if [[ $code -ne 0 ]] && ! can_treat_nonzero_as_success "$LOG_FILE"; then
-						exit "$code"
-					fi
+				fi
+				if [[ $code -ne 0 ]] && (is_strict_exit || ! can_treat_nonzero_as_success "$LOG_FILE"); then
+					exit "$code"
 				fi
 				if ! check_log_for_script_errors "$LOG_FILE"; then
 					exit 1
@@ -255,6 +296,9 @@ for ((elapsed=0; elapsed<TIMEOUT_SECONDS; elapsed++)); do
 				kill -9 "$PID" 2>/dev/null || true
 				wait "$PID" 2>/dev/null || true
 				echo "[$NAME] WARN log indicates PASS before godot exited; terminating process"
+				if is_strict_exit; then
+					exit 1
+				fi
 			fi
 		fi
 		exit 0
@@ -300,6 +344,10 @@ for ((elapsed=0; elapsed<TIMEOUT_SECONDS; elapsed++)); do
 
 		if [[ $outcome -eq 0 ]]; then
 			if [[ $code -ne 0 ]]; then
+				if is_strict_exit; then
+					echo "[$NAME] FAIL godot_exit_code=$code despite PASS log (strict exit enabled)"
+					exit "$code"
+				fi
 				echo "[$NAME] WARN godot_exit_code=$code but log indicates PASS; treating as success"
 			fi
 			exit 0
@@ -317,12 +365,16 @@ for ((elapsed=0; elapsed<TIMEOUT_SECONDS; elapsed++)); do
 		# （macOS 上偶现进程退出后 log-file 尾部延迟写入，导致短轮询未命中）
 		if detect_log_outcome "$LOG_FILE"; then
 			if [[ $code -ne 0 ]]; then
+				if is_strict_exit; then
+					echo "[$NAME] FAIL godot_exit_code=$code despite PASS log (strict exit enabled)"
+					exit "$code"
+				fi
 				echo "[$NAME] WARN godot_exit_code=$code but log indicates PASS; treating as success"
 			fi
 			exit 0
 		fi
 
-		if [[ $code -ne 0 ]] && can_treat_nonzero_as_success "$LOG_FILE"; then
+		if [[ $code -ne 0 ]] && ! is_strict_exit && can_treat_nonzero_as_success "$LOG_FILE"; then
 			echo "[$NAME] WARN godot_exit_code=$code with benign shutdown leak warnings; treating as success"
 			exit 0
 		fi
