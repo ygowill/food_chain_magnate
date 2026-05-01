@@ -88,8 +88,12 @@ static func run() -> Result:
 	if not r7.ok:
 		return r7
 
+	var r8 := _assert_auto_advance_drain_loop_is_centralized()
+	if not r8.ok:
+		return r8
+
 	return Result.success({
-		"checks": 7,
+		"checks": 8,
 	})
 
 static func _assert_no_direct_ui_refs() -> Result:
@@ -207,6 +211,31 @@ static func _assert_runtime_command_paths_do_not_consume_rng() -> Result:
 			if hit.is_empty():
 				continue
 			return Result.failure("运行期 command/rules 路径不得直接消耗 RNG，需先扩展 replay API: %s:%d contains %s" % [path, int(hit.get("line", 1)), str(hit.get("pattern", ""))])
+	return Result.success()
+
+static func _assert_auto_advance_drain_loop_is_centralized() -> Result:
+	var roots := [
+		"res://core/engine/game_engine",
+		"res://gameplay/replay/step_timeline_build",
+	]
+	var allowlist := {
+		"res://core/engine/game_engine/auto_advance.gd": true,
+		"res://core/engine/game_engine/auto_advance_impl.gd": true,
+		"res://core/engine/game_engine/auto_advance_try_step.gd": true,
+		"res://core/engine/game_engine/auto_advance_drain_steps.gd": true,
+	}
+	for root in roots:
+		var files: Array[String] = []
+		var list_r := _list_gd_files_recursive(root, files)
+		if not list_r.ok:
+			return list_r
+		for path in files:
+			if allowlist.has(path):
+				continue
+			var hit := _find_code_pattern(path, ["try_advance_one(", "while safety < 32"])
+			if hit.is_empty():
+				continue
+			return Result.failure("auto-advance drain 循环应集中在 core runner: %s:%d contains %s" % [path, int(hit.get("line", 1)), str(hit.get("pattern", ""))])
 	return Result.success()
 
 static func _should_skip_file(path: String) -> bool:

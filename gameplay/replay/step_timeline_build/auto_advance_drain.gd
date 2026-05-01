@@ -3,7 +3,7 @@
 # - phase 变化插入 phase step，并按 PhaseTransition 规则归属事件
 extends RefCounted
 
-const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
+const AutoAdvanceDrainStepsClass = preload("res://core/engine/game_engine/auto_advance_drain_steps.gd")
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
 const PhaseTransitionClass = preload("res://gameplay/replay/step_timeline_build/phase_transition.gd")
 const StepTimelineHelpersClass = preload("res://gameplay/replay/step_timeline_build/helpers.gd")
@@ -24,17 +24,35 @@ static func drain(
 ) -> Result:
 	var seq := int(seq_in)
 	var pending_anchor := int(pending_marketing_enter_anchor_command_index)
+	var final_state: GameState = state_in
 
-	var safety := 0
-	while safety < 32:
-		safety += 1
-		var before := state_in.duplicate_state()
-		var adv: Result = AutoAdvanceClass.try_advance_one(state_in, engine.phase_manager, engine.action_registry)
-		if not adv.ok:
-			return Result.failure("StepTimelineBuild: auto_advance 失败(命令 #%d): %s" % [command_index, adv.error]).with_warnings(warnings).with_warnings(adv.warnings)
-		warnings.append_array(adv.warnings)
-		if not bool(adv.value):
-			break
+	var drain_r := AutoAdvanceDrainStepsClass.drain_steps(state_in, engine.phase_manager, engine.action_registry)
+	if not drain_r.ok:
+		return Result.failure("StepTimelineBuild: auto_advance 失败(命令 #%d): %s" % [command_index, drain_r.error]).with_warnings(warnings).with_warnings(drain_r.warnings)
+	warnings.append_array(drain_r.warnings)
+	if not (drain_r.value is Dictionary):
+		return Result.failure("StepTimelineBuild: auto_advance drain 返回值类型错误（期望 Dictionary）").with_warnings(warnings)
+	var drain_info: Dictionary = drain_r.value
+	var final_state_val = drain_info.get("state", state_in)
+	if not (final_state_val is GameState):
+		return Result.failure("StepTimelineBuild: auto_advance drain 返回 state 类型错误（期望 GameState）").with_warnings(warnings)
+	final_state = final_state_val
+	var auto_steps_val = drain_info.get("steps", null)
+	if not (auto_steps_val is Array):
+		return Result.failure("StepTimelineBuild: auto_advance drain 返回 steps 类型错误（期望 Array）").with_warnings(warnings)
+
+	for auto_step_val in Array(auto_steps_val):
+		if not (auto_step_val is Dictionary):
+			return Result.failure("StepTimelineBuild: auto_advance step 类型错误（期望 Dictionary）").with_warnings(warnings)
+		var auto_step: Dictionary = auto_step_val
+		var before_val = auto_step.get("before", null)
+		var after_val = auto_step.get("after", null)
+		if not (before_val is GameState):
+			return Result.failure("StepTimelineBuild: auto_advance step.before 类型错误（期望 GameState）").with_warnings(warnings)
+		if not (after_val is GameState):
+			return Result.failure("StepTimelineBuild: auto_advance step.after 类型错误（期望 GameState）").with_warnings(warnings)
+		var before: GameState = before_val
+		state_in = after_val
 
 		var phase_changed := (str(before.phase) != str(state_in.phase))
 
@@ -101,11 +119,8 @@ static func drain(
 				return append_milestone_r.with_warnings(warnings)
 			seq = int(append_milestone_r.value)
 
-	if safety >= 32:
-		return Result.failure("StepTimelineBuild: auto_advance exceeded max steps (possible loop)").with_warnings(warnings)
-
 	return Result.success({
-		"state": state_in,
+		"state": final_state,
 		"current_step_index": current_step_index,
 		"seq": seq,
 		"pending_marketing_enter_anchor_command_index": pending_anchor,

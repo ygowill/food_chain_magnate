@@ -2830,3 +2830,29 @@
 结论：
 
 - 已完成该 P1 去重整改：历史命令“如何从 old state 应用为 new state”的执行契约不再散落在 Replay、EventHistoryRebuild、CommandIndexQueries 与 StepTimeline 构建层；后续 force/replay 严格性、executor 查找或 state 类型约束只需要维护 `ReplayStepRunner`。
+
+### Fix 54：auto-advance drain 循环收敛到统一 step runner
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 2 `[P2] auto-advance 存在三套 drain 契约，当前可工作，但职责边界需要文档化或收敛`。
+
+改动：
+
+- 新增 `core/engine/game_engine/auto_advance_drain_steps.gd`，统一负责 `try_advance_one(...)` 循环、`max_steps` safety、warning 汇总，以及每一步 `before/after` `GameState` 快照输出。
+- `core/engine/game_engine/auto_advance_impl.gd`：基础 `AutoAdvance.drain(...)` 改用统一 drain step runner，只保留“是否推进到稳定态”的无事件契约。
+- `core/engine/game_engine/command_runner.gd`：运行时命令执行的 auto-advance 改用统一 drain steps，再在 CommandRunner 层投影 phase/cash 事件。
+- `gameplay/replay/step_timeline_build/auto_advance_drain.gd`：StepTimeline 不再自己循环 `try_advance_one(...)`，改消费统一 before/after step 序列，并继续只负责 step/event 归属、phase step 插入与特殊里程碑事件投影。
+- `core/tests/core_architecture_boundary_contract_test.gd`：新增架构守卫，禁止 `core/engine/game_engine` 与 `gameplay/replay/step_timeline_build` 中除统一 runner/底层 wrapper 外再次复制 `try_advance_one` drain 循环或 `while safety < 32`。
+
+验证：
+
+- `rg -n "try_advance_one\\(|while safety < 32" core/engine/game_engine gameplay/replay/step_timeline_build -g "*.gd"`：仅命中 `auto_advance.gd`、`auto_advance_impl.gd`、`auto_advance_try_step.gd` 与 `auto_advance_drain_steps.gd`。
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1109`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`391/391`。
+
+结论：
+
+- 已完成该 P2 收敛：auto-advance 的推进循环、safety 与快照边界只有一个实现；CommandRunner 与 StepTimeline 仍保留各自必要的事件/时间线投影职责，不再重复维护推进语义。

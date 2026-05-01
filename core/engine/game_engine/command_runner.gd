@@ -1,8 +1,8 @@
 # GameEngine 命令执行主流程（抽离自 core/engine/game_engine.gd）
 extends RefCounted
 
-const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
 const ReplayClass = preload("res://core/engine/game_engine/replay.gd")
+const AutoAdvanceDrainStepsClass = preload("res://core/engine/game_engine/auto_advance_drain_steps.gd")
 const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 
 const EVENT_BUILD_PROVIDER_PATH_SETTING = "fcm/command_runner_event_build_provider_path"
@@ -369,28 +369,38 @@ static func _drain_auto_advances(engine: GameEngine, state_in: GameState) -> Res
 		return Result.failure("auto_advance: state 为空")
 
 	var events: Array[Dictionary] = []
-	var all_warnings: Array[String] = []
-	var safety := 0
+	var drain_r := AutoAdvanceDrainStepsClass.drain_steps(state_in, engine.phase_manager, engine.action_registry)
+	if not drain_r.ok:
+		return drain_r
+	if not (drain_r.value is Dictionary):
+		return Result.failure("auto_advance: drain result 类型错误（期望 Dictionary）").with_warnings(drain_r.warnings)
+	var drain_info: Dictionary = drain_r.value
+	var steps_val = drain_info.get("steps", null)
+	if not (steps_val is Array):
+		return Result.failure("auto_advance: drain steps 类型错误（期望 Array）").with_warnings(drain_r.warnings)
 
-	while safety < 32:
-		safety += 1
-		var before := state_in.duplicate_state()
-		var step: Result = AutoAdvanceClass.try_advance_one(state_in, engine.phase_manager, engine.action_registry)
-		if not step.ok:
-			return step
-		all_warnings.append_array(step.warnings)
-		if not bool(step.value):
-			break
-
+	for step_val in Array(steps_val):
+		if not (step_val is Dictionary):
+			return Result.failure("auto_advance: drain step 类型错误（期望 Dictionary）").with_warnings(drain_r.warnings)
+		var step_info: Dictionary = step_val
+		var before_val = step_info.get("before", null)
+		var after_val = step_info.get("after", null)
+		if not (before_val is GameState):
+			return Result.failure("auto_advance: drain step.before 类型错误（期望 GameState）").with_warnings(drain_r.warnings)
+		if not (after_val is GameState):
+			return Result.failure("auto_advance: drain step.after 类型错误（期望 GameState）").with_warnings(drain_r.warnings)
+		var before: GameState = before_val
+		var after: GameState = after_val
 		var provider = _get_event_build_provider()
 		if provider != null:
-			events.append_array(provider.build_phase_change_events(before, state_in))
-			events.append_array(provider.build_player_cash_changed_events(before, state_in, Command.create_system("auto_advance")))
+			events.append_array(provider.build_phase_change_events(before, after))
+			events.append_array(provider.build_player_cash_changed_events(before, after, Command.create_system("auto_advance")))
 
-	if safety >= 32:
-		return Result.failure("auto_advance: exceeded max steps (possible loop)")
+	var final_state_val = drain_info.get("state", state_in)
+	if not (final_state_val is GameState):
+		return Result.failure("auto_advance: drain state 类型错误（期望 GameState）").with_warnings(drain_r.warnings)
 
 	return Result.success({
-		"state": state_in,
+		"state": final_state_val,
 		"events": events
-	}).with_warnings(all_warnings)
+	}).with_warnings(drain_r.warnings)

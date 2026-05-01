@@ -5,30 +5,13 @@
 extends RefCounted
 
 const TryStepClass = preload("res://core/engine/game_engine/auto_advance_try_step.gd")
+const DrainStepsClass = preload("res://core/engine/game_engine/auto_advance_drain_steps.gd")
 
 static func drain(state_in: GameState, phase_manager: PhaseManager, action_registry: ActionRegistry, max_steps: int = 32) -> Result:
-	if state_in == null:
-		return Result.failure("auto_advance: state 为空")
-	if phase_manager == null:
-		return Result.failure("auto_advance: phase_manager 为空")
-	if action_registry == null:
-		return Result.failure("auto_advance: action_registry 为空")
-	if max_steps <= 0:
-		return Result.failure("auto_advance: max_steps 必须 > 0")
-
-	var warnings: Array[String] = []
-	var safety := 0
-
-	while safety < max_steps:
-		safety += 1
-		var step: Result = try_advance_one(state_in, phase_manager, action_registry)
-		if not step.ok:
-			return step
-		warnings.append_array(step.warnings)
-		if not bool(step.value):
-			return Result.success().with_warnings(warnings)
-
-	return Result.failure("auto_advance: exceeded max steps (possible loop)").with_warnings(warnings)
+	var drain_r := DrainStepsClass.drain_steps(state_in, phase_manager, action_registry, max_steps, "auto_advance")
+	if not drain_r.ok:
+		return drain_r
+	return Result.success().with_warnings(drain_r.warnings)
 
 static func try_advance_one(state_in: GameState, phase_manager: PhaseManager, action_registry: ActionRegistry) -> Result:
 	return TryStepClass.try_advance_one(state_in, phase_manager, action_registry)
