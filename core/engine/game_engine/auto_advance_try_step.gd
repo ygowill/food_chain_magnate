@@ -102,7 +102,9 @@ static func try_advance_one(state_in: GameState, phase_manager: PhaseManager, ac
 	# 结算阶段默认自动跳过（无玩家交互）
 	if PhaseBlockingClass.is_auto_skip_settlement_phase(state_in.phase):
 		if state_in.phase == DefsClass.PHASE_DINNERTIME:
-			_ensure_online_dinnertime_pending_guard(state_in)
+			var dinnertime_guard_r: Result = _ensure_online_dinnertime_pending_guard(state_in)
+			if not dinnertime_guard_r.ok:
+				return dinnertime_guard_r
 		var blocked_r3: Result = PhaseBlockingClass.is_phase_blocked_by_pending_actions(state_in, str(state_in.phase))
 		if not blocked_r3.ok:
 			return blocked_r3
@@ -153,15 +155,70 @@ static func try_advance_one(state_in: GameState, phase_manager: PhaseManager, ac
 
 	return Result.success(false)
 
-static func _ensure_online_dinnertime_pending_guard(state_in: GameState) -> void:
+static func _ensure_online_dinnertime_pending_guard(state_in: GameState) -> Result:
 	if state_in == null:
-		return
+		return Result.failure("online dinnertime guard: state 为空")
 	if not _is_online_dinnertime_confirm_enabled(state_in):
-		return
+		return Result.success()
 	if not (state_in.players is Array):
-		return
+		return Result.failure("online dinnertime guard: state.players 类型错误（期望 Array）")
 	if not (state_in.round_state is Dictionary):
-		return
+		return Result.failure("online dinnertime guard: state.round_state 类型错误（期望 Dictionary）")
+	var players: Array = state_in.players
+	var rs: Dictionary = state_in.round_state
+
+	var confirmed_r := _read_online_dinnertime_confirmed_players_strict(state_in, players, rs)
+	if not confirmed_r.ok:
+		return confirmed_r
+	var confirmed: Array[bool] = Array(confirmed_r.value, TYPE_BOOL, "", null)
+
+	var expected_pending_players: Array[int] = []
+	for pid in range(players.size()):
+		if _is_player_forfeited(state_in, pid):
+			if not bool(confirmed[pid]):
+				return Result.failure("online dinnertime guard: forfeited player %d must be confirmed" % pid)
+			continue
+		if not bool(confirmed[pid]):
+			expected_pending_players.append(pid)
+
+	var ppa_val = rs.get("pending_phase_actions", null)
+	if ppa_val != null and not (ppa_val is Dictionary):
+		return Result.failure("online dinnertime guard: round_state.pending_phase_actions 类型错误（期望 Dictionary）")
+
+	var list_val = null
+	if ppa_val is Dictionary:
+		list_val = Dictionary(ppa_val).get(DefsClass.PHASE_DINNERTIME, null)
+
+	if expected_pending_players.is_empty():
+		if list_val == null:
+			return Result.success()
+		if not (list_val is Array):
+			return Result.failure("online dinnertime guard: round_state.pending_phase_actions[Dinnertime] 类型错误（期望 Array）")
+		var done_list: Array = Array(list_val)
+		if not done_list.is_empty():
+			return Result.failure("online dinnertime guard: 全员已确认但 Dinnertime pending 仍存在: %s" % _pending_preview(done_list))
+		return Result.success()
+
+	if list_val == null:
+		return Result.failure("online dinnertime guard: 缺少 round_state.pending_phase_actions[Dinnertime]")
+	if not (list_val is Array):
+		return Result.failure("online dinnertime guard: round_state.pending_phase_actions[Dinnertime] 类型错误（期望 Array）")
+
+	var list: Array = Array(list_val)
+	var match_r := _validate_online_dinnertime_confirm_pending_list(list, expected_pending_players)
+	if not match_r.ok:
+		return match_r
+	return Result.success()
+
+static func _repair_online_dinnertime_pending_guard_for_resume(state_in: GameState) -> Result:
+	if state_in == null:
+		return Result.failure("online dinnertime resume repair: state 为空")
+	if not _is_online_dinnertime_confirm_enabled(state_in):
+		return Result.success()
+	if not (state_in.players is Array):
+		return Result.failure("online dinnertime resume repair: state.players 类型错误（期望 Array）")
+	if not (state_in.round_state is Dictionary):
+		return Result.failure("online dinnertime resume repair: state.round_state 类型错误（期望 Dictionary）")
 	var players: Array = state_in.players
 	var rs: Dictionary = state_in.round_state
 
@@ -190,11 +247,11 @@ static func _ensure_online_dinnertime_pending_guard(state_in: GameState) -> void
 
 	# 存在其它模块注入的 Dinnertime pending 时，不强行覆盖。
 	if existing_kind == "other":
-		return
+		return Result.success()
 
-	var confirmed := _read_or_build_online_dinnertime_confirmed_players(state_in, players, rs)
+	var confirmed := _read_or_build_online_dinnertime_confirmed_players_for_resume(state_in, players, rs)
 	if confirmed.is_empty():
-		return
+		return Result.failure("online dinnertime resume repair: 无法构造 confirmed players")
 
 	var repaired_pending: Array[Dictionary] = []
 	for pid in range(players.size()):
@@ -207,14 +264,14 @@ static func _ensure_online_dinnertime_pending_guard(state_in: GameState) -> void
 
 	# 全员已确认/弃权：pending 为空是正常状态（允许 auto-advance 离开 Dinnertime）
 	if repaired_pending.is_empty():
-		return
+		return Result.success()
 
 	# 若已有正确的 per-player 列表且 confirmed 同步无误，则无需写回
 	if existing_kind == "per_player":
 		if _list_matches_pending_players(existing_list, repaired_pending):
 			var c_val = rs.get(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, null)
 			if c_val is Array and _array_matches_confirmed_players(Array(c_val), confirmed):
-				return
+				return Result.success()
 
 	# 写回 confirmed + pending_phase_actions[Dinnertime]
 	rs[ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY] = confirmed
@@ -223,8 +280,7 @@ static func _ensure_online_dinnertime_pending_guard(state_in: GameState) -> void
 		rs, DefsClass.PHASE_DINNERTIME, repaired_pending, "auto_advance:dinnertime_guard"
 	)
 	if not set_r.ok:
-		AutoloadAccessClass.log_warn("AutoAdvance", "dinnertime_guard failed: %s" % str(set_r.error))
-		return
+		return Result.failure("online dinnertime resume repair: %s" % str(set_r.error))
 
 	if existing_kind != "per_player":
 		AutoloadAccessClass.log_warn(
@@ -237,6 +293,7 @@ static func _ensure_online_dinnertime_pending_guard(state_in: GameState) -> void
 					_pending_preview(repaired_pending),
 				]
 		)
+	return Result.success()
 
 static func _is_online_dinnertime_confirm_enabled(state: GameState) -> bool:
 	if state == null:
@@ -262,7 +319,39 @@ static func _is_truthy_marker(value) -> bool:
 			return int(f) > 0
 	return false
 
-static func _read_or_build_online_dinnertime_confirmed_players(state_in: GameState, players: Array, rs: Dictionary) -> Array[bool]:
+static func _read_online_dinnertime_confirmed_players_strict(state_in: GameState, players: Array, rs: Dictionary) -> Result:
+	if state_in == null:
+		return Result.failure("online dinnertime guard: state 为空")
+	if not (players is Array):
+		return Result.failure("online dinnertime guard: state.players 类型错误（期望 Array）")
+	if not (rs is Dictionary):
+		return Result.failure("online dinnertime guard: state.round_state 类型错误（期望 Dictionary）")
+	if not rs.has(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY):
+		return Result.failure("online dinnertime guard: 缺少 round_state.%s" % ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY)
+	var confirmed: Array[bool] = []
+	var val = rs.get(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, null)
+	if not (val is Array):
+		return Result.failure("online dinnertime guard: round_state.%s 类型错误（期望 Array）" % ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY)
+	var raw: Array = Array(val)
+	if raw.size() != players.size():
+		return Result.failure("online dinnertime guard: round_state.%s 长度错误（期望 %d，实际 %d）" % [ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, players.size(), raw.size()])
+	for i in range(raw.size()):
+		var v = raw[i]
+		if v is bool:
+			confirmed.append(bool(v))
+			continue
+		if v is int:
+			confirmed.append(int(v) != 0)
+			continue
+		if v is float:
+			var f: float = float(v)
+			if f == floor(f):
+				confirmed.append(int(f) != 0)
+				continue
+		return Result.failure("online dinnertime guard: round_state.%s[%d] 类型错误（期望 bool/int/float）" % [ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, i])
+	return Result.success(confirmed)
+
+static func _read_or_build_online_dinnertime_confirmed_players_for_resume(state_in: GameState, players: Array, rs: Dictionary) -> Array[bool]:
 	var confirmed: Array[bool] = []
 	var val = rs.get(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, null)
 	if val is Array:
@@ -286,7 +375,6 @@ static func _read_or_build_online_dinnertime_confirmed_players(state_in: GameSta
 					break
 			if not ok:
 				confirmed.clear()
-
 	if confirmed.size() != players.size():
 		confirmed.clear()
 		for pid in range(players.size()):
@@ -296,6 +384,40 @@ static func _read_or_build_online_dinnertime_confirmed_players(state_in: GameSta
 		if _is_player_forfeited(state_in, pid2):
 			confirmed[pid2] = true
 	return confirmed
+
+static func _validate_online_dinnertime_confirm_pending_list(list: Array, expected_pending_players: Array[int]) -> Result:
+	var expected := {}
+	for pid in expected_pending_players:
+		expected[int(pid)] = true
+	var seen := {}
+	for i in range(list.size()):
+		var item_val = list[i]
+		if not (item_val is Dictionary):
+			return Result.failure("online dinnertime guard: round_state.pending_phase_actions[Dinnertime][%d] 类型错误（期望 Dictionary）" % i)
+		var item: Dictionary = item_val
+		var kind_val = item.get("kind", null)
+		if not (kind_val is String):
+			return Result.failure("online dinnertime guard: round_state.pending_phase_actions[Dinnertime][%d].kind 类型错误（期望 String）" % i)
+		var kind := str(kind_val).strip_edges()
+		if kind != KIND_CONFIRM_DINNERTIME:
+			return Result.failure("online dinnertime guard: round_state.pending_phase_actions[Dinnertime][%d].kind 非法: %s" % [i, kind])
+		var pid_val = item.get("player_id", null)
+		var pid := -1
+		if pid_val is int:
+			pid = int(pid_val)
+		elif pid_val is float and float(pid_val) == floor(float(pid_val)):
+			pid = int(pid_val)
+		else:
+			return Result.failure("online dinnertime guard: round_state.pending_phase_actions[Dinnertime][%d].player_id 类型错误（期望 int/float）" % i)
+		if not expected.has(pid):
+			return Result.failure("online dinnertime guard: round_state.pending_phase_actions[Dinnertime][%d].player_id 非预期: %d" % [i, pid])
+		if seen.has(pid):
+			return Result.failure("online dinnertime guard: round_state.pending_phase_actions[Dinnertime] 重复 player_id: %d" % pid)
+		seen[pid] = true
+	for pid2 in expected_pending_players:
+		if not seen.has(int(pid2)):
+			return Result.failure("online dinnertime guard: round_state.pending_phase_actions[Dinnertime] 缺少未确认玩家 pending: %d" % int(pid2))
+	return Result.success()
 
 static func _is_player_forfeited(state_in: GameState, player_id: int) -> bool:
 	if state_in == null or not (state_in.players is Array):

@@ -3,6 +3,7 @@ class_name OnlineDinnertimeConfirmEnforcedTest
 extends RefCounted
 
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 
@@ -14,6 +15,11 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if NetContext == null:
 		return Result.failure("NetContext autoload missing")
 	NetContext.mode = NetContext.Mode.ONLINE_SERVER
+
+	var strict_guard_r := _test_auto_advance_fails_on_missing_confirm_pending(player_count, seed_val)
+	if not strict_guard_r.ok:
+		_reset_net_context()
+		return strict_guard_r
 
 	var engine := GameEngine.new()
 	var init := engine.initialize(player_count, seed_val)
@@ -86,6 +92,60 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("双方确认后应进入 Payday，实际: %s" % str(engine.get_state().phase))
 
 	_reset_net_context()
+	return Result.success()
+
+static func _test_auto_advance_fails_on_missing_confirm_pending(player_count: int, seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val)
+	if not init.ok:
+		return Result.failure("strict guard 初始化失败: %s" % init.error)
+
+	var state: GameState = engine.get_state()
+	if state == null:
+		return Result.failure("strict guard state 为空")
+	var prepare_r: Result = OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
+	if not prepare_r.ok:
+		return Result.failure("strict guard prepare_engine_for_online_resume 失败: %s" % prepare_r.error)
+	var setup_r := TestPhaseUtilsClass.complete_setup(engine)
+	if not setup_r.ok:
+		return Result.failure("strict guard complete_setup 失败: %s" % setup_r.error)
+	var restruct_r := TestPhaseUtilsClass.complete_restructuring(engine)
+	if not restruct_r.ok:
+		return Result.failure("strict guard complete_restructuring 失败: %s" % restruct_r.error)
+	var oob_r := TestPhaseUtilsClass.complete_order_of_business(engine)
+	if not oob_r.ok:
+		return Result.failure("strict guard complete_order_of_business 失败: %s" % oob_r.error)
+	var working_r := TestPhaseUtilsClass.complete_working_phase(engine)
+	if not working_r.ok:
+		return Result.failure("strict guard complete_working_phase 失败: %s" % working_r.error)
+
+	var after_work: GameState = engine.get_state()
+	if after_work == null:
+		return Result.failure("strict guard Working 完成后 state 为空")
+	if str(after_work.phase) != DefsClass.PHASE_DINNERTIME:
+		return Result.failure("strict guard 应停留在 Dinnertime，实际: %s" % str(after_work.phase))
+	if not (after_work.round_state is Dictionary):
+		return Result.failure("strict guard round_state 类型错误（期望 Dictionary）")
+	var rs: Dictionary = after_work.round_state
+	var confirmed_before := str(rs.get("online_dinnertime_confirmed_players", null))
+	if not rs.has("online_dinnertime_confirmed_players"):
+		return Result.failure("strict guard 缺少 online_dinnertime_confirmed_players")
+	var ppa: Dictionary = {}
+	if rs.get("pending_phase_actions", null) is Dictionary:
+		ppa = Dictionary(rs.get("pending_phase_actions", {})).duplicate(true)
+	ppa.erase(DefsClass.PHASE_DINNERTIME)
+	rs["pending_phase_actions"] = ppa
+
+	var auto_r: Result = AutoAdvanceClass.try_advance_one(after_work, engine.phase_manager, engine.action_registry)
+	if auto_r.ok:
+		return Result.failure("Dinnertime confirm pending 缺失时 auto_advance 应失败，不应修复后继续")
+	if str(auto_r.error).find("pending_phase_actions[Dinnertime]") < 0:
+		return Result.failure("strict guard 错误信息应包含 pending_phase_actions[Dinnertime]，实际: %s" % auto_r.error)
+	if str(rs.get("online_dinnertime_confirmed_players", null)) != confirmed_before:
+		return Result.failure("strict guard 失败时不应改写 online_dinnertime_confirmed_players")
+	var ppa_after_val = rs.get("pending_phase_actions", null)
+	if ppa_after_val is Dictionary and Dictionary(ppa_after_val).has(DefsClass.PHASE_DINNERTIME):
+		return Result.failure("strict guard 失败时不应重建 pending_phase_actions[Dinnertime]")
 	return Result.success()
 
 static func _read_dinnertime_pending_list(state: GameState) -> Result:

@@ -2658,3 +2658,27 @@
 
 - 已完成该 P1 边界整改：`base_rules` 权威结算不再根据当前进程是 headless、GUI、client 或 server 改变 state；运行环境差异由 UI/online bootstrap 显式转成规则标记。
 - online confirmed/pending 的灾难恢复 guard 仍有单独 P2（`AutoAdvanceTryStep._ensure_online_dinnertime_pending_guard` 会修复 pending），后续应继续拆分为 strict runtime 与显式 recovery。
+
+### Fix 47：online Dinnertime pending guard 拆分运行期严格校验与显式恢复
+
+日期：2026-05-01
+
+对应问题：
+
+- Fix 46 遗留 P2：`AutoAdvanceTryStep._ensure_online_dinnertime_pending_guard` 会在普通 auto-advance 运行期修复缺失、空、legacy 或错位的 `pending_phase_actions[Dinnertime]` 与 `online_dinnertime_confirmed_players`，属于过度兜底。
+
+改动：
+
+- `core/engine/game_engine/auto_advance_try_step.gd`：`_ensure_online_dinnertime_pending_guard(...)` 改为返回 `Result`，普通 auto-advance 只做 strict 校验并向上失败传播；缺 confirmed 数组、confirmed 长度/类型错误、缺少应存在的 per-player pending、重复/越界/legacy pending 都不再被修复。
+- `core/engine/game_engine/auto_advance_try_step.gd`：新增 `_repair_online_dinnertime_pending_guard_for_resume(...)`，把旧的修复语义限定到名字明确的 online resume 准备路径；该路径修复失败也返回 `Result.failure`，不再只 log warning 后继续。
+- `core/engine/game_engine/online_resume_point_validator.gd`：Dinnertime 恢复点准备改为显式调用 resume repair，并在失败时阻断恢复点验证/启动。
+- `core/tests/online_dinnertime_confirm_enforced_test.gd`：新增 strict guard 负例，构造 Dinnertime 后删除确认 pending，确认 auto-advance 会失败且不会重建 `pending_phase_actions[Dinnertime]` 或改写 confirmed 数组。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`391/391`。
+
+结论：
+
+- 已完成该 P2 strict 化：online Dinnertime 的普通运行期不再用 auto-advance 修补损坏 state；旧 archive/resume 需要补 pending 时，只能经过显式 online resume repair 入口。
