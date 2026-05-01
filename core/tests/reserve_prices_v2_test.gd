@@ -3,12 +3,22 @@ class_name ReservePricesV2Test
 extends RefCounted
 
 const BankruptcyRulesClass = preload("res://core/rules/economy/bankruptcy_rules.gd")
+const EntryClass = preload("res://modules/reserve_prices/rules/entry.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_count != 2:
 		return Result.failure("本测试固定为 2 人局（实际: %d）" % player_count)
 
 	var r := _test_setup_uses_alternate_reserve_cards(seed_val)
+	if not r.ok:
+		return r
+	r = _test_init_state_preserves_valid_existing_selected()
+	if not r.ok:
+		return r
+	r = _test_init_state_rejects_out_of_range_existing_selected_without_partial_mutation()
+	if not r.ok:
+		return r
+	r = _test_init_state_rejects_non_int_existing_selected_without_partial_mutation()
 	if not r.ok:
 		return r
 
@@ -22,6 +32,99 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r.ok:
 		return r
 
+	return Result.success()
+
+static func _test_init_state_preserves_valid_existing_selected() -> Result:
+	var entry = EntryClass.new()
+	var state := GameState.new()
+	state.players = [
+		{
+			"reserve_cards": [{"type": 99}],
+			"reserve_card_selected": 2,
+			"reserve_card_revealed": true,
+		},
+		{
+			"reserve_card_selected": -1,
+		},
+	]
+
+	var r := entry._init_state(state, null)
+	if not r.ok:
+		return Result.failure("_init_state 不应拒绝合法 reserve_card_selected: %s" % r.error)
+	if int(state.players[0].get("reserve_card_selected", -999)) != 2:
+		return Result.failure("合法 reserve_card_selected 应保留，实际: %s" % str(state.players[0].get("reserve_card_selected", null)))
+	if int(state.players[1].get("reserve_card_selected", -999)) != -1:
+		return Result.failure("-1 应保留为未选择，实际: %s" % str(state.players[1].get("reserve_card_selected", null)))
+	if bool(state.players[0].get("reserve_card_revealed", true)):
+		return Result.failure("_init_state 应将 reserve_card_revealed 设为 false")
+	return _assert_reserve_price_cards(state.players[0].get("reserve_cards", null), "players[0].reserve_cards")
+
+static func _test_init_state_rejects_out_of_range_existing_selected_without_partial_mutation() -> Result:
+	var entry = EntryClass.new()
+	var state := GameState.new()
+	state.players = [
+		{
+			"reserve_cards": [{"type": 99}],
+			"reserve_card_selected": 3,
+			"reserve_card_revealed": true,
+		},
+		{
+			"reserve_card_selected": -1,
+		},
+	]
+	var before := str(state.players)
+
+	var r := entry._init_state(state, null)
+	if r.ok:
+		return Result.failure("越界 reserve_card_selected 应失败")
+	var err := str(r.error)
+	if err.find("reserve_card_selected") < 0 or err.find("越界") < 0:
+		return Result.failure("错误信息应包含 reserve_card_selected 越界，实际: %s" % err)
+	if str(state.players) != before:
+		return Result.failure("失败时不应把非法 reserve_card_selected 重置或半初始化 reserve_cards")
+	return Result.success()
+
+static func _test_init_state_rejects_non_int_existing_selected_without_partial_mutation() -> Result:
+	var entry = EntryClass.new()
+	var state := GameState.new()
+	state.players = [
+		{
+			"reserve_cards": [{"type": 99}],
+			"reserve_card_selected": 1.0,
+			"reserve_card_revealed": true,
+		},
+		{
+			"reserve_card_selected": -1,
+		},
+	]
+	var before := str(state.players)
+
+	var r := entry._init_state(state, null)
+	if r.ok:
+		return Result.failure("非 int reserve_card_selected 应失败")
+	var err := str(r.error)
+	if err.find("reserve_card_selected") < 0 or err.find("类型错误") < 0:
+		return Result.failure("错误信息应包含 reserve_card_selected 类型错误，实际: %s" % err)
+	if str(state.players) != before:
+		return Result.failure("失败时不应把非法 reserve_card_selected 重置或半初始化 reserve_cards")
+	return Result.success()
+
+static func _assert_reserve_price_cards(cards_val, path: String) -> Result:
+	if not (cards_val is Array):
+		return Result.failure("%s 类型错误（期望 Array）" % path)
+	var cards: Array = cards_val
+	var expected_order: Array[int] = [5, 10, 20]
+	if cards.size() != expected_order.size():
+		return Result.failure("%s 张数错误，实际: %d" % [path, cards.size()])
+	for i in range(expected_order.size()):
+		var card_val = cards[i]
+		if not (card_val is Dictionary):
+			return Result.failure("%s[%d] 类型错误（期望 Dictionary）" % [path, i])
+		var card: Dictionary = card_val
+		if int(card.get("type", -1)) != expected_order[i]:
+			return Result.failure("%s 顺序应为 [5,10,20]，实际: %s" % [path, str(cards)])
+		if card.has("cash") or card.has("ceo_slots"):
+			return Result.failure("%s[%d] 不应包含 cash/ceo_slots" % [path, i])
 	return Result.success()
 
 static func _test_setup_uses_alternate_reserve_cards(seed_val: int) -> Result:

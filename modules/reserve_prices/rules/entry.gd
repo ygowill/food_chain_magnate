@@ -27,29 +27,33 @@ func _init_state(state: GameState, _rng_manager) -> Result:
 	if ALLOWED_TYPES.size() != CARDS_PER_PLAYER:
 		return Result.failure("%s: ALLOWED_TYPES 与 CARDS_PER_PLAYER 不一致（types=%d cards_per_player=%d）" % [MODULE_ID, ALLOWED_TYPES.size(), CARDS_PER_PLAYER])
 
+	var validated_players: Array[Dictionary] = []
+	var selected_by_player: Array[int] = []
 	for pid in range(state.players.size()):
 		var p_val = state.players[pid]
 		if not (p_val is Dictionary):
 			return Result.failure("%s: players[%d] 类型错误（期望 Dictionary）" % [MODULE_ID, pid])
 		var player: Dictionary = p_val
 
+		var sel := -1
+		if player.has("reserve_card_selected"):
+			var sel_val = player.get("reserve_card_selected", null)
+			if not (sel_val is int):
+				return Result.failure("%s: player[%d].reserve_card_selected 类型错误（期望 int）" % [MODULE_ID, pid])
+			sel = int(sel_val)
+			if sel < -1 or sel >= CARDS_PER_PLAYER:
+				return Result.failure("%s: player[%d].reserve_card_selected 越界: %d" % [MODULE_ID, pid, sel])
+		validated_players.append(player)
+		selected_by_player.append(sel)
+
+	for pid in range(validated_players.size()):
+		var player: Dictionary = validated_players[pid]
 		var cards: Array = []
 		for t in ALLOWED_TYPES:
 			cards.append({"type": int(t)})
 
 		player["reserve_cards"] = cards
-		var sel := -1
-		if player.has("reserve_card_selected"):
-			var sel_val = player.get("reserve_card_selected", -1)
-			if sel_val is int:
-				sel = int(sel_val)
-			elif sel_val is float:
-				var f: float = float(sel_val)
-				if f == floor(f):
-					sel = int(f)
-		if sel < -1 or sel >= CARDS_PER_PLAYER:
-			sel = -1
-		player["reserve_card_selected"] = sel
+		player["reserve_card_selected"] = int(selected_by_player[pid])
 		player["reserve_card_revealed"] = false
 		state.players[pid] = player
 

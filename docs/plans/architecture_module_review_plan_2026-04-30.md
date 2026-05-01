@@ -2303,3 +2303,27 @@
 结论：
 
 - 已完成 rural_marketeers 部分 strict 化：模块私有 rural/offramp state 由 initializer 明确创建，运行期 hook、offramp action 与冲突查询不再把缺失或损坏的模块状态解释为空状态。
+
+### Fix 33：reserve_prices 初始化拒绝非法已存在选择字段
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 7 `[P2] reserve_prices 初始化会把非法 reserve_card_selected 重置为 -1，而不是暴露状态损坏`。
+- 具体问题：`modules/reserve_prices/rules/entry.gd` 在 `_init_state(...)` 中读取已存在 `reserve_card_selected` 时，非 int、越界或其它非法值最终会被写回 `-1`，把坏状态解释成“未选择”。
+
+改动：
+
+- `modules/reserve_prices/rules/entry.gd`：`_init_state(...)` 改为先校验所有玩家已有 `reserve_card_selected`，只有缺失字段才按新局初始化为 `-1`；已有字段必须是 int 且范围为 `-1..CARDS_PER_PLAYER-1`。
+- `modules/reserve_prices/rules/entry.gd`：校验通过后才写入替代储备卡与 `reserve_card_revealed=false`，避免失败时留下半初始化 state。
+- `core/tests/reserve_prices_v2_test.gd`：新增合法已有选择保留、越界选择失败且不发生 partial mutation、非 int 选择失败且不发生 partial mutation 的回归测试。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：`reserve_prices` 不再把损坏的已存在储备卡选择字段重置为“未选择”，初始化阶段会直接暴露坏状态。
