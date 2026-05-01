@@ -114,9 +114,16 @@ func _build_transport_error(url: String, request_result: int, response_code: int
 	}
 
 static func parse_http_json_response(response_code: int, body_text: String) -> Dictionary:
-	var parsed: Variant = JSON.parse_string(str(body_text))
-	if parsed == null:
-		parsed = {}
+	var parser := JSON.new()
+	var parse_err := parser.parse(str(body_text))
+	if parse_err != OK:
+		return {"error": {
+			"_http_status": int(response_code),
+			"parse_error": parser.get_error_message(),
+			"parse_error_line": parser.get_error_line(),
+			"body_text": str(body_text),
+		}}
+	var parsed: Variant = parser.data
 
 	if response_code < 200 or response_code >= 300:
 		if parsed is Dictionary:

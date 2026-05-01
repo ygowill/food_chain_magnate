@@ -2453,3 +2453,25 @@
 结论：
 
 - 已完成该 P2 修复：Lobbyists 主放置 UI 不再复制 autoload enum 的底层数值，后续 enum 顺序调整不会破坏在线客户端回合 gating。
+
+### Fix 39：PlatformApi 2xx 非 JSON 响应不再伪装成成功
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 9 `[P2] PlatformApi.parse_http_json_response(...) 对 2xx 非 JSON 响应返回 {"ok": {}}，会把后端协议错误伪装成成功`。
+
+改动：
+
+- `autoload/platform_api.gd`：`parse_http_json_response(...)` 改用 `JSON.new().parse(...)`，显式区分合法 `null` 与解析失败；任何响应体 JSON 解析失败都会返回 `error`，并包含 `_http_status`、`parse_error`、`parse_error_line` 与原始 `body_text`。
+- `core/tests/platform_api_response_parse_test.gd`：新增合法 JSON `null` 仍为 ok、2xx 非 JSON 必须返回 error 的契约测试，防止后端协议错误再次被解释为空成功体。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：平台 API 客户端不再把坏 JSON 响应降级为成功空对象，调用方可以明确感知后端协议错误。
