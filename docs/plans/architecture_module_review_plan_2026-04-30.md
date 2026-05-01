@@ -1458,6 +1458,7 @@
   - 证据：新增测试显式把 `Globals.replay_load_playable=false`，再断言零命令 lobbyist 存档“不应进入只读回放模式”、ActionPanel 不应禁用、且不打开右侧日志面板。证据：`ui/scenes/tests/game_timeline_zero_command_snapshot_test.gd:101-138`、`272-289`。
   - 风险：任何零命令 archive 都会被解释为可操作手工快照，而不是只读 replay。这里用 `command_history.is_empty()` 推断 archive 类型，属于新的过度兜底：缺少日志不等于用户希望进入可变对局。
   - 建议：archive 增加明确 metadata，例如 `archive_kind = "manual_snapshot" | "replay"` 或 `load_mode = "playable_snapshot"`；`start_replay_from_file` 只根据显式 metadata/调用参数进入可操作模式，不能仅凭空命令历史。
+  - 状态：Fix 43 已移除 `engine.command_history.is_empty()` 隐式推断，改为 `Globals.replay_load_playable` 或 archive 显式 `ui_load_mode == "playable_snapshot"` 才进入可操作模式，并补未标记零命令 archive 的只读负例。
 
 - [P2] 模块提供的 placement overlay 控制器按 best-effort 动态加载，新增 lobbyists 主放置 UI 已依赖这条不严格链路。
   - 证据：`lobbyists` manifest 新增 `provides.ui.placement_overlays`，包含 `lobbyists_placement_flow_controller.gd` 与 `lobbyists_extra_tile_flow_controller.gd`。证据：`modules/lobbyists/module.json:16-20`。
