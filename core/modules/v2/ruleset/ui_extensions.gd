@@ -7,6 +7,7 @@ var map_overlay_providers: Array[Dictionary] = []  # [{id, callback, priority, s
 var piece_ui_hints: Array[Dictionary] = []  # [{piece_id, hints, priority, source}]
 var effect_ui_texts: Array[Dictionary] = []  # [{effect_id, text, priority, source}]
 var milestone_effect_ui_texts: Array[Dictionary] = []  # [{effect_type, text, priority, source}]
+var reserve_supply_providers: Array[Dictionary] = []  # [{id, callback, priority, source}]
 
 func clear() -> void:
 	phase_action_ui_modals.clear()
@@ -14,6 +15,7 @@ func clear() -> void:
 	piece_ui_hints.clear()
 	effect_ui_texts.clear()
 	milestone_effect_ui_texts.clear()
+	reserve_supply_providers.clear()
 
 func register_phase_action_ui_modal(
 	phase_name: String,
@@ -110,6 +112,36 @@ func register_map_overlay_provider(provider_id: String, callback: Callable, prio
 		return Result.success()
 
 	map_overlay_providers.append(entry)
+	return Result.success()
+
+func register_reserve_supply_provider(provider_id: String, callback: Callable, priority: int = 100, source_module_id: String = "") -> Result:
+	var id := str(provider_id).strip_edges()
+	if id.is_empty():
+		return Result.failure("RulesetV2: reserve_supply_provider.id 不能为空")
+	if not callback.is_valid():
+		return Result.failure("RulesetV2: reserve_supply_provider.callback 无效: %s" % id)
+
+	var entry := {
+		"id": id,
+		"callback": callback,
+		"priority": int(priority),
+		"source": str(source_module_id),
+	}
+
+	for i in range(reserve_supply_providers.size()):
+		var prev_val = reserve_supply_providers[i]
+		if not (prev_val is Dictionary):
+			continue
+		var prev: Dictionary = prev_val
+		if str(prev.get("id", "")).strip_edges() != id:
+			continue
+		var prev_src := str(prev.get("source", "")).strip_edges()
+		reserve_supply_providers[i] = entry
+		if not prev_src.is_empty():
+			return Result.success().with_warning("reserve supply provider 覆盖: %s (%s -> %s)" % [id, prev_src, str(source_module_id)])
+		return Result.success()
+
+	reserve_supply_providers.append(entry)
 	return Result.success()
 
 func register_piece_ui_hint(piece_id: String, hints: Dictionary, priority: int = 100, source_module_id: String = "") -> Result:

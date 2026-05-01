@@ -129,6 +129,11 @@ class RulesetRegistrarV2:
 			return Result.failure("RulesetRegistrarV2: ui_extensions 缺少 register_map_overlay_provider")
 		return _ui_extensions.register_map_overlay_provider(provider_id, callback, priority, _module_id)
 
+	func register_reserve_supply_provider(provider_id: String, callback: Callable, priority: int = 100) -> Result:
+		if _ui_extensions == null or not _ui_extensions.has_method("register_reserve_supply_provider"):
+			return Result.failure("RulesetRegistrarV2: ui_extensions 缺少 register_reserve_supply_provider")
+		return _ui_extensions.register_reserve_supply_provider(provider_id, callback, priority, _module_id)
+
 	func register_piece_ui_hint(piece_id: String, hints: Dictionary, priority: int = 100) -> Result:
 		if _ui_extensions == null or not _ui_extensions.has_method("register_piece_ui_hint"):
 			return Result.failure("RulesetRegistrarV2: ui_extensions 缺少 register_piece_ui_hint")

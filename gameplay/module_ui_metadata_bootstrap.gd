@@ -58,9 +58,14 @@ static func apply(engine) -> Result:
 	if overlay_apply.value is int:
 		overlay_provider_count = int(overlay_apply.value)
 
+	var reserve_supply_provider_count := 0
+	if metadata_counts is Dictionary:
+		reserve_supply_provider_count = int((metadata_counts as Dictionary).get("reserve_supply_providers", 0))
+
 	return Result.success({
 		"phase_action_modals": phase_action_modal_count,
 		"piece_hints": piece_hint_count,
 		"effect_texts": effect_text_count,
 		"map_overlay_providers": overlay_provider_count,
+		"reserve_supply_providers": reserve_supply_provider_count,
 	})

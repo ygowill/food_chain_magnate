@@ -7,6 +7,7 @@ static var _piece_ui_hints: Array = []
 static var _effect_ui_texts: Array = []
 static var _milestone_effect_ui_texts: Array = []
 static var _map_overlay_providers: Array = []
+static var _reserve_supply_providers: Array = []
 static var _loaded: bool = false
 
 static func reset() -> void:
@@ -15,6 +16,7 @@ static func reset() -> void:
 	_effect_ui_texts = []
 	_milestone_effect_ui_texts = []
 	_map_overlay_providers = []
+	_reserve_supply_providers = []
 	_loaded = true
 
 static func is_loaded() -> bool:
@@ -47,6 +49,10 @@ static func configure_from_ui_extensions(ui_extensions) -> Result:
 	var overlay_provider_items = ui_extensions.get("map_overlay_providers")
 	if not (overlay_provider_items is Array):
 		return Result.failure("ModuleUiMetadata.configure_from_ui_extensions: ui_extensions.map_overlay_providers 缺失或类型错误（期望 Array）")
+
+	var reserve_supply_provider_items = ui_extensions.get("reserve_supply_providers")
+	if not (reserve_supply_provider_items is Array):
+		return Result.failure("ModuleUiMetadata.configure_from_ui_extensions: ui_extensions.reserve_supply_providers 缺失或类型错误（期望 Array）")
 
 	_phase_action_modal_by_key.clear()
 
@@ -95,6 +101,7 @@ static func configure_from_ui_extensions(ui_extensions) -> Result:
 	_effect_ui_texts = (effect_text_items as Array).duplicate()
 	_milestone_effect_ui_texts = (milestone_effect_text_items as Array).duplicate()
 	_map_overlay_providers = (overlay_provider_items as Array).duplicate()
+	_reserve_supply_providers = (reserve_supply_provider_items as Array).duplicate()
 
 	return Result.success({
 		"phase_action_modals": _phase_action_modal_by_key.size(),
@@ -102,6 +109,7 @@ static func configure_from_ui_extensions(ui_extensions) -> Result:
 		"effect_ui_texts": _effect_ui_texts.size(),
 		"milestone_effect_ui_texts": _milestone_effect_ui_texts.size(),
 		"map_overlay_providers": _map_overlay_providers.size(),
+		"reserve_supply_providers": _reserve_supply_providers.size(),
 	})
 
 static func get_phase_action_ui_modal_scene_path(phase_name: String, kind: String) -> String:
@@ -134,6 +142,11 @@ static func get_map_overlay_provider_entries() -> Array:
 	if not _loaded:
 		return []
 	return _map_overlay_providers.duplicate()
+
+static func get_reserve_supply_provider_entries() -> Array:
+	if not _loaded:
+		return []
+	return _reserve_supply_providers.duplicate()
 
 static func _build_phase_action_modal_key(phase_name: String, kind: String) -> String:
 	var phase := str(phase_name).strip_edges()

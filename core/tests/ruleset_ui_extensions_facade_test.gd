@@ -58,6 +58,16 @@ static func run() -> Result:
 	if not overlay_r.ok:
 		return Result.failure("ui_extensions.register_map_overlay_provider 失败: %s" % overlay_r.error)
 
+	var supply_r := ui_extensions.register_reserve_supply_provider(
+		"test_module:supply",
+		func(_state: GameState) -> Dictionary:
+			return {"test_supply_remaining": 2},
+		100,
+		"test_module"
+	)
+	if not supply_r.ok:
+		return Result.failure("ui_extensions.register_reserve_supply_provider 失败: %s" % supply_r.error)
+
 	var phase_modals_val = ui_extensions.get("phase_action_ui_modals")
 	if not (phase_modals_val is Array) or phase_modals_val.size() != 1:
 		return Result.failure("ui_extensions.phase_action_ui_modals 未收到注册结果")
@@ -75,6 +85,8 @@ static func run() -> Result:
 		return Result.failure("ModuleUiMetadata 未缓存 milestone_effect_ui_texts")
 	if ModuleUiMetadataClass.get_map_overlay_provider_entries().size() != 1:
 		return Result.failure("ModuleUiMetadata 未缓存 map_overlay_providers")
+	if ModuleUiMetadataClass.get_reserve_supply_provider_entries().size() != 1:
+		return Result.failure("ModuleUiMetadata 未缓存 reserve_supply_providers")
 
 	PieceUiHintsRegistryClass.reset()
 	EffectUiTextRegistryClass.reset()
@@ -109,6 +121,9 @@ static func run() -> Result:
 	var disposed_modals = ui_extensions.get("phase_action_ui_modals")
 	if not (disposed_modals is Array) or not disposed_modals.is_empty():
 		return Result.failure("RulesetV2UiExtensions.clear() 未清空 ui_extensions")
+	var disposed_supply_providers = ui_extensions.get("reserve_supply_providers")
+	if not (disposed_supply_providers is Array) or not disposed_supply_providers.is_empty():
+		return Result.failure("RulesetV2UiExtensions.clear() 未清空 reserve_supply_providers")
 
 	ruleset.dispose()
 	return Result.success({
@@ -116,4 +131,5 @@ static func run() -> Result:
 		"piece_ui_hints": 1,
 		"effect_ui_texts": 1,
 		"map_overlay_providers": 1,
+		"reserve_supply_providers": 1,
 	})

@@ -35,6 +35,7 @@ const BILLBOARD_BOARD_NUMBER_BY_SIDE := {
 }
 
 const PLACEMENT_CONFLICT_PROVIDER_ID := "%s:placement_conflicts" % MODULE_ID
+const RESERVE_SUPPLY_PROVIDER_ID := "%s:reserve_supply" % MODULE_ID
 const CONFLICT_ID_OFFRAMP_CONNECTION := "%s:offramp_connection" % MODULE_ID
 const STATE_SCHEMA_ID_OFFRAMP_PENDING := "rural_marketeers:round_state_int_keys:rural_marketeers_offramp_pending"
 
@@ -69,6 +70,7 @@ func register(registrar) -> Result:
 		Callable(registrar, "register_action_validator").bind("initiate_marketing", "%s:airplane_offramp_conflict" % MODULE_ID, Callable(self, "_validate_airplane_offramp_conflict"), 10),
 		# 对外暴露“占用/冲突查询”：其他模块不应直接读取本模块的 state.map 字段结构。
 		Callable(registrar, "register_placement_conflict_provider").bind(PLACEMENT_CONFLICT_PROVIDER_ID, Callable(self, "_get_placement_conflicts_at_world_pos"), 100),
+		Callable(registrar, "register_reserve_supply_provider").bind(RESERVE_SUPPLY_PROVIDER_ID, Callable(self, "_build_reserve_supply_counts"), 100),
 		# round_state.<player_id(int) -> ...> 字典：读档后需要把 "0"/"1" 转回 0/1
 		Callable(registrar, "register_round_state_int_key_dict_schema").bind(STATE_SCHEMA_ID_OFFRAMP_PENDING, [OFFRAMP_PENDING_KEY], 100),
 	]
@@ -77,6 +79,26 @@ func register(registrar) -> Result:
 		if not r.ok:
 			return r
 	return Result.success()
+
+func _build_reserve_supply_counts(state: GameState) -> Dictionary:
+	return {
+		OFFRAMP_SUPPLY_KEY: OFFRAMP_SUPPLY_TOTAL,
+		"rural_billboard_supply_remaining": _get_rural_billboard_supply_remaining(state),
+	}
+
+func _get_rural_billboard_supply_remaining(state: GameState) -> int:
+	var occupied := 0
+	if state != null and (state.map is Dictionary):
+		var houses_val = state.map.get("houses", null)
+		if houses_val is Dictionary:
+			var rural_val = Dictionary(houses_val).get(RURAL_HOUSE_ID, null)
+			if rural_val is Dictionary:
+				var boards_val = Dictionary(rural_val).get("giant_billboards", null)
+				if boards_val is Dictionary:
+					for side in BILLBOARD_SIDES:
+						if Dictionary(boards_val).has(side):
+							occupied += 1
+	return maxi(0, BILLBOARD_SIDES.size() - occupied)
 
 func _get_placement_conflicts_at_world_pos(state: GameState, world_pos: Vector2i, _ctx: Dictionary) -> Result:
 	var offramps_read := MapStateAccessClass.require_optional_array_field_or_empty(

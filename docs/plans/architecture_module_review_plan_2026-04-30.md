@@ -2027,3 +2027,30 @@
 结论：
 
 - 已完成 settlement 部分 P2 strict 化：权威结算入口的回调契约错误不再作为 warning 继续推进阶段。
+
+### Fix 22：模块供给兜底从 core 迁回模块侧 provider
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 4 `[P2] core/rules/module_supply_fallbacks.gd 在 core 层硬编码具体模块的 UI 供给兜底`。
+
+改动：
+
+- `core/modules/v2/ruleset/ui_extensions.gd`、`core/modules/v2/ruleset_builder.gd`：新增 `register_reserve_supply_provider(...)` 模块 UI 扩展注册点，作为模块侧向 UI 提供储备区供给数量的桥接。
+- `gameplay/module_ui_metadata.gd`、`gameplay/module_ui_metadata_bootstrap.gd`：缓存并暴露 `reserve_supply_providers`，启动时纳入 UI metadata 统计。
+- `modules/lobbyists/rules/entry.gd`：模块自身注册道路/公园 piece 的储备供给数量 provider。
+- `modules/rural_marketeers/rules/entry.gd`：模块自身注册 offramp 与 rural billboard 储备供给数量 provider；billboard 剩余数量由 rural_area.giant_billboards 当前占用计算。
+- `ui/components/reserve_area/reserve_area_supply_helpers.gd`：储备区 UI 改为读取 `ModuleUiMetadata.get_reserve_supply_provider_entries()`，按启用模块过滤 provider，不再引用 core 中的具体模块 fallback。
+- `core/rules/module_supply_fallbacks.gd`、`core/rules/module_supply_fallbacks.gd.uid`：删除 core 层模块硬编码 fallback。
+- `core/tests/ruleset_ui_extensions_facade_test.gd`、`core/tests/core_architecture_boundary_contract_test.gd`：补充 reserve supply provider 注册、metadata 缓存、clear 行为与 core UI metadata 边界白名单。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 边界整改：core 不再保存具体模块的储备供给兜底配置；模块供给数量由各模块通过 UI metadata provider 暴露，ReserveArea 只消费通用 provider 输出。

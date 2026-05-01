@@ -30,6 +30,9 @@ const _UI_METADATA_ALLOWLIST := {
 		"res://core/modules/v2/ruleset/ui_extensions.gd": true,
 		"res://core/rules/map_overlay_provider_registry.gd": true,
 	},
+	"reserve_supply_providers": {
+		"res://core/modules/v2/ruleset/ui_extensions.gd": true,
+	},
 	"ui_hide_if_not_initiatable": {
 		"res://core/actions/action_executor.gd": true,
 	},

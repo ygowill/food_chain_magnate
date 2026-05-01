@@ -1,9 +1,9 @@
 # ReserveAreaFullScreenView：供给数据提取辅助
-# 用途：抽取“从 GameState.map 读取供给/模块兜底供给”的逻辑，避免 UI 脚本过大。
+# 用途：抽取“从 GameState.map 和模块 UI metadata 读取供给”的逻辑，避免 UI 脚本过大。
 class_name ReserveAreaSupplyHelpers
 extends RefCounted
 
-const ModuleSupplyFallbacksClass = preload("res://core/rules/module_supply_fallbacks.gd")
+const ModuleUiMetadataClass = preload("res://gameplay/module_ui_metadata.gd")
 
 static func get_enabled_module_ids(state: GameState) -> Array[String]:
 	var out: Array[String] = []
@@ -35,30 +35,32 @@ static func collect_module_supply_counts(state: GameState, module_ids: Array[Str
 			if f == floor(f) and int(f) > 0:
 				out[key] = int(f)
 
-	_merge_module_supply_fallback_counts(state, module_ids, out, seen_keys)
+	_merge_module_supply_provider_counts(state, module_ids, out, seen_keys)
 	return out
 
-static func _merge_module_supply_fallback_counts(state: GameState, module_ids: Array[String], supply_counts: Dictionary, seen_keys: Dictionary) -> void:
-	if module_ids.has("lobbyists"):
-		var fallback_counts := ModuleSupplyFallbacksClass.get_lobbyists_supply_fallbacks()
-		for key in fallback_counts.keys():
-			var count := int(fallback_counts.get(key, 0))
-			_append_supply_count_if_missing(supply_counts, seen_keys, str(key), count)
-
-	if module_ids.has("rural_marketeers"):
-		_append_supply_count_if_missing(
-			supply_counts,
-			seen_keys,
-			ModuleSupplyFallbacksClass.get_rural_offramp_supply_fallback_key(),
-			ModuleSupplyFallbacksClass.get_rural_offramp_supply_fallback_total()
-		)
-		var billboard_remaining := _get_rural_billboard_supply_remaining(state)
-		_append_supply_count_if_missing(
-			supply_counts,
-			seen_keys,
-			ModuleSupplyFallbacksClass.get_rural_billboard_supply_pseudo_key(),
-			billboard_remaining
-		)
+static func _merge_module_supply_provider_counts(state: GameState, module_ids: Array[String], supply_counts: Dictionary, seen_keys: Dictionary) -> void:
+	if not ModuleUiMetadataClass.is_loaded():
+		return
+	var providers := ModuleUiMetadataClass.get_reserve_supply_provider_entries()
+	for item_val in providers:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		var source := str(item.get("source", "")).strip_edges()
+		if not source.is_empty() and not module_ids.has(source):
+			continue
+		var cb: Callable = item.get("callback", Callable())
+		if not cb.is_valid():
+			push_error("ReserveAreaSupplyHelpers: reserve supply provider callback 无效: %s" % str(item.get("id", "")))
+			continue
+		var r = cb.call(state)
+		if not (r is Dictionary):
+			push_error("ReserveAreaSupplyHelpers: reserve supply provider 必须返回 Dictionary: %s" % str(item.get("id", "")))
+			continue
+		var counts: Dictionary = r
+		for key_val in counts.keys():
+			var count := int(counts.get(key_val, 0))
+			_append_supply_count_if_missing(supply_counts, seen_keys, str(key_val), count)
 
 static func _append_supply_count_if_missing(supply_counts: Dictionary, seen_keys: Dictionary, key: String, count: int) -> void:
 	if key.is_empty() or count <= 0:
@@ -66,20 +68,6 @@ static func _append_supply_count_if_missing(supply_counts: Dictionary, seen_keys
 	if supply_counts.has(key) or seen_keys.has(key):
 		return
 	supply_counts[key] = count
-
-static func _get_rural_billboard_supply_remaining(state: GameState) -> int:
-	var occupied := 0
-	if state != null and (state.map is Dictionary):
-		var houses_val = state.map.get("houses", null)
-		if houses_val is Dictionary:
-			var rural_val = Dictionary(houses_val).get("rural_area", null)
-			if rural_val is Dictionary:
-				var boards_val = Dictionary(rural_val).get("giant_billboards", null)
-				if boards_val is Dictionary:
-					for side in ["N", "E", "S", "W"]:
-						if Dictionary(boards_val).has(side):
-							occupied += 1
-	return maxi(0, ModuleSupplyFallbacksClass.get_rural_billboard_supply_total() - occupied)
 
 static func collect_module_tile_supply_entries(state: GameState, _module_ids: Array[String] = []) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -108,4 +96,3 @@ static func collect_module_tile_supply_entries(state: GameState, _module_ids: Ar
 		if c > 0:
 			out.append({"tile_id": tid, "count": c})
 	return out
-

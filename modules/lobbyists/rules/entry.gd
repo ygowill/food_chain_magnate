@@ -21,6 +21,7 @@ const HookType = PhaseManagerClass.HookType
 
 const MODULE_ID := LobbyistsRoadOverlaysClass.MODULE_ID
 const MAP_OVERLAY_PROVIDER_ID := "%s:map_overlays" % MODULE_ID
+const RESERVE_SUPPLY_PROVIDER_ID := "%s:reserve_supply" % MODULE_ID
 
 const ROAD_SUPPLY_BY_PIECE_ID := {
 	"lobbyists_road_straight": 4,
@@ -61,6 +62,7 @@ func register(registrar) -> Result:
 		Callable(registrar, "register_round_state_int_key_dict_schema").bind(STATE_SCHEMA_ID_EXTRA_TILE_PENDING, [EXTRA_TILE_PENDING_KEY], 100),
 		# UI overlays：把模块私有 map_data（pending_roads/roadworks_markers）转换为通用 overlay 指令，避免 core UI 解析私有结构。
 		Callable(registrar, "register_map_overlay_provider").bind(MAP_OVERLAY_PROVIDER_ID, Callable(self, "_build_map_overlays"), 100),
+		Callable(registrar, "register_reserve_supply_provider").bind(RESERVE_SUPPLY_PROVIDER_ID, Callable(self, "_build_reserve_supply_counts"), 100),
 	]
 	for step in steps:
 		var r: Result = step.call()
@@ -91,6 +93,16 @@ func register(registrar) -> Result:
 	if not r_hint3.ok:
 		return r_hint3
 	return Result.success()
+
+func _build_reserve_supply_counts(_state: GameState) -> Dictionary:
+	var out := {}
+	for piece_id_val in ROAD_SUPPLY_BY_PIECE_ID.keys():
+		var piece_id := str(piece_id_val)
+		out["%s_supply_remaining" % piece_id] = int(ROAD_SUPPLY_BY_PIECE_ID[piece_id_val])
+	for piece_id_val in PARK_SUPPLY_BY_PIECE_ID.keys():
+		var piece_id := str(piece_id_val)
+		out["%s_supply_remaining" % piece_id] = int(PARK_SUPPLY_BY_PIECE_ID[piece_id_val])
+	return out
 
 func _build_map_overlays(map_data: Dictionary) -> Dictionary:
 	if map_data == null or not (map_data is Dictionary):
