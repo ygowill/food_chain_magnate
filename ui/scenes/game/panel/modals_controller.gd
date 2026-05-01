@@ -14,6 +14,7 @@ const PhaseActionUiRegistryClass = preload("res://ui/scenes/game/panel/phase_act
 
 var _scene = null
 var _execute_command: Callable = Callable()
+var _refresh_ui: Callable = Callable()
 
 var _turn_order_modal = null
 var _reserve_card_modal = null
@@ -28,12 +29,14 @@ var _reserve_card_modal_dismissed: bool = false
 var _reserve_card_modal_dismissed_player_id: int = -1
 var _reserve_card_modal_dismissed_interactive: bool = true
 
-func _init(scene, execute_command: Callable) -> void:
+func _init(scene, execute_command: Callable, refresh_ui: Callable = Callable()) -> void:
 	_scene = scene
 	_execute_command = execute_command
+	_refresh_ui = refresh_ui
 
 func dispose() -> void:
 	_execute_command = Callable()
+	_refresh_ui = Callable()
 
 	if is_instance_valid(_turn_order_modal):
 		_turn_order_modal.queue_free()
@@ -65,6 +68,10 @@ func _clear_reserve_card_dismissed_state() -> void:
 	_reserve_card_modal_dismissed = false
 	_reserve_card_modal_dismissed_player_id = -1
 	_reserve_card_modal_dismissed_interactive = true
+
+func _request_ui_refresh() -> void:
+	if _refresh_ui.is_valid():
+		_refresh_ui.call()
 
 func _get_live_state() -> GameState:
 	if _scene == null:
@@ -535,6 +542,7 @@ func _on_reserve_card_modal_cancelled() -> void:
 	_reserve_card_modal_dismissed_player_id = current_player_id
 	_reserve_card_modal_dismissed_interactive = interactive
 	hide_reserve_card_modal()
+	_request_ui_refresh()
 
 func show_phase_action_ui_modal(phase_name: String, kind: String, state: GameState, current_player_id: int, covered: Rect2) -> void:
 	if _scene == null:

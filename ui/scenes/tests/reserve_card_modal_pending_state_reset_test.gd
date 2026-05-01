@@ -44,7 +44,10 @@ static func run() -> Result:
 	tree.root.add_child(scene)
 	await tree.process_frame
 
-	var controller = ControllerClass.new(scene, Callable())
+	var refresh_calls := {"count": 0}
+	var refresh_cb := func() -> void:
+		refresh_calls["count"] = int(refresh_calls.get("count", 0)) + 1
+	var controller = ControllerClass.new(scene, Callable(), refresh_cb)
 	var modal := Control.new()
 	modal.visible = false
 	scene.add_child(modal)
@@ -71,6 +74,9 @@ static func run() -> Result:
 	controller._reserve_card_modal = modal
 	modal.visible = true
 	controller._on_reserve_card_modal_cancelled()
+	if int(refresh_calls.get("count", 0)) != 1:
+		_cleanup(scene)
+		return Result.failure("储备卡弹窗暂时关闭后应立即触发 UI 刷新，实际刷新次数: %d" % int(refresh_calls.get("count", 0)))
 	if modal.visible:
 		_cleanup(scene)
 		return Result.failure("储备卡弹窗暂时关闭后应隐藏")

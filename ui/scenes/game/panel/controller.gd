@@ -87,9 +87,10 @@ func _init(scene, map_controller, overlay_controller, execute_command: Callable,
 		_scene,
 		_execute_command,
 		Callable(self, "get_view_player_id"),
-		Callable(self, "_on_view_player_selected")
+		Callable(self, "_on_view_player_selected"),
+		_refresh_ui
 	)
-	_modals_controller = ModalsControllerClass.new(_scene, _execute_command)
+	_modals_controller = ModalsControllerClass.new(_scene, _execute_command, _refresh_ui)
 	_views_controller = ViewsControllerClass.new(_scene)
 	_ui_components_binder = UiComponentsBinderClass.new(self)
 

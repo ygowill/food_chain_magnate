@@ -70,11 +70,18 @@ static func run() -> Result:
 	var state_for_modal: GameState = engine.get_state()
 	state_for_modal.phase = DefsClass.PHASE_RESTRUCTURING
 	var dummy_scene := _DummyScene.new()
-	var dismiss_controller = RestructuringControllerClass.new(dummy_scene, Callable(), Callable(), Callable())
+	var refresh_calls := {"count": 0}
+	var refresh_cb := func() -> void:
+		refresh_calls["count"] = int(refresh_calls.get("count", 0)) + 1
+	var dismiss_controller = RestructuringControllerClass.new(dummy_scene, Callable(), Callable(), Callable(), refresh_cb)
 	var dismissed_modal := Control.new()
 	dismissed_modal.visible = true
 	dismiss_controller.set("_restructuring_modal", dismissed_modal)
 	dismiss_controller._on_restructuring_modal_cancelled()
+	if int(refresh_calls.get("count", 0)) != 1:
+		_safe_free(dummy_scene)
+		_safe_free(dismissed_modal)
+		return Result.failure("重组面板暂时关闭后应立即触发 UI 刷新，实际刷新次数: %d" % int(refresh_calls.get("count", 0)))
 	if dismissed_modal.visible:
 		_safe_free(dummy_scene)
 		_safe_free(dismissed_modal)

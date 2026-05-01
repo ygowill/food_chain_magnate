@@ -14,20 +14,23 @@ var _scene = null
 var _execute_command: Callable = Callable()
 var _get_view_player_id: Callable = Callable()
 var _view_player_selected: Callable = Callable()
+var _refresh_ui: Callable = Callable()
 
 var _restructuring_modal = null
 var _restructuring_modal_dismissed: bool = false
 
-func _init(scene, execute_command: Callable, get_view_player_id: Callable, view_player_selected: Callable) -> void:
+func _init(scene, execute_command: Callable, get_view_player_id: Callable, view_player_selected: Callable, refresh_ui: Callable = Callable()) -> void:
 	_scene = scene
 	_execute_command = execute_command
 	_get_view_player_id = get_view_player_id
 	_view_player_selected = view_player_selected
+	_refresh_ui = refresh_ui
 
 func dispose() -> void:
 	_execute_command = Callable()
 	_get_view_player_id = Callable()
 	_view_player_selected = Callable()
+	_refresh_ui = Callable()
 
 	if is_instance_valid(_restructuring_modal):
 		_restructuring_modal.queue_free()
@@ -57,6 +60,10 @@ func get_modal():
 
 func hide_modal() -> void:
 	_hide_restructuring_modal()
+
+func _request_ui_refresh() -> void:
+	if _refresh_ui.is_valid():
+		_refresh_ui.call()
 
 func _get_live_state() -> GameState:
 	if _scene == null:
@@ -674,6 +681,7 @@ func _on_restructuring_modal_completed(_result: Dictionary) -> void:
 func _on_restructuring_modal_cancelled() -> void:
 	_restructuring_modal_dismissed = true
 	_hide_restructuring_modal()
+	_request_ui_refresh()
 
 func _on_restructuring_modal_auto_fill_requested() -> void:
 	if _scene == null or _scene.get("game_engine") == null:
