@@ -7,6 +7,7 @@
 - `docs/plans/ui_remediation_plan.md`
 - `docs/plans/ui_development_plan.md`
 - `docs/plans/module_ui_decoupling_plan_2026-02-10.md`
+- `docs/plans/architecture_module_review_plan_2026-04-30.md`
 - `docs/plans/manual_test_saves_plan.md`
 
 ## 历史计划归档
