@@ -2,6 +2,7 @@ class_name StepTimelineIncrementalAppendTest
 extends RefCounted
 
 const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
+const StepTimelineBuildHelpersClass = preload("res://ui/scenes/game/timeline/step_timeline_build_helpers.gd")
 const StepTimelineHelpersClass = preload("res://gameplay/replay/step_timeline_build/helpers.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
@@ -71,6 +72,12 @@ static func run(seed_val: int = 12345) -> Result:
 			"base timeline processed_command_count mismatch: %d vs %d"
 				% [base_processed_count, int(engine.command_history.size())]
 		)
+	var corrupted_cache_r := _assert_corrupted_append_cache_rejected(engine, base_timeline)
+	if not corrupted_cache_r.ok:
+		return corrupted_cache_r
+	var bad_prebuilt_r := _assert_prebuilt_entries_reject_bad_items(base_timeline)
+	if not bad_prebuilt_r.ok:
+		return bad_prebuilt_r
 
 	state_after = engine.get_state()
 	var pick1_actor := state_after.get_current_player_id()
@@ -247,3 +254,61 @@ static func _test_payday_report_appends_on_triggering_skip(seed_val: int) -> Res
 
 static func _read_array_size(value) -> int:
 	return Array(value).size() if (value is Array) else 0
+
+static func _assert_corrupted_append_cache_rejected(engine: GameEngine, base_timeline: Dictionary) -> Result:
+	var missing_meta := base_timeline.duplicate(true)
+	missing_meta.erase("_build_meta")
+	var missing_meta_r: Result = StepTimelineBuildClass.append_from_existing(engine, missing_meta)
+	if missing_meta_r.ok:
+		return Result.failure("append_from_existing 不应接受缺少 _build_meta 的缓存")
+	if str(missing_meta_r.error).find("_build_meta") < 0:
+		return Result.failure("缺少 _build_meta 的错误信息应包含 _build_meta，实际: %s" % missing_meta_r.error)
+
+	var bad_steps := base_timeline.duplicate(true)
+	var steps_val = bad_steps.get("steps", [])
+	if not (steps_val is Array):
+		return Result.failure("测试基线 timeline.steps 类型错误")
+	var bad_steps_arr: Array = []
+	for step_val in Array(steps_val):
+		bad_steps_arr.append(step_val)
+	bad_steps_arr.append("bad_step")
+	bad_steps["steps"] = bad_steps_arr
+	var bad_steps_r: Result = StepTimelineBuildClass.append_from_existing(engine, bad_steps)
+	if bad_steps_r.ok:
+		return Result.failure("append_from_existing 不应过滤坏 step 后继续使用缓存")
+	if str(bad_steps_r.error).find("steps") < 0:
+		return Result.failure("坏 step 错误信息应包含 steps，实际: %s" % bad_steps_r.error)
+
+	var bad_events := base_timeline.duplicate(true)
+	var events_val = bad_events.get("events", [])
+	if not (events_val is Array):
+		return Result.failure("测试基线 timeline.events 类型错误")
+	var bad_events_arr: Array = []
+	for event_val in Array(events_val):
+		bad_events_arr.append(event_val)
+	bad_events_arr.append("bad_event")
+	bad_events["events"] = bad_events_arr
+	var bad_events_r: Result = StepTimelineBuildClass.append_from_existing(engine, bad_events)
+	if bad_events_r.ok:
+		return Result.failure("append_from_existing 不应过滤坏 event 后继续使用缓存")
+	if str(bad_events_r.error).find("events") < 0:
+		return Result.failure("坏 event 错误信息应包含 events，实际: %s" % bad_events_r.error)
+
+	return Result.success()
+
+static func _assert_prebuilt_entries_reject_bad_items(base_timeline: Dictionary) -> Result:
+	var bad_entries_r: Result = StepTimelineBuildHelpersClass.build_info_from_prebuilt_entries(base_timeline, ["bad_entry"])
+	if bad_entries_r.ok:
+		return Result.failure("prebuilt entries 不应过滤坏 entry 后继续使用")
+	if str(bad_entries_r.error).find("entries") < 0:
+		return Result.failure("坏 prebuilt entry 错误信息应包含 entries，实际: %s" % bad_entries_r.error)
+
+	var bad_timeline := base_timeline.duplicate(true)
+	bad_timeline["events"] = ["bad_event"]
+	var bad_timeline_r: Result = StepTimelineBuildHelpersClass.build_info_from_timeline(bad_timeline)
+	if bad_timeline_r.ok:
+		return Result.failure("prebuilt timeline 不应过滤坏 event 后继续使用")
+	if str(bad_timeline_r.error).find("events") < 0:
+		return Result.failure("坏 prebuilt timeline 错误信息应包含 events，实际: %s" % bad_timeline_r.error)
+
+	return Result.success()

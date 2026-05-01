@@ -17,15 +17,36 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 		return Result.failure("StepTimelineBuild: existing_timeline 为空")
 
 	var timeline: Dictionary = existing_timeline.duplicate(false)
+	var meta := StepTimelineHelpersClass.read_build_meta(timeline)
+	if meta.is_empty():
+		return Result.failure("StepTimelineBuild: existing_timeline 缺少 _build_meta，不能增量 append")
+	if not meta.has("processed_command_count") or not (meta.get("processed_command_count", null) is int):
+		return Result.failure("StepTimelineBuild: existing_timeline._build_meta.processed_command_count 缺失或类型错误")
+	if not meta.has("last_event_sequence") or not (meta.get("last_event_sequence", null) is int):
+		return Result.failure("StepTimelineBuild: existing_timeline._build_meta.last_event_sequence 缺失或类型错误")
 	var steps: Array[Dictionary] = []
-	for step_val in existing_timeline.get("steps", []):
-		if step_val is Dictionary:
-			steps.append(step_val)
+	var steps_val = existing_timeline.get("steps", null)
+	if not (steps_val is Array):
+		return Result.failure("StepTimelineBuild: existing_timeline.steps 缺失或类型错误（期望 Array）")
+	var steps_src: Array = steps_val
+	for i in range(steps_src.size()):
+		var step_val = steps_src[i]
+		if not (step_val is Dictionary):
+			return Result.failure("StepTimelineBuild: existing_timeline.steps[%d] 类型错误（期望 Dictionary）" % i)
+		steps.append(Dictionary(step_val).duplicate(true))
 	var events_out: Array[Dictionary] = []
-	for event_val in existing_timeline.get("events", []):
-		if event_val is Dictionary:
-			events_out.append(event_val)
-	var processed_command_count := StepTimelineHelpersClass.read_processed_command_count(timeline)
+	var events_val = existing_timeline.get("events", null)
+	if not (events_val is Array):
+		return Result.failure("StepTimelineBuild: existing_timeline.events 缺失或类型错误（期望 Array）")
+	var events_src: Array = events_val
+	for i in range(events_src.size()):
+		var event_val = events_src[i]
+		if not (event_val is Dictionary):
+			return Result.failure("StepTimelineBuild: existing_timeline.events[%d] 类型错误（期望 Dictionary）" % i)
+		events_out.append(Dictionary(event_val).duplicate(true))
+	var processed_command_count := int(meta.get("processed_command_count", 0))
+	if processed_command_count < 0:
+		return Result.failure("StepTimelineBuild: existing_timeline._build_meta.processed_command_count 不能为负数")
 	var total_command_count := int(engine.command_history.size())
 	if processed_command_count > total_command_count:
 		return Result.failure(
@@ -35,7 +56,9 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 
 	var old_step_count := int(steps.size())
 	var old_event_count := int(events_out.size())
-	var last_event_sequence := StepTimelineHelpersClass.read_last_event_sequence(timeline)
+	var last_event_sequence := int(meta.get("last_event_sequence", 0))
+	if last_event_sequence < 0:
+		return Result.failure("StepTimelineBuild: existing_timeline._build_meta.last_event_sequence 不能为负数")
 
 	if processed_command_count == total_command_count:
 		timeline = StepTimelineHelpersClass.attach_build_meta_owned(timeline, total_command_count, last_event_sequence)

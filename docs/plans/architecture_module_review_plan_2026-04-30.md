@@ -1049,6 +1049,7 @@
   - 证据：UI 对 prebuilt entries 同样只复制 Dictionary entry，坏 entry 被跳过。证据：`ui/scenes/game/timeline/step_timeline_build_helpers.gd:119-154`。
   - 风险：timeline cache 一旦损坏，系统可能局部丢 step/event/entry 后继续 append，导致日志与 engine history 慢慢漂移；缺 meta 反推也让缓存版本边界不清。
   - 建议：cached/prebuilt timeline 必须有 schema version、processed count、event sequence、engine/history signature。校验失败时整块缓存失效并 full rebuild；不应部分过滤后继续 append。
+  - 状态：Fix 37 已要求增量 append 缓存必须带 `_build_meta`，并严格校验 cached/prebuilt steps/events/entries；坏缓存不再被部分过滤。
 
 - [P2] Game 日志仍有 StepTimeline 与 EventBus EventLog 双链路，靠 runtime 条件避免重复，职责划分仍不清晰。
   - 证据：文档已说明同时存在派生时间线链路与事件格式化链路。证据：`docs/architecture/21-ui-game-scene.md:136-151`。
@@ -2406,3 +2407,27 @@
 结论：
 
 - 已完成该 P2 strict 化：事件 envelope 从 core runtime 到 replay/timeline 派生视图都变成显式契约，坏事件不再被日志链路悄悄丢弃或降级展示。
+
+### Fix 37：timeline cache 与 prebuilt entries 不再过滤坏项后继续使用
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 8 `[P2] 增量 timeline 与预构建 entry 的 cache 路径存在 “过滤坏缓存后继续使用” 的行为`。
+- 具体问题：`append_from_existing(...)` 会跳过非 Dictionary 的 cached step/event，并在缺少 `_build_meta` 时从 events/steps 反推 processed command count；UI prebuilt entries 也会跳过坏 entry。
+
+改动：
+
+- `gameplay/replay/step_timeline_build/build_append_impl.gd`：增量 append 入口改为要求 `_build_meta.processed_command_count` 与 `_build_meta.last_event_sequence` 显式存在且为非负 int；`existing_timeline.steps/events` 必须是 Array 且所有元素为 Dictionary，否则 append 失败并交由上层 full rebuild。
+- `ui/scenes/game/timeline/step_timeline_build_helpers.gd`：`build_info_from_timeline(...)` 与 `build_info_from_prebuilt_entries(...)` 严格校验 timeline `steps/events` 和 prebuilt `entries`，不再过滤坏项后继续构建 UI 日志。
+- `core/tests/step_timeline_incremental_append_test.gd`：新增缺 `_build_meta`、坏 step、坏 event、坏 prebuilt entry 的负例，固定坏缓存必须失败的契约。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：timeline cache/prebuilt 数据不再局部丢弃坏项；增量缓存失效会显式失败，让调用方使用完整重建路径。

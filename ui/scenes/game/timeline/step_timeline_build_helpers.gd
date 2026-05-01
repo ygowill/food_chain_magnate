@@ -93,12 +93,18 @@ static func build_info_from_timeline(timeline: Dictionary) -> Result:
 		"timeline_event_count": int(span_events_count),
 	})
 	var normalized_timeline: Dictionary = Dictionary(timeline).duplicate(true)
-	var events_val = timeline.get("events", [])
-	var events: Array = events_val if (events_val is Array) else []
+	var events_r := _read_dictionary_array(timeline, "events", "timeline")
+	if not events_r.ok:
+		OnlinePerfTraceClass.end_span(span, {"ok": false, "error": str(events_r.error)})
+		return events_r
+	var events: Array = events_r.value
 	var entries := GameTimelineLogEntriesBuilderClass.build(events)
 
-	var steps_val = timeline.get("steps", [])
-	var steps: Array = steps_val if (steps_val is Array) else []
+	var steps_r := _read_dictionary_array(timeline, "steps", "timeline")
+	if not steps_r.ok:
+		OnlinePerfTraceClass.end_span(span, {"ok": false, "error": str(steps_r.error)})
+		return steps_r
+	var steps: Array = steps_r.value
 
 	OnlinePerfTraceClass.end_span(span, {
 		"ok": true,
@@ -128,15 +134,21 @@ static func build_info_from_prebuilt_entries(timeline: Dictionary, entries: Arra
 		"entry_count": int(entries.size()),
 	})
 	var normalized_timeline: Dictionary = Dictionary(timeline).duplicate(true)
-	var normalized_entries: Array[Dictionary] = []
-	if entries is Array:
-		for entry_val in entries:
-			if not (entry_val is Dictionary):
-				continue
-			normalized_entries.append(Dictionary(entry_val).duplicate(false))
+	var entries_r := _read_dictionary_array({"entries": entries}, "entries", "prebuilt")
+	if not entries_r.ok:
+		OnlinePerfTraceClass.end_span(span, {"ok": false, "error": str(entries_r.error)})
+		return entries_r
+	var normalized_entries: Array[Dictionary] = entries_r.value
 
-	var steps_val = timeline.get("steps", [])
-	var steps: Array = steps_val if (steps_val is Array) else []
+	var steps_r := _read_dictionary_array(timeline, "steps", "timeline")
+	if not steps_r.ok:
+		OnlinePerfTraceClass.end_span(span, {"ok": false, "error": str(steps_r.error)})
+		return steps_r
+	var steps: Array = steps_r.value
+	var events_r := _read_dictionary_array(timeline, "events", "timeline")
+	if not events_r.ok:
+		OnlinePerfTraceClass.end_span(span, {"ok": false, "error": str(events_r.error)})
+		return events_r
 
 	OnlinePerfTraceClass.end_span(span, {
 		"ok": true,
@@ -185,6 +197,20 @@ static func load_prebuilt_timeline_with_entries(
 	if not info_r.ok:
 		return info_r
 	return load_timeline_info(Dictionary(info_r.value), game_log_panel, read_only).with_warnings(info_r.warnings)
+
+static func _read_dictionary_array(source: Dictionary, key: String, context: String) -> Result:
+	if source == null or not (source is Dictionary):
+		return Result.failure("%s 类型错误（期望 Dictionary）" % context)
+	if not source.has(key) or not (source.get(key, null) is Array):
+		return Result.failure("%s.%s 缺失或类型错误（期望 Array）" % [context, key])
+	var arr: Array = source.get(key)
+	var out: Array[Dictionary] = []
+	for i in range(arr.size()):
+		var item_val = arr[i]
+		if not (item_val is Dictionary):
+			return Result.failure("%s.%s[%d] 类型错误（期望 Dictionary）" % [context, key, i])
+		out.append(Dictionary(item_val).duplicate(false))
+	return Result.success(out)
 
 static func load_timeline_info(
 	info: Dictionary,
