@@ -277,12 +277,16 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 			"count": recruit_used_now,
 		})
 		if not ms.ok:
-			warnings.append("里程碑触发失败(Recruit): %s" % ms.error)
+			return Result.failure("里程碑触发失败(Recruit): %s" % ms.error).with_warnings(warnings).with_warnings(ms.warnings)
+		warnings.append_array(ms.warnings)
 
 	var use_staff := StaffStateClass.increment_staff_track_usage(state, recruiter_staff_id, "recruit", 1)
 	if not use_staff.ok:
 		return use_staff
-	EmployeeUsageHelperClass.append_use_employee_warning(warnings, state, player_id, recruiter_employee_type)
+	var use_employee := EmployeeUsageHelperClass.apply_use_employee_event(state, player_id, recruiter_employee_type)
+	if not use_employee.ok:
+		return use_employee
+	warnings.append_array(use_employee.warnings)
 
 	var result := Result.success({
 		"employee_type": employee_type,

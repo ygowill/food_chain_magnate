@@ -2327,3 +2327,31 @@
 结论：
 
 - 已完成该 P2 strict 化：`reserve_prices` 不再把损坏的已存在储备卡选择字段重置为“未选择”，初始化阶段会直接暴露坏状态。
+
+### Fix 34：玩家动作与扩展模块的里程碑触发失败改为 fail-fast
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 7 `[P1] MilestoneSystem.process_event(...) 失败被降级为 warning 的模式不只存在于 base_rules，已经扩散到 gameplay actions 与多个扩展模块`。
+- 具体问题：多个 action/module 在完成权威 state mutation 后，把 `Produce`、`UseEmployee`、`InitiateMarketing`、`RestaurantPlaced`、`Train`、`LowerPrice`、`HouseBuilt`、`CleanupDiscard`、`DemandMarked` 等里程碑触发失败追加为 warning，导致“动作成功但里程碑副作用缺失”。
+
+改动：
+
+- `gameplay/actions/employee_usage_helper.gd`：`append_use_employee_warning(...)` 改为 `apply_use_employee_event(...) -> Result`；`UseEmployee` 失败直接返回 failure，并保留 milestone warnings。
+- `gameplay/actions/*`：`produce_food`、`initiate_marketing`、`place_restaurant`、`recruit`、`train`、`set_price`、`set_discount`、`place_house`、`choose_fridge_keep`、`choose_kimchi_storage`、`procure_drinks` 等权威动作改为里程碑失败即失败，不再降级为 warning。
+- `modules/lobbyists/actions/*`、`modules/rural_marketeers/actions/place_giant_billboard_action.gd`、`modules/rural_marketeers/rules/entry.gd`：模块 action/settlement 的 `UseEmployee` / `DemandMarked` 触发失败改为 fail-fast。
+- `gameplay/actions/procure_drinks_action.gd`：保留事件生成层的 best-effort 派生行为；权威 validate/apply 使用 strict helper，日志事件在 plan 派生失败时仅从命令参数补充展示字段，不影响动作执行契约。
+- `core/tests/milestone_system/milestone_system_triggers_test.gd`：新增 action milestone handler 损坏时 `set_price` 必须失败、不得记录命令历史或写入 round_state 的契约测试。
+- `core/tests/rural_giant_billboard_state_access_test.gd`：直接调用 action 的测试保留初始化 engine 引用，避免模块 milestone callback 因测试夹具释放而失效。
+
+验证：
+
+- `rg -n "append_use_employee_warning|with_warning\\(\"里程碑触发失败|warnings\\.append\\(\"里程碑触发失败|result\\.with_warning\\(\"里程碑触发失败" gameplay modules -g"*.gd"`：无匹配。
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P1 strict 化：玩家动作和已覆盖扩展模块不再把关键里程碑触发失败吞为 warning；失败会阻断动作/结算，避免权威状态缺失里程碑副作用。

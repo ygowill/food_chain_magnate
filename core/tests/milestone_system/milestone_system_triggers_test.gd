@@ -15,7 +15,7 @@ static func run(seed_val: int) -> Result:
 	var r := _run_all(seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 8})
+	return Result.success({"cases": 9})
 
 static func _run_all(seed_val: int) -> Result:
 	var r_multi_claim_and_cleanup := _test_multi_claim_and_cleanup(seed_val)
@@ -29,6 +29,10 @@ static func _run_all(seed_val: int) -> Result:
 	var r_lower_price_triggers_first_lower_prices := _test_lower_price_triggers_first_lower_prices(seed_val)
 	if not r_lower_price_triggers_first_lower_prices.ok:
 		return r_lower_price_triggers_first_lower_prices
+
+	var r_action_milestone_failure_is_fatal := _test_action_milestone_failure_is_fatal(seed_val)
+	if not r_action_milestone_failure_is_fatal.ok:
+		return r_action_milestone_failure_is_fatal
 
 	var r_produce_triggers_first_burger_produced := _test_produce_triggers_first_burger_produced(seed_val)
 	if not r_produce_triggers_first_burger_produced.ok:
@@ -50,6 +54,50 @@ static func _run_all(seed_val: int) -> Result:
 	if not r_cash_reached_triggers_first_have_20_and_100.ok:
 		return r_cash_reached_triggers_first_have_20_and_100
 
+	return Result.success()
+
+static func _test_action_milestone_failure_is_fatal(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := engine.get_state()
+	Support._force_turn_order(state)
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = ""
+
+	var take := StateUpdaterClass.take_from_pool(state, "pricing_manager", 1)
+	if not take.ok:
+		return Result.failure("从员工池取出 pricing_manager 失败: %s" % take.error)
+	var add := StateUpdaterClass.add_employee(state, 0, "pricing_manager", false)
+	if not add.ok:
+		return Result.failure("添加 pricing_manager 失败: %s" % add.error)
+
+	var registry = engine.ruleset_v2.milestone_effect_registry
+	if registry == null:
+		return Result.failure("测试前置失败：缺少 milestone_effect_registry")
+	var handlers: Dictionary = registry._handlers
+	if not handlers.has("base_price_delta"):
+		return Result.failure("测试前置失败：缺少 base_price_delta handler")
+	var handler_meta: Dictionary = handlers["base_price_delta"]
+	var previous_callback: Callable = handler_meta.get("callback", Callable())
+	handler_meta["callback"] = Callable()
+	handlers["base_price_delta"] = handler_meta
+	var round_before := str(state.round_state)
+	var command_count_before := engine.command_history.size()
+	var r := engine.execute_command(Command.create("set_price", 0))
+	handler_meta["callback"] = previous_callback
+	handlers["base_price_delta"] = handler_meta
+	if r.ok:
+		return Result.failure("set_price 的里程碑触发失败不应降级为 warning")
+	var err := str(r.error)
+	if err.find("LowerPrice") < 0 or err.find("base_price_delta") < 0:
+		return Result.failure("错误信息应包含 LowerPrice 与 base_price_delta，实际: %s" % err)
+	if str(engine.get_state().round_state) != round_before:
+		return Result.failure("里程碑失败时不应写入 price_modifiers 或 mandatory completion")
+	if engine.command_history.size() != command_count_before:
+		return Result.failure("里程碑失败时不应记录命令历史")
 	return Result.success()
 
 static func _test_multi_claim_and_cleanup(seed_val: int) -> Result:

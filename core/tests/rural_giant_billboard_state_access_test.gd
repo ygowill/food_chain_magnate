@@ -5,7 +5,10 @@ extends RefCounted
 const ActionClass = preload("res://modules/rural_marketeers/actions/place_giant_billboard_action.gd")
 const EntryClass = preload("res://modules/rural_marketeers/rules/entry.gd")
 
+static var _held_engines: Array = []
+
 static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
+	_held_engines.clear()
 	var r := _test_validate_specific_succeeds_with_initialized_houses(seed_val)
 	if not r.ok:
 		return r
@@ -51,6 +54,7 @@ static func _make_state(seed_val: int) -> Result:
 	var init := engine.initialize(2, seed_val, enabled_modules)
 	if not init.ok:
 		return init
+	_held_engines.append(engine)
 	var state := engine.get_state()
 	state.phase = "Working"
 	state.sub_phase = "Marketing"

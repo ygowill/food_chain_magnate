@@ -166,11 +166,11 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"player_id": int(command.actor),
 		"id": EMPLOYEE_ID
 	})
+	if not ms.ok:
+		return Result.failure("里程碑触发失败(UseEmployee/%s): %s" % [EMPLOYEE_ID, ms.error]).with_warnings(ms.warnings)
 	var result := Result.success({
 		"player_id": int(command.actor),
 		"side": side,
 		"product": product,
-	})
-	if not ms.ok:
-		result.with_warning("里程碑触发失败(UseEmployee/%s): %s" % [EMPLOYEE_ID, ms.error])
+	}).with_warnings(ms.warnings)
 	return result

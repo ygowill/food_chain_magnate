@@ -596,9 +596,12 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	state.round_state["train_events"] = train_events
 
 	var ms := MilestoneSystemClass.process_event(state, "Train", {"player_id": player_id})
+	if not ms.ok:
+		return Result.failure("里程碑触发失败(Train): %s" % ms.error).with_warnings(ms.warnings)
 
 	# 使用员工：按“培训次数/容量”推导哪些培训员必然被使用，并对每次推导出的使用调用一次 UseEmployee。
 	var warnings: Array[String] = []
+	warnings.append_array(ms.warnings)
 	var inferred_use := TrainEmployeeUsageClass.apply_inferred_use_employee_train(state, player_id)
 	if not inferred_use.ok:
 		return inferred_use
@@ -610,8 +613,6 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"to_employee": to_employee,
 		"from_pending": use_pending
 	})
-	if not ms.ok:
-		result.with_warning("里程碑触发失败(Train): %s" % ms.error)
 	result.with_warnings(warnings)
 	return result
 

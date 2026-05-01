@@ -362,7 +362,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 			"phase": state.phase,
 		})
 		if not ms.ok:
-			result.with_warning("里程碑触发失败(RestaurantPlaced): %s" % ms.error)
+			return Result.failure("里程碑触发失败(RestaurantPlaced): %s" % ms.error).with_warnings(ms.warnings)
+		result.with_warnings(ms.warnings)
 
 	return result
 

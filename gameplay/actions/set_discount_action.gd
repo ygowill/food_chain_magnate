@@ -60,7 +60,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	MandatoryActionsRulesClass.mark_completed(state, player_id, action_id)
 
 	# 使用员工：用于 FIRST DISCOUNT MANAGER USED
-	EmployeeUsageHelperClass.append_use_employee_warning(warnings, state, player_id, provider_id)
+	var use_employee := EmployeeUsageHelperClass.apply_use_employee_event(state, player_id, provider_id)
+	if not use_employee.ok:
+		return use_employee
+	warnings.append_array(use_employee.warnings)
 
 	# 若玩家具有“折扣移除银行资金”效果，则标记为“下回合 Restructuring 结束扣款”
 	var p_val = state.players[player_id]
@@ -71,13 +74,14 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 			state.players[player_id] = p
 
 	var ms := MilestoneSystemClass.process_event(state, "LowerPrice", {"player_id": player_id})
+	if not ms.ok:
+		return Result.failure("里程碑触发失败(LowerPrice): %s" % ms.error).with_warnings(warnings).with_warnings(ms.warnings)
+	warnings.append_array(ms.warnings)
 
 	var result := Result.success({
 		"player_id": player_id,
 		"modifier": -3
 	}).with_warnings(warnings)
-	if not ms.ok:
-		result.with_warning("里程碑触发失败(LowerPrice): %s" % ms.error)
 	return result
 
 func _generate_specific_events(_old_state: GameState, _new_state: GameState, command: Command) -> Array[Dictionary]:

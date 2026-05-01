@@ -308,7 +308,8 @@ func _on_marketing_enter_extension(state: GameState, phase_manager: PhaseManager
 				"product": product,
 			})
 			if not ms.ok:
-				warnings.append("里程碑触发失败(DemandMarked)：%s" % ms.error)
+				return Result.failure("里程碑触发失败(DemandMarked)：%s" % ms.error).with_warnings(warnings).with_warnings(ms.warnings)
+			warnings.append_array(ms.warnings)
 
 	rural["demands"] = demands
 	houses[RURAL_HOUSE_ID] = rural

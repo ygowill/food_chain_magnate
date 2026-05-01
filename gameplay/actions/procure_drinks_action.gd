@@ -45,13 +45,21 @@ func can_initiate(state: GameState, player_id: int) -> bool:
 			return true
 	return false
 
-func _build_preview_state_with_use_employee(state: GameState, player_id: int, employee_type: String) -> GameState:
+func _build_preview_state_with_use_employee(state: GameState, player_id: int, employee_type: String) -> Result:
 	if state == null or employee_type.is_empty():
-		return state
+		return Result.success(state)
 
 	var preview_state := state.duplicate_state()
-	var preview_warnings: Array[String] = []
-	EmployeeUsageHelperClass.append_use_employee_warning(preview_warnings, preview_state, player_id, employee_type)
+	var use_employee := EmployeeUsageHelperClass.apply_use_employee_event(preview_state, player_id, employee_type)
+	if not use_employee.ok:
+		return use_employee
+	return Result.success(preview_state).with_warnings(use_employee.warnings)
+
+func _build_preview_state_with_use_employee_best_effort(state: GameState, player_id: int, employee_type: String) -> GameState:
+	if state == null or employee_type.is_empty():
+		return state
+	var preview_state := state.duplicate_state()
+	var _use_employee := EmployeeUsageHelperClass.apply_use_employee_event(preview_state, player_id, employee_type)
 	return preview_state
 
 func _read_optional_staff_id(command: Command) -> Result:
@@ -133,7 +141,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if not command.params.has("selected_sources"):
 		return Result.failure("缺少参数: selected_sources（请先选择饮料点）", Result.ErrorCode.MISSING_PARAMS)
 
-	var preview_state := _build_preview_state_with_use_employee(state, command.actor, employee_type)
+	var preview_state_read := _build_preview_state_with_use_employee(state, command.actor, employee_type)
+	if not preview_state_read.ok:
+		return preview_state_read
+	var preview_state: GameState = preview_state_read.value
 
 	# 校验路线合法性与可拾取来源
 	var plan_result := DrinksProcurementClass.resolve_procurement_plan(preview_state, command, restaurant_ids, emp_def)
@@ -186,7 +197,10 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return Result.failure("你没有餐厅，无法采购饮料")
 
 	# 使用员工：用于“first_cart_operator_used”等里程碑（要求首个 haul 也生效）
-	EmployeeUsageHelperClass.append_use_employee_warning(warnings, state, player_id, procurer_employee_type)
+	var use_employee := EmployeeUsageHelperClass.apply_use_employee_event(state, player_id, procurer_employee_type)
+	if not use_employee.ok:
+		return use_employee
+	warnings.append_array(use_employee.warnings)
 
 	# 特殊：跑腿伙计（直接获得 1 瓶指定饮料）
 	if employee_type == "errand_boy":
@@ -335,7 +349,7 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 		var emp_def = EmployeeRegistryClass.get_def(employee_type)
 		var restaurant_ids := StructuresClass.get_player_restaurants(_old_state, command.actor)
 		if emp_def != null and (emp_def is EmployeeDef) and not restaurant_ids.is_empty():
-			var preview_state := _build_preview_state_with_use_employee(_old_state, command.actor, employee_type)
+			var preview_state := _build_preview_state_with_use_employee_best_effort(_old_state, command.actor, employee_type)
 			var plan_r := DrinksProcurementClass.resolve_procurement_plan(preview_state, command, restaurant_ids, emp_def)
 			if plan_r.ok and plan_r.value is Dictionary:
 				var plan: Dictionary = plan_r.value
@@ -391,6 +405,8 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 							if drink_type.is_empty():
 								continue
 							drinks_procured[drink_type] = int(drinks_procured.get(drink_type, 0)) + drinks_per_source
+			else:
+				_append_procurement_event_fallback_data(data, command)
 
 	if not drinks_procured.is_empty():
 		data["drinks_procured"] = drinks_procured
@@ -401,3 +417,30 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 	})
 
 	return events
+
+static func _append_procurement_event_fallback_data(data: Dictionary, command: Command) -> void:
+	if data == null or command == null:
+		return
+	var restaurant_id := str(command.params.get("restaurant_id", "")).strip_edges()
+	if not restaurant_id.is_empty():
+		data["restaurant_id"] = restaurant_id
+	var selected_val = command.params.get("selected_sources", null)
+	if not (selected_val is Array):
+		return
+	var selected: Array = selected_val
+	if selected.is_empty():
+		return
+	data["selected_sources"] = selected
+	var picked_sources_out: Array[Dictionary] = []
+	for pos_val in selected:
+		var pos_out: Array = []
+		if pos_val is Vector2i:
+			var wp: Vector2i = pos_val
+			pos_out = [wp.x, wp.y]
+		elif pos_val is Array:
+			pos_out = Array(pos_val)
+		if pos_out.is_empty():
+			continue
+		picked_sources_out.append({"world_pos": pos_out})
+	if not picked_sources_out.is_empty():
+		data["picked_sources"] = picked_sources_out

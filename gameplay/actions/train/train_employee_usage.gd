@@ -167,6 +167,9 @@ static func apply_inferred_use_employee_train(state: GameState, player_id: int) 
 			return inc
 
 		for _k in range(delta):
-			EmployeeUsageHelperClass.append_use_employee_warning(warnings, state, player_id, emp_id)
+			var use_employee := EmployeeUsageHelperClass.apply_use_employee_event(state, player_id, emp_id)
+			if not use_employee.ok:
+				return use_employee
+			warnings.append_array(use_employee.warnings)
 
 	return Result.success().with_warnings(warnings)

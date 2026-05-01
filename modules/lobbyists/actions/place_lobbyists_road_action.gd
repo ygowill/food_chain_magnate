@@ -240,15 +240,15 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"player_id": player_id,
 		"employee_id": "lobbyist",
 	})
+	if not ms.ok:
+		return Result.failure("里程碑触发失败(UseEmployee/lobbyist): %s" % ms.error).with_warnings(ms.warnings)
 	var result := Result.success({
 		"player_id": player_id,
 		"piece_id": piece_id,
 		"anchor_pos": anchor_pos,
 		"rotation": rotation,
 		"markers": placed_markers,
-	})
-	if not ms.ok:
-		result.with_warning("里程碑触发失败(UseEmployee/lobbyist): %s" % ms.error)
+	}).with_warnings(ms.warnings)
 	return result
 
 func _generate_specific_events(_old_state: GameState, _new_state: GameState, command: Command) -> Array[Dictionary]:

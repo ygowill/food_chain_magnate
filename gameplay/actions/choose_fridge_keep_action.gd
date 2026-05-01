@@ -166,9 +166,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 			"discarded": discarded,
 		})
 		if not ms.ok:
-			warnings.append("里程碑触发失败(CleanupDiscard): 玩家 %d: %s" % [command.actor, ms.error])
-		else:
-			warnings.append_array(ms.warnings)
+			return Result.failure("里程碑触发失败(CleanupDiscard): 玩家 %d: %s" % [command.actor, ms.error]).with_warnings(warnings).with_warnings(ms.warnings)
+		warnings.append_array(ms.warnings)
 
 	pending.remove_at(0)
 	var set_pending_r := _set_pending_cleanup_tasks(state, pending)

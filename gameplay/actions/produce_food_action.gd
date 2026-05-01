@@ -193,12 +193,18 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return use_staff
 
 	# 使用员工：用于“first_*_used”等里程碑
-	EmployeeUsageHelperClass.append_use_employee_warning(warnings, state, player_id, producer_employee_type)
+	var use_employee := EmployeeUsageHelperClass.apply_use_employee_event(state, player_id, producer_employee_type)
+	if not use_employee.ok:
+		return use_employee
+	warnings.append_array(use_employee.warnings)
 
 	var ms := MilestoneSystemClass.process_event(state, "Produce", {
 		"player_id": player_id,
 		"product": food_type
 	})
+	if not ms.ok:
+		return Result.failure("里程碑触发失败(Produce): %s" % ms.error).with_warnings(warnings).with_warnings(ms.warnings)
+	warnings.append_array(ms.warnings)
 
 	var result := Result.success({
 		"employee_type": employee_type,
@@ -210,8 +216,6 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"player_id": player_id,
 		"new_inventory": new_amount
 	}).with_warnings(warnings)
-	if not ms.ok:
-		result.with_warning("里程碑触发失败(Produce): %s" % ms.error)
 	return result
 
 func _generate_specific_events(_old_state: GameState, _new_state: GameState, command: Command) -> Array[Dictionary]:

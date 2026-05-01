@@ -58,13 +58,13 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	MandatoryActionsRulesClass.mark_completed(state, player_id, action_id)
 
 	var ms := MilestoneSystemClass.process_event(state, "LowerPrice", {"player_id": player_id})
+	if not ms.ok:
+		return Result.failure("里程碑触发失败(LowerPrice): %s" % ms.error).with_warnings(ms.warnings)
 
 	var result := Result.success({
 		"player_id": player_id,
 		"modifier": -1
-	})
-	if not ms.ok:
-		result.with_warning("里程碑触发失败(LowerPrice): %s" % ms.error)
+	}).with_warnings(ms.warnings)
 	return result
 
 func _generate_specific_events(_old_state: GameState, _new_state: GameState, command: Command) -> Array[Dictionary]:

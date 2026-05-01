@@ -143,9 +143,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 			"discarded": discarded,
 		})
 		if not ms.ok:
-			warnings.append("里程碑触发失败(CleanupDiscard): 玩家 %d: %s" % [command.actor, ms.error])
-		else:
-			warnings.append_array(ms.warnings)
+			return Result.failure("里程碑触发失败(CleanupDiscard): 玩家 %d: %s" % [command.actor, ms.error]).with_warnings(warnings).with_warnings(ms.warnings)
+		warnings.append_array(ms.warnings)
 
 	# === pending 流转：先处理 kimchi 选择；结束后再进入 fridge 选择（若有） ===
 	pending.remove_at(0)

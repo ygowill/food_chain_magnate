@@ -157,7 +157,10 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 	var warnings: Array[String] = []
 
 	# 使用员工：用于“first_marketeer_used”等里程碑
-	EmployeeUsageHelperClass.append_use_employee_warning(warnings, state, player_id, marketer_employee_type)
+	var use_employee := EmployeeUsageHelperClass.apply_use_employee_event(state, player_id, marketer_employee_type)
+	if not use_employee.ok:
+		return use_employee
+	warnings.append_array(use_employee.warnings)
 
 	# 飞机轴与 tile 索引
 	var axis := ""
@@ -222,6 +225,9 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 		"employee_type": marketer_employee_type,
 		"employee_is_marketeer": _is_employee_marketeer(emp_def),
 	})
+	if not ms.ok:
+		return Result.failure("里程碑触发失败(InitiateMarketing): %s" % ms.error).with_warnings(warnings).with_warnings(ms.warnings)
+	warnings.append_array(ms.warnings)
 
 	var ext_apply := MarketingInitiationRegistryClass.apply(state, command, instance)
 	if not ext_apply.ok:
@@ -239,8 +245,6 @@ static func apply(action: ActionExecutor, state: GameState, command: Command) ->
 		"world_pos": world_pos,
 		"rotation": rotation,
 	})
-	if not ms.ok:
-		result.with_warning("里程碑触发失败(InitiateMarketing): %s" % ms.error)
 	result.with_warnings(ext_apply.warnings)
 	result.with_warnings(warnings)
 	return result

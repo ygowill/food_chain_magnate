@@ -313,6 +313,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return use_staff
 
 	var ms := MilestoneSystemClass.process_event(state, "HouseBuilt", {"player_id": player_id})
+	if not ms.ok:
+		return Result.failure("里程碑触发失败(HouseBuilt): %s" % ms.error).with_warnings(ms.warnings)
 
 	var result := Result.success({
 		"house_id": house_id,
@@ -322,9 +324,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"rotation": rotation,
 		"staff_id": placer_staff_id,
 		"employee_type": placer_employee_type,
-	})
-	if not ms.ok:
-		result.with_warning("里程碑触发失败(HouseBuilt): %s" % ms.error)
+	}).with_warnings(ms.warnings)
 	return result
 
 func _generate_specific_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
