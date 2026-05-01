@@ -76,8 +76,15 @@ async def _seed_local_replay_match_with_archive(
     return m.match_id
 
 
-async def _seed_match_with_local_artifacts(db: AsyncSession, user_id: str, replay_storage_dir: str) -> tuple[str, str]:
-    m = Match(room_code="ARTDET", status="completed", player_count=1)
+async def _seed_match_with_local_artifacts(
+    db: AsyncSession,
+    user_id: str,
+    replay_storage_dir: str,
+    *,
+    link_match: bool = True,
+    room_code: str = "ARTDET",
+) -> tuple[str, str]:
+    m = Match(room_code=room_code, status="completed", player_count=1)
     db.add(m)
     await db.flush()
     db.add(MatchParticipant(
@@ -86,8 +93,8 @@ async def _seed_match_with_local_artifacts(db: AsyncSession, user_id: str, repla
         role="player",
         seat_index=0,
     ))
-    autosave_path = f"{replay_storage_dir}/artifacts/rooms/ARTDET/latest_autosave.json"
-    snapshot_path = f"{replay_storage_dir}/artifacts/rooms/ARTDET/map_snapshots/round_0002_round_end.png"
+    autosave_path = f"{replay_storage_dir}/artifacts/rooms/{room_code}/latest_autosave.json"
+    snapshot_path = f"{replay_storage_dir}/artifacts/rooms/{room_code}/map_snapshots/round_0002_round_end.png"
     import os
     os.makedirs(os.path.dirname(snapshot_path), exist_ok=True)
     with open(autosave_path, "w", encoding="utf-8") as f:
@@ -96,25 +103,25 @@ async def _seed_match_with_local_artifacts(db: AsyncSession, user_id: str, repla
     with open(snapshot_path, "wb") as f:
         f.write(png_bytes)
     db.add(MatchArtifact(
-        match_id=m.match_id,
-        room_code="ARTDET",
+        match_id=m.match_id if link_match else None,
+        room_code=room_code,
         artifact_type="autosave_latest",
         snapshot_kind="round_end",
         round_number=2,
         state_hash="hash-2",
-        storage_uri="local_artifact://rooms/ARTDET/latest_autosave.json",
+        storage_uri=f"local_artifact://rooms/{room_code}/latest_autosave.json",
         mime_type="application/json",
         checksum="save-checksum",
         size_bytes=len('{"round":2}'),
     ))
     snapshot = MatchArtifact(
-        match_id=m.match_id,
-        room_code="ARTDET",
+        match_id=m.match_id if link_match else None,
+        room_code=room_code,
         artifact_type="map_snapshot",
         snapshot_kind="round_end",
         round_number=2,
         state_hash="hash-2",
-        storage_uri="local_artifact://rooms/ARTDET/map_snapshots/round_0002_round_end.png",
+        storage_uri=f"local_artifact://rooms/{room_code}/map_snapshots/round_0002_round_end.png",
         mime_type="image/png",
         checksum="snapshot-checksum",
         size_bytes=len(png_bytes),
@@ -198,6 +205,52 @@ async def test_get_match_detail_includes_server_artifacts(client: AsyncClient, d
         assert body["latest_save"]["state_hash"] == "hash-2"
         assert body["map_snapshots"][0]["id"] == snapshot_id
         assert body["map_snapshots"][0]["download_url"] == f"/v1/matches/{mid}/map-snapshots/{snapshot_id}/download"
+    finally:
+        settings.replay_storage_dir = old_replay_storage_dir
+
+
+@pytest.mark.asyncio
+async def test_match_detail_includes_orphan_room_artifacts_from_finalize_race(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    tmp_path,
+):
+    old_replay_storage_dir = settings.replay_storage_dir
+    settings.replay_storage_dir = str(tmp_path)
+    try:
+        user = await _create_user(client)
+        mid, snapshot_id = await _seed_match_with_local_artifacts(
+            db_session,
+            user["user_id"],
+            str(tmp_path),
+            link_match=False,
+            room_code="RACE01",
+        )
+
+        list_resp = await client.get("/v1/matches", params={"session_id": user["session_id"]})
+        assert list_resp.status_code == 200
+        list_match = next(item for item in list_resp.json() if item["match_id"] == mid)
+        assert list_match["latest_save_round"] == 2
+        assert list_match["map_snapshot_count"] == 1
+
+        detail_resp = await client.get(f"/v1/matches/{mid}", params={"session_id": user["session_id"]})
+        assert detail_resp.status_code == 200
+        detail = detail_resp.json()
+        assert detail["latest_save_round"] == 2
+        assert detail["map_snapshot_count"] == 1
+        assert detail["map_snapshots"][0]["id"] == snapshot_id
+        assert detail["map_snapshots"][0]["download_url"] == f"/v1/matches/{mid}/map-snapshots/{snapshot_id}/download"
+
+        autosave = await client.get(f"/v1/matches/{mid}/autosave/download", params={"session_id": user["session_id"]})
+        assert autosave.status_code == 200
+        assert autosave.text == '{"round":2}'
+
+        snapshot = await client.get(
+            f"/v1/matches/{mid}/map-snapshots/{snapshot_id}/download",
+            params={"session_id": user["session_id"]},
+        )
+        assert snapshot.status_code == 200
+        assert snapshot.content == b"\x89PNG\r\n\x1a\nartifact-test"
     finally:
         settings.replay_storage_dir = old_replay_storage_dir
 

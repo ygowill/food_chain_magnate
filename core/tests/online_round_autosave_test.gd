@@ -76,11 +76,22 @@ static func _test_cleanup_to_restructuring_requests_round_autosave() -> Result:
 	if str(call.get("snapshot_kind", "")) != "round_end":
 		return Result.failure("snapshot_kind 应为 round_end: %s" % str(call))
 
-	var non_cleanup_cmd = CommandClass.create("skip", 0)
-	non_cleanup_cmd.phase = DefsClass.PHASE_PAYDAY
-	server_logic._maybe_request_round_end_autosave(room, non_cleanup_cmd, state, "hash_after_payday")
-	if fake_net.calls.size() != 1:
-		return Result.failure("非 Cleanup 阶段不应请求回合自动存档")
+	var auto_settlement_cmd = CommandClass.create("skip", 0)
+	auto_settlement_cmd.phase = DefsClass.PHASE_PAYDAY
+	server_logic._maybe_request_round_end_autosave(room, auto_settlement_cmd, state, "hash_after_payday")
+	if fake_net.calls.size() != 2:
+		return Result.failure("自动结算阶段进入 Restructuring 时也应请求回合自动存档，实际: %d" % fake_net.calls.size())
+	var auto_call: Dictionary = fake_net.calls[1]
+	if int(auto_call.get("completed_round_number", -1)) != 2:
+		return Result.failure("自动结算 completed_round_number 错误: %s" % str(auto_call))
+	if str(auto_call.get("snapshot_kind", "")) != "round_end":
+		return Result.failure("自动结算 snapshot_kind 应为 round_end: %s" % str(auto_call))
+
+	var working_cmd = CommandClass.create("skip", 0)
+	working_cmd.phase = DefsClass.PHASE_WORKING
+	server_logic._maybe_request_round_end_autosave(room, working_cmd, state, "hash_after_working")
+	if fake_net.calls.size() != 2:
+		return Result.failure("非结算阶段进入 Restructuring 不应请求回合自动存档")
 
 	return Result.success()
 

@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user, has_admin_access_configured, is_admin_user
@@ -314,6 +314,24 @@ def _build_artifact_info(match_id: str, artifact: MatchArtifact) -> MatchArtifac
     )
 
 
+def _normalize_artifact_room_code(value: Optional[str]) -> str:
+    return str(value or "").strip().upper()
+
+
+def _match_artifact_owner_filter(match_id: str, room_code: Optional[str]):
+    direct_owner = MatchArtifact.match_id == match_id
+    normalized_room_code = _normalize_artifact_room_code(room_code)
+    if not normalized_room_code:
+        return direct_owner
+    return or_(
+        direct_owner,
+        and_(
+            MatchArtifact.match_id.is_(None),
+            MatchArtifact.room_code == normalized_room_code,
+        ),
+    )
+
+
 async def _require_match_for_participant(db: AsyncSession, match_id: str, user_id: str) -> Match:
     part = (await db.execute(
         select(MatchParticipant).where(MatchParticipant.match_id == match_id, MatchParticipant.user_id == user_id)
@@ -609,13 +627,28 @@ async def list_matches(
         str(replay.match_id): _load_local_replay_logo_overrides(replay.storage_uri)
         for replay in replay_rows
     }
+    room_code_to_match_id = {
+        _normalize_artifact_room_code(m.room_code): str(m.match_id)
+        for m in rows
+        if _normalize_artifact_room_code(m.room_code)
+    }
+    artifact_owner_filters = [MatchArtifact.match_id.in_(match_ids)]
+    if room_code_to_match_id:
+        artifact_owner_filters.append(and_(
+            MatchArtifact.match_id.is_(None),
+            MatchArtifact.room_code.in_(room_code_to_match_id.keys()),
+        ))
     artifact_rows = (
-        await db.execute(select(MatchArtifact).where(MatchArtifact.match_id.in_(match_ids)))
+        await db.execute(select(MatchArtifact).where(or_(*artifact_owner_filters)))
     ).scalars().all()
     latest_save_round_by_match_id: dict[str, int] = {}
     map_snapshot_count_by_match_id: dict[str, int] = {}
     for artifact in artifact_rows:
-        mid = str(artifact.match_id)
+        mid = str(artifact.match_id or "").strip()
+        if not mid:
+            mid = room_code_to_match_id.get(_normalize_artifact_room_code(artifact.room_code), "")
+        if not mid:
+            continue
         if str(artifact.artifact_type) == "autosave_latest":
             latest_save_round_by_match_id[mid] = int(artifact.round_number or 0)
         elif str(artifact.artifact_type) == "map_snapshot":
@@ -654,7 +687,7 @@ async def get_match(match_id: str, session_id: str = Query(""), db: AsyncSession
     )).scalar_one_or_none()
     artifacts = (await db.execute(
         select(MatchArtifact)
-        .where(MatchArtifact.match_id == match_id)
+        .where(_match_artifact_owner_filter(match_id, match.room_code))
         .order_by(MatchArtifact.round_number.asc(), MatchArtifact.created_at.asc())
     )).scalars().all()
     latest_save: Optional[MatchArtifactInfo] = None
@@ -726,10 +759,10 @@ async def download_autosave(match_id: str, session_id: str = Query(""), db: Asyn
     match = await _require_match_for_participant_or_admin(db, match_id, sess.user_id)
     artifact = (await db.execute(
         select(MatchArtifact).where(
-            MatchArtifact.match_id == match_id,
+            _match_artifact_owner_filter(match_id, match.room_code),
             MatchArtifact.artifact_type == "autosave_latest",
-        )
-    )).scalar_one_or_none()
+        ).order_by(MatchArtifact.match_id.is_(None).asc(), MatchArtifact.updated_at.desc())
+    )).scalars().first()
     if not artifact:
         raise HTTPException(404, "autosave not found")
     return _download_artifact_response(
@@ -749,7 +782,7 @@ async def download_map_snapshot(
     match = await _require_match_for_participant_or_admin(db, match_id, sess.user_id)
     artifact = (await db.execute(
         select(MatchArtifact).where(
-            MatchArtifact.match_id == match_id,
+            _match_artifact_owner_filter(match_id, match.room_code),
             MatchArtifact.id == artifact_id,
             MatchArtifact.artifact_type == "map_snapshot",
         )

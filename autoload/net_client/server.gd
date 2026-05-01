@@ -2180,9 +2180,9 @@ func _maybe_request_round_end_autosave(room, cmd, state, state_hash: String) -> 
 			final_round_number = 1
 		_net.request_server_round_autosave(game_over_room_code, final_round_number, str(state_hash).strip_edges(), "game_over")
 		return
-	if str(cmd.phase) != DefsClass.PHASE_CLEANUP:
-		return
 	if str(state.phase) != DefsClass.PHASE_RESTRUCTURING:
+		return
+	if not _command_phase_can_complete_round(str(cmd.phase)):
 		return
 	var completed_round_number := int(state.round_number) - 1
 	if completed_round_number <= 0:
@@ -2193,6 +2193,19 @@ func _maybe_request_round_end_autosave(room, cmd, state, state_hash: String) -> 
 	if room_code.is_empty():
 		return
 	_net.request_server_round_autosave(room_code, completed_round_number, str(state_hash).strip_edges(), "round_end")
+
+func _command_phase_can_complete_round(command_phase: String) -> bool:
+	match str(command_phase).strip_edges():
+		DefsClass.PHASE_DINNERTIME:
+			return true
+		DefsClass.PHASE_PAYDAY:
+			return true
+		DefsClass.PHASE_MARKETING:
+			return true
+		DefsClass.PHASE_CLEANUP:
+			return true
+		_:
+			return false
 
 func server_is_player_forfeited(state, player_id: int) -> bool:
 	if state == null:
