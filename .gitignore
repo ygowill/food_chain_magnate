@@ -9,6 +9,7 @@
 .history/
 .obsidian/
 .vscode/
+.VSCodeCounter/
 .venv/
 .playwright-cli/
 
