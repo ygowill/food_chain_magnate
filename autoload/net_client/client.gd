@@ -595,10 +595,14 @@ func _initialize_online_client_engine_from_config(config: Dictionary, room_code:
 
 	var engine = GameEngineClass.new()
 	var config_overrides_val = config.get("game_config_overrides", null)
-	if config_overrides_val is Dictionary:
+	if config_overrides_val != null:
+		if not (config_overrides_val is Dictionary):
+			return Result.failure("Online room game_config_overrides 必须是 Dictionary")
 		engine.set_game_config_overrides(Dictionary(config_overrides_val).duplicate(true))
 	var option_overrides_val = config.get("game_option_overrides", null)
-	if option_overrides_val is Dictionary:
+	if option_overrides_val != null:
+		if not (option_overrides_val is Dictionary):
+			return Result.failure("Online room game_option_overrides 必须是 Dictionary")
 		engine.set_game_option_overrides(Dictionary(option_overrides_val).duplicate(true))
 	var init_r = engine.initialize(player_count, seed, enabled_modules, base_dir, reserve_card_choices, logo_choices)
 	if not init_r.ok:

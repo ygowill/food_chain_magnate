@@ -2599,3 +2599,32 @@
 结论：
 
 - 已完成该 P2 strict 化：artifact backfill 工具不会再为不明确的最终状态合成 latest autosave 元数据，避免输出与 replay 真实事件边界不一致的产物。
+
+### Fix 45：GameEngine 配置覆盖不再隐式读取 Globals
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 1 `[P1] server/room.gd 在权威房间启动时临时写入 Globals 的配置覆盖`。
+- Step 2 `[P2] GameEngine 初始化已经支持依赖注入覆盖，但仍保留从 Globals 读取配置覆盖的 fallback`。
+- Step 9 中同源风险：online/client/server 初始化不应把坏配置覆盖形状解释为默认配置。
+
+改动：
+
+- `core/engine/game_engine/initializer.gd`：移除 `Globals.game_config_overrides` / `Globals.game_option_overrides` fallback；`GameEngine` 初始化只接受 `GameEngineDependencies` 中显式注入的配置覆盖。
+- `ui/scenes/game/game.gd`：本地新局在创建 `GameEngine` 后显式注入 `Globals.game_config_overrides` 与 `Globals.game_option_overrides`，把 UI 设置层与 core 初始化层的边界拆开。
+- `server/room.gd`：权威房间启动不再临时改写 `Globals`；房间 config 中存在覆盖字段时直接注入到 engine，且字段类型不是 `Dictionary` 时 fail-fast。
+- `autoload/net_client/client.gd`：online client bootstrap 同样拒绝非 `Dictionary` 的配置覆盖字段，不再静默忽略坏配置后用默认规则初始化。
+- `core/tests/engine_dependencies_injection_test.gd`：新增 `Globals` 覆盖不再隐式影响普通 `GameEngine.initialize(...)` 的回归测试。
+- `core/tests/online_client_config_bootstrap_overrides_test.gd`：新增 online room config 中坏 `game_option_overrides` 必须拒绝且不得创建本地 engine 的负例。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`391/391`。
+
+结论：
+
+- 已完成该 P1/P2 边界整改：core/server 初始化语义不再依赖跨场景全局单例；UI、server、online client 均通过显式注入表达配置覆盖。
+- 后续若还需要 `Globals` 承载 UI 设置缓存，也应只停留在 UI/setup 层，不能再作为 `GameEngine` 默认 fallback。

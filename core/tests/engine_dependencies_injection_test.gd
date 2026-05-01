@@ -202,6 +202,9 @@ static func run(seed_val: int = 12345) -> Result:
 	var malformed_event_r := _test_malformed_event_envelope_fails_fast(seed_val + 5)
 	if not malformed_event_r.ok:
 		return malformed_event_r
+	var globals_override_r := _test_globals_overrides_are_not_implicit(seed_val + 6)
+	if not globals_override_r.ok:
+		return globals_override_r
 	return Result.success({
 		"cash_calls": event_provider.cash_calls,
 		"milestone_calls": event_provider.milestone_calls,
@@ -212,8 +215,46 @@ static func run(seed_val: int = 12345) -> Result:
 		"invalid_action_provider_verified": true,
 		"invalid_event_provider_verified": true,
 		"malformed_event_envelope_verified": true,
+		"globals_override_isolation_verified": true,
 		"event_sink_events": event_sink.emitted_types.size(),
 	})
+
+static func _test_globals_overrides_are_not_implicit(seed_val: int) -> Result:
+	if Globals == null:
+		return Result.failure("Globals autoload missing")
+	var prev_config_overrides := Dictionary(Globals.game_config_overrides).duplicate(true)
+	var prev_option_overrides := Dictionary(Globals.game_option_overrides).duplicate(true)
+	Globals.game_config_overrides = {
+		"rules.salary_cost": 123,
+	}
+	Globals.game_option_overrides = {
+		"player.starting_cash": 7,
+	}
+
+	var engine := GameEngine.new()
+	var init_r := engine.initialize(2, seed_val)
+	if not init_r.ok:
+		Globals.game_config_overrides = prev_config_overrides
+		Globals.game_option_overrides = prev_option_overrides
+		engine.dispose()
+		return Result.failure("Globals 隔离测试初始化失败: %s" % init_r.error)
+	var state: GameState = engine.get_state()
+	var p0 := Dictionary(state.players[0])
+	if state.get_rule_int("salary_cost") == 123:
+		Globals.game_config_overrides = prev_config_overrides
+		Globals.game_option_overrides = prev_option_overrides
+		engine.dispose()
+		return Result.failure("未显式注入时不应应用 Globals.game_config_overrides")
+	if int(p0.get("cash", -1)) == 7:
+		Globals.game_config_overrides = prev_config_overrides
+		Globals.game_option_overrides = prev_option_overrides
+		engine.dispose()
+		return Result.failure("未显式注入时不应应用 Globals.game_option_overrides")
+
+	Globals.game_config_overrides = prev_config_overrides
+	Globals.game_option_overrides = prev_option_overrides
+	engine.dispose()
+	return Result.success()
 
 static func _test_short_game_option_overrides(seed_val: int) -> Result:
 	var current_patch := {

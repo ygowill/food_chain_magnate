@@ -58,8 +58,8 @@ static func initialize_new_game(
 
 	var cfg = config_result.value
 
-	# 应用高级配置覆盖 / 游戏选项覆盖
-	var _globals_node = AutoloadAccessClass.get_autoload("Globals")
+	# 应用高级配置覆盖 / 游戏选项覆盖。调用方必须通过 GameEngineDependencies 显式注入，
+	# 避免 core/server 初始化语义依赖 Globals 这类跨场景单例。
 	var injected_config_overrides = null
 	var injected_option_overrides = null
 	var effective_option_overrides: Dictionary = {}
@@ -74,15 +74,6 @@ static func initialize_new_game(
 		if not overrides.is_empty():
 			cfg.apply_overrides(overrides)
 			AutoloadAccessClass.log_info("GameEngine", "已应用 %d 项注入的高级配置覆盖" % overrides.size())
-	elif _globals_node != null and "game_config_overrides" in _globals_node:
-		var globals_overrides = _globals_node.game_config_overrides
-		if globals_overrides != null:
-			if not (globals_overrides is Dictionary):
-				return Result.failure("初始化失败：全局 game_config_overrides 类型错误（期望 Dictionary）")
-			var overrides: Dictionary = globals_overrides
-			if not overrides.is_empty():
-				cfg.apply_overrides(overrides)
-				AutoloadAccessClass.log_info("GameEngine", "已应用 %d 项高级配置覆盖" % overrides.size())
 
 	if injected_option_overrides != null:
 		if not (injected_option_overrides is Dictionary):
@@ -92,16 +83,6 @@ static func initialize_new_game(
 		if not opt_overrides.is_empty():
 			cfg.apply_overrides(opt_overrides)
 			AutoloadAccessClass.log_info("GameEngine", "已应用 %d 项注入的游戏选项覆盖" % opt_overrides.size())
-	elif _globals_node != null and "game_option_overrides" in _globals_node:
-		var globals_option_overrides = _globals_node.game_option_overrides
-		if globals_option_overrides != null:
-			if not (globals_option_overrides is Dictionary):
-				return Result.failure("初始化失败：全局 game_option_overrides 类型错误（期望 Dictionary）")
-			var opt_overrides: Dictionary = globals_option_overrides
-			effective_option_overrides = opt_overrides.duplicate(true)
-			if not opt_overrides.is_empty():
-				cfg.apply_overrides(opt_overrides)
-				AutoloadAccessClass.log_info("GameEngine", "已应用 %d 项游戏选项覆盖" % opt_overrides.size())
 
 	var legacy_short_game := _is_legacy_short_game_option_patch(effective_option_overrides)
 	if legacy_short_game:
