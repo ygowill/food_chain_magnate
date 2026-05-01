@@ -4,6 +4,7 @@ extends RefCounted
 
 const ControllerClass = preload("res://ui/scenes/game/menu/controller.gd")
 const ConfirmDialogScene = preload("res://ui/dialogs/confirm_dialog.tscn")
+const UiZClass = preload("res://ui/utils/ui_z.gd")
 
 
 class _MockMenuDebugController:
@@ -85,6 +86,8 @@ static func _run_online_game_over_return_confirm(tree: SceneTree) -> Result:
 	tree.root.add_child(host)
 	var menu_dialog := Control.new()
 	host.add_child(menu_dialog)
+	var phase_modal := Control.new()
+	host.add_child(phase_modal)
 	var box := VBoxContainer.new()
 	box.name = "VBoxContainer"
 	menu_dialog.add_child(box)
@@ -116,6 +119,10 @@ static func _run_online_game_over_return_confirm(tree: SceneTree) -> Result:
 		return await _cleanup_and_fail(tree, host, controller, "GameOver 联机菜单按钮应显示返回房间列表，实际: %s" % str(quit_btn.text))
 	if mock_debug.open_menu_count != 1:
 		return await _cleanup_and_fail(tree, host, controller, "打开菜单应委托 menu_debug_controller.open_menu")
+	if menu_dialog.get_index() <= phase_modal.get_index():
+		return await _cleanup_and_fail(tree, host, controller, "打开菜单时 MenuDialog 应移到阶段弹窗之后以接收点击")
+	if menu_dialog.z_as_relative or menu_dialog.z_index < UiZClass.MENU:
+		return await _cleanup_and_fail(tree, host, controller, "打开菜单时 MenuDialog 应使用最高菜单层级")
 
 	controller.on_quit_to_menu_pressed()
 	await tree.process_frame

@@ -74,6 +74,19 @@ func is_menu_visible() -> bool:
 func is_confirm_visible() -> bool:
 	return _confirm_dialog != null and is_instance_valid(_confirm_dialog) and bool(_confirm_dialog.visible)
 
+func _raise_menu_dialog() -> void:
+	if not is_instance_valid(_menu_dialog):
+		return
+	UiZClass.apply_absolute(_menu_dialog, UiZClass.MENU)
+	_menu_dialog.move_to_front()
+
+func _raise_confirm_dialog() -> void:
+	if _confirm_dialog == null or not is_instance_valid(_confirm_dialog):
+		return
+	if _confirm_dialog is Control:
+		UiZClass.apply_absolute((_confirm_dialog as Control), UiZClass.CONFIRM_DIALOG)
+		(_confirm_dialog as Control).move_to_front()
+
 func handle_escape() -> bool:
 	# 关闭顶层对话框
 	if is_menu_visible():
@@ -97,6 +110,7 @@ func on_menu_pressed() -> void:
 		_menu_debug_controller.call("open_menu")
 	elif is_instance_valid(_menu_dialog):
 		_menu_dialog.show()
+	_raise_menu_dialog()
 
 func on_menu_dialog_close_requested() -> void:
 	if is_instance_valid(_menu_debug_controller) and _menu_debug_controller.has_method("close_menu"):
@@ -229,6 +243,7 @@ func show_confirm(title: String, message: String, on_confirm: Callable, on_cance
 		_confirm_dialog.call("show_dialog")
 	else:
 		_confirm_dialog.show()
+	_raise_confirm_dialog()
 
 func _on_confirm_dialog_confirmed() -> void:
 	var cb := _confirm_dialog_on_confirm
@@ -257,3 +272,4 @@ func _cancel_quit_to_menu() -> void:
 		_menu_debug_controller.call("open_menu")
 	elif is_instance_valid(_menu_dialog):
 		_menu_dialog.show()
+	_raise_menu_dialog()

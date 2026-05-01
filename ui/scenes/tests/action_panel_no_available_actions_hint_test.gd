@@ -42,9 +42,9 @@ static func run() -> Result:
 	if title_label_main == null:
 		await _cleanup_panel(panel, st)
 		return Result.failure("TitleLabel 节点缺失")
-	if (modal_btn as Button).get_index() >= title_label_main.get_index():
+	if (modal_btn as Button).get_index() != title_label_main.get_index() + 1:
 		await _cleanup_panel(panel, st)
-		return Result.failure("ModalReopenButton 应位于右侧动作面板最上方")
+		return Result.failure("ModalReopenButton 应紧跟在可用动作标题下方")
 
 	var emitted := {"id": "", "params": {}}
 	ap.action_requested.connect(func(action_id: String, params: Dictionary) -> void:
