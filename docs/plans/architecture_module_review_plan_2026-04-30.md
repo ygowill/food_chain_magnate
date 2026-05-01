@@ -1188,6 +1188,7 @@
   - 证据：JSON 解析为 `null` 时直接改成 `{}`；只要 HTTP status 是 2xx，就返回 `{"ok": parsed}`。证据：`autoload/platform_api.gd:116-131`。
   - 风险：如果 backend/proxy 返回 200 HTML、空 body 或损坏 JSON，调用方会看到成功空字典，后续再以缺字段方式失败，定位困难；对房间/账号/恢复 ticket 这种强契约接口尤其不合适。
   - 建议：2xx 响应 body 不是 JSON object 时应返回 transport/protocol error；只有明确允许空 body 的 endpoint 才单独放行。
+  - 状态：Fix 69 复核当前 `parse_http_json_response(...)` 已在 JSON 解析失败时返回 `error` 并保留 `_http_status/parse_error/body_text`；`PlatformApiResponseParseTest` 已覆盖 200 非 JSON body 必须失败，且合法 JSON `null` 不再被改写为 `{}`。
 
 - [P2] Online client 从 server config 初始化 engine 时，`modules_v2_base_dir` 非法会回退默认目录，可能和 server 权威模块装配不一致。
   - 证据：`_initialize_online_client_engine_from_config(...)` 解析 `modules_v2_base_dir` 失败时只 warning，并设为 `GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR`。证据：`autoload/net_client/client.gd:570-577`。
@@ -3194,6 +3195,28 @@
 验证：
 
 - `pytest backend/tests/test_rooms.py::test_spectate_room_rejects_corrupt_config_json`：PASS，`1 passed`。
+
+结论：
+
+- 该 P2 在当前代码中已完成，不需要额外运行时代码改动；本次更新仅把审查文档从旧证据状态修正为当前实现状态。
+
+### Fix 69：复核 PlatformApi 2xx 坏 JSON 不再伪装为成功
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 9 `[P2] PlatformApi.parse_http_json_response(...) 对 2xx 非 JSON 响应返回 {"ok": {}}，会把后端协议错误伪装成成功`。
+
+复核结论：
+
+- 当前 `autoload/platform_api.gd` 在 `JSON.parse(...)` 非 OK 时直接返回 `{"error": {...}}`，包含 `_http_status`、`parse_error`、`parse_error_line` 和 `body_text`。
+- 当前实现不再把合法 JSON `null` 改写成 `{}`；2xx 合法 JSON 返回 `ok`，2xx 坏 JSON 返回 protocol error。
+- `core/tests/platform_api_response_parse_test.gd` 已覆盖 200 invalid JSON 必须返回 error，并断言错误中保留 `_http_status` 与 `parse_error`。
+
+验证：
+
+- Fix 65 过程中已跑 `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`392/392`，包含 `PlatformApiResponseParseTest`。
 
 结论：
 
