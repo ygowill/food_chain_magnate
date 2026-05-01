@@ -1194,6 +1194,7 @@
   - 证据：`_initialize_online_client_engine_from_config(...)` 解析 `modules_v2_base_dir` 失败时只 warning，并设为 `GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR`。证据：`autoload/net_client/client.gd:570-577`。
   - 风险：联机客户端必须与 server 使用同一模块目录和模块集合。即便当前 server 多数情况下会在 initialize 失败时阻止开局，client 侧仍不应拥有“不同配置也继续初始化”的路径。
   - 建议：联机 config 缺失/非法时 fail-fast，请求 server resync 或拒绝启动；默认模块目录只用于本地新局 UI，不用于已由 server 签发的房间配置。
+  - 状态：Fix 70 复核当前 `_initialize_online_client_engine_from_config(...)` 已在空/非法 `modules_v2_base_dir` 时返回 `Result.failure`，不再回退默认目录；`OnlineClientConfigBootstrapOverridesTest` 已覆盖失败时不写入 `Globals.current_game_engine`。
 
 - [P3] Online/server 关键文件仍承担多个子系统职责，后续维护风险较高。
   - 证据：当前最长文件包括 `server/room.gd` 2431 行、`autoload/net_client/server.gd` 2297 行、`ui/scenes/game/controllers/online_resync_controller.gd` 1149 行、`autoload/net_client/client.gd` 1082 行、`autoload/net_client.gd` 993 行。
@@ -3217,6 +3218,28 @@
 验证：
 
 - Fix 65 过程中已跑 `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`392/392`，包含 `PlatformApiResponseParseTest`。
+
+结论：
+
+- 该 P2 在当前代码中已完成，不需要额外运行时代码改动；本次更新仅把审查文档从旧证据状态修正为当前实现状态。
+
+### Fix 70：复核联机客户端模块目录配置不再回退默认目录
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 9 `[P2] Online client 从 server config 初始化 engine 时，modules_v2_base_dir 非法会回退默认目录，可能和 server 权威模块装配不一致`。
+
+复核结论：
+
+- 当前 `autoload/net_client/client.gd` 在 `_initialize_online_client_engine_from_config(...)` 中要求 `modules_v2_base_dir` 非空，并通过 `ModuleDirSpecClass.parse_base_dirs(...)` 校验；空值或非法路径都会返回 `Result.failure`。
+- 失败路径发生在创建/绑定 engine 之前，不会把默认模块目录写入客户端 engine，也不会污染 `Globals.current_game_engine`。
+- `core/tests/online_client_config_bootstrap_overrides_test.gd` 中 `_test_invalid_modules_base_dir_rejected()` 已覆盖非法 `/tmp/not_res_modules` 会失败、错误信息包含 `modules_v2_base_dir`、且不会写入全局 engine。
+
+验证：
+
+- Fix 65 过程中已跑 `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`392/392`，包含 `OnlineClientConfigBootstrapOverridesTest`。
 
 结论：
 
