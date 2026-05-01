@@ -135,6 +135,8 @@ static func apply_from_dict(state, data: Dictionary, expected_schema_version: in
 			return Result.failure("GameState.modules 出现重复 id: %s" % mid)
 		module_seen[mid] = true
 	state.modules = modules_out
+	if not state.modules.is_empty() and not StateSchemaRegistryClass.is_loaded():
+		return Result.failure("GameState.from_dict: StateSchemaRegistry 未加载，无法反序列化含模块状态")
 
 	var players_val = data.get("players", null)
 	if not (players_val is Array):

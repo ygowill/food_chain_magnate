@@ -6,6 +6,8 @@ class_name StateSchemaArchiveLoadTest
 extends RefCounted
 
 const LOBBYISTS_PENDING_KEY := "lobbyists_extra_tile_pending"
+const RulesRegistryBundleClass = preload("res://core/engine/game_engine/rules_registry_bundle.gd")
+const StateSchemaRegistryClass = preload("res://core/state/state_schema_registry.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_count != 2:
@@ -75,5 +77,24 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not (submitted.get(0, null) is bool) or not (submitted.get(1, null) is bool):
 		return Result.failure("round_state.restructuring.submitted 值类型错误（期望 bool）")
 
+	var strict_r := _test_from_dict_rejects_module_state_without_schema_registry(s1.to_dict())
+	if not strict_r.ok:
+		return strict_r
+
 	return Result.success()
 
+static func _test_from_dict_rejects_module_state_without_schema_registry(state_dict: Dictionary) -> Result:
+	var previous_bundle := RulesRegistryBundleClass.new()
+	previous_bundle.state_schema_loaded = StateSchemaRegistryClass.is_loaded()
+	previous_bundle.state_int_key_dict_schemas = StateSchemaRegistryClass.get_int_key_dict_schemas()
+
+	StateSchemaRegistryClass.reset_current_bundle()
+	var read := GameState.from_dict(state_dict)
+	StateSchemaRegistryClass.set_current_bundle(previous_bundle)
+
+	if read.ok:
+		return Result.failure("GameState.from_dict 反序列化含模块状态时，StateSchemaRegistry 未加载应失败")
+	var err := str(read.error)
+	if err.find("StateSchemaRegistry") < 0 or err.find("含模块状态") < 0:
+		return Result.failure("错误信息应包含 StateSchemaRegistry 与 含模块状态，实际: %s" % err)
+	return Result.success()

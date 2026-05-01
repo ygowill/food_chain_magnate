@@ -1873,3 +1873,26 @@
 
 - 已完成该 P2 strict 化：事件构建 provider 配置或契约错误会在初始化阶段暴露，不再把缺 provider 解释为空派生事件。
 - 纯展示层如需 best-effort timeline，应走独立的显式宽松构建入口，而不是依赖 CommandRunner 静默缺省。
+
+### Fix 16：含模块状态反序列化要求 StateSchemaRegistry 已装配
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 2 `[P2] StateSchemaRegistry 未加载时会跳过 int-key 字典归一化`。
+
+改动：
+
+- `core/state/game_state_serialization.gd`：`GameState.from_dict` 解析到非空 `modules` 后，如果 `StateSchemaRegistry` 未加载，直接 `Result.failure`；空模块的纯 core 状态仍允许无 schema 反序列化。
+- `core/tests/state_schema_archive_load_test.gd`：新增负例，先用含模块状态构造存档态，再强制卸载 `StateSchemaRegistry`，断言 `GameState.from_dict` 必须失败。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：含模块 state 不再能在 schema 未装配时跳过 int-key 归一化。
+- 直接调用 `GameState.from_dict` 的工具/测试如果要处理模块态，必须先通过 engine/archive loader 路径装配模块 schema。
