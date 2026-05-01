@@ -1200,6 +1200,7 @@
   - 证据：当前最长文件包括 `server/room.gd` 2431 行、`autoload/net_client/server.gd` 2297 行、`ui/scenes/game/controllers/online_resync_controller.gd` 1149 行、`autoload/net_client/client.gd` 1082 行、`autoload/net_client.gd` 993 行。
   - 风险：虽然已经抽出 `server_resync_service`、`client_resync_service`、`server_disconnect_grace_service` 等 helper，但主文件仍混合房间状态、恢复房、回滚、resync、结算上报、性能诊断和 UI 回调协调。后续 strict/migration 拆分会继续增加复杂度。
   - 建议：按职责继续拆：`OnlineRoomResumeStore`、`OnlineRoomRollbackService`、`OnlineRoomStartSession`、`ClientCommandReplayService`、`ClientSnapshotBootstrapService`。每个服务使用明确 Result contract，减少 `has_method` 与 callback 字典胶水。
+  - 状态：Fix 74 已先从 `server/room.gd` 抽出 rollback proposal pending/vote/public payload 状态管理，降低 `OnlineRoom` 在回滚子系统上的状态承载；该 P3 属于持续拆分项，后续仍可继续按 resume/start-session/client replay 边界拆分。
 
 暂不列为问题：
 
@@ -3317,3 +3318,26 @@
 结论：
 
 - 已完成该 P3 的模块 UI 结构收敛：Lobbyists 主放置控制器不再直接承载 ViewModel 派生、命令构造和 ActionPanel context 绑定三个独立职责，后续 road/park 扩展可以优先落在对应 helper 中。
+
+### Fix 74：OnlineRoom rollback proposal 状态拆出独立 helper
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 9 `[P3] Online/server 关键文件仍承担多个子系统职责，后续维护风险较高`。
+
+改动：
+
+- 新增 `server/room_rollback_proposal_store.gd`，集中管理 rollback proposal 的 pending 数据、公开 payload、投票推进、拒绝/清空/消费逻辑。
+- `server/room.gd` 保留房间状态、engine 当前 command index/history 校验、参与玩家推导与 RPC-facing 方法，具体 proposal 状态变更委托给 helper。
+- `OnlineRoom` 不再直接读写 `_pending_rollback_proposal` 字典，也移除了本地 `_public_rollback_proposal_payload()` 组装逻辑；房间公开状态协议保持 `rollback_proposal` 字段不变。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1123`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`392/392`。
+
+结论：
+
+- 已完成该 P3 的一个可独立落地拆分：rollback proposal 的生命周期状态从 `OnlineRoom` 主文件中移出，后续 server rollback/resync/start-session 继续拆分时可以沿用“小状态对象 + 房间入口校验”的模式。
