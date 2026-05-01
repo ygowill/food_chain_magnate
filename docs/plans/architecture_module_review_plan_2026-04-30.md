@@ -1167,6 +1167,7 @@
   - 证据：启动恢复等待条件需要收到 `game_started` 且 archive/delta transport ready；delta failure 有单独信号，但 snapshot assemble failure 没有。证据：`autoload/online_session_coordinator.gd:391-423`、`541-553`。
   - 风险：分片损坏、manifest/chunk hash 不一致时，UI/恢复状态机可能停在加载中直到 timeout；对 resync 场景也无法立即请求新的 snapshot。
   - 建议：新增 `resync_snapshot_failed` 或复用 `resync_delta_failed` 的 failure channel；assemble failure 应触发 force snapshot retry 或清晰终止恢复。
+  - 状态：Fix 66 复核当前代码已复用 `resync_delta_failed` 作为 snapshot assemble failure channel，并在失败时调用 `request_resume_force_snapshot_once()`；`OnlineClientResyncSnapshotChunkTest` 已覆盖坏 chunk 会发 failure、清空 pending state，并请求下一次强制 snapshot。
 
 - [P2] Resync 后的 pending command flush 与实时 command_applied 路径不一致：解析/执行失败会移除 queued command，而不是立即 resync。
   - 证据：实时 `_on_online_command_applied(...)` 解析失败只 log return，执行失败会触发 `_request_online_resync("command_apply_failed")`。证据：`ui/scenes/game/controllers/online_resync_controller.gd:405-432`。
@@ -3128,3 +3129,25 @@
 结论：
 
 - 已完成该 P3 的测试聚合治理：顶层 AllTests 现在只表达 suite 顺序，domain 注册分散到小文件中，降低后续迁移/新增测试漏接架构测试的概率；`all_tests_refs.gd` 仍作为统一 preload 表保留，后续若继续增长可再按 suite 拆 refs。
+
+### Fix 66：复核客户端 snapshot 分片组装失败已有 failure channel
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 9 `[P2] 客户端 snapshot 分片组装失败只记录 error，不发失败信号或 force resync，恢复等待可能只能靠超时退出`。
+
+复核结论：
+
+- 当前 `autoload/net_client/client_resync_service.gd` 在 `assemble_snapshot(...)` 失败后会调用 `_emit_delta_failure("snapshot 恢复失败：分片组装失败...")`，不再只记录日志后返回。
+- `_emit_delta_failure(...)` 会先调用 `request_resume_force_snapshot_once()`，再发 `resync_delta_failed`；启动恢复等待链路与游戏内 resync controller 都已经监听该 failure signal。
+- `core/tests/online_client_resync_snapshot_chunk_test.gd` 已覆盖坏 chunk：不会发 `resync_archive_received`，会发一次 resync failure，清理 pending manifest/chunks，并设置 `resume_force_snapshot_requested = true`。
+
+验证：
+
+- Fix 65 过程中已跑 `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`392/392`，包含 `OnlineClientResyncSnapshotChunkTest`。
+
+结论：
+
+- 该 P2 在当前代码中已完成，不需要额外运行时代码改动；本次更新仅把审查文档从旧证据状态修正为当前实现状态。
