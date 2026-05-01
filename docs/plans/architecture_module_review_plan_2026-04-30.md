@@ -2078,3 +2078,27 @@
 结论：
 
 - 已完成该 P2 strict 化：模块 demand provider 的失败原因可通过 `Result.failure` 明确传播，错误返回值不再被 registry 当作 legacy 兼容路径继续执行。
+
+### Fix 24：Action availability override 校验阶段与子阶段语义
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 5 `[P2] Action availability override 只校验 phase/sub_phase 字段形状，不校验阶段/子阶段语义是否存在或是否可达`。
+- 附带问题：`action_wiring.gd` 对 malformed override item 使用静默 `continue`，模块配置错误可能被跳过而不是失败暴露。
+
+改动：
+
+- `core/actions/action_availability_registry.gd`：`compile_with_validation(...)` 新增可选 `phase_manager` 参数；模块 override point 会校验 phase 是否存在，以及 sub_phase 是否属于对应阶段的可达顺序。`Setup` 只允许空 sub-phase 或 `ReserveCards`，`GameOver` 只允许空 sub-phase，`Working`/`Cleanup` 使用 PhaseManager 的阶段顺序查询。
+- `core/engine/game_engine/action_wiring.gd`：`action_availability_overrides` 中非 Dictionary、空 `action_id`、非 Array `points` 直接返回 `Result.failure(...)`，不再静默跳过；编译 availability 时传入 engine 的 `phase_manager` 做语义校验。
+- `core/tests/action_availability_override_v2_test.gd`：新增非法 phase、非法 Working sub-phase、非法 Setup sub-phase 负例；补充 malformed override item 应让 action wiring 失败的契约测试。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：模块 action availability override 不能再指向未知或不可达的阶段/子阶段；override 配置结构错误也会在 action registry wiring 阶段失败暴露。

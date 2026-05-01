@@ -79,18 +79,19 @@ static func setup_action_registry(engine, piece_registry: Dictionary = {}) -> Re
 	if ruleset != null and ruleset.action_availability_overrides is Array:
 		var list2: Array = ruleset.action_availability_overrides
 		var applied := {}
-		for item_val3 in list2:
+		for i in range(list2.size()):
+			var item_val3 = list2[i]
 			if not (item_val3 is Dictionary):
-				continue
+				return Result.failure("ActionAvailabilityRegistry: action_availability_overrides[%d] 类型错误（期望 Dictionary）" % i)
 			var item3: Dictionary = item_val3
 			var action_id2: String = str(item3.get("action_id", ""))
 			if action_id2.is_empty():
-				continue
+				return Result.failure("ActionAvailabilityRegistry: action_availability_overrides[%d].action_id 不能为空" % i)
 			if applied.has(action_id2):
 				continue
 			var points_val = item3.get("points", [])
 			if not (points_val is Array):
-				continue
+				return Result.failure("ActionAvailabilityRegistry: action_availability_overrides[%d].points 类型错误（期望 Array）: %s" % [i, action_id2])
 			var points: Array = points_val
 			var prio3: int = int(item3.get("priority", 100))
 			var src: String = str(item3.get("source", ""))
@@ -99,7 +100,7 @@ static func setup_action_registry(engine, piece_registry: Dictionary = {}) -> Re
 				return reg_r
 			applied[action_id2] = true
 
-	var compile_r := availability.compile_with_validation(registry.get_all_action_ids())
+	var compile_r := availability.compile_with_validation(registry.get_all_action_ids(), engine.phase_manager)
 	if not compile_r.ok:
 		return compile_r
 	registry.set_availability_registry(availability)

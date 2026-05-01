@@ -4,6 +4,8 @@
 class_name ActionAvailabilityRegistry
 extends RefCounted
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+
 var _default_points_by_action: Dictionary = {}  # action_id -> Array[{phase, sub_phase}]
 var _override_by_action: Dictionary = {}        # action_id -> {points:Array, priority:int, source:String}
 
@@ -95,7 +97,7 @@ func register_action_points_override(
 	_compiled_ready = false
 	return Result.success()
 
-func compile_with_validation(action_ids: Array) -> Result:
+func compile_with_validation(action_ids: Array, phase_manager = null) -> Result:
 	_compiled.clear()
 	_compiled_any_phase.clear()
 
@@ -113,6 +115,11 @@ func compile_with_validation(action_ids: Array) -> Result:
 			var info: Dictionary = _override_by_action[aid2]
 			var src: String = str(info.get("source", ""))
 			return Result.failure("ActionAvailabilityRegistry: 覆盖了不存在的 action_id: %s (module:%s)" % [aid2, src])
+
+	if phase_manager != null:
+		var semantic_r := _validate_override_points_semantics(phase_manager)
+		if not semantic_r.ok:
+			return semantic_r
 
 	var all_action_ids: Array[String] = []
 	for v in action_ids:
@@ -181,6 +188,79 @@ func compile_with_validation(action_ids: Array) -> Result:
 	_compiled_any_phase.sort()
 	_compiled_ready = true
 	return Result.success()
+
+func _validate_override_points_semantics(phase_manager) -> Result:
+	for aid_val in _override_by_action.keys():
+		var aid := str(aid_val)
+		var info_val = _override_by_action.get(aid_val, null)
+		if not (info_val is Dictionary):
+			return Result.failure("ActionAvailabilityRegistry: override 类型错误: %s" % aid)
+		var info: Dictionary = info_val
+		var points_val = info.get("points", [])
+		if not (points_val is Array):
+			return Result.failure("ActionAvailabilityRegistry: override.points 类型错误: %s" % aid)
+		var points: Array = points_val
+		if points.is_empty():
+			continue
+		for i in range(points.size()):
+			var p_val = points[i]
+			if not (p_val is Dictionary):
+				return Result.failure("ActionAvailabilityRegistry: override.points[%d] 类型错误: %s" % [i, aid])
+			var p: Dictionary = p_val
+			var phase_name := str(p.get("phase", "")).strip_edges()
+			var sub_phase_name := str(p.get("sub_phase", "")).strip_edges()
+			var point_r := _validate_point_semantics(phase_manager, phase_name, sub_phase_name)
+			if not point_r.ok:
+				return Result.failure("ActionAvailabilityRegistry: action availability override point 不可达: %s[%d] %s/%s: %s" % [aid, i, phase_name, sub_phase_name, point_r.error])
+	return Result.success()
+
+func _validate_point_semantics(phase_manager, phase_name: String, sub_phase_name: String) -> Result:
+	if phase_name.is_empty():
+		return Result.failure("phase 不能为空")
+	var phase_enum := DefsClass.get_phase_enum(phase_name)
+	if phase_enum == -1:
+		return Result.failure("未知 phase: %s" % phase_name)
+
+	if phase_name == DefsClass.PHASE_SETUP:
+		if sub_phase_name.is_empty() or sub_phase_name == DefsClass.SUB_PHASE_RESERVE_CARDS:
+			return Result.success()
+		return Result.failure("Setup 不包含 sub_phase: %s" % sub_phase_name)
+
+	if phase_name == DefsClass.PHASE_GAME_OVER:
+		if sub_phase_name.is_empty():
+			return Result.success()
+		return Result.failure("GameOver 不包含 sub_phase: %s" % sub_phase_name)
+
+	if phase_name == DefsClass.PHASE_WORKING:
+		return _validate_sub_phase_in_order(phase_manager, "get_working_sub_phase_order_names", sub_phase_name, phase_name)
+
+	if phase_name == DefsClass.PHASE_CLEANUP:
+		return _validate_sub_phase_in_order(phase_manager, "get_cleanup_sub_phase_order_names", sub_phase_name, phase_name)
+
+	if sub_phase_name.is_empty():
+		return Result.success()
+	if phase_manager == null or not phase_manager.has_method("get_phase_sub_phase_order_names"):
+		return Result.failure("缺少 phase_sub_phase_order 查询能力")
+	var order_val = phase_manager.get_phase_sub_phase_order_names(phase_enum)
+	if not (order_val is Array):
+		return Result.failure("%s sub_phase_order 类型错误（期望 Array）" % phase_name)
+	var order: Array = order_val
+	if order.has(sub_phase_name):
+		return Result.success()
+	return Result.failure("%s 不包含 sub_phase: %s" % [phase_name, sub_phase_name])
+
+func _validate_sub_phase_in_order(phase_manager, method_name: String, sub_phase_name: String, phase_name: String) -> Result:
+	if sub_phase_name.is_empty():
+		return Result.success()
+	if phase_manager == null or not phase_manager.has_method(method_name):
+		return Result.failure("缺少 %s 查询能力" % method_name)
+	var order_val = phase_manager.call(method_name)
+	if not (order_val is Array):
+		return Result.failure("%s sub_phase_order 类型错误（期望 Array）" % phase_name)
+	var order: Array = order_val
+	if order.has(sub_phase_name):
+		return Result.success()
+	return Result.failure("%s 不包含 sub_phase: %s" % [phase_name, sub_phase_name])
 
 func is_action_available(action_id: String, phase: String, sub_phase: String) -> bool:
 	if not _compiled_ready:
