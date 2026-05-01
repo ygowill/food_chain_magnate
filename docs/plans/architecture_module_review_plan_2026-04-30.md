@@ -2730,3 +2730,28 @@
 结论：
 
 - 已完成该 P1 边界整改：DedicatedServer 不再耦合 `NetClient` 的房间管理字段布局；后续 RoomManager 内部字段重命名或封装调整只需要维护 NetClient facade。
+
+### Fix 50：服务端地图快照渲染不再复用 UI MapCanvas
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 1 `[P1] server/map_snapshot_cpu_canvas.gd 复用 UI map canvas/drawer 作为服务端渲染实现`。
+
+改动：
+
+- `server/map_snapshot_renderer.gd`：移除对 `server/map_snapshot_cpu_canvas.gd` 的依赖，默认使用 server 内部已有 schematic PNG renderer，返回 `renderer="map_snapshot_schematic"`。
+- 删除 `server/map_snapshot_cpu_canvas.gd` 与对应 `.uid`，彻底移除 server 层对 `ui/visual/ui_skin_cache.gd`、`ui/scenes/game/map/indexer.gd`、`ui/scenes/game/map/drawer/drawer.gd` 的复用链路。
+- `core/tests/online_round_autosave_test.gd`：更新 round autosave 截图契约，要求服务端地图截图使用独立 schematic renderer，而不是 UI MapCanvas CPU renderer。
+- `core/tests/core_architecture_boundary_contract_test.gd`：新增守卫，禁止 `server/` 脚本直接引用 `res://ui/`。
+
+验证：
+
+- `rg -n "res://ui/" server --glob "*.gd"`：无命中。
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`391/391`。
+
+结论：
+
+- 已完成该 P1 边界整改：服务端快照导出不再受 Game 场景 MapCanvas、UI skin cache 或 UI drawer 内部重构影响；后续若要提升截图视觉质量，应在 server/shared renderer 内独立演进，而不是反向依赖 UI 节点绘制链路。

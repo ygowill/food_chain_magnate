@@ -80,8 +80,12 @@ static func run() -> Result:
 	if not r5.ok:
 		return r5
 
+	var r6 := _assert_server_has_no_direct_ui_refs()
+	if not r6.ok:
+		return r6
+
 	return Result.success({
-		"checks": 5,
+		"checks": 6,
 	})
 
 static func _assert_no_direct_ui_refs() -> Result:
@@ -161,6 +165,17 @@ static func _assert_dedicated_server_uses_netclient_facade() -> Result:
 	])
 	if not hit.is_empty():
 		return Result.failure("DedicatedServer 应通过 NetClient facade 访问房间服务: %s:%d contains %s" % [path, int(hit.get("line", 1)), str(hit.get("pattern", ""))])
+	return Result.success()
+
+static func _assert_server_has_no_direct_ui_refs() -> Result:
+	var files: Array[String] = []
+	var list_r := _list_gd_files_recursive("res://server", files)
+	if not list_r.ok:
+		return list_r
+	for path in files:
+		var hit := _find_code_pattern(path, ["res://ui/"])
+		if not hit.is_empty():
+			return Result.failure("server 不应直接引用 UI 资源: %s:%d contains %s" % [path, int(hit.get("line", 1)), str(hit.get("pattern", ""))])
 	return Result.success()
 
 static func _should_skip_file(path: String) -> bool:

@@ -2,7 +2,6 @@ class_name MapSnapshotRenderer
 extends RefCounted
 
 const VERSION := 1
-const MapSnapshotCpuCanvasClass = preload("res://server/map_snapshot_cpu_canvas.gd")
 
 const DEFAULT_CELL_PX := 80
 const DEFAULT_PAD_PX := 18
@@ -30,21 +29,7 @@ const PLAYER_COLORS := [
 ]
 
 static func render_state_png(state, options: Dictionary = {}) -> Result:
-	var canvas := MapSnapshotCpuCanvasClass.new()
-	var canvas_r: Result = canvas.render_state_png(state, {
-		"cell_px": int(options.get("cell_px", DEFAULT_CELL_PX)),
-		"min_cell_px": int(options.get("min_cell_px", MIN_CELL_PX)),
-		"max_image_dimension": int(options.get("max_image_dimension", MAX_IMAGE_DIMENSION)),
-	})
-	if canvas_r.ok:
-		var value: Dictionary = Dictionary(canvas_r.value)
-		value["version"] = VERSION
-		return canvas_r.with_value(value)
-	if bool(options.get("allow_schematic_fallback", false)):
-		var fallback_r := _render_schematic_state_png(state, options)
-		if fallback_r.ok:
-			return fallback_r.with_warning("MapCanvas CPU 渲染失败，已退回示意图: %s" % canvas_r.error)
-	return canvas_r
+	return _render_schematic_state_png(state, options)
 
 static func _render_schematic_state_png(state, options: Dictionary = {}) -> Result:
 	if state == null or not (state.map is Dictionary):
@@ -86,6 +71,7 @@ static func _render_schematic_state_png(state, options: Dictionary = {}) -> Resu
 		return Result.failure("map snapshot: png 编码失败")
 	return Result.success({
 		"version": VERSION,
+		"renderer": "map_snapshot_schematic",
 		"png_bytes": png_bytes,
 		"width": width,
 		"height": height,
