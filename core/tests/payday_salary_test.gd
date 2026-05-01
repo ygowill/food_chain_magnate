@@ -373,6 +373,7 @@ static func _test_salary_total_delta_uses_milestone_effect_value() -> Result:
 			"employees": [],
 			"reserve_employees": [],
 			"busy_marketers": [],
+			"inventory": {},
 			"milestones": ["first_train"],
 		}
 	]

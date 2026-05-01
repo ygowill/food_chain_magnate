@@ -1730,3 +1730,27 @@
 
 - 已完成该 P1/P2 同源问题的 strict 化：权威运行路径不再把非法模块目录解释成默认模块集。
 - 仍保留 UI 设置层的用户偏好恢复默认行为，边界是“进入 engine/server/client bootstrap 前必须已经是合法 res:// spec”。
+
+### Fix 10：Payday settlement 不再修补损坏的 player.inventory
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 4 / Step 6 `[P2] Payday settlement 对缺失/错误的 player.inventory 自动修补为空字典`。
+
+改动：
+
+- `modules/base_rules/rules/phase/payday_settlement.gd`：用 `PlayerStateAccess.require_inventory(...)` 读取 `player.inventory`；缺失或类型错误直接失败，不再 warning 后写回 `{}`。
+- `core/tests/payday_settlement_state_access_test.gd`：新增 `player.inventory` 类型错误负例，断言失败时不改写 `players/bank/round_state`。
+- `core/tests/payday_salary_test.gd`：补全手写最小 `GameState` fixture 的 `inventory` 字段，使测试 fixture 符合运行时 state schema。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：Payday 权威结算不再把坏库存字段解释成“没有 token”。
+- 如果需要兼容旧 archive，应在显式 migration/recovery 阶段补齐 `inventory` 并记录迁移，而不是在结算时静默修改。

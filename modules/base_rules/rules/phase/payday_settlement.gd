@@ -87,15 +87,10 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 		var pay_with_tokens := bool(player.get("salary_pay_with_tokens", false))
 		var allow_unpaid := bool(player.get("salary_allow_unpaid", false))
 
-		var inventory: Dictionary = {}
-		if player.has("inventory") and (player["inventory"] is Dictionary):
-			inventory = player["inventory"]
-		else:
-			# 容错：测试/旧存档可能缺失 inventory；视为无 token。
-			warnings.append("PaydaySettlement: player[%d].inventory 缺失或类型错误（期望 Dictionary），已视为 {}" % i)
-			player["inventory"] = {}
-			state.players[i] = player
-			inventory = player["inventory"]
+		var inventory_read := PlayerStateAccessClass.require_inventory(player, "player[%d]" % i, "PaydaySettlement")
+		if not inventory_read.ok:
+			return inventory_read
+		var inventory: Dictionary = inventory_read.value
 
 		var tokens_available := 0
 		if pay_with_tokens:
