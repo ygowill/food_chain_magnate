@@ -1966,3 +1966,26 @@
 结论：
 
 - 已完成该 P2 strict 化：非法 named sub-phase hook 类型会在模块注册/装配阶段暴露，不再延迟成 PhaseManager 内部字典访问风险。
+
+### Fix 20：Phase hook callback 返回非 Result 时始终失败
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 4 `[P2] Phase hook callback 返回值类型错误时，非 debug 模式只 warning 后继续`。
+- Step 10 `[P2] Hook/settlement callback 返回非 Result 的 warning-only 行为被 contract test 固定` 中 hook 部分。
+
+改动：
+
+- `core/engine/phase_manager/hooks.gd`：phase/sub-phase/named hook callback 返回非 `Result` 时立即 `Result.failure`，不再依赖 debug mode 才失败。
+- `core/tests/callback_result_contract_test.gd`：hook 用例改为任何模式下都必须失败；settlement 用例暂时保留旧契约，作为下一项单独修复。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests`：PASS，`390/390`。
+
+结论：
+
+- 已完成 hook 部分 P2 strict 化：模块 hook 契约错误会在阶段推进时立即暴露，不再作为 warning 继续执行。

@@ -1,5 +1,5 @@
 # hooks/settlement 回调契约测试（P1.4）
-# 目的：确保回调必须返回 Result；否则至少 warning，且在 DebugFlags 下升级为 failure。
+# 目的：确保 hook 回调必须返回 Result；settlement 回调当前仍覆盖旧 warning-only 契约。
 class_name CallbackResultContractTest
 extends RefCounted
 
@@ -23,14 +23,11 @@ static func run() -> Result:
 	var bad_hook := _BadHook.new()
 	hooks.register_phase_hook(DefsClass.Phase.WORKING, 0, Callable(bad_hook, "bad_hook"), 100, "CallbackResultContractTest")
 	var hr: Result = hooks.run_phase_hooks(DefsClass.Phase.WORKING, 0, state)
-	if expect_fail:
-		if hr.ok:
-			return Result.failure("Phase hooks: 预期 debug 模式下非 Result 返回应失败，但实际 ok=true")
-	else:
-		if not hr.ok:
-			return Result.failure("Phase hooks: 预期非 debug 模式下应仅 warning，但实际失败: %s" % hr.error)
-		if hr.warnings.is_empty():
-			return Result.failure("Phase hooks: 预期产生 warning，但 warnings 为空")
+	if hr.ok:
+		return Result.failure("Phase hooks: 非 Result 返回应始终失败")
+	var hook_err := str(hr.error)
+	if hook_err.find("必须返回 Result") < 0:
+		return Result.failure("Phase hooks: 错误信息应包含 必须返回 Result，实际: %s" % hook_err)
 
 	# Case B: SettlementRegistry（primary 返回非 Result）
 	var reg := SettlementRegistryClass.new()
@@ -63,4 +60,3 @@ class _BadSettlement:
 	func bad_settlement(_state: GameState, _phase_manager):
 		# 故意不返回 Result（返回 null）
 		pass
-

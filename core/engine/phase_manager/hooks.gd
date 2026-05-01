@@ -219,8 +219,7 @@ static func _run_hooks(hooks: Array, state: GameState, ctx: String = "") -> Resu
 			]
 			warnings.append(msg)
 			AutoloadAccessClass.log_warn("PhaseManager", msg)
-			if AutoloadAccessClass.is_debug_mode():
-				return Result.failure(msg).with_warnings(warnings)
+			return Result.failure(msg).with_warnings(warnings)
 	return Result.success().with_warnings(warnings)
 
 static func _hook_type_name(hook_type: int) -> String:
