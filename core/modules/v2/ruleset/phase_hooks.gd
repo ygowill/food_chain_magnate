@@ -241,6 +241,31 @@ static func apply(ruleset, phase_manager) -> Result:
 			if not set_r.ok:
 				return set_r
 
+	# timeline settlement event policies
+	if not ruleset.timeline_settlement_event_policies.is_empty():
+		if not phase_manager.has_method("register_timeline_settlement_event_policy"):
+			return Result.failure("RulesetV2: phase_manager 缺少 register_timeline_settlement_event_policy")
+		for i in range(ruleset.timeline_settlement_event_policies.size()):
+			var policy_val = ruleset.timeline_settlement_event_policies[i]
+			if not (policy_val is Dictionary):
+				return Result.failure("RulesetV2: timeline_settlement_event_policies[%d] 类型错误（期望 Dictionary）" % i)
+			var policy_item: Dictionary = policy_val
+			var phase_policy := int(policy_item.get("phase", -1))
+			var point_policy := int(policy_item.get("point", -1))
+			var policy_dict_val = policy_item.get("policy", null)
+			if not (policy_dict_val is Dictionary):
+				return Result.failure("RulesetV2: timeline_settlement_event_policies[%d].policy 类型错误（期望 Dictionary）" % i)
+			var policy_dict: Dictionary = policy_dict_val
+			var source_policy := str(policy_item.get("source", ""))
+			var policy_r: Result = phase_manager.register_timeline_settlement_event_policy(
+				phase_policy,
+				point_policy,
+				policy_dict,
+				source_policy
+			)
+			if not policy_r.ok:
+				return policy_r
+
 	# phase sub phase order overrides
 	if not ruleset.phase_sub_phase_order_overrides.is_empty():
 		for i in range(ruleset.phase_sub_phase_order_overrides.size()):

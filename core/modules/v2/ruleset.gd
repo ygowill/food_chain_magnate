@@ -46,6 +46,7 @@ var phase_order_override = null  # {order:Array[String], priority:int, source:St
 var working_sub_phase_order_override = null  # {order:Array[String], priority:int, source:String}
 var cleanup_sub_phase_order_override = null  # {order:Array[String], priority:int, source:String}
 var settlement_triggers_override: Array[Dictionary] = []  # [{phase, timing, points, source}]
+var timeline_settlement_event_policies: Array[Dictionary] = []  # [{phase, point, policy, priority, source}]
 var phase_sub_phase_order_overrides: Array[Dictionary] = []  # [{phase, order, priority, source}]
 var state_initializers: Array[Dictionary] = []  # [{id, callback, priority, source}]
 var state_int_key_dict_schemas: Array[Dictionary] = []  # [{id, root, path, priority, source}]
@@ -93,6 +94,7 @@ func dispose() -> void:
 	cleanup_sub_phase_insertions.clear()
 	cleanup_sub_phase_name_hooks.clear()
 	settlement_triggers_override.clear()
+	timeline_settlement_event_policies.clear()
 	phase_sub_phase_order_overrides.clear()
 	state_initializers.clear()
 	state_int_key_dict_schemas.clear()
@@ -282,6 +284,9 @@ func register_cleanup_sub_phase_order_override(order_names: Array, priority: int
 
 func register_settlement_triggers_override(phase: int, timing: String, points: Array, priority: int = 100, source_module_id: String = "") -> Result:
 	return StateAndOrderHelperClass.register_settlement_triggers_override(self, phase, timing, points, priority, source_module_id)
+
+func register_timeline_settlement_event_policy(phase: int, point: int, policy: Dictionary, priority: int = 100, source_module_id: String = "") -> Result:
+	return StateAndOrderHelperClass.register_timeline_settlement_event_policy(self, phase, point, policy, priority, source_module_id)
 
 func register_phase_sub_phase_order_override(phase: int, order_names: Array, priority: int = 100, source_module_id: String = "") -> Result:
 	return StateAndOrderHelperClass.register_phase_sub_phase_order_override(self, phase, order_names, priority, source_module_id)

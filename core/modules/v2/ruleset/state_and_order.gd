@@ -3,6 +3,7 @@ class_name RulesetV2StateAndOrder
 extends RefCounted
 
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 
 static func register_state_initializer(
 	ruleset,
@@ -228,6 +229,46 @@ static func register_settlement_triggers_override(
 		"source": source_module_id,
 	})
 	ruleset.settlement_triggers_override.sort_custom(func(a, b) -> bool:
+		return int(a.get("priority", 100)) > int(b.get("priority", 100))
+	)
+	return Result.success()
+
+static func register_timeline_settlement_event_policy(
+	ruleset,
+	phase: int,
+	point: int,
+	policy: Dictionary,
+	priority: int = 100,
+	source_module_id: String = ""
+) -> Result:
+	if phase == PhaseDefsClass.Phase.SETUP or phase == PhaseDefsClass.Phase.GAME_OVER:
+		return Result.failure("RulesetV2: timeline settlement policy 不允许包含 Setup/GameOver")
+	if not PhaseDefsClass.PHASE_NAMES.has(phase):
+		return Result.failure("RulesetV2: timeline settlement policy phase 越界: %d" % phase)
+	if point != SettlementRegistryClass.Point.ENTER and point != SettlementRegistryClass.Point.EXIT:
+		return Result.failure("RulesetV2: timeline settlement policy point 不支持: %d" % point)
+	if policy == null or not (policy is Dictionary) or policy.is_empty():
+		return Result.failure("RulesetV2: timeline settlement policy 类型错误或为空")
+	var kind := str(policy.get("kind", "")).strip_edges()
+	if kind != "defer_settlement_effects_until_phase_exit":
+		return Result.failure("RulesetV2: timeline settlement policy kind 不支持: %s" % kind)
+
+	for item_val in ruleset.timeline_settlement_event_policies:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		if int(item.get("phase", -1)) == phase and int(item.get("point", -1)) == point:
+			var prev_source := str(item.get("source", ""))
+			return Result.failure("RulesetV2: timeline settlement policy 重复注册（%s vs %s）" % [prev_source, source_module_id])
+
+	ruleset.timeline_settlement_event_policies.append({
+		"phase": phase,
+		"point": point,
+		"policy": policy.duplicate(true),
+		"priority": int(priority),
+		"source": source_module_id,
+	})
+	ruleset.timeline_settlement_event_policies.sort_custom(func(a, b) -> bool:
 		return int(a.get("priority", 100)) > int(b.get("priority", 100))
 	)
 	return Result.success()

@@ -48,8 +48,7 @@ static func build_full_impl(engine: GameEngine) -> Result:
 	var steps: Array[Dictionary] = []
 	var events_out: Array[Dictionary] = []
 	var warnings: Array[String] = []
-	var pending_marketing_enter_effect_events: Array[Dictionary] = []
-	var pending_marketing_enter_anchor_command_index := -1
+	var pending_phase_exit_effects := StepTimelineHelpersClass.create_phase_exit_pending_effects()
 	var pending_cleanup_throw_away_milestone_events: Array[Dictionary] = []
 	var seq := 0
 
@@ -152,8 +151,7 @@ static func build_full_impl(engine: GameEngine) -> Result:
 				milestone_events_cmd,
 				cmd,
 				cmd,
-				pending_marketing_enter_effect_events,
-				pending_marketing_enter_anchor_command_index,
+				pending_phase_exit_effects,
 				pending_cleanup_throw_away_milestone_events,
 				seq
 			)
@@ -163,7 +161,6 @@ static func build_full_impl(engine: GameEngine) -> Result:
 				return Result.failure("StepTimelineBuild: phase transition 返回值类型错误（期望 Dictionary）").with_warnings(warnings)
 			var update: Dictionary = update_r.value
 			seq = int(update.get("seq", seq))
-			pending_marketing_enter_anchor_command_index = int(update.get("pending_marketing_enter_anchor_command_index", pending_marketing_enter_anchor_command_index))
 		else:
 			var append_command_r := _append_events(events_out, command_events, i, command_step_index, str(state_in.phase), seq)
 			if not append_command_r.ok:
@@ -201,8 +198,7 @@ static func build_full_impl(engine: GameEngine) -> Result:
 			events_out,
 			current_step_index,
 			seq,
-			pending_marketing_enter_effect_events,
-			pending_marketing_enter_anchor_command_index,
+			pending_phase_exit_effects,
 			pending_cleanup_throw_away_milestone_events,
 			warnings
 		)
@@ -218,7 +214,6 @@ static func build_full_impl(engine: GameEngine) -> Result:
 		state_in = state_out_val
 		current_step_index = int(drain_dict.get("current_step_index", current_step_index))
 		seq = int(drain_dict.get("seq", seq))
-		pending_marketing_enter_anchor_command_index = int(drain_dict.get("pending_marketing_enter_anchor_command_index", pending_marketing_enter_anchor_command_index))
 
 		# 命令已执行（便于回放验证与旧逻辑兼容；默认归属到玩家行动 step）
 		seq += 1
@@ -243,36 +238,11 @@ static func build_full_impl(engine: GameEngine) -> Result:
 		# 下一条命令的起点 state（应为“执行该命令并完成所有 auto-advance”的稳定状态）
 		replay_state = state_in
 
-	# 兜底：若时间线构建结束仍处于 Marketing，且存在未刷出的 enter effects，则追加到最后一个 step（避免丢日志）。
-	if not pending_marketing_enter_effect_events.is_empty():
-		var flush_step_index := steps.size() - 1
-		if flush_step_index >= 0:
-			var flush_ci := pending_marketing_enter_anchor_command_index
-			if flush_ci < 0:
-				flush_ci = engine.command_history.size() - 1
-			var append_marketing_flush_r := _append_events(events_out, pending_marketing_enter_effect_events, flush_ci, flush_step_index, DefsClass.PHASE_MARKETING, seq)
-			if not append_marketing_flush_r.ok:
-				return append_marketing_flush_r.with_warnings(warnings)
-			seq = int(append_marketing_flush_r.value)
-		pending_marketing_enter_effect_events = []
-		pending_marketing_enter_anchor_command_index = -1
-
-	# 兜底：避免丢失被延后的 cleanup 里程碑（理论上应在最后一次 pending cleanup 动作或 Cleanup:enter 时刷出）。
-	if not pending_cleanup_throw_away_milestone_events.is_empty():
-		var flush_step_index2 := steps.size() - 1
-		if flush_step_index2 >= 0:
-			var flush_ci2 := engine.command_history.size() - 1
-			var append_cleanup_flush_r := _append_events(events_out, pending_cleanup_throw_away_milestone_events, flush_ci2, flush_step_index2, DefsClass.PHASE_CLEANUP, seq)
-			if not append_cleanup_flush_r.ok:
-				return append_cleanup_flush_r.with_warnings(warnings)
-			seq = int(append_cleanup_flush_r.value)
-		pending_cleanup_throw_away_milestone_events = []
-
 	return Result.success(StepTimelineHelpersClass.attach_build_meta({
 		"initial_state_dict": state_dict_val.duplicate(true),
 		"steps": steps,
 		"events": events_out,
-	}, int(engine.command_history.size()), seq)).with_warnings(warnings)
+	}, int(engine.command_history.size()), seq, pending_phase_exit_effects, pending_cleanup_throw_away_milestone_events)).with_warnings(warnings)
 
 static func _build_step_dict(kind: String, anchor_command_index: int, state: GameState, extra: Dictionary = {}) -> Dictionary:
 	return StepTimelineHelpersClass.build_step_dict(kind, anchor_command_index, state, extra)

@@ -60,8 +60,23 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 	if last_event_sequence < 0:
 		return Result.failure("StepTimelineBuild: existing_timeline._build_meta.last_event_sequence 不能为负数")
 
+	var pending_phase_exit_r := StepTimelineHelpersClass.read_phase_exit_pending_effects(existing_timeline)
+	if not pending_phase_exit_r.ok:
+		return pending_phase_exit_r
+	var pending_phase_exit_effects: Dictionary = pending_phase_exit_r.value
+	var pending_cleanup_r := StepTimelineHelpersClass.read_pending_cleanup_deferred_events(existing_timeline)
+	if not pending_cleanup_r.ok:
+		return pending_cleanup_r
+	var pending_cleanup_throw_away_milestone_events: Array[Dictionary] = pending_cleanup_r.value
+
 	if processed_command_count == total_command_count:
-		timeline = StepTimelineHelpersClass.attach_build_meta_owned(timeline, total_command_count, last_event_sequence)
+		timeline = StepTimelineHelpersClass.attach_build_meta_owned(
+			timeline,
+			total_command_count,
+			last_event_sequence,
+			pending_phase_exit_effects,
+			pending_cleanup_throw_away_milestone_events
+		)
 		return Result.success({
 			"timeline": timeline,
 			"head_step_index": int(steps.size()) - 1,
@@ -78,9 +93,6 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 	var replay_state: GameState = restore_r.value
 
 	var warnings: Array[String] = []
-	var pending_marketing_enter_effect_events: Array[Dictionary] = []
-	var pending_marketing_enter_anchor_command_index := -1
-	var pending_cleanup_throw_away_milestone_events: Array[Dictionary] = []
 	var seq := int(last_event_sequence)
 
 	for i in range(processed_command_count, total_command_count):
@@ -147,8 +159,7 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 				milestone_events_cmd,
 				cmd,
 				cmd,
-				pending_marketing_enter_effect_events,
-				pending_marketing_enter_anchor_command_index,
+				pending_phase_exit_effects,
 				pending_cleanup_throw_away_milestone_events,
 				seq
 			)
@@ -158,12 +169,6 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 				return Result.failure("StepTimelineBuild: phase transition 返回值类型错误（期望 Dictionary）").with_warnings(warnings)
 			var update: Dictionary = update_r.value
 			seq = int(update.get("seq", seq))
-			pending_marketing_enter_anchor_command_index = int(
-				update.get(
-					"pending_marketing_enter_anchor_command_index",
-					pending_marketing_enter_anchor_command_index
-				)
-			)
 		else:
 			var append_command_r := _append_events(events_out, command_events, i, command_step_index, str(state_in.phase), seq)
 			if not append_command_r.ok:
@@ -208,8 +213,7 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 			events_out,
 			current_step_index,
 			seq,
-			pending_marketing_enter_effect_events,
-			pending_marketing_enter_anchor_command_index,
+			pending_phase_exit_effects,
 			pending_cleanup_throw_away_milestone_events,
 			warnings
 		)
@@ -224,12 +228,6 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 		state_in = state_out_val
 		current_step_index = int(drain_dict.get("current_step_index", current_step_index))
 		seq = int(drain_dict.get("seq", seq))
-		pending_marketing_enter_anchor_command_index = int(
-			drain_dict.get(
-				"pending_marketing_enter_anchor_command_index",
-				pending_marketing_enter_anchor_command_index
-			)
-		)
 
 		seq += 1
 		events_out.append({
@@ -250,45 +248,15 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 
 		replay_state = state_in
 
-	if not pending_marketing_enter_effect_events.is_empty():
-		var flush_step_index := steps.size() - 1
-		if flush_step_index >= 0:
-			var flush_ci := pending_marketing_enter_anchor_command_index
-			if flush_ci < 0:
-				flush_ci = total_command_count - 1
-			var append_marketing_flush_r := _append_events(
-				events_out,
-				pending_marketing_enter_effect_events,
-				flush_ci,
-				flush_step_index,
-				DefsClass.PHASE_MARKETING,
-				seq
-			)
-			if not append_marketing_flush_r.ok:
-				return append_marketing_flush_r.with_warnings(warnings)
-			seq = int(append_marketing_flush_r.value)
-		pending_marketing_enter_effect_events = []
-		pending_marketing_enter_anchor_command_index = -1
-
-	if not pending_cleanup_throw_away_milestone_events.is_empty():
-		var flush_step_index2 := steps.size() - 1
-		if flush_step_index2 >= 0:
-			var append_cleanup_flush_r := _append_events(
-				events_out,
-				pending_cleanup_throw_away_milestone_events,
-				total_command_count - 1,
-				flush_step_index2,
-				DefsClass.PHASE_CLEANUP,
-				seq
-			)
-			if not append_cleanup_flush_r.ok:
-				return append_cleanup_flush_r.with_warnings(warnings)
-			seq = int(append_cleanup_flush_r.value)
-		pending_cleanup_throw_away_milestone_events = []
-
 	timeline["steps"] = steps
 	timeline["events"] = events_out
-	timeline = StepTimelineHelpersClass.attach_build_meta_owned(timeline, total_command_count, seq)
+	timeline = StepTimelineHelpersClass.attach_build_meta_owned(
+		timeline,
+		total_command_count,
+		seq,
+		pending_phase_exit_effects,
+		pending_cleanup_throw_away_milestone_events
+	)
 
 	return Result.success({
 		"timeline": timeline,

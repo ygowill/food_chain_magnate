@@ -83,6 +83,9 @@ class RulesetRegistrarV2:
 	func register_settlement_triggers_override(phase: int, timing: String, points: Array, priority: int = 100) -> Result:
 		return _ruleset.register_settlement_triggers_override(phase, timing, points, priority, _module_id)
 
+	func register_timeline_settlement_event_policy(phase: int, point: int, policy: Dictionary, priority: int = 100) -> Result:
+		return _ruleset.register_timeline_settlement_event_policy(phase, point, policy, priority, _module_id)
+
 	func register_phase_sub_phase_order_override(phase: int, order_names: Array, priority: int = 100) -> Result:
 		return _ruleset.register_phase_sub_phase_order_override(phase, order_names, priority, _module_id)
 

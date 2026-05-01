@@ -23,6 +23,7 @@ const WorkingSubPhase = PhaseDefsClass.WorkingSubPhase
 const HookType = PhaseManagerClass.HookType
 
 const STATE_SCHEMA_ID_RESTRUCTURING_SUBMITTED := "base_rules:round_state_int_keys:restructuring.submitted"
+const TIMELINE_POLICY_DEFER_SETTLEMENT_EFFECTS_UNTIL_PHASE_EXIT := "defer_settlement_effects_until_phase_exit"
 
 func register(registrar) -> Result:
 	var r = registrar.register_primary_settlement(Phase.DINNERTIME, SettlementRegistryClass.Point.ENTER, Callable(self, "_on_dinnertime_enter"))
@@ -32,6 +33,11 @@ func register(registrar) -> Result:
 	if not r.ok:
 		return r
 	r = registrar.register_primary_settlement(Phase.MARKETING, SettlementRegistryClass.Point.ENTER, Callable(self, "_on_marketing_enter"))
+	if not r.ok:
+		return r
+	r = registrar.register_timeline_settlement_event_policy(Phase.MARKETING, SettlementRegistryClass.Point.ENTER, {
+		"kind": TIMELINE_POLICY_DEFER_SETTLEMENT_EFFECTS_UNTIL_PHASE_EXIT,
+	})
 	if not r.ok:
 		return r
 	r = registrar.register_primary_settlement(Phase.CLEANUP, SettlementRegistryClass.Point.ENTER, Callable(self, "_on_cleanup_enter"))

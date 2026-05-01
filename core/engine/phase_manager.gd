@@ -12,6 +12,7 @@ const OrderConfigClass = preload("res://core/engine/phase_manager/order_config.g
 const SettlementTriggersClass = preload("res://core/engine/phase_manager/settlement_triggers.gd")
 
 const MarketingRangeCalculatorClass = preload("res://core/rules/marketing_range_calculator.gd")
+const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 
 const Phase = DefsClass.Phase
 const WorkingSubPhase = DefsClass.WorkingSubPhase
@@ -40,6 +41,7 @@ var _phase_order_enums: Array[int] = []
 var _phase_order_names: Array[String] = []
 var _settlement_triggers_on_enter: Dictionary = {}  # phase_enum -> Array[int] (SettlementRegistry.Point)
 var _settlement_triggers_on_exit: Dictionary = {}  # phase_enum -> Array[int] (SettlementRegistry.Point)
+var _timeline_settlement_event_policies: Dictionary = {}  # "phase:point" -> policy Dictionary
 var _working_sub_phase_order_names: Array[String] = []
 var _cleanup_sub_phase_order_names: Array[String] = []
 var _phase_sub_phase_orders: Dictionary = {}  # phase_enum -> Array[String]
@@ -61,6 +63,7 @@ func _init() -> void:
 	_phase_order_names = _build_phase_order_names(_phase_order_enums)
 	_settlement_triggers_on_enter = _build_default_settlement_triggers_on_enter()
 	_settlement_triggers_on_exit = _build_default_settlement_triggers_on_exit()
+	_timeline_settlement_event_policies = {}
 	_working_sub_phase_order_names = _build_default_working_sub_phase_order_names()
 	_cleanup_sub_phase_order_names = []
 	_phase_sub_phase_orders = {}
@@ -172,6 +175,47 @@ func validate_required_primary_settlements() -> Result:
 
 func is_settlement_scheduled(phase: int, point: int) -> bool:
 	return SettlementTriggersClass.is_settlement_scheduled(self, phase, point)
+
+func register_timeline_settlement_event_policy(
+	phase: int,
+	point: int,
+	policy: Dictionary,
+	source_module_id: String = ""
+) -> Result:
+	if phase == Phase.SETUP or phase == Phase.GAME_OVER:
+		return Result.failure("PhaseManager: timeline settlement policy 不允许包含 Setup/GameOver")
+	if not PHASE_NAMES.has(phase):
+		return Result.failure("PhaseManager: timeline settlement policy phase 越界: %d" % phase)
+	if point != SettlementRegistryClass.Point.ENTER and point != SettlementRegistryClass.Point.EXIT:
+		return Result.failure("PhaseManager: timeline settlement policy point 不支持: %d" % point)
+	if policy == null or not (policy is Dictionary) or policy.is_empty():
+		return Result.failure("PhaseManager: timeline settlement policy 类型错误或为空")
+	var kind := str(policy.get("kind", "")).strip_edges()
+	if kind != "defer_settlement_effects_until_phase_exit":
+		return Result.failure("PhaseManager: timeline settlement policy kind 不支持: %s" % kind)
+	var key := _timeline_settlement_event_policy_key(phase, point)
+	if _timeline_settlement_event_policies.has(key):
+		var prev: Dictionary = _timeline_settlement_event_policies[key]
+		if str(prev.get("kind", "")).strip_edges() == kind and str(prev.get("source", "")) == source_module_id:
+			return Result.success()
+		return Result.failure(
+			"PhaseManager: timeline settlement policy 重复注册: %s (prev=%s new=%s)"
+				% [key, str(prev.get("source", "")), source_module_id]
+		)
+	var stored := policy.duplicate(true)
+	stored["source"] = source_module_id
+	_timeline_settlement_event_policies[key] = stored
+	return Result.success()
+
+func get_timeline_settlement_event_policy(phase: int, point: int) -> Dictionary:
+	var key := _timeline_settlement_event_policy_key(phase, point)
+	if not _timeline_settlement_event_policies.has(key):
+		return {}
+	var policy_val = _timeline_settlement_event_policies.get(key, {})
+	return Dictionary(policy_val).duplicate(true) if (policy_val is Dictionary) else {}
+
+static func _timeline_settlement_event_policy_key(phase: int, point: int) -> String:
+	return "%d:%d" % [phase, point]
 
 func get_marketing_rounds(state: GameState) -> Result:
 	var marketing_rounds := 1

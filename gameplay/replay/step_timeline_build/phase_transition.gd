@@ -1,7 +1,7 @@
 # StepTimelineBuild：阶段切换事件归属（phase transition）
 # - 拆分 PHASE_CHANGED 前后事件归属
 # - 结算产生的 cash/milestone 事件按触发点归属（兼容 exit+enter 叠加）
-# - Marketing enter effects 延后到离开 Marketing 后输出
+# - 支持由 PhaseManager timeline settlement policy 声明的阶段延后展示事件
 # - CleanupDiscard: 带 timeline defer metadata 的清理里程碑按“清理库存动作完成后”显示
 extends RefCounted
 
@@ -9,6 +9,7 @@ const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
 const StepTimelineHelpersClass = preload("res://gameplay/replay/step_timeline_build/helpers.gd")
+const DeferredEventPolicyClass = preload("res://gameplay/replay/step_timeline_build/deferred_event_policy.gd")
 
 static func append_phase_transition_events(
 	engine: GameEngine,
@@ -23,13 +24,11 @@ static func append_phase_transition_events(
 	milestone_events_full: Array[Dictionary],
 	cash_cmd: Command,
 	milestone_cmd: Command,
-	pending_marketing_enter_effect_events: Array[Dictionary],
-	pending_marketing_enter_anchor_command_index: int,
+	pending_phase_exit_effects: Dictionary,
 	pending_cleanup_throw_away_milestone_events: Array[Dictionary],
 	seq_in: int
 ) -> Result:
 	var seq := int(seq_in)
-	var pending_anchor := int(pending_marketing_enter_anchor_command_index)
 
 	var before_phase_events: Array[Dictionary] = []
 	var after_phase_events: Array[Dictionary] = []
@@ -68,14 +67,15 @@ static func append_phase_transition_events(
 			return append_before_r
 		seq = int(append_before_r.value)
 
-	# Marketing: 先输出汇总事件（如 DEMAND_GENERATED），再输出进入 Marketing 时产生的 cash/milestone。
-	if old_phase_name == PhaseDefsClass.PHASE_MARKETING and pending_marketing_enter_effect_events != null and not pending_marketing_enter_effect_events.is_empty():
-		var append_pending_marketing_r := StepTimelineHelpersClass.append_events(out_events, pending_marketing_enter_effect_events, command_index, old_step_index, PhaseDefsClass.PHASE_MARKETING, seq)
-		if not append_pending_marketing_r.ok:
-			return append_pending_marketing_r
-		seq = int(append_pending_marketing_r.value)
-		pending_marketing_enter_effect_events.clear()
-		pending_anchor = -1
+	# 由规则装配声明的 phase-exit 延后事件：先输出当前阶段的汇总事件（如 DEMAND_GENERATED），
+	# 再输出进入该阶段时产生、但被标记为“离开阶段后展示”的效果事件。
+	if StepTimelineHelpersClass.should_flush_phase_exit_pending_effects(pending_phase_exit_effects, old_phase_name):
+		var pending_phase_events := StepTimelineHelpersClass.get_phase_exit_pending_events(pending_phase_exit_effects)
+		var append_pending_phase_r := StepTimelineHelpersClass.append_events(out_events, pending_phase_events, command_index, old_step_index, old_phase_name, seq)
+		if not append_pending_phase_r.ok:
+			return append_pending_phase_r
+		seq = int(append_pending_phase_r.value)
+		StepTimelineHelpersClass.clear_phase_exit_pending_effects(pending_phase_exit_effects)
 
 	# 结算/里程碑/现金变化：按结算触发点归属。
 	# - 兼容 Payday->Marketing 的 exit+enter 叠加：拆分 exit/enter 的差异，避免 Marketing:enter 被误归到 Payday。
@@ -158,19 +158,27 @@ static func append_phase_transition_events(
 		seq = int(append_after_r.value)
 
 	if not cash_events_new.is_empty() or not milestone_events_new.is_empty():
-		if new_phase_name == PhaseDefsClass.PHASE_MARKETING:
-			pending_anchor = command_index
-			if pending_marketing_enter_effect_events != null:
-				if not cash_events_new.is_empty():
-					var new_cash_pending_override_r := StepTimelineHelpersClass.override_events_phase_fields(cash_events_new, new_state)
-					if not new_cash_pending_override_r.ok:
-						return new_cash_pending_override_r
-					pending_marketing_enter_effect_events.append_array(new_cash_pending_override_r.value)
-				if not milestone_events_new.is_empty():
-					var new_milestone_pending_override_r := StepTimelineHelpersClass.override_events_phase_fields(milestone_events_new, new_state)
-					if not new_milestone_pending_override_r.ok:
-						return new_milestone_pending_override_r
-					pending_marketing_enter_effect_events.append_array(new_milestone_pending_override_r.value)
+		var new_enter_policy := _get_timeline_settlement_event_policy(engine, new_phase_name, SettlementRegistryClass.Point.ENTER)
+		if DeferredEventPolicyClass.is_defer_settlement_effects_until_phase_exit_policy(new_enter_policy):
+			var deferred_events: Array[Dictionary] = []
+			if not cash_events_new.is_empty():
+				var new_cash_pending_override_r := StepTimelineHelpersClass.override_events_phase_fields(cash_events_new, new_state)
+				if not new_cash_pending_override_r.ok:
+					return new_cash_pending_override_r
+				deferred_events.append_array(new_cash_pending_override_r.value)
+			if not milestone_events_new.is_empty():
+				var new_milestone_pending_override_r := StepTimelineHelpersClass.override_events_phase_fields(milestone_events_new, new_state)
+				if not new_milestone_pending_override_r.ok:
+					return new_milestone_pending_override_r
+				deferred_events.append_array(new_milestone_pending_override_r.value)
+			var add_pending_r := StepTimelineHelpersClass.append_phase_exit_pending_effects(
+				pending_phase_exit_effects,
+				new_phase_name,
+				command_index,
+				deferred_events
+			)
+			if not add_pending_r.ok:
+				return add_pending_r
 		else:
 			if not cash_events_new.is_empty():
 				var new_cash_override_r := StepTimelineHelpersClass.override_events_phase_fields(cash_events_new, new_state)
@@ -202,7 +210,6 @@ static func append_phase_transition_events(
 
 	return Result.success({
 		"seq": seq,
-		"pending_marketing_enter_anchor_command_index": pending_anchor,
 	})
 
 static func _sync_seq(out_events: Array[Dictionary], seq_fallback: int) -> int:
@@ -212,3 +219,14 @@ static func _sync_seq(out_events: Array[Dictionary], seq_fallback: int) -> int:
 	if last is Dictionary and Dictionary(last).has("sequence"):
 		return int(Dictionary(last).get("sequence", seq_fallback))
 	return int(seq_fallback)
+
+static func _get_timeline_settlement_event_policy(engine: GameEngine, phase_name: String, point: int) -> Dictionary:
+	if engine == null or engine.phase_manager == null:
+		return {}
+	if not engine.phase_manager.has_method("get_timeline_settlement_event_policy"):
+		return {}
+	var phase_enum := PhaseDefsClass.get_phase_enum(str(phase_name).strip_edges())
+	if phase_enum == -1:
+		return {}
+	var policy_val = engine.phase_manager.get_timeline_settlement_event_policy(phase_enum, point)
+	return Dictionary(policy_val).duplicate(true) if (policy_val is Dictionary) else {}

@@ -1042,7 +1042,7 @@
   - 证据：构建末尾有两个明确 “兜底”：Marketing enter effects 和 cleanup delayed milestone 若未刷出，则追加到最后一个 step。证据：`gameplay/replay/step_timeline_build/build_full_impl.gd:246-265`、`gameplay/replay/step_timeline_build/build_append_impl.gd:232-262`。
   - 风险：timeline 构建器理解了 `choose_fridge_keep/first_throw_away/Marketing enter effects` 等规则细节，新增模块或调整 settlement 顺序时，UI/replay 层必须同步改；末尾 flush 还可能把事件归属到错误 step，掩盖规则层未提供足够 attribution 的根因。
   - 建议：规则层应在 event metadata 中提供排序/归属信息，例如 `display_after_action_id`、`phase_segment`、`step_anchor`；StepTimeline 只消费通用 metadata。无法归属的 pending event 应触发构建失败或 strict diagnostic，不应自动塞到最后一格。
-  - 状态：Fix 62 已先把 cleanup discard milestone 延后改为事件 metadata 驱动，StepTimeline 不再硬编码 `first_throw_away` / `choose_fridge_keep`；Marketing enter effects 和末尾 flush 的归属策略仍需继续收敛。
+  - 状态：Fix 62 已先把 cleanup discard milestone 延后改为事件 metadata 驱动，StepTimeline 不再硬编码 `first_throw_away` / `choose_fridge_keep`；Fix 63 继续把 Marketing enter effects 改为 PhaseManager timeline settlement policy 驱动，并移除构建末尾 flush 到最后一个 step 的兜底。
 
 - [P2] 增量 timeline 与预构建 entry 的 cache 路径存在 “过滤坏缓存后继续使用” 的行为。
   - 证据：append 构建从 `existing_timeline.steps/events` 只收集 Dictionary entry，非 Dictionary 被跳过。证据：`gameplay/replay/step_timeline_build/build_append_impl.gd:19-28`。
@@ -3053,3 +3053,28 @@
 结论：
 
 - 已完成该 P2 中 cleanup 延后里程碑的第一阶段收敛：`first_throw_away` 的展示延后策略现在由事件 metadata 表达，StepTimeline 构建层不再识别具体 milestone/action。剩余 Marketing enter effects 与构建末尾 flush 的归属策略仍需要后续按同一 metadata/strict attribution 方向继续清理。
+
+### Fix 63：StepTimeline 延后事件归属策略由规则装配声明并持久化 pending meta
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 8 `[P2] StepTimeline 构建层硬编码具体规则/动作/里程碑，并在末尾用 flush 兜底补事件` 中的 Marketing enter effects 与末尾 flush 部分。
+
+改动：
+
+- `core/engine/phase_manager.gd`：新增 timeline settlement event policy 注册/查询入口，支持模块声明某个 `(phase, settlement point)` 的展示事件需要延后到 phase exit 后输出；同源同策略重复注册视为幂等，兼容 archive/resync 复用 PhaseManager 的装配路径。
+- `core/modules/v2/ruleset*.gd`：Ruleset/registrar 增加 `register_timeline_settlement_event_policy(...)`，在 apply hooks 时把策略装配到 PhaseManager。
+- `modules/base_rules/rules/phase_and_map.gd`：base_rules 显式声明 `Marketing:enter` 的 settlement effects 使用 `defer_settlement_effects_until_phase_exit` 策略，StepTimeline 不再内置 `Marketing enter effects` 特判。
+- `gameplay/replay/step_timeline_build/*`：PhaseTransition 读取 PhaseManager policy 后把延后事件写入通用 `pending_phase_exit_effects`；full/append 不再在构建末尾把 pending Marketing/cleanup 事件强行 flush 到最后一个 step。
+- `gameplay/replay/step_timeline_build/helpers.gd`：在 `_build_meta.pending_timeline_events` 中持久化未到归属点的 pending phase-exit effects 与 cleanup deferred events，使增量 append 可以在后续命令到达时继续正确归属，而不是依赖内存或末尾兜底。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1113`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：第一轮发现 PhaseManager policy 重复装配问题，修正为同源幂等后 PASS，`392/392`。
+
+结论：
+
+- 已完成该 P2 的剩余收敛：StepTimeline 构建层不再识别具体 Marketing enter 展示策略，也不再把无法归属的 pending 事件塞到最后一个 step；未到归属点的事件作为 timeline build meta 保留，等待后续 append/rebuild 在真实 phase/action 边界释放。

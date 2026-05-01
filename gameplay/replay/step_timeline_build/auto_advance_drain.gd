@@ -17,13 +17,11 @@ static func drain(
 	out_events: Array[Dictionary],
 	current_step_index: int,
 	seq_in: int,
-	pending_marketing_enter_effect_events: Array[Dictionary],
-	pending_marketing_enter_anchor_command_index: int,
+	pending_phase_exit_effects: Dictionary,
 	pending_cleanup_throw_away_milestone_events: Array[Dictionary],
 	warnings: Array[String]
 ) -> Result:
 	var seq := int(seq_in)
-	var pending_anchor := int(pending_marketing_enter_anchor_command_index)
 	var final_state: GameState = state_in
 
 	var drain_r := AutoAdvanceDrainStepsClass.drain_steps(state_in, engine.phase_manager, engine.action_registry)
@@ -89,8 +87,7 @@ static func drain(
 				milestone_events,
 				Command.create_system("auto_advance"),
 				cmd,
-				pending_marketing_enter_effect_events,
-				pending_anchor,
+				pending_phase_exit_effects,
 				pending_cleanup_throw_away_milestone_events,
 				seq
 			)
@@ -100,7 +97,6 @@ static func drain(
 				return Result.failure("StepTimelineBuild: phase transition 返回值类型错误（期望 Dictionary）")
 			var update: Dictionary = update_r.value
 			seq = int(update.get("seq", seq))
-			pending_anchor = int(update.get("pending_marketing_enter_anchor_command_index", pending_anchor))
 
 			current_step_index = phase_step_index
 		else:
@@ -123,7 +119,6 @@ static func drain(
 		"state": final_state,
 		"current_step_index": current_step_index,
 		"seq": seq,
-		"pending_marketing_enter_anchor_command_index": pending_anchor,
 	})
 
 static func _sync_seq(out_events: Array[Dictionary], seq_fallback: int) -> int:
