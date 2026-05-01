@@ -5,6 +5,7 @@ const TextureUtilsClass = preload("res://ui/scenes/game/map/drawer/texture_utils
 const OverlayUtilsClass = preload("res://ui/scenes/game/map/drawer/overlay_utils.gd")
 const RoadsPassClass = preload("res://ui/scenes/game/map/drawer/passes/roads_pass.gd")
 const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
+const PiecePreviewLayoutClass = preload("res://ui/utils/piece_preview_layout.gd")
 const DrinkSourcesPassClass = preload("res://ui/scenes/game/map/drawer/passes/drink_sources_pass.gd")
 const HouseNumberManagerClass = preload("res://core/map/house_number_manager.gd")
 const HOUSE_ID_FONT_PATH := "res://assets/fonts/NotoSansSC-Regular.otf"
@@ -631,24 +632,17 @@ static func draw_road_overlay_piece(canvas, cell_size: int, anchor: Vector2i, in
 	OverlayUtilsClass.draw_view_cells_overlay(canvas, cell_size, cells_val, fill, border, 1.0)
 
 	var min_pos: Vector2i = info.get("min", Vector2i.ZERO)
-	var max_pos: Vector2i = info.get("max", Vector2i.ZERO)
-	var size_cells := (max_pos - min_pos) + Vector2i.ONE
-	var structure_rect := Rect2(
-		Vector2(min_pos.x * cell_size, min_pos.y * cell_size),
-		Vector2(size_cells.x * cell_size, size_cells.y * cell_size)
-	)
-
 	var sign_tex: Texture2D = RoadsPassClass.get_roadworks_marker_texture(canvas._skin)
 	if sign_tex != null:
-		var pad := maxf(2.0, float(cell_size) * 0.12)
-		var sign_rect := structure_rect.grow(-pad)
-		var sign_dst := TextureUtilsClass.get_texture_aspect_fit_rect(sign_tex, sign_rect)
-		TextureUtilsClass.draw_texture_rect_clipped_by_view_cells(
+		var local_cells := PiecePreviewLayoutClass.normalize_cells(cells_val)
+		var center: Vector2 = PiecePreviewLayoutClass.get_road_icon_center(local_cells)
+		var origin := Vector2(min_pos.x * cell_size, min_pos.y * cell_size)
+		var sign_rect: Rect2 = PiecePreviewLayoutClass.get_centered_rect(center, origin, float(cell_size), 0.90)
+		var pad := maxf(2.0, float(cell_size) * 0.06)
+		TextureUtilsClass.draw_texture_aspect_fit(
 			canvas,
 			sign_tex,
-			sign_dst,
-			cells_val,
-			cell_size,
+			sign_rect.grow(-pad),
 			Color(1, 1, 1, 0.90 * clampf(alpha, 0.0, 1.0))
 		)
 
@@ -691,25 +685,17 @@ static func draw_park_piece(canvas, cell_size: int, info: Dictionary, alpha: flo
 	OverlayUtilsClass.draw_view_cells_overlay(canvas, cell_size, cells_val, fill, border, 1.0)
 
 	var min_pos: Vector2i = info.get("min", Vector2i.ZERO)
-	var max_pos: Vector2i = info.get("max", Vector2i.ZERO)
-	var size_cells := (max_pos - min_pos) + Vector2i.ONE
-	var structure_rect := Rect2(
-		Vector2(min_pos.x * cell_size, min_pos.y * cell_size),
-		Vector2(size_cells.x * cell_size, size_cells.y * cell_size)
-	)
-
 	var tex: Texture2D = canvas._skin.get_piece_texture(piece_id)
 	var pad := maxf(1.0, float(cell_size) * 0.06)
-	var rect := structure_rect.grow(-pad)
-	var dst := TextureUtilsClass.get_texture_aspect_fill_rect(tex, rect)
-	TextureUtilsClass.draw_texture_rect_clipped_by_view_cells(
-		canvas,
-		tex,
-		dst,
-		cells_val,
-		cell_size,
-		Color(1, 1, 1, 0.85 * clampf(alpha, 0.0, 1.0))
-	)
+	var origin := Vector2(min_pos.x * cell_size, min_pos.y * cell_size)
+	var local_cells := PiecePreviewLayoutClass.normalize_cells(cells_val)
+	var run: Array[Vector2i] = PiecePreviewLayoutClass.get_longest_cell_run(local_cells)
+	var rect := PiecePreviewLayoutClass.get_rect_for_cells(run, origin, float(cell_size)).grow(-pad)
+	var mod := Color(1, 1, 1, 0.85 * clampf(alpha, 0.0, 1.0))
+	if PiecePreviewLayoutClass.is_run_vertical(run):
+		TextureUtilsClass.draw_texture_aspect_fit_rotated(canvas, tex, rect, 90.0, mod)
+	else:
+		TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, rect, mod)
 
 static func draw_generic_piece(canvas, cell_size: int, info: Dictionary, alpha: float = 1.0) -> void:
 	if canvas == null or canvas._skin == null:
