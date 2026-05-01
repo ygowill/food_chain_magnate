@@ -1159,7 +1159,7 @@
   - 证据：`build_best_effort_resume_transfer(...)` 只要 delta 构建失败，就构建 full snapshot，并把 delta error 作为 `fallback_reason`。证据：`autoload/net_client/server_resync_service.gd:96-115`。
   - 风险：delta 缓存损坏、checkpoint 创建失败、cursor/hash mismatch 都会被归入 snapshot fallback。状态最终可能可恢复，但 server 失去了“delta store 已经坏掉”的强信号，性能问题和恢复链路缺陷会长期隐藏。
   - 建议：`record_resume_delta` 返回 Result，并在广播链路记录结构化 error；delta fallback 应区分正常 stale cursor、client 强制 snapshot、server recovery store 损坏三类原因，后者应告警并进入健康状态。
-  - 状态：Fix 59 已让 `record_resume_delta(...)` 返回 `Result`，checkpoint 初始化/轮转失败会回传，并由 server broadcast 链路记录结构化 error；resync fallback 分类仍可继续细化。
+  - 状态：Fix 59 已让 `record_resume_delta(...)` 返回 `Result`，checkpoint 初始化/轮转失败会回传，并由 server broadcast 链路记录结构化 error；Fix 64 继续区分 force snapshot、stale/hash mismatch、delta gap/size 与 recovery store unhealthy fallback reason。
 
 - [P2] 客户端 snapshot 分片组装失败只记录 error，不发失败信号或 force resync，恢复等待可能只能靠超时退出。
   - 证据：`handle_snapshot_chunk(...)` 收齐 chunks 后 `assemble_snapshot(...)` 失败时，清空 pending snapshot state、记录 `GameLog.error` 后直接 return。证据：`autoload/net_client/client_resync_service.gd:117-123`。
@@ -3078,3 +3078,28 @@
 结论：
 
 - 已完成该 P2 的剩余收敛：StepTimeline 构建层不再识别具体 Marketing enter 展示策略，也不再把无法归属的 pending 事件塞到最后一个 step；未到归属点的事件作为 timeline build meta 保留，等待后续 append/rebuild 在真实 phase/action 边界释放。
+
+### Fix 64：server resync snapshot fallback 增加明确原因分类
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 9 `[P2] Server recovery delta store 是 best-effort：记录失败被静默吞掉，resync 服务再用 full snapshot 兜底，缺少诊断边界` 中的 fallback reason 分类部分。
+
+改动：
+
+- `server/room.gd`：新增 `_resume_delta_store_unhealthy_reason`，当 recovery checkpoint 创建、archive 创建或 delta post hash 获取失败时记录 unhealthy reason；成功重建 recovery store 后清空。
+- `server/room.gd`：`build_delta_resume_payload(...)` 遇到 unhealthy recovery store 会显式失败为 `recovery store unhealthy: ...`，不再和普通 cursor stale/gap 混在一起。
+- `autoload/net_client/server_resync_service.gd`：`build_best_effort_resume_transfer(...)` 为 snapshot fallback 增加 `fallback_reason_code`，区分 `force_snapshot_requested`、`cursor_missing`、`cursor_hash_mismatch`、`cursor_invalid`、`delta_gap`、`delta_too_large`、`recovery_store_unhealthy` 与通用 `delta_unavailable`。
+- `autoload/net_client/server_resync_service.gd`：dispatch snapshot fallback 时记录 `class=<fallback_reason_code>`；`recovery_store_unhealthy` 升级为 error 日志，正常 stale/force snapshot 仍为 info。
+- `core/tests/server_resync_guard_test.gd`：新增 force snapshot、hash mismatch、recovery store unhealthy 三类 fallback code 断言。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1113`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`392/392`。
+
+结论：
+
+- 已完成该 P2 的 fallback 边界收紧：server resync 仍允许在 delta 不可用时发 full snapshot，但调用方与日志现在能区分正常客户端请求/游标过期、delta 窗口问题和服务端 recovery store unhealthy，不再把健康问题伪装成普通 snapshot fallback。

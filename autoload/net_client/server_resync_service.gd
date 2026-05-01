@@ -10,6 +10,14 @@ const DEFAULT_RESYNC_SNAPSHOT_CHUNK_SIZE_BYTES := 256 * 1024
 const DEFAULT_RESYNC_SNAPSHOT_MAX_CHUNKS := 256
 const RESYNC_DELTA_BUFFER_HEADROOM_RATIO := 0.5
 const DEFAULT_RESYNC_DELTA_MAX_COMMANDS := 32
+const FALLBACK_FORCE_SNAPSHOT := "force_snapshot_requested"
+const FALLBACK_CURSOR_MISSING := "cursor_missing"
+const FALLBACK_CURSOR_INVALID := "cursor_invalid"
+const FALLBACK_CURSOR_HASH_MISMATCH := "cursor_hash_mismatch"
+const FALLBACK_DELTA_GAP := "delta_gap"
+const FALLBACK_DELTA_TOO_LARGE := "delta_too_large"
+const FALLBACK_RECOVERY_STORE_UNHEALTHY := "recovery_store_unhealthy"
+const FALLBACK_DELTA_UNAVAILABLE := "delta_unavailable"
 
 var _net = null
 var _last_request_msec_by_peer: Dictionary = {} # peer_id -> last accepted resync request msec
@@ -97,7 +105,12 @@ func build_best_effort_resume_transfer(room, resume_cursor: Dictionary = {}) -> 
 	var cursor: Dictionary = Dictionary(resume_cursor).duplicate(true)
 	var force_snapshot := bool(cursor.get("force_snapshot", false))
 	var fallback_reason := ""
-	if not force_snapshot and not cursor.is_empty():
+	var fallback_reason_code := ""
+	if force_snapshot:
+		fallback_reason_code = FALLBACK_FORCE_SNAPSHOT
+	elif cursor.is_empty():
+		fallback_reason_code = FALLBACK_CURSOR_MISSING
+	else:
 		var delta_r: Result = build_delta_transfer(room, cursor)
 		if delta_r.ok:
 			return ResultClass.success({
@@ -105,6 +118,7 @@ func build_best_effort_resume_transfer(room, resume_cursor: Dictionary = {}) -> 
 				"transfer": Dictionary(delta_r.value).duplicate(true),
 			})
 		fallback_reason = str(delta_r.error)
+		fallback_reason_code = _classify_delta_fallback_reason(fallback_reason)
 	var snapshot_r: Result = build_full_snapshot_transfer(room)
 	if not snapshot_r.ok:
 		return snapshot_r
@@ -112,6 +126,7 @@ func build_best_effort_resume_transfer(room, resume_cursor: Dictionary = {}) -> 
 		"mode": "snapshot",
 		"transfer": Dictionary(snapshot_r.value).duplicate(true),
 		"fallback_reason": fallback_reason,
+		"fallback_reason_code": fallback_reason_code,
 	})
 
 func dispatch_prepared_transfer(
@@ -128,19 +143,42 @@ func dispatch_prepared_transfer(
 		return ResultClass.success({"mode": "delta"})
 	if mode == "snapshot":
 		var fallback_reason := str(prepared_transfer.get("fallback_reason", "")).strip_edges()
-		if not fallback_reason.is_empty():
-			GameLog.info(
-				"NetClient",
-				"Resume delta unavailable source=%s %s reason=%s"
-					% [
-						ServerLogFormatClass.safe_text(source),
-						ServerLogFormatClass.request_tag(peer_id, request_id),
-						fallback_reason,
-					]
-			)
+		var fallback_reason_code := str(prepared_transfer.get("fallback_reason_code", "")).strip_edges()
+		if not fallback_reason.is_empty() or not fallback_reason_code.is_empty():
+			var log_message := "Resume delta unavailable source=%s %s class=%s reason=%s" % [
+				ServerLogFormatClass.safe_text(source),
+				ServerLogFormatClass.request_tag(peer_id, request_id),
+				ServerLogFormatClass.safe_text(fallback_reason_code),
+				ServerLogFormatClass.safe_text(fallback_reason),
+			]
+			if fallback_reason_code == FALLBACK_RECOVERY_STORE_UNHEALTHY:
+				GameLog.error("NetClient", log_message)
+			else:
+				GameLog.info("NetClient", log_message)
 		send_prebuilt_snapshot(peer_id, request_id, room, transfer, source)
-		return ResultClass.success({"mode": "snapshot"})
+		return ResultClass.success({
+			"mode": "snapshot",
+			"fallback_reason_code": fallback_reason_code,
+		})
 	return ResultClass.failure("resume transfer mode invalid: %s" % mode)
+
+static func _classify_delta_fallback_reason(reason: String) -> String:
+	var text := str(reason).strip_edges().to_lower()
+	if text.is_empty():
+		return FALLBACK_DELTA_UNAVAILABLE
+	if text.find("recovery store unhealthy") >= 0:
+		return FALLBACK_RECOVERY_STORE_UNHEALTHY
+	if text.find("hash mismatch") >= 0:
+		return FALLBACK_CURSOR_HASH_MISMATCH
+	if text.find("sequence invalid") >= 0:
+		return FALLBACK_CURSOR_INVALID
+	if text.find("cursor missing") >= 0:
+		return FALLBACK_CURSOR_MISSING
+	if text.find("delta gap") >= 0 or text.find("delta incomplete") >= 0:
+		return FALLBACK_DELTA_GAP
+	if text.find("too long") >= 0 or text.find("too large") >= 0:
+		return FALLBACK_DELTA_TOO_LARGE
+	return FALLBACK_DELTA_UNAVAILABLE
 
 func send_best_effort_resume_transfer(
 	peer_id: int,

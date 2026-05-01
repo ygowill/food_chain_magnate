@@ -61,6 +61,7 @@ var _resume_checkpoint_sequence: int = 0
 var _resume_checkpoint_state_hash: String = ""
 var _resume_checkpoint_archive: Dictionary = {}
 var _resume_delta_log: Array[Dictionary] = []
+var _resume_delta_store_unhealthy_reason: String = ""
 var _resume_checkpoint_counter: int = 0
 var _prepared_resume_start_engine = null
 var _prepared_resume_start_archive: Dictionary = {}
@@ -459,12 +460,15 @@ func _reset_recovery_store_from_current_engine(reason: String = "") -> Result:
 		_resume_checkpoint_state_hash = ""
 		_resume_checkpoint_archive = {}
 		_resume_delta_log.clear()
+		_resume_delta_store_unhealthy_reason = ""
 		return Result.success()
 	if game_engine == null:
-		return Result.failure("Room engine missing")
+		_resume_delta_store_unhealthy_reason = "Room engine missing"
+		return Result.failure(_resume_delta_store_unhealthy_reason)
 	var archive_r: Result = game_engine.create_archive()
 	if not archive_r.ok:
-		return Result.failure("create_archive failed: %s" % archive_r.error)
+		_resume_delta_store_unhealthy_reason = "create_archive failed: %s" % archive_r.error
+		return Result.failure(_resume_delta_store_unhealthy_reason)
 	_resume_checkpoint_counter += 1
 	var suffix := str(reason).strip_edges()
 	if suffix.is_empty():
@@ -474,6 +478,7 @@ func _reset_recovery_store_from_current_engine(reason: String = "") -> Result:
 	_resume_checkpoint_state_hash = _current_resume_state_hash()
 	_resume_checkpoint_archive = Dictionary(archive_r.value).duplicate(true)
 	_resume_delta_log.clear()
+	_resume_delta_store_unhealthy_reason = ""
 	return Result.success({
 		"checkpoint_id": _resume_checkpoint_id,
 		"sequence": _resume_checkpoint_sequence,
@@ -492,6 +497,8 @@ func build_delta_resume_payload(cursor: Dictionary, max_commands: int = 0, soft_
 		return Result.failure("Room is not in game")
 	if game_engine == null:
 		return Result.failure("Room engine missing")
+	if not _resume_delta_store_unhealthy_reason.strip_edges().is_empty():
+		return Result.failure("recovery store unhealthy: %s" % _resume_delta_store_unhealthy_reason)
 	if cursor.is_empty():
 		return Result.failure("resume cursor missing")
 	if _resume_checkpoint_archive.is_empty():
@@ -581,7 +588,8 @@ func record_resume_delta(cmd: Command, post_state_hash: String = "") -> Result:
 	if normalized_hash.is_empty():
 		normalized_hash = _current_resume_state_hash()
 	if normalized_hash.is_empty():
-		return Result.failure("record_resume_delta: post_state_hash 为空")
+		_resume_delta_store_unhealthy_reason = "record_resume_delta: post_state_hash 为空"
+		return Result.failure(_resume_delta_store_unhealthy_reason)
 	var sequence := _current_resume_sequence()
 	_resume_delta_log.append({
 		"sequence": sequence,

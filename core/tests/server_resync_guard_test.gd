@@ -158,6 +158,17 @@ static func _run_delta_case() -> Result:
 		return Result.failure("force_snapshot fallback 不应再发送旧 rpc_resync_archive")
 	if _find_request_rejected(mock_net.sent, 11, "req_force_snapshot", "resync_rate_limited") >= 0:
 		return Result.failure("force_snapshot fallback 不应被 resync_rate_limited 拒绝")
+	var force_prepared_r: Result = server._resync_service.build_best_effort_resume_transfer(room, {
+		"checkpoint_id": "cp_initial",
+		"last_applied_sequence": 0,
+		"last_state_hash": initial_hash,
+		"force_snapshot": true,
+	})
+	if not force_prepared_r.ok:
+		return Result.failure("force_snapshot prepared transfer 应成功: %s" % force_prepared_r.error)
+	var force_prepared: Dictionary = force_prepared_r.value
+	if str(force_prepared.get("fallback_reason_code", "")) != "force_snapshot_requested":
+		return Result.failure("force_snapshot fallback class 错误: %s" % str(force_prepared))
 
 	server._resync_service.forget_peer(11)
 	mock_net.sent.clear()
@@ -175,6 +186,29 @@ static func _run_delta_case() -> Result:
 		return Result.failure("hash 不匹配时应发送 snapshot chunk，实际=%s" % str(mock_net.sent))
 	if _find_sent_method(mock_net.sent, 11, "rpc_resync_archive") >= 0:
 		return Result.failure("hash 不匹配 fallback 不应再发送旧 rpc_resync_archive")
+	var mismatch_prepared_r: Result = server._resync_service.build_best_effort_resume_transfer(room, {
+		"checkpoint_id": "cp_initial",
+		"last_applied_sequence": 0,
+		"last_state_hash": "mismatched_hash",
+	})
+	if not mismatch_prepared_r.ok:
+		return Result.failure("hash mismatch prepared transfer 应成功: %s" % mismatch_prepared_r.error)
+	var mismatch_prepared: Dictionary = mismatch_prepared_r.value
+	if str(mismatch_prepared.get("fallback_reason_code", "")) != "cursor_hash_mismatch":
+		return Result.failure("hash mismatch fallback class 错误: %s" % str(mismatch_prepared))
+
+	room._resume_delta_store_unhealthy_reason = "test recovery store unhealthy"
+	var unhealthy_prepared_r: Result = server._resync_service.build_best_effort_resume_transfer(room, {
+		"checkpoint_id": "cp_initial",
+		"last_applied_sequence": 0,
+		"last_state_hash": initial_hash,
+	})
+	room._resume_delta_store_unhealthy_reason = ""
+	if not unhealthy_prepared_r.ok:
+		return Result.failure("unhealthy recovery store prepared transfer 应回退 snapshot: %s" % unhealthy_prepared_r.error)
+	var unhealthy_prepared: Dictionary = unhealthy_prepared_r.value
+	if str(unhealthy_prepared.get("fallback_reason_code", "")) != "recovery_store_unhealthy":
+		return Result.failure("unhealthy recovery store fallback class 错误: %s" % str(unhealthy_prepared))
 	return Result.success()
 
 static func _run_rewind_meta_case() -> Result:
