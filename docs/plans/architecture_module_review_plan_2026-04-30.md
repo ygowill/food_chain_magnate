@@ -3489,3 +3489,23 @@
 结论：
 
 - 已完成 `OnlineRoom` 的第三个 P3 拆分点：恢复 delta 的状态与构建逻辑不再挤在房间主文件中；`OnlineRoom` 继续作为房间生命周期入口，delta store 作为独立状态对象维护 resync/recovery 细节。
+
+### 整改收尾复核：当前文档内已列问题状态
+
+日期：2026-05-01
+
+复核范围：
+
+- 重新对照本文档中 Step 1 到 Step 10、main 增量复审，以及 Fix 1 到 Fix 80 的对应关系。
+- 重点复核 P1/P2 的 strict/fail-fast、过度兜底、online resume/resync、timeline/replay、模块注册、server/client 配置与测试链路。
+
+结论：
+
+- 本轮审查文档中已明确列出的 P1/P2/P3 问题均已完成修复、改善或复核关闭；其中 P3 `Online/server 关键文件仍承担多个子系统职责` 已通过 Fix 74、Fix 76、Fix 80 完成本轮可操作拆分。
+- 文档早期段落中出现的“尚未”“后续”属于当时阶段结论或中间 Fix 的历史记录；后续 Fix 已在文档末尾逐项覆盖，不再作为当前未完成项。
+- 若后续继续拆 `server/room.gd` 的 seat membership、resume lobby 或 client replay/bootstrap 等更大边界，应另建专项重构计划，不作为本轮审查结果的未修复遗留。
+
+验证：
+
+- `rg -n "^- \\[P[0-3]\\]|### Fix|状态：" docs/plans/architecture_module_review_plan_2026-04-30.md`：已复核所有问题条目与后续 Fix 记录。
+- 最近一次代码验证仍为 Fix 80：`HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd` PASS，`files=1123`；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120 --strict-exit` PASS，`392/392`。
