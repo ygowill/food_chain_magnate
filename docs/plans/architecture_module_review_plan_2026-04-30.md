@@ -1474,6 +1474,7 @@
   - 证据：`modules/lobbyists/ui/lobbyists_placement_flow_controller.gd` 新增 523 行；其中 `_show_overlay`、`_refresh_map_selection`、`_on_placement_confirmed`、`_build_lobbyist_employee_items`、`_bind_action_panel_context` 均在同一文件内。证据：`modules/lobbyists/ui/lobbyists_placement_flow_controller.gd:82-120`、`161-235`、`274-292`、`371-413`。
   - 风险：这是模块 UI 层可以接受的短期整合，但后续如果继续增加 park/road/extra-tile 规则、online 约束和 staff usage，它会很快变成模块内的第二个 GamePanel controller。
   - 建议：若继续扩展，拆出 `LobbyistsPlacementViewModel`（从 state 派生员工/可选 pieces）、`LobbyistsPlacementCommandBuilder`（构造 command params）、`LobbyistsPlacementActionPanelBinder`（绑定 context）三类 helper。
+  - 状态：Fix 58 已先拆出 `LobbyistsPlacementCommandBuilder`，把 action 归一化、参数校验与 Command 创建从 flow controller 中移出。
 
 暂不列为问题：
 
@@ -2931,3 +2932,26 @@
 结论：
 
 - 已完成该 P2 权威语义修复：Lobbyists UI 的具体 staff 选择已经与 core/module action 实际消耗一致；联机或坏客户端传入不可用 `staff_id` 不再能绕过权威校验。
+
+### Fix 58：Lobbyists placement flow controller 拆出命令构造 helper
+
+日期：2026-05-01
+
+对应问题：
+
+- main 增量 `[P3] Lobbyists placement flow controller 新增 523 行，集中处理 manifest UI 扩展、员工列表派生、地图高亮/预览、命令构造、ActionPanel context 绑定与 refresh`。
+
+改动：
+
+- 新增 `modules/lobbyists/ui/lobbyists_placement_command_builder.gd`，集中处理 Lobbyists road/park action 归一化、piece/position/rotation/staff 参数校验与 `Command` 创建。
+- `modules/lobbyists/ui/lobbyists_placement_flow_controller.gd`：`_on_placement_confirmed(...)` 改为调用 command builder；移除本地 `_create_command(...)` 与内联 params 拼装，flow controller 继续只负责 overlay 生命周期、地图预览/高亮、员工列表同步与执行回调。
+- 该拆分是低风险的第一步：员工列表 ViewModel 与 ActionPanel binder 暂未继续拆出，避免一次性重排 UI 控制器行为。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1111`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`391/391`。
+
+结论：
+
+- 已完成该 P3 的第一阶段职责拆分：命令构造不再散落在主 flow controller 中，后续如果继续扩展 staff UI 或 action panel context，可以在同一模式下继续拆 ViewModel/Binder，而不需要把规则参数继续塞回 overlay 控制器。

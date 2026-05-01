@@ -1,6 +1,7 @@
 extends RefCounted
 
 const LobbyistsPlacementOverlayClass = preload("res://modules/lobbyists/ui/components/lobbyists_placement/lobbyists_placement_overlay.gd")
+const LobbyistsPlacementCommandBuilderClass = preload("res://modules/lobbyists/ui/lobbyists_placement_command_builder.gd")
 const LobbyistsStaffUsageClass = preload("res://modules/lobbyists/actions/lobbyists_staff_usage.gd")
 
 const ACTION_ROAD := "place_lobbyists_road"
@@ -207,22 +208,21 @@ func _on_placement_confirmed(action_id: String, position: Vector2i, rotation: in
 	if actor_id < 0:
 		return
 
-	var command_params := {
-		"piece_id": piece_id,
-		"anchor_pos": [position.x, position.y],
-		"rotation": int(rotation),
-	}
-	var emp_type := str(employee_type).strip_edges()
-	if not emp_type.is_empty():
-		command_params["employee_type"] = emp_type
-		if int(staff_id) > 0:
-			command_params["staff_id"] = int(staff_id)
-
-	var command = _create_command(aid, actor_id, command_params)
-	if command == null:
+	var command_read := LobbyistsPlacementCommandBuilderClass.build_command(
+		state,
+		aid,
+		actor_id,
+		position,
+		rotation,
+		piece_id,
+		employee_type,
+		staff_id
+	)
+	if not command_read.ok:
 		if is_instance_valid(_overlay) and _overlay.has_method("set_validation"):
-			_overlay.call("set_validation", false, "无法创建说客动作命令")
+			_overlay.call("set_validation", false, command_read.error)
 		return
+	var command = command_read.value
 
 	var result = _execute_command.call(command)
 	if not result.ok:
@@ -294,10 +294,7 @@ func _show_toast(message: String) -> void:
 		_overlay_controller.show_toast(message)
 
 func _normalize_action(action_id: String) -> String:
-	var aid := str(action_id).strip_edges()
-	if aid == ACTION_ROAD or aid == ACTION_PARK:
-		return aid
-	return ""
+	return LobbyistsPlacementCommandBuilderClass.normalize_action(action_id)
 
 func _is_overlay_allowed(state) -> bool:
 	if state == null:
@@ -350,21 +347,6 @@ func _get_executor_piece_ids(action_id: String) -> Array[String]:
 			seen[s] = true
 			out.append(s)
 	return out
-
-func _create_command(action_id: String, actor_id: int, params: Dictionary):
-	var command_script = load("res://core/types/command.gd")
-	if command_script == null:
-		return null
-	var command = command_script.new()
-	command.action_id = action_id
-	command.actor = int(actor_id)
-	command.params = params.duplicate(true)
-	if _scene != null and _scene.game_engine != null:
-		var state = _scene.game_engine.get_state()
-		if state != null:
-			command.phase = str(state.phase)
-			command.sub_phase = str(state.sub_phase)
-	return command
 
 func _build_lobbyist_employee_items(state, player_id: int) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
