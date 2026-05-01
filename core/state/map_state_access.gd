@@ -4,6 +4,7 @@ extends RefCounted
 const KEY_MARKETING_PLACEMENTS := "marketing_placements"
 const KEY_RESTAURANTS := "restaurants"
 const KEY_HOUSES := "houses"
+const KEY_DRINK_SOURCES := "drink_sources"
 
 static func _prefix(label: String) -> String:
 	if label.is_empty():
@@ -124,9 +125,11 @@ static func require_boundary_index(state: GameState, prefix_label: String) -> Re
 static func require_marketing_placements(state: GameState, prefix_label: String) -> Result:
 	return require_dict_field(state, KEY_MARKETING_PLACEMENTS, prefix_label)
 
+static func require_drink_sources(state: GameState, prefix_label: String) -> Result:
+	return require_array_field(state, KEY_DRINK_SOURCES, prefix_label)
+
 static func require_restaurants(state: GameState, prefix_label: String) -> Result:
 	return require_dict_field(state, KEY_RESTAURANTS, prefix_label)
 
 static func require_houses(state: GameState, prefix_label: String) -> Result:
 	return require_dict_field(state, KEY_HOUSES, prefix_label)
-

@@ -2149,3 +2149,30 @@
 结论：
 
 - 已完成该 P2 strict 化：模块注册的 phase action modal 坏路径会在 UI metadata bootstrap 时失败暴露，不再等到用户打开 modal 时才出现 warning 或静默缺 UI。
+
+### Fix 27：营销占地与冲突路径拒绝损坏状态
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 7 `[P2] base_marketing 与 initiate_marketing 在营销占地/冲突路径仍保留旧数据默认值，会掩盖 marketing_placements 或 board spec 损坏`。
+- Step 7 测试缺口：缺少 `initiate_marketing` 对 malformed `drink_sources/marketing_placements/footprint_size/rotation/axis` 的 strict 测试。
+
+改动：
+
+- `modules/base_marketing/rules/entry.gd`：billboard footprint 解析不再把缺失/错误字段回退为 `Vector2i.ONE/0`；`marketing_instance.footprint_size` 与 `rotation` 必须显式存在且合法。airplane range 也必须读取合法 `footprint_size`，不再重置为 1x1；mailbox range 在 road graph 构建失败时返回 `Result.failure`。
+- `gameplay/actions/initiate_marketing/validation.gd`：`board_spec.footprint_size` 必须显式为 `Vector2i`；`state.map.drink_sources` 必须是结构正确的数组；airplane overlap 与非 airplane overlap 对损坏的 `marketing_placements`、缺失 `world_pos/axis/footprint_size/rotation` 均 fail-fast，不再跳过或默认成 1x1/0。
+- `core/state/map_state_access.gd`：新增 `require_drink_sources(...)`，让营销动作使用统一 state 访问 helper。
+- `core/tests/base_marketing_state_access_test.gd`、`core/tests/initiate_marketing_overlap_state_access_test.gd`、`core/tests/initiate_marketing_airplane_overlap_state_access_test.gd`、`core/tests/marketing_campaigns_test.gd`：补充缺失/非法 footprint、rotation、axis、drink_sources 等负例。
+- `core/tests/step_timeline_marketing_milestone_order_test.gd`、`core/tests/milestone_system/milestone_system_triggers_test.gd`、`core/tests/marketing_dinnertime_golden_replay_test.gd`、`core/tests/mass_marketeers_v2_test.gd`、`core/tests/new_districts_v2_test.gd`、`core/tests/marketing_settlement_fail_fast_test.gd`：迁移旧手工营销夹具，显式写入 `footprint_size` 与 `rotation`，避免测试继续依赖运行期默认兜底。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：首次运行因旧测试夹具缺少 `footprint_size/rotation` 失败；迁移夹具后重跑 PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：营销占地、饮品点冲突、飞机冲突和营销范围计算不再把损坏 state 或坏配置解释成默认 1x1/0 或空冲突。
+- 旧存档/旧手工测试数据如缺少营销 footprint/rotation，应通过显式迁移或测试夹具更新处理；运行期规则路径不再承担隐式数据修复。

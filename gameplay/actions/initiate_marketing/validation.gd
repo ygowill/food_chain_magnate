@@ -117,7 +117,10 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 		return provider_read
 
 	# === 放置校验：占地/边界/阻塞/道路/边缘/重叠 ===
-	var base_size: Vector2i = board_spec.get("footprint_size", Vector2i.ONE)
+	var base_size_val = board_spec.get("footprint_size", null)
+	if not (base_size_val is Vector2i):
+		return Result.failure("board_spec.footprint_size 缺失或类型错误（期望 Vector2i）")
+	var base_size: Vector2i = base_size_val
 
 	# Airplane is placed outside the board:
 	# - It is NOT blocked by structures/roads/drink_sources.
@@ -186,17 +189,10 @@ static func validate(action: ActionExecutor, state: GameState, command: Command)
 	var footprint_cells: Array[Vector2i] = MarketingRulesClass.build_footprint_cells(world_pos, size)
 
 	# 饮品进货点集合（用于“禁止覆盖 drink_source”校验，issue_tracker #35）。
-	var drink_source_pos_set := {}
-	var sources_val = state.map.get("drink_sources", null)
-	if sources_val is Array:
-		var sources: Array = sources_val
-		for s_val in sources:
-			if not (s_val is Dictionary):
-				continue
-			var s: Dictionary = s_val
-			var wp_val = s.get("world_pos", null)
-			if wp_val is Vector2i:
-				drink_source_pos_set[Vector2i(wp_val)] = true
+	var drink_source_pos_set_read := _build_drink_source_pos_set(state)
+	if not drink_source_pos_set_read.ok:
+		return drink_source_pos_set_read
+	var drink_source_pos_set: Dictionary = drink_source_pos_set_read.value
 
 	# 1) 越界/建筑占用检查（所有占地格）
 	for p in footprint_cells:
@@ -351,28 +347,30 @@ static func _validate_airplane_overlap(
 	for key in placements.keys():
 		var p_val = placements[key]
 		if not (p_val is Dictionary):
-			continue
+			return Result.failure("airplane overlap: marketing_placements[%s] 类型错误（期望 Dictionary）" % str(key))
 		var placement: Dictionary = p_val
-		if str(placement.get("type", "")) != "airplane":
+		var type_val = placement.get("type", null)
+		if not (type_val is String):
+			return Result.failure("airplane overlap: marketing_placements[%s].type 缺失或类型错误（期望 String）" % str(key))
+		var placement_type := str(type_val).strip_edges()
+		if placement_type.is_empty():
+			return Result.failure("airplane overlap: marketing_placements[%s].type 不能为空" % str(key))
+		if placement_type != "airplane":
 			continue
 		var wp_val = placement.get("world_pos", null)
 		if not (wp_val is Vector2i):
-			continue
+			return Result.failure("airplane overlap: marketing_placements[%s].world_pos 缺失或类型错误（期望 Vector2i）" % str(key))
 		var existing_world_pos: Vector2i = wp_val
 		var existing_axis := str(placement.get("axis", "")).strip_edges()
 		if existing_axis != "row" and existing_axis != "col":
-			existing_axis = _infer_airplane_axis(state, existing_world_pos, Vector2i.ONE)
+			return Result.failure("airplane overlap: marketing_placements[%s].axis 缺失或非法（期望 row/col）" % str(key))
 		if existing_axis != axis:
 			continue
 
-		var footprint_val = placement.get("footprint_size", null)
-		var footprint := Vector2i.ONE
-		if footprint_val is Vector2i:
-			footprint = Vector2i(footprint_val)
-		elif footprint_val is Array:
-			var footprint_arr: Array = footprint_val
-			if footprint_arr.size() == 2:
-				footprint = Vector2i(int(footprint_arr[0]), int(footprint_arr[1]))
+		var footprint_read := _require_marketing_footprint_size(placement, "airplane overlap: marketing_placements[%s].footprint_size" % str(key))
+		if not footprint_read.ok:
+			return footprint_read
+		var footprint: Vector2i = footprint_read.value
 		var existing_length := 0
 		if footprint.x == 2 and footprint.y != 2:
 			existing_length = footprint.y
@@ -392,7 +390,7 @@ static func _validate_airplane_overlap(
 			elif existing_world_pos.x == maxp.x or existing_world_pos.x == (maxp.x - (thickness - 1)):
 				existing_side = "E"
 			else:
-				continue
+				return Result.failure("airplane overlap: marketing_placements[%s].world_pos 不在对应左右边缘: %s" % [str(key), str(existing_world_pos)])
 			existing_start = existing_world_pos.y
 			existing_end = existing_world_pos.y + existing_length - 1
 		else:
@@ -401,7 +399,7 @@ static func _validate_airplane_overlap(
 			elif existing_world_pos.y == maxp.y or existing_world_pos.y == (maxp.y - (thickness - 1)):
 				existing_side = "S"
 			else:
-				continue
+				return Result.failure("airplane overlap: marketing_placements[%s].world_pos 不在对应上下边缘: %s" % [str(key), str(existing_world_pos)])
 			existing_start = existing_world_pos.x
 			existing_end = existing_world_pos.x + existing_length - 1
 
@@ -412,6 +410,68 @@ static func _validate_airplane_overlap(
 			return Result.failure("飞机与已有飞机占用同一边并重叠: %s" % side)
 
 	return Result.success()
+
+static func _build_drink_source_pos_set(state: GameState) -> Result:
+	var sources_read := MapStateAccessClass.require_drink_sources(state, "initiate_marketing")
+	if not sources_read.ok:
+		return sources_read
+	var sources: Array = sources_read.value
+	var out := {}
+	for i in range(sources.size()):
+		var src_val = sources[i]
+		if not (src_val is Dictionary):
+			return Result.failure("initiate_marketing: state.map.drink_sources[%d] 类型错误（期望 Dictionary）" % i)
+		var src: Dictionary = src_val
+		var wp_val = src.get("world_pos", null)
+		if not (wp_val is Vector2i):
+			return Result.failure("initiate_marketing: state.map.drink_sources[%d].world_pos 缺失或类型错误（期望 Vector2i）" % i)
+		var type_val = src.get("type", null)
+		if not (type_val is String) or str(type_val).strip_edges().is_empty():
+			return Result.failure("initiate_marketing: state.map.drink_sources[%d].type 缺失或为空" % i)
+		out[Vector2i(wp_val)] = true
+	return Result.success(out)
+
+static func _require_marketing_footprint_size(placement: Dictionary, path: String) -> Result:
+	if not placement.has("footprint_size"):
+		return Result.failure("%s 缺失" % path)
+	var read := _parse_vector2i_value(placement.get("footprint_size", null), path)
+	if not read.ok:
+		return read
+	var size: Vector2i = read.value
+	if size.x <= 0 or size.y <= 0:
+		return Result.failure("%s 非法: %s" % [path, str(size)])
+	return Result.success(size)
+
+static func _require_marketing_rotation(placement: Dictionary, path: String) -> Result:
+	if not placement.has("rotation"):
+		return Result.failure("%s 缺失" % path)
+	return _parse_int_value(placement.get("rotation", null), path)
+
+static func _parse_vector2i_value(value, path: String) -> Result:
+	if value is Vector2i:
+		return Result.success(Vector2i(value))
+	if value is Array:
+		var arr: Array = value
+		if arr.size() != 2:
+			return Result.failure("%s 长度错误（期望 2）" % path)
+		var x_read := _parse_int_value(arr[0], "%s[0]" % path)
+		if not x_read.ok:
+			return x_read
+		var y_read := _parse_int_value(arr[1], "%s[1]" % path)
+		if not y_read.ok:
+			return y_read
+		return Result.success(Vector2i(int(x_read.value), int(y_read.value)))
+	return Result.failure("%s 类型错误（期望 Vector2i 或 [x,y] Array）" % path)
+
+static func _parse_int_value(value, path: String) -> Result:
+	if value is int:
+		return Result.success(int(value))
+	if value is float:
+		var f: float = float(value)
+		if f != floor(f):
+			return Result.failure("%s 必须为整数" % path)
+		return Result.success(int(f))
+	return Result.failure("%s 类型错误（期望 int）" % path)
 
 static func _count_reusable_marketing_uses_from_busy_groups_this_round(
 	state: GameState,
@@ -477,7 +537,13 @@ static func _has_marketing_overlap_excluding_airplane(state: GameState, footprin
 		if not (p_val is Dictionary):
 			return Result.failure("marketing overlap: marketing_placements[%s] 类型错误（期望 Dictionary）" % str(k))
 		var p: Dictionary = p_val
-		if str(p.get("type", "")) == "airplane":
+		var type_val = p.get("type", null)
+		if not (type_val is String):
+			return Result.failure("marketing overlap: marketing_placements[%s].type 缺失或类型错误（期望 String）" % str(k))
+		var placement_type := str(type_val).strip_edges()
+		if placement_type.is_empty():
+			return Result.failure("marketing overlap: marketing_placements[%s].type 不能为空" % str(k))
+		if placement_type == "airplane":
 			continue
 
 		var wp_val = p.get("world_pos", null)
@@ -485,27 +551,18 @@ static func _has_marketing_overlap_excluding_airplane(state: GameState, footprin
 			return Result.failure("marketing overlap: marketing_placements[%s].world_pos 缺失或类型错误（期望 Vector2i）" % str(k))
 		var anchor: Vector2i = wp_val
 
-		var base_size := Vector2i.ONE
-		var fs_val = p.get("footprint_size", null)
-		if fs_val is Vector2i:
-			base_size = Vector2i(fs_val)
-		elif fs_val is Array:
-			var arr: Array = fs_val
-			if arr.size() == 2:
-				base_size = Vector2i(int(arr[0]), int(arr[1]))
-		if base_size.x <= 0 or base_size.y <= 0:
-			base_size = Vector2i.ONE
+		var base_size_read := _require_marketing_footprint_size(p, "marketing overlap: marketing_placements[%s].footprint_size" % str(k))
+		if not base_size_read.ok:
+			return base_size_read
+		var base_size: Vector2i = base_size_read.value
 
-		var rotation := 0
-		var rot_val = p.get("rotation", null)
-		if rot_val is int:
-			rotation = int(rot_val)
-		elif rot_val is float:
-			var f: float = float(rot_val)
-			if f == floor(f):
-				rotation = int(f)
-		if not rotation in [0, 90, 180, 270]:
-			rotation = 0
+		var rotation_read := _require_marketing_rotation(p, "marketing overlap: marketing_placements[%s].rotation" % str(k))
+		if not rotation_read.ok:
+			return rotation_read
+		var rotation: int = int(rotation_read.value)
+		var rotation_valid := MarketingRulesClass.require_rotation(rotation)
+		if not rotation_valid.ok:
+			return Result.failure("marketing overlap: marketing_placements[%s].rotation 非法: %s" % [str(k), str(rotation)])
 
 		var size := base_size
 		if rotation == 90 or rotation == 270:

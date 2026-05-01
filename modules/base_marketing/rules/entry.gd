@@ -80,28 +80,18 @@ func _get_billboard_house_ids(state: GameState, marketing_instance: Dictionary) 
 	return Result.success(_dict_keys_to_string_array(set))
 
 func _resolve_marketing_footprint_cells(marketing_instance: Dictionary, world_pos: Vector2i, label: String) -> Result:
-	var footprint_size := Vector2i.ONE
-	var footprint_val = marketing_instance.get("footprint_size", null)
-	if footprint_val is Vector2i:
-		footprint_size = Vector2i(footprint_val)
-	elif footprint_val is Array:
-		var arr: Array = footprint_val
-		if arr.size() == 2:
-			footprint_size = Vector2i(int(arr[0]), int(arr[1]))
-	if footprint_size.x <= 0 or footprint_size.y <= 0:
-		return Result.failure("%s: %s range: marketing_instance.footprint_size 非法: %s" % [MODULE_ID, label, str(footprint_val)])
+	var footprint_read := _require_marketing_footprint_size(marketing_instance, "%s range: marketing_instance.footprint_size" % label)
+	if not footprint_read.ok:
+		return footprint_read
+	var footprint_size: Vector2i = footprint_read.value
 
-	var rotation := 0
-	var rotation_val = marketing_instance.get("rotation", 0)
-	if rotation_val is int:
-		rotation = int(rotation_val)
-	elif rotation_val is float:
-		var f: float = float(rotation_val)
-		if f == floor(f):
-			rotation = int(f)
+	var rotation_read := _require_marketing_rotation(marketing_instance, "%s range: marketing_instance.rotation" % label)
+	if not rotation_read.ok:
+		return rotation_read
+	var rotation: int = int(rotation_read.value)
 	var size_read := MarketingRulesClass.get_rotated_footprint_size(footprint_size, rotation)
 	if not size_read.ok:
-		return Result.failure("%s: %s range: 无法解析 marketing_instance.rotation=%s: %s" % [MODULE_ID, label, str(rotation_val), size_read.error])
+		return Result.failure("%s: %s range: %s" % [MODULE_ID, label, size_read.error])
 	var size: Vector2i = size_read.value
 	return Result.success(MarketingRulesClass.build_footprint_cells(world_pos, size))
 
@@ -126,6 +116,8 @@ func _get_mailbox_house_ids(state: GameState, marketing_instance: Dictionary) ->
 		return boundary_read
 
 	var road_graph = RoadGraphCacheClass.get_road_graph(state)
+	if road_graph == null or not road_graph.has_method("get_block_cells"):
+		return Result.failure("%s: mailbox range: road_graph 构建失败" % MODULE_ID)
 	var block_cells: Array[Vector2i] = road_graph.get_block_cells(world_pos)
 	if block_cells.is_empty():
 		var empty: Array[String] = []
@@ -237,17 +229,10 @@ func _get_airplane_house_ids(state: GameState, marketing_instance: Dictionary) -
 	if axis != "row" and axis != "col":
 		return Result.failure("%s: airplane range: marketing_instance.axis 非法（期望 row/col）: %s" % [MODULE_ID, axis])
 
-	# footprint_size is stored by initiate_marketing.apply; allow fallback to 1x1 for older data.
-	var fs := Vector2i.ONE
-	var fs_val = marketing_instance.get("footprint_size", null)
-	if fs_val is Vector2i:
-		fs = Vector2i(fs_val)
-	elif fs_val is Array:
-		var arr: Array = fs_val
-		if arr.size() == 2:
-			fs = Vector2i(int(arr[0]), int(arr[1]))
-	if fs.x <= 0 or fs.y <= 0:
-		fs = Vector2i.ONE
+	var fs_read := _require_marketing_footprint_size(marketing_instance, "airplane range: marketing_instance.footprint_size")
+	if not fs_read.ok:
+		return fs_read
+	var fs: Vector2i = fs_read.value
 
 	var thickness := 2
 	var length := 0
@@ -374,3 +359,45 @@ static func _require_world_pos(marketing_instance: Dictionary, type_id: String) 
 	if not marketing_instance.has("world_pos") or not (marketing_instance["world_pos"] is Vector2i):
 		return Result.failure("%s: %s range: marketing_instance.world_pos 缺失或类型错误（期望 Vector2i）" % [MODULE_ID, type_id])
 	return Result.success(marketing_instance["world_pos"])
+
+func _require_marketing_footprint_size(marketing_instance: Dictionary, path: String) -> Result:
+	if not marketing_instance.has("footprint_size"):
+		return Result.failure("%s: %s 缺失" % [MODULE_ID, path])
+	var read := _parse_vector2i_value(marketing_instance.get("footprint_size", null), "%s: %s" % [MODULE_ID, path])
+	if not read.ok:
+		return read
+	var size: Vector2i = read.value
+	if size.x <= 0 or size.y <= 0:
+		return Result.failure("%s: %s 非法: %s" % [MODULE_ID, path, str(size)])
+	return Result.success(size)
+
+func _require_marketing_rotation(marketing_instance: Dictionary, path: String) -> Result:
+	if not marketing_instance.has("rotation"):
+		return Result.failure("%s: %s 缺失" % [MODULE_ID, path])
+	return _parse_int_value(marketing_instance.get("rotation", null), "%s: %s" % [MODULE_ID, path])
+
+func _parse_vector2i_value(value, path: String) -> Result:
+	if value is Vector2i:
+		return Result.success(Vector2i(value))
+	if value is Array:
+		var arr: Array = value
+		if arr.size() != 2:
+			return Result.failure("%s 长度错误（期望 2）" % path)
+		var x_read := _parse_int_value(arr[0], "%s[0]" % path)
+		if not x_read.ok:
+			return x_read
+		var y_read := _parse_int_value(arr[1], "%s[1]" % path)
+		if not y_read.ok:
+			return y_read
+		return Result.success(Vector2i(int(x_read.value), int(y_read.value)))
+	return Result.failure("%s 类型错误（期望 Vector2i 或 [x,y] Array）" % path)
+
+func _parse_int_value(value, path: String) -> Result:
+	if value is int:
+		return Result.success(int(value))
+	if value is float:
+		var f: float = float(value)
+		if f != floor(f):
+			return Result.failure("%s 必须为整数" % path)
+		return Result.success(int(f))
+	return Result.failure("%s 类型错误（期望 int）" % path)

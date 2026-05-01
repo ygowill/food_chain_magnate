@@ -35,6 +35,8 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		"employee_type": "marketing_trainee",
 		"product": "burger",
 		"world_pos": Vector2i(0, 0),
+		"footprint_size": Vector2i.ONE,
+		"rotation": 0,
 		"remaining_duration": 1,
 		"axis": "",
 		"tile_index": -1,
@@ -80,12 +82,25 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		"employee_type": "marketing_trainee",
 		"product": "burger",
 		"world_pos": Vector2i(0, 0),
+		"footprint_size": Vector2i.ONE,
+		"rotation": 0,
 		"remaining_duration": 1,
 		"axis": "",
 		"tile_index": -1,
 		"created_round": state.round_number,
 	})
-	placements["1"] = {"board_number": 1}
+	placements["1"] = {
+		"board_number": 1,
+		"type": "unknown_type",
+		"owner": 0,
+		"product": "burger",
+		"world_pos": Vector2i(0, 0),
+		"footprint_size": Vector2i.ONE,
+		"rotation": 0,
+		"remaining_duration": 1,
+		"axis": "",
+		"tile_index": -1,
+	}
 	var r3 := MarketingSettlementClass.apply(state, pm.get_marketing_range_calculator(), 1, pm)
 	if r3.ok:
 		return Result.failure("未知 marketing type 应失败")
@@ -120,6 +135,7 @@ static func _test_milestone_failure_is_fatal(player_count: int, seed_val: int) -
 		"product": "burger",
 		"world_pos": Vector2i(2, 2),
 		"footprint_size": Vector2i.ONE,
+		"rotation": 0,
 		"remaining_duration": 1,
 		"axis": "",
 		"tile_index": -1,
@@ -128,7 +144,15 @@ static func _test_milestone_failure_is_fatal(player_count: int, seed_val: int) -
 	var placements: Dictionary = state.map["marketing_placements"]
 	placements["1"] = {
 		"board_number": 1,
+		"type": "radio",
+		"owner": 0,
+		"product": "burger",
+		"world_pos": Vector2i(2, 2),
+		"footprint_size": Vector2i.ONE,
+		"rotation": 0,
 		"remaining_duration": 1,
+		"axis": "",
+		"tile_index": -1,
 	}
 
 	var pm := PhaseManagerClass.new()
@@ -216,6 +240,8 @@ static func _test_online_confirmed_players_fail_fast(player_count: int, seed_val
 		"employee_type": "marketing_trainee",
 		"product": "burger",
 		"world_pos": Vector2i(0, 0),
+		"footprint_size": Vector2i.ONE,
+		"rotation": 0,
 		"remaining_duration": 1,
 		"axis": "",
 		"tile_index": -1,
@@ -223,7 +249,18 @@ static func _test_online_confirmed_players_fail_fast(player_count: int, seed_val
 	})
 	var placements: Dictionary = state.map["marketing_placements"]
 	placements.clear()
-	placements["1"] = {"board_number": 1}
+	placements["1"] = {
+		"board_number": 1,
+		"type": "billboard",
+		"owner": 0,
+		"product": "burger",
+		"world_pos": Vector2i(0, 0),
+		"footprint_size": Vector2i.ONE,
+		"rotation": 0,
+		"remaining_duration": 1,
+		"axis": "",
+		"tile_index": -1,
+	}
 	var confirmed_before := str(state.round_state.get(ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY, null))
 
 	var pm := PhaseManagerClass.new()

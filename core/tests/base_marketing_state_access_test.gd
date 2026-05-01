@@ -11,10 +11,19 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_billboard_range_uses_full_rotated_footprint()
 	if not r.ok:
 		return r
+	r = _test_billboard_range_fails_fast_on_missing_footprint_size()
+	if not r.ok:
+		return r
+	r = _test_billboard_range_fails_fast_on_invalid_rotation()
+	if not r.ok:
+		return r
 	r = _test_billboard_range_fails_fast_on_missing_grid_size()
 	if not r.ok:
 		return r
 	r = _test_mailbox_range_fails_fast_on_missing_boundary_index()
+	if not r.ok:
+		return r
+	r = _test_mailbox_range_fails_fast_when_road_graph_unavailable()
 	if not r.ok:
 		return r
 	r = _test_radio_range_fails_fast_on_missing_tile_grid_size()
@@ -23,7 +32,10 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_airplane_range_fails_fast_on_missing_cells()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 6})
+	r = _test_airplane_range_fails_fast_on_missing_footprint_size()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 10})
 
 static func _make_state(grid_size: Vector2i = Vector2i(3, 3)) -> GameState:
 	var state := GameState.new()
@@ -45,7 +57,11 @@ static func _make_state(grid_size: Vector2i = Vector2i(3, 3)) -> GameState:
 	return state
 
 static func _make_world_pos_instance() -> Dictionary:
-	return {"world_pos": Vector2i(1, 1)}
+	return {
+		"world_pos": Vector2i(1, 1),
+		"footprint_size": Vector2i.ONE,
+		"rotation": 0,
+	}
 
 static func _test_billboard_range_succeeds_with_valid_map() -> Result:
 	var entry = EntryClass.new()
@@ -75,6 +91,32 @@ static func _test_billboard_range_uses_full_rotated_footprint() -> Result:
 		return Result.failure("billboard rotated footprint 命中房屋错误: %s" % str(house_ids))
 	return Result.success()
 
+static func _test_billboard_range_fails_fast_on_missing_footprint_size() -> Result:
+	var entry = EntryClass.new()
+	var state := _make_state()
+	var inst := _make_world_pos_instance()
+	inst.erase("footprint_size")
+	var result := entry._get_billboard_house_ids(state, inst)
+	if result.ok:
+		return Result.failure("缺失 footprint_size 时应失败")
+	var err := str(result.error)
+	if err.find("footprint_size") < 0:
+		return Result.failure("错误信息应包含 footprint_size，实际: %s" % err)
+	return Result.success()
+
+static func _test_billboard_range_fails_fast_on_invalid_rotation() -> Result:
+	var entry = EntryClass.new()
+	var state := _make_state()
+	var inst := _make_world_pos_instance()
+	inst["rotation"] = "bad"
+	var result := entry._get_billboard_house_ids(state, inst)
+	if result.ok:
+		return Result.failure("rotation 类型错误时应失败")
+	var err := str(result.error)
+	if err.find("rotation") < 0:
+		return Result.failure("错误信息应包含 rotation，实际: %s" % err)
+	return Result.success()
+
 static func _test_billboard_range_fails_fast_on_missing_grid_size() -> Result:
 	var entry = EntryClass.new()
 	var state := _make_state()
@@ -97,6 +139,18 @@ static func _test_mailbox_range_fails_fast_on_missing_boundary_index() -> Result
 	var err := str(result.error)
 	if err.find("state.map.boundary_index") < 0:
 		return Result.failure("错误信息应包含 state.map.boundary_index，实际: %s" % err)
+	return Result.success()
+
+static func _test_mailbox_range_fails_fast_when_road_graph_unavailable() -> Result:
+	var entry = EntryClass.new()
+	var state := _make_state()
+	state.map["cells"] = []
+	var result := entry._get_mailbox_house_ids(state, _make_world_pos_instance())
+	if result.ok:
+		return Result.failure("road_graph 无法构建时应失败")
+	var err := str(result.error)
+	if err.find("road_graph") < 0:
+		return Result.failure("错误信息应包含 road_graph，实际: %s" % err)
 	return Result.success()
 
 static func _test_radio_range_fails_fast_on_missing_tile_grid_size() -> Result:
@@ -125,6 +179,20 @@ static func _test_airplane_range_fails_fast_on_missing_cells() -> Result:
 	var err := str(result.error)
 	if err.find("state.map.cells") < 0:
 		return Result.failure("错误信息应包含 state.map.cells，实际: %s" % err)
+	return Result.success()
+
+static func _test_airplane_range_fails_fast_on_missing_footprint_size() -> Result:
+	var entry = EntryClass.new()
+	var state := _make_state()
+	var result := entry._get_airplane_house_ids(state, {
+		"world_pos": Vector2i(0, 0),
+		"axis": "row",
+	})
+	if result.ok:
+		return Result.failure("airplane 缺失 footprint_size 时应失败")
+	var err := str(result.error)
+	if err.find("footprint_size") < 0:
+		return Result.failure("错误信息应包含 footprint_size，实际: %s" % err)
 	return Result.success()
 
 static func _set_house(state: GameState, house_id: String, cells: Array[Vector2i]) -> void:

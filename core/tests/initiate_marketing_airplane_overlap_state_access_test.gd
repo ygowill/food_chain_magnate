@@ -17,7 +17,13 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_overlap_fails_fast_on_invalid_marketing_placements_type()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 4})
+	r = _test_overlap_fails_fast_on_missing_existing_airplane_axis()
+	if not r.ok:
+		return r
+	r = _test_overlap_fails_fast_on_missing_existing_airplane_footprint_size()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 6})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -69,4 +75,26 @@ static func _test_overlap_fails_fast_on_invalid_marketing_placements_type() -> R
 	var err := str(result.error)
 	if err.find("state.map.marketing_placements") < 0:
 		return Result.failure("错误信息应包含 state.map.marketing_placements，实际: %s" % err)
+	return Result.success()
+
+static func _test_overlap_fails_fast_on_missing_existing_airplane_axis() -> Result:
+	var state := _make_state()
+	(state.map["marketing_placements"]["6"] as Dictionary).erase("axis")
+	var result := ValidationClass._validate_airplane_overlap(state, Vector2i(0, 1), "row", 2, 3)
+	if result.ok:
+		return Result.failure("已有 airplane placement 缺失 axis 时应失败")
+	var err := str(result.error)
+	if err.find("axis") < 0:
+		return Result.failure("错误信息应包含 axis，实际: %s" % err)
+	return Result.success()
+
+static func _test_overlap_fails_fast_on_missing_existing_airplane_footprint_size() -> Result:
+	var state := _make_state()
+	(state.map["marketing_placements"]["6"] as Dictionary).erase("footprint_size")
+	var result := ValidationClass._validate_airplane_overlap(state, Vector2i(0, 1), "row", 2, 3)
+	if result.ok:
+		return Result.failure("已有 airplane placement 缺失 footprint_size 时应失败")
+	var err := str(result.error)
+	if err.find("footprint_size") < 0:
+		return Result.failure("错误信息应包含 footprint_size，实际: %s" % err)
 	return Result.success()

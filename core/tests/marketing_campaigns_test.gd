@@ -585,6 +585,19 @@ static func _test_marketing_rejects_drink_source_overlap(player_count: int, seed
 	state.phase = DefsClass.PHASE_WORKING
 	state.sub_phase = DefsClass.SUB_PHASE_MARKETING
 
+	state.map["drink_sources"] = ["bad"]
+	var malformed_attempt := engine.execute_command(Command.create("initiate_marketing", actor, {
+		"employee_type": "brand_manager",
+		"board_number": 11,
+		"product": "burger",
+		"duration": 1,
+		"position": [0, 2],
+	}))
+	if malformed_attempt.ok:
+		return Result.failure("drink_sources 元素损坏时 initiate_marketing 应失败")
+	if str(malformed_attempt.error).find("drink_sources") < 0:
+		return Result.failure("错误原因应包含 drink_sources，实际: %s" % str(malformed_attempt.error))
+
 	# 在 billboard(#11) 的占地内放置一个饮品进货点，营销应被拒绝（issue_tracker #35）
 	var ds_pos := Vector2i(1, 2)
 	state.map["drink_sources"] = [{"world_pos": ds_pos, "type": "soda"}]
