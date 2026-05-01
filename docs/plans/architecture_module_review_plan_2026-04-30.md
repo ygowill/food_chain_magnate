@@ -3438,3 +3438,28 @@
 结论：
 
 - 已完成 Fix 7 遗留的 strict 收敛：online resume 准备阶段只写入显式 online confirm marker，并校验现有 Dinnertime pending guard；损坏或旧格式 pending 不再被运行期修补。
+
+### Fix 79：传播 online resume prepare 失败，避免 strict 校验被调用点吞掉
+
+日期：2026-05-01
+
+对应问题：
+
+- Fix 78 后 `prepare_engine_for_online_resume(...)` 已可能因为 Dinnertime pending guard 损坏而失败；继续忽略返回值会把 strict 校验重新降级为“日志/无感继续”。
+- Step 6/7 关于 online confirm pending/confirmed 状态损坏不应被运行期兜底的后续收敛。
+
+改动：
+
+- `server/room.gd`：`_enable_online_settlement_confirm_on_engine(...)` 改为返回 `Result`；普通房间启动构建 engine 后若 online confirm prepare 失败，会中止 start payload 构建。
+- `autoload/net_client/client.gd`：`_mark_online_client_engine_ready(...)` 改为返回 `Result`，所有复用现有 engine、从配置初始化 engine、从 archive/bootstrap snapshot 装配 engine 的路径都必须处理失败，不再继续绑定 runtime/Globals/NetContext。
+- `ui/scenes/game/controllers/online_resync_controller.gd`：联机 resync archive 加载后若 online resume prepare 失败，按同步失败处理：记录错误、清空 pending command、退出 resync in-progress，并在非 headless 下弹出失败提示。
+
+验证：
+
+- `rg -n "^[ ]+\S|\t +| +\t" server/room.gd autoload/net_client/client.gd ui/scenes/game/controllers/online_resync_controller.gd`：无匹配。
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1123`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120 --strict-exit`：PASS，`392/392`。
+
+结论：
+
+- online resume prepare 现在是显式失败边界；server/client/resync 调用点不再吞掉坏恢复点，从而保持 Fix 78 的 strict 语义。

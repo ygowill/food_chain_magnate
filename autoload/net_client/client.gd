@@ -552,7 +552,10 @@ func _try_reuse_existing_online_client_engine(room_code: String, local_pid: int)
 	var reusing_for_room := not normalized_room_code.is_empty() and _get_online_client_engine_room_code() == normalized_room_code
 	if not reusing_for_reconnect and not reusing_for_room:
 		return null
-	_mark_online_client_engine_ready(existing_engine, normalized_room_code, local_pid)
+	var ready_r := _mark_online_client_engine_ready(existing_engine, normalized_room_code, local_pid)
+	if not ready_r.ok:
+		GameLog.error("NetClient", "Reuse existing online engine failed: %s" % ready_r.error)
+		return null
 	if reusing_for_reconnect:
 		GameLog.info("NetClient", "Online client reconnect ready: reusing existing engine")
 	else:
@@ -613,7 +616,9 @@ func _initialize_online_client_engine_from_config(config: Dictionary, room_code:
 		)
 		return Result.failure(str(init_r.error))
 
-	_mark_online_client_engine_ready(engine, room_code, local_pid)
+	var ready_r := _mark_online_client_engine_ready(engine, room_code, local_pid)
+	if not ready_r.ok:
+		return ready_r
 	GameLog.info(
 		"NetClient",
 		"Online client engine ready players=%d seed=%d modules=%d base_dir=%s"
@@ -637,7 +642,10 @@ func _try_bootstrap_online_client_engine_from_archive(archive: Dictionary) -> vo
 	if not load_r.ok:
 		GameLog.error("NetClient", "Online client archive bootstrap failed: %s" % load_r.error)
 		return
-	_mark_online_client_engine_ready(engine, room_code, local_pid)
+	var ready_r := _mark_online_client_engine_ready(engine, room_code, local_pid)
+	if not ready_r.ok:
+		GameLog.error("NetClient", "Online client archive bootstrap prepare failed: %s" % ready_r.error)
+		return
 	if _is_resume_archive_room_state():
 		var prepare_r := _online_resume_support.prepare_single_full_engine_runtime(
 			engine,
@@ -654,10 +662,12 @@ func _try_bootstrap_online_client_engine_from_archive(archive: Dictionary) -> vo
 			% [_safe_text(room_code), int(engine.command_history.size())]
 	)
 
-func _mark_online_client_engine_ready(engine: GameEngine, room_code: String, local_pid: int) -> void:
+func _mark_online_client_engine_ready(engine: GameEngine, room_code: String, local_pid: int) -> Result:
 	if engine == null or engine.get_state() == null:
-		return
-	OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
+		return Result.failure("online client engine/state 为空")
+	var prepare_r: Result = OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
+	if not prepare_r.ok:
+		return prepare_r
 	_get_online_resume_session_state().bind_runtime(engine, room_code, local_pid)
 	if local_pid >= -1:
 		NetContext.local_player_id = int(local_pid)
@@ -667,6 +677,7 @@ func _mark_online_client_engine_ready(engine: GameEngine, room_code: String, loc
 	if Globals != null and Globals.has_method("apply_online_room_state"):
 		Globals.apply_online_room_state(NetContext.room_state if NetContext != null else {})
 	_set_online_client_engine_room_code(room_code)
+	return Result.success()
 
 func clear_online_resume_full_history_state() -> void:
 	_clear_online_resume_full_history_state()
@@ -797,7 +808,9 @@ func _bootstrap_resume_full_snapshot_archive(
 		"command_count": int(engine.command_history.size()),
 		"current_index": int(engine.current_command_index),
 	})
-	_mark_online_client_engine_ready(engine, normalized_room_code, int(local_pid))
+	var ready_r := _mark_online_client_engine_ready(engine, normalized_room_code, int(local_pid))
+	if not ready_r.ok:
+		return ready_r
 	_emit_local_bootstrap_progress(_make_local_bootstrap_progress_state(
 		normalized_room_code,
 		"timeline_cache",

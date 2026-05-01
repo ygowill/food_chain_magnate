@@ -534,7 +534,22 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 				_show_confirm.call("联机同步失败", r.error, Callable(), Callable(), "确定", "关闭")
 			return
 
-	OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
+	var prepare_r: Result = OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
+	if not prepare_r.ok:
+		GameLog.error("Game", "联机 ResyncArchive 恢复点准备失败: %s" % prepare_r.error)
+		if _reconnect_flow_active:
+			_reconnect_attempt_failed = true
+			_reconnect_attempt_failure_reason = "联机同步失败：%s" % prepare_r.error
+		_resync_in_progress = false
+		_rollback_request_id = ""
+		_resync_request_id = ""
+		_pending_cmds.clear()
+		if _update_ui.is_valid():
+			_update_ui.call()
+		if not OS.has_feature("headless"):
+			if _show_confirm.is_valid():
+				_show_confirm.call("联机同步失败", prepare_r.error, Callable(), Callable(), "确定", "关闭")
+		return
 
 	var ui_metadata_apply := ModuleUiMetadataBootstrapClass.apply(engine)
 	if not ui_metadata_apply.ok:

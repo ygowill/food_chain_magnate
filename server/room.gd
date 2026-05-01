@@ -289,8 +289,8 @@ static func _normalize_room_mode(raw_mode: String) -> String:
 		return ROOM_MODE_RESUME_ARCHIVE
 	return ROOM_MODE_NORMAL
 
-static func _enable_online_settlement_confirm_on_engine(engine) -> void:
-	OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
+static func _enable_online_settlement_confirm_on_engine(engine) -> Result:
+	return OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
 
 func _clear_prepared_resume_start_cache() -> void:
 	_prepared_resume_start_engine = null
@@ -1857,7 +1857,9 @@ func _build_start_game_engine_and_payload() -> Result:
 		if not init_r.ok:
 			return Result.failure("GameEngine.initialize failed: %s" % init_r.error)
 
-	_enable_online_settlement_confirm_on_engine(engine)
+	var online_prepare_r := _enable_online_settlement_confirm_on_engine(engine)
+	if not online_prepare_r.ok:
+		return Result.failure("online settlement confirm prepare failed: %s" % online_prepare_r.error)
 	return Result.success({
 		"engine": engine,
 		"payload": {
