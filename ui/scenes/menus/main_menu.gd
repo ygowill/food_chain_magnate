@@ -131,9 +131,6 @@ func _on_rules_tutorial_pressed() -> void:
 	GameLog.info("MainMenu", "点击规则教学")
 	if Globals != null and Globals.has_method("request_rules_tutorial"):
 		Globals.request_rules_tutorial()
-	else:
-		if Globals != null:
-			Globals.tutorial_pending_setup_tour = true
 	SceneManager.goto_game_setup()
 
 func _on_online_pressed() -> void:

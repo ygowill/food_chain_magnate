@@ -305,11 +305,6 @@ func _save_settings() -> void:
 	config.set_value("game", "confirm_actions", _current_settings.confirm_actions)
 	config.set_value("game", "show_hints", _current_settings.show_hints)
 	config.set_value("game", "replay_load_playable", _current_settings.replay_load_playable)
-	if config.has_section_key("game", "tutorial_enabled"):
-		config.erase_section_key("game", "tutorial_enabled")
-	if config.has_section_key("game", "tutorial_auto_popup"):
-		config.erase_section_key("game", "tutorial_auto_popup")
-	_erase_legacy_tutorial_settings(config)
 	config.set_value("game", "animation_speed", _current_settings.animation_speed)
 
 	config.save("user://settings.cfg")
@@ -663,10 +658,3 @@ func _sync_globals_runtime_settings() -> void:
 	Globals.animation_speed = float(_current_settings.animation_speed)
 	if Globals.has_method("apply_font_scale"):
 		Globals.apply_font_scale()
-
-func _erase_legacy_tutorial_settings(config: ConfigFile) -> void:
-	if config == null:
-		return
-	for key in ["progress_version", "setup_welcome_seen", "setup_tour_seen", "game_ui_tour_seen", "flow_hints_seen"]:
-		if config.has_section_key("tutorial", key):
-			config.erase_section_key("tutorial", key)

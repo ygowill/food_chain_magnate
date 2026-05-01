@@ -268,11 +268,6 @@ func save_settings() -> void:
 	config.set_value("game", "enabled_modules_v2", enabled_modules_v2)
 	modules_v2_base_dir = _normalize_modules_base_dir(modules_v2_base_dir)
 	config.set_value("game", "modules_v2_base_dir", modules_v2_base_dir)
-	if config.has_section_key("game", "tutorial_enabled"):
-		config.erase_section_key("game", "tutorial_enabled")
-	if config.has_section_key("game", "tutorial_auto_popup"):
-		config.erase_section_key("game", "tutorial_auto_popup")
-	_erase_legacy_tutorial_settings(config)
 	config.set_value("players", "names", player_names)
 	config.set_value("players", "color_indices", player_color_indices)
 	config.set_value("players", "restaurant_logo_choices", player_restaurant_logo_choices)
@@ -296,13 +291,6 @@ func clear_tutorial_runtime_flags() -> void:
 	tutorial_pending_game_ui_tour = false
 	tutorial_pending_flow_tutorial = false
 	tutorial_match_enabled = false
-
-func _erase_legacy_tutorial_settings(config: ConfigFile) -> void:
-	if config == null:
-		return
-	for key in ["progress_version", "setup_welcome_seen", "setup_tour_seen", "game_ui_tour_seen", "flow_hints_seen"]:
-		if config.has_section_key("tutorial", key):
-			config.erase_section_key("tutorial", key)
 
 # 重置游戏配置
 func reset_game_config() -> void:

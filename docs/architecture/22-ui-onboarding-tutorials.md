@@ -170,7 +170,7 @@ flowchart TB
 职责：
 
 - 不再提供任何教学相关设置项 UI
-- 保存设置时只负责清理旧版本遗留的 `game/tutorial_enabled`、`game/tutorial_auto_popup` 与 `tutorial/*_seen` 等历史配置键
+- 不读取、不写入、不清理任何教学配置键；旧版本残留键即使仍在 `user://settings.cfg` 中，也不会参与运行时判断
 
 边界：
 
