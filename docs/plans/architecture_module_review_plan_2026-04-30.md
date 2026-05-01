@@ -2202,3 +2202,27 @@
 结论：
 
 - 已完成该 P2 strict 化：`new_milestones` 的 Dinnertime 扩展结算不再把 primary settlement 的坏报告解释成“没有相关事件”，也不再允许 Brand Director 状态只改实例、不改 map placement。
+
+### Fix 29：coffee 模块状态访问改为 strict runtime 契约
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 7 `[P2] coffee 模块在 range origin、route purchase、First Coffee Sold pending 注入中存在多处过度跳过`。
+
+改动：
+
+- `modules/coffee/rules/coffee_actions_and_state.gd`：range origin provider 不再把负 actor、缺失 `coffee_shops`、坏 shop entry、缺失 owner 或 owned shop 缺少位置解释为空 origins；这些都改为 `Result.failure`。仍保留 `entrance_pos` 缺失时回退 `anchor_pos` 的显式数据契约。
+- `modules/coffee/rules/coffee_first_coffee_sold.gd`：Dinnertime extension settlement 要求 `round_state.dinnertime.sales` 与 `sales[*].route_purchases` 结构正确；坏 sale、坏 route purchase、coffee seller 缺失/越界均失败。Cleanup pending 不再兼容 legacy `int/float` item，bonus pending player 越界也失败。
+- `modules/coffee/rules/coffee_dinnertime_route.gd`：route stop index、purchase simulation、filtered simulation 与最终购买应用都校验 stop/purchase 结构；坏 restaurant/shop/stop entry、缺失 owner/id/kind、seller/price 类型错误不再跳过。
+- `core/tests/coffee_range_origins_state_access_test.gd`、`core/tests/coffee_first_coffee_sold_state_access_test.gd`、`core/tests/coffee_route_state_access_test.gd`：更新旧 fail-soft/legacy pending 用例，补充 malformed coffee shop、route purchase、stop item 与 bonus pending 越界负例。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：咖啡模块不再把损坏的 module-owned state、Dinnertime route purchases 或 Cleanup pending 解释成“没有咖啡可买/没有奖励待处理”。旧 pending 形态应由迁移路径处理，而不是运行期结算兼容。

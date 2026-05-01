@@ -14,7 +14,13 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_simulate_coffee_purchases_requires_inventory_dict()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 3})
+	r = _test_build_stop_index_fails_fast_on_malformed_coffee_shop()
+	if not r.ok:
+		return r
+	r = _test_simulate_coffee_purchases_fails_fast_on_malformed_stop_item()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 5})
 
 static func _test_build_stop_index_requires_restaurants_dict() -> Result:
 	var state := GameState.new()
@@ -63,4 +69,47 @@ static func _test_simulate_coffee_purchases_requires_inventory_dict() -> Result:
 	var err := str(read.error)
 	if err.find("player[0].inventory") < 0:
 		return Result.failure("错误信息应包含 inventory 路径，实际: %s" % err)
+	return Result.success()
+
+static func _test_build_stop_index_fails_fast_on_malformed_coffee_shop() -> Result:
+	var state := GameState.new()
+	state.players = [
+		{"inventory": {"coffee": 1}},
+	]
+	state.map = {
+		"restaurants": {},
+		"coffee_shops": {
+			"shop_1": {
+				"owner": 0,
+			},
+		},
+	}
+	var read := CoffeeDinnertimeRouteClass._build_coffee_stop_index(state, "")
+	if read.ok:
+		return Result.failure("coffee_shop 缺少 anchor_pos 时应失败")
+	var err := str(read.error)
+	if err.find("coffee_shop[shop_1].anchor_pos") < 0:
+		return Result.failure("错误信息应包含 coffee_shop[shop_1].anchor_pos，实际: %s" % err)
+	return Result.success()
+
+static func _test_simulate_coffee_purchases_fails_fast_on_malformed_stop_item() -> Result:
+	var state := GameState.new()
+	state.players = [
+		{"inventory": {"coffee": 1}},
+	]
+	var path: Array[Vector2i] = [Vector2i(1, 1)]
+	var stop_index := {
+		CoffeeDinnertimeRouteClass._pos_key(Vector2i(1, 1)): [
+			{"kind": "coffee_shop", "id": "shop_1"},
+		],
+	}
+	var cup_breakdowns := {
+		0: {"revenue": 5},
+	}
+	var read := CoffeeDinnertimeRouteClass._simulate_coffee_purchases(state, path, stop_index, cup_breakdowns)
+	if read.ok:
+		return Result.failure("stop item 缺少 owner 时应失败")
+	var err := str(read.error)
+	if err.find("stop_index[1,1][0].owner") < 0:
+		return Result.failure("错误信息应包含 stop_index[1,1][0].owner，实际: %s" % err)
 	return Result.success()

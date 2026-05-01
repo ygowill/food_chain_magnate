@@ -35,29 +35,23 @@ static func _get_cleanup_pending_tasks(state: GameState) -> Result:
 	var out: Array[Dictionary] = []
 	for i in range(list.size()):
 		var item_val = list[i]
-		if item_val is Dictionary:
-			var item: Dictionary = item_val
-			var kind_val = item.get("kind", null)
-			var pid_val = item.get("player_id", null)
-			if not (kind_val is String):
-				return Result.failure("coffee:first_coffee_sold: pending_phase_actions[Cleanup][%d].kind 类型错误（期望 String）" % i)
-			var kind: String = str(kind_val).strip_edges()
-			if kind.is_empty():
-				return Result.failure("coffee:first_coffee_sold: pending_phase_actions[Cleanup][%d].kind 不能为空" % i)
-			if not (pid_val is int or pid_val is float):
-				return Result.failure("coffee:first_coffee_sold: pending_phase_actions[Cleanup][%d].player_id 类型错误（期望 int/float）" % i)
-			out.append({
-				"kind": kind,
-				"player_id": int(pid_val),
-			})
-			continue
-		if item_val is int or item_val is float:
-			out.append({
-				"kind": "fridge_keep",
-				"player_id": int(item_val),
-			})
-			continue
-		return Result.failure("coffee:first_coffee_sold: pending_phase_actions[Cleanup][%d] 类型错误（期望 Dictionary/int/float）" % i)
+		if not (item_val is Dictionary):
+			return Result.failure("coffee:first_coffee_sold: pending_phase_actions[Cleanup][%d] 类型错误（期望 Dictionary）" % i)
+		var item: Dictionary = item_val
+		var kind_val = item.get("kind", null)
+		var pid_val = item.get("player_id", null)
+		if not (kind_val is String):
+			return Result.failure("coffee:first_coffee_sold: pending_phase_actions[Cleanup][%d].kind 类型错误（期望 String）" % i)
+		var kind: String = str(kind_val).strip_edges()
+		if kind.is_empty():
+			return Result.failure("coffee:first_coffee_sold: pending_phase_actions[Cleanup][%d].kind 不能为空" % i)
+		var pid_read := _parse_int_value(pid_val, "coffee:first_coffee_sold: pending_phase_actions[Cleanup][%d].player_id" % i)
+		if not pid_read.ok:
+			return pid_read
+		out.append({
+			"kind": kind,
+			"player_id": int(pid_read.value),
+		})
 	return Result.success(out)
 
 func register(registrar) -> Result:
@@ -81,14 +75,14 @@ func _after_dinnertime_primary(state: GameState, _phase_manager) -> Result:
 	if not (state.players is Array):
 		return Result.failure("coffee:first_coffee_sold: state.players 类型错误（期望 Array）")
 
-	var ds_val = state.round_state.get("dinnertime", null)
-	if not (ds_val is Dictionary):
-		return Result.success()
-	var ds: Dictionary = ds_val
-	var sales_val = ds.get("sales", null)
-	if not (sales_val is Array):
-		return Result.success()
-	var sales: Array = sales_val
+	var ds_read := _require_dinnertime_report(state)
+	if not ds_read.ok:
+		return ds_read
+	var ds: Dictionary = ds_read.value
+	var sales_read := _require_sales_report(ds)
+	if not sales_read.ok:
+		return sales_read
+	var sales: Array = sales_read.value
 	if sales.is_empty():
 		return Result.success()
 
@@ -96,22 +90,21 @@ func _after_dinnertime_primary(state: GameState, _phase_manager) -> Result:
 
 	var first_sale_index_by_seller := {}
 	for sale_index in range(sales.size()):
-		var s_val = sales[sale_index]
-		if not (s_val is Dictionary):
-			continue
-		var s: Dictionary = s_val
-		var rp_val = s.get("route_purchases", null)
-		if not (rp_val is Array):
-			continue
-		for p_val in Array(rp_val):
-			if not (p_val is Dictionary):
-				continue
-			var p: Dictionary = p_val
+		var sale_read := _require_sale_report(sale_index, sales[sale_index])
+		if not sale_read.ok:
+			return sale_read
+		var s: Dictionary = sale_read.value
+		var route_purchases: Array = s.get("route_purchases", [])
+		for purchase_index in range(route_purchases.size()):
+			var purchase_read := _require_route_purchase_report(sale_index, purchase_index, route_purchases[purchase_index])
+			if not purchase_read.ok:
+				return purchase_read
+			var p: Dictionary = purchase_read.value
 			if str(p.get("kind", "")) != COFFEE_ID:
 				continue
 			var seller: int = int(p.get("seller", -1))
 			if seller < 0 or seller >= state.players.size():
-				continue
+				return Result.failure("coffee:first_coffee_sold: sales[%d].route_purchases[%d].seller 越界: %d" % [sale_index, purchase_index, seller])
 			if not first_sale_index_by_seller.has(seller) or sale_index < int(first_sale_index_by_seller[seller]):
 				first_sale_index_by_seller[seller] = sale_index
 
@@ -181,10 +174,14 @@ func _on_cleanup_enter_after_primary(state: GameState, _phase_manager) -> Result
 		return Result.success()
 
 	var bonus_set := {}
-	for v in pending_players:
-		var pid: int = int(v)
-		if pid >= 0 and pid < state.players.size():
-			bonus_set[pid] = true
+	for i in range(pending_players.size()):
+		var pid_read := _parse_int_value(pending_players[i], "coffee:first_coffee_sold: %s[%d]" % [BONUS_PENDING_PLAYERS_KEY, i])
+		if not pid_read.ok:
+			return pid_read
+		var pid: int = int(pid_read.value)
+		if pid < 0 or pid >= state.players.size():
+			return Result.failure("coffee:first_coffee_sold: %s[%d] 玩家越界: %d" % [BONUS_PENDING_PLAYERS_KEY, i, pid])
+		bonus_set[pid] = true
 
 	# 读取现有 Cleanup pending（可能来自冰箱选择）
 	var existing_read := _get_cleanup_pending_tasks(state)
@@ -244,3 +241,61 @@ func _on_cleanup_enter_after_primary(state: GameState, _phase_manager) -> Result
 
 	state.round_state.erase(BONUS_PENDING_PLAYERS_KEY)
 	return Result.success()
+
+static func _require_dinnertime_report(state: GameState) -> Result:
+	if not state.round_state.has("dinnertime"):
+		return Result.failure("coffee:first_coffee_sold: round_state.dinnertime 缺失")
+	var ds_val = state.round_state.get("dinnertime", null)
+	if not (ds_val is Dictionary):
+		return Result.failure("coffee:first_coffee_sold: round_state.dinnertime 类型错误（期望 Dictionary）")
+	return Result.success(ds_val)
+
+static func _require_sales_report(dinnertime_report: Dictionary) -> Result:
+	if not dinnertime_report.has("sales"):
+		return Result.failure("coffee:first_coffee_sold: round_state.dinnertime.sales 缺失")
+	var sales_val = dinnertime_report.get("sales", null)
+	if not (sales_val is Array):
+		return Result.failure("coffee:first_coffee_sold: round_state.dinnertime.sales 类型错误（期望 Array）")
+	return Result.success(sales_val)
+
+static func _require_sale_report(sale_index: int, sale_val) -> Result:
+	var path := "coffee:first_coffee_sold: sales[%d]" % sale_index
+	if not (sale_val is Dictionary):
+		return Result.failure("%s 类型错误（期望 Dictionary）" % path)
+	var sale: Dictionary = sale_val
+	if not sale.has("route_purchases"):
+		return Result.failure("%s.route_purchases 缺失" % path)
+	var purchases_val = sale.get("route_purchases", null)
+	if not (purchases_val is Array):
+		return Result.failure("%s.route_purchases 类型错误（期望 Array）" % path)
+	return Result.success(sale)
+
+static func _require_route_purchase_report(sale_index: int, purchase_index: int, purchase_val) -> Result:
+	var path := "coffee:first_coffee_sold: sales[%d].route_purchases[%d]" % [sale_index, purchase_index]
+	if not (purchase_val is Dictionary):
+		return Result.failure("%s 类型错误（期望 Dictionary）" % path)
+	var purchase: Dictionary = purchase_val
+	var kind_val = purchase.get("kind", null)
+	if not (kind_val is String):
+		return Result.failure("%s.kind 缺失或类型错误（期望 String）" % path)
+	var kind := str(kind_val).strip_edges()
+	if kind.is_empty():
+		return Result.failure("%s.kind 不能为空" % path)
+	purchase["kind"] = kind
+	if kind != COFFEE_ID:
+		return Result.success(purchase)
+	var seller_read := _parse_int_value(purchase.get("seller", null), "%s.seller" % path)
+	if not seller_read.ok:
+		return seller_read
+	purchase["seller"] = int(seller_read.value)
+	return Result.success(purchase)
+
+static func _parse_int_value(value, path: String) -> Result:
+	if value is int:
+		return Result.success(int(value))
+	if value is float:
+		var f: float = float(value)
+		if f != floor(f):
+			return Result.failure("%s 必须为整数，实际: %s" % [path, str(value)])
+		return Result.success(int(f))
+	return Result.failure("%s 缺失或类型错误（期望 int）" % path)

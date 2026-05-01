@@ -6,13 +6,22 @@ const RulesClass = preload("res://modules/coffee/rules/coffee_first_coffee_sold.
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
-	var r := _test_cleanup_merges_bonus_after_existing_legacy_pending()
+	var r := _test_cleanup_merges_bonus_after_existing_pending()
 	if not r.ok:
 		return r
 	r = _test_cleanup_fails_fast_on_invalid_pending_item_without_partial_mutation()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 2})
+	r = _test_cleanup_fails_fast_on_bonus_pending_player_out_of_range()
+	if not r.ok:
+		return r
+	r = _test_dinnertime_fails_fast_on_missing_report()
+	if not r.ok:
+		return r
+	r = _test_dinnertime_fails_fast_on_bad_route_purchase()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 5})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -25,11 +34,14 @@ static func _make_state() -> GameState:
 	state.round_state = {}
 	return state
 
-static func _test_cleanup_merges_bonus_after_existing_legacy_pending() -> Result:
+static func _test_cleanup_merges_bonus_after_existing_pending() -> Result:
 	var rules = RulesClass.new()
 	var state := _make_state()
 	state.round_state["pending_phase_actions"] = {
-		DefsClass.PHASE_CLEANUP: [0],
+		DefsClass.PHASE_CLEANUP: [{
+			"kind": "fridge_keep",
+			"player_id": 0,
+		}],
 	}
 	state.round_state["coffee_first_coffee_sold_bonus_pending_players"] = [1]
 	var result := rules._on_cleanup_enter_after_primary(state, null)
@@ -79,4 +91,43 @@ static func _test_cleanup_fails_fast_on_invalid_pending_item_without_partial_mut
 		return Result.failure("失败时不应提前清除 bonus pending players")
 	if state.current_player_index != 1:
 		return Result.failure("失败时不应提前改写 current_player_index")
+	return Result.success()
+
+static func _test_cleanup_fails_fast_on_bonus_pending_player_out_of_range() -> Result:
+	var rules = RulesClass.new()
+	var state := _make_state()
+	state.round_state["coffee_first_coffee_sold_bonus_pending_players"] = [9]
+	var result := rules._on_cleanup_enter_after_primary(state, null)
+	if result.ok:
+		return Result.failure("bonus pending 玩家越界时应失败")
+	var err := str(result.error)
+	if err.find("coffee_first_coffee_sold_bonus_pending_players[0]") < 0:
+		return Result.failure("错误信息应包含 pending players key，实际: %s" % err)
+	return Result.success()
+
+static func _test_dinnertime_fails_fast_on_missing_report() -> Result:
+	var rules = RulesClass.new()
+	var state := _make_state()
+	var result := rules._after_dinnertime_primary(state, null)
+	if result.ok:
+		return Result.failure("缺失 round_state.dinnertime 时应失败")
+	var err := str(result.error)
+	if err.find("round_state.dinnertime") < 0:
+		return Result.failure("错误信息应包含 round_state.dinnertime，实际: %s" % err)
+	return Result.success()
+
+static func _test_dinnertime_fails_fast_on_bad_route_purchase() -> Result:
+	var rules = RulesClass.new()
+	var state := _make_state()
+	state.round_state["dinnertime"] = {
+		"sales": [{
+			"route_purchases": ["bad"],
+		}],
+	}
+	var result := rules._after_dinnertime_primary(state, null)
+	if result.ok:
+		return Result.failure("route_purchases entry 类型错误时应失败")
+	var err := str(result.error)
+	if err.find("route_purchases[0]") < 0:
+		return Result.failure("错误信息应包含 route_purchases[0]，实际: %s" % err)
 	return Result.success()

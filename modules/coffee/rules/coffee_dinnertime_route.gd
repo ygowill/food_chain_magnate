@@ -171,10 +171,11 @@ func _dinnertime_route_coffee(state: GameState, ctx: Dictionary) -> Result:
 	# 执行购买：扣库存 + 银行支付
 	var warnings: Array[String] = []
 	var paid_by_player: Dictionary = {}
-	for p_val in final_purchases:
-		if not (p_val is Dictionary):
-			continue
-		var p: Dictionary = p_val
+	for i in range(final_purchases.size()):
+		var purchase_read := _require_purchase(final_purchases[i], "coffee:route:final_purchases[%d]" % i)
+		if not purchase_read.ok:
+			return purchase_read
+		var p: Dictionary = purchase_read.value
 		var seller: int = int(p.get("seller", -1))
 		var price: int = int(p.get("price", 0))
 		if seller < 0 or seller >= state.players.size():
@@ -226,20 +227,21 @@ static func _simulate_coffee_purchases(state: GameState, path: Array[Vector2i], 
 			continue
 		var list_val = stop_index[key]
 		if not (list_val is Array):
-			continue
+			return Result.failure("coffee: stop_index[%s] 类型错误（期望 Array）" % key)
 		var list: Array = list_val
-		for item_val in list:
-			if not (item_val is Dictionary):
-				continue
-			var item: Dictionary = item_val
+		for item_index in range(list.size()):
+			var item_read := _require_stop_item(list[item_index], "coffee: stop_index[%s][%d]" % [key, item_index])
+			if not item_read.ok:
+				return item_read
+			var item: Dictionary = item_read.value
 			var kind: String = str(item.get("kind", ""))
 			var loc_id: String = str(item.get("id", ""))
 			var loc_key := _location_key(kind, loc_id)
-			if loc_key.is_empty() or visited_locations.has(loc_key):
+			if visited_locations.has(loc_key):
 				continue
 			var seller: int = int(item.get("owner", -1))
-			if seller < 0:
-				continue
+			if seller < 0 or seller >= state.players.size():
+				return Result.failure("coffee: stop_index[%s][%d].owner 越界: %d" % [key, item_index, seller])
 			if int(inv_left.get(seller, 0)) <= 0:
 				continue
 
@@ -275,16 +277,23 @@ static func _build_coffee_stop_index(state: GameState, exclude_restaurant_id: St
 		return restaurants_read
 	var restaurants: Dictionary = restaurants_read.value
 	for rid_val in restaurants.keys():
-		var rid: String = str(rid_val)
-		if rid.is_empty() or rid == exclude_restaurant_id:
+		if not (rid_val is String):
+			return Result.failure("coffee: restaurants key 类型错误（期望 String）: %s" % str(rid_val))
+		var rid: String = str(rid_val).strip_edges()
+		if rid.is_empty():
+			return Result.failure("coffee: restaurants key 不能为空")
+		if rid == exclude_restaurant_id:
 			continue
 		var rest_val = restaurants[rid_val]
 		if not (rest_val is Dictionary):
-			continue
+			return Result.failure("coffee: restaurants[%s] 类型错误（期望 Dictionary）" % rid)
 		var rest: Dictionary = rest_val
-		var owner: int = int(rest.get("owner", -1))
-		if owner < 0:
-			continue
+		var owner_read := _parse_int_value(rest.get("owner", null), "coffee: restaurants[%s].owner" % rid)
+		if not owner_read.ok:
+			return owner_read
+		var owner: int = int(owner_read.value)
+		if owner < 0 or owner >= state.players.size():
+			return Result.failure("coffee: restaurants[%s].owner 越界: %d" % [rid, owner])
 		var entrance_points_read := _get_restaurant_entrance_points(state, rest)
 		if not entrance_points_read.ok:
 			return entrance_points_read
@@ -313,16 +322,21 @@ static func _build_coffee_stop_index(state: GameState, exclude_restaurant_id: St
 		return shops_read
 	var shops: Dictionary = shops_read.value
 	for sid_val in shops.keys():
-		var sid: String = str(sid_val)
+		if not (sid_val is String):
+			return Result.failure("coffee: coffee_shops key 类型错误（期望 String）: %s" % str(sid_val))
+		var sid: String = str(sid_val).strip_edges()
 		if sid.is_empty():
-			continue
+			return Result.failure("coffee: coffee_shops key 不能为空")
 		var shop_val = shops[sid_val]
 		if not (shop_val is Dictionary):
-			continue
+			return Result.failure("coffee: coffee_shops[%s] 类型错误（期望 Dictionary）" % sid)
 		var shop: Dictionary = shop_val
-		var owner: int = int(shop.get("owner", -1))
-		if owner < 0:
-			continue
+		var owner_read := _parse_int_value(shop.get("owner", null), "coffee: coffee_shops[%s].owner" % sid)
+		if not owner_read.ok:
+			return owner_read
+		var owner: int = int(owner_read.value)
+		if owner < 0 or owner >= state.players.size():
+			return Result.failure("coffee: coffee_shops[%s].owner 越界: %d" % [sid, owner])
 		var anchor_val = shop.get("anchor_pos", null)
 		if not (anchor_val is Vector2i):
 			return Result.failure("coffee: coffee_shop[%s].anchor_pos 类型错误（期望 Vector2i）" % sid)
@@ -536,24 +550,25 @@ static func _simulate_coffee_purchases_filtered(
 			continue
 		var list_val = stop_index[key]
 		if not (list_val is Array):
-			continue
+			return Result.failure("coffee: stop_index[%s] 类型错误（期望 Array）" % key)
 		var list: Array = list_val
-		for item_val in list:
-			if not (item_val is Dictionary):
-				continue
-			var item: Dictionary = item_val
+		for item_index in range(list.size()):
+			var item_read := _require_stop_item(list[item_index], "coffee: stop_index[%s][%d]" % [key, item_index])
+			if not item_read.ok:
+				return item_read
+			var item: Dictionary = item_read.value
 			var kind: String = str(item.get("kind", ""))
 			var loc_id: String = str(item.get("id", ""))
 			var loc_key := _location_key(kind, loc_id)
 			if loc_key.is_empty():
-				continue
+				return Result.failure("coffee: stop_index[%s][%d] location key 为空" % [key, item_index])
 			if not allowed_location_keys.has(loc_key):
 				continue
 			if visited_locations.has(loc_key):
 				continue
 			var seller: int = int(item.get("owner", -1))
-			if seller < 0:
-				continue
+			if seller < 0 or seller >= state.players.size():
+				return Result.failure("coffee: stop_index[%s][%d].owner 越界: %d" % [key, item_index, seller])
 			if int(inv_left.get(seller, 0)) <= 0:
 				continue
 
@@ -579,3 +594,51 @@ static func _simulate_coffee_purchases_filtered(
 		"purchases": purchases,
 		"income_by_player": income_by_player,
 	})
+
+static func _require_stop_item(item_val, path: String) -> Result:
+	if not (item_val is Dictionary):
+		return Result.failure("%s 类型错误（期望 Dictionary）" % path)
+	var item: Dictionary = item_val
+	var kind_val = item.get("kind", null)
+	if not (kind_val is String):
+		return Result.failure("%s.kind 缺失或类型错误（期望 String）" % path)
+	var kind := str(kind_val).strip_edges()
+	if kind.is_empty():
+		return Result.failure("%s.kind 不能为空" % path)
+	var id_val = item.get("id", null)
+	if not (id_val is String):
+		return Result.failure("%s.id 缺失或类型错误（期望 String）" % path)
+	var loc_id := str(id_val).strip_edges()
+	if loc_id.is_empty():
+		return Result.failure("%s.id 不能为空" % path)
+	var owner_read := _parse_int_value(item.get("owner", null), "%s.owner" % path)
+	if not owner_read.ok:
+		return owner_read
+	item["kind"] = kind
+	item["id"] = loc_id
+	item["owner"] = int(owner_read.value)
+	return Result.success(item)
+
+static func _require_purchase(purchase_val, path: String) -> Result:
+	if not (purchase_val is Dictionary):
+		return Result.failure("%s 类型错误（期望 Dictionary）" % path)
+	var purchase: Dictionary = purchase_val
+	var seller_read := _parse_int_value(purchase.get("seller", null), "%s.seller" % path)
+	if not seller_read.ok:
+		return seller_read
+	var price_read := _parse_int_value(purchase.get("price", null), "%s.price" % path)
+	if not price_read.ok:
+		return price_read
+	purchase["seller"] = int(seller_read.value)
+	purchase["price"] = int(price_read.value)
+	return Result.success(purchase)
+
+static func _parse_int_value(value, path: String) -> Result:
+	if value is int:
+		return Result.success(int(value))
+	if value is float:
+		var f: float = float(value)
+		if f != floor(f):
+			return Result.failure("%s 必须为整数，实际: %s" % [path, str(value)])
+		return Result.success(int(f))
+	return Result.failure("%s 缺失或类型错误（期望 int）" % path)

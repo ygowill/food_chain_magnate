@@ -69,14 +69,14 @@ func _get_extra_range_origins(state: GameState, ctx: Dictionary) -> Result:
 		return Result.failure("coffee:range_origins: ctx.actor 类型错误（期望 int）")
 	var actor: int = int(actor_val)
 	if actor < 0:
-		return Result.success([] as Array[Vector2i])
+		return Result.failure("coffee:range_origins: ctx.actor 不能为负数: %d" % actor)
 	var map_read := MapStateAccessClass.require_map(state, "coffee:range_origins")
 	if not map_read.ok:
 		return map_read
 	var map: Dictionary = map_read.value
 
 	if not map.has("coffee_shops"):
-		return Result.success([] as Array[Vector2i])
+		return Result.failure("coffee:range_origins: state.map.coffee_shops 缺失")
 	var shops_read := MapStateAccessClass.require_dict_field(state, "coffee_shops", "coffee:range_origins")
 	if not shops_read.ok:
 		return shops_read
@@ -87,15 +87,18 @@ func _get_extra_range_origins(state: GameState, ctx: Dictionary) -> Result:
 	for sid_val in shops.keys():
 		var shop_val = shops.get(sid_val, null)
 		if not (shop_val is Dictionary):
-			continue
+			return Result.failure("coffee:range_origins: coffee_shops[%s] 类型错误（期望 Dictionary）" % str(sid_val))
 		var shop: Dictionary = shop_val
-		if int(shop.get("owner", -1)) != actor:
+		var owner_val = shop.get("owner", null)
+		if not (owner_val is int):
+			return Result.failure("coffee:range_origins: coffee_shops[%s].owner 缺失或类型错误（期望 int）" % str(sid_val))
+		if int(owner_val) != actor:
 			continue
 		var pos_val = shop.get("entrance_pos", null)
 		if not (pos_val is Vector2i):
 			pos_val = shop.get("anchor_pos", null)
 		if not (pos_val is Vector2i):
-			continue
+			return Result.failure("coffee:range_origins: coffee_shops[%s].entrance_pos/anchor_pos 缺失或类型错误（期望 Vector2i）" % str(sid_val))
 		var pos: Vector2i = pos_val
 		if seen.has(pos):
 			continue
