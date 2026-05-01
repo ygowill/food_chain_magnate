@@ -72,7 +72,6 @@ var show_tile_ids: bool = false
 var show_cell_hover_tooltip: bool = false
 var font_scale: float = 1.1
 var log_font_scale: float = 1.35
-var tutorial_enabled: bool = true
 var tutorial_progress_version: int = TUTORIAL_PROGRESS_VERSION
 var tutorial_setup_tour_seen: bool = false
 var tutorial_game_ui_tour_seen: bool = false
@@ -141,7 +140,6 @@ func _load_settings() -> void:
 		show_hints = bool(config.get_value("game", "show_hints", true))
 		animation_speed = float(config.get_value("game", "animation_speed", 1.0))
 		replay_load_playable = bool(config.get_value("game", "replay_load_playable", false))
-		tutorial_enabled = bool(config.get_value("game", "tutorial_enabled", tutorial_enabled))
 
 		var mods_val = config.get_value("game", "enabled_modules_v2", null)
 		if mods_val is Array and not Array(mods_val).is_empty():
@@ -291,7 +289,8 @@ func save_settings() -> void:
 	config.set_value("game", "enabled_modules_v2", enabled_modules_v2)
 	modules_v2_base_dir = _normalize_modules_base_dir(modules_v2_base_dir)
 	config.set_value("game", "modules_v2_base_dir", modules_v2_base_dir)
-	config.set_value("game", "tutorial_enabled", tutorial_enabled)
+	if config.has_section_key("game", "tutorial_enabled"):
+		config.erase_section_key("game", "tutorial_enabled")
 	if config.has_section_key("game", "tutorial_auto_popup"):
 		config.erase_section_key("game", "tutorial_auto_popup")
 	config.set_value("players", "names", player_names)
@@ -314,8 +313,7 @@ func has_tutorial_flow_hint_seen(hint_id: String) -> bool:
 
 func is_tutorial_runtime_enabled() -> bool:
 	return (
-		tutorial_enabled
-		or tutorial_pending_setup_tour
+		tutorial_pending_setup_tour
 		or tutorial_pending_game_ui_tour
 		or tutorial_pending_flow_tutorial
 		or tutorial_match_enabled
@@ -324,11 +322,6 @@ func is_tutorial_runtime_enabled() -> bool:
 func request_rules_tutorial() -> void:
 	reset_tutorial_progress(false)
 	tutorial_pending_setup_tour = true
-
-func apply_tutorial_preferences_from_settings(settings: Dictionary) -> void:
-	if settings == null:
-		return
-	tutorial_enabled = bool(settings.get("tutorial_enabled", tutorial_enabled))
 
 func mark_tutorial_flow_hint_seen(hint_id: String, save_now: bool = true) -> void:
 	var id := str(hint_id).strip_edges()
@@ -345,12 +338,15 @@ func reset_tutorial_progress(save_now: bool = true) -> void:
 	tutorial_setup_tour_seen = false
 	tutorial_game_ui_tour_seen = false
 	tutorial_flow_hints_seen = []
+	clear_tutorial_runtime_flags()
+	if save_now:
+		save_settings()
+
+func clear_tutorial_runtime_flags() -> void:
 	tutorial_pending_setup_tour = false
 	tutorial_pending_game_ui_tour = false
 	tutorial_pending_flow_tutorial = false
 	tutorial_match_enabled = false
-	if save_now:
-		save_settings()
 
 # 重置游戏配置
 func reset_game_config() -> void:
@@ -363,10 +359,7 @@ func reset_game_config() -> void:
 	reserve_card_selected_by_player = []
 	is_game_active = false
 	current_game_engine = null
-	tutorial_pending_setup_tour = false
-	tutorial_pending_game_ui_tour = false
-	tutorial_pending_flow_tutorial = false
-	tutorial_match_enabled = false
+	clear_tutorial_runtime_flags()
 
 # 生成新的随机种子
 func generate_seed() -> int:

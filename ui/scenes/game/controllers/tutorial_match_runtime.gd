@@ -116,7 +116,7 @@ func dispose() -> void:
 func is_enabled() -> bool:
 	if Globals == null:
 		return false
-	var runtime_enabled := bool(Globals.tutorial_enabled)
+	var runtime_enabled := bool(Globals.tutorial_match_enabled)
 	if Globals.has_method("is_tutorial_runtime_enabled"):
 		runtime_enabled = bool(Globals.is_tutorial_runtime_enabled())
 	if not runtime_enabled:

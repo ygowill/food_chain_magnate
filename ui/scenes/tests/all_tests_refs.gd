@@ -52,6 +52,7 @@ const ModuleSelectorSetupConstraintsTestClass = preload("res://ui/scenes/tests/m
 const SetupTutorialTargetsContractTestClass = preload("res://ui/scenes/tests/setup_tutorial_targets_contract_test.gd")
 const GameTutorialTargetsContractTestClass = preload("res://ui/scenes/tests/game_tutorial_targets_contract_test.gd")
 const TutorialSceneBoundaryContractTestClass = preload("res://ui/scenes/tests/tutorial_scene_boundary_contract_test.gd")
+const TutorialRuntimeScopeTestClass = preload("res://ui/scenes/tests/tutorial_runtime_scope_test.gd")
 const TutorialMatchRuntimeTestClass = preload("res://ui/scenes/tests/tutorial_match_runtime_test.gd")
 const TutorialSpotlightOverlayStartTestClass = preload("res://ui/scenes/tests/tutorial_spotlight_overlay_start_test.gd")
 const TutorialSpotlightOverlayLayoutTestClass = preload("res://ui/scenes/tests/tutorial_spotlight_overlay_layout_test.gd")

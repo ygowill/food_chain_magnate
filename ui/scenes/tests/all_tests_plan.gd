@@ -75,6 +75,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.TutorialSceneBoundaryContractTestClass.run(),
 		},
 		{
+			"name": "TutorialRuntimeScopeTest",
+			"fn": func() -> Result: return TestRefs.TutorialRuntimeScopeTestClass.run(),
+		},
+		{
 			"name": "TutorialMatchRuntimeTest",
 			"fn": func() -> Result: return TestRefs.TutorialMatchRuntimeTestClass.run(),
 		},

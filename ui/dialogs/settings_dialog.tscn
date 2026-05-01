@@ -370,17 +370,11 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 13
 text = "教学"
 
-[node name="TutorialEnabledCheck" type="CheckBox" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/GamePage"]
-unique_name_in_owner = true
-layout_mode = 2
-button_pressed = true
-text = "启用新手教学"
-
 [node name="ResetTutorialProgressButton" type="Button" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/GamePage"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(150, 34)
 layout_mode = 2
-text = "重置教学进度"
+text = "重置规则教学进度"
 
 [node name="TutorialSep" type="HSeparator" parent="MarginContainer/VBoxContainer/ContentHBox/PagePanel/PageMargin/GamePage"]
 layout_mode = 2

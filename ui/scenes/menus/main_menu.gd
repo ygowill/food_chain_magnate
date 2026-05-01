@@ -123,6 +123,8 @@ func _apply_title_logo_texture() -> void:
 
 func _on_new_game_pressed() -> void:
 	GameLog.info("MainMenu", "点击本地游戏")
+	if Globals != null and Globals.has_method("clear_tutorial_runtime_flags"):
+		Globals.clear_tutorial_runtime_flags()
 	SceneManager.goto_game_setup()
 
 func _on_rules_tutorial_pressed() -> void:
@@ -136,6 +138,8 @@ func _on_rules_tutorial_pressed() -> void:
 
 func _on_online_pressed() -> void:
 	GameLog.info("MainMenu", "点击联机游戏")
+	if Globals != null and Globals.has_method("clear_tutorial_runtime_flags"):
+		Globals.clear_tutorial_runtime_flags()
 	SceneManager.goto_online_lobby()
 
 func _attempt_auto_resume_on_startup() -> void:
@@ -261,6 +265,8 @@ func _on_save_load_selected(path: String) -> void:
 		await get_tree().process_frame
 
 	# 主菜单“载入”改为回放入口：将文件路径交给 Game 场景自动进入回放模式。
+	if Globals != null and Globals.has_method("clear_tutorial_runtime_flags"):
+		Globals.clear_tutorial_runtime_flags()
 	Globals.pending_replay_file_path = path
 	Globals.current_game_engine = null
 	Globals.is_game_active = false

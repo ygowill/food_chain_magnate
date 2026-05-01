@@ -110,18 +110,15 @@ static func _is_visible_control(target) -> bool:
 
 static func _capture_tutorial_settings() -> Dictionary:
 	return {
-		"tutorial_enabled": Globals.tutorial_enabled,
 		"tutorial_pending_game_ui_tour": Globals.tutorial_pending_game_ui_tour,
 		"tutorial_pending_flow_tutorial": Globals.tutorial_pending_flow_tutorial,
 	}
 
 static func _prepare_tutorial_flags_for_test() -> void:
-	Globals.tutorial_enabled = false
 	Globals.tutorial_pending_game_ui_tour = false
 	Globals.tutorial_pending_flow_tutorial = false
 
 static func _restore_tutorial_settings(snapshot: Dictionary) -> void:
-	Globals.tutorial_enabled = bool(snapshot.get("tutorial_enabled", true))
 	Globals.tutorial_pending_game_ui_tour = bool(snapshot.get("tutorial_pending_game_ui_tour", false))
 	Globals.tutorial_pending_flow_tutorial = bool(snapshot.get("tutorial_pending_flow_tutorial", false))
 

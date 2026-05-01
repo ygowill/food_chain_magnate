@@ -232,10 +232,6 @@
 
 建议统一存入 `user://settings.cfg`：
 
-### `game` section
-
-- `tutorial_enabled: bool`
-
 ### `tutorial` section
 
 - `progress_version: int`

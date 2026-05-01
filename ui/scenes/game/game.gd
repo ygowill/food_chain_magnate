@@ -145,6 +145,8 @@ func _ready() -> void:
 			startup_replay_from_main_menu = true
 			startup_replay_path = p
 			Globals.pending_replay_file_path = ""
+			if Globals.has_method("clear_tutorial_runtime_flags"):
+				Globals.clear_tutorial_runtime_flags()
 	var should_restore_log_history := false
 	if Globals.current_game_engine != null and Globals.current_game_engine is GameEngine:
 		var existing_engine: GameEngine = Globals.current_game_engine

@@ -663,7 +663,12 @@ func _is_tutorial_runtime_enabled() -> bool:
 		return false
 	if Globals.has_method("is_tutorial_runtime_enabled"):
 		return bool(Globals.is_tutorial_runtime_enabled())
-	return bool(Globals.tutorial_enabled)
+	return (
+		bool(Globals.tutorial_pending_setup_tour)
+		or bool(Globals.tutorial_pending_game_ui_tour)
+		or bool(Globals.tutorial_pending_flow_tutorial)
+		or bool(Globals.tutorial_match_enabled)
+	)
 
 func _is_hotseat_runtime() -> bool:
 	if NetContext == null:

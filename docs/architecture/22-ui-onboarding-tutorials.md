@@ -145,13 +145,12 @@ flowchart TB
 
 当前由 `Globals` 持有：
 
-- 开关：
-	- `tutorial_enabled`
 - 已看过进度：
 	- `tutorial_setup_tour_seen`
 	- `tutorial_game_ui_tour_seen`
 	- `tutorial_flow_hints_seen`
 - 运行时待触发标记：
+	- `tutorial_pending_setup_tour`
 	- `tutorial_pending_game_ui_tour`
 	- `tutorial_pending_flow_tutorial`
 	- `tutorial_match_enabled`

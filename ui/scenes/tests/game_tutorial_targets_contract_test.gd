@@ -211,7 +211,6 @@ static func _is_control(target) -> bool:
 
 static func _capture_tutorial_settings() -> Dictionary:
 	return {
-		"tutorial_enabled": Globals.tutorial_enabled,
 		"tutorial_setup_tour_seen": Globals.tutorial_setup_tour_seen,
 		"tutorial_game_ui_tour_seen": Globals.tutorial_game_ui_tour_seen,
 		"tutorial_pending_game_ui_tour": Globals.tutorial_pending_game_ui_tour,
@@ -220,7 +219,6 @@ static func _capture_tutorial_settings() -> Dictionary:
 	}
 
 static func _prepare_globals_for_test() -> void:
-	Globals.tutorial_enabled = false
 	Globals.tutorial_setup_tour_seen = true
 	Globals.tutorial_game_ui_tour_seen = true
 	Globals.tutorial_pending_game_ui_tour = false
@@ -228,7 +226,6 @@ static func _prepare_globals_for_test() -> void:
 	Globals.tutorial_match_enabled = false
 
 static func _restore_tutorial_settings(snapshot: Dictionary) -> void:
-	Globals.tutorial_enabled = bool(snapshot.get("tutorial_enabled", true))
 	Globals.tutorial_setup_tour_seen = bool(snapshot.get("tutorial_setup_tour_seen", false))
 	Globals.tutorial_game_ui_tour_seen = bool(snapshot.get("tutorial_game_ui_tour_seen", false))
 	Globals.tutorial_pending_game_ui_tour = bool(snapshot.get("tutorial_pending_game_ui_tour", false))

@@ -193,7 +193,7 @@ func _is_tutorial_match_mode() -> bool:
 		return false
 	if Globals.has_method("is_tutorial_runtime_enabled"):
 		return bool(Globals.is_tutorial_runtime_enabled())
-	return bool(Globals.tutorial_enabled)
+	return true
 
 func setup_waiting(current_player_id: int) -> void:
 	# 联机：等待其他玩家选择（不展示任何卡片信息）

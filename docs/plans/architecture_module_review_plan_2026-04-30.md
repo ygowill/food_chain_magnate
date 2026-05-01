@@ -1541,3 +1541,32 @@
 
 - 已完成该 P1 的严格化整改：历史命令重放链路不再使用 force execution 跳过 action-specific validation。
 - 运行时 debug 面板的显式 `compute_new_state_force(...)` 能力未在本次移除；它仍属于调试命令执行语义，不再被 replay/archive/timeline rebuild 自动复用。
+
+### Fix 3：教学运行时只允许由规则教学入口触发
+
+日期：2026-05-01
+
+对应问题：
+
+- 用户补充反馈：载入回放等非规则教学模式仍有残留教学；期望教学只存在于“规则教学”中。
+- 本项属于 UI/onboarding 运行边界问题：全局设置项 `tutorial_enabled=true` 被当成运行时教学开关，导致普通模式、回放/加载路径存在误触发空间。
+
+改动：
+
+- `autoload/globals.gd`：移除 `tutorial_enabled` 全局字段和 `apply_tutorial_preferences_from_settings(...)`；`is_tutorial_runtime_enabled()` 只根据规则教学入口写入的运行时标记判断，包括 `tutorial_pending_setup_tour`、`tutorial_pending_game_ui_tour`、`tutorial_pending_flow_tutorial`、`tutorial_match_enabled`。
+- `autoload/globals.gd`：新增 `clear_tutorial_runtime_flags()`，并在 `reset_tutorial_progress()`、`reset_game_config()` 中复用，避免规则教学运行标记散落清理。
+- `ui/scenes/menus/main_menu.gd`、`ui/scenes/game/game.gd`：进入本地新局、联机大厅、载入回放，以及 Game 场景消费 pending replay path 时，显式清理教学运行标记。
+- `ui/dialogs/settings_dialog.gd`、`ui/dialogs/settings_dialog.tscn`、`ui/scenes/game/overlay/controller.gd`：设置页移除“启用新手教学”开关；保存设置时清理旧 `game/tutorial_enabled` 配置键；保留并改名“重置规则教学进度”。
+- `ui/scenes/game/controllers/tutorials_controller.gd`、`ui/scenes/game/controllers/tutorial_match_runtime.gd`、`ui/components/modal_panel/reserve_card_selection_modal.gd`：移除对 `Globals.tutorial_enabled` 的兜底依赖。
+- `ui/scenes/tests/tutorial_runtime_scope_test.gd`：新增教学运行范围契约测试，固定“无规则教学运行标记时普通模式不启用教学；规则教学 pending/match 标记才启用教学”的行为。
+- `docs/architecture/22-ui-onboarding-tutorials.md`、`docs/tutorial_onboarding_design.md`：同步移除 `tutorial_enabled` 的设计记录。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成本次补充修复：教学运行时不再有用户设置总开关，也不会因默认设置在普通模式、回放/加载路径误触发。
+- 后续如果需要新增其他教学类型，应新增明确入口和独立运行标记，不能复用全局“教学启用”式开关。

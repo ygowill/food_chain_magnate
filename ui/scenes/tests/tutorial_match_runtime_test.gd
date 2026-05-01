@@ -59,11 +59,9 @@ static func run() -> Result:
 		return Result.failure("Globals 不可用")
 
 	var snapshot := {
-		"tutorial_enabled": bool(Globals.tutorial_enabled),
 		"tutorial_match_enabled": bool(Globals.tutorial_match_enabled),
 	}
 
-	Globals.tutorial_enabled = true
 	Globals.tutorial_match_enabled = true
 
 	var holder := _EngineHolder.new()
@@ -153,5 +151,4 @@ static func _make_history_command(action_id: String, actor: int, round_number: i
 static func _restore_globals(snapshot: Dictionary) -> void:
 	if Globals == null:
 		return
-	Globals.tutorial_enabled = bool(snapshot.get("tutorial_enabled", true))
 	Globals.tutorial_match_enabled = bool(snapshot.get("tutorial_match_enabled", false))

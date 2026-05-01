@@ -428,10 +428,6 @@ func _on_settings_changed(settings: Dictionary) -> void:
 	Globals.confirm_actions = bool(settings.get("confirm_actions", Globals.confirm_actions))
 	Globals.show_hints = bool(settings.get("show_hints", Globals.show_hints))
 	Globals.replay_load_playable = bool(settings.get("replay_load_playable", Globals.replay_load_playable))
-	if Globals.has_method("apply_tutorial_preferences_from_settings"):
-		Globals.apply_tutorial_preferences_from_settings(settings)
-	else:
-		Globals.tutorial_enabled = bool(settings.get("tutorial_enabled", Globals.tutorial_enabled))
 	Globals.animation_speed = float(settings.get("animation_speed", Globals.animation_speed))
 
 	# 字体倍率：允许在运行时立即生效（主要用于调试可读性）。
