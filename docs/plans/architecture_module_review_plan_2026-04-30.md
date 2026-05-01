@@ -1849,3 +1849,27 @@
 
 - 已完成该 P2 strict 化：动作注册 provider 配置或契约错误会在 engine 初始化阶段暴露，不会延迟成“空动作集合”的运行期问题。
 - 测试如需空 registry，后续应通过显式 test helper 构造，不能走生产初始化兜底。
+
+### Fix 15：CommandRunner 事件构建 provider 初始化期校验
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 2 `[P2] CommandRunner 事件构建 provider 缺失时静默返回空派生事件`。
+
+改动：
+
+- `core/engine/game_engine/command_runner.gd`：新增事件构建 provider 解析与方法集校验，要求 provider 提供现金、里程碑、阶段、Payday、Dinnertime、Marketing、Cleanup 等事件构建方法；注入 provider 错误不再回退到 ProjectSettings provider。
+- `core/engine/game_engine/initializer.gd`：新局初始化时先校验 CommandRunner event build provider，失败直接中止初始化。
+- `core/tests/engine_dependencies_injection_test.gd`：补齐测试 stub 的完整事件构建方法集，并新增坏 event provider 初始化失败回归测试。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：事件构建 provider 配置或契约错误会在初始化阶段暴露，不再把缺 provider 解释为空派生事件。
+- 纯展示层如需 best-effort timeline，应走独立的显式宽松构建入口，而不是依赖 CommandRunner 静默缺省。

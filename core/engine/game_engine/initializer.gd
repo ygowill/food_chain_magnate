@@ -14,6 +14,7 @@ const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 const GameStartedEventBuildClass = preload("res://core/engine/game_engine/game_started_event_build.gd")
 const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 const BankStateAccessClass = preload("res://core/state/bank_state_access.gd")
+const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
 
 static func initialize_new_game(
 	engine: GameEngine,
@@ -120,6 +121,9 @@ static func initialize_new_game(
 	if not data_result.ok:
 		return Result.failure("加载数据失败: %s" % data_result.error)
 	engine.game_data = data_result.value
+	var event_provider_r := CommandRunnerClass.validate_event_build_provider(engine)
+	if not event_provider_r.ok:
+		return Result.failure("初始化失败：CommandRunner event build provider 设置失败: %s" % event_provider_r.error)
 	var span_actions := PerfTraceClass.begin_span("init:ActionRegistry.setup_action_registry")
 	var setup_actions := engine.setup_action_registry(engine.game_data.pieces)
 	PerfTraceClass.end_span(span_actions)

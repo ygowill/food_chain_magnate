@@ -6,6 +6,16 @@ const ReplayClass = preload("res://core/engine/game_engine/replay.gd")
 const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 
 const EVENT_BUILD_PROVIDER_PATH_SETTING = "fcm/command_runner_event_build_provider_path"
+const REQUIRED_EVENT_BUILD_METHODS := [
+	"build_player_cash_changed_events",
+	"build_milestone_achieved_events",
+	"build_phase_change_events",
+	"build_payday_report_events",
+	"build_food_sold_events_from_dinnertime_report",
+	"build_marketing_demand_generated_events",
+	"build_marketing_expired_events",
+	"build_cleanup_inventory_discarded_events",
+]
 static var event_build_provider_path_override: String = ""
 static var _event_build_provider_cache = null
 static var _event_build_provider_cache_path: String = ""
@@ -28,26 +38,26 @@ static func _resolve_event_build_provider_path() -> String:
 		return ""
 	return str(v).strip_edges()
 
-static func _resolve_injected_event_build_provider(provider_override):
+static func _validate_event_build_provider_methods(provider, context: String) -> Result:
+	if provider == null:
+		return Result.failure("%s 为空" % context)
+	for method_name in REQUIRED_EVENT_BUILD_METHODS:
+		if not provider.has_method(str(method_name)):
+			return Result.failure("%s 缺少必需方法: %s" % [context, str(method_name)])
+	return Result.success(provider)
+
+static func _resolve_injected_event_build_provider(provider_override) -> Result:
 	if provider_override == null:
-		return null
+		return Result.success(null)
 	if provider_override is String:
 		var injected_path := str(provider_override).strip_edges()
 		if injected_path.is_empty():
-			AutoloadAccessClass.log_error("CommandRunner", "注入的事件构建 provider path 为空")
-			return null
+			return Result.failure("注入的事件构建 provider path 为空")
 		var injected_provider = load(injected_path)
 		if injected_provider == null:
-			AutoloadAccessClass.log_error("CommandRunner", "缺少注入的事件构建 provider: %s" % injected_path)
-			return null
-		if not injected_provider.has_method("build_player_cash_changed_events") or not injected_provider.has_method("build_milestone_achieved_events"):
-			AutoloadAccessClass.log_error("CommandRunner", "注入的事件构建 provider 缺少必需方法: %s" % injected_path)
-			return null
-		return injected_provider
-	if provider_override.has_method("build_player_cash_changed_events") and provider_override.has_method("build_milestone_achieved_events"):
-		return provider_override
-	AutoloadAccessClass.log_error("CommandRunner", "注入的事件构建 provider 类型错误（缺少必需方法）")
-	return null
+			return Result.failure("缺少注入的事件构建 provider: %s" % injected_path)
+		return _validate_event_build_provider_methods(injected_provider, "注入的事件构建 provider: %s" % injected_path)
+	return _validate_event_build_provider_methods(provider_override, "注入的事件构建 provider")
 
 static func _get_injected_debug_option(engine: GameEngine, key: String, default_value: bool) -> bool:
 	if engine == null or not engine.has_method("get_dependencies") or engine.get_dependencies() == null:
@@ -76,28 +86,44 @@ static func _is_debug_mode(engine: GameEngine) -> bool:
 static func _force_execute_commands_enabled(engine: GameEngine) -> bool:
 	return _get_injected_debug_option(engine, "force_execute_commands", AutoloadAccessClass.force_execute_commands_enabled())
 
-static func _get_event_build_provider(engine: GameEngine = null):
+static func _resolve_event_build_provider(engine: GameEngine = null) -> Result:
 	if engine != null and engine.has_method("get_dependencies") and engine.get_dependencies() != null:
-		var injected_provider = _resolve_injected_event_build_provider(engine.get_dependencies().command_runner_event_build_provider)
-		if injected_provider != null:
-			return injected_provider
+		var injected_r := _resolve_injected_event_build_provider(engine.get_dependencies().command_runner_event_build_provider)
+		if not injected_r.ok:
+			return injected_r
+		if injected_r.value != null:
+			return injected_r
 
 	var provider_path := _resolve_event_build_provider_path()
 	if provider_path.is_empty():
-		return null
+		return Result.failure("未配置事件构建 provider（override 或 ProjectSettings.%s）" % EVENT_BUILD_PROVIDER_PATH_SETTING)
 	if _event_build_provider_cache != null and _event_build_provider_cache_path == provider_path:
-		return _event_build_provider_cache
+		return Result.success(_event_build_provider_cache)
 
 	var provider = load(provider_path)
 	if provider == null:
-		AutoloadAccessClass.log_error("CommandRunner", "缺少事件构建 provider: %s" % provider_path)
 		_event_build_provider_cache = null
 		_event_build_provider_cache_path = provider_path
-		return null
+		return Result.failure("缺少事件构建 provider: %s" % provider_path)
+	var provider_r := _validate_event_build_provider_methods(provider, "事件构建 provider: %s" % provider_path)
+	if not provider_r.ok:
+		_event_build_provider_cache = null
+		_event_build_provider_cache_path = provider_path
+		return provider_r
 
 	_event_build_provider_cache = provider
 	_event_build_provider_cache_path = provider_path
-	return provider
+	return Result.success(provider)
+
+static func validate_event_build_provider(engine: GameEngine = null) -> Result:
+	return _resolve_event_build_provider(engine)
+
+static func _get_event_build_provider(engine: GameEngine = null):
+	var provider_r := _resolve_event_build_provider(engine)
+	if not provider_r.ok:
+		AutoloadAccessClass.log_error("CommandRunner", str(provider_r.error))
+		return null
+	return provider_r.value
 
 static func execute_command(engine: GameEngine, command: Command, is_replay: bool = false) -> Result:
 	var init_check := engine.ensure_initialized()

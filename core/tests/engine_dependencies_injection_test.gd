@@ -39,6 +39,27 @@ class StubEventBuildProvider:
 		milestone_calls += 1
 		return []
 
+	func build_phase_change_events(_old_state: GameState, _new_state: GameState) -> Array[Dictionary]:
+		return []
+
+	func build_payday_report_events(_old_state: GameState, _new_state: GameState) -> Array[Dictionary]:
+		return []
+
+	func build_food_sold_events_from_dinnertime_report(_dinnertime_state: GameState, _report: Dictionary) -> Array[Dictionary]:
+		return []
+
+	func build_marketing_demand_generated_events(_marketing_state: GameState) -> Array[Dictionary]:
+		return []
+
+	func build_marketing_expired_events(_marketing_state: GameState) -> Array[Dictionary]:
+		return []
+
+	func build_cleanup_inventory_discarded_events(_cleanup_state: GameState) -> Array[Dictionary]:
+		return []
+
+class MissingEventBuildProvider:
+	extends RefCounted
+
 class StubRestaurantLogoAssignmentProvider:
 	extends RefCounted
 
@@ -145,6 +166,9 @@ static func run(seed_val: int = 12345) -> Result:
 	var invalid_provider_r := _test_invalid_action_setup_provider_fails_fast(seed_val + 2)
 	if not invalid_provider_r.ok:
 		return invalid_provider_r
+	var invalid_event_provider_r := _test_invalid_command_runner_event_provider_fails_fast(seed_val + 4)
+	if not invalid_event_provider_r.ok:
+		return invalid_event_provider_r
 	return Result.success({
 		"cash_calls": event_provider.cash_calls,
 		"milestone_calls": event_provider.milestone_calls,
@@ -153,6 +177,7 @@ static func run(seed_val: int = 12345) -> Result:
 		"force_execute_ok": true,
 		"short_game_verified": true,
 		"invalid_action_provider_verified": true,
+		"invalid_event_provider_verified": true,
 		"event_sink_events": event_sink.emitted_types.size(),
 	})
 
@@ -238,4 +263,16 @@ static func _test_invalid_action_setup_provider_fails_fast(seed_val: int) -> Res
 	var null_err := str(null_r.error)
 	if null_err.find("ActionRegistry") < 0 or null_err.find("build_registry") < 0:
 		return Result.failure("返回 null 的错误信息应包含 ActionRegistry/build_registry，实际: %s" % null_err)
+	return Result.success()
+
+static func _test_invalid_command_runner_event_provider_fails_fast(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	engine.set_command_runner_event_build_provider(MissingEventBuildProvider.new())
+	var init_r := engine.initialize(2, seed_val)
+	engine.dispose()
+	if init_r.ok:
+		return Result.failure("缺少事件构建方法的 command_runner_event_build_provider 应导致初始化失败")
+	var err := str(init_r.error)
+	if err.find("CommandRunner") < 0 or err.find("事件构建 provider") < 0:
+		return Result.failure("事件构建 provider 错误信息应包含 CommandRunner/事件构建 provider，实际: %s" % err)
 	return Result.success()
