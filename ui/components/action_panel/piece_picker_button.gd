@@ -162,13 +162,13 @@ func _draw_road_texture(texture: Texture2D, local_cells: Array[Vector2i], board_
 func _draw_park_texture(texture: Texture2D, local_cells: Array[Vector2i], board_pos: Vector2, cell_px: float, modulate: Color) -> void:
 	if texture == null or local_cells.is_empty():
 		return
-	var run: Array[Vector2i] = PiecePreviewLayoutClass.get_longest_cell_run(local_cells)
-	if run.is_empty():
+	var texture_cells: Array[Vector2i] = PiecePreviewLayoutClass.get_park_texture_cells(local_cells)
+	if texture_cells.is_empty():
 		return
-	var rect: Rect2 = PiecePreviewLayoutClass.get_rect_for_cells(run, board_pos, cell_px)
+	var rect: Rect2 = PiecePreviewLayoutClass.get_rect_for_cells(texture_cells, board_pos, cell_px)
 	var pad := maxf(1.0, cell_px * 0.08)
 	rect = rect.grow(-pad)
-	if PiecePreviewLayoutClass.is_run_vertical(run):
+	if PiecePreviewLayoutClass.should_rotate_texture_for_cells(texture_cells):
 		_draw_texture_aspect_fit_rotated(texture, rect, modulate, 90.0)
 	else:
 		_draw_texture_aspect_fit(texture, rect, modulate)

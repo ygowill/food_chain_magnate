@@ -689,10 +689,10 @@ static func draw_park_piece(canvas, cell_size: int, info: Dictionary, alpha: flo
 	var pad := maxf(1.0, float(cell_size) * 0.06)
 	var origin := Vector2(min_pos.x * cell_size, min_pos.y * cell_size)
 	var local_cells := PiecePreviewLayoutClass.normalize_cells(cells_val)
-	var run: Array[Vector2i] = PiecePreviewLayoutClass.get_longest_cell_run(local_cells)
-	var rect := PiecePreviewLayoutClass.get_rect_for_cells(run, origin, float(cell_size)).grow(-pad)
+	var texture_cells: Array[Vector2i] = PiecePreviewLayoutClass.get_park_texture_cells(local_cells)
+	var rect := PiecePreviewLayoutClass.get_rect_for_cells(texture_cells, origin, float(cell_size)).grow(-pad)
 	var mod := Color(1, 1, 1, 0.85 * clampf(alpha, 0.0, 1.0))
-	if PiecePreviewLayoutClass.is_run_vertical(run):
+	if PiecePreviewLayoutClass.should_rotate_texture_for_cells(texture_cells):
 		TextureUtilsClass.draw_texture_aspect_fit_rotated(canvas, tex, rect, 90.0, mod)
 	else:
 		TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, rect, mod)
