@@ -13,6 +13,9 @@ static func run() -> Result:
 	r = _case_park_icon_uses_longest_straight_run()
 	if not r.ok:
 		return r
+	r = _case_park_icon_uses_full_solid_rectangle()
+	if not r.ok:
+		return r
 	r = _case_vertical_run_reports_orientation()
 	if not r.ok:
 		return r
@@ -46,7 +49,7 @@ static func _case_park_icon_uses_longest_straight_run() -> Result:
 		Vector2i(2, 0),
 		Vector2i(0, 1),
 	]
-	var run: Array[Vector2i] = PiecePreviewLayoutClass.get_longest_cell_run(cells)
+	var run: Array[Vector2i] = PiecePreviewLayoutClass.get_park_texture_cells(cells)
 	var expected: Array[Vector2i] = [
 		Vector2i(0, 0),
 		Vector2i(1, 0),
@@ -56,13 +59,27 @@ static func _case_park_icon_uses_longest_straight_run() -> Result:
 		return Result.failure("公园图标应选择最长边，实际: %s" % str(run))
 	return Result.success({})
 
+static func _case_park_icon_uses_full_solid_rectangle() -> Result:
+	var cells: Array[Vector2i] = [
+		Vector2i(0, 0),
+		Vector2i(1, 0),
+		Vector2i(0, 1),
+		Vector2i(1, 1),
+	]
+	var texture_cells: Array[Vector2i] = PiecePreviewLayoutClass.get_park_texture_cells(cells)
+	if texture_cells.size() != 4:
+		return Result.failure("完整 2x2 公园应使用整个区域绘制，实际: %s" % str(texture_cells))
+	if PiecePreviewLayoutClass.should_rotate_texture_for_cells(texture_cells):
+		return Result.failure("完整 2x2 公园不应旋转纹理")
+	return Result.success({})
+
 static func _case_vertical_run_reports_orientation() -> Result:
 	var cells: Array[Vector2i] = [
 		Vector2i(2, 2),
 		Vector2i(2, 3),
 		Vector2i(2, 4),
 	]
-	var run: Array[Vector2i] = PiecePreviewLayoutClass.get_longest_cell_run(cells)
-	if not PiecePreviewLayoutClass.is_run_vertical(run):
+	var run: Array[Vector2i] = PiecePreviewLayoutClass.get_park_texture_cells(cells)
+	if not PiecePreviewLayoutClass.should_rotate_texture_for_cells(run):
 		return Result.failure("竖向最长边应标记为 vertical，实际: %s" % str(run))
 	return Result.success({})

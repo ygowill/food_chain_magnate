@@ -112,6 +112,29 @@ static func get_longest_cell_run(cells: Array) -> Array[Vector2i]:
 
 	return best
 
+static func get_park_texture_cells(cells: Array) -> Array[Vector2i]:
+	var local := normalize_cells(cells)
+	if local.is_empty():
+		return []
+	if is_solid_rectangle(local):
+		return local
+	return get_longest_cell_run(local)
+
+static func is_solid_rectangle(cells: Array) -> bool:
+	var local := normalize_cells(cells)
+	if local.is_empty():
+		return false
+	var bounds := get_bounds(local)
+	var size: Vector2i = bounds.get("size", Vector2i.ZERO)
+	if size.x <= 0 or size.y <= 0:
+		return false
+	return local.size() == size.x * size.y
+
+static func should_rotate_texture_for_cells(cells: Array) -> bool:
+	var bounds := get_bounds(cells)
+	var size: Vector2i = bounds.get("size", Vector2i.ZERO)
+	return size.y > size.x
+
 static func is_run_vertical(run: Array) -> bool:
 	if run.size() < 2:
 		return false
