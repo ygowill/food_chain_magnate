@@ -39,15 +39,13 @@ static func pay_bank_to_player(state: GameState, player_id: int, amount: int, re
 	if cash >= 20:
 		var ms20 := MilestoneSystemClass.process_event(state, "CashReached", {"player_id": player_id, "value": 20})
 		if not ms20.ok:
-			warnings.append("里程碑触发失败(CashReached/20): 玩家 %d: %s" % [player_id, ms20.error])
-		else:
-			warnings.append_array(ms20.warnings)
+			return Result.failure("里程碑触发失败(CashReached/20): 玩家 %d: %s" % [player_id, ms20.error]).with_warnings(warnings).with_warnings(ms20.warnings)
+		warnings.append_array(ms20.warnings)
 	if cash >= 100:
 		var ms100 := MilestoneSystemClass.process_event(state, "CashReached", {"player_id": player_id, "value": 100})
 		if not ms100.ok:
-			warnings.append("里程碑触发失败(CashReached/100): 玩家 %d: %s" % [player_id, ms100.error])
-		else:
-			warnings.append_array(ms100.warnings)
+			return Result.failure("里程碑触发失败(CashReached/100): 玩家 %d: %s" % [player_id, ms100.error]).with_warnings(warnings).with_warnings(ms100.warnings)
+		warnings.append_array(ms100.warnings)
 
 	return Result.success().with_warnings(warnings)
 

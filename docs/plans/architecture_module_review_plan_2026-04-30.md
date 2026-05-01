@@ -3386,3 +3386,28 @@
 结论：
 
 - 已完成该 P3 的第二个可独立落地拆分：开局 bootstrap 的短生命周期状态从 `OnlineRoom` 主文件中移出，`OnlineRoom` 更集中于房间入口校验和 engine 提交。
+
+### Fix 77：补齐 BankruptcyRules 的 CashReached 里程碑 fail-fast
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 6 `[P1] 多处关键里程碑触发失败被降级为 warning，结算仍成功`。
+- Step 7 `[P1] MilestoneSystem.process_event(...) 失败被降级为 warning 的模式不只存在于 base_rules，已经扩散到 gameplay actions 与多个扩展模块`。
+- 过度兜底复查补充发现：`core/rules/economy/bankruptcy_rules.gd` 中 `CashReached/20` 与 `CashReached/100` 仍把 `MilestoneSystem.process_event(...)` 失败追加为 warning，导致现金支付成功但 `first_have_20` / `first_have_100` 的规则副作用可能缺失。
+
+改动：
+
+- `core/rules/economy/bankruptcy_rules.gd`：`pay_bank_to_player(...)` 在触发 `CashReached/20` 或 `CashReached/100` 失败时直接返回 `Result.failure`，并保留此前累积 warnings 与 milestone warnings；成功路径继续透传 warnings。
+- `core/tests/bankruptcy_test.gd`：新增 `CashReached` fail-fast 回归用例，通过临时移除 `MilestoneEffectRegistry` 验证失败不会被降级为 warning，也不会授予 `first_have_20` 或写入 `milestones_auto_awarded`。
+
+验证：
+
+- `rg -n "^[ ]+\S|\t +| +\t" core/rules/economy/bankruptcy_rules.gd core/tests/bankruptcy_test.gd`：无匹配，确认未引入空格缩进或 tab/space 混用。
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1123`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120 --strict-exit`：PASS，`392/392`。
+
+结论：
+
+- 已补齐现金里程碑支付路径的 P1 strict 化：银行向玩家支付导致现金达到 $20 / $100 时，里程碑触发失败不再被吞为 warning，避免权威现金状态与里程碑副作用状态分离。

@@ -7,6 +7,8 @@ const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const BankruptcyRulesClass = preload("res://core/rules/economy/bankruptcy_rules.gd")
+const MilestoneEffectRegistryClass = preload("res://core/rules/milestone_effect_registry.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_count != 2:
@@ -20,15 +22,43 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r2.ok:
 		return r2
 
-	var r3 := _test_second_bankruptcy_ends_game(seed_val)
+	var r3 := _test_cash_reached_milestone_failure_is_fatal(seed_val)
 	if not r3.ok:
 		return r3
+
+	var r4 := _test_second_bankruptcy_ends_game(seed_val)
+	if not r4.ok:
+		return r4
 
 	return Result.success({
 		"player_count": player_count,
 		"seed": seed_val,
-		"cases": 3,
+		"cases": 4,
 	})
+
+static func _test_cash_reached_milestone_failure_is_fatal(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("CashReached fail-fast 测试初始化失败: %s" % init.error)
+
+	var state := engine.get_state()
+	MilestoneEffectRegistryClass.reset_current()
+	var r := BankruptcyRulesClass.pay_bank_to_player(state, 0, 20, "test_cash_reached_fail_fast")
+	engine.activate_registry_bundles()
+
+	if r.ok:
+		return Result.failure("CashReached 里程碑触发失败时不应降级为 warning")
+	var err := str(r.error)
+	if err.find("CashReached/20") < 0 or err.find("MilestoneEffectRegistry") < 0:
+		return Result.failure("错误信息应包含 CashReached/20 与 MilestoneEffectRegistry，实际: %s" % err)
+	var milestones: Array = state.players[0].get("milestones", [])
+	if milestones.has("first_have_20"):
+		return Result.failure("里程碑触发失败时不应授予 first_have_20")
+	if state.round_state.has("milestones_auto_awarded"):
+		return Result.failure("里程碑触发失败时不应写入 milestones_auto_awarded")
+
+	return Result.success()
 
 static func _test_first_bankruptcy_on_exact_zero(seed_val: int) -> Result:
 	var engine := GameEngine.new()
