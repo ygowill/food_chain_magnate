@@ -18,6 +18,9 @@ static func run() -> Result:
 	var marker_r := _run_prepare_persists_online_confirm_markers_case()
 	if not marker_r.ok:
 		return marker_r
+	var validate_no_mutate_r := _run_validate_resume_point_does_not_mutate_source_case()
+	if not validate_no_mutate_r.ok:
+		return validate_no_mutate_r
 	var repair_marker_r := _run_repair_missing_marketing_marker_case()
 	if not repair_marker_r.ok:
 		return repair_marker_r
@@ -53,6 +56,40 @@ static func _run_prepare_persists_online_confirm_markers_case() -> Result:
 		return Result.failure("恢复存档 initial_state 缺少晚餐确认 marker")
 	if int(rules.get(ONLINE_MARKETING_CONFIRM_KEY, 0)) != 1:
 		return Result.failure("恢复存档 initial_state 缺少营销确认 marker")
+	return Result.success()
+
+static func _run_validate_resume_point_does_not_mutate_source_case() -> Result:
+	var engine := GameEngineClass.new()
+	var init_r: Result = engine.initialize(2, 12345, [], GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR)
+	if not init_r.ok:
+		return Result.failure("初始化 validate no-mutate 测试失败: %s" % init_r.error)
+	var state = engine.get_state()
+	if state == null:
+		return Result.failure("validate no-mutate 测试 state 为空")
+	var before_hash := str(state.compute_hash())
+	var before_rules: Dictionary = Dictionary(state.rules).duplicate(true) if state.rules is Dictionary else {}
+	var validate_r: Result = OnlineResumePointValidatorClass.validate_resume_point(engine)
+	if not validate_r.ok:
+		return Result.failure("validate_resume_point 应在验证副本上成功: %s" % validate_r.error)
+	if str(state.compute_hash()) != before_hash:
+		return Result.failure("validate_resume_point 不应修改传入 engine 的 state hash")
+	var after_rules: Dictionary = Dictionary(state.rules).duplicate(true) if state.rules is Dictionary else {}
+	if after_rules != before_rules:
+		return Result.failure("validate_resume_point 不应修改传入 engine 的 rules: before=%s after=%s" % [str(before_rules), str(after_rules)])
+	if int(after_rules.get(ONLINE_DINNERTIME_CONFIRM_KEY, 0)) != 0:
+		return Result.failure("validate_resume_point 不应写入晚餐确认 marker")
+	if int(after_rules.get(ONLINE_MARKETING_CONFIRM_KEY, 0)) != 0:
+		return Result.failure("validate_resume_point 不应写入营销确认 marker")
+	var archive_r: Result = engine.create_archive()
+	if not archive_r.ok:
+		return Result.failure("创建 validate no-mutate 存档失败: %s" % archive_r.error)
+	var archive: Dictionary = Dictionary(archive_r.value).duplicate(true)
+	var initial: Dictionary = Dictionary(archive.get("initial_state", {}))
+	var initial_rules: Dictionary = Dictionary(initial.get("rules", {})) if initial.get("rules", null) is Dictionary else {}
+	if int(initial_rules.get(ONLINE_DINNERTIME_CONFIRM_KEY, 0)) != 0:
+		return Result.failure("validate_resume_point 不应修改 initial checkpoint 的晚餐 marker")
+	if int(initial_rules.get(ONLINE_MARKETING_CONFIRM_KEY, 0)) != 0:
+		return Result.failure("validate_resume_point 不应修改 initial checkpoint 的营销 marker")
 	return Result.success()
 
 static func _run_repair_missing_marketing_marker_case() -> Result:

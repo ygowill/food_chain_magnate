@@ -421,7 +421,7 @@ func _prepare_effective_resume_start_engine() -> Result:
 	if int(preview_engine.current_command_index) < int(preview_engine.command_history.size()) - 1:
 		preview_engine.truncate_future_history()
 
-	var validate_r: Result = OnlineResumePointValidatorClass.validate_resume_point(preview_engine)
+	var validate_r: Result = OnlineResumePointValidatorClass.prepare_and_validate_resume_point(preview_engine)
 	if not validate_r.ok:
 		return validate_r
 

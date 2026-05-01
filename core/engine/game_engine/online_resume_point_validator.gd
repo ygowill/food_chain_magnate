@@ -84,10 +84,27 @@ static func validate_resume_point(
 	engine: GameEngine,
 	persist_current_state_to_checkpoint: bool = true
 ) -> Result:
+	var validation_engine_r := _build_validation_engine(engine)
+	if not validation_engine_r.ok:
+		return validation_engine_r
+	var validation_engine: GameEngine = validation_engine_r.value
+	var prepare_r: Result = prepare_engine_for_online_resume(validation_engine, persist_current_state_to_checkpoint)
+	if not prepare_r.ok:
+		return prepare_r
+	var validate_r: Result = _validate_prepared_resume_point(validation_engine)
+	return validate_r.with_warnings(prepare_r.warnings)
+
+static func prepare_and_validate_resume_point(
+	engine: GameEngine,
+	persist_current_state_to_checkpoint: bool = true
+) -> Result:
 	var prepare_r: Result = prepare_engine_for_online_resume(engine, persist_current_state_to_checkpoint)
 	if not prepare_r.ok:
 		return prepare_r
+	var validate_r: Result = _validate_prepared_resume_point(engine)
+	return validate_r.with_warnings(prepare_r.warnings)
 
+static func _validate_prepared_resume_point(engine: GameEngine) -> Result:
 	var state = engine.get_state()
 	if state == null:
 		return Result.failure("恢复状态为空")
@@ -105,6 +122,21 @@ static func validate_resume_point(
 				"player_id": player_id,
 				"initiatable_actions": initiatable.duplicate(),
 				"state_hash": str(state.compute_hash()),
-			}).with_warnings(prepare_r.warnings)
+			})
 
-	return Result.failure("当前恢复点没有任何玩家可执行动作，联机恢复后将无法推进").with_warnings(prepare_r.warnings)
+	return Result.failure("当前恢复点没有任何玩家可执行动作，联机恢复后将无法推进")
+
+static func _build_validation_engine(engine: GameEngine) -> Result:
+	if engine == null or not is_instance_valid(engine):
+		return Result.failure("恢复引擎为空")
+	if not engine.has_method("create_archive"):
+		return Result.failure("恢复引擎缺少 create_archive")
+	var archive_r: Result = engine.create_archive()
+	if not archive_r.ok:
+		return Result.failure("构造恢复点验证快照失败: %s" % archive_r.error)
+	var archive: Dictionary = Dictionary(archive_r.value).duplicate(true)
+	var validation_engine := GameEngine.new()
+	var load_r: Result = validation_engine.load_from_archive(archive)
+	if not load_r.ok:
+		return Result.failure("加载恢复点验证快照失败: %s" % load_r.error)
+	return Result.success(validation_engine)

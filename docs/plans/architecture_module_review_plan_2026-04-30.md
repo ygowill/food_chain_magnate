@@ -1596,3 +1596,29 @@
 
 - 已完成该 P1 的第一阶段整改：联机 archive/resync 加载不再通过写全局 `NetContext.mode` 改变规则执行语义。
 - 当前仍保留 `OnlineResumePointValidator.prepare_engine_for_online_resume(...)` 对恢复点写入 marker/修复 pending 的行为；这对应 Step 8 的另一个 P1（validator mutation/repair），需要作为后续独立整改继续拆分。
+
+### Fix 5：OnlineResumePointValidator 的 validate 路径不再污染传入 engine
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 8 `[P1] OnlineResumePointValidator 同时 validate + repair，并在校验过程中改写权威 state/checkpoint` 的第一阶段拆分。
+- Step 10 测试缺口：缺少 `OnlineResumePointValidator` 对验证调用不得修改原 engine 的回归测试。
+
+改动：
+
+- `core/engine/game_engine/online_resume_point_validator.gd`：`validate_resume_point(...)` 改为先从传入 engine 构造验证快照，再在独立 validation engine 上执行 prepare/validate，因此不再修改调用方传入的 engine、rules 或 checkpoint。
+- `core/engine/game_engine/online_resume_point_validator.gd`：新增 `prepare_and_validate_resume_point(...)`，保留“恢复房真正启动前需要写入 online confirm marker 并校验”的显式路径。
+- `server/room.gd`：恢复房 `_prepare_effective_resume_start_engine()` 改用 `prepare_and_validate_resume_point(...)`，让启动用的 prepared engine 仍显式写入 marker，但不再依赖 `validate_resume_point(...)` 的副作用。
+- `core/tests/online_resume_archive_recovery_test.gd`：新增 `validate_resume_point` no-mutate 契约，验证调用后原 engine 的 `state.compute_hash()`、`state.rules`、archive initial checkpoint 均不被写入 online confirm marker。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成 validator 职责拆分的第一步：预览/校验调用不再污染原始恢复点；实际恢复房启动仍通过显式 prepare 路径写入运行所需 marker。
+- 尚未完全移除 `prepare_engine_for_online_resume(...)` 内部对 pending/confirmed_players 的修复逻辑；该部分仍对应 Step 8 的“repair 过度兜底”后续整改。
