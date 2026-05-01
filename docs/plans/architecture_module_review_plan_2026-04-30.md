@@ -2882,3 +2882,27 @@
 结论：
 
 - 已完成该 P2 工具改进：日常测试仍兼容 Godot headless 退出噪声；架构/发布验证可显式开启 strict exit，避免“日志看似 PASS 但进程失败”的情况被静默视为成功。
+
+### Fix 56：模块 placement overlay 控制器加载失败不再静默跳过
+
+日期：2026-05-01
+
+对应问题：
+
+- main 增量 `[P2] 模块提供的 placement overlay 控制器按 best-effort 动态加载，新增 lobbyists 主放置 UI 已依赖这条不严格链路`。
+
+改动：
+
+- `ui/scenes/game/panel/placement_overlays.gd`：`_ensure_module_overlay_controllers_loaded(...)` 改为返回 `Result`；`module_plan_v2` 中缺 manifest、`provides.ui.placement_overlays` 类型错误、路径为空、路径非 `res://`、重复路径、资源不存在、资源不是 `Script`、controller 缺少 `sync/hide/dispose/get_context_overlay` 必需方法时，都会失败而不是 `continue`。
+- `ui/scenes/game/panel/placement_overlays.gd`：模块 overlay 加载失败会记录一次 `_module_overlay_load_error`，后续不重复加载/刷屏；同时通过 `push_error` 与 `overlay_controller.show_toast(...)` 给出可见诊断。
+- `get_active_context_overlay(...)`、`try_show_module_action_overlay(...)` 与 `_sync_module_overlays(...)` 改为消费加载 `Result`，失败时停止模块 overlay 路径，避免半加载状态继续运行。
+- `ui/scenes/tests/placement_staff_picker_ui_test.gd`：新增负例，构造无效 `placement_overlays` 路径，验证不会被处理为成功，并且会产生包含失败路径的可见 toast。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1109`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`391/391`。
+
+结论：
+
+- 已完成该 P2 strict 化：Lobbyists 等模块的自定义 placement overlay 不再依赖静默 best-effort 加载；manifest 或脚本契约损坏会在 UI 初始化路径上明确暴露，避免隐藏动作入口与实际 overlay 缺失之间的漂移。

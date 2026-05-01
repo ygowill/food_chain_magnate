@@ -7,6 +7,7 @@ const PlacementOverlaysClass = preload("res://ui/scenes/game/panel/placement_ove
 const PiecePickerButtonClass = preload("res://ui/components/action_panel/piece_picker_button.gd")
 const RestaurantOverlayClass = preload("res://ui/components/restaurant_placement/restaurant_placement_overlay.gd")
 const StaffPickerStateClass = preload("res://ui/components/employee_picker/staff_picker_state.gd")
+const ModuleManifestClass = preload("res://core/modules/v2/module_manifest.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
@@ -70,9 +71,13 @@ class _OverlayControllerSpy:
 	extends RefCounted
 
 	var hide_all_count: int = 0
+	var toast_messages: Array[String] = []
 
 	func hide_all_overlays() -> void:
 		hide_all_count += 1
+
+	func show_toast(message: String) -> void:
+		toast_messages.append(str(message))
 
 class _CommandExecutor:
 	extends RefCounted
@@ -113,6 +118,9 @@ static func run() -> Result:
 	if not r.ok:
 		return r
 	r = await _case_lobbyists_context_uses_custom_layout()
+	if not r.ok:
+		return r
+	r = _case_invalid_module_overlay_controller_reports_error()
 	if not r.ok:
 		return r
 	return Result.success({})
@@ -521,6 +529,51 @@ static func _case_lobbyists_context_uses_custom_layout() -> Result:
 			return await _finish_overlay_case(Result.failure("说客 Context 缺少板块预览：%s，实际=%s" % [expected_pid, str(preview_ids)]), overlays, scene, action_panel, engine, st)
 
 	return await _finish_overlay_case(Result.success({}), overlays, scene, action_panel, engine, st)
+
+static func _case_invalid_module_overlay_controller_reports_error() -> Result:
+	var manifest_r := ModuleManifestClass.from_dict({
+		"schema_version": 1,
+		"id": "bad_overlay",
+		"name": "Bad Overlay",
+		"version": "0.0.0",
+		"priority": 100,
+		"dependencies": [],
+		"conflicts": [],
+		"entry_script": "res://modules/lobbyists/rules/entry.gd",
+		"provides": {
+			"ui": {
+				"placement_overlays": [
+					"res://modules/lobbyists/ui/missing_overlay_controller.gd",
+				],
+			},
+		},
+	})
+	if not manifest_r.ok:
+		return manifest_r
+
+	var scene := _FakeGameScene.new()
+	var engine := GameEngine.new()
+	engine.module_plan_v2 = ["bad_overlay"]
+	engine.module_manifests_v2 = {
+		"bad_overlay": manifest_r.value,
+	}
+	scene.game_engine = engine
+
+	var overlay_controller := _OverlayControllerSpy.new()
+	var overlays = PlacementOverlaysClass.new(scene, _MapControllerSpy.new(), overlay_controller, Callable(), Callable())
+	if bool(overlays.try_show_module_action_overlay("place_lobbyists_road", {})):
+		overlays.dispose()
+		scene.free()
+		return Result.failure("无效模块 overlay controller 不应被处理为成功")
+	overlays.dispose()
+	scene.free()
+
+	if overlay_controller.toast_messages.is_empty():
+		return Result.failure("无效模块 overlay controller 应产生可见 toast 诊断")
+	var msg := str(overlay_controller.toast_messages[0])
+	if msg.find("模块放置 UI 加载失败") < 0 or msg.find("missing_overlay_controller.gd") < 0:
+		return Result.failure("无效模块 overlay controller toast 内容不完整: %s" % msg)
+	return Result.success({})
 
 static func _find_valid_house_plan(engine: GameEngine, actor: int, staff_id: int) -> Dictionary:
 	if engine == null:

@@ -18,6 +18,7 @@ var house_placement_overlay = null
 var piece_placement_overlay = null
 var _module_overlay_controllers: Array = []
 var _module_overlay_controllers_loaded: bool = false
+var _module_overlay_load_error: String = ""
 
 func _init(scene, map_controller, overlay_controller, execute_command: Callable, hide_all: Callable) -> void:
 	_scene = scene
@@ -64,7 +65,9 @@ func dispose() -> void:
 	_hide_all = Callable()
 
 func get_active_context_overlay():
-	_ensure_module_overlay_controllers_loaded()
+	var module_load_r := _ensure_module_overlay_controllers_loaded()
+	if not module_load_r.ok:
+		return null
 	if is_instance_valid(restaurant_placement_overlay) and restaurant_placement_overlay.visible:
 		return restaurant_placement_overlay
 	if is_instance_valid(house_placement_overlay) and house_placement_overlay.visible:
@@ -280,7 +283,9 @@ func try_show_piece_placement(action_id: String, params: Dictionary) -> bool:
 
 func try_show_module_action_overlay(action_id: String, params: Dictionary) -> bool:
 	# Allow module-provided overlay controllers to handle action clicks and open custom UI flows.
-	_ensure_module_overlay_controllers_loaded()
+	var module_load_r := _ensure_module_overlay_controllers_loaded()
+	if not module_load_r.ok:
+		return false
 	for c in _module_overlay_controllers:
 		if c == null or not is_instance_valid(c):
 			continue
@@ -439,18 +444,22 @@ func show_house_placement(action_id: String, params: Dictionary) -> void:
 			_map_controller.on_house_garden_preview_cleared()
 
 func _sync_module_overlays(state: GameState, force_full_refresh: bool = false) -> void:
-	_ensure_module_overlay_controllers_loaded()
+	var module_load_r := _ensure_module_overlay_controllers_loaded()
+	if not module_load_r.ok:
+		return
 	for c in _module_overlay_controllers:
 		if c == null or not is_instance_valid(c):
 			continue
 		if c.has_method("sync"):
 			c.call("sync", state, force_full_refresh)
 
-func _ensure_module_overlay_controllers_loaded() -> void:
+func _ensure_module_overlay_controllers_loaded() -> Result:
 	if _module_overlay_controllers_loaded:
-		return
+		if not _module_overlay_load_error.is_empty():
+			return Result.failure(_module_overlay_load_error)
+		return Result.success()
 	if _scene == null or _scene.game_engine == null:
-		return
+		return Result.success()
 
 	var engine: GameEngine = _scene.game_engine
 	var manifests: Dictionary = engine.module_manifests_v2
@@ -460,7 +469,7 @@ func _ensure_module_overlay_controllers_loaded() -> void:
 	for mid in plan:
 		var manifest_val = manifests.get(mid, null)
 		if not (manifest_val is ModuleManifest):
-			continue
+			return _fail_module_overlay_load("module plan 中缺少有效 manifest: %s" % str(mid))
 		var manifest: ModuleManifest = manifest_val
 		var provides: Dictionary = manifest.provides
 		var ui_val = provides.get("ui", null)
@@ -468,20 +477,55 @@ func _ensure_module_overlay_controllers_loaded() -> void:
 			continue
 		var ui: Dictionary = ui_val
 		var controllers_val = ui.get("placement_overlays", null)
-		if not (controllers_val is Array):
+		if controllers_val == null:
 			continue
+		if not (controllers_val is Array):
+			return _fail_module_overlay_load("%s.provides.ui.placement_overlays 类型错误（期望 Array）" % manifest.id)
 
 		for p in Array(controllers_val):
 			var path := str(p).strip_edges()
-			if path.is_empty() or seen.has(path):
-				continue
+			if path.is_empty():
+				return _fail_module_overlay_load("%s.provides.ui.placement_overlays 包含空路径" % manifest.id)
+			if not path.begins_with("res://"):
+				return _fail_module_overlay_load("%s.provides.ui.placement_overlays 路径必须以 res:// 开头: %s" % [manifest.id, path])
+			if seen.has(path):
+				return _fail_module_overlay_load("重复的模块 placement overlay controller 路径: %s" % path)
 			seen[path] = true
-			var res = load(path)
-			if res is Script:
-				var ctrl = (res as Script).new(_scene, _map_controller, _overlay_controller, _execute_command, _hide_all)
-				_module_overlay_controllers.append(ctrl)
+			var load_r := _instantiate_module_overlay_controller(path, manifest.id)
+			if not load_r.ok:
+				return _fail_module_overlay_load(load_r.error)
+			_module_overlay_controllers.append(load_r.value)
 
 	_module_overlay_controllers_loaded = true
+	return Result.success()
+
+func _instantiate_module_overlay_controller(path: String, module_id: String) -> Result:
+	if not ResourceLoader.exists(path):
+		return Result.failure("%s.provides.ui.placement_overlays 资源不存在: %s" % [module_id, path])
+	var res = ResourceLoader.load(path)
+	if not (res is Script):
+		return Result.failure("%s.provides.ui.placement_overlays 不是 Script: %s" % [module_id, path])
+	var ctrl = (res as Script).new(_scene, _map_controller, _overlay_controller, _execute_command, _hide_all)
+	if ctrl == null:
+		return Result.failure("%s.provides.ui.placement_overlays 创建 controller 失败: %s" % [module_id, path])
+	for method_name in ["sync", "hide", "dispose", "get_context_overlay"]:
+		if not ctrl.has_method(str(method_name)):
+			return Result.failure("%s.provides.ui.placement_overlays controller 缺少方法 %s: %s" % [module_id, str(method_name), path])
+	return Result.success(ctrl)
+
+func _fail_module_overlay_load(message: String) -> Result:
+	_module_overlay_load_error = str(message).strip_edges()
+	if _module_overlay_load_error.is_empty():
+		_module_overlay_load_error = "模块 placement overlay controller 加载失败"
+	_module_overlay_controllers_loaded = true
+	_report_module_overlay_load_error(_module_overlay_load_error)
+	return Result.failure(_module_overlay_load_error)
+
+func _report_module_overlay_load_error(message: String) -> void:
+	var msg := "模块放置 UI 加载失败：%s" % str(message)
+	push_error("[PlacementOverlays] %s" % msg)
+	if _overlay_controller != null and _overlay_controller.has_method("show_toast"):
+		_overlay_controller.show_toast(msg)
 
 func _on_restaurant_placement_confirmed(position: Vector2i, rotation: int, restaurant_id: String) -> void:
 	if _scene == null or _scene.game_engine == null:
