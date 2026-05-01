@@ -9,7 +9,6 @@ const SYNTHETIC_STAFF_ID_BASE := 100000
 const PHASE_WORKING := "Working"
 const SUB_PHASE_LOBBYISTS := "Lobbyists"
 const EMPLOYEE_LOBBYIST := "lobbyist"
-const NET_MODE_ONLINE_CLIENT := 1
 
 var _scene = null
 var _map_controller = null
@@ -323,8 +322,8 @@ func _get_actor_id_for_state(state) -> int:
 		return -1
 	var current_player_id := int(state.get_current_player_id())
 	var net_context = _get_net_context()
-	if net_context != null and int(net_context.get("mode")) == NET_MODE_ONLINE_CLIENT:
-		var local_player_id := int(net_context.get("local_player_id"))
+	if net_context != null and net_context.mode == net_context.Mode.ONLINE_CLIENT:
+		var local_player_id := int(net_context.local_player_id)
 		if local_player_id < 0 or current_player_id != local_player_id:
 			return -1
 		return local_player_id

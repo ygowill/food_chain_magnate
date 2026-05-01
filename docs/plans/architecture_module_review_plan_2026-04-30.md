@@ -1468,6 +1468,7 @@
   - 对比：同模块已有 `lobbyists_extra_tile_flow_controller.gd` 直接使用 `NetContext.Mode.ONLINE_CLIENT`。证据：`modules/lobbyists/ui/lobbyists_extra_tile_flow_controller.gd:69-83`。
   - 风险：枚举顺序一旦调整，新 Lobbyists 主放置 UI 会错误判断在线本地玩家回合，可能在在线客户端显示/隐藏错误操作入口。
   - 建议：改为直接使用 `NetContext.Mode.ONLINE_CLIENT`，或抽 `OnlinePhaseInteraction`/UI session helper；避免模块 UI 复制 autoload enum 数值。
+  - 状态：Fix 38 已移除硬编码数值，改为直接读取 `net_context.Mode.ONLINE_CLIENT` 与 `net_context.local_player_id`。
 
 - [P3] Lobbyists placement flow controller 新增 523 行，集中处理 manifest UI 扩展、员工列表派生、地图高亮/预览、命令构造、ActionPanel context 绑定与 refresh。
   - 证据：`modules/lobbyists/ui/lobbyists_placement_flow_controller.gd` 新增 523 行；其中 `_show_overlay`、`_refresh_map_selection`、`_on_placement_confirmed`、`_build_lobbyist_employee_items`、`_bind_action_panel_context` 均在同一文件内。证据：`modules/lobbyists/ui/lobbyists_placement_flow_controller.gd:82-120`、`161-235`、`274-292`、`371-413`。
@@ -2431,3 +2432,24 @@
 结论：
 
 - 已完成该 P2 strict 化：timeline cache/prebuilt 数据不再局部丢弃坏项；增量缓存失效会显式失败，让调用方使用完整重建路径。
+
+### Fix 38：Lobbyists 主放置 UI 不再硬编码 NetContext enum 数值
+
+日期：2026-05-01
+
+对应问题：
+
+- main 增量 `[P2] 新增 lobbyists_placement_flow_controller.gd 硬编码 NetContext.Mode.ONLINE_CLIENT == 1，和其它模块 UI 的联机判断方式不一致`。
+
+改动：
+
+- `modules/lobbyists/ui/lobbyists_placement_flow_controller.gd`：移除 `NET_MODE_ONLINE_CLIENT := 1`；在线客户端判断改为 `net_context.mode == net_context.Mode.ONLINE_CLIENT`，本地玩家读取改为 `net_context.local_player_id`，与同模块 `lobbyists_extra_tile_flow_controller.gd` 的模式一致。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 修复：Lobbyists 主放置 UI 不再复制 autoload enum 的底层数值，后续 enum 顺序调整不会破坏在线客户端回合 gating。
