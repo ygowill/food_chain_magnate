@@ -14,8 +14,13 @@ static func setup_action_registry(engine, piece_registry: Dictionary = {}) -> Re
 	var action_setup_provider = null
 	if engine.has_method("get_dependencies") and engine.get_dependencies() != null:
 		action_setup_provider = engine.get_dependencies().action_setup_provider
-	engine.action_registry = ActionSetupClass.build_registry(engine.phase_manager, piece_registry, action_setup_provider)
+	var registry_r: Result = ActionSetupClass.build_registry(engine.phase_manager, piece_registry, action_setup_provider)
+	if not registry_r.ok:
+		return registry_r
+	engine.action_registry = registry_r.value
 	var registry: ActionRegistry = engine.action_registry
+	if registry == null:
+		return Result.failure("内部错误：ActionRegistry 构建结果为空")
 
 	var ruleset = engine.ruleset_v2
 	if ruleset != null:

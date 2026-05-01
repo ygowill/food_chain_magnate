@@ -1825,3 +1825,27 @@
 
 - 已完成该 P2 strict 化：Restructuring 不再把 CEO 错位状态解释为可自动修复状态。
 - 若旧存档确实存在 CEO 位于 reserve 的情况，应由显式 archive migration/recovery 处理，不能留在运行期阶段 hook 中。
+
+### Fix 14：ActionSetup provider 错误不再创建空 ActionRegistry
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 2 `[P2] 动作注册 provider 缺失或错误时会创建空 ActionRegistry，初始化链路可能继续运行`。
+
+改动：
+
+- `core/engine/game_engine/action_setup.gd`：`build_registry(...)` 改为返回 `Result`；provider 缺失、路径为空、缺少 `build_registry`、或返回值不是 `ActionRegistry` 时直接 `Result.failure`，不再创建空 registry。
+- `core/engine/game_engine/action_wiring.gd`：初始化动作注册时必须消费 `Result`，失败直接返回给 `GameEngine.initialize(...)`。
+- `core/tests/engine_dependencies_injection_test.gd`：新增坏 provider 回归测试，覆盖缺少 `build_registry` 与返回 `null` 两类错误，要求初始化阶段失败。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：动作注册 provider 配置或契约错误会在 engine 初始化阶段暴露，不会延迟成“空动作集合”的运行期问题。
+- 测试如需空 registry，后续应通过显式 test helper 构造，不能走生产初始化兜底。

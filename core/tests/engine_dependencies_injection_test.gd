@@ -16,6 +16,15 @@ class StubActionSetupProvider:
 		last_piece_registry = piece_registry.duplicate(true)
 		return GameplayActionSetupClass.build_registry(phase_manager, piece_registry)
 
+class MissingBuildRegistryProvider:
+	extends RefCounted
+
+class NullRegistryProvider:
+	extends RefCounted
+
+	func build_registry(_phase_manager: PhaseManager, _piece_registry: Dictionary = {}):
+		return null
+
 class StubEventBuildProvider:
 	extends RefCounted
 
@@ -133,6 +142,9 @@ static func run(seed_val: int = 12345) -> Result:
 	var short_game_r := _test_short_game_option_overrides(seed_val + 1)
 	if not short_game_r.ok:
 		return short_game_r
+	var invalid_provider_r := _test_invalid_action_setup_provider_fails_fast(seed_val + 2)
+	if not invalid_provider_r.ok:
+		return invalid_provider_r
 	return Result.success({
 		"cash_calls": event_provider.cash_calls,
 		"milestone_calls": event_provider.milestone_calls,
@@ -140,6 +152,7 @@ static func run(seed_val: int = 12345) -> Result:
 		"salary_cost": final_salary_cost,
 		"force_execute_ok": true,
 		"short_game_verified": true,
+		"invalid_action_provider_verified": true,
 		"event_sink_events": event_sink.emitted_types.size(),
 	})
 
@@ -203,4 +216,26 @@ static func _assert_short_game_init_state(option_overrides: Dictionary, seed_val
 			return Result.failure("短游戏自动选择后不应揭示储备卡(%s, pid=%d)" % [label, pid])
 
 	engine.dispose()
+	return Result.success()
+
+static func _test_invalid_action_setup_provider_fails_fast(seed_val: int) -> Result:
+	var missing_engine := GameEngine.new()
+	missing_engine.set_action_setup_provider(MissingBuildRegistryProvider.new())
+	var missing_r := missing_engine.initialize(2, seed_val)
+	missing_engine.dispose()
+	if missing_r.ok:
+		return Result.failure("缺少 build_registry 的 action_setup_provider 应导致初始化失败")
+	var missing_err := str(missing_r.error)
+	if missing_err.find("ActionRegistry") < 0 or missing_err.find("build_registry") < 0:
+		return Result.failure("缺少 build_registry 的错误信息应包含 ActionRegistry/build_registry，实际: %s" % missing_err)
+
+	var null_engine := GameEngine.new()
+	null_engine.set_action_setup_provider(NullRegistryProvider.new())
+	var null_r := null_engine.initialize(2, seed_val + 1)
+	null_engine.dispose()
+	if null_r.ok:
+		return Result.failure("返回 null 的 action_setup_provider 应导致初始化失败")
+	var null_err := str(null_r.error)
+	if null_err.find("ActionRegistry") < 0 or null_err.find("build_registry") < 0:
+		return Result.failure("返回 null 的错误信息应包含 ActionRegistry/build_registry，实际: %s" % null_err)
 	return Result.success()
