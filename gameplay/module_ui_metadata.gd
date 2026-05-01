@@ -85,6 +85,9 @@ static func configure_from_ui_extensions(ui_extensions) -> Result:
 			return Result.failure("ModuleUiMetadata: phase_action_ui_modals[%d].scene_path 不能为空" % i)
 		if not scene_path.begins_with("res://"):
 			return Result.failure("ModuleUiMetadata: phase_action_ui_modals[%d].scene_path 必须以 res:// 开头: %s" % [i, scene_path])
+		var scene_read := _validate_phase_action_modal_scene_path(scene_path, i)
+		if not scene_read.ok:
+			return scene_read
 
 		var priority := int(item.get("priority", 100))
 		var source := str(item.get("source", "")).strip_edges()
@@ -154,3 +157,11 @@ static func _build_phase_action_modal_key(phase_name: String, kind: String) -> S
 	if phase.is_empty() or modal_kind.is_empty():
 		return ""
 	return "%s|%s" % [phase, modal_kind]
+
+static func _validate_phase_action_modal_scene_path(scene_path: String, index: int) -> Result:
+	if not ResourceLoader.exists(scene_path, "PackedScene"):
+		return Result.failure("ModuleUiMetadata: phase_action_ui_modals[%d].scene_path 资源不存在或不是 PackedScene: %s" % [index, scene_path])
+	var res = ResourceLoader.load(scene_path, "PackedScene")
+	if not (res is PackedScene):
+		return Result.failure("ModuleUiMetadata: phase_action_ui_modals[%d].scene_path 无法加载为 PackedScene: %s" % [index, scene_path])
+	return Result.success()

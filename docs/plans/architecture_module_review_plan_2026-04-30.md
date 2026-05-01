@@ -2126,3 +2126,26 @@
 结论：
 
 - 已完成该 P2 strict 化：新模块 manifest 漏写关键 schema 字段会在加载模块包时立即失败；纯内容模块仍可通过显式 `entry_script: ""` 与 `provides: {}` 表达无规则入口/无额外声明。
+
+### Fix 26：phase action UI modal 路径在 metadata 装配阶段校验资源
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 5 `[P2] 模块 UI modal scene path 只校验字符串前缀，不校验资源存在或可加载`。
+
+改动：
+
+- `gameplay/module_ui_metadata.gd`：`configure_from_ui_extensions(...)` 处理 `phase_action_ui_modals` 时，除类型、非空与 `res://` 前缀外，新增 `ResourceLoader.exists(scene_path, "PackedScene")` 与 `ResourceLoader.load(scene_path, "PackedScene")` 校验；不存在、类型不对或无法作为 `PackedScene` 加载时直接 `Result.failure(...)`。
+- `core/tests/ruleset_ui_extensions_facade_test.gd`：测试注册改用真实 modal scene，并新增坏 `scene_path` 在 `ModuleUiMetadata` 装配阶段失败的负例。
+- `docs/architecture/60-modules-v2.md`：记录 `phase_action_ui_modals[*].scene_path` 在 gameplay UI metadata 装配时必须是可加载 `PackedScene`。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：模块注册的 phase action modal 坏路径会在 UI metadata bootstrap 时失败暴露，不再等到用户打开 modal 时才出现 warning 或静默缺 UI。

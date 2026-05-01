@@ -190,6 +190,8 @@ RulesetV2 当前承载的扩展主要包括：
 - `effect_ui_texts`
 - `milestone_effect_ui_texts`
 
+`phase_action_ui_modals[*].scene_path` 在 gameplay 层装配 `ModuleUiMetadata` 时会校验为存在且可加载的 `PackedScene`，避免模块注册了坏 UI 路径后在打开面板时才静默降级。
+
 ## 与 `core/data` 的关系
 
 模块内容经 `ContentCatalogLoader` 加载后，会进一步驱动：

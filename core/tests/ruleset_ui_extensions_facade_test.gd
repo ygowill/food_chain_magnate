@@ -7,6 +7,7 @@ const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_regis
 const EffectUiTextRegistryClass = preload("res://core/rules/effect_ui_text_registry.gd")
 const MapOverlayProviderRegistryClass = preload("res://core/rules/map_overlay_provider_registry.gd")
 const ModuleUiMetadataClass = preload("res://gameplay/module_ui_metadata.gd")
+const TEST_MODAL_SCENE_PATH := "res://modules/kimchi/ui/components/modal_panel/kimchi_storage_modal.tscn"
 
 static func run() -> Result:
 	var ruleset := RulesetV2.new()
@@ -17,16 +18,20 @@ static func run() -> Result:
 
 	var ui_extensions := RulesetUiExtensionsClass.new()
 
+	var invalid_scene_r := _assert_invalid_phase_action_modal_scene_fails()
+	if not invalid_scene_r.ok:
+		return invalid_scene_r
+
 	var modal_r := ui_extensions.register_phase_action_ui_modal(
 		"cleanup",
 		"kimchi",
-		"res://ui/scenes/game/modals/kimchi_modal.tscn",
+		TEST_MODAL_SCENE_PATH,
 		100,
 		"test_module"
 	)
 	if not modal_r.ok:
 		return Result.failure("ui_extensions.register_phase_action_ui_modal 失败: %s" % modal_r.error)
-	if ui_extensions.get_phase_action_ui_modal_scene_path("cleanup", "kimchi") != "res://ui/scenes/game/modals/kimchi_modal.tscn":
+	if ui_extensions.get_phase_action_ui_modal_scene_path("cleanup", "kimchi") != TEST_MODAL_SCENE_PATH:
 		return Result.failure("RulesetV2UiExtensions 未透传 phase_action_ui_modal 查询")
 
 	var hint_r := ui_extensions.register_piece_ui_hint("test_module:road", {"kind": "road"}, 100, "test_module")
@@ -133,3 +138,22 @@ static func run() -> Result:
 		"map_overlay_providers": 1,
 		"reserve_supply_providers": 1,
 	})
+
+static func _assert_invalid_phase_action_modal_scene_fails() -> Result:
+	var ui_extensions := RulesetUiExtensionsClass.new()
+	var modal_r := ui_extensions.register_phase_action_ui_modal(
+		"cleanup",
+		"bad_modal",
+		"res://modules/kimchi/ui/components/modal_panel/no_such_modal.tscn",
+		100,
+		"test_module"
+	)
+	if not modal_r.ok:
+		return Result.failure("register_phase_action_ui_modal 应只做结构注册，实际失败: %s" % modal_r.error)
+	ModuleUiMetadataClass.reset()
+	var metadata_r := ModuleUiMetadataClass.configure_from_ui_extensions(ui_extensions)
+	if metadata_r.ok:
+		return Result.failure("不存在的 phase action UI modal scene_path 应在 ModuleUiMetadata 装配时失败")
+	if str(metadata_r.error).find("scene_path") < 0:
+		return Result.failure("错误信息应包含 scene_path，实际: %s" % metadata_r.error)
+	return Result.success()
