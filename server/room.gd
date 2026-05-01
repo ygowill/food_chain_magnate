@@ -7,6 +7,7 @@ const ArchiveRecoveryClass = preload("res://core/engine/game_engine/archive_reco
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 const RollbackProposalStoreClass = preload("res://server/room_rollback_proposal_store.gd")
+const StartSessionStateClass = preload("res://server/room_start_session_state.gd")
 const DEFAULT_RESTAURANT_LOGO_COUNT := 6
 const RESUME_PARTICIPANT_BINDINGS_CONFIG_KEY := "resume_participant_bindings"
 
@@ -67,15 +68,7 @@ var _resume_checkpoint_counter: int = 0
 var _prepared_resume_start_engine = null
 var _prepared_resume_start_archive: Dictionary = {}
 var _prepared_resume_start_final_hash: String = ""
-var _pending_start_session_id: String = ""
-var _pending_start_request_id: String = ""
-var _pending_start_started_at_ms: int = 0
-var _pending_start_phase: String = ""
-var _pending_start_engine = null
-var _pending_start_payload: Dictionary = {}
-var _pending_start_target_peer_ids: Array[int] = []
-var _pending_start_ready_peer_ids: Dictionary = {}
-var _pending_start_error: String = ""
+var _start_session_state = StartSessionStateClass.new()
 var _rollback_proposal_store = RollbackProposalStoreClass.new()
 
 func to_persistence_dict(include_runtime_membership: bool = false) -> Result:
@@ -305,33 +298,25 @@ func _clear_prepared_resume_start_cache() -> void:
 	_prepared_resume_start_final_hash = ""
 
 func _clear_pending_start_session() -> void:
-	_pending_start_session_id = ""
-	_pending_start_request_id = ""
-	_pending_start_started_at_ms = 0
-	_pending_start_phase = ""
-	_pending_start_engine = null
-	_pending_start_payload = {}
-	_pending_start_target_peer_ids.clear()
-	_pending_start_ready_peer_ids = {}
-	_pending_start_error = ""
+	_start_session_state.clear()
 
 func has_pending_start_session() -> bool:
-	return not _pending_start_session_id.is_empty()
+	return _start_session_state.has_pending()
 
 func get_pending_start_session_id() -> String:
-	return _pending_start_session_id
+	return _start_session_state.get_session_id()
 
 func get_pending_start_request_id() -> String:
-	return _pending_start_request_id
+	return _start_session_state.get_request_id()
 
 func set_pending_start_phase(phase: String) -> void:
 	if not has_pending_start_session():
 		return
-	_pending_start_phase = str(phase).strip_edges()
+	_start_session_state.set_phase(phase)
 	_touch()
 
 func get_pending_start_target_peer_ids() -> Array[int]:
-	return _pending_start_target_peer_ids.duplicate()
+	return _start_session_state.get_target_peer_ids()
 
 func begin_start_game_session(request_id: String) -> Result:
 	if has_pending_start_session():
@@ -342,56 +327,24 @@ func begin_start_game_session(request_id: String) -> Result:
 
 	var started_at_ms := int(Time.get_unix_time_from_system() * 1000.0)
 	status = STATUS_STARTING
-	_pending_start_session_id = "%s_%d" % [str(room_code).strip_edges().to_upper(), started_at_ms]
-	_pending_start_request_id = str(request_id).strip_edges()
-	_pending_start_started_at_ms = started_at_ms
-	_pending_start_phase = "preparing"
-	_pending_start_engine = null
-	_pending_start_payload = {}
-	_pending_start_target_peer_ids = get_peer_ids()
-	_pending_start_target_peer_ids.sort()
-	_pending_start_ready_peer_ids = {}
-	_pending_start_error = ""
+	_start_session_state.begin(room_code, request_id, get_peer_ids(), started_at_ms)
 	_touch()
 	return Result.success(get_pending_start_summary())
 
 func get_pending_start_summary() -> Dictionary:
-	if not has_pending_start_session():
-		return {}
-	var total_count := _pending_start_target_peer_ids.size()
-	var ready_count := 0
-	for peer_id in _pending_start_target_peer_ids:
-		if bool(_pending_start_ready_peer_ids.get(peer_id, false)):
-			ready_count += 1
-	return {
-		"id": _pending_start_session_id,
-		"phase": _pending_start_phase,
-		"ready_count": ready_count,
-		"total_count": total_count,
-		"request_id": _pending_start_request_id,
-		"started_at_ms": _pending_start_started_at_ms,
-		"error": _pending_start_error,
-	}
+	return _start_session_state.get_summary()
 
 func mark_pending_start_peer_ready(peer_id: int) -> bool:
-	if not has_pending_start_session():
+	if not _start_session_state.mark_peer_ready(peer_id):
 		return false
-	if not _pending_start_target_peer_ids.has(peer_id):
-		return false
-	_pending_start_ready_peer_ids[peer_id] = true
 	_touch()
 	return true
 
 func is_pending_start_ready_to_commit() -> bool:
-	if not has_pending_start_session():
-		return false
-	for peer_id in _pending_start_target_peer_ids:
-		if not bool(_pending_start_ready_peer_ids.get(peer_id, false)):
-			return false
-	return true
+	return _start_session_state.is_ready_to_commit()
 
 func abort_prepared_start_game(reason: String = "") -> void:
-	_pending_start_error = str(reason).strip_edges()
+	_start_session_state.set_error(reason)
 	status = STATUS_LOBBY
 	game_engine = null
 	_clear_pending_start_session()
@@ -1727,7 +1680,7 @@ func to_room_state_dict_for_peer(peer_id: int) -> Dictionary:
 		state["rollback_proposal"] = proposal
 	if state.get("bootstrap", null) is Dictionary:
 		var bootstrap: Dictionary = Dictionary(state.get("bootstrap", {})).duplicate(true)
-		bootstrap["self_ready"] = bool(_pending_start_ready_peer_ids.get(peer_id, false))
+		bootstrap["self_ready"] = _start_session_state.is_peer_ready(peer_id)
 		state["bootstrap"] = bootstrap
 	return state
 
@@ -1948,8 +1901,8 @@ func prepare_start_game() -> Result:
 	elif status != STATUS_STARTING:
 		return Result.failure("Room is not in Starting")
 
-	if _pending_start_engine != null and is_instance_valid(_pending_start_engine) and not _pending_start_payload.is_empty():
-		return Result.success(_pending_start_payload.duplicate(true))
+	if _start_session_state.has_prepared_payload():
+		return Result.success(_start_session_state.get_payload())
 
 	var build_r: Result = _build_start_game_engine_and_payload()
 	if not build_r.ok:
@@ -1958,20 +1911,23 @@ func prepare_start_game() -> Result:
 		return Result.failure("start_game build result type invalid")
 
 	var build_info: Dictionary = build_r.value
-	_pending_start_engine = build_info.get("engine", null)
-	_pending_start_payload = Dictionary(build_info.get("payload", {})).duplicate(true)
-	_pending_start_phase = "waiting_for_players"
+	_start_session_state.set_prepared(
+		build_info.get("engine", null),
+		Dictionary(build_info.get("payload", {})),
+		"waiting_for_players"
+	)
 	_touch()
-	return Result.success(_pending_start_payload.duplicate(true))
+	return Result.success(_start_session_state.get_payload())
 
 func commit_prepared_start_game() -> Result:
 	if not has_pending_start_session():
 		return Result.failure("pending start session missing")
-	if _pending_start_engine == null or not is_instance_valid(_pending_start_engine):
+	var pending_engine = _start_session_state.get_prepared_engine()
+	if pending_engine == null or not is_instance_valid(pending_engine):
 		return Result.failure("pending start engine missing")
 
-	var payload: Dictionary = _pending_start_payload.duplicate(true)
-	var commit_r: Result = _commit_started_engine(_pending_start_engine)
+	var payload: Dictionary = _start_session_state.get_payload()
+	var commit_r: Result = _commit_started_engine(pending_engine)
 	_clear_pending_start_session()
 	if not commit_r.ok:
 		return commit_r

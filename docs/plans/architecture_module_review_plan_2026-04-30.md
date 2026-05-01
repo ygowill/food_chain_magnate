@@ -1200,7 +1200,7 @@
   - 证据：当前最长文件包括 `server/room.gd` 2431 行、`autoload/net_client/server.gd` 2297 行、`ui/scenes/game/controllers/online_resync_controller.gd` 1149 行、`autoload/net_client/client.gd` 1082 行、`autoload/net_client.gd` 993 行。
   - 风险：虽然已经抽出 `server_resync_service`、`client_resync_service`、`server_disconnect_grace_service` 等 helper，但主文件仍混合房间状态、恢复房、回滚、resync、结算上报、性能诊断和 UI 回调协调。后续 strict/migration 拆分会继续增加复杂度。
   - 建议：按职责继续拆：`OnlineRoomResumeStore`、`OnlineRoomRollbackService`、`OnlineRoomStartSession`、`ClientCommandReplayService`、`ClientSnapshotBootstrapService`。每个服务使用明确 Result contract，减少 `has_method` 与 callback 字典胶水。
-  - 状态：Fix 74 已先从 `server/room.gd` 抽出 rollback proposal pending/vote/public payload 状态管理，降低 `OnlineRoom` 在回滚子系统上的状态承载；该 P3 属于持续拆分项，后续仍可继续按 resume/start-session/client replay 边界拆分。
+  - 状态：Fix 74 已先从 `server/room.gd` 抽出 rollback proposal pending/vote/public payload 状态管理，降低 `OnlineRoom` 在回滚子系统上的状态承载；Fix 76 继续抽出 start session pending/ready/payload 状态，减少房间启动 bootstrap 子系统对 `OnlineRoom` 主文件的字段占用。该 P3 属于持续拆分项，后续仍可继续按 resume/client replay 边界拆分。
 
 暂不列为问题：
 
@@ -3363,3 +3363,26 @@
 结论：
 
 - 已完成该 P2 的验证链路收敛：本地开发仍可兼容 Godot 退出阶段的已知噪声，CI 则使用严格退出码，避免非 0 Godot 进程被 PASS 日志兜底掩盖。
+
+### Fix 76：OnlineRoom start session pending 状态拆出独立 helper
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 9 `[P3] Online/server 关键文件仍承担多个子系统职责，后续维护风险较高`。
+
+改动：
+
+- 新增 `server/room_start_session_state.gd`，集中管理开局 bootstrap 的 pending session id、request id、phase、prepared engine/payload、目标 peer 与 ready peer 统计。
+- `server/room.gd` 保留 can-start 校验、状态切到 `STATUS_STARTING`、构建/commit engine、回滚到 lobby 等房间职责，具体 pending start 字段读写委托给 helper。
+- `OnlineRoom` 不再直接维护 `_pending_start_*` 字段；`get_pending_start_summary()` 与 `to_room_state_dict_for_peer()` 输出协议保持不变。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1123`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120 --strict-exit`：PASS，`392/392`。
+
+结论：
+
+- 已完成该 P3 的第二个可独立落地拆分：开局 bootstrap 的短生命周期状态从 `OnlineRoom` 主文件中移出，`OnlineRoom` 更集中于房间入口校验和 engine 提交。
