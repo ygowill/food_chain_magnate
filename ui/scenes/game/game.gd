@@ -513,7 +513,11 @@ func _initialize_game() -> void:
 
 	game_engine = GameEngine.new()
 	game_engine.set_game_config_overrides(Globals.game_config_overrides)
-	game_engine.set_game_option_overrides(Globals.game_option_overrides)
+	var option_overrides := Globals.game_option_overrides.duplicate(true)
+	if DisplayServer.get_name() != "headless":
+		option_overrides["rules.require_dinnertime_confirm"] = true
+		option_overrides["rules.require_marketing_confirm"] = true
+	game_engine.set_game_option_overrides(option_overrides)
 	# 银行储备卡在进入游戏后由玩家秘密选择（Setup/ReserveCards），这里不从游戏设置注入选择结果。
 	var logo_choices: Array[int] = []
 	var reserve_card_choices: Array[int] = []

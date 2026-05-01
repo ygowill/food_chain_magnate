@@ -10,6 +10,7 @@ const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const BaseRulesEffectsClass = preload("res://modules/base_rules/rules/effects.gd")
 const MilestoneEffectRegistryClass = preload("res://core/rules/milestone_effect_registry.gd")
+const REQUIRE_DINNERTIME_CONFIRM_KEY := "require_dinnertime_confirm"
 const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
 const ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY := "online_dinnertime_confirmed_players"
 
@@ -51,11 +52,46 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r8.ok:
 		return r8
 
+	var r9 := _test_local_confirm_marker_injects_explicit_pending(seed_val)
+	if not r9.ok:
+		return r9
+
 	return Result.success({
 		"player_count": player_count,
 		"seed": seed_val,
-		"cases": 8,
+		"cases": 9,
 	})
+
+static func _test_local_confirm_marker_injects_explicit_pending(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("初始化本地确认 marker 测试失败: %s" % init.error)
+	var state := engine.get_state()
+	_force_turn_order(state)
+	_apply_test_map(state)
+	_set_house_demands(state, "house_left", [{"product": "burger"}])
+	state.players[0]["inventory"]["burger"] = 1
+	state.players[1]["inventory"]["burger"] = 1
+	state.rules[REQUIRE_DINNERTIME_CONFIRM_KEY] = true
+
+	var adv := _advance_to_dinnertime(engine)
+	if not adv.ok:
+		return adv
+	state = engine.get_state()
+	if str(state.phase) != DefsClass.PHASE_DINNERTIME:
+		return Result.failure("显式本地晚餐确认 marker 应阻塞在 Dinnertime，实际: %s" % str(state.phase))
+	var ppa: Dictionary = state.round_state.get("pending_phase_actions", {})
+	var pending_val = ppa.get(DefsClass.PHASE_DINNERTIME, null)
+	if not (pending_val is Array):
+		return Result.failure("本地晚餐确认 pending 缺失")
+	var pending: Array = pending_val
+	if pending.size() != 1 or not (pending[0] is Dictionary):
+		return Result.failure("本地晚餐确认 pending 应为单个 Dictionary，实际: %s" % str(pending))
+	var item: Dictionary = pending[0]
+	if str(item.get("kind", "")) != "confirm_dinnertime" or int(item.get("player_id", -1)) != 0:
+		return Result.failure("本地晚餐确认 pending 内容错误: %s" % str(item))
+	return Result.success()
 
 static func _test_waitress_milestone_failure_is_fatal(seed_val: int) -> Result:
 	var engine := GameEngine.new()

@@ -7,6 +7,7 @@ const MarketingSettlementClass = preload("res://modules/base_rules/rules/phase/m
 const EffectRegistryClass = preload("res://core/rules/effect_registry.gd")
 const PhaseManagerClass = preload("res://core/engine/phase_manager.gd")
 const MilestoneEffectRegistryClass = preload("res://core/rules/milestone_effect_registry.gd")
+const REQUIRE_MARKETING_CONFIRM_KEY := "require_marketing_confirm"
 const ONLINE_MARKETING_CONFIRM_KEY := "online_require_marketing_confirm"
 const ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY := "online_marketing_confirmed_players"
 
@@ -115,9 +116,70 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not milestone_r.ok:
 		return milestone_r
 
+	var local_confirm_r := _test_local_confirm_marker_injects_explicit_pending(player_count, seed_val)
+	if not local_confirm_r.ok:
+		return local_confirm_r
+
 	return Result.success({
-		"cases": 6,
+		"cases": 7,
 	})
+
+static func _test_local_confirm_marker_injects_explicit_pending(player_count: int, seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val)
+	if not init.ok:
+		return Result.failure("初始化本地营销确认 marker 测试失败: %s" % init.error)
+	var state := engine.get_state()
+	state.map = _build_single_house_radio_map()
+	state.rules[REQUIRE_MARKETING_CONFIRM_KEY] = true
+	state.phase = "Marketing"
+	state.turn_order = [0, 1]
+	state.current_player_index = 0
+	state.marketing_instances.clear()
+	state.marketing_instances.append({
+		"board_number": 1,
+		"type": "radio",
+		"owner": 0,
+		"employee_type": "marketing_trainee",
+		"product": "burger",
+		"world_pos": Vector2i(2, 2),
+		"footprint_size": Vector2i.ONE,
+		"rotation": 0,
+		"remaining_duration": 1,
+		"axis": "",
+		"tile_index": -1,
+		"created_round": state.round_number,
+	})
+	var placements: Dictionary = state.map["marketing_placements"]
+	placements["1"] = {
+		"board_number": 1,
+		"type": "radio",
+		"owner": 0,
+		"product": "burger",
+		"world_pos": Vector2i(2, 2),
+		"footprint_size": Vector2i.ONE,
+		"rotation": 0,
+		"remaining_duration": 1,
+		"axis": "",
+		"tile_index": -1,
+	}
+
+	var pm := PhaseManagerClass.new()
+	pm.set_effect_registry(EffectRegistryClass.new())
+	var r := MarketingSettlementClass.apply(state, pm.get_marketing_range_calculator(), 1, pm)
+	if not r.ok:
+		return Result.failure("本地营销确认 marker 结算失败: %s" % r.error)
+	var ppa: Dictionary = state.round_state.get("pending_phase_actions", {})
+	var pending_val = ppa.get("Marketing", null)
+	if not (pending_val is Array):
+		return Result.failure("本地营销确认 pending 缺失")
+	var pending: Array = pending_val
+	if pending.size() != 1 or not (pending[0] is Dictionary):
+		return Result.failure("本地营销确认 pending 应为单个 Dictionary，实际: %s" % str(pending))
+	var item: Dictionary = pending[0]
+	if str(item.get("kind", "")) != "confirm_marketing" or int(item.get("player_id", -1)) != 0:
+		return Result.failure("本地营销确认 pending 内容错误: %s" % str(item))
+	return Result.success()
 
 static func _test_milestone_failure_is_fatal(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()

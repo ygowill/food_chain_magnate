@@ -5473,7 +5473,10 @@
 			},
 			"pending_phase_actions": {
 				"Marketing": [
-					"confirm_marketing"
+					{
+						"kind": "confirm_marketing",
+						"player_id": 0
+					}
 				]
 			},
 			"phase_order": [
@@ -5543,6 +5546,7 @@
 			"demand_cap_with_garden": 5,
 			"fridge_capacity_per_product": 10,
 			"one_x_employee_copies": 1,
+			"require_marketing_confirm": 1,
 			"salary_cost": 5,
 			"waitress_tips": 3
 		},

@@ -22,6 +22,8 @@ var rule_fridge_capacity_per_product: int = 10
 var rule_one_x_employee_copies_by_player_count: Dictionary = {}
 var rule_bankruptcy_max_breaks: int = 2
 var rule_bankruptcy_extra_reserve_per_player: int = 0
+var rule_require_dinnertime_confirm: bool = false
+var rule_require_marketing_confirm: bool = false
 
 # === milestones ===
 var milestones_enabled: bool = true
@@ -127,6 +129,17 @@ static func from_dict(data: Dictionary) -> Result:
 		return fridge_capacity_read
 	cfg.rule_fridge_capacity_per_product = int(fridge_capacity_read.value)
 
+	if rules.has("require_dinnertime_confirm"):
+		var require_dinnertime_val = rules.get("require_dinnertime_confirm", null)
+		if not (require_dinnertime_val is bool):
+			return Result.failure("GameConfig.rules.require_dinnertime_confirm 类型错误（期望 bool）")
+		cfg.rule_require_dinnertime_confirm = bool(require_dinnertime_val)
+	if rules.has("require_marketing_confirm"):
+		var require_marketing_val = rules.get("require_marketing_confirm", null)
+		if not (require_marketing_val is bool):
+			return Result.failure("GameConfig.rules.require_marketing_confirm 类型错误（期望 bool）")
+		cfg.rule_require_marketing_confirm = bool(require_marketing_val)
+
 	var one_x_copies_val = rules.get("one_x_employee_copies_by_player_count", null)
 	if not (one_x_copies_val is Dictionary):
 		return Result.failure("GameConfig.rules.one_x_employee_copies_by_player_count 缺失或类型错误（期望 Dictionary）")
@@ -209,6 +222,10 @@ func apply_overrides(overrides: Dictionary) -> void:
 				rule_bankruptcy_max_breaks = clampi(int(val), 1, 2)
 			"rules.bankruptcy_extra_reserve_per_player":
 				rule_bankruptcy_extra_reserve_per_player = maxi(0, int(val))
+			"rules.require_dinnertime_confirm":
+				rule_require_dinnertime_confirm = bool(val)
+			"rules.require_marketing_confirm":
+				rule_require_marketing_confirm = bool(val)
 			"milestones.enabled":
 				milestones_enabled = bool(val)
 			"milestones.disabled_ids":

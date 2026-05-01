@@ -44,8 +44,16 @@ static func _validate_marketing_pending(state: GameState) -> Result:
 	if not (marketing_val is Array):
 		return Result.failure("pending_phase_actions.Marketing missing")
 	var marketing_pending: Array = marketing_val
-	if not marketing_pending.has("confirm_marketing"):
-		return Result.failure("pending_phase_actions.Marketing must include confirm_marketing")
+	if marketing_pending.size() != 1 or not (marketing_pending[0] is Dictionary):
+		return Result.failure("pending_phase_actions.Marketing must contain one confirm_marketing Dictionary")
+	var pending: Dictionary = marketing_pending[0]
+	if str(pending.get("kind", "")) != "confirm_marketing":
+		return Result.failure("pending_phase_actions.Marketing[0].kind must be confirm_marketing")
+	if int(pending.get("player_id", -1)) < 0:
+		return Result.failure("pending_phase_actions.Marketing[0].player_id must be valid")
+	var rules: Dictionary = state.rules if state.rules is Dictionary else {}
+	if not bool(rules.get("require_marketing_confirm", false)):
+		return Result.failure("manual marketing save must keep require_marketing_confirm=true")
 	return Result.success()
 
 static func _validate_marketing_placements(state: GameState) -> Result:

@@ -70,6 +70,8 @@ static func apply_initial_state(
 		"fridge_capacity_per_product": int(cfg.rule_fridge_capacity_per_product),
 		"bankruptcy_max_breaks": int(cfg.rule_bankruptcy_max_breaks),
 		"bankruptcy_extra_reserve_per_player": int(cfg.rule_bankruptcy_extra_reserve_per_player),
+		"require_dinnertime_confirm": 1 if bool(cfg.rule_require_dinnertime_confirm) else 0,
+		"require_marketing_confirm": 1 if bool(cfg.rule_require_marketing_confirm) else 0,
 	}
 	var one_x_map: Dictionary = cfg.rule_one_x_employee_copies_by_player_count
 	var pc_key := str(player_count)

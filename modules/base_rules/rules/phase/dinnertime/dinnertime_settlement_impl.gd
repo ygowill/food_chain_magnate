@@ -18,19 +18,9 @@ const EFFECT_SEG_DINNERTIME_INCOME_BONUS := ":dinnertime:income_bonus:"
 const EFFECT_SEG_DINNERTIME_DISTANCE_DELTA := ":dinnertime:distance_delta:"
 const EFFECT_SEG_DINNERTIME_SALE_HOUSE_BONUS := ":dinnertime:sale_house_bonus:"
 const KIND_CONFIRM_DINNERTIME := "confirm_dinnertime"
+const REQUIRE_DINNERTIME_CONFIRM_KEY := "require_dinnertime_confirm"
 const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
 const ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY := "online_dinnertime_confirmed_players"
-
-static func _net_mode_name() -> String:
-	if NetContext == null:
-		return "NetContext:null"
-	match int(NetContext.mode):
-		NetContext.Mode.ONLINE_CLIENT:
-			return "ONLINE_CLIENT"
-		NetContext.Mode.ONLINE_SERVER:
-			return "ONLINE_SERVER"
-		_:
-			return "HOTSEAT"
 
 static func _bool_array_preview(arr: Array, limit: int = 12) -> String:
 	if arr == null:
@@ -82,6 +72,25 @@ static func _read_online_dinnertime_confirm_marker(state: GameState):
 			return rs.get(ONLINE_DINNERTIME_CONFIRM_KEY, null)
 	return null
 
+static func _is_local_dinnertime_confirm_enabled(state: GameState) -> Result:
+	if state == null:
+		return Result.failure("DinnertimeSettlement: state 为空")
+	if not (state.rules is Dictionary):
+		return Result.failure("DinnertimeSettlement: state.rules 类型错误（期望 Dictionary）")
+	var rules: Dictionary = state.rules
+	if not rules.has(REQUIRE_DINNERTIME_CONFIRM_KEY):
+		return Result.success(false)
+	var v = rules.get(REQUIRE_DINNERTIME_CONFIRM_KEY, null)
+	if v is bool:
+		return Result.success(bool(v))
+	if v is int:
+		return Result.success(int(v) != 0)
+	if v is float:
+		var f: float = float(v)
+		if f == floor(f):
+			return Result.success(int(f) != 0)
+	return Result.failure("DinnertimeSettlement: state.rules.%s 类型错误（期望 bool/int/float）" % REQUIRE_DINNERTIME_CONFIRM_KEY)
+
 static func _build_dinnertime_confirm_pending(state: GameState, confirmed_players: Array[bool] = []) -> Array:
 	if state == null or not (state.players is Array):
 		return []
@@ -101,6 +110,17 @@ static func _build_dinnertime_confirm_pending(state: GameState, confirmed_player
 			"player_id": pid,
 		})
 	return pending
+
+static func _build_local_dinnertime_confirm_pending(state: GameState) -> Result:
+	if state == null:
+		return Result.failure("DinnertimeSettlement: state 为空")
+	var pid := state.get_current_player_id()
+	if pid < 0:
+		return Result.failure("DinnertimeSettlement: 当前玩家无效，无法创建晚餐确认 pending")
+	return Result.success([{
+		"kind": KIND_CONFIRM_DINNERTIME,
+		"player_id": pid,
+	}])
 
 static func _build_online_dinnertime_confirmed_players(state: GameState) -> Array[bool]:
 	var confirmed: Array[bool] = []
@@ -430,21 +450,26 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 		"timeline_events": timeline_events,
 	}
 
-	# 注入阻塞：晚餐结算需等待玩家确认后才允许 auto-advance 离开 DINNERTIME。
-	# 离线/本地 headless 测试仍保持“自动跳过晚餐阶段”，避免影响既有测试与快速流程。
-	# 联机模式（包括 ONLINE_SERVER headless）必须注入 pending，确保与客户端状态一致，避免 state_hash 分叉触发 resync。
-	# 注意：`godot --headless` 运行在 editor binary 下时，OS.has_feature("headless") 仍可能为 false；
-	# 使用 DisplayServer.get_name() 判断显示模式更可靠。
 	var online_dinnertime_confirm_enabled := _is_online_dinnertime_confirm_enabled(state)
-	var should_inject_pending := (DisplayServer.get_name() != "headless") or online_dinnertime_confirm_enabled
+	var local_dinnertime_confirm_read := _is_local_dinnertime_confirm_enabled(state)
+	if not local_dinnertime_confirm_read.ok:
+		return local_dinnertime_confirm_read
+	var local_dinnertime_confirm_enabled := bool(local_dinnertime_confirm_read.value)
+	var should_inject_pending := online_dinnertime_confirm_enabled or local_dinnertime_confirm_enabled
 	if should_inject_pending:
 		var confirmed_players: Array[bool] = []
+		var pending: Array = []
 		if online_dinnertime_confirm_enabled and state.round_state is Dictionary:
 			var confirmed_r := _ensure_online_dinnertime_confirmed_players(state)
 			if not confirmed_r.ok:
 				return confirmed_r
 			confirmed_players = Array(confirmed_r.value, TYPE_BOOL, "", null)
-		var pending := _build_dinnertime_confirm_pending(state, confirmed_players)
+			pending = _build_dinnertime_confirm_pending(state, confirmed_players)
+		else:
+			var local_pending_r := _build_local_dinnertime_confirm_pending(state)
+			if not local_pending_r.ok:
+				return local_pending_r
+			pending = local_pending_r.value
 		var set_pending := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
 			state.round_state, DefsClass.PHASE_DINNERTIME, pending, "晚餐结算"
 		)
@@ -459,11 +484,9 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 			if pending.size() != expected:
 				AutoloadAccessClass.log_warn(
 					"Dinnertime",
-					"Online pending mismatch round=%d mode=%s display=%s expected=%d actual=%d confirmed=%s pending=%s"
+					"Online pending mismatch round=%d expected=%d actual=%d confirmed=%s pending=%s"
 						% [
 							int(state.round_number),
-							_net_mode_name(),
-							str(DisplayServer.get_name()),
 							expected,
 							pending.size(),
 							_bool_array_preview(confirmed_players),
@@ -473,11 +496,9 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 			else:
 				AutoloadAccessClass.log_info(
 					"Dinnertime",
-					"Online pending injected round=%d mode=%s display=%s confirmed=%s pending=%s"
+					"Online pending injected round=%d confirmed=%s pending=%s"
 						% [
 							int(state.round_number),
-							_net_mode_name(),
-							str(DisplayServer.get_name()),
 							_bool_array_preview(confirmed_players),
 							_pending_preview(pending),
 						]

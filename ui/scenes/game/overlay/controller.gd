@@ -162,7 +162,7 @@ func confirm_dinnertime_settlement() -> void:
 		return
 	if _execute_command.is_valid():
 		var live_state := _read_live_game_state()
-		var confirm_cmd = CommandClass.create_system("confirm_dinnertime")
+		var confirm_cmd = _build_settlement_confirm_command("confirm_dinnertime", live_state)
 		if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
 			var local_pid := int(NetContext.local_player_id)
 			if local_pid < 0:
@@ -204,7 +204,7 @@ func confirm_marketing_settlement() -> void:
 		return
 	if _execute_command.is_valid():
 		var live_state := _read_live_game_state()
-		var confirm_cmd = CommandClass.create_system("confirm_marketing")
+		var confirm_cmd = _build_settlement_confirm_command("confirm_marketing", live_state)
 		if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
 			var local_pid := int(NetContext.local_player_id)
 			if local_pid < 0:
@@ -1136,6 +1136,13 @@ func _read_live_game_state() -> GameState:
 		return null
 	var state_val = engine_val.get_state()
 	return state_val if state_val is GameState else null
+
+func _build_settlement_confirm_command(action_id: String, state: GameState):
+	if state != null:
+		var actor_id := state.get_current_player_id()
+		if actor_id >= 0:
+			return CommandClass.create(action_id, actor_id, {})
+	return CommandClass.create_system(action_id)
 
 func _should_send_dinnertime_confirm() -> bool:
 	var live_state := _read_live_game_state()

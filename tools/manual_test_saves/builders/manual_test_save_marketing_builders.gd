@@ -132,8 +132,15 @@ func _build_marketing_phase_animation_review(engine: GameEngine, _c: Dictionary)
 	if not visible_after.ok:
 		return visible_after
 
+	state.rules["require_marketing_confirm"] = true
+	var confirm_pid := state.get_current_player_id()
+	if confirm_pid < 0:
+		return Result.failure("manual marketing review: 当前玩家无效，无法创建 confirm_marketing pending")
 	var pending := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
-		state.round_state, DefsClass.PHASE_MARKETING, ["confirm_marketing"], "manual marketing review"
+		state.round_state,
+		DefsClass.PHASE_MARKETING,
+		[{"kind": "confirm_marketing", "player_id": confirm_pid}],
+		"manual marketing review"
 	)
 	if not pending.ok:
 		return pending

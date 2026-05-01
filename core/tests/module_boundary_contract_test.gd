@@ -1,6 +1,7 @@
 # 模块边界契约测试（P1）
 # 目标：
 # - base_rules 不允许再引用旧 `res://core/rules/phase/**` 路径（避免规则实现回流到 core）
+# - base_rules 规则实现不得直接读取显示/联机环境；运行环境应由 UI/online bootstrap 转成显式规则标记
 # - core（不含 core/tests 与 core/modules）不应直接引用 `res://modules/` 路径（避免 core 依赖具体模块资源/脚本）
 class_name ModuleBoundaryContractTest
 extends RefCounted
@@ -17,8 +18,16 @@ static func run() -> Result:
 	if not r2.ok:
 		return r2
 
+	var r3 := _assert_no_pattern_in_gd_dir("res://modules/base_rules/rules", "DisplayServer")
+	if not r3.ok:
+		return r3
+
+	var r4 := _assert_no_pattern_in_gd_dir("res://modules/base_rules/rules", "NetContext")
+	if not r4.ok:
+		return r4
+
 	return Result.success({
-		"checks": 2,
+		"checks": 4,
 	})
 
 static func _assert_core_no_modules_path_refs() -> Result:

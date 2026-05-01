@@ -2628,3 +2628,33 @@
 
 - 已完成该 P1/P2 边界整改：core/server 初始化语义不再依赖跨场景全局单例；UI、server、online client 均通过显式注入表达配置覆盖。
 - 后续若还需要 `Globals` 承载 UI 设置缓存，也应只停留在 UI/setup 层，不能再作为 `GameEngine` 默认 fallback。
+
+### Fix 46：base_rules 结算确认不再读取运行环境
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 6 `[P1] base_rules 的规则结算直接依赖运行环境和全局联机单例，导致同一规则路径会因 headless/windowed/online 状态产生不同 state`。
+- 同源遗留：Dinnertime/Marketing 本地动画确认仍由 `DisplayServer.get_name()` 隐式决定是否写入 `pending_phase_actions`。
+
+改动：
+
+- `core/data/game_config.gd`、`core/state/game_state_factory.gd`：新增 `rules.require_dinnertime_confirm` 与 `rules.require_marketing_confirm`，作为进入规则 state 的显式 `0/1` 标记。
+- `modules/base_rules/rules/phase/dinnertime/dinnertime_settlement_impl.gd`、`modules/base_rules/rules/phase/marketing_settlement.gd`：移除对 `DisplayServer` 与 `NetContext` 的直接读取；是否注入本地确认 pending 只取决于显式规则标记，online per-player pending 仍取决于已有 online marker。
+- `ui/scenes/game/game.gd`：图形 UI 新局启动时在 UI 层根据显示环境显式注入本地确认标记；headless/core/server 路径默认不注入。
+- `ui/scenes/game/overlay/controller.gd`：本地确认命令改为携带当前玩家 actor，匹配结构化 pending；online client 继续使用 `NetContext.local_player_id`。
+- `tools/manual_test_saves/builders/manual_test_save_marketing_builders.gd`、`testdata/saves/manual_cases/marketing/marketing_phase_animation_review.json`、`core/tests/manual_marketing_review_save_test.gd`：手工营销动画复核存档从 legacy string pending 改为结构化 `{kind, player_id}` pending，并保留显式 `require_marketing_confirm=1`。
+- `core/tests/dinnertime_settlement_test.gd`、`core/tests/marketing_settlement_fail_fast_test.gd`：新增显式本地确认 marker 会注入结构化 pending 的回归测试。
+- `core/tests/module_boundary_contract_test.gd`：新增架构守卫，禁止 `modules/base_rules/rules` 再直接引用 `DisplayServer` 或 `NetContext`。
+
+验证：
+
+- 首次 AllTests 暴露 `GameState.rules` 只能序列化整数规则值，已将新增规则标记改为 `0/1` 存储后重跑。
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`391/391`。
+
+结论：
+
+- 已完成该 P1 边界整改：`base_rules` 权威结算不再根据当前进程是 headless、GUI、client 或 server 改变 state；运行环境差异由 UI/online bootstrap 显式转成规则标记。
+- online confirmed/pending 的灾难恢复 guard 仍有单独 P2（`AutoAdvanceTryStep._ensure_online_dinnertime_pending_guard` 会修复 pending），后续应继续拆分为 strict runtime 与显式 recovery。

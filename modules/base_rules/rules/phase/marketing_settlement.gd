@@ -12,6 +12,7 @@ const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
 
 const KIND_CONFIRM_MARKETING := "confirm_marketing"
+const REQUIRE_MARKETING_CONFIRM_KEY := "require_marketing_confirm"
 const ONLINE_MARKETING_CONFIRM_KEY := "online_require_marketing_confirm"
 const ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY := "online_marketing_confirmed_players"
 
@@ -245,19 +246,28 @@ static func _inject_marketing_confirm_pending_if_needed(state: GameState, has_an
 	if not (state.round_state is Dictionary):
 		return Result.failure("MarketingSettlement: state.round_state 类型错误（期望 Dictionary）")
 
-	# 离线/本地 headless 测试继续自动跳过 Marketing；图形界面和联机模式需要等待动画确认。
 	var online_marketing_confirm_enabled := _is_online_marketing_confirm_enabled(state)
-	var should_inject_pending := (DisplayServer.get_name() != "headless") or online_marketing_confirm_enabled
+	var local_marketing_confirm_read := _is_local_marketing_confirm_enabled(state)
+	if not local_marketing_confirm_read.ok:
+		return local_marketing_confirm_read
+	var local_marketing_confirm_enabled := bool(local_marketing_confirm_read.value)
+	var should_inject_pending := online_marketing_confirm_enabled or local_marketing_confirm_enabled
 	if not should_inject_pending:
 		return Result.success()
 
 	var confirmed_players: Array[bool] = []
+	var pending: Array = []
 	if online_marketing_confirm_enabled:
 		var confirmed_r := _ensure_online_marketing_confirmed_players(state)
 		if not confirmed_r.ok:
 			return confirmed_r
 		confirmed_players = Array(confirmed_r.value, TYPE_BOOL, "", null)
-	var pending := _build_marketing_confirm_pending(state, confirmed_players)
+		pending = _build_marketing_confirm_pending(state, confirmed_players)
+	else:
+		var local_pending_r := _build_local_marketing_confirm_pending(state)
+		if not local_pending_r.ok:
+			return local_pending_r
+		pending = local_pending_r.value
 	return RoundStatePendingPhaseActionsClass.set_phase_pending_players(
 		state.round_state, DefsClass.PHASE_MARKETING, pending, "营销结算"
 	)
@@ -287,6 +297,25 @@ static func _read_online_marketing_confirm_marker(state: GameState):
 			return rs.get(ONLINE_MARKETING_CONFIRM_KEY, null)
 	return null
 
+static func _is_local_marketing_confirm_enabled(state: GameState) -> Result:
+	if state == null:
+		return Result.failure("MarketingSettlement: state 为空")
+	if not (state.rules is Dictionary):
+		return Result.failure("MarketingSettlement: state.rules 类型错误（期望 Dictionary）")
+	var rules: Dictionary = state.rules
+	if not rules.has(REQUIRE_MARKETING_CONFIRM_KEY):
+		return Result.success(false)
+	var v = rules.get(REQUIRE_MARKETING_CONFIRM_KEY, null)
+	if v is bool:
+		return Result.success(bool(v))
+	if v is int:
+		return Result.success(int(v) != 0)
+	if v is float:
+		var f: float = float(v)
+		if f == floor(f):
+			return Result.success(int(f) != 0)
+	return Result.failure("MarketingSettlement: state.rules.%s 类型错误（期望 bool/int/float）" % REQUIRE_MARKETING_CONFIRM_KEY)
+
 static func _build_marketing_confirm_pending(state: GameState, confirmed_players: Array[bool] = []) -> Array:
 	if state == null or not (state.players is Array):
 		return []
@@ -306,6 +335,17 @@ static func _build_marketing_confirm_pending(state: GameState, confirmed_players
 			"player_id": pid,
 		})
 	return pending
+
+static func _build_local_marketing_confirm_pending(state: GameState) -> Result:
+	if state == null:
+		return Result.failure("MarketingSettlement: state 为空")
+	var pid := state.get_current_player_id()
+	if pid < 0:
+		return Result.failure("MarketingSettlement: 当前玩家无效，无法创建营销确认 pending")
+	return Result.success([{
+		"kind": KIND_CONFIRM_MARKETING,
+		"player_id": pid,
+	}])
 
 static func _build_online_marketing_confirmed_players(state: GameState) -> Array[bool]:
 	var confirmed: Array[bool] = []
