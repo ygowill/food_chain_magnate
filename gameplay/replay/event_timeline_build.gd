@@ -23,10 +23,10 @@ static func build_full(engine: GameEngine) -> Result:
 	# 1) 初始化事件（不属于任何命令）
 	var init_event := _build_game_started_event(engine)
 	if not init_event.ok:
-		warnings.append(init_event.error)
+		return Result.failure("EventTimelineBuild: GAME_STARTED 构建失败: %s" % init_event.error)
 	warnings.append_array(init_event.warnings)
 
-	var init_data: Dictionary = init_event.value if init_event.ok else {}
+	var init_data: Dictionary = init_event.value
 	seq = TimelineEventHelpersClass.append_timeline_event(out, EventBus.EventType.GAME_STARTED, init_data, seq, -1)
 
 	# 2) 命令时间线事件（按命令重放生成，稳定顺序）
@@ -61,40 +61,20 @@ static func _build_game_started_event(engine: GameEngine) -> Result:
 	if engine.state == null:
 		return Result.failure("EventTimelineBuild: state 为空")
 
-	# fallback：尽量不阻塞完整时间线构建（player_count/seed 仍可从运行中引擎读取）
-	var player_count := engine.state.players.size() if (engine.state.players is Array) else -1
-	var seed := engine.random_manager.get_seed() if (engine.random_manager != null and engine.random_manager.has_method("get_seed")) else 0
-
 	# 优先从初始 checkpoint 构建（更贴近 command_index=-1 的语义）。
 	if engine.checkpoints.is_empty():
-		return Result.success({
-			"player_count": player_count,
-			"seed": seed,
-			"state_hash": "",
-		}).with_warning("EventTimelineBuild: 缺少初始 checkpoint，GAME_STARTED.state_hash 留空")
+		return Result.failure("EventTimelineBuild: 缺少初始 checkpoint")
 
 	var cp_val = engine.checkpoints[0]
 	if not (cp_val is Dictionary):
-		return Result.success({
-			"player_count": player_count,
-			"seed": seed,
-			"state_hash": "",
-		}).with_warning("EventTimelineBuild: checkpoints[0] 类型错误（期望 Dictionary），GAME_STARTED.state_hash 留空")
+		return Result.failure("EventTimelineBuild: checkpoints[0] 类型错误（期望 Dictionary）")
 	var cp: Dictionary = cp_val
 	var state_dict_val = cp.get("state_dict", null)
 	if not (state_dict_val is Dictionary):
-		return Result.success({
-			"player_count": player_count,
-			"seed": seed,
-			"state_hash": "",
-		}).with_warning("EventTimelineBuild: checkpoints[0].state_dict 缺失或类型错误，GAME_STARTED.state_hash 留空")
+		return Result.failure("EventTimelineBuild: checkpoints[0].state_dict 缺失或类型错误（期望 Dictionary）")
 
 	var data_read := GameStartedEventBuildClass.build_from_state_dict(state_dict_val, "EventTimelineBuild")
 	if not data_read.ok:
-		return Result.success({
-			"player_count": player_count,
-			"seed": seed,
-			"state_hash": "",
-		}).with_warning("EventTimelineBuild: %s" % data_read.error)
+		return data_read
 
 	return data_read

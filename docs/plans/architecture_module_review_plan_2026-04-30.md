@@ -1919,3 +1919,26 @@
 
 - 已完成该 P2 strict 化：模块漏注册 int-key schema 不再被降级为读档 warning。
 - 若需要诊断损坏存档，应提供显式 recovery/inspection 工具；运行期读档路径不应继续加载 key 类型漂移的模块状态。
+
+### Fix 18：EventTimelineBuild 缺初始 checkpoint 时 fail-fast
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 2 `[P2] EventTimelineBuild 缺少或损坏初始 checkpoint 时仍返回成功，并把 GAME_STARTED.state_hash 留空`。
+
+改动：
+
+- `gameplay/replay/event_timeline_build.gd`：`GAME_STARTED` 构建失败时直接返回 `Result.failure`；缺少 `checkpoints[0]`、checkpoint 类型错误、缺少 `state_dict`、或 `GameStartedEventBuild` 恢复失败都不再生成空 `state_hash`。
+- `core/tests/event_timeline_build_test.gd`：新增缺少初始 checkpoint 的负例，断言 `build_full(...)` 必须失败并明确提到 `GAME_STARTED`/`checkpoint`。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：完整事件时间线不再产生缺 `state_hash` 的 `GAME_STARTED` 事件。
+- 需要 best-effort 展示时，应提供单独的 UI 宽松构建入口，而不是让完整 replay/timeline 构建吞掉初始状态损坏。

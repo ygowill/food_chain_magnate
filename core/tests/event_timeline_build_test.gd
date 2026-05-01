@@ -89,7 +89,23 @@ static func run(player_count: int = 2, seed_val: int = 12345, min_commands: int 
 		if not seen.has(i):
 			return Result.failure("缺少命令索引对应事件: %d (last=%d)" % [i, last_index])
 
+	var missing_cp_r := _test_missing_initial_checkpoint_fails(engine)
+	if not missing_cp_r.ok:
+		return missing_cp_r
+
 	return Result.success({
 		"commands": last_index + 1,
 		"events": events.size(),
 	})
+
+static func _test_missing_initial_checkpoint_fails(engine: GameEngine) -> Result:
+	var checkpoints_before := engine.checkpoints.duplicate(true)
+	engine.checkpoints = []
+	var build_r: Result = EventTimelineBuildClass.build_full(engine)
+	engine.checkpoints = checkpoints_before
+	if build_r.ok:
+		return Result.failure("EventTimelineBuild 缺少初始 checkpoint 时应失败")
+	var err := str(build_r.error)
+	if err.find("GAME_STARTED") < 0 or err.find("checkpoint") < 0:
+		return Result.failure("错误信息应包含 GAME_STARTED 与 checkpoint，实际: %s" % err)
+	return Result.success()
