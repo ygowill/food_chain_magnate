@@ -24,6 +24,29 @@ static func draw_texture_aspect_fit(
 
 	canvas.draw_texture_rect(texture, Rect2(pos, size), false, modulate)
 
+static func draw_texture_aspect_fit_rotated(
+	canvas,
+	texture: Texture2D,
+	rect: Rect2,
+	rotation_degrees: float,
+	modulate: Color = Color(1, 1, 1, 1)
+) -> void:
+	if canvas == null or texture == null:
+		return
+	var ts: Vector2 = texture.get_size()
+	if ts.x <= 0.0 or ts.y <= 0.0:
+		return
+	if rect.size.x <= 0.0 or rect.size.y <= 0.0:
+		return
+
+	var effective_size := Vector2(ts.y, ts.x)
+	var scale := minf(rect.size.x / effective_size.x, rect.size.y / effective_size.y)
+	var size := ts * scale
+	var center := rect.position + rect.size * 0.5
+	canvas.draw_set_transform(center, deg_to_rad(rotation_degrees), Vector2.ONE)
+	canvas.draw_texture_rect(texture, Rect2(-size * 0.5, size), false, modulate)
+	canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
 static func get_texture_aspect_fit_rect(texture: Texture2D, rect: Rect2, v_align: String = "center") -> Rect2:
 	if texture == null:
 		return Rect2()

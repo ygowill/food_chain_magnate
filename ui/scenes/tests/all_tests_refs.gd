@@ -247,6 +247,7 @@ const MapZoomPropertyTestClass = preload("res://ui/scenes/tests/map_zoom_propert
 const RuralAreaMapPanelBoundsTestClass = preload("res://ui/scenes/tests/rural_area_map_panel_bounds_test.gd")
 const TileInternalGridLinesTestClass = preload("res://ui/scenes/tests/tile_internal_grid_lines_test.gd")
 const ExternalTileInternalGridLinesTestClass = preload("res://ui/scenes/tests/external_tile_internal_grid_lines_test.gd")
+const PiecePreviewLayoutTestClass = preload("res://ui/scenes/tests/piece_preview_layout_test.gd")
 const MapGroundSkipsOutsideRingTestClass = preload("res://ui/scenes/tests/map_ground_skips_outside_ring_test.gd")
 const MapBlockedOverlaySkipsVoidCellsTestClass = preload("res://ui/scenes/tests/map_blocked_overlay_skips_void_cells_test.gd")
 const MapIndexerStructuresRespectsMapOriginTestClass = preload("res://ui/scenes/tests/map_indexer_structures_respects_map_origin_test.gd")

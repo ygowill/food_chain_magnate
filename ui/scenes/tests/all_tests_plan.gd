@@ -994,6 +994,10 @@ static func build_tests(host) -> Array[Dictionary]:
 						"name": "ExternalTileInternalGridLinesTest",
 						"fn": func() -> Result: return TestRefs.ExternalTileInternalGridLinesTestClass.run(),
 					},
+					{
+						"name": "PiecePreviewLayoutTest",
+						"fn": func() -> Result: return TestRefs.PiecePreviewLayoutTestClass.run(),
+					},
 						{
 							"name": "MapGroundSkipsOutsideRingTest",
 							"fn": func() -> Result: return TestRefs.MapGroundSkipsOutsideRingTestClass.run(),
