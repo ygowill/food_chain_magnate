@@ -3,7 +3,7 @@
 extends RefCounted
 
 const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
-const ReplayClass = preload("res://core/engine/game_engine/replay.gd")
+const ReplayStepRunnerClass = preload("res://core/engine/game_engine/replay_step_runner.gd")
 
 static func build(engine: GameEngine, target_index: int) -> Result:
 	if engine == null:
@@ -33,23 +33,16 @@ static func build(engine: GameEngine, target_index: int) -> Result:
 
 	for i in range(target_index + 1):
 		var cmd: Command = engine.command_history[i]
-		var executor := engine.action_registry.get_executor(cmd.action_id)
-		if executor == null:
-			return Result.failure("EventHistoryRebuild: 回放时找不到执行器: %s" % cmd.action_id)
-
-		var force_execute := ReplayClass.should_force_execute_in_replay(cmd, replay_state)
-		if force_execute and executor.requires_actor:
-			# 强制模式：允许“非当前玩家”执行（与 CommandRunner._validate_force_execute / ReplayClass 语义一致），但仍需保证 actor 合法。
-			var count := replay_state.players.size()
-			if cmd.actor < 0 or cmd.actor >= count:
-				return Result.failure("EventHistoryRebuild: 回放强制命令 #%d actor 超出范围: actor=%d players=%d" % [i, cmd.actor, count])
-
-		var step_result := executor.compute_new_state_force(replay_state, cmd) if force_execute else executor.compute_new_state(replay_state, cmd)
+		var step_result := ReplayStepRunnerClass.apply_replay_command(replay_state, cmd, engine.action_registry, i, "EventHistoryRebuild")
 		if not step_result.ok:
-			return Result.failure("EventHistoryRebuild: 回放命令 #%d 失败: %s" % [i, step_result.error])
+			return step_result.with_warnings(all_warnings)
 		all_warnings.append_array(step_result.warnings)
+		var step_info: Dictionary = Dictionary(step_result.value)
+		var executor = step_info.get("executor", null)
+		if executor == null:
+			return Result.failure("EventHistoryRebuild: 回放命令 #%d executor 为空" % i).with_warnings(all_warnings)
 
-		var new_state: GameState = step_result.value
+		var new_state: GameState = step_info.get("state", null)
 
 		# 生成事件（与 CommandRunner.execute_command 对齐）
 		var events: Array = executor.generate_events(replay_state, new_state, cmd)

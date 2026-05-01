@@ -2805,3 +2805,28 @@
 结论：
 
 - 已完成该 P2 架构约束：运行期随机不再只靠口头约定；新增随机规则前必须先调整可回放命令执行契约，否则架构测试会阻断。
+
+### Fix 53：历史命令应用逻辑收敛到 ReplayStepRunner
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 2 `[P1] 回放、事件历史重建、StepTimeline 与命令索引查询重复实现“应用一条历史命令”的核心流程`。
+
+改动：
+
+- 新增 `core/engine/game_engine/replay_step_runner.gd`，集中处理历史命令应用的 strict replay force policy、executor 查找、强制执行 actor 合法性校验、state 计算、warning 透传与 `GameState` 返回类型契约。
+- `core/engine/game_engine/replay.gd`：`rewind_to_command(...)` 与 `full_replay(...)` 改用 `ReplayStepRunner`，只保留 checkpoint 恢复、auto-advance drain 与 replay 返回结构职责。
+- `core/engine/game_engine/event_history_rebuild.gd`：事件历史重建改用同一单步应用 helper，保留事件生成、auto-advance 事件合并与 command_index 标注职责。
+- `core/engine/game_engine/command_index_queries.gd`：按 replay 推导当前玩家回合起点时，复用同一单步应用 helper，避免单独维护 executor/force/state 计算分支。
+- `gameplay/replay/step_timeline_build/build_full_impl.gd` 与 `build_append_impl.gd`：StepTimeline 全量/增量构建改用同一单步应用 helper，时间线层只负责 step/event 投影与 auto-advance 分段。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1108`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`391/391`。
+
+结论：
+
+- 已完成该 P1 去重整改：历史命令“如何从 old state 应用为 new state”的执行契约不再散落在 Replay、EventHistoryRebuild、CommandIndexQueries 与 StepTimeline 构建层；后续 force/replay 严格性、executor 查找或 state 类型约束只需要维护 `ReplayStepRunner`。

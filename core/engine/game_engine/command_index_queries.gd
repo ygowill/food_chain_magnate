@@ -3,7 +3,7 @@
 extends RefCounted
 
 const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
-const ReplayClass = preload("res://core/engine/game_engine/replay.gd")
+const ReplayStepRunnerClass = preload("res://core/engine/game_engine/replay_step_runner.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 # 查找“当前阶段开始”对应的命令索引（用于 UI 的“一键回退本阶段”）。
@@ -146,24 +146,13 @@ static func infer_current_player_turn_start_command_index_by_replay(
 	var warnings: Array[String] = []
 	for i in range(mini(target_index, engine.command_history.size() - 1) + 1):
 		var cmd: Command = engine.command_history[i]
-		if cmd == null:
-			return Result.failure("command_history[%d] 为空" % i).with_warnings(warnings)
-		var executor := engine.action_registry.get_executor(cmd.action_id)
-		if executor == null:
-			return Result.failure("回放时找不到执行器: %s" % str(cmd.action_id)).with_warnings(warnings)
-
-		var force_execute := ReplayClass.should_force_execute_in_replay(cmd, replay_state)
-		if force_execute and executor.requires_actor:
-			var count := replay_state.players.size()
-			if cmd.actor < 0 or cmd.actor >= count:
-				return Result.failure("回放强制命令 #%d actor 超出范围: actor=%d players=%d" % [i, cmd.actor, count]).with_warnings(warnings)
-
-		var step_result := executor.compute_new_state_force(replay_state, cmd) if force_execute else executor.compute_new_state(replay_state, cmd)
+		var step_result := ReplayStepRunnerClass.apply_replay_command(replay_state, cmd, engine.action_registry, i, "CommandIndexQueries")
 		if not step_result.ok:
-			return Result.failure("回放命令 #%d 失败: %s" % [i, step_result.error]).with_warnings(warnings)
+			return step_result.with_warnings(warnings)
 		warnings.append_array(step_result.warnings)
+		var step_info: Dictionary = Dictionary(step_result.value)
 
-		var new_state: GameState = step_result.value
+		var new_state: GameState = step_info.get("state", null)
 		if new_state == null:
 			return Result.failure("回放命令 #%d 失败: state 为空" % i).with_warnings(warnings)
 

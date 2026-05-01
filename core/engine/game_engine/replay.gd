@@ -4,6 +4,7 @@ extends RefCounted
 const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
 const JsonValueParseHelpersClass = preload("res://core/utils/json_value_parse_helpers.gd")
 const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
+const ReplayStepRunnerClass = preload("res://core/engine/game_engine/replay_step_runner.gd")
 
 static func rewind_to_command(
 	command_history: Array[Command],
@@ -71,22 +72,12 @@ static func rewind_to_command(
 	var all_warnings: Array[String] = []
 	for i in range(start_index, target_index + 1):
 		var cmd: Command = command_history[i]
-		var executor := action_registry.get_executor(cmd.action_id)
-		if executor == null:
-			return Result.failure("回放时找不到执行器: %s" % cmd.action_id)
-
-		var force_execute := should_force_execute_in_replay(cmd, replay_state)
-		if force_execute and executor.requires_actor:
-			# 强制模式：允许“非当前玩家”执行（与 CommandRunner._validate_force_execute 语义一致），但仍需保证 actor 合法。
-			var count := replay_state.players.size()
-			if cmd.actor < 0 or cmd.actor >= count:
-				return Result.failure("回放强制命令 #%d actor 超出范围: actor=%d players=%d" % [i, cmd.actor, count])
-
-		var step_result := executor.compute_new_state_force(replay_state, cmd) if force_execute else executor.compute_new_state(replay_state, cmd)
+		var step_result := ReplayStepRunnerClass.apply_replay_command(replay_state, cmd, action_registry, i, "GameEngineReplay")
 		if not step_result.ok:
-			return Result.failure("回放命令 #%d 失败: %s" % [i, step_result.error])
-		replay_state = step_result.value
+			return step_result.with_warnings(all_warnings)
 		all_warnings.append_array(step_result.warnings)
+		var step_info: Dictionary = Dictionary(step_result.value)
+		replay_state = step_info.get("state", replay_state)
 
 		var auto_r: Result = AutoAdvanceClass.drain(replay_state, phase_manager, action_registry)
 		if not auto_r.ok:
@@ -136,22 +127,12 @@ static func full_replay(
 	var all_warnings: Array[String] = []
 	for i in range(command_history.size()):
 		var cmd: Command = command_history[i]
-		var executor := action_registry.get_executor(cmd.action_id)
-		if executor == null:
-			return Result.failure("重放时找不到执行器: %s" % cmd.action_id)
-
-		var force_execute := should_force_execute_in_replay(cmd, replay_state)
-		if force_execute and executor.requires_actor:
-			# 强制模式：允许“非当前玩家”执行（与 CommandRunner._validate_force_execute 语义一致），但仍需保证 actor 合法。
-			var count := replay_state.players.size()
-			if cmd.actor < 0 or cmd.actor >= count:
-				return Result.failure("重放强制命令 #%d actor 超出范围: actor=%d players=%d" % [i, cmd.actor, count])
-
-		var step_result := executor.compute_new_state_force(replay_state, cmd) if force_execute else executor.compute_new_state(replay_state, cmd)
+		var step_result := ReplayStepRunnerClass.apply_replay_command(replay_state, cmd, action_registry, i, "GameEngineReplay")
 		if not step_result.ok:
-			return Result.failure("重放命令 #%d 失败: %s" % [i, step_result.error])
-		replay_state = step_result.value
+			return step_result.with_warnings(all_warnings)
 		all_warnings.append_array(step_result.warnings)
+		var step_info: Dictionary = Dictionary(step_result.value)
+		replay_state = step_info.get("state", replay_state)
 
 		var auto_r: Result = AutoAdvanceClass.drain(replay_state, phase_manager, action_registry)
 		if not auto_r.ok:
@@ -167,10 +148,7 @@ static func full_replay(
 	}).with_warnings(all_warnings)
 
 static func should_force_execute_in_replay(_command: Command, _replay_state: GameState = null) -> bool:
-	# Replay/archive/timeline rebuild must be strict: command history is a persisted fact stream,
-	# not a runtime debug command source. Runtime debug_force remains handled by CommandRunner
-	# only when executing a new command outside replay mode.
-	return false
+	return ReplayStepRunnerClass.should_force_execute_in_replay(_command, _replay_state)
 
 static func _require_checkpoint_rng_calls(checkpoint: Dictionary, path: String) -> Result:
 	if not (checkpoint is Dictionary):
