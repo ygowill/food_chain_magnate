@@ -419,6 +419,10 @@ static func build_tests(host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.GameOnlineResyncRequestRejectionTestClass.run(),
 		},
 		{
+			"name": "OnlineResumeDeltaStoreContractTest",
+			"fn": func() -> Result: return TestRefs.OnlineResumeDeltaStoreContractTestClass.run(),
+		},
+		{
 			"name": "OnlineLobbyResumeControllerTest",
 			"fn": func() -> Result: return await TestRefs.OnlineLobbyResumeControllerTestClass.run(),
 		},

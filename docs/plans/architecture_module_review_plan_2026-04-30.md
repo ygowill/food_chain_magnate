@@ -1156,6 +1156,7 @@
   - 证据：`build_best_effort_resume_transfer(...)` 只要 delta 构建失败，就构建 full snapshot，并把 delta error 作为 `fallback_reason`。证据：`autoload/net_client/server_resync_service.gd:96-115`。
   - 风险：delta 缓存损坏、checkpoint 创建失败、cursor/hash mismatch 都会被归入 snapshot fallback。状态最终可能可恢复，但 server 失去了“delta store 已经坏掉”的强信号，性能问题和恢复链路缺陷会长期隐藏。
   - 建议：`record_resume_delta` 返回 Result，并在广播链路记录结构化 error；delta fallback 应区分正常 stale cursor、client 强制 snapshot、server recovery store 损坏三类原因，后者应告警并进入健康状态。
+  - 状态：Fix 59 已让 `record_resume_delta(...)` 返回 `Result`，checkpoint 初始化/轮转失败会回传，并由 server broadcast 链路记录结构化 error；resync fallback 分类仍可继续细化。
 
 - [P2] 客户端 snapshot 分片组装失败只记录 error，不发失败信号或 force resync，恢复等待可能只能靠超时退出。
   - 证据：`handle_snapshot_chunk(...)` 收齐 chunks 后 `assemble_snapshot(...)` 失败时，清空 pending snapshot state、记录 `GameLog.error` 后直接 return。证据：`autoload/net_client/client_resync_service.gd:117-123`。
@@ -2955,3 +2956,26 @@
 结论：
 
 - 已完成该 P3 的第一阶段职责拆分：命令构造不再散落在主 flow controller 中，后续如果继续扩展 staff UI 或 action panel context，可以在同一模式下继续拆 ViewModel/Binder，而不需要把规则参数继续塞回 overlay 控制器。
+
+### Fix 59：server recovery delta 记录失败不再静默吞掉
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 9 `[P2] Server recovery delta store 是 best-effort：记录失败被静默吞掉，resync 服务再用 full snapshot 兜底，缺少诊断边界`。
+
+改动：
+
+- `server/room.gd`：`record_resume_delta(...)` 从 `void` 改为返回 `Result`；checkpoint 初始化失败、无法计算 `post_state_hash`、checkpoint 轮转失败都会返回 failure，不再直接 `return`。
+- `autoload/net_client/server.gd`：`broadcast_command_applied(...)` 消费 `record_resume_delta(...)` 的返回值，失败时通过 `GameLog.error` 输出 room、command、state hash 与错误信息，避免 recovery store 损坏只表现为后续 snapshot fallback。
+- 新增 `core/tests/online_resume_delta_store_contract_test.gd`，覆盖 checkpoint 初始化失败、正常 delta 记录、checkpoint rotate 失败三条契约，并接入 AllTests。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1112`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`392/392`。
+
+结论：
+
+- 已完成该 P2 的第一阶段收紧：server delta store 写入失败现在会成为明确诊断信号，而不是被普通 full snapshot fallback 掩盖。后续若继续拆分，可在 `server_resync_service` 层把 stale cursor、force snapshot 与 recovery store unhealthy 进一步区分为不同 fallback reason。

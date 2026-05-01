@@ -2120,7 +2120,18 @@ func broadcast_command_applied(room, cmd, perf_meta: Dictionary = {}) -> void:
 		"state_hash": state_hash,
 	}
 	if room.has_method("record_resume_delta"):
-		room.record_resume_delta(cmd, state_hash)
+		var delta_record_r: Result = room.record_resume_delta(cmd, state_hash)
+		if not delta_record_r.ok:
+			GameLog.error(
+				"NetClient",
+				"Resume delta record failed room=%s cmd=%s hash=%s error=%s"
+					% [
+						ServerLogFormatClass.safe_text(str(room.room_code).to_upper()),
+						ServerLogFormatClass.safe_text(str(cmd.action_id)),
+						ServerLogFormatClass.short_hash(state_hash),
+						ServerLogFormatClass.safe_text(delta_record_r.error),
+					]
+			)
 	_maybe_request_round_end_autosave(room, cmd, state, state_hash)
 	var targets := Array(room.get_peer_ids())
 	var broadcast_start_mono_usec := OnlinePerfTraceClass.now_mono_usec()

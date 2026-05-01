@@ -567,23 +567,38 @@ func build_delta_resume_payload(cursor: Dictionary, max_commands: int = 0, soft_
 		"final_hash": current_hash,
 	})
 
-func record_resume_delta(cmd: Command, post_state_hash: String = "") -> void:
+func record_resume_delta(cmd: Command, post_state_hash: String = "") -> Result:
 	if status != STATUS_IN_GAME or game_engine == null or cmd == null:
-		return
+		return Result.success({
+			"recorded": false,
+			"reason": "room_not_recordable",
+		})
 	if _resume_checkpoint_archive.is_empty():
 		var checkpoint_r: Result = _reset_recovery_store_from_current_engine("delta_init")
 		if not checkpoint_r.ok:
-			return
+			return Result.failure("record_resume_delta: checkpoint init failed: %s" % checkpoint_r.error)
 	var normalized_hash := str(post_state_hash).strip_edges()
 	if normalized_hash.is_empty():
 		normalized_hash = _current_resume_state_hash()
+	if normalized_hash.is_empty():
+		return Result.failure("record_resume_delta: post_state_hash 为空")
+	var sequence := _current_resume_sequence()
 	_resume_delta_log.append({
-		"sequence": _current_resume_sequence(),
+		"sequence": sequence,
 		"cmd": cmd.to_dict(),
 		"post_state_hash": normalized_hash,
 	})
-	if _current_resume_sequence() - _resume_checkpoint_sequence >= RESUME_DELTA_ROTATE_COMMAND_THRESHOLD:
-		_reset_recovery_store_from_current_engine("delta_rotate")
+	if sequence - _resume_checkpoint_sequence >= RESUME_DELTA_ROTATE_COMMAND_THRESHOLD:
+		var rotate_r: Result = _reset_recovery_store_from_current_engine("delta_rotate")
+		if not rotate_r.ok:
+			return Result.failure("record_resume_delta: checkpoint rotate failed: %s" % rotate_r.error)
+	return Result.success({
+		"recorded": true,
+		"sequence": sequence,
+		"post_state_hash": normalized_hash,
+		"delta_count": _resume_delta_log.size(),
+		"checkpoint_id": _resume_checkpoint_id,
+	})
 
 func _make_seat_slot(
 	seat_index: int,

@@ -102,6 +102,7 @@ const GameOnlineResyncResumeTicketRetryPolicyTestClass = preload("res://core/tes
 const GameOnlineResyncReconnectFlowTestClass = preload("res://core/tests/game_online_resync_reconnect_flow_test.gd")
 const GameOnlineResumeProgressSyncTestClass = preload("res://core/tests/game_online_resume_progress_sync_test.gd")
 const GameOnlineResyncRequestRejectionTestClass = preload("res://core/tests/game_online_resync_request_rejection_test.gd")
+const OnlineResumeDeltaStoreContractTestClass = preload("res://core/tests/online_resume_delta_store_contract_test.gd")
 const OnlineRoomPersistenceRecoveryTestClass = preload("res://core/tests/online_room_persistence_recovery_test.gd")
 const OnlineRoundAutosaveTestClass = preload("res://core/tests/online_round_autosave_test.gd")
 const ExportMatchArtifactsContractTestClass = preload("res://core/tests/export_match_artifacts_contract_test.gd")
