@@ -1,11 +1,10 @@
 extends RefCounted
 
 const LobbyistsPlacementOverlayClass = preload("res://modules/lobbyists/ui/components/lobbyists_placement/lobbyists_placement_overlay.gd")
+const LobbyistsStaffUsageClass = preload("res://modules/lobbyists/actions/lobbyists_staff_usage.gd")
 
 const ACTION_ROAD := "place_lobbyists_road"
 const ACTION_PARK := "place_lobbyists_park"
-const PLACE_COUNT_KEY := "lobbyists_place_counts"
-const SYNTHETIC_STAFF_ID_BASE := 100000
 const PHASE_WORKING := "Working"
 const SUB_PHASE_LOBBYISTS := "Lobbyists"
 const EMPLOYEE_LOBBYIST := "lobbyist"
@@ -216,8 +215,8 @@ func _on_placement_confirmed(action_id: String, position: Vector2i, rotation: in
 	var emp_type := str(employee_type).strip_edges()
 	if not emp_type.is_empty():
 		command_params["employee_type"] = emp_type
-	if int(staff_id) > 0 and int(staff_id) < SYNTHETIC_STAFF_ID_BASE:
-		command_params["staff_id"] = int(staff_id)
+		if int(staff_id) > 0:
+			command_params["staff_id"] = int(staff_id)
 
 	var command = _create_command(aid, actor_id, command_params)
 	if command == null:
@@ -372,47 +371,29 @@ func _build_lobbyist_employee_items(state, player_id: int) -> Array[Dictionary]:
 	if state == null:
 		return out
 
-	var player = state.get_player(player_id)
-	if player.is_empty():
+	var providers_read := LobbyistsStaffUsageClass.try_get_lobbyists_for_working(state, player_id)
+	if not providers_read.ok:
 		return out
-	var employees_val = player.get("employees", [])
-	if not (employees_val is Array):
-		return out
-	var registry_val = player.get("staff_registry", {})
-	var registry: Dictionary = registry_val if registry_val is Dictionary else {}
-	var active_staff_ids_val = player.get("employees_staff_ids", [])
-	var active_staff_ids: Array = active_staff_ids_val if active_staff_ids_val is Array else []
-	var used_staff_ids := {}
-	var used_remaining := _get_player_round_count(state, player_id)
-
-	for i in range(Array(employees_val).size()):
-		var employee_type := str(Array(employees_val)[i]).strip_edges()
+	for provider_val in Array(providers_read.value):
+		if not (provider_val is Dictionary):
+			continue
+		var provider: Dictionary = provider_val
+		var employee_type := str(provider.get("employee_type", provider.get("id", ""))).strip_edges()
 		if employee_type.is_empty():
 			continue
-		if not _is_lobbyist_employee(employee_type):
-			continue
-
-		var capacity := 1
-		var used_for_staff := mini(used_remaining, capacity)
-		used_remaining = maxi(0, used_remaining - used_for_staff)
-		var staff_id := _resolve_active_staff_id_for_employee(employee_type, i, active_staff_ids, registry, used_staff_ids)
-		used_staff_ids[staff_id] = true
 		out.append({
-			"staff_id": staff_id,
+			"staff_id": int(provider.get("staff_id", -1)),
 			"id": employee_type,
 			"employee_type": employee_type,
 			"employee_def": _get_lobbyist_employee_def(employee_type),
-			"capacity": capacity,
-			"used": used_for_staff,
-			"remaining": maxi(0, capacity - used_for_staff),
+			"capacity": int(provider.get("capacity", 0)),
+			"used": int(provider.get("used", 0)),
+			"remaining": int(provider.get("remaining", 0)),
 			"can_place_lobbyists_road": true,
 			"can_place_lobbyists_park": true,
 		})
 
 	return out
-
-func _is_lobbyist_employee(employee_type: String) -> bool:
-	return str(employee_type).strip_edges() == EMPLOYEE_LOBBYIST
 
 func _get_lobbyist_employee_def(employee_type: String) -> Dictionary:
 	var emp_id := str(employee_type).strip_edges()
@@ -434,42 +415,6 @@ func _get_lobbyist_employee_def(employee_type: String) -> Dictionary:
 		"train_capacity": 0,
 		"tags": ["entry_level"],
 	}
-
-func _resolve_active_staff_id_for_employee(employee_type: String, employee_index: int, active_staff_ids: Array, registry: Dictionary, used_staff_ids: Dictionary) -> int:
-	if employee_index >= 0 and employee_index < active_staff_ids.size():
-		var direct_id := int(active_staff_ids[employee_index])
-		if direct_id > 0 and not used_staff_ids.has(direct_id):
-			var direct_record_val = registry.get(direct_id, null)
-			if direct_record_val is Dictionary:
-				var direct_record: Dictionary = direct_record_val
-				if str(direct_record.get("employee_type", "")).strip_edges() == employee_type:
-					return direct_id
-
-	for sid_val in active_staff_ids:
-		var staff_id := int(sid_val)
-		if staff_id <= 0 or used_staff_ids.has(staff_id):
-			continue
-		var record_val = registry.get(staff_id, null)
-		if not (record_val is Dictionary):
-			continue
-		var record: Dictionary = record_val
-		if str(record.get("employee_type", "")).strip_edges() == employee_type:
-			return staff_id
-
-	return SYNTHETIC_STAFF_ID_BASE + employee_index + 1
-
-func _get_player_round_count(state, player_id: int) -> int:
-	if state == null or not (state.round_state is Dictionary):
-		return 0
-	var round_state: Dictionary = state.round_state
-	var counts_val = round_state.get(PLACE_COUNT_KEY, {})
-	if not (counts_val is Dictionary):
-		return 0
-	var counts: Dictionary = counts_val
-	var value = counts.get(player_id, null)
-	if value == null and counts.has(str(player_id)):
-		value = counts.get(str(player_id), null)
-	return maxi(0, int(value)) if value != null else 0
 
 func _select_first_enabled_lobbyist_if_needed() -> void:
 	if not is_instance_valid(_overlay):

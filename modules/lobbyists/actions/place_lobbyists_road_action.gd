@@ -7,12 +7,12 @@ const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache
 const StructuresClass = preload("res://core/map/map_runtime/structures.gd")
 const PlacementClass = preload("res://core/map/placement_validator/placement.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
-const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const PieceRegistryClass = preload("res://core/map/piece_registry.gd")
 const MilestoneSystemClass = preload("res://core/rules/milestone_system.gd")
 const RoundStateCountersClass = preload("res://core/utils/round_state_counters.gd")
 const MapStateAccessClass = preload("res://core/state/map_state_access.gd")
 const LobbyistsRoadOverlaysClass = preload("res://modules/lobbyists/road_overlays.gd")
+const LobbyistsStaffUsageClass = preload("res://modules/lobbyists/actions/lobbyists_staff_usage.gd")
 
 const MODULE_ID := LobbyistsRoadOverlaysClass.MODULE_ID
 
@@ -51,17 +51,9 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 			if bool(flag):
 				return Result.failure("请先处理里程碑奖励：扩边放置地图板块（使用/放弃）")
 
-	var player := state.get_player(command.actor)
-	var capacity := EmployeeRulesClass.count_active_by_usage_tag_for_working(state, player, command.actor, "use:lobbyists")
-	if capacity <= 0:
-		return Result.failure("需要在岗的说客才能放置道路/公园")
-
-	var used_read := RoundStateCountersClass.get_player_count(state.round_state, "lobbyists_place_counts", command.actor)
-	if not used_read.ok:
-		return used_read
-	var used := int(used_read.value)
-	if used >= capacity:
-		return Result.failure("本子阶段可用说客次数已用完: %d/%d" % [used, capacity])
+	var staff_read := _resolve_lobbyist_staff(state, command)
+	if not staff_read.ok:
+		return staff_read
 
 	if not (state.map is Dictionary):
 		return Result.failure("state.map 类型错误（期望 Dictionary）")
@@ -149,6 +141,11 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 
 func _apply_changes(state: GameState, command: Command) -> Result:
 	var player_id: int = command.actor
+	var staff_read := _resolve_lobbyist_staff(state, command)
+	if not staff_read.ok:
+		return staff_read
+	var staff_info: Dictionary = staff_read.value
+	var staff_id := int(staff_info.get("staff_id", -1))
 
 	var piece_id: String = require_string_param(command, "piece_id").value
 	var anchor_pos: Vector2i = require_vector2i_param(command, "anchor_pos").value
@@ -234,6 +231,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var inc := RoundStateCountersClass.increment_player_count(state.round_state, "lobbyists_place_counts", player_id, 1)
 	if not inc.ok:
 		return inc
+	var staff_inc := LobbyistsStaffUsageClass.increment_lobbyist_usage(state, staff_id)
+	if not staff_inc.ok:
+		return staff_inc
 
 	# 触发里程碑：UseEmployee (lobbyist) —— 每次放置都触发一次（你已要求）
 	var ms := MilestoneSystemClass.process_event(state, "UseEmployee", {
@@ -247,14 +247,17 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		"piece_id": piece_id,
 		"anchor_pos": anchor_pos,
 		"rotation": rotation,
+		"staff_id": staff_id,
 		"markers": placed_markers,
 	}).with_warnings(ms.warnings)
 	return result
 
-func _generate_specific_events(_old_state: GameState, _new_state: GameState, command: Command) -> Array[Dictionary]:
+func _generate_specific_events(old_state: GameState, new_state: GameState, command: Command) -> Array[Dictionary]:
 	var piece_id: String = require_string_param(command, "piece_id").value
 	var anchor_pos: Vector2i = require_vector2i_param(command, "anchor_pos").value
 	var rotation: int = int(optional_int_param(command, "rotation", 0).value)
+	var explicit_staff_id := int(optional_int_param(command, "staff_id", -1).value)
+	var staff_id := LobbyistsStaffUsageClass.infer_consumed_lobbyist_staff_id(old_state, new_state, command.actor, explicit_staff_id)
 	return [{
 		"type": EventBus.EventType.STATE_CHANGED,
 		"data": {
@@ -264,8 +267,15 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 			"piece_id": piece_id,
 			"anchor_pos": [anchor_pos.x, anchor_pos.y],
 			"rotation": rotation,
+			"staff_id": staff_id,
 		}
 	}]
+
+func _resolve_lobbyist_staff(state: GameState, command: Command) -> Result:
+	var staff_read := optional_int_param(command, "staff_id", -1)
+	if not staff_read.ok:
+		return staff_read
+	return LobbyistsStaffUsageClass.resolve_lobbyist_for_working(state, command.actor, int(staff_read.value))
 
 func _build_map_context(state: GameState) -> Result:
 	var houses_read := MapStateAccessClass.require_houses(state, "place_lobbyists_road")

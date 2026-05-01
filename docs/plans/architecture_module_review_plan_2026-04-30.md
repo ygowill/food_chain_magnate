@@ -2906,3 +2906,28 @@
 结论：
 
 - 已完成该 P2 strict 化：Lobbyists 等模块的自定义 placement overlay 不再依赖静默 best-effort 加载；manifest 或脚本契约损坏会在 UI 初始化路径上明确暴露，避免隐藏动作入口与实际 overlay 缺失之间的漂移。
+
+### Fix 57：Lobbyists road/park 动作接入权威 staff_id 校验与消耗
+
+日期：2026-05-01
+
+对应问题：
+
+- main 增量 `[P2] Lobbyists 新 UI 选择具体 staff_id，但 road/park action 仍只按聚合次数计数，UI 表达的“具体员工选择”与权威规则不一致`。
+
+改动：
+
+- 新增 `modules/lobbyists/actions/lobbyists_staff_usage.gd`，集中派生当前玩家在岗、具备 `use:lobbyists` 能力的说客 staff provider，并按 `round_state.staff_usage[staff_id]["lobbyists"]` 计算 capacity/used/remaining。
+- `place_lobbyists_road_action.gd` 与 `place_lobbyists_park_action.gd`：校验阶段改为解析并验证 `command.params.staff_id`；指定 staff 不存在、非当前玩家、非在岗说客或本子阶段已用完时直接失败。缺省 `staff_id` 时仍选择首个可用说客，保留历史命令兼容。
+- 两个 action 的 `_apply_changes(...)` 在保持旧 `lobbyists_place_counts` 聚合计数的同时，新增权威 staff track 消耗；返回值与事件 payload 写入实际消耗的 `staff_id`。
+- `modules/lobbyists/ui/lobbyists_placement_flow_controller.gd`：员工列表改为读取同一 `LobbyistsStaffUsage` provider，不再用 `lobbyists_place_counts` 把前 N 个 staff 推断为已用，也不再生成 synthetic staff id。
+- `core/tests/lobbyists_road_state_access_test.gd`：新增 staff_id 契约测试，覆盖 road action 只消耗指定 staff、已使用 staff 被拒绝、park action 接受可用 staff 并拒绝不存在 staff。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1110`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：首次暴露新增测试中未装配 milestone handler 的干扰；测试改为预先标记 `first_lobbyist_used` 后重跑 PASS，`391/391`。
+
+结论：
+
+- 已完成该 P2 权威语义修复：Lobbyists UI 的具体 staff 选择已经与 core/module action 实际消耗一致；联机或坏客户端传入不可用 `staff_id` 不再能绕过权威校验。
