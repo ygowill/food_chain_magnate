@@ -70,6 +70,7 @@ static func _case_drinks_panel_keeps_selected_staff_id() -> Result:
 	panel.set_producer_items([
 		{"staff_id": 41, "employee_type": "truck_driver", "capacity": 1, "used": 1, "remaining": 0},
 		{"staff_id": 42, "employee_type": "truck_driver", "capacity": 1, "used": 0, "remaining": 1},
+		{"staff_id": 43, "employee_type": "truck_driver", "capacity": 1, "used": 0, "remaining": 1},
 	])
 	await st.process_frame
 
@@ -87,6 +88,47 @@ static func _case_drinks_panel_keeps_selected_staff_id() -> Result:
 	if int(panel.get_selected_staff_id()) != 41:
 		_safe_free(panel)
 		return Result.failure("drinks 面板切换选择后应保留 staff_id=41，实际: %s" % str(panel.get_selected_staff_id()))
+
+	picker.set_selected("staff:42")
+	panel._on_employee_selected("truck_driver")
+	if int(panel.get_selected_staff_id()) != 42:
+		_safe_free(panel)
+		return Result.failure("drinks 面板选择第二个实例后应保留 staff_id=42，实际: %s" % str(panel.get_selected_staff_id()))
+
+	if not panel.has_method("refresh_producer_items"):
+		_safe_free(panel)
+		return Result.failure("ProductionPanel 缺少 refresh_producer_items")
+	panel.refresh_producer_items([
+		{"staff_id": 41, "employee_type": "truck_driver", "capacity": 1, "used": 1, "remaining": 0},
+		{"staff_id": 42, "employee_type": "truck_driver", "capacity": 1, "used": 1, "remaining": 0},
+		{"staff_id": 43, "employee_type": "truck_driver", "capacity": 1, "used": 0, "remaining": 1},
+	])
+	await st.process_frame
+
+	picker = panel.get("_employee_picker")
+	if picker == null or not is_instance_valid(picker):
+		_safe_free(panel)
+		return Result.failure("drinks 面板刷新后未创建 employee picker")
+	if int(panel.get_selected_staff_id()) != 43:
+		_safe_free(panel)
+		return Result.failure("第二个同名采购员用完后应自动选中 staff_id=43，实际: %s" % str(panel.get_selected_staff_id()))
+	if picker.get_child_count() != 3:
+		_safe_free(panel)
+		return Result.failure("drinks 面板刷新后应保留 3 个 staff item，实际: %d" % picker.get_child_count())
+	var second_item = picker.get_child(1)
+	var third_item = picker.get_child(2)
+	if second_item == null or not is_instance_valid(second_item) or not second_item.has_method("is_enabled"):
+		_safe_free(panel)
+		return Result.failure("第二个同名采购员 item 缺少 is_enabled")
+	if bool(second_item.call("is_enabled")):
+		_safe_free(panel)
+		return Result.failure("第二个同名采购员用完后应灰显")
+	if third_item == null or not is_instance_valid(third_item) or not third_item.has_method("is_enabled"):
+		_safe_free(panel)
+		return Result.failure("第三个同名采购员 item 缺少 is_enabled")
+	if not bool(third_item.call("is_enabled")):
+		_safe_free(panel)
+		return Result.failure("第二个同名采购员用完后不应误灰显第三个")
 
 	_safe_free(panel)
 	return Result.success()

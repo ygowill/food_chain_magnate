@@ -901,9 +901,13 @@ func get_key_values() -> Dictionary:
 # === 菜单/调试（TopBar + Dialogs）===
 
 func _can_open_menu() -> bool:
-	if _panel_controller != null and _panel_controller.has_method("has_blocking_modal_ui"):
-		if bool(_panel_controller.call("has_blocking_modal_ui")):
-			return false
+	if _panel_controller != null:
+		if _panel_controller.has_method("has_menu_blocking_modal_ui"):
+			if bool(_panel_controller.call("has_menu_blocking_modal_ui")):
+				return false
+		elif _panel_controller.has_method("has_blocking_modal_ui"):
+			if bool(_panel_controller.call("has_blocking_modal_ui")):
+				return false
 	if online_game_details_dialog != null and is_instance_valid(online_game_details_dialog) and bool(online_game_details_dialog.visible):
 		return false
 	return true

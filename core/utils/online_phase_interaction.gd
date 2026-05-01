@@ -2,6 +2,7 @@ class_name OnlinePhaseInteraction
 extends RefCounted
 
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
 const RoundStatePlayerBoolFlagsClass = preload("res://core/utils/round_state_player_bool_flags.gd")
 const RoundStateSubPhasePassedClass = preload("res://core/utils/round_state_sub_phase_passed.gd")
 const KIND_CONFIRM_DINNERTIME := "confirm_dinnertime"
@@ -257,19 +258,66 @@ static func can_player_reopen_online_restructuring(state: GameState, player_id: 
 		return false
 	return bool(submitted_read.value)
 
-static func clear_player_restructuring_submission_for_online_reopen(state: GameState, player_id: int) -> void:
+static func clear_player_restructuring_submission_for_online_reopen(state: GameState, player_id: int) -> Result:
 	if not can_player_reopen_online_restructuring(state, player_id):
-		return
+		return Result.success()
 	if not (state.round_state is Dictionary):
-		return
-	var _set_r := RoundStatePlayerBoolFlagsClass.set_player_flag(
+		return Result.failure("OnlinePhaseInteraction.clear_player_restructuring_submission_for_online_reopen: round_state 类型错误（期望 Dictionary）")
+	var pending_read := _read_restructuring_pending_players_for_reopen(state, player_id)
+	if not pending_read.ok:
+		return pending_read
+	var pending: Array = pending_read.value
+
+	var set_r := RoundStatePlayerBoolFlagsClass.set_player_flag(
 		state.round_state,
 		["restructuring", "submitted"],
 		player_id,
 		false,
 		"OnlinePhaseInteraction.clear_player_restructuring_submission_for_online_reopen"
 	)
+	if not set_r.ok:
+		return set_r
+
 	var restructuring_val = state.round_state.get("restructuring", null)
 	if restructuring_val is Dictionary:
 		var restructuring: Dictionary = restructuring_val
 		restructuring["finalized"] = false
+
+	var pending_set := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
+		state.round_state,
+		DefsClass.PHASE_RESTRUCTURING,
+		pending,
+		"OnlinePhaseInteraction.clear_player_restructuring_submission_for_online_reopen"
+	)
+	if not pending_set.ok:
+		return pending_set
+	return Result.success()
+
+static func _read_restructuring_pending_players_for_reopen(state: GameState, player_id: int) -> Result:
+	if state == null:
+		return Result.failure("OnlinePhaseInteraction.clear_player_restructuring_submission_for_online_reopen: state 为空")
+	if not (state.round_state is Dictionary):
+		return Result.failure("OnlinePhaseInteraction.clear_player_restructuring_submission_for_online_reopen: round_state 类型错误（期望 Dictionary）")
+	var pending: Array = []
+	var ppa_val = state.round_state.get("pending_phase_actions", null)
+	if ppa_val != null:
+		if not (ppa_val is Dictionary):
+			return Result.failure("OnlinePhaseInteraction.clear_player_restructuring_submission_for_online_reopen: round_state.pending_phase_actions 类型错误（期望 Dictionary）")
+		var ppa: Dictionary = ppa_val
+		if ppa.has(DefsClass.PHASE_RESTRUCTURING):
+			var list_val = ppa.get(DefsClass.PHASE_RESTRUCTURING, null)
+			if not (list_val is Array):
+				return Result.failure("OnlinePhaseInteraction.clear_player_restructuring_submission_for_online_reopen: round_state.pending_phase_actions[Restructuring] 类型错误（期望 Array）")
+			var list: Array = list_val
+			for i in range(list.size()):
+				var pending_player_id := _read_integral_player_id(list[i])
+				if pending_player_id < 0:
+					return Result.failure("OnlinePhaseInteraction.clear_player_restructuring_submission_for_online_reopen: round_state.pending_phase_actions[Restructuring][%d] 类型错误（期望 int/整数 float）" % i)
+				if not is_valid_player_id(state, pending_player_id):
+					return Result.failure("OnlinePhaseInteraction.clear_player_restructuring_submission_for_online_reopen: round_state.pending_phase_actions[Restructuring][%d] 玩家越界: %d" % [i, pending_player_id])
+				if not pending.has(pending_player_id):
+					pending.append(pending_player_id)
+	if not pending.has(player_id):
+		pending.append(player_id)
+	pending.sort()
+	return Result.success(pending)

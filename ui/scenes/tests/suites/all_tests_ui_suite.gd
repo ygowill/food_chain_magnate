@@ -62,6 +62,10 @@ static func build_tests(_host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.TurnOrderSelectionModalOnlineVisibilityTestClass.run(),
 			},
 			{
+				"name": "TurnOrderMenuAccessTest",
+				"fn": func() -> Result: return TestRefs.TurnOrderMenuAccessTestClass.run(),
+			},
+			{
 				"name": "RoomConfigEditorEditableSignalTest",
 				"fn": func() -> Result: return TestRefs.RoomConfigEditorEditableSignalTestClass.run(),
 			},

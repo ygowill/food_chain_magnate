@@ -312,6 +312,19 @@ func has_blocking_modal_ui() -> bool:
 			return true
 	return false
 
+func has_menu_blocking_modal_ui() -> bool:
+	if _restructuring_controller != null and _restructuring_controller.has_method("has_open_modal_ui"):
+		if bool(_restructuring_controller.has_open_modal_ui()):
+			return true
+	if _modals_controller != null:
+		if _modals_controller.has_method("has_menu_blocking_modal_ui"):
+			if bool(_modals_controller.has_menu_blocking_modal_ui()):
+				return true
+		elif _modals_controller.has_method("has_open_modal_ui"):
+			if bool(_modals_controller.has_open_modal_ui()):
+				return true
+	return false
+
 func hide_modal_ui() -> void:
 	if _modals_controller != null and _modals_controller.has_method("hide"):
 		_modals_controller.hide()

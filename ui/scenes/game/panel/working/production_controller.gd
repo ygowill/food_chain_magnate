@@ -111,6 +111,8 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 				production_panel.set_available_drink_types(_get_all_drink_types())
 			if production_panel.has_method("set_drinks_procurement_state"):
 				production_panel.set_drinks_procurement_state(0, false, "")
+	elif production_panel.has_method("refresh_producer_items"):
+		production_panel.refresh_producer_items(_build_producer_items(state, production_type))
 
 	# Inventory changes frequently; keep it fresh even without a full refresh.
 	if production_panel != null and is_instance_valid(production_panel) and production_panel.has_method("set_current_inventory"):

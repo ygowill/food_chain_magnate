@@ -118,7 +118,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	var context_read := _require_apply_context(state, command.actor, slot_index)
 	if not context_read.ok:
 		return context_read
-	OnlinePhaseInteractionClass.clear_player_restructuring_submission_for_online_reopen(state, command.actor)
+	var reopen_clear := OnlinePhaseInteractionClass.clear_player_restructuring_submission_for_online_reopen(state, command.actor)
+	if not reopen_clear.ok:
+		return reopen_clear
 	var context: Dictionary = context_read.value
 	var player: Dictionary = context.get("player", {})
 	var employees: Array = context.get("employees", [])

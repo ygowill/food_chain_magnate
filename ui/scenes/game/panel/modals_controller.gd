@@ -72,6 +72,19 @@ func has_open_modal_ui() -> bool:
 			return true
 	return false
 
+func has_menu_blocking_modal_ui() -> bool:
+	if _reserve_card_open_routine_running or _pending_reserve_card_open_player_id >= 0:
+		return true
+	if is_instance_valid(_reserve_card_modal) and _reserve_card_modal.visible:
+		return true
+	for k in _phase_action_modals_by_key.keys():
+		var inst = _phase_action_modals_by_key.get(k, null)
+		if not is_instance_valid(inst):
+			continue
+		if inst is Control and (inst as Control).visible:
+			return true
+	return false
+
 func hide() -> void:
 	hide_turn_order_modal()
 	hide_reserve_card_modal()
@@ -243,6 +256,10 @@ func show_turn_order_modal(state: GameState, current_player_id: int, selections:
 
 	if not is_instance_valid(_turn_order_modal):
 		return
+
+	if _turn_order_modal is Control:
+		# 顺位选择允许玩家打开游戏菜单；菜单层级高于该弹窗，但仍低于真正阻塞性的 modal。
+		UiZClass.apply_absolute((_turn_order_modal as Control), UiZClass.MENU - 1)
 
 	if _turn_order_modal.has_method("setup"):
 		_turn_order_modal.call("setup", state, current_player_id, selections, bool(interactive), int(local_player_id))

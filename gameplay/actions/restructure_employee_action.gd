@@ -97,7 +97,9 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 	if not to_reserve:
 		return Result.success({"employee_id": employee_id, "to_reserve": false, "no_op": true})
 
-	OnlinePhaseInteractionClass.clear_player_restructuring_submission_for_online_reopen(state, command.actor)
+	var reopen_clear := OnlinePhaseInteractionClass.clear_player_restructuring_submission_for_online_reopen(state, command.actor)
+	if not reopen_clear.ok:
+		return reopen_clear
 
 	var player_read := PlayerStateAccessClass.require_player(state, command.actor, "restructure_employee")
 	if not player_read.ok:

@@ -171,6 +171,23 @@ func set_producer_items(items: Array) -> void:
 		_producer_items.append(Dictionary(item_val).duplicate(true))
 	_rebuild()
 
+func refresh_producer_items(items: Array) -> void:
+	_available_producers.clear()
+	_producer_items.clear()
+	for item_val in items:
+		if not (item_val is Dictionary):
+			continue
+		_producer_items.append(Dictionary(item_val).duplicate(true))
+	_rebuild_employee_options()
+	if _food_controller != null and is_instance_valid(_food_controller):
+		_food_controller.rebuild_food_type_options()
+		_food_controller.update_food_controls_visibility()
+	if _drinks_controller != null and is_instance_valid(_drinks_controller):
+		_drinks_controller.update_drinks_controls_visibility()
+		_drinks_controller.update_drinks_selection_label()
+	_update_confirm_state()
+	_update_info()
+
 func set_current_inventory(inventory: Dictionary) -> void:
 	_current_inventory = inventory.duplicate()
 	_update_info()
