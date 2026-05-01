@@ -128,6 +128,23 @@ static func run() -> Result:
 		_safe_free(hand)
 		_safe_free(company)
 		return Result.failure("RestructuringModal.size=%s (期望接近全屏)" % str(modal.size))
+	var modal_panel = modal.get_node_or_null("Panel")
+	if modal_panel == null or not (modal_panel is Control):
+		_safe_free(modal)
+		_safe_free(hand)
+		_safe_free(company)
+		return Result.failure("RestructuringModal.Panel 节点缺失")
+	var panel_control := modal_panel as Control
+	if panel_control.position.x < -0.01 or panel_control.position.y < -0.01:
+		_safe_free(modal)
+		_safe_free(hand)
+		_safe_free(company)
+		return Result.failure("RestructuringModal.Panel.position=%s 不应溢出左/上边界" % str(panel_control.position))
+	if panel_control.position.x + panel_control.size.x > modal.size.x + 0.01 or panel_control.position.y + panel_control.size.y > modal.size.y + 0.01:
+		_safe_free(modal)
+		_safe_free(hand)
+		_safe_free(company)
+		return Result.failure("RestructuringModal.Panel rect=%s size=%s 不应溢出 modal=%s" % [str(panel_control.position), str(panel_control.size), str(modal.size)])
 
 	# Split children should expand vertically, otherwise CompanyStructure.ManagerScroll may be squeezed to 0 height.
 	# (issue_tracker #44)

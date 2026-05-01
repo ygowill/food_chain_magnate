@@ -14,8 +14,8 @@ signal auto_fill_requested()
 @onready var auto_fill_button: Button = $Panel/MarginContainer/VBoxContainer/ButtonRow/AutoFillButton
 
 const RESTRUCTURING_HAND_TARGET_WIDTH := 460.0 # fits 3 compact cards/row with margins (issue_tracker #45)
-const RESTRUCTURING_PANEL_TARGET_SIZE := Vector2(4096.0, 2160.0)
 const RESTRUCTURING_FALLBACK_VIEWPORT_SIZE := Vector2(1280.0, 720.0)
+const RESTRUCTURING_PANEL_MARGIN := 12.0
 const _MAX_SPLIT_ADJUST_ATTEMPTS := 6
 
 var _hand_area: Node = null
@@ -40,8 +40,9 @@ func _ready() -> void:
 			auto_fill_button.pressed.connect(_on_auto_fill_pressed)
 
 func open(_covered_rect: Rect2) -> void:
-	_prepare_near_fullscreen_panel()
-	super.open(_resolve_near_fullscreen_cover_rect(_covered_rect))
+	var cover_rect := _resolve_near_fullscreen_cover_rect(_covered_rect)
+	_prepare_near_fullscreen_panel(cover_rect)
+	super.open(cover_rect)
 	if is_instance_valid(hand_host):
 		hand_host.custom_minimum_size.x = RESTRUCTURING_HAND_TARGET_WIDTH
 	_queue_apply_split_target_width()
@@ -122,7 +123,7 @@ func set_content_visible(visible: bool) -> void:
 	if is_instance_valid(split):
 		split.visible = bool(visible)
 
-func _prepare_near_fullscreen_panel() -> void:
+func _prepare_near_fullscreen_panel(cover_rect: Rect2) -> void:
 	var panel_node: Control = panel
 	if not is_instance_valid(panel_node):
 		var n = get_node_or_null("Panel")
@@ -131,8 +132,12 @@ func _prepare_near_fullscreen_panel() -> void:
 	if not is_instance_valid(panel_node):
 		return
 
-	panel_node.custom_minimum_size = RESTRUCTURING_PANEL_TARGET_SIZE
-	panel_node.size = RESTRUCTURING_PANEL_TARGET_SIZE
+	var panel_size := Vector2(
+		maxf(0.0, cover_rect.size.x - RESTRUCTURING_PANEL_MARGIN * 2.0),
+		maxf(0.0, cover_rect.size.y - RESTRUCTURING_PANEL_MARGIN * 2.0)
+	)
+	panel_node.custom_minimum_size = panel_size
+	panel_node.size = panel_size
 
 func _resolve_near_fullscreen_cover_rect(covered_rect: Rect2) -> Rect2:
 	var full_size := Vector2.ZERO
