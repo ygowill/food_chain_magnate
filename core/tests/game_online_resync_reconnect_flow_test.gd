@@ -263,7 +263,7 @@ static func run() -> Result:
 			prev_user_id,
 			prev_is_guest,
 			prev_display_name,
-			"resync archive 应保持 HOTSEAT 读档语义的 phase: %s vs %s"
+			"resync archive 应保持显式 marker 驱动的读档语义 phase: %s vs %s"
 				% [str(engine.get_state().phase), str(expected_engine.get_state().phase)]
 		)
 	if str(engine.get_state().compute_hash()) != str(expected_engine.get_state().compute_hash()):
@@ -284,7 +284,7 @@ static func run() -> Result:
 			prev_user_id,
 			prev_is_guest,
 			prev_display_name,
-			"resync archive hash 应与 HOTSEAT 读档 + prepare 一致: %s vs %s"
+			"resync archive hash 应与显式 marker 读档 + prepare 一致: %s vs %s"
 				% [str(engine.get_state().compute_hash()), str(expected_engine.get_state().compute_hash())]
 		)
 
@@ -479,10 +479,7 @@ static func _restore_and_fail(
 
 static func _build_expected_resume_engine(archive: Dictionary) -> Result:
 	var engine = GameEngineClass.new()
-	var prev_mode = NetContext.mode
-	NetContext.mode = NetContext.Mode.HOTSEAT
 	var load_r: Result = engine.load_from_archive(archive)
-	NetContext.mode = prev_mode
 	if not load_r.ok:
 		return Result.failure("load_from_archive failed: %s" % load_r.error)
 	var prepare_r: Result = OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)

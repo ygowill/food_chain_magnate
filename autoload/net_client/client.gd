@@ -902,20 +902,7 @@ func _is_resume_archive_room_state() -> bool:
 func _load_archive_for_online_client(engine: GameEngine, archive: Dictionary, progress_callback: Callable = Callable()) -> Result:
 	if engine == null:
 		return Result.failure("load archive failed: engine 为空")
-	if NetContext == null:
-		return engine.load_from_archive(archive, progress_callback)
-
-	var restore_mode := false
-	var previous_mode = NetContext.mode
-	if int(previous_mode) == int(NetContext.Mode.ONLINE_CLIENT):
-		restore_mode = true
-		NetContext.mode = NetContext.Mode.HOTSEAT
-
-	var load_r: Result = engine.load_from_archive(archive, progress_callback)
-
-	if restore_mode:
-		NetContext.mode = previous_mode
-	return load_r
+	return engine.load_from_archive(archive, progress_callback)
 
 func _sync_online_resume_progress(engine, checkpoint_id: String = "") -> void:
 	if NetContext == null:

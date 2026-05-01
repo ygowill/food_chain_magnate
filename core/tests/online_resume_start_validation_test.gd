@@ -95,9 +95,11 @@ static func _run_dinnertime_resume_point_test_impl() -> Result:
 	var init_state = engine.get_state()
 	if init_state == null:
 		return Result.failure("Dinnertime 测试初始化 state 为空")
-	if not (init_state.rules is Dictionary):
-		init_state.rules = {}
-	init_state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 0
+	var prepare_marker_r: Result = OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
+	if not prepare_marker_r.ok:
+		return Result.failure("Dinnertime 测试写入 online resume marker 失败: %s" % prepare_marker_r.error)
+	if not (init_state.rules is Dictionary) or int(init_state.rules.get(ONLINE_DINNERTIME_CONFIRM_KEY, 0)) != 1:
+		return Result.failure("Dinnertime 测试缺少 online dinnertime confirm marker")
 	var setup_r := TestPhaseUtilsClass.complete_setup(engine)
 	if not setup_r.ok:
 		return Result.failure("构造 Dinnertime 恢复测试历史失败(setup): %s" % setup_r.error)

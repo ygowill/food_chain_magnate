@@ -33,6 +33,7 @@ static func run() -> Result:
 		return _restore_and_fail(prev_mode, prev_local_player_id, prev_local_role, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state, prev_engine, prev_is_game_active, "构造 working-phase 恢复存档失败: %s" % build_r.error)
 	var build_info: Dictionary = Dictionary(build_r.value)
 	var transfer: Dictionary = Dictionary(build_info.get("transfer", {})).duplicate(true)
+	var archive_for_probe: Dictionary = Dictionary(build_info.get("archive", {})).duplicate(true)
 
 	Globals.current_game_engine = null
 	Globals.is_game_active = false
@@ -49,6 +50,10 @@ static func run() -> Result:
 	}
 	NetContext.set_online_resume_context("FULL02", "player", "https://platform.example.test", NetContext.ONLINE_RESUME_TARGET_GAME)
 	NetContext.mark_online_resume_in_game(true)
+
+	var mode_probe_r := _test_load_archive_preserves_online_mode_during_progress(archive_for_probe)
+	if not mode_probe_r.ok:
+		return _restore_and_fail(prev_mode, prev_local_player_id, prev_local_role, prev_server_url, prev_connect_token, prev_room_state, prev_room_list, prev_player_profile, prev_resume_state, prev_engine, prev_is_game_active, mode_probe_r.error)
 
 	var mock_net := _MockNet.new()
 	var client = ClientLogicClass.new()
@@ -140,7 +145,30 @@ static func _build_working_phase_resume_archive_transfer() -> Result:
 		return Result.failure("build_snapshot_transfer 失败: %s" % transfer_r.error)
 	return Result.success({
 		"transfer": Dictionary(transfer_r.value).duplicate(true),
+		"archive": archive.duplicate(true),
 	})
+
+static func _test_load_archive_preserves_online_mode_during_progress(archive: Dictionary) -> Result:
+	if archive.is_empty():
+		return Result.failure("mode probe archive 为空")
+	var client = ClientLogicClass.new()
+	var engine := GameEngineClass.new()
+	var probe := _ModeProbe.new()
+	var load_r: Result = client._load_archive_for_online_client(
+		engine,
+		archive.duplicate(true),
+		Callable(probe, "record")
+	)
+	if not load_r.ok:
+		return Result.failure("mode probe load_archive_for_online_client 失败: %s" % load_r.error)
+	if NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return Result.failure("load_archive_for_online_client 后 NetContext.mode 被改写: %s" % str(NetContext.mode))
+	if probe.modes.is_empty():
+		return Result.failure("mode probe 未收到 archive load progress callback")
+	for mode_val in probe.modes:
+		if int(mode_val) != int(NetContext.Mode.ONLINE_CLIENT):
+			return Result.failure("archive load progress 期间 NetContext.mode 不应切到 HOTSEAT: %s" % str(probe.modes))
+	return Result.success()
 
 static func _restore(prev_mode: int, prev_local_player_id: int, prev_local_role: String, prev_server_url: String, prev_connect_token: String, prev_room_state: Dictionary, prev_room_list: Array, prev_player_profile: Dictionary, prev_resume_state: Dictionary, prev_engine, prev_is_game_active: bool) -> void:
 	NetContext.mode = prev_mode
@@ -185,3 +213,11 @@ class _MockNet:
 	var _pending_resync_snapshot_chunks: Dictionary = {}
 	var _pending_resync_delta: Dictionary = {}
 	var _online_client_engine_room_code: String = ""
+
+class _ModeProbe:
+	extends RefCounted
+
+	var modes: Array[int] = []
+
+	func record(_progress: Dictionary) -> void:
+		modes.append(int(NetContext.mode))

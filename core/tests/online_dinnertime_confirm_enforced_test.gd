@@ -1,8 +1,9 @@
-# Online：晚餐阶段必须等待玩家确认（即便 rules 标记被错误写为 0）
+# Online：晚餐阶段必须由显式 rules marker 驱动玩家确认，不能隐式依赖 NetContext.mode。
 class_name OnlineDinnertimeConfirmEnforcedTest
 extends RefCounted
 
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 
 const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
@@ -24,10 +25,13 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if state == null:
 		_reset_net_context()
 		return Result.failure("state 为空")
-	if not (state.rules is Dictionary):
-		state.rules = {}
-	# 显式写入“禁用标记”，验证在线模式仍强制启用晚餐确认阻塞。
-	state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 0
+	var prepare_r: Result = OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
+	if not prepare_r.ok:
+		_reset_net_context()
+		return Result.failure("prepare_engine_for_online_resume 失败: %s" % prepare_r.error)
+	if not (state.rules is Dictionary) or int(state.rules.get(ONLINE_DINNERTIME_CONFIRM_KEY, 0)) != 1:
+		_reset_net_context()
+		return Result.failure("prepare_engine_for_online_resume 未写入晚餐确认 marker")
 
 	var setup_r := TestPhaseUtilsClass.complete_setup(engine)
 	if not setup_r.ok:
@@ -131,4 +135,3 @@ static func _assert_per_player_confirm_pending(list: Array, player_count: int) -
 static func _reset_net_context() -> void:
 	if NetContext != null and NetContext.has_method("reset"):
 		NetContext.reset()
-

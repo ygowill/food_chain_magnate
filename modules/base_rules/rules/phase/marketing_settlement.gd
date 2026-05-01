@@ -257,15 +257,7 @@ static func _inject_marketing_confirm_pending_if_needed(state: GameState, has_an
 		state.round_state, DefsClass.PHASE_MARKETING, pending, "营销结算"
 	)
 
-static func _is_online_mode() -> bool:
-	if NetContext == null:
-		return false
-	return NetContext.mode == NetContext.Mode.ONLINE_CLIENT or NetContext.mode == NetContext.Mode.ONLINE_SERVER
-
 static func _is_online_marketing_confirm_enabled(state: GameState) -> bool:
-	if _is_online_mode():
-		return true
-
 	var v = _read_online_marketing_confirm_marker(state)
 	if v is bool:
 		return bool(v)
@@ -275,7 +267,7 @@ static func _is_online_marketing_confirm_enabled(state: GameState) -> bool:
 		var f: float = float(v)
 		if f == floor(f):
 			return int(f) > 0
-	return _is_online_mode()
+	return false
 
 static func _read_online_marketing_confirm_marker(state: GameState):
 	if state == null:

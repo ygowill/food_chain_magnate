@@ -1570,3 +1570,29 @@
 
 - 已完成本次补充修复：教学运行时不再有用户设置总开关，也不会因默认设置在普通模式、回放/加载路径误触发。
 - 后续如果需要新增其他教学类型，应新增明确入口和独立运行标记，不能复用全局“教学启用”式开关。
+
+### Fix 4：online archive/resync 加载不再临时切换 NetContext.mode
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 8 `[P1] 联机 archive/resync 加载路径依赖全局 NetContext.mode 临时切换到 HOTSEAT，规则执行语义被 autoload 运行模式反向影响`。
+- Step 8/10 的测试缺口：缺少“客户端 archive load 不得修改 `NetContext.mode`”的回归测试。
+
+改动：
+
+- `autoload/net_client/client.gd`：`_load_archive_for_online_client(...)` 直接调用 `engine.load_from_archive(...)`，移除 `ONLINE_CLIENT -> HOTSEAT -> ONLINE_CLIENT` 的全局模式切换。
+- `modules/base_rules/rules/phase/dinnertime/dinnertime_settlement_impl.gd`、`modules/base_rules/rules/phase/marketing_settlement.gd`：online confirm 是否启用只读取 `state.rules/round_state` 中显式 `online_require_*_confirm` marker，不再通过 `NetContext.mode` 隐式启用。
+- `core/tests/online_dinnertime_confirm_enforced_test.gd`、`core/tests/online_resume_start_validation_test.gd`、`core/tests/game_online_resync_reconnect_flow_test.gd`：测试构造改为通过 `OnlineResumePointValidator.prepare_engine_for_online_resume(...)` 写入 marker，预期从“HOTSEAT 读档语义”改为“显式 marker 读档语义”。
+- `core/tests/online_resume_single_full_engine_cache_test.gd`：新增 mode probe，验证 `_load_archive_for_online_client(...)` 期间 progress callback 看到的 `NetContext.mode` 始终保持 `ONLINE_CLIENT`，读档后也不被改写。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P1 的第一阶段整改：联机 archive/resync 加载不再通过写全局 `NetContext.mode` 改变规则执行语义。
+- 当前仍保留 `OnlineResumePointValidator.prepare_engine_for_online_resume(...)` 对恢复点写入 marker/修复 pending 的行为；这对应 Step 8 的另一个 P1（validator mutation/repair），需要作为后续独立整改继续拆分。
