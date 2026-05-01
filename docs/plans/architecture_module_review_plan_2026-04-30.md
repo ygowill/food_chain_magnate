@@ -1308,6 +1308,7 @@
   - 证据：`ui/scenes/tests/all_tests_plan.gd` 当前 1558 行，`all_tests_refs.gd` 集中 preload 大量测试类。证据：`ui/scenes/tests/all_tests_plan.gd:1-8` 与本轮 `wc -l` 结果。
   - 风险：测试覆盖已经很丰富，但聚合入口本身成为手工维护热点。新增 strict/recovery 双轨测试时，漏加到 AllTests 的概率上升。
   - 建议：按 domain 拆分 test suites，例如 `all_tests_core_architecture.gd`、`all_tests_online.gd`、`all_tests_modules.gd`，再由顶层 AllTests 聚合 suite 列表。
+  - 状态：Fix 65 已将顶层 `all_tests_plan.gd` 缩减为 suite 聚合器，并按 bootstrap/core architecture/online/ui/core rules/runtime timeline/modules/settlement 拆出 8 个 domain suite。
 
 暂不列为问题：
 
@@ -3103,3 +3104,27 @@
 结论：
 
 - 已完成该 P2 的 fallback 边界收紧：server resync 仍允许在 delta 不可用时发 full snapshot，但调用方与日志现在能区分正常客户端请求/游标过期、delta 窗口问题和服务端 recovery store unhealthy，不再把健康问题伪装成普通 snapshot fallback。
+
+### Fix 65：AllTests 聚合计划拆分为 domain suites
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 10 `[P3] AllTests 聚合文件过大，新增/迁移测试需要同时维护 refs 与 plan，容易漏接架构测试`。
+
+改动：
+
+- `ui/scenes/tests/all_tests_plan.gd`：从 1578 行缩减为 27 行，只保留 suite preload、按序聚合和 `_append_suite(...)`。
+- 新增 `ui/scenes/tests/suites/` 下 8 个 suite：`all_tests_bootstrap_suite.gd`、`all_tests_core_architecture_suite.gd`、`all_tests_online_suite.gd`、`all_tests_ui_suite.gd`、`all_tests_core_rules_suite.gd`、`all_tests_runtime_timeline_suite.gd`、`all_tests_modules_suite.gd`、`all_tests_settlement_suite.gd`。
+- 保持原 AllTests 执行顺序与 392 个测试条目不变；每个 suite 只承载一个 domain 的测试注册，后续新增 online/resync、timeline 或 module 测试时不再需要修改一个 1500+ 行聚合文件。
+- `docs/testing.md`：将恢复房专项定向核验说明改为指向拆分后的 online/runtime timeline suites。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1121`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`392/392`。
+
+结论：
+
+- 已完成该 P3 的测试聚合治理：顶层 AllTests 现在只表达 suite 顺序，domain 注册分散到小文件中，降低后续迁移/新增测试漏接架构测试的概率；`all_tests_refs.gd` 仍作为统一 preload 表保留，后续若继续增长可再按 suite 拆 refs。

@@ -141,7 +141,7 @@ tools/run_headless_script.sh res://tools/check_compile.gd
 tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120
 ```
 
-若只想做定向核验，优先关注 `ui/scenes/tests/all_tests_plan.gd` 中这些注册项：
+若只想做定向核验，优先关注 `ui/scenes/tests/suites/all_tests_online_suite.gd` 与 `ui/scenes/tests/suites/all_tests_runtime_timeline_suite.gd` 中这些注册项：
 
 - `OnlineResumeFullSnapshotBootstrapTest`
 - `OnlineResumeSingleFullEngineCacheTest`
