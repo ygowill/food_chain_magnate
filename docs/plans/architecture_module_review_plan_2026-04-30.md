@@ -1580,6 +1580,7 @@
 - `ui/scenes/game/controllers/tutorials_controller.gd`：上下文导览与流程提示的去重改为控制器实例内 `_seen_tutorial_ids`，只约束本次规则教学，不再写入用户设置。
 - `ui/scenes/tests/tutorial_runtime_scope_test.gd`、`ui/scenes/tests/game_tutorial_targets_contract_test.gd`：同步移除对持久化教学进度字段的依赖。
 - `docs/architecture/22-ui-onboarding-tutorials.md`、`docs/tutorial_onboarding_design.md`：更新设计说明，明确教学进度不再持久化。
+- 追加复核：继续清理文档中残留的“教学设置持久化”“设置页开关 + 重置教学进度”“Globals 负责进度与偏好”等旧描述；当前设置页只保留历史配置键清理逻辑，不再暴露任何教学设置入口。
 
 验证：
 

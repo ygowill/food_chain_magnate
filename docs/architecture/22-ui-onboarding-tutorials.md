@@ -13,8 +13,9 @@
 3. **场景级教学 controller**
 	- 决定什么时候开始导览、什么时候发流程提示
 	- 决定是否切换到“教学局模式”文案
-4. **全局进度与开关**
-	- 保存“是否启用教学”“哪些提示已经看过”
+4. **规则教学运行时标记**
+	- 只在主菜单规则教学入口触发后串联 Setup / Game 教学流程
+	- 不保存“是否启用教学”或“哪些提示已经看过”
 
 这样可以避免把教学流程直接塞进 `game.gd`、`game_setup.gd` 这类主场景脚本里。
 
@@ -22,7 +23,7 @@
 
 ```mermaid
 flowchart TB
-  Globals["autoload/globals.gd\n教学开关 / 进度持久化"]
+  Globals["autoload/globals.gd\n规则教学运行时标记"]
   MainMenu["ui/scenes/menus/main_menu.gd\n规则教学入口"]
   TutorialCore["ui/tutorial/tutorial_controller.gd\n通用导览入口"]
   Spotlight["ui/components/tutorial/tutorial_spotlight_overlay.*\nSpotlight UI"]
@@ -168,9 +169,8 @@ flowchart TB
 
 职责：
 
-- 只负责教学相关**设置项 UI**
-	- 是否启用教学
-	- 重置教学进度
+- 不再提供任何教学相关设置项 UI
+- 保存设置时只负责清理旧版本遗留的 `game/tutorial_enabled`、`game/tutorial_auto_popup` 与 `tutorial/*_seen` 等历史配置键
 
 边界：
 
@@ -205,8 +205,8 @@ flowchart TB
 3. **通用 UI 与业务策略分离**
 	- `ui/tutorial/tutorial_controller.gd` 只做通用 tour 容器
 	- 具体“什么时候出现什么步骤”交给场景级 controller
-4. **Globals 只保存状态，不渲染 UI**
-	- 它负责进度与偏好，不负责任何弹窗或 overlay
+4. **Globals 只保存规则教学运行时标记，不渲染 UI**
+	- 它不持久化教学进度或教学偏好，也不负责任何弹窗或 overlay
 
 ## 当前自动化防线
 
@@ -218,3 +218,5 @@ flowchart TB
 	- 检查 game 主界面、重组弹窗、顺位弹窗与放置相关 target 仍可解析
 - `ui/scenes/tests/tutorial_scene_boundary_contract_test.gd`
 	- 检查 `game.gd` / `game_setup.gd` 没有重新混入 `start_tour(...)` 等教学细节
+- `ui/scenes/tests/tutorial_runtime_scope_test.gd`
+	- 检查只有规则教学运行标记才会启用教学，普通模式、回放和加载路径不会通过历史设置误触发教学
