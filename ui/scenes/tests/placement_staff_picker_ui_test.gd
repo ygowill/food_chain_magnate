@@ -4,6 +4,7 @@ extends RefCounted
 const ActionPanelScene = preload("res://ui/components/action_panel/action_panel.tscn")
 const HouseOverlayClass = preload("res://ui/components/house_placement/house_placement_overlay.gd")
 const PlacementOverlaysClass = preload("res://ui/scenes/game/panel/placement_overlays.gd")
+const PiecePickerButtonClass = preload("res://ui/components/action_panel/piece_picker_button.gd")
 const RestaurantOverlayClass = preload("res://ui/components/restaurant_placement/restaurant_placement_overlay.gd")
 const StaffPickerStateClass = preload("res://ui/components/employee_picker/staff_picker_state.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
@@ -510,9 +511,14 @@ static func _case_lobbyists_context_uses_custom_layout() -> Result:
 		return await _finish_overlay_case(Result.failure("ContextPanel 应挂载说客自定义 UI"), overlays, scene, action_panel, engine, st)
 
 	var text := _collect_visible_text(panel.custom_context_container)
-	for expected in ["选择员工", "选择效果", "放置道路", "放置公园", "选择板块", "短道路"]:
+	for expected in ["选择员工", "选择效果", "放置道路", "放置公园", "选择板块"]:
 		if not text.has(expected):
 			return await _finish_overlay_case(Result.failure("说客 Context 缺少文本：%s，实际=%s" % [expected, str(text)]), overlays, scene, action_panel, engine, st)
+
+	var preview_ids := _collect_piece_preview_ids(panel.custom_context_container)
+	for expected_pid in ["lobbyists_road_straight", "lobbyists_road_long", "lobbyists_road_l"]:
+		if not preview_ids.has(expected_pid):
+			return await _finish_overlay_case(Result.failure("说客 Context 缺少板块预览：%s，实际=%s" % [expected_pid, str(preview_ids)]), overlays, scene, action_panel, engine, st)
 
 	return await _finish_overlay_case(Result.success({}), overlays, scene, action_panel, engine, st)
 
@@ -579,6 +585,21 @@ static func _collect_visible_text_recursive(node: Node, out: Array[String]) -> v
 			out.append(button_text)
 	for child in node.get_children():
 		_collect_visible_text_recursive(child, out)
+
+static func _collect_piece_preview_ids(root: Node) -> Array[String]:
+	var out: Array[String] = []
+	_collect_piece_preview_ids_recursive(root, out)
+	return out
+
+static func _collect_piece_preview_ids_recursive(node: Node, out: Array[String]) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if PiecePickerButtonClass != null and node is PiecePickerButtonClass:
+		var pid := str(node.get("piece_id")).strip_edges()
+		if not pid.is_empty():
+			out.append(pid)
+	for child in node.get_children():
+		_collect_piece_preview_ids_recursive(child, out)
 
 static func _finish_restaurant_context_case(result: Result, overlay: Node, action_panel: Node, st: SceneTree) -> Result:
 	if action_panel != null and is_instance_valid(action_panel):

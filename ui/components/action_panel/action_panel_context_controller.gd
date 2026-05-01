@@ -449,6 +449,8 @@ func _ensure_custom_context_node(scene_path: String, overlay: Node) -> void:
 func _sync_custom_context_node(overlay: Node) -> void:
 	if not is_instance_valid(_custom_context_node):
 		return
+	if _custom_context_node.has_method("set_map_skin"):
+		_custom_context_node.call("set_map_skin", _map_skin)
 	if _custom_context_node.has_method("bind_overlay"):
 		_custom_context_node.call("bind_overlay", overlay)
 	elif _custom_context_node.has_method("set_overlay"):

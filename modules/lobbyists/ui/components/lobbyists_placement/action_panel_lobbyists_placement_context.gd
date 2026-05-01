@@ -2,6 +2,7 @@ extends VBoxContainer
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const EmployeePickerClass = preload("res://ui/components/employee_picker/employee_picker.gd")
+const PiecePickerButtonClass = preload("res://ui/components/action_panel/piece_picker_button.gd")
 
 const ROTATE_CCW_ICON_PATH := "res://assets/ui/icons/kenney/board/arrow_counterclockwise.png"
 const ROTATE_CW_ICON_PATH := "res://assets/ui/icons/kenney/board/arrow_clockwise.png"
@@ -10,6 +11,7 @@ const ACTION_ROAD := "place_lobbyists_road"
 const ACTION_PARK := "place_lobbyists_park"
 
 var _overlay: Node = null
+var _map_skin = null
 var _syncing: bool = false
 
 var _employee_row: VBoxContainer = null
@@ -32,6 +34,13 @@ func _ready() -> void:
 func bind_overlay(overlay: Node) -> void:
 	_overlay = overlay
 	sync_from_overlay()
+
+func set_map_skin(skin) -> void:
+	if _map_skin == skin:
+		return
+	_map_skin = skin
+	if _piece_flow != null:
+		_sync_piece_section()
 
 func sync_from_overlay() -> void:
 	if _overlay == null or not is_instance_valid(_overlay):
@@ -250,21 +259,25 @@ func _sync_piece_section() -> void:
 		return
 
 	var selected := str(_safe_call("get_selected_piece", "")).strip_edges()
+	var rotation := int(_safe_call("get_selected_rotation", 0))
 	var group := ButtonGroup.new()
 	group.allow_unpress = false
 	for pid in pieces:
 		var label := _piece_button_label(pid)
-		var btn := Button.new()
-		btn.text = label
+		var btn = PiecePickerButtonClass.new()
+		btn.piece_id = pid
 		btn.toggle_mode = true
-		btn.clip_text = true
-		btn.custom_minimum_size = Vector2(74, 34)
 		btn.button_group = group
 		btn.set_pressed_no_signal(pid == selected)
-		UiStylesClass.apply_button_secondary(btn)
+		if btn.has_method("set_piece_rotation"):
+			btn.call("set_piece_rotation", rotation)
+		if _map_skin != null and is_instance_valid(_map_skin) and _map_skin.has_method("get_piece_texture") and btn.has_method("set_preview_texture"):
+			btn.call("set_preview_texture", _map_skin.call("get_piece_texture", pid))
 		btn.pressed.connect(_on_piece_pressed.bind(pid))
 		btn.tooltip_text = label if not label.is_empty() else pid
 		_piece_flow.add_child(btn)
+		btn.custom_minimum_size = Vector2(76, 76)
+		btn.minimum_size_changed.emit()
 
 func _piece_button_label(piece_id: String) -> String:
 	var pid := str(piece_id).strip_edges()
