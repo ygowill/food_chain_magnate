@@ -17,6 +17,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not milestone_r.ok:
 		return milestone_r
 
+	var claimed_entry_r := _test_cleanup_milestones_claimed_entry_malformed_fails_fast(player_count, seed_val + 29)
+	if not claimed_entry_r.ok:
+		return claimed_entry_r
+
 	var engine := GameEngine.new()
 	var init := engine.initialize(player_count, seed_val)
 	if not init.ok:
@@ -173,5 +177,30 @@ static func _test_cleanup_discard_milestone_failure_is_fatal(player_count: int, 
 		return Result.failure("错误信息应包含 CleanupDiscard，实际: %s" % r.error)
 	if state.round_state.has("cleanup"):
 		return Result.failure("里程碑触发失败时不应写入 round_state.cleanup")
+
+	return Result.success()
+
+static func _test_cleanup_milestones_claimed_entry_malformed_fails_fast(player_count: int, seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val)
+	if not init.ok:
+		return Result.failure("milestones_claimed malformed 测试初始化失败: %s" % init.error)
+
+	var state := engine.get_state()
+	state.round_state["milestones_claimed"] = {
+		"first_throw_away": 1,
+	}
+	var pool_before := str(state.milestone_pool)
+	var round_state_before := str(state.round_state)
+
+	var r := CleanupSettlementClass.apply_cleanup_milestones(state)
+	if r.ok:
+		return Result.failure("milestones_claimed entry 非 Array 时不应按 1 份兜底清理")
+	if str(r.error).find("milestones_claimed") < 0 or str(r.error).find("Array") < 0:
+		return Result.failure("错误信息应包含 milestones_claimed 与 Array，实际: %s" % r.error)
+	if str(state.milestone_pool) != pool_before:
+		return Result.failure("milestones_claimed entry 类型错误失败时不应改写 milestone_pool")
+	if str(state.round_state) != round_state_before:
+		return Result.failure("milestones_claimed entry 类型错误失败时不应改写 round_state")
 
 	return Result.success()

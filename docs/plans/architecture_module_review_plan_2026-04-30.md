@@ -1754,3 +1754,26 @@
 
 - 已完成该 P2 strict 化：Payday 权威结算不再把坏库存字段解释成“没有 token”。
 - 如果需要兼容旧 archive，应在显式 migration/recovery 阶段补齐 `inventory` 并记录迁移，而不是在结算时静默修改。
+
+### Fix 11：Cleanup 里程碑池清理拒绝损坏的 milestones_claimed entry
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 6 `[P2] Cleanup 里程碑池清理对 milestones_claimed[milestone_id] 的错误结构按 1 份处理`。
+
+改动：
+
+- `modules/base_rules/rules/phase/cleanup_settlement.gd`：`round_state.milestones_claimed[milestone_id]` 必须是 `Array`；非 Array 直接 `Result.failure`，不再按 1 份兜底从 `milestone_pool` 移除。
+- `core/tests/cleanup_inventory_test.gd`：新增 malformed `milestones_claimed` entry 负例，断言失败时不改写 `milestone_pool` 和 `round_state`。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：Cleanup 不再把损坏的里程碑领取结构解释为正常领取 1 份。
+- 旧结构兼容应移动到显式 archive migration/recovery，而不是 Cleanup 权威结算。

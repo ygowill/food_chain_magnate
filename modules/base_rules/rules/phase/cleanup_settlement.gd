@@ -313,8 +313,7 @@ static func apply_cleanup_milestones(state: GameState) -> Result:
 		if list_val is Array:
 			claimed_remove_counts[mid] = maxi(1, Array(list_val).size())
 		else:
-			# 容错：结构异常时按 1 份处理（避免阻塞回合推进）
-			claimed_remove_counts[mid] = 1
+			return Result.failure("CleanupSettlement: round_state.milestones_claimed[%s] 类型错误（期望 Array）" % mid)
 	claimed_ids.sort()
 
 	var expired_ids: Array[String] = []
