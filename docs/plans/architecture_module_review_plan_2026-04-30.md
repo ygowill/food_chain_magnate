@@ -1464,6 +1464,7 @@
   - 证据：`PlacementOverlays._ensure_module_overlay_controllers_loaded()` 对 `manifest_val` 非 `ModuleManifest`、`ui` 非 Dictionary、`placement_overlays` 非 Array、路径为空/重复都直接 `continue`；`load(path)` 不是 Script 时也不报错；成功与否没有 Result/warning。证据：`ui/scenes/game/panel/placement_overlays.gd:449-484`。
   - 风险：该扩展点现在承载 Lobbyists 主入口。若路径拼错、脚本构造函数签名不匹配、资源不是 Script，UI 会静默降级；`place_lobbyists_park` 又在 manifest `hidden_action_ids` 中，用户可能只看到部分或错误的通用 piece placement。
   - 建议：在 modules_v2 装配或 GamePanel 初始化阶段校验 `provides.ui.placement_overlays` schema、资源存在性、脚本构造契约；失败应返回清晰错误或至少进入可见诊断，不应静默跳过。
+  - 状态：Fix 72 复核当前 `PlacementOverlays` 已对 module manifest、路径、Script 类型、controller 创建与必要方法做严格校验；加载失败会返回 `Result.failure`、缓存错误并显示 toast 诊断。
 
 - [P2] Lobbyists 新 UI 选择具体 `staff_id`，但 road/park action 仍只按聚合次数计数，UI 表达的“具体员工选择”与权威规则不一致。
   - 证据：新 flow controller 会把选中的 `staff_id` 写入 command params。证据：`modules/lobbyists/ui/lobbyists_placement_flow_controller.gd:196-223`。
@@ -3264,6 +3265,29 @@
 验证：
 
 - Fix 65 过程中已跑 `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`392/392`，包含 `LobbyistsRoadStateAccessTest` 与 `LobbyistsParkStateAccessTest`。
+
+结论：
+
+- 该 P2 在当前代码中已完成，不需要额外运行时代码改动；本次更新仅把审查文档从旧证据状态修正为当前实现状态。
+
+### Fix 72：复核模块 placement overlay 加载不再静默跳过坏配置
+
+日期：2026-05-01
+
+对应问题：
+
+- main 增量 `[P2] 模块提供的 placement overlay 控制器按 best-effort 动态加载，新增 lobbyists 主放置 UI 已依赖这条不严格链路`。
+
+复核结论：
+
+- 当前 `ui/scenes/game/panel/placement_overlays.gd` 的 `_ensure_module_overlay_controllers_loaded()` 会要求 module plan 中的 manifest 为 `ModuleManifest`，`provides.ui.placement_overlays` 必须是 Array，路径不能为空、不能重复且必须以 `res://` 开头。
+- `_instantiate_module_overlay_controller(...)` 会校验资源存在、资源是 Script、controller 能创建，并要求实现 `sync/hide/dispose/get_context_overlay`。
+- 失败路径统一进入 `_fail_module_overlay_load(...)`，缓存错误，返回 `Result.failure`，并通过 `_report_module_overlay_load_error(...)` 触发 `push_error` 与 overlay toast。
+- `ui/scenes/tests/placement_staff_picker_ui_test.gd` 中 `_case_invalid_module_overlay_controller_reports_error()` 已覆盖缺失 controller 路径不会被处理为成功，并会产生可见 toast 诊断。
+
+验证：
+
+- Fix 65 过程中已跑 `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`392/392`，包含 `PlacementStaffPickerUiTest`。
 
 结论：
 
