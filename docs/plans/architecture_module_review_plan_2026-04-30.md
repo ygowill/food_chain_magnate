@@ -1309,6 +1309,7 @@
   - 证据：运行后如果日志已有 PASS/SUMMARY，即使 Godot exit code 非 0，也会 treat as success；另有“SUMMARY failed=[] 兜底成功”。证据：`tools/run_headless_test.sh:232-260`、`301-327`。
   - 风险：目前脚本仍会拦截 `SCRIPT ERROR` 和明确 FAIL，因此不是直接缺陷；但当架构审查需要验证 fail-fast 时，exit-code fallback 会降低 CI 信号纯度。
   - 建议：保留默认兼容模式，同时增加 `STRICT_EXIT=1` 或 `--strict-exit`，用于架构/发布验证，要求 Godot exit code 与日志同时成功。
+  - 状态：Fix 75 已确认脚本具备 `--strict-exit` / `STRICT_EXIT=1`，并将 GitHub CI 的 AllTests 调用切换为 `--strict-exit`，让发布验证链路不再接受非 0 Godot exit code 的 PASS 日志兜底。
 
 - [P3] AllTests 聚合文件过大，新增/迁移测试需要同时维护 refs 与 plan，容易漏接架构测试。
   - 证据：`ui/scenes/tests/all_tests_plan.gd` 当前 1558 行，`all_tests_refs.gd` 集中 preload 大量测试类。证据：`ui/scenes/tests/all_tests_plan.gd:1-8` 与本轮 `wc -l` 结果。
@@ -3341,3 +3342,24 @@
 结论：
 
 - 已完成该 P3 的一个可独立落地拆分：rollback proposal 的生命周期状态从 `OnlineRoom` 主文件中移出，后续 server rollback/resync/start-session 继续拆分时可以沿用“小状态对象 + 房间入口校验”的模式。
+
+### Fix 75：CI headless 测试启用 strict exit 模式
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 10 `[P2] tools/run_headless_test.sh 对 Godot 退出码有多处 success fallback，作为测试工具可以理解，但 CI/架构验证需要更明确的严格模式`。
+
+改动：
+
+- `.github/workflows/ci.yml`：发布 CI 的 AllTests 调用从普通模式改为 `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120 --strict-exit`。
+- 保留本地脚本默认的 benign shutdown warning 兼容；CI/发布验证链路要求 Godot exit code 与日志 outcome 同时成功。
+
+验证：
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120 --strict-exit`：PASS，`392/392`。
+
+结论：
+
+- 已完成该 P2 的验证链路收敛：本地开发仍可兼容 Godot 退出阶段的已知噪声，CI 则使用严格退出码，避免非 0 Godot 进程被 PASS 日志兜底掩盖。
