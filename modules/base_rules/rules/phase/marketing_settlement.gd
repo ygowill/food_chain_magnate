@@ -151,7 +151,8 @@ static func apply(state: GameState, marketing_range_calculator = null, rounds: i
 					"product": p
 				})
 				if not ms.ok:
-					warnings.append("里程碑触发失败(DemandMarked)：%s" % ms.error)
+					return Result.failure("MarketingSettlement: 里程碑触发失败(DemandMarked): %s" % ms.error).with_warnings(warnings).with_warnings(ms.warnings)
+				warnings.append_array(ms.warnings)
 
 	var processed: Array[Dictionary] = []
 	var expired: Array[Dictionary] = []

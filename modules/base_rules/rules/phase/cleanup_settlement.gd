@@ -103,7 +103,7 @@ static func apply(state: GameState) -> Result:
 				"discarded": discarded,
 			})
 			if not ms.ok:
-				warnings.append("里程碑触发失败(CleanupDiscard): 玩家 %d: %s" % [i, ms.error])
+				return Result.failure("CleanupSettlement: 里程碑触发失败(CleanupDiscard): 玩家 %d: %s" % [i, ms.error]).with_warnings(warnings).with_warnings(ms.warnings)
 			else:
 				warnings.append_array(ms.warnings)
 

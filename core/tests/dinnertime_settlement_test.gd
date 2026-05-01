@@ -8,6 +8,8 @@ const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const BaseRulesEffectsClass = preload("res://modules/base_rules/rules/effects.gd")
+const MilestoneEffectRegistryClass = preload("res://core/rules/milestone_effect_registry.gd")
 const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
 const ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY := "online_dinnertime_confirmed_players"
 
@@ -45,11 +47,41 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r7.ok:
 		return r7
 
+	var r8 := _test_waitress_milestone_failure_is_fatal(seed_val)
+	if not r8.ok:
+		return r8
+
 	return Result.success({
 		"player_count": player_count,
 		"seed": seed_val,
-		"cases": 7,
+		"cases": 8,
 	})
+
+static func _test_waitress_milestone_failure_is_fatal(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := engine.get_state()
+	var effects = BaseRulesEffectsClass.new()
+	var ctx := {
+		"tips": 0,
+		"use_employee_triggered": false,
+	}
+
+	MilestoneEffectRegistryClass.reset_current()
+	var r: Result = effects._effect_dinnertime_tips_waitress(state, 0, ctx)
+	engine.activate_registry_bundles()
+
+	if r.ok:
+		return Result.failure("UseEmployee/waitress 里程碑触发失败时不应降级为 warning")
+	if str(r.error).find("UseEmployee/waitress") < 0:
+		return Result.failure("错误信息应包含 UseEmployee/waitress，实际: %s" % r.error)
+	if bool(ctx.get("use_employee_triggered", false)):
+		return Result.failure("里程碑触发失败时不应标记 use_employee_triggered")
+
+	return Result.success()
 
 static func _test_distance_winner(seed_val: int) -> Result:
 	var engine := GameEngine.new()

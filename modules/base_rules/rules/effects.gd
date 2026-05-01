@@ -48,7 +48,8 @@ func _effect_dinnertime_tips_waitress(state: GameState, player_id: int, ctx: Dic
 			"id": "waitress"
 		})
 		if not ms.ok:
-			warnings.append("里程碑触发失败(UseEmployee/waitress)：%s" % ms.error)
+			return Result.failure("里程碑触发失败(UseEmployee/waitress)：%s" % ms.error).with_warnings(warnings).with_warnings(ms.warnings)
+		warnings.append_array(ms.warnings)
 		ctx["use_employee_triggered"] = true
 
 	var player_val = state.players[player_id]

@@ -8,6 +8,7 @@ const SalaryDiscountClass = preload("res://modules/base_rules/rules/phase/payday
 const EffectRegistryClass = preload("res://core/rules/effect_registry.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const StaffStateClass = preload("res://core/state/staff_state.gd")
+const MilestoneEffectRegistryClass = preload("res://core/rules/milestone_effect_registry.gd")
 
 static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var r_strict := _test_recruit_capacity_strict_parsing()
@@ -29,6 +30,10 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 	var r0 := _test_salary_total_delta_uses_milestone_effect_value()
 	if not r0.ok:
 		return r0
+
+	var r_milestone := _test_pay_salaries_milestone_failure_is_fatal(player_count, seed)
+	if not r_milestone.ok:
+		return r_milestone
 
 	var engine := GameEngine.new()
 	var init := engine.initialize(player_count, seed)
@@ -120,6 +125,27 @@ static func run(player_count: int = 2, seed: int = 12345) -> Result:
 		"due": expected_due,
 		"paid": expected_paid
 	})
+
+static func _test_pay_salaries_milestone_failure_is_fatal(player_count: int, seed: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed)
+	if not init.ok:
+		return Result.failure("PaySalaries fail-fast 测试初始化失败: %s" % init.error)
+
+	var state := engine.get_state()
+	state.phase = DefsClass.PHASE_PAYDAY
+	MilestoneEffectRegistryClass.reset_current()
+	var r := PaydaySettlementClass.apply(state, engine.phase_manager)
+	engine.activate_registry_bundles()
+
+	if r.ok:
+		return Result.failure("PaySalaries 里程碑触发失败时不应降级为 warning")
+	if str(r.error).find("PaySalaries") < 0:
+		return Result.failure("错误信息应包含 PaySalaries，实际: %s" % r.error)
+	if state.round_state.has("payday"):
+		return Result.failure("里程碑触发失败时不应写入 round_state.payday")
+
+	return Result.success()
 
 static func _test_recruit_capacity_strict_parsing() -> Result:
 	# use:recruit 时必须提供 recruit_capacity 且 > 0（严格模式）

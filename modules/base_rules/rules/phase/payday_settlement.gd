@@ -132,7 +132,8 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 			"paid": pay_amount,
 		})
 		if not ms.ok:
-			warnings.append("里程碑触发失败(PaySalaries): 玩家 %d: %s" % [i, ms.error])
+			return Result.failure("PaydaySettlement: 里程碑触发失败(PaySalaries): 玩家 %d: %s" % [i, ms.error]).with_warnings(warnings).with_warnings(ms.warnings)
+		warnings.append_array(ms.warnings)
 
 		base_due.append(base_due_amount)
 		discount.append(discount_amount)

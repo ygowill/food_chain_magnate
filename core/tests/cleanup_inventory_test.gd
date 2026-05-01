@@ -7,10 +7,15 @@ extends RefCounted
 
 const CleanupSettlementClass = preload("res://modules/base_rules/rules/phase/cleanup_settlement.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const MilestoneEffectRegistryClass = preload("res://core/rules/milestone_effect_registry.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_count < 2:
 		return Result.failure("测试至少需要 2 名玩家")
+
+	var milestone_r := _test_cleanup_discard_milestone_failure_is_fatal(player_count, seed_val)
+	if not milestone_r.ok:
+		return milestone_r
 
 	var engine := GameEngine.new()
 	var init := engine.initialize(player_count, seed_val)
@@ -144,3 +149,29 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		"p1_inventory_after": inv1_after,
 		"p1_inventory_case2": inv1_case2,
 	})
+
+static func _test_cleanup_discard_milestone_failure_is_fatal(player_count: int, seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val)
+	if not init.ok:
+		return Result.failure("CleanupDiscard fail-fast 测试初始化失败: %s" % init.error)
+
+	var state := engine.get_state()
+	state.phase = DefsClass.PHASE_CLEANUP
+	state.sub_phase = ""
+	state.players[0]["inventory"] = {
+		"burger": 1,
+	}
+
+	MilestoneEffectRegistryClass.reset_current()
+	var r := CleanupSettlementClass.apply(state)
+	engine.activate_registry_bundles()
+
+	if r.ok:
+		return Result.failure("CleanupDiscard 里程碑触发失败时不应降级为 warning")
+	if str(r.error).find("CleanupDiscard") < 0:
+		return Result.failure("错误信息应包含 CleanupDiscard，实际: %s" % r.error)
+	if state.round_state.has("cleanup"):
+		return Result.failure("里程碑触发失败时不应写入 round_state.cleanup")
+
+	return Result.success()

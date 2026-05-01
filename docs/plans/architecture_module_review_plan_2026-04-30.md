@@ -1675,3 +1675,30 @@
 
 - 已完成 confirm action 层面的 P2 strict 化：旧格式 pending 与 confirmed/pending 不一致不再被默默修复。
 - 如果以后需要导入旧 archive，应放到显式 migration/recovery 路径中处理，而不是常规 action 执行路径。
+
+### Fix 8：base_rules 关键里程碑触发失败不再降级为 warning
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 6 `[P1] 多处关键里程碑触发失败被降级为 warning，结算仍成功`。
+- 过度兜底复审中确认：Waitress `UseEmployee`、Marketing `DemandMarked`、Payday `PaySalaries`、Cleanup `CleanupDiscard` 都属于规则状态写入点；`MilestoneSystem.process_event(...)` 失败意味着 registry/context/effect 执行不可信，不应继续把阶段结算标记为成功。
+
+改动：
+
+- `modules/base_rules/rules/effects.gd`：女服务员 tips 触发 `UseEmployee/waitress` 失败时直接返回 `Result.failure`，不再设置 `use_employee_triggered=true`；成功时继续透传 `ms.warnings`。
+- `modules/base_rules/rules/phase/marketing_settlement.gd`：`DemandMarked` 触发失败时直接使 Marketing settlement 失败；成功时透传 milestone warnings。
+- `modules/base_rules/rules/phase/payday_settlement.gd`：`PaySalaries` 触发失败时直接使 Payday settlement 失败；成功时透传 milestone warnings。
+- `modules/base_rules/rules/phase/cleanup_settlement.gd`：`CleanupDiscard` 触发失败时直接使 Cleanup settlement 失败；成功路径保持 warning 透传。
+- `core/tests/dinnertime_settlement_test.gd`、`core/tests/marketing_settlement_fail_fast_test.gd`、`core/tests/payday_salary_test.gd`、`core/tests/cleanup_inventory_test.gd`：新增四个 fail-fast 回归用例，通过临时移除当前 `MilestoneEffectRegistry` 验证上述触发点不再 warning-only。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P1 的 strict 化：关键里程碑触发失败现在会中止对应规则效果或阶段结算，不再把不可信状态以 warning 形式吞掉。
+- 结算函数本身仍不是事务式回滚模型；若未来继续收紧规则执行一致性，应单独评估 settlement apply 的状态提交边界。

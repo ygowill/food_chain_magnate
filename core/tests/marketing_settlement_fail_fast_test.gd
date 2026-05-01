@@ -6,6 +6,7 @@ extends RefCounted
 const MarketingSettlementClass = preload("res://modules/base_rules/rules/phase/marketing_settlement.gd")
 const EffectRegistryClass = preload("res://core/rules/effect_registry.gd")
 const PhaseManagerClass = preload("res://core/engine/phase_manager.gd")
+const MilestoneEffectRegistryClass = preload("res://core/rules/milestone_effect_registry.gd")
 const ONLINE_MARKETING_CONFIRM_KEY := "online_require_marketing_confirm"
 const ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY := "online_marketing_confirmed_players"
 
@@ -95,9 +96,103 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not online_confirm_r.ok:
 		return online_confirm_r
 
+	var milestone_r := _test_milestone_failure_is_fatal(player_count, seed_val)
+	if not milestone_r.ok:
+		return milestone_r
+
 	return Result.success({
-		"cases": 5,
+		"cases": 6,
 	})
+
+static func _test_milestone_failure_is_fatal(player_count: int, seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val)
+	if not init.ok:
+		return Result.failure("初始化 milestone fail-fast 测试失败: %s" % init.error)
+	var state := engine.get_state()
+	state.map = _build_single_house_radio_map()
+	state.marketing_instances.clear()
+	state.marketing_instances.append({
+		"board_number": 1,
+		"type": "radio",
+		"owner": 0,
+		"employee_type": "marketing_trainee",
+		"product": "burger",
+		"world_pos": Vector2i(2, 2),
+		"footprint_size": Vector2i.ONE,
+		"remaining_duration": 1,
+		"axis": "",
+		"tile_index": -1,
+		"created_round": state.round_number,
+	})
+	var placements: Dictionary = state.map["marketing_placements"]
+	placements["1"] = {
+		"board_number": 1,
+		"remaining_duration": 1,
+	}
+
+	var pm := PhaseManagerClass.new()
+	pm.set_effect_registry(EffectRegistryClass.new())
+	MilestoneEffectRegistryClass.reset_current()
+	var r := MarketingSettlementClass.apply(state, pm.get_marketing_range_calculator(), 1, pm)
+	engine.activate_registry_bundles()
+
+	if r.ok:
+		return Result.failure("DemandMarked 里程碑触发失败时不应降级为 warning")
+	if str(r.error).find("DemandMarked") < 0:
+		return Result.failure("错误信息应包含 DemandMarked，实际: %s" % r.error)
+	if state.round_state.has("marketing"):
+		return Result.failure("里程碑触发失败时不应写入 round_state.marketing")
+
+	return Result.success()
+
+static func _build_single_house_radio_map() -> Dictionary:
+	var grid_size := Vector2i(5, 5)
+	var cells: Array = []
+	for y in range(grid_size.y):
+		var row: Array = []
+		for x in range(grid_size.x):
+			row.append({
+				"terrain_type": "empty",
+				"structure": {},
+				"road_segments": [],
+				"blocked": false,
+			})
+		cells.append(row)
+
+	var house_pos := Vector2i(0, 0)
+	cells[house_pos.y][house_pos.x]["structure"] = {
+		"piece_id": "house",
+		"house_id": "h0",
+		"house_number": 1,
+		"has_garden": false,
+		"dynamic": true,
+	}
+
+	return {
+		"grid_size": grid_size,
+		"tile_grid_size": Vector2i(1, 1),
+		"cells": cells,
+		"houses": {
+			"h0": {
+				"house_id": "h0",
+				"house_number": 1,
+				"anchor_pos": house_pos,
+				"cells": [house_pos],
+				"has_garden": false,
+				"is_apartment": false,
+				"printed": false,
+				"owner": -1,
+				"demands": [],
+			},
+		},
+		"restaurants": {},
+		"drink_sources": [],
+		"next_house_number": 2,
+		"next_restaurant_id": 1,
+		"boundary_index": {},
+		"marketing_placements": {},
+	}
 
 static func _test_online_confirmed_players_fail_fast(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
