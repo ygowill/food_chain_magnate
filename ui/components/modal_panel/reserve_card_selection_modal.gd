@@ -1,5 +1,5 @@
 # 银行储备卡选择遮罩面板（Setup/ReserveCards）
-# - 强制弹窗：不可取消；确认后执行 select_reserve_card 命令
+# - 阶段强制完成，但面板允许暂时关闭；确认后执行 select_reserve_card 命令
 class_name ReserveCardSelectionModal
 extends "res://ui/components/modal_panel/modal_panel_base.gd"
 
@@ -25,8 +25,9 @@ var _card_summaries: Array[String] = []
 var _card_button_group: ButtonGroup = ButtonGroup.new()
 
 func _ready() -> void:
-	allow_cancel = false
+	allow_cancel = true
 	allow_peek_map = false
+	cancel_hint_text = "ESC 暂时关闭"
 	# 储备卡选择仍然禁止窥视地图，但遮罩应保持与其他弹窗一致的半透明风格。
 	super._ready()
 	set_process(false)
@@ -34,11 +35,11 @@ func _ready() -> void:
 
 	set_title_text("选择银行储备卡")
 	set_confirm_text("确认选择")
-	set_cancel_text("")
+	set_cancel_text("暂时关闭")
 	set_confirm_enabled(false)
 
 	if is_instance_valid(hint_label):
-		hint_label.text = "请确保其他玩家未看到你的选择；确认后不可更改。"
+		hint_label.text = "请确保其他玩家未看到你的选择；确认后不可更改。关闭后可从右侧操作面板重新打开。"
 
 	# 并列卡片选择：三张卡只能选其一
 	_bind_card_button(card_button_0, 0)
@@ -66,9 +67,7 @@ func _apply_visual_styles() -> void:
 			ReserveUiStylesClass.apply_label_hint_dark(label)
 
 func open(_covered_rect: Rect2) -> void:
-	# 储备卡选择为强制弹窗，直接使用 viewport 区域，避免局部覆盖区坐标导致面板越界。
-	var viewport_rect := get_viewport_rect()
-	super.open(Rect2(Vector2.ZERO, viewport_rect.size))
+	super.open(_covered_rect)
 	set_process(true)
 
 func close() -> void:
@@ -180,7 +179,7 @@ func setup(state: GameState, current_player_id: int) -> void:
 		if _is_tutorial_match_mode():
 			hint_lines.append("教学说明：开局需要先秘密选择 1 张储备卡。请先阅读三张卡的效果，再确认选择；若与纸质规则或其他模块不同，请以当前卡面和本模式说明为准。")
 		else:
-			hint_lines.append("请确保其他玩家未看到你的选择；确认后不可更改。")
+			hint_lines.append("请确保其他玩家未看到你的选择；确认后不可更改。关闭后可从右侧操作面板重新打开。")
 		hint_lines.append(_build_reserve_card_rule_hint(has_any_bank_fields, has_any_price_only))
 		hint_label.text = "\n".join(hint_lines)
 
@@ -204,7 +203,7 @@ func setup_waiting(current_player_id: int) -> void:
 	set_confirm_enabled(false)
 
 	if is_instance_valid(hint_label):
-		hint_label.text = "该选择对其他玩家保密。请等待对方完成。（Space 可暂时查看地图）"
+		hint_label.text = "该选择对其他玩家保密。请等待对方完成。关闭后可从右侧操作面板重新打开。"
 
 	var name := Globals.get_player_name(current_player_id) if Globals != null else ("玩家%d" % (current_player_id + 1))
 	set_title_text("选择银行储备卡 | 等待: %s" % name)
@@ -231,8 +230,8 @@ func _on_confirm_pressed() -> void:
 	completed.emit({"selected_index": _selected_index})
 
 func _on_cancel_pressed() -> void:
-	# 强制弹窗：不允许取消
-	return
+	cancelled.emit()
+	close()
 
 func _bind_card_button(btn: Button, index: int) -> void:
 	if not is_instance_valid(btn):

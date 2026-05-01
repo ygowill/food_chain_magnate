@@ -21,6 +21,9 @@ const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_inter
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const ReserveCardsViewDataClass = preload("res://ui/components/reserve_cards/reserve_cards_view_data.gd")
 
+const ACTION_REOPEN_RESERVE_CARD_MODAL := "__reopen_reserve_card_modal"
+const ACTION_REOPEN_RESTRUCTURING_MODAL := "__reopen_restructuring_modal"
+
 const _GUIDED_ACTION_DOCK_SCRIPT_PATHS := {
 	"res://ui/components/recruit_panel/recruit_panel.gd": true,
 	"res://ui/components/train_panel/train_panel.gd": true,
@@ -313,16 +316,6 @@ func has_blocking_modal_ui() -> bool:
 	return false
 
 func has_menu_blocking_modal_ui() -> bool:
-	if _restructuring_controller != null and _restructuring_controller.has_method("has_open_modal_ui"):
-		if bool(_restructuring_controller.has_open_modal_ui()):
-			return true
-	if _modals_controller != null:
-		if _modals_controller.has_method("has_menu_blocking_modal_ui"):
-			if bool(_modals_controller.has_menu_blocking_modal_ui()):
-				return true
-		elif _modals_controller.has_method("has_open_modal_ui"):
-			if bool(_modals_controller.has_open_modal_ui()):
-				return true
 	return false
 
 func hide_modal_ui() -> void:
@@ -387,6 +380,7 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	if _end_panels != null:
 		_end_panels.sync(state, force_full_refresh)
 	_sync_modals(state)
+	_sync_modal_reopen_action(state)
 	_sync_action_panel_context(force_full_refresh)
 	_sync_action_flow_controls()
 	_hide_open_guided_action_panels_if_not_initiatable(state)
@@ -449,6 +443,41 @@ func _sync_reserve_cards_overview_access(state: GameState) -> void:
 			button.disabled = not can_open
 	if not can_open and _views_controller != null and _views_controller.has_method("hide_reserve_cards_full_screen_view"):
 		_views_controller.hide_reserve_cards_full_screen_view()
+
+func _sync_modal_reopen_action(state: GameState) -> void:
+	if _scene == null:
+		return
+	if not is_instance_valid(_scene.action_panel):
+		return
+	if not _scene.action_panel.has_method("set_modal_reopen_action"):
+		return
+
+	if _modals_controller != null and _modals_controller.has_method("has_dismissed_reserve_card_modal"):
+		if bool(_modals_controller.has_dismissed_reserve_card_modal()):
+			_scene.action_panel.call(
+				"set_modal_reopen_action",
+				ACTION_REOPEN_RESERVE_CARD_MODAL,
+				"打开储备卡选择",
+				true,
+				"继续当前储备卡选择"
+			)
+			return
+
+	if _restructuring_controller != null and _restructuring_controller.has_method("has_dismissed_restructuring_modal"):
+		if bool(_restructuring_controller.has_dismissed_restructuring_modal(state)):
+			_scene.action_panel.call(
+				"set_modal_reopen_action",
+				ACTION_REOPEN_RESTRUCTURING_MODAL,
+				"打开重组面板",
+				true,
+				"继续公司结构重组"
+			)
+			return
+
+	if _scene.action_panel.has_method("clear_modal_reopen_action"):
+		_scene.action_panel.call("clear_modal_reopen_action")
+	else:
+		_scene.action_panel.call("set_modal_reopen_action", "", "")
 
 func _sync_action_panel_context(force_refresh: bool = false) -> void:
 	if _scene == null:
@@ -791,6 +820,21 @@ func on_action_requested(action_id: String, params: Dictionary) -> void:
 
 	var state: GameState = _scene.game_engine.get_state()
 	if state == null:
+		return
+
+	var requested_action_id := str(action_id).strip_edges()
+	if requested_action_id == ACTION_REOPEN_RESERVE_CARD_MODAL:
+		if _modals_controller != null and _modals_controller.has_method("reopen_reserve_card_modal_for_current_state"):
+			_modals_controller.reopen_reserve_card_modal_for_current_state()
+		_sync_modal_reopen_action(state)
+		return
+	if requested_action_id == ACTION_REOPEN_RESTRUCTURING_MODAL:
+		if _restructuring_controller != null and _restructuring_controller.has_method("reopen_restructuring_modal"):
+			var covered := Rect2(Vector2.ZERO, Vector2.ZERO)
+			if _modals_controller != null and _modals_controller.has_method("get_modal_cover_rect"):
+				covered = _modals_controller.get_modal_cover_rect()
+			_view_player_id = int(_restructuring_controller.reopen_restructuring_modal(state, covered, _view_player_id))
+		_sync_modal_reopen_action(state)
 		return
 
 	var current_player_id := state.get_current_player_id()

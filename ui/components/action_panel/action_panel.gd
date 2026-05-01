@@ -15,6 +15,7 @@ const ContextControllerClass = preload("res://ui/components/action_panel/action_
 const ActionsControllerClass = preload("res://ui/components/action_panel/action_panel_actions_controller.gd")
 
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TitleLabel
+@onready var modal_reopen_button: Button = $MarginContainer/VBoxContainer/ModalReopenButton
 @onready var guided_action_panel: Control = $MarginContainer/VBoxContainer/GuidedActionPanel
 @onready var guided_action_title_label: Label = $MarginContainer/VBoxContainer/GuidedActionPanel/MarginContainer/VBoxContainer/GuidedActionTitleLabel
 @onready var guided_action_hint_label: Label = $MarginContainer/VBoxContainer/GuidedActionPanel/MarginContainer/VBoxContainer/GuidedActionHintLabel
@@ -57,6 +58,7 @@ var _visible_initiatable_action_ids: Array[String] = []
 var _action_enabled: Dictionary = {} # action_id -> bool
 var _action_disabled_reason: Dictionary = {} # action_id -> String
 var _guided_action_id: String = ""
+var _modal_reopen_action_id: String = ""
 var _flow_confirm_end_visible: bool = false
 var _flow_skip_step_visible: bool = false
 var _external_action_block_reason_provider: Callable = Callable()
@@ -243,6 +245,7 @@ func _get_skip_sub_phase_display_name() -> String:
 
 func _ready() -> void:
 	_build_ui()
+	UiStylesClass.apply_button_primary(modal_reopen_button)
 	UiStylesClass.apply_button_secondary(skip_context_button)
 	UiStylesClass.apply_button_secondary(confirm_context_button)
 	UiStylesClass.apply_button_secondary(cancel_context_button)
@@ -250,6 +253,7 @@ func _ready() -> void:
 	_apply_context_visual_styles()
 	_apply_guided_action_visual_styles()
 	_connect_guided_action_signals()
+	_connect_modal_reopen_signal()
 	_sync_guided_action_placeholder()
 
 func _build_ui() -> void:
@@ -281,6 +285,38 @@ func _connect_guided_action_signals() -> void:
 		UiSignalHelpersClass.safe_connect(open_guided_action_button, "pressed", _on_open_guided_action_pressed)
 	if is_instance_valid(context_panel):
 		UiSignalHelpersClass.safe_connect(context_panel, "visibility_changed", _on_context_panel_visibility_changed)
+
+func _connect_modal_reopen_signal() -> void:
+	if is_instance_valid(modal_reopen_button):
+		UiSignalHelpersClass.safe_connect(modal_reopen_button, "pressed", _on_modal_reopen_pressed)
+
+func set_modal_reopen_action(action_id: String, text: String, enabled: bool = true, tooltip: String = "") -> void:
+	var aid := str(action_id).strip_edges()
+	_modal_reopen_action_id = aid
+	if not is_instance_valid(modal_reopen_button):
+		return
+
+	var should_show := not aid.is_empty()
+	modal_reopen_button.visible = should_show
+	if not should_show:
+		modal_reopen_button.disabled = true
+		modal_reopen_button.tooltip_text = ""
+		return
+
+	modal_reopen_button.text = str(text).strip_edges() if not str(text).strip_edges().is_empty() else "打开阶段面板"
+	modal_reopen_button.disabled = not bool(enabled)
+	modal_reopen_button.tooltip_text = str(tooltip).strip_edges()
+
+func clear_modal_reopen_action() -> void:
+	set_modal_reopen_action("", "")
+
+func _on_modal_reopen_pressed() -> void:
+	var aid := str(_modal_reopen_action_id).strip_edges()
+	if aid.is_empty():
+		return
+	if is_instance_valid(modal_reopen_button) and modal_reopen_button.disabled:
+		return
+	action_requested.emit(aid, {})
 
 func _on_context_panel_visibility_changed() -> void:
 	_sync_guided_action_placeholder()

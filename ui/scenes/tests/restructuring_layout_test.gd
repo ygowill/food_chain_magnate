@@ -1,6 +1,6 @@
 # 重组界面布局回归测试（UI 属性测试）
 # 覆盖 issue_tracker #25：
-# - RestructuringModal 必须全屏覆盖（忽略 covered_rect）
+# - RestructuringModal 使用传入覆盖区并居中显示
 # - HandArea 在重组模式仅显示 reserve（不显示 active/busy）
 # - CompanyStructure 下属卡槽使用 4 列网格（多行）
 class_name RestructuringLayoutTest
@@ -11,7 +11,14 @@ const HandAreaScene = preload("res://ui/components/hand_area/hand_area.tscn")
 const CompanyStructureScene = preload("res://ui/components/company_structure/company_structure.tscn")
 const RestructuringControllerClass = preload("res://ui/scenes/game/panel/restructuring_controller.gd")
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+
+class _DummyScene extends Control:
+	var game_engine = null
+	var hand_area = null
+	var company_structure = null
+	var bottom_panel = null
 
 static func run() -> Result:
 	# 确保 EmployeeRegistry 已装配（用于挑选 manager_slots>0 的员工）
@@ -60,6 +67,34 @@ static func run() -> Result:
 	if not no_target.is_empty():
 		return Result.failure("已在公司树中的员工不应再得到新的双击自动放置目标，实际: %s" % str(no_target))
 
+	var state_for_modal: GameState = engine.get_state()
+	state_for_modal.phase = DefsClass.PHASE_RESTRUCTURING
+	var dummy_scene := _DummyScene.new()
+	var dismiss_controller = RestructuringControllerClass.new(dummy_scene, Callable(), Callable(), Callable())
+	var dismissed_modal := Control.new()
+	dismissed_modal.visible = true
+	dismiss_controller.set("_restructuring_modal", dismissed_modal)
+	dismiss_controller._on_restructuring_modal_cancelled()
+	if dismissed_modal.visible:
+		_safe_free(dummy_scene)
+		_safe_free(dismissed_modal)
+		return Result.failure("重组面板暂时关闭后应隐藏")
+	if not dismiss_controller.has_dismissed_restructuring_modal(state_for_modal):
+		_safe_free(dummy_scene)
+		_safe_free(dismissed_modal)
+		return Result.failure("重组面板暂时关闭后应记录为 dismissed，供右侧按钮重新打开")
+	dismiss_controller.reopen_restructuring_modal(state_for_modal, Rect2(Vector2(20, 20), Vector2(400, 300)), 0)
+	if dismiss_controller.has_dismissed_restructuring_modal(state_for_modal):
+		_safe_free(dummy_scene)
+		_safe_free(dismissed_modal)
+		return Result.failure("重新打开重组面板后 dismissed 状态应清除")
+	if not dismissed_modal.visible:
+		_safe_free(dummy_scene)
+		_safe_free(dismissed_modal)
+		return Result.failure("重新打开重组面板后 modal 应可见")
+	_safe_free(dummy_scene)
+	_safe_free(dismissed_modal)
+
 	var modal = RestructuringModalScene.instantiate()
 	var hand = HandAreaScene.instantiate()
 	var company = CompanyStructureScene.instantiate()
@@ -73,19 +108,19 @@ static func run() -> Result:
 	if company.has_method("_ready"):
 		company.call("_ready")
 
-	# open 应忽略 covered_rect 并全屏
+	# open 应使用 covered_rect，保持与其它居中弹窗一致的浮层行为。
 	var covered := Rect2(Vector2(10, 10), Vector2(100, 100))
 	modal.open(covered)
-	if modal.position != Vector2.ZERO:
+	if modal.position != covered.position:
 		_safe_free(modal)
 		_safe_free(hand)
 		_safe_free(company)
-		return Result.failure("RestructuringModal.position=%s (期望 Vector2.ZERO)" % str(modal.position))
-	if modal.size.is_equal_approx(covered.size):
+		return Result.failure("RestructuringModal.position=%s (期望 %s)" % [str(modal.position), str(covered.position)])
+	if not modal.size.is_equal_approx(covered.size):
 		_safe_free(modal)
 		_safe_free(hand)
 		_safe_free(company)
-		return Result.failure("RestructuringModal.size=%s (不应等于 covered.size=%s)" % [str(modal.size), str(covered.size)])
+		return Result.failure("RestructuringModal.size=%s (期望 covered.size=%s)" % [str(modal.size), str(covered.size)])
 
 	# Split children should expand vertically, otherwise CompanyStructure.ManagerScroll may be squeezed to 0 height.
 	# (issue_tracker #44)

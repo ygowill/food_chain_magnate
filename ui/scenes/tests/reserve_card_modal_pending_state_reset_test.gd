@@ -68,6 +68,24 @@ static func run() -> Result:
 		_cleanup(scene)
 		return Result.failure("reserve_card_open_routine_running 未清理")
 
+	controller._reserve_card_modal = modal
+	modal.visible = true
+	controller._on_reserve_card_modal_cancelled()
+	if modal.visible:
+		_cleanup(scene)
+		return Result.failure("储备卡弹窗暂时关闭后应隐藏")
+	if not controller.has_dismissed_reserve_card_modal():
+		_cleanup(scene)
+		return Result.failure("储备卡弹窗暂时关闭后应记录为 dismissed，供右侧按钮重新打开")
+
+	controller.reopen_reserve_card_modal_for_current_state()
+	if controller.has_dismissed_reserve_card_modal():
+		_cleanup(scene)
+		return Result.failure("重新打开储备卡弹窗后 dismissed 状态应清除")
+	if not modal.visible:
+		_cleanup(scene)
+		return Result.failure("重新打开储备卡弹窗后 modal 应可见")
+
 	_cleanup(scene)
 	return Result.success({})
 

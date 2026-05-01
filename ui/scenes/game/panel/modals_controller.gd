@@ -24,6 +24,9 @@ var _pending_reserve_card_open_player_id: int = -1
 var _pending_reserve_card_open_interactive: bool = true
 var _pending_reserve_card_open_attempts: int = 0
 var _reserve_card_open_routine_running: bool = false
+var _reserve_card_modal_dismissed: bool = false
+var _reserve_card_modal_dismissed_player_id: int = -1
+var _reserve_card_modal_dismissed_interactive: bool = true
 
 func _init(scene, execute_command: Callable) -> void:
 	_scene = scene
@@ -48,6 +51,7 @@ func dispose() -> void:
 	_phase_action_active_kind_by_phase.clear()
 
 	_clear_pending_reserve_card_open_state()
+	_clear_reserve_card_dismissed_state()
 
 	_scene = null
 
@@ -56,6 +60,33 @@ func _clear_pending_reserve_card_open_state() -> void:
 	_pending_reserve_card_open_interactive = true
 	_pending_reserve_card_open_attempts = 0
 	_reserve_card_open_routine_running = false
+
+func _clear_reserve_card_dismissed_state() -> void:
+	_reserve_card_modal_dismissed = false
+	_reserve_card_modal_dismissed_player_id = -1
+	_reserve_card_modal_dismissed_interactive = true
+
+func _get_live_state() -> GameState:
+	if _scene == null:
+		return null
+	var engine = _scene.get("game_engine")
+	if engine == null or not is_instance_valid(engine):
+		return null
+	if not engine.has_method("get_state"):
+		return null
+	var state = engine.get_state()
+	return state if state is GameState else null
+
+func _is_reserve_card_selection_state(state: GameState) -> bool:
+	return state != null and str(state.phase) == DefsClass.PHASE_SETUP and str(state.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS
+
+func _compute_reserve_card_interactive(state: GameState, current_player_id: int) -> bool:
+	if state == null or current_player_id < 0:
+		return false
+	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
+		return true
+	var local_player_id := int(NetContext.local_player_id)
+	return local_player_id >= 0 and current_player_id == local_player_id
 
 func has_open_modal_ui() -> bool:
 	if _reserve_card_open_routine_running or _pending_reserve_card_open_player_id >= 0:
@@ -73,17 +104,27 @@ func has_open_modal_ui() -> bool:
 	return false
 
 func has_menu_blocking_modal_ui() -> bool:
-	if _reserve_card_open_routine_running or _pending_reserve_card_open_player_id >= 0:
-		return true
-	if is_instance_valid(_reserve_card_modal) and _reserve_card_modal.visible:
-		return true
-	for k in _phase_action_modals_by_key.keys():
-		var inst = _phase_action_modals_by_key.get(k, null)
-		if not is_instance_valid(inst):
-			continue
-		if inst is Control and (inst as Control).visible:
-			return true
 	return false
+
+func has_dismissed_reserve_card_modal() -> bool:
+	if not _reserve_card_modal_dismissed:
+		return false
+	var state := _get_live_state()
+	if not _is_reserve_card_selection_state(state):
+		return false
+	return true
+
+func reopen_reserve_card_modal_for_current_state() -> void:
+	var state := _get_live_state()
+	if not _is_reserve_card_selection_state(state):
+		_clear_reserve_card_dismissed_state()
+		return
+	_clear_reserve_card_dismissed_state()
+	var current_player_id := state.get_current_player_id()
+	if current_player_id < 0:
+		return
+	var interactive := _compute_reserve_card_interactive(state, current_player_id)
+	show_reserve_card_modal(state, current_player_id, get_modal_cover_rect(), interactive)
 
 func hide() -> void:
 	hide_turn_order_modal()
@@ -106,12 +147,17 @@ func sync_for_state(state: GameState, covered: Rect2) -> void:
 	var is_local_turn := (not is_online) or (local_player_id >= 0 and current_player_id == local_player_id)
 
 	# 储备卡选择（Setup/ReserveCards）
-	if state.phase == DefsClass.PHASE_SETUP and str(state.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS and current_player_id >= 0:
-		var interactive := true
-		if is_online:
-			interactive = is_local_turn
-		show_reserve_card_modal(state, current_player_id, covered, interactive)
+	if _is_reserve_card_selection_state(state) and current_player_id >= 0:
+		var interactive := _compute_reserve_card_interactive(state, current_player_id)
+		if _reserve_card_modal_dismissed:
+			if _reserve_card_modal_dismissed_player_id != current_player_id or _reserve_card_modal_dismissed_interactive != interactive:
+				_clear_reserve_card_dismissed_state()
+		if _reserve_card_modal_dismissed:
+			hide_reserve_card_modal()
+		else:
+			show_reserve_card_modal(state, current_player_id, covered, interactive)
 	else:
+		_clear_reserve_card_dismissed_state()
 		hide_reserve_card_modal()
 
 	# pending phase actions（Cleanup）：由 registry 路由到对应 modal（避免在 controller 内硬编码 kind）
@@ -258,8 +304,7 @@ func show_turn_order_modal(state: GameState, current_player_id: int, selections:
 		return
 
 	if _turn_order_modal is Control:
-		# 顺位选择允许玩家打开游戏菜单；菜单层级高于该弹窗，但仍低于真正阻塞性的 modal。
-		UiZClass.apply_absolute((_turn_order_modal as Control), UiZClass.MENU - 1)
+		UiZClass.apply_absolute((_turn_order_modal as Control), UiZClass.MODAL)
 
 	if _turn_order_modal.has_method("setup"):
 		_turn_order_modal.call("setup", state, current_player_id, selections, bool(interactive), int(local_player_id))
@@ -321,10 +366,10 @@ func show_reserve_card_modal(state: GameState, current_player_id: int, covered: 
 		return
 	if state == null:
 		return
-	_close_game_menu_for_blocking_modal()
 
 	_reserve_card_modal = _initialize_modal(_reserve_card_modal, ReserveCardSelectionModalScene, {
 		"completed": _on_reserve_card_modal_completed,
+		"cancelled": _on_reserve_card_modal_cancelled,
 	})
 
 	if not is_instance_valid(_reserve_card_modal):
@@ -367,6 +412,9 @@ func _deferred_open_reserve_card_modal() -> void:
 		var expected_player_id := _pending_reserve_card_open_player_id
 		var expected_interactive := _pending_reserve_card_open_interactive
 		if expected_player_id < 0:
+			_clear_pending_reserve_card_open_state()
+			return
+		if _reserve_card_modal_dismissed:
 			_clear_pending_reserve_card_open_state()
 			return
 		if _scene == null or _scene.game_engine == null:
@@ -414,7 +462,6 @@ func _deferred_open_reserve_card_modal() -> void:
 		# 进入储备卡选择时再隐藏加载遮罩，避免“先闪一帧游戏 UI 再弹窗”的体验。
 		if SceneManager != null and SceneManager.has_method("hide_loading"):
 			SceneManager.hide_loading()
-		_close_game_menu_for_blocking_modal()
 
 		if expected_interactive:
 			if _reserve_card_modal.has_method("setup"):
@@ -430,12 +477,6 @@ func _deferred_open_reserve_card_modal() -> void:
 			c.size = covered.size
 			c.visible = true
 		return
-
-func _close_game_menu_for_blocking_modal() -> void:
-	if _scene == null:
-		return
-	if _scene.has_method("_ensure_game_menu_closed_for_blocking_modal"):
-		_scene.call("_ensure_game_menu_closed_for_blocking_modal")
 
 func hide_reserve_card_modal() -> void:
 	_clear_pending_reserve_card_open_state()
@@ -465,6 +506,7 @@ func _on_reserve_card_modal_completed(result: Dictionary) -> void:
 	if selected_index < 0:
 		return
 
+	_clear_reserve_card_dismissed_state()
 	if _reserve_card_modal.has_method("set_confirm_enabled"):
 		_reserve_card_modal.call("set_confirm_enabled", false)
 
@@ -480,6 +522,19 @@ func _on_reserve_card_modal_completed(result: Dictionary) -> void:
 			return
 
 	_execute_command.call(Command.create("select_reserve_card", current_player_id, {"selected_index": selected_index}))
+
+func _on_reserve_card_modal_cancelled() -> void:
+	var state := _get_live_state()
+	var current_player_id := -1
+	var interactive := true
+	if state != null:
+		current_player_id = state.get_current_player_id()
+		if current_player_id >= 0:
+			interactive = _compute_reserve_card_interactive(state, current_player_id)
+	_reserve_card_modal_dismissed = true
+	_reserve_card_modal_dismissed_player_id = current_player_id
+	_reserve_card_modal_dismissed_interactive = interactive
+	hide_reserve_card_modal()
 
 func show_phase_action_ui_modal(phase_name: String, kind: String, state: GameState, current_player_id: int, covered: Rect2) -> void:
 	if _scene == null:

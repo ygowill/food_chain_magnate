@@ -16,6 +16,7 @@ var _get_view_player_id: Callable = Callable()
 var _view_player_selected: Callable = Callable()
 
 var _restructuring_modal = null
+var _restructuring_modal_dismissed: bool = false
 
 func _init(scene, execute_command: Callable, get_view_player_id: Callable, view_player_selected: Callable) -> void:
 	_scene = scene
@@ -31,10 +32,23 @@ func dispose() -> void:
 	if is_instance_valid(_restructuring_modal):
 		_restructuring_modal.queue_free()
 	_restructuring_modal = null
+	_restructuring_modal_dismissed = false
 	_scene = null
 
 func has_open_modal_ui() -> bool:
 	return is_instance_valid(_restructuring_modal) and bool(_restructuring_modal.visible)
+
+func has_dismissed_restructuring_modal(state: GameState = null) -> bool:
+	if not _restructuring_modal_dismissed:
+		return false
+	var live_state := state
+	if live_state == null:
+		live_state = _get_live_state()
+	return _should_show_restructuring_modal_for_state(live_state)
+
+func reopen_restructuring_modal(state: GameState, covered: Rect2, requested_view_player_id: int) -> int:
+	_restructuring_modal_dismissed = false
+	return sync_modal(state, covered, requested_view_player_id)
 
 func get_modal():
 	if not is_instance_valid(_restructuring_modal):
@@ -44,39 +58,47 @@ func get_modal():
 func hide_modal() -> void:
 	_hide_restructuring_modal()
 
-func sync_modal(state: GameState, covered: Rect2, requested_view_player_id: int) -> int:
-	var should_show_restructuring := false
-	if state != null and state.phase == DefsClass.PHASE_RESTRUCTURING and state.players.size() > 0:
-		var all_submitted := false
-		if state.round_state is Dictionary:
-			var r_val = state.round_state.get("restructuring", null)
-			if r_val is Dictionary:
-				var r: Dictionary = r_val
-				var finalized_val = r.get("finalized", null)
-				if finalized_val is bool and bool(finalized_val):
-					all_submitted = true
-				elif r.has("submitted") and (r["submitted"] is Dictionary):
-					var submitted: Dictionary = r["submitted"]
-					all_submitted = true
-					for pid in range(state.players.size()):
-						var v = submitted.get(pid, null)
-						if v == null and submitted.has(str(pid)):
-							v = submitted.get(str(pid), null)
-						if not bool(v):
-							all_submitted = false
-							break
-		should_show_restructuring = not all_submitted
+func _get_live_state() -> GameState:
+	if _scene == null:
+		return null
+	var engine = _scene.get("game_engine")
+	if engine == null or not is_instance_valid(engine):
+		return null
+	if not engine.has_method("get_state"):
+		return null
+	var state = engine.get_state()
+	return state if state is GameState else null
 
-	if not should_show_restructuring:
-		_hide_restructuring_modal()
-		return requested_view_player_id
+func _should_show_restructuring_modal_for_state(state: GameState) -> bool:
+	if state == null:
+		return false
+	if state.phase != DefsClass.PHASE_RESTRUCTURING:
+		return false
+	if state.players.size() <= 0:
+		return false
 
-	_show_restructuring_modal(covered)
+	var all_submitted := false
+	if state.round_state is Dictionary:
+		var r_val = state.round_state.get("restructuring", null)
+		if r_val is Dictionary:
+			var r: Dictionary = r_val
+			var finalized_val = r.get("finalized", null)
+			if finalized_val is bool and bool(finalized_val):
+				all_submitted = true
+			elif r.has("submitted") and (r["submitted"] is Dictionary):
+				var submitted: Dictionary = r["submitted"]
+				all_submitted = true
+				for pid in range(state.players.size()):
+					var v = submitted.get(pid, null)
+					if v == null and submitted.has(str(pid)):
+						v = submitted.get(str(pid), null)
+					if not bool(v):
+						all_submitted = false
+						break
 
-	var view_player_id := _get_effective_view_player_id(state, requested_view_player_id)
-	var privacy_view_id := apply_view_privacy(state, view_player_id)
-	_sync_restructuring_modal_ui(state, privacy_view_id)
+	return not all_submitted
 
+func _get_view_player_id_return_value(_state: GameState, view_player_id: int, privacy_view_id: int, requested_view_player_id: int) -> int:
 	# 仅在“隐私规则强制切换”时写回 view_player_id；默认回退（例如 requested 不在范围内）不写回。
 	var is_online := (NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT)
 	if is_online:
@@ -85,6 +107,25 @@ func sync_modal(state: GameState, covered: Rect2, requested_view_player_id: int)
 	if privacy_view_id != view_player_id:
 		return privacy_view_id
 	return requested_view_player_id
+
+func sync_modal(state: GameState, covered: Rect2, requested_view_player_id: int) -> int:
+	var should_show_restructuring := _should_show_restructuring_modal_for_state(state)
+
+	if not should_show_restructuring:
+		_restructuring_modal_dismissed = false
+		_hide_restructuring_modal()
+		return requested_view_player_id
+
+	var view_player_id := _get_effective_view_player_id(state, requested_view_player_id)
+	var privacy_view_id := apply_view_privacy(state, view_player_id)
+	if _restructuring_modal_dismissed:
+		_hide_restructuring_modal()
+		return _get_view_player_id_return_value(state, view_player_id, privacy_view_id, requested_view_player_id)
+
+	_show_restructuring_modal(covered)
+	_sync_restructuring_modal_ui(state, privacy_view_id)
+
+	return _get_view_player_id_return_value(state, view_player_id, privacy_view_id, requested_view_player_id)
 
 func is_player_submitted(state: GameState, player_id: int) -> bool:
 	var submitted := _get_restructuring_submitted_map(state)
@@ -631,6 +672,7 @@ func _on_restructuring_modal_completed(_result: Dictionary) -> void:
 			_restructuring_modal.call("set_confirm_enabled", true)
 
 func _on_restructuring_modal_cancelled() -> void:
+	_restructuring_modal_dismissed = true
 	_hide_restructuring_modal()
 
 func _on_restructuring_modal_auto_fill_requested() -> void:

@@ -18,19 +18,17 @@ const FULLSCREEN_VIEW := 1050
 const DINNERTIME_OVERLAY := 1100
 const DINNERTIME_CONTROL_BAR := 1150
 
-# 游戏内菜单
-const MENU := 1200
-
 # 阻塞性弹窗（储备卡选择/顺位选择/重组 modal/银行破产等）
 const MODAL := 1300
-
-# ConfirmDialog（返回主菜单确认等）
-const CONFIRM_DIALOG := 1350
 
 # 终局面板 / 规则书 / Toast
 const GAME_OVER := 1400
 const RULES_DIALOG := 1500
 const TOAST := 1600
+
+# 游戏内菜单必须高于所有游戏内面板/提示；菜单触发的确认框再高一层。
+const MENU := 1700
+const CONFIRM_DIALOG := 1800
 
 static func apply_absolute(item: CanvasItem, z: int) -> void:
 	if item == null or not is_instance_valid(item):

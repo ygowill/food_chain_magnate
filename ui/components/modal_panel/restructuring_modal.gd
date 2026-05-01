@@ -25,11 +25,12 @@ var _split_adjust_attempts: int = 0
 var _split_adjusted: bool = false
 
 func _ready() -> void:
-	allow_cancel = false
+	allow_cancel = true
+	cancel_hint_text = "ESC 暂时关闭"
 	super._ready()
 	set_title_text("公司结构重组")
 	set_confirm_text("确认重组")
-	set_cancel_text("关闭")
+	set_cancel_text("暂时关闭")
 	set_confirm_enabled(true)
 	if is_instance_valid(auto_fill_button):
 		UiStylesClass.apply_button_secondary(auto_fill_button)
@@ -37,28 +38,10 @@ func _ready() -> void:
 			auto_fill_button.pressed.connect(_on_auto_fill_pressed)
 
 func open(_covered_rect: Rect2) -> void:
-	# Restructuring needs a full-screen modal (covers left info panel as well).
-	var size_guess := Vector2.ZERO
-	if is_inside_tree():
-		size_guess = get_viewport_rect().size
-	if size_guess.x <= 1.0 or size_guess.y <= 1.0:
-		# Fallback for headless/tests before layout: use a reasonable size.
-		size_guess = Vector2(1280, 720)
-	var rect := Rect2(Vector2.ZERO, size_guess)
-	super.open(rect)
+	super.open(_covered_rect)
 	if is_instance_valid(hand_host):
 		hand_host.custom_minimum_size.x = RESTRUCTURING_HAND_TARGET_WIDTH
 	_queue_apply_split_target_width()
-
-func _center_panel() -> void:
-	# Restructuring modal is not a centered popup; panel fills the whole covered area.
-	if not is_instance_valid(panel):
-		return
-	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	panel.offset_left = 0
-	panel.offset_top = 0
-	panel.offset_right = 0
-	panel.offset_bottom = 0
 
 func close() -> void:
 	_restore_hand_area_display_mode()

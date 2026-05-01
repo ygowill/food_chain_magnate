@@ -1,6 +1,6 @@
 # 遮罩面板基类
 # - 覆盖指定区域（通常为中央地图区）
-# - ESC 取消；Space 按住窥视地图（隐藏面板并降低遮罩）
+# - ESC 取消/关闭；Space 按住窥视地图（隐藏面板并降低遮罩）
 class_name ModalPanelBase
 extends Control
 
@@ -12,6 +12,7 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 @export var title: String = ""
 @export var confirm_text: String = "确认"
 @export var cancel_text: String = "取消"
+@export var cancel_hint_text: String = "ESC 取消"
 @export var allow_cancel: bool = true
 @export var allow_peek_map: bool = true
 
@@ -149,6 +150,8 @@ func _center_panel() -> void:
 func _input(event: InputEvent) -> void:
 	if not visible:
 		return
+	if _is_game_menu_visible():
+		return
 	if not (event is InputEventKey):
 		return
 	var e: InputEventKey = event
@@ -199,10 +202,18 @@ func _update_hint() -> void:
 		return
 	var parts: Array[String] = []
 	if allow_cancel:
-		parts.append("ESC 取消")
+		var close_hint := str(cancel_hint_text).strip_edges()
+		parts.append(close_hint if not close_hint.is_empty() else "ESC 取消")
 	if allow_peek_map:
 		parts.append("按住 Space 查看地图")
 	hint_label.text = " | ".join(parts)
+
+func _is_game_menu_visible() -> bool:
+	var parent_node := get_parent()
+	if parent_node == null or not is_instance_valid(parent_node):
+		return false
+	var menu = parent_node.get_node_or_null("MenuDialog")
+	return menu is Control and bool((menu as Control).visible)
 
 func _on_confirm_pressed() -> void:
 	completed.emit({})

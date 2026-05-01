@@ -31,6 +31,42 @@ static func run() -> Result:
 		return Result.failure("实例不是 ActionPanel")
 
 	var ap: ActionPanel = panel
+	var modal_btn = panel.get_node_or_null("MarginContainer/VBoxContainer/ModalReopenButton")
+	if not (modal_btn is Button):
+		await _cleanup_panel(panel, st)
+		return Result.failure("ModalReopenButton 节点缺失")
+	if (modal_btn as Button).visible:
+		await _cleanup_panel(panel, st)
+		return Result.failure("ModalReopenButton 默认应隐藏")
+	var title_label_main = panel.get_node_or_null("MarginContainer/VBoxContainer/TitleLabel")
+	if title_label_main == null:
+		await _cleanup_panel(panel, st)
+		return Result.failure("TitleLabel 节点缺失")
+	if (modal_btn as Button).get_index() >= title_label_main.get_index():
+		await _cleanup_panel(panel, st)
+		return Result.failure("ModalReopenButton 应位于右侧动作面板最上方")
+
+	var emitted := {"id": "", "params": {}}
+	ap.action_requested.connect(func(action_id: String, params: Dictionary) -> void:
+		emitted["id"] = action_id
+		emitted["params"] = params
+	)
+	ap.set_modal_reopen_action("__test_modal", "打开测试面板", true, "继续测试面板")
+	if not (modal_btn as Button).visible:
+		await _cleanup_panel(panel, st)
+		return Result.failure("设置 reopen action 后 ModalReopenButton 应显示")
+	if str((modal_btn as Button).text) != "打开测试面板":
+		await _cleanup_panel(panel, st)
+		return Result.failure("ModalReopenButton 文案错误: %s" % str((modal_btn as Button).text))
+	(modal_btn as Button).emit_signal("pressed")
+	if str(emitted.get("id", "")) != "__test_modal":
+		await _cleanup_panel(panel, st)
+		return Result.failure("ModalReopenButton 未发出 action_requested，实际: %s" % str(emitted.get("id", "")))
+	ap.clear_modal_reopen_action()
+	if (modal_btn as Button).visible:
+		await _cleanup_panel(panel, st)
+		return Result.failure("清除 reopen action 后 ModalReopenButton 应隐藏")
+
 	var actions: Array[String] = ["skip"]
 	ap.set_available_actions(actions)
 
