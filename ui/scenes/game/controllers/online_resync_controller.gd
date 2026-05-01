@@ -405,6 +405,7 @@ func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> voi
 	var parsed: Result = Command.from_dict(cmd_dict)
 	if not parsed.ok:
 		GameLog.error("Game", "联机 CommandApplied 解析失败: %s" % parsed.error)
+		_request_online_force_resync("command_parse_failed")
 		return
 	var cmd: Command = parsed.value
 	if int(cmd.index) != int(engine.command_history.size()):
@@ -770,9 +771,8 @@ func _flush_online_pending_commands_after_resync() -> void:
 			var parsed: Result = Command.from_dict(item_cmd_dict)
 			if not parsed.ok:
 				GameLog.error("Game", "联机待处理命令解析失败: %s" % parsed.error)
-				queue.remove_at(i)
-				progressed = true
-				break
+				_request_online_force_resync("pending_command_parse_failed")
+				return
 			var cmd: Command = parsed.value
 			var expected_index := int(engine.command_history.size())
 			if int(cmd.index) < expected_index:
@@ -785,9 +785,8 @@ func _flush_online_pending_commands_after_resync() -> void:
 			var r: Result = engine.execute_command(cmd, true)
 			if not r.ok:
 				GameLog.error("Game", "联机回放待处理命令失败: %s" % r.error)
-				queue.remove_at(i)
-				progressed = true
-				break
+				_request_online_force_resync("pending_command_apply_failed")
+				return
 			if NetClient != null and NetClient.has_method("record_online_resume_runtime_command_applied"):
 				NetClient.record_online_resume_runtime_command_applied(item_cmd_dict, item_hash)
 			if not item_hash.is_empty():
@@ -822,6 +821,9 @@ func _flush_online_pending_commands_after_resync() -> void:
 
 func _request_online_resync(reason: String) -> void:
 	_begin_full_resync_request(reason)
+
+func _request_online_force_resync(reason: String) -> void:
+	_begin_full_resync_request(reason, true)
 
 func _on_online_connected() -> void:
 	if not _reconnect_flow_active:

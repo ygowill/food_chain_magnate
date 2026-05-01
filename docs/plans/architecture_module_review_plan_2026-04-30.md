@@ -2503,3 +2503,28 @@
 结论：
 
 - 已完成该 P2 strict 化：后端不再把损坏或错误类型的房间配置解释为空配置，恢复房识别与观战权限不会被坏 JSON 兜底绕过。
+
+### Fix 41：resync 后 pending command 失败立即触发 force snapshot
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 9 `[P2] Resync 后的 pending command flush 与实时 command_applied 路径不一致：解析/执行失败会移除 queued command，而不是立即 resync`。
+- Step 10 `[P2] Online resync 测试没有覆盖 pending command flush 的失败路径`。
+
+改动：
+
+- `ui/scenes/game/controllers/online_resync_controller.gd`：实时 `CommandApplied` 解析失败不再只记录日志返回，改为立即触发 `force_snapshot=true` 的 resync。
+- `ui/scenes/game/controllers/online_resync_controller.gd`：`_flush_online_pending_commands_after_resync(...)` 中 pending command 解析失败或执行失败不再 `remove_at(...)` 后继续/退出成功路径，改为立即触发 `force_snapshot=true` 的 resync，并避免后续 UI 成功刷新。
+- `core/tests/game_online_resync_request_rejection_test.gd`：新增实时 malformed CommandApplied、pending command 执行失败、pending command 解析失败三组契约覆盖，要求失败后进入 resync、`force_snapshot=true`，且 pending flush 失败不得走成功 UI refresh。
+
+验证：
+
+- 首次 AllTests 暴露测试直接给 typed `Array[Dictionary]` 属性赋未类型化数组的问题；已改为 `clear()/append()` 后重跑通过。
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：resync 后积压命令的坏 envelope 或本地执行失败不会被当作可跳过项处理，客户端会立即请求强制快照，避免以不可信本地状态继续刷新 UI。

@@ -71,6 +71,143 @@ static func run() -> Result:
 		return Result.failure("命令回放失败后应进入同步中状态")
 	apply_failure_controller.dispose()
 
+	var parse_failure_harness := _Harness.new(_FailingEngine.new())
+	var parse_failure_controller = ControllerClass.new(
+		host,
+		null,
+		Callable(parse_failure_harness, "get_engine"),
+		Callable(),
+		Callable(),
+		Callable(parse_failure_harness, "update_ui"),
+		Callable(),
+		Callable(parse_failure_harness, "show_confirm"),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(parse_failure_harness, "request_resync")
+	)
+	parse_failure_controller._on_online_command_applied({"index": 0}, "")
+	if parse_failure_harness.request_resync_calls != 1:
+		parse_failure_controller.dispose()
+		host.queue_free()
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
+		return Result.failure("CommandApplied 解析失败后应立刻请求 resync: %d" % parse_failure_harness.request_resync_calls)
+	if parse_failure_harness.request_resync_force_flags.size() != 1 or not bool(parse_failure_harness.request_resync_force_flags[0]):
+		parse_failure_controller.dispose()
+		host.queue_free()
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
+		return Result.failure("CommandApplied 解析失败后的 resync 应携带 force_snapshot")
+	if not parse_failure_controller.is_resync_in_progress():
+		parse_failure_controller.dispose()
+		host.queue_free()
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
+		return Result.failure("CommandApplied 解析失败后应进入同步中状态")
+	parse_failure_controller.dispose()
+
+	var pending_failure_harness := _Harness.new(_FailingEngine.new())
+	var pending_failure_controller = ControllerClass.new(
+		host,
+		null,
+		Callable(pending_failure_harness, "get_engine"),
+		Callable(),
+		Callable(),
+		Callable(pending_failure_harness, "update_ui"),
+		Callable(),
+		Callable(pending_failure_harness, "show_confirm"),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(pending_failure_harness, "request_resync")
+	)
+	pending_failure_controller._pending_cmds.clear()
+	pending_failure_controller._pending_cmds.append({
+		"cmd_dict": {
+			"index": 0,
+			"action_id": "forced_pending_apply_failure",
+			"actor": 0,
+			"params": {},
+			"phase": "test",
+			"sub_phase": "",
+			"timestamp": 1,
+			"metadata": {},
+		},
+		"state_hash": "",
+	})
+	pending_failure_controller._flush_online_pending_commands_after_resync()
+	if pending_failure_harness.request_resync_calls != 1:
+		pending_failure_controller.dispose()
+		host.queue_free()
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
+		return Result.failure("待处理命令执行失败后应立刻请求 resync: %d" % pending_failure_harness.request_resync_calls)
+	if pending_failure_harness.request_resync_force_flags.size() != 1 or not bool(pending_failure_harness.request_resync_force_flags[0]):
+		pending_failure_controller.dispose()
+		host.queue_free()
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
+		return Result.failure("待处理命令执行失败后的 resync 应携带 force_snapshot")
+	if pending_failure_harness.update_ui_calls != 0:
+		pending_failure_controller.dispose()
+		host.queue_free()
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
+		return Result.failure("待处理命令失败后不应按成功路径刷新 UI: %d" % pending_failure_harness.update_ui_calls)
+	if not pending_failure_controller.is_resync_in_progress():
+		pending_failure_controller.dispose()
+		host.queue_free()
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
+		return Result.failure("待处理命令执行失败后应进入同步中状态")
+	pending_failure_controller.dispose()
+
+	var pending_parse_harness := _Harness.new(_FailingEngine.new())
+	var pending_parse_controller = ControllerClass.new(
+		host,
+		null,
+		Callable(pending_parse_harness, "get_engine"),
+		Callable(),
+		Callable(),
+		Callable(pending_parse_harness, "update_ui"),
+		Callable(),
+		Callable(pending_parse_harness, "show_confirm"),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(pending_parse_harness, "request_resync")
+	)
+	pending_parse_controller._pending_cmds.clear()
+	pending_parse_controller._pending_cmds.append({
+		"cmd_dict": {"index": 0},
+		"state_hash": "",
+	})
+	pending_parse_controller._flush_online_pending_commands_after_resync()
+	if pending_parse_harness.request_resync_calls != 1:
+		pending_parse_controller.dispose()
+		host.queue_free()
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
+		return Result.failure("待处理命令解析失败后应立刻请求 resync: %d" % pending_parse_harness.request_resync_calls)
+	if pending_parse_harness.request_resync_force_flags.size() != 1 or not bool(pending_parse_harness.request_resync_force_flags[0]):
+		pending_parse_controller.dispose()
+		host.queue_free()
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
+		return Result.failure("待处理命令解析失败后的 resync 应携带 force_snapshot")
+	if pending_parse_harness.update_ui_calls != 0:
+		pending_parse_controller.dispose()
+		host.queue_free()
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
+		return Result.failure("待处理命令解析失败后不应按成功路径刷新 UI: %d" % pending_parse_harness.update_ui_calls)
+	if not pending_parse_controller.is_resync_in_progress():
+		pending_parse_controller.dispose()
+		host.queue_free()
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
+		return Result.failure("待处理命令解析失败后应进入同步中状态")
+	pending_parse_controller.dispose()
+
 	var harness := _Harness.new()
 	var controller = ControllerClass.new(
 		host,
