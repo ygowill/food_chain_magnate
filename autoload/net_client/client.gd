@@ -4,7 +4,6 @@
 extends RefCounted
 
 const GameEngineClass = preload("res://core/engine/game_engine.gd")
-const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const ClientResyncServiceClass = preload("res://autoload/net_client/client_resync_service.gd")
 const NetClientOnlineResumeSupportClass = preload("res://autoload/net_client_online_resume_support.gd")
@@ -570,10 +569,11 @@ func _initialize_online_client_engine_from_config(config: Dictionary, room_code:
 	var player_count := int(config.get("desired_player_count", 0))
 	var seed := int(config.get("seed", 0))
 	var base_dir := str(config.get("modules_v2_base_dir", "")).strip_edges()
+	if base_dir.is_empty():
+		return Result.failure("Online room modules_v2_base_dir 不能为空")
 	var base_dirs_read = ModuleDirSpecClass.parse_base_dirs(base_dir)
 	if not base_dirs_read.ok:
-		GameLog.warn("NetClient", "Online room modules_v2_base_dir 非 res://，已回退默认: %s" % base_dir)
-		base_dir = GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR
+		return Result.failure("Online room modules_v2_base_dir 无效: %s" % base_dirs_read.error)
 	var enabled_modules: Array[String] = []
 	var mods_val = config.get("enabled_modules_v2", null)
 	if mods_val is Array:

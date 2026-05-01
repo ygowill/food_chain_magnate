@@ -1702,3 +1702,31 @@
 
 - 已完成该 P1 的 strict 化：关键里程碑触发失败现在会中止对应规则效果或阶段结算，不再把不可信状态以 warning 形式吞掉。
 - 结算函数本身仍不是事务式回滚模型；若未来继续收紧规则执行一致性，应单独评估 settlement apply 的状态提交边界。
+
+### Fix 9：非法 modules_v2_base_dir 不再回退默认模块目录
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 3 `[P1] 存档加载遇到非法 modules_v2_base_dir 会回退默认模块目录，而不是拒绝加载`。
+- Step 3 `[P2] 新局初始化遇到非法 modules_v2_base_dir 会回退默认目录`。
+- Step 8 `[P2] Online client 从 server config 初始化 engine 时，modules_v2_base_dir 非法会回退默认目录`。
+
+改动：
+
+- `core/engine/game_engine/loader.gd`：archive 中的 `modules_v2_base_dir` 解析失败时直接 `Result.failure`，不再追加 warning 后使用 `GameDefaults.DEFAULT_MODULES_V2_BASE_DIR`。
+- `core/engine/game_engine/initializer.gd`：调用方显式传入非空但非法的 `modules_v2_base_dir` 时直接初始化失败；空字符串仍表示使用默认模块目录。
+- `autoload/net_client/client.gd`：联机 `GameStarted.config.modules_v2_base_dir` 缺失/为空/非法时直接 bootstrap 失败，不再回退默认目录，避免客户端模块装配与服务端权威配置分叉。
+- `autoload/globals.gd` 的 UI 用户偏好归一化未改动：用户设置损坏时仍可恢复默认目录，但恢复后的值再传入 engine。
+- `core/tests/archive_file_roundtrip_test.gd`、`core/tests/module_system_v2_bootstrap_test.gd`、`core/tests/online_client_config_bootstrap_overrides_test.gd`：新增非法 base dir 负例，覆盖 archive load、engine initialize 和 online client config bootstrap。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P1/P2 同源问题的 strict 化：权威运行路径不再把非法模块目录解释成默认模块集。
+- 仍保留 UI 设置层的用户偏好恢复默认行为，边界是“进入 engine/server/client bootstrap 前必须已经是合法 res:// spec”。

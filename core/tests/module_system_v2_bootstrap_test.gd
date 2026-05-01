@@ -40,4 +40,11 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if state.modules != plan:
 		return Result.failure("state.modules 应等于 module_plan_v2，实际: %s" % str(state.modules))
 
+	var invalid_engine := GameEngine.new()
+	var invalid_init := invalid_engine.initialize(player_count, seed_val, [], "/tmp/not_res_modules")
+	if invalid_init.ok:
+		return Result.failure("非法 modules_v2_base_dir 不应回退默认目录后初始化成功")
+	if str(invalid_init.error).find("modules_v2_base_dir") < 0:
+		return Result.failure("错误信息应包含 modules_v2_base_dir，实际: %s" % invalid_init.error)
+
 	return Result.success()

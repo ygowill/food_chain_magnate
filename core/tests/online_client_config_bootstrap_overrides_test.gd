@@ -12,6 +12,10 @@ static func run() -> Result:
 	if Globals == null:
 		return Result.failure("Globals autoload missing")
 
+	var invalid_base_dir_r := _test_invalid_modules_base_dir_rejected()
+	if not invalid_base_dir_r.ok:
+		return invalid_base_dir_r
+
 	var prev_mode := NetContext.mode
 	var prev_local_player_id := int(NetContext.local_player_id)
 	var prev_local_role := str(NetContext.local_role)
@@ -292,6 +296,36 @@ static func _restore_and_fail(
 		prev_is_game_active
 	)
 	return Result.failure(message)
+
+static func _test_invalid_modules_base_dir_rejected() -> Result:
+	var prev_engine = Globals.current_game_engine
+	var prev_is_game_active := bool(Globals.is_game_active)
+	Globals.current_game_engine = null
+	Globals.is_game_active = false
+
+	var client = ClientLogicClass.new()
+	var mock_net := _MockNet.new()
+	client.setup(mock_net)
+	var init_r: Result = client._initialize_online_client_engine_from_config({
+		"desired_player_count": 2,
+		"seed": 12345,
+		"enabled_modules_v2": [],
+		"modules_v2_base_dir": "/tmp/not_res_modules",
+		"restaurant_logo_choices_by_player": [-1, -1],
+	}, "BADCFG", 0)
+	var engine_after = Globals.current_game_engine
+
+	Globals.current_game_engine = prev_engine
+	Globals.is_game_active = prev_is_game_active
+
+	if init_r.ok:
+		return Result.failure("Online client config 中非法 modules_v2_base_dir 不应回退默认目录后初始化成功")
+	if str(init_r.error).find("modules_v2_base_dir") < 0:
+		return Result.failure("错误信息应包含 modules_v2_base_dir，实际: %s" % init_r.error)
+	if engine_after != null:
+		return Result.failure("Online client config 初始化失败时不应写入 Globals.current_game_engine")
+
+	return Result.success()
 
 class _MockMultiplayer:
 	extends RefCounted

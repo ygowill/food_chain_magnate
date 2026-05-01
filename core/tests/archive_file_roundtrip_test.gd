@@ -91,8 +91,33 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if h1 != h2:
 		return Result.failure("存档回读 hash 不一致: %s vs %s" % [h1, h2])
 
+	var invalid_base_dir_r := _test_invalid_modules_base_dir_rejected(player_count, seed_val + 901)
+	if not invalid_base_dir_r.ok:
+		return invalid_base_dir_r
+
 	return Result.success({
 		"save_path": save_path,
 		"hash": h1.substr(0, 8),
 		"commands": engine.get_command_history().size(),
 	})
+
+static func _test_invalid_modules_base_dir_rejected(player_count: int, seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val)
+	if not init.ok:
+		return Result.failure("初始化 invalid modules_v2_base_dir 用例失败: %s" % init.error)
+
+	var archive_r := engine.create_archive()
+	if not archive_r.ok:
+		return Result.failure("创建存档失败: %s" % archive_r.error)
+	var archive: Dictionary = archive_r.value
+	archive["modules_v2_base_dir"] = "/tmp/not_res_modules"
+
+	var loaded := GameEngine.new()
+	var load_r := loaded.load_from_archive(archive)
+	if load_r.ok:
+		return Result.failure("非法 modules_v2_base_dir 的存档不应回退默认目录后加载成功")
+	if str(load_r.error).find("modules_v2_base_dir") < 0:
+		return Result.failure("错误信息应包含 modules_v2_base_dir，实际: %s" % load_r.error)
+
+	return Result.success()

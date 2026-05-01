@@ -38,8 +38,7 @@ static func initialize_new_game(
 	else:
 		var base_dirs_read = ModuleDirSpecClass.parse_base_dirs(modules_v2_base_dir)
 		if not base_dirs_read.ok:
-			init_warnings.append("modules_v2_base_dir 非 res:// 目录，已回退默认: %s" % modules_v2_base_dir)
-			modules_v2_base_dir = GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR
+			return Result.failure("初始化失败：modules_v2_base_dir 无效: %s" % base_dirs_read.error)
 
 	var span_cfg := PerfTraceClass.begin_span("init:GameConfig.load_default")
 	var config_result := GameConfigClass.load_default()
