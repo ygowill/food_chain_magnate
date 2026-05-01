@@ -21,10 +21,10 @@ static func run() -> Result:
 	var validate_no_mutate_r := _run_validate_resume_point_does_not_mutate_source_case()
 	if not validate_no_mutate_r.ok:
 		return validate_no_mutate_r
-	var repair_marker_r := _run_repair_missing_marketing_marker_case()
-	if not repair_marker_r.ok:
-		return repair_marker_r
-	var replay_import_r := _run_replay_import_repairs_missing_marketing_marker_case()
+	var missing_marker_resume_r := _run_online_resume_rejects_missing_marketing_marker_case()
+	if not missing_marker_resume_r.ok:
+		return missing_marker_resume_r
+	var replay_import_r := _run_replay_import_rejects_missing_marketing_marker_case()
 	if not replay_import_r.ok:
 		return replay_import_r
 	var replay_import_tail_r := _run_replay_import_rejects_bad_tail_case()
@@ -36,6 +36,9 @@ static func run() -> Result:
 	var recover_r := _run_explicit_prefix_recovery_bad_tail_command_case()
 	if not recover_r.ok:
 		return recover_r
+	var bad_checkpoint_r := _run_prefix_recovery_rejects_empty_checkpoint_hash_case()
+	if not bad_checkpoint_r.ok:
+		return bad_checkpoint_r
 	return _run_resume_room_rejects_bad_tail_archive_case()
 
 static func _run_prepare_persists_online_confirm_markers_case() -> Result:
@@ -92,7 +95,7 @@ static func _run_validate_resume_point_does_not_mutate_source_case() -> Result:
 		return Result.failure("validate_resume_point 不应修改 initial checkpoint 的营销 marker")
 	return Result.success()
 
-static func _run_repair_missing_marketing_marker_case() -> Result:
+static func _run_online_resume_rejects_missing_marketing_marker_case() -> Result:
 	var archive_r := _build_missing_marketing_marker_archive()
 	if not archive_r.ok:
 		return archive_r
@@ -104,22 +107,10 @@ static func _run_repair_missing_marketing_marker_case() -> Result:
 		return Result.failure("缺少 marketing marker 的在线确认历史不应能直接完整加载")
 
 	var recover_r: Result = ArchiveRecoveryClass.load_for_online_resume(bad_archive)
-	if not recover_r.ok:
-		return Result.failure("修补缺失 marketing marker 后仍加载失败: %s" % recover_r.error)
-	var info: Dictionary = Dictionary(recover_r.value)
-	if bool(info.get("truncated", true)):
-		return Result.failure("缺失 marketing marker 应完整修补加载，不应截断: %s" % str(info))
-	var repaired_markers: Array = Array(info.get("repaired_online_confirm_markers", []))
-	if not repaired_markers.has(ONLINE_MARKETING_CONFIRM_KEY):
-		return Result.failure("修补结果应记录 marketing marker: %s" % str(info))
-	var recovered_archive: Dictionary = Dictionary(info.get("archive", {})).duplicate(true)
-	var initial: Dictionary = Dictionary(recovered_archive.get("initial_state", {}))
-	var rules: Dictionary = Dictionary(initial.get("rules", {})) if initial.get("rules", null) is Dictionary else {}
-	if int(rules.get(ONLINE_MARKETING_CONFIRM_KEY, 0)) != 1:
-		return Result.failure("修补后的存档 initial_state 仍缺少 marketing marker")
-	var commands: Array = Array(recovered_archive.get("commands", [])) if recovered_archive.get("commands", null) is Array else []
-	if commands.size() != 3:
-		return Result.failure("修补加载应保留完整命令历史，实际命令数: %d" % commands.size())
+	if recover_r.ok:
+		return Result.failure("普通 online resume 不应反推修补缺失的 marketing marker")
+	if str(recover_r.error).is_empty():
+		return Result.failure("普通 online resume 拒绝缺失 marker 时应返回错误信息")
 	return Result.success()
 
 static func _build_corrupted_tail_archive() -> Result:
@@ -228,7 +219,7 @@ static func _build_missing_marketing_marker_archive() -> Result:
 	archive["initial_state"] = initial
 	return Result.success(archive)
 
-static func _run_replay_import_repairs_missing_marketing_marker_case() -> Result:
+static func _run_replay_import_rejects_missing_marketing_marker_case() -> Result:
 	var archive_r := _build_missing_marketing_marker_archive()
 	if not archive_r.ok:
 		return archive_r
@@ -240,31 +231,20 @@ static func _run_replay_import_repairs_missing_marketing_marker_case() -> Result
 		return Result.failure("缺少 marketing marker 的回放存档不应能直接完整加载")
 
 	var import_r: Result = ArchiveRecoveryClass.load_for_replay_import(bad_archive)
-	if not import_r.ok:
-		return Result.failure("回放导入修补缺失 marketing marker 后仍加载失败: %s" % import_r.error)
-	var info: Dictionary = Dictionary(import_r.value)
-	if bool(info.get("truncated", true)):
-		return Result.failure("回放导入不应截断命令历史: %s" % str(info))
-	var repaired_markers: Array = Array(info.get("repaired_online_confirm_markers", []))
-	if not repaired_markers.has(ONLINE_MARKETING_CONFIRM_KEY):
-		return Result.failure("回放导入应记录 marketing marker 修补: %s" % str(info))
-	var engine = info.get("engine", null)
-	if engine == null or not is_instance_valid(engine) or not engine.has_method("get_state"):
-		return Result.failure("回放导入结果缺少 engine")
-	var imported_commands_val = engine.get("command_history")
-	if not (imported_commands_val is Array):
-		return Result.failure("回放导入结果 command_history 类型错误")
-	var imported_commands: Array = imported_commands_val
-	if imported_commands.size() != 3:
-		return Result.failure("回放导入应保留完整命令历史，实际命令数: %d" % imported_commands.size())
+	if import_r.ok:
+		return Result.failure("回放导入不应反推修补缺失的 marketing marker")
+	if str(import_r.error).is_empty():
+		return Result.failure("回放导入拒绝缺失 marker 时应返回错误信息")
 
 	var tmp_path := "user://replay_import_missing_marketing_marker.json"
 	var save_r: Result = ArchiveClass.save_archive_to_file(bad_archive, tmp_path)
 	if not save_r.ok:
 		return Result.failure("写入回放导入测试存档失败: %s" % save_r.error)
 	var file_import_r: Result = ArchiveRecoveryClass.load_file_for_replay_import(tmp_path)
-	if not file_import_r.ok:
-		return Result.failure("回放文件导入修补缺失 marketing marker 后仍加载失败: %s" % file_import_r.error)
+	if file_import_r.ok:
+		return Result.failure("回放文件导入不应反推修补缺失的 marketing marker")
+	if str(file_import_r.error).is_empty():
+		return Result.failure("回放文件导入拒绝缺失 marker 时应返回错误信息")
 
 	return Result.success()
 
@@ -332,6 +312,25 @@ static func _run_explicit_prefix_recovery_bad_tail_command_case() -> Result:
 	var verify_load: Result = verify_engine.load_from_archive(recovered_archive)
 	if not verify_load.ok:
 		return Result.failure("恢复后的存档仍无法加载: %s" % verify_load.error)
+	return Result.success()
+
+static func _run_prefix_recovery_rejects_empty_checkpoint_hash_case() -> Result:
+	var bad_r := _build_corrupted_tail_archive()
+	if not bad_r.ok:
+		return bad_r
+	var bad_info: Dictionary = Dictionary(bad_r.value)
+	var archive: Dictionary = Dictionary(bad_info.get("archive", {})).duplicate(true)
+	archive["checkpoints"] = [{
+		"index": 0,
+		"hash": "",
+		"rng_calls": 0,
+	}]
+
+	var recover_r: Result = ArchiveRecoveryClass.load_for_online_resume_with_prefix_recovery(archive)
+	if recover_r.ok:
+		return Result.failure("prefix recovery 不应接受空 hash checkpoint metadata")
+	if not str(recover_r.error).contains("checkpoint"):
+		return Result.failure("prefix recovery 拒绝空 checkpoint hash 时应返回 checkpoint 相关错误，实际: %s" % recover_r.error)
 	return Result.success()
 
 static func _run_resume_room_rejects_bad_tail_archive_case() -> Result:

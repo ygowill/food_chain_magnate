@@ -1021,6 +1021,7 @@
   - 证据：prefix checkpoint metadata 遇到坏 checkpoint entry 会跳过；没有可用 checkpoint 时合成 `{index=0, hash="", rng_calls=0}`。证据：`core/engine/game_engine/archive_recovery.gd:253-271`。
   - 风险：命令历史反推规则开关会把 “archive 缺规则字段” 解释成可恢复旧格式，而不是暴露 archive schema 不完整；合成空 hash checkpoint 又会削弱 replay/hash 审计。
   - 建议：online confirm marker 修复应迁移到版本化 archive migration；常规 replay import 只接受完整 initial rules/checkpoint。空 hash checkpoint 不应进入 strict replay。
+  - 状态：Fix 35 已移除普通导入/联机恢复中的 marker 反推修补，并将 prefix checkpoint metadata 改为 strict 校验。
 
 - [P2] 事件 envelope 在 core runner、event history rebuild、EventTimeline、StepTimeline 多处被静默过滤，坏事件不会暴露。
   - 证据：`CommandRunner` 发送事件时跳过非 Dictionary、空 type，并把非 Dictionary data 变成 `{}`。证据：`core/engine/game_engine/command_runner.gd:195-211`。
@@ -2355,3 +2356,27 @@
 结论：
 
 - 已完成该 P1 strict 化：玩家动作和已覆盖扩展模块不再把关键里程碑触发失败吞为 warning；失败会阻断动作/结算，避免权威状态缺失里程碑副作用。
+
+### Fix 35：archive recovery 不再反推修补 online confirm marker
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 8 `[P2] Archive replay import 会根据命令历史反推并补齐 online confirm 规则标记，把运行期语义迁移放进了 recovery path`。
+- 具体问题：`ArchiveRecovery` 在 replay import / online resume 的普通加载路径中扫描 `confirm_dinnertime` / `confirm_marketing` 命令，并把缺失的 online confirm marker 写回 `initial_state.rules`；显式 prefix recovery 还会在 checkpoint metadata 不可用时合成空 hash checkpoint。
+
+改动：
+
+- `core/engine/game_engine/archive_recovery.gd`：移除 `_repair_online_confirm_markers_for_replay(...)` 以及普通导入/联机恢复中的 marker 反推修补；`load_for_online_resume(...)` 与 `load_for_replay_import(...)` 只加载调用方提供的 archive，缺 marker 会沿用 `GameEngine.load_from_archive(...)` 的 strict 失败。
+- `core/engine/game_engine/archive_recovery.gd`：显式 prefix recovery 的 checkpoint metadata 由跳过坏 entry / 合成 `{hash=""}` 改为严格校验 `index/hash/rng_calls`；缺失、类型错误、空 hash 或没有可用前缀 checkpoint 都会失败。
+- `core/tests/online_resume_archive_recovery_test.gd`：把缺失 marketing marker 的旧成功契约改为 online resume 与 replay import 均必须失败；新增 prefix recovery 拒绝空 hash checkpoint metadata 的负例。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：普通 archive import/resume 不再承担 online confirm marker migration；显式灾难恢复模式也不再制造不可审计的空 hash checkpoint。
