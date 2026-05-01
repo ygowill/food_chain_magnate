@@ -2755,3 +2755,28 @@
 结论：
 
 - 已完成该 P1 边界整改：服务端快照导出不再受 Game 场景 MapCanvas、UI skin cache 或 UI drawer 内部重构影响；后续若要提升截图视觉质量，应在 server/shared renderer 内独立演进，而不是反向依赖 UI 节点绘制链路。
+
+### Fix 51：OnlineSessionCoordinator 错误策略移出 UI 目录
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 1 `[P2] OnlineSessionCoordinator 依赖位于 UI 目录的错误分类策略`。
+
+改动：
+
+- `ui/scenes/online/online_resume_error_policy.gd` 迁移为 `autoload/online_resume_error_policy.gd`，保留原 `.uid` 到新路径；该策略是纯 `RefCounted` 静态分类逻辑，不再归属于 online lobby UI 场景。
+- `autoload/online_session_coordinator.gd`：preload 改为 `res://autoload/online_resume_error_policy.gd`。
+- `core/tests/online_resume_error_policy_test.gd`：测试 preload 同步改到新路径。
+- 新策略文件不声明 `class_name`，避免 Godot global script class cache 在移动路径期间保留旧 UI class_name 造成隐藏冲突；调用方均通过 preload 常量使用。
+
+验证：
+
+- `rg -n "res://ui/scenes/online/online_resume_error_policy" . --glob "*.gd" --glob "!*.uid"`：无命中。
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`391/391`。
+
+结论：
+
+- 已完成该 P2 边界整改：联机恢复编排层不再反向依赖 online UI 场景目录；UI 可继续复用 autoload 中立层的错误策略。

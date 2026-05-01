@@ -1,5 +1,4 @@
 # 联机恢复：错误分类与本地 resume 清理策略
-class_name OnlineResumeErrorPolicy
 extends RefCounted
 
 static func classify_resume_failure(error_val) -> Dictionary:

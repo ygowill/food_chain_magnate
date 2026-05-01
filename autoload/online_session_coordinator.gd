@@ -1,6 +1,6 @@
 extends Node
 
-const ResumeErrorPolicyClass = preload("res://ui/scenes/online/online_resume_error_policy.gd")
+const ResumeErrorPolicyClass = preload("res://autoload/online_resume_error_policy.gd")
 
 const TARGET_LOBBY := "online_lobby"
 const TARGET_GAME := "game"

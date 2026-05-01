@@ -2,7 +2,7 @@
 class_name OnlineResumeErrorPolicyTest
 extends RefCounted
 
-const PolicyClass = preload("res://ui/scenes/online/online_resume_error_policy.gd")
+const PolicyClass = preload("res://autoload/online_resume_error_policy.gd")
 
 static func run() -> Result:
 	var room_missing := PolicyClass.classify_resume_failure({
