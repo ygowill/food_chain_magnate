@@ -11,7 +11,13 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_open_opening_soon_restaurants_fails_fast_on_missing_player_restaurants()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 2})
+	r = _test_open_opening_soon_restaurants_fails_fast_on_existing_restaurant()
+	if not r.ok:
+		return r
+	r = _test_open_opening_soon_restaurants_fails_fast_on_structure_mismatch()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 4})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -77,4 +83,47 @@ static func _test_open_opening_soon_restaurants_fails_fast_on_missing_player_res
 	var err := str(result.error)
 	if err.find("player[0].restaurants") < 0:
 		return Result.failure("错误信息应包含 player[0].restaurants，实际: %s" % err)
+	return Result.success()
+
+static func _test_open_opening_soon_restaurants_fails_fast_on_existing_restaurant() -> Result:
+	var state := _make_state()
+	state.map["restaurants"]["rest_1"] = {
+		"restaurant_id": "rest_1",
+		"owner": 0,
+		"anchor_pos": Vector2i.ZERO,
+		"entrance_pos": Vector2i.ZERO,
+		"cells": [Vector2i.ZERO],
+	}
+	var round_state_before := str(state.round_state)
+	var player_restaurants_before := str(state.players[0].get("restaurants", []))
+	var result := CleanupSettlementClass._open_opening_soon_restaurants(state)
+	if result.ok:
+		return Result.failure("opening_soon restaurant 已存在于 map.restaurants 时应失败")
+	var err := str(result.error)
+	if err.find("已存在") < 0:
+		return Result.failure("错误信息应包含 已存在，实际: %s" % err)
+	if str(state.round_state) != round_state_before:
+		return Result.failure("失败时不应清除 opening_soon_restaurants")
+	if str(state.players[0].get("restaurants", [])) != player_restaurants_before:
+		return Result.failure("失败时不应改写 player.restaurants")
+	return Result.success()
+
+static func _test_open_opening_soon_restaurants_fails_fast_on_structure_mismatch() -> Result:
+	var state := _make_state()
+	state.map["cells"][0][0]["structure"]["restaurant_id"] = "other_rest"
+	var round_state_before := str(state.round_state)
+	var restaurants_before := str(state.map.get("restaurants", {}))
+	var player_restaurants_before := str(state.players[0].get("restaurants", []))
+	var result := CleanupSettlementClass._open_opening_soon_restaurants(state)
+	if result.ok:
+		return Result.failure("opening_soon cell restaurant_id 不匹配时应失败")
+	var err := str(result.error)
+	if err.find("restaurant_id 不匹配") < 0:
+		return Result.failure("错误信息应包含 restaurant_id 不匹配，实际: %s" % err)
+	if str(state.round_state) != round_state_before:
+		return Result.failure("structure 不匹配失败时不应清除 opening_soon_restaurants")
+	if str(state.map.get("restaurants", {})) != restaurants_before:
+		return Result.failure("structure 不匹配失败时不应加入 map.restaurants")
+	if str(state.players[0].get("restaurants", [])) != player_restaurants_before:
+		return Result.failure("structure 不匹配失败时不应改写 player.restaurants")
 	return Result.success()

@@ -1777,3 +1777,27 @@
 
 - 已完成该 P2 strict 化：Cleanup 不再把损坏的里程碑领取结构解释为正常领取 1 份。
 - 旧结构兼容应移动到显式 archive migration/recovery，而不是 Cleanup 权威结算。
+
+### Fix 12：Cleanup opening-soon 开业逻辑拒绝不一致地图结构
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 6 `[P2] Cleanup “opening soon restaurant” 翻面逻辑对重复/已开业餐厅和不匹配地图结构静默跳过，最后仍清除 pending 列表`。
+
+改动：
+
+- `modules/base_rules/rules/phase/cleanup_settlement.gd`：`_open_opening_soon_restaurants(...)` 改为先完整校验 pending entries 与地图格子，再统一写入 `map.restaurants`、`player.restaurants` 并清除 `opening_soon` 标记。
+- 同一函数现在拒绝重复 pending `restaurant_id`、已经存在于 `state.map.restaurants` 的 restaurant、地图外 cells、缺失/错误 cell structure、`piece_id`/`restaurant_id` 不匹配、缺少 `opening_soon` 标记等损坏状态。
+- `core/tests/cleanup_settlement_opening_soon_state_access_test.gd`：新增已存在 restaurant 与 cell restaurant_id 不匹配负例，断言失败时不清除 pending，也不写入 map/player restaurants。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：Cleanup 不再把 opening-soon pending 与地图结构不一致解释成可跳过状态。
+- 若未来要支持幂等恢复，应先验证 map/player/restaurants 三者已经一致，再由显式 recovery 路径清理 pending。

@@ -188,6 +188,12 @@ static func _open_opening_soon_restaurants(state: GameState) -> Result:
 
 	var warnings: Array[String] = []
 	var restaurants: Dictionary = restaurants_read.value
+	var cells_read := MapStateAccessClass.require_cells(state, "CleanupSettlement")
+	if not cells_read.ok:
+		return cells_read
+	var map_cells: Array = cells_read.value
+	var normalized_entries: Array[Dictionary] = []
+	var seen_pending_ids := {}
 
 	for i in range(pending.size()):
 		var entry_val = pending[i]
@@ -198,6 +204,11 @@ static func _open_opening_soon_restaurants(state: GameState) -> Result:
 		var rid := str(entry.get("restaurant_id", "")).strip_edges()
 		if rid.is_empty():
 			return Result.failure("CleanupSettlement: opening_soon_restaurants[%d].restaurant_id 为空" % i)
+		if seen_pending_ids.has(rid):
+			return Result.failure("CleanupSettlement: opening_soon_restaurants 出现重复 restaurant_id: %s" % rid)
+		seen_pending_ids[rid] = true
+		if restaurants.has(rid):
+			return Result.failure("CleanupSettlement: opening_soon_restaurants[%s] 已存在于 state.map.restaurants" % rid)
 		var owner := int(entry.get("owner", -1))
 		if owner < 0 or owner >= state.players.size():
 			return Result.failure("CleanupSettlement: opening_soon_restaurants[%s].owner 越界: %d" % [rid, owner])
@@ -222,9 +233,52 @@ static func _open_opening_soon_restaurants(state: GameState) -> Result:
 
 		var rotation := int(entry.get("rotation", 0))
 
-		if restaurants.has(rid):
-			# 容错：已开业则跳过（避免重复加入导致玩家 restaurants 重复）
-			continue
+		var cell_updates: Array[Dictionary] = []
+		for cpos in cells:
+			if not CoordsClass.is_world_pos_in_grid(state, cpos):
+				return Result.failure("CleanupSettlement: opening_soon_restaurants[%s].cells 包含地图外坐标: %s" % [rid, str(cpos)])
+			var idx: Vector2i = CoordsClass.world_to_index(state, cpos)
+			if idx.y < 0 or idx.y >= map_cells.size() or not (map_cells[idx.y] is Array):
+				return Result.failure("CleanupSettlement: state.map.cells[%d] 缺失或类型错误（期望 Array）" % idx.y)
+			var row: Array = map_cells[idx.y]
+			if idx.x < 0 or idx.x >= row.size() or not (row[idx.x] is Dictionary):
+				return Result.failure("CleanupSettlement: state.map.cells[%d][%d] 缺失或类型错误（期望 Dictionary）" % [idx.y, idx.x])
+			var cell: Dictionary = row[idx.x]
+			var s_val = cell.get("structure", null)
+			if not (s_val is Dictionary):
+				return Result.failure("CleanupSettlement: opening_soon_restaurants[%s] cell %s structure 缺失或类型错误（期望 Dictionary）" % [rid, str(cpos)])
+			var s: Dictionary = s_val
+			if str(s.get("piece_id", "")) != "restaurant":
+				return Result.failure("CleanupSettlement: opening_soon_restaurants[%s] cell %s piece_id 不匹配: %s" % [rid, str(cpos), str(s.get("piece_id", null))])
+			if str(s.get("restaurant_id", "")) != rid:
+				return Result.failure("CleanupSettlement: opening_soon_restaurants[%s] cell %s restaurant_id 不匹配: %s" % [rid, str(cpos), str(s.get("restaurant_id", null))])
+			if not bool(s.get("opening_soon", false)):
+				return Result.failure("CleanupSettlement: opening_soon_restaurants[%s] cell %s 缺少 opening_soon 标记" % [rid, str(cpos)])
+			cell_updates.append({
+				"idx": idx,
+				"cell": cell.duplicate(true),
+				"structure": s.duplicate(true),
+			})
+
+		normalized_entries.append({
+			"restaurant_id": rid,
+			"owner": owner,
+			"anchor_pos": anchor_pos,
+			"entrance_pos": entrance_pos,
+			"cells": cells,
+			"rotation": rotation,
+			"cell_updates": cell_updates,
+		})
+
+	for entry_val in normalized_entries:
+		var entry: Dictionary = entry_val
+		var rid: String = str(entry["restaurant_id"])
+		var owner: int = int(entry["owner"])
+		var anchor_pos: Vector2i = entry["anchor_pos"]
+		var entrance_pos: Vector2i = entry["entrance_pos"]
+		var cells: Array[Vector2i] = entry["cells"]
+		var rotation: int = int(entry["rotation"])
+		var cell_updates: Array = entry["cell_updates"]
 
 		restaurants[rid] = {
 			"restaurant_id": rid,
@@ -250,22 +304,17 @@ static func _open_opening_soon_restaurants(state: GameState) -> Result:
 		state.players[owner] = player
 
 		# 清理 structure 上的 opening_soon 标志（翻面至“欢迎光临”）
-		for cpos in cells:
-			var idx: Vector2i = CoordsClass.world_to_index(state, cpos)
-			var cell: Dictionary = state.map.cells[idx.y][idx.x]
-			var s_val = cell.get("structure", null)
-			if not (s_val is Dictionary):
-				continue
-			var s: Dictionary = s_val
-			if str(s.get("piece_id", "")) != "restaurant":
-				continue
-			if str(s.get("restaurant_id", "")) != rid:
-				continue
+		for update_val in cell_updates:
+			var update: Dictionary = update_val
+			var idx: Vector2i = update["idx"]
+			var cell: Dictionary = update["cell"]
+			var s: Dictionary = update["structure"]
 			if s.has("opening_soon"):
 				s.erase("opening_soon")
 			cell["structure"] = s
-			state.map.cells[idx.y][idx.x] = cell
+			map_cells[idx.y][idx.x] = cell
 
+	state.map["cells"] = map_cells
 	state.map["restaurants"] = restaurants
 	state.round_state.erase(ROUND_STATE_OPENING_SOON_RESTAURANTS_KEY)
 	return Result.success().with_warnings(warnings)
