@@ -1,5 +1,5 @@
-# StateSchemaRegistry 未注册 int-key dict 的告警测试（F3）
-# 目的：当模块自有字段仍含 "0"/"1"... 这类字符串玩家 key 时，读档应产生可定位 warning。
+# StateSchemaRegistry 未注册 int-key dict 的严格读档测试（F3）
+# 目的：当模块自有字段仍含 "0"/"1"... 这类字符串玩家 key 时，读档应 fail-fast。
 class_name StateSchemaUnregisteredModuleKeyWarningTest
 extends RefCounted
 
@@ -45,16 +45,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 
 	var e2 := GameEngine.new()
 	var load_r := e2.load_from_archive(archive)
-	if not load_r.ok:
-		return Result.failure("load_from_archive 失败: %s" % load_r.error)
-
-	var found := false
-	for w in load_r.warnings:
-		if w is String and str(w).find("lobbyists_unregistered_test") != -1:
-			found = true
-			break
-	if not found:
-		return Result.failure("预期读档 warnings 包含 lobbyists_unregistered_test，但实际: %s" % str(load_r.warnings))
+	if load_r.ok:
+		return Result.failure("load_from_archive 遇到未注册 schema 的模块字符串玩家 key 时应失败")
+	var err := str(load_r.error)
+	if err.find("lobbyists_unregistered_test") < 0 or err.find("字符串玩家 key") < 0:
+		return Result.failure("错误信息应包含 lobbyists_unregistered_test 与 字符串玩家 key，实际: %s" % err)
 
 	return Result.success()
-

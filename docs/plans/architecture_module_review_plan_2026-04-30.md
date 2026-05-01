@@ -1896,3 +1896,26 @@
 
 - 已完成该 P2 strict 化：含模块 state 不再能在 schema 未装配时跳过 int-key 归一化。
 - 直接调用 `GameState.from_dict` 的工具/测试如果要处理模块态，必须先通过 engine/archive loader 路径装配模块 schema。
+
+### Fix 17：模块自有字符串玩家 key 从 warning 升级为读档失败
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 2 `[P2] 模块自有字段出现字符串玩家 key 时只发 warning，不阻断读档`。
+
+改动：
+
+- `core/state/game_state_serialization.gd`：`StateSchemaRegistry.warn_if_module_owned_has_string_player_keys(...)` 检测到 module-owned 字段下存在 `"0"`/`"1"` 等字符串玩家 key 时，`GameState.from_dict` 直接失败，不再作为 warning 继续返回成功。
+- `core/tests/state_schema_unregistered_module_key_warning_test.gd`：原 warning 预期改为 strict 预期；注入未注册 schema 的 `lobbyists_unregistered_test` 后，`load_from_archive(...)` 必须失败并给出字段名。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：模块漏注册 int-key schema 不再被降级为读档 warning。
+- 若需要诊断损坏存档，应提供显式 recovery/inspection 工具；运行期读档路径不应继续加载 key 类型漂移的模块状态。

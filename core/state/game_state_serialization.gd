@@ -217,12 +217,16 @@ static func apply_from_dict(state, data: Dictionary, expected_schema_version: in
 	)
 	if not rs_warn.ok:
 		return rs_warn
+	if not rs_warn.warnings.is_empty():
+		return Result.failure("GameState.from_dict: 模块自有字段存在字符串玩家 key: %s" % str(rs_warn.warnings))
 	all_warnings.append_array(rs_warn.warnings)
 	var map_warn := StateSchemaRegistryClass.warn_if_module_owned_has_string_player_keys(
 		state.modules, "map", state.map, state.players.size(), "GameState.map"
 	)
 	if not map_warn.ok:
 		return map_warn
+	if not map_warn.warnings.is_empty():
+		return Result.failure("GameState.from_dict: 模块自有字段存在字符串玩家 key: %s" % str(map_warn.warnings))
 	all_warnings.append_array(map_warn.warnings)
 
 	return Result.success(state).with_warnings(all_warnings)
