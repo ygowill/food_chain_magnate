@@ -228,6 +228,88 @@ func request_server_round_autosave(room_code: String, completed_round_number: in
 		kind = "round_end"
 	server_round_autosave_requested.emit(normalized_room_code, int(completed_round_number), str(state_hash).strip_edges(), kind)
 
+func has_server_room_manager() -> bool:
+	return _get_server_room_manager_or_null() != null
+
+func restore_server_room_manager_from_persistence(snapshot: Dictionary) -> Result:
+	var room_manager = _get_server_room_manager_or_null()
+	if room_manager == null:
+		return ResultClass.failure("RoomManager missing")
+	if not room_manager.has_method("restore_from_persistence"):
+		return ResultClass.failure("RoomManager.restore_from_persistence missing")
+	return room_manager.restore_from_persistence(Dictionary(snapshot).duplicate(true))
+
+func create_server_room_persistence_snapshot(include_runtime_membership: bool = false) -> Result:
+	var room_manager = _get_server_room_manager_or_null()
+	if room_manager == null:
+		return ResultClass.failure("RoomManager missing")
+	if not room_manager.has_method("create_persistence_snapshot"):
+		return ResultClass.failure("RoomManager.create_persistence_snapshot missing")
+	return room_manager.create_persistence_snapshot(bool(include_runtime_membership))
+
+func save_server_room_manager_with_store(store) -> Result:
+	var room_manager = _get_server_room_manager_or_null()
+	if room_manager == null:
+		return ResultClass.failure("RoomManager missing")
+	if store == null or not store.has_method("save_room_manager"):
+		return ResultClass.failure("Room persistence store missing save_room_manager")
+	return store.save_room_manager(room_manager)
+
+func get_server_room_by_code(room_code: String):
+	var room_manager = _get_server_room_manager_or_null()
+	if room_manager == null:
+		return null
+	var code := str(room_code).strip_edges().to_upper()
+	if code.is_empty():
+		return null
+	if not (room_manager.rooms is Dictionary):
+		return null
+	return room_manager.rooms.get(code, null)
+
+func force_remove_server_room(room_code: String) -> Result:
+	var room_manager = _get_server_room_manager_or_null()
+	if room_manager == null:
+		return ResultClass.failure("RoomManager missing")
+	if not room_manager.has_method("force_remove_room"):
+		return ResultClass.failure("RoomManager.force_remove_room missing")
+	return room_manager.force_remove_room(str(room_code).strip_edges().to_upper())
+
+func get_server_room_count() -> int:
+	var room_manager = _get_server_room_manager_or_null()
+	if room_manager == null or not (room_manager.rooms is Dictionary):
+		return 0
+	return int(room_manager.rooms.size())
+
+func list_active_server_room_codes() -> Array[String]:
+	var out: Array[String] = []
+	var room_manager = _get_server_room_manager_or_null()
+	if room_manager == null or not (room_manager.rooms is Dictionary):
+		return out
+	for code_val in room_manager.rooms.keys():
+		var code := str(code_val).strip_edges().to_upper()
+		if code.is_empty():
+			continue
+		var room = room_manager.rooms.get(code_val, null)
+		if room == null:
+			continue
+		var room_status := str(room.status).strip_edges()
+		if room_status != "Lobby" and room_status != "Starting" and room_status != "InGame":
+			continue
+		out.append(code)
+	out.sort()
+	return out
+
+func build_empty_room_state() -> Dictionary:
+	return _empty_room_state()
+
+func broadcast_server_room_list(reason: String = "") -> void:
+	_broadcast_room_list(str(reason))
+
+func _get_server_room_manager_or_null():
+	if _room_manager == null or not is_instance_valid(_room_manager):
+		return null
+	return _room_manager
+
 func request_create_room(desired_player_count: int, room_password: String, config: Dictionary = {}) -> String:
 	var request_id := _next_request_id()
 	var payload := {

@@ -76,8 +76,12 @@ static func run() -> Result:
 	if not r4.ok:
 		return r4
 
+	var r5 := _assert_dedicated_server_uses_netclient_facade()
+	if not r5.ok:
+		return r5
+
 	return Result.success({
-		"checks": 4,
+		"checks": 5,
 	})
 
 static func _assert_no_direct_ui_refs() -> Result:
@@ -146,6 +150,17 @@ static func _assert_project_settings_usage_confined() -> Result:
 			continue
 		return Result.failure("新增 ProjectSettings 读取前需先收敛依赖边界: %s:%d contains %s" % [path, int(hit.get("line", 1)), str(hit.get("pattern", ""))])
 
+	return Result.success()
+
+static func _assert_dedicated_server_uses_netclient_facade() -> Result:
+	var path := "res://server/dedicated_server.gd"
+	var hit := _find_code_pattern(path, [
+		"NetClient._room_manager",
+		"NetClient._broadcast_room_list",
+		"NetClient._empty_room_state",
+	])
+	if not hit.is_empty():
+		return Result.failure("DedicatedServer 应通过 NetClient facade 访问房间服务: %s:%d contains %s" % [path, int(hit.get("line", 1)), str(hit.get("pattern", ""))])
 	return Result.success()
 
 static func _should_skip_file(path: String) -> bool:

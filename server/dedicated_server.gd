@@ -105,7 +105,7 @@ func _setup_persistence() -> Result:
 	if _room_persistence_store.has_method("set_round_autosave_dir"):
 		_room_persistence_store.set_round_autosave_dir(round_autosave_dir)
 
-	if NetClient == null or NetClient._room_manager == null or not is_instance_valid(NetClient._room_manager):
+	if NetClient == null or not NetClient.has_method("has_server_room_manager") or not NetClient.has_server_room_manager():
 		return Result.failure("DedicatedServer persistence setup failed: RoomManager missing")
 
 	var load_r: Result = _room_persistence_store.load_snapshot()
@@ -118,7 +118,7 @@ func _setup_persistence() -> Result:
 	var restore_snapshot: Dictionary = snapshot
 	if sync_r.value is Dictionary:
 		restore_snapshot = Dictionary(sync_r.value)
-	var restore_r: Result = NetClient._room_manager.restore_from_persistence(restore_snapshot)
+	var restore_r: Result = NetClient.restore_server_room_manager_from_persistence(restore_snapshot)
 	if not restore_r.ok:
 		return Result.failure("恢复房间快照失败: %s" % restore_r.error)
 
@@ -154,15 +154,13 @@ func _on_server_round_autosave_requested(room_code: String, completed_round_numb
 func _persist_round_autosave(room_code: String, completed_round_number: int, state_hash: String, snapshot_kind: String = "round_end") -> void:
 	if _room_persistence_store == null:
 		return
-	if NetClient == null or NetClient._room_manager == null or not is_instance_valid(NetClient._room_manager):
-		return
-	if not (NetClient._room_manager.rooms is Dictionary):
+	if NetClient == null or not NetClient.has_method("get_server_room_by_code"):
 		return
 	var code := str(room_code).strip_edges().to_upper()
 	if code.is_empty():
 		return
 	var kind := _normalize_round_snapshot_kind(snapshot_kind)
-	var room = NetClient._room_manager.rooms.get(code, null)
+	var room = NetClient.get_server_room_by_code(code)
 	if room == null:
 		GameLog.warn("DedicatedServer", "Round autosave skipped: room not found %s" % code)
 		return
@@ -456,9 +454,7 @@ func _prune_remote_ended_rooms(room_codes: Array, source: String) -> void:
 		return
 	if NetClient == null or not is_instance_valid(NetClient):
 		return
-	if NetClient._room_manager == null or not is_instance_valid(NetClient._room_manager):
-		return
-	if not NetClient._room_manager.has_method("force_remove_room"):
+	if not NetClient.has_method("force_remove_server_room"):
 		return
 
 	var removed_codes: Array[String] = []
@@ -467,7 +463,7 @@ func _prune_remote_ended_rooms(room_codes: Array, source: String) -> void:
 		var code := str(code_val).strip_edges().to_upper()
 		if code.is_empty():
 			continue
-		var remove_r: Result = NetClient._room_manager.force_remove_room(code)
+		var remove_r: Result = NetClient.force_remove_server_room(code)
 		if not remove_r.ok:
 			GameLog.warn("DedicatedServer", "Prune remote-ended room failed code=%s source=%s error=%s" % [code, source, remove_r.error])
 			continue
@@ -483,11 +479,11 @@ func _prune_remote_ended_rooms(room_codes: Array, source: String) -> void:
 					continue
 				if not notified_peer_ids.has(peer_id):
 					notified_peer_ids.append(peer_id)
-				NetClient.rpc_id(peer_id, "rpc_room_state", NetClient._empty_room_state())
+				NetClient.rpc_id(peer_id, "rpc_room_state", NetClient.build_empty_room_state())
 
 	if removed_codes.is_empty():
 		return
-	NetClient._broadcast_room_list("")
+	NetClient.broadcast_server_room_list("")
 	_persist_rooms()
 	GameLog.info(
 		"DedicatedServer",
@@ -528,12 +524,10 @@ func _flush_room_directory_sync() -> void:
 	if _room_directory_sync_in_flight:
 		_room_directory_sync_pending = true
 		return
-	if NetClient == null or NetClient._room_manager == null or not is_instance_valid(NetClient._room_manager):
-		return
-	if not NetClient._room_manager.has_method("create_persistence_snapshot"):
+	if NetClient == null or not NetClient.has_method("create_server_room_persistence_snapshot"):
 		return
 
-	var snapshot_r: Result = NetClient._room_manager.create_persistence_snapshot(true)
+	var snapshot_r: Result = NetClient.create_server_room_persistence_snapshot(true)
 	if not snapshot_r.ok:
 		GameLog.warn("DedicatedServer", "Create room directory snapshot failed: %s" % snapshot_r.error)
 		return
@@ -580,13 +574,13 @@ func _on_persist_timeout() -> void:
 func _persist_rooms() -> void:
 	if _room_persistence_store == null:
 		return
-	if NetClient == null or NetClient._room_manager == null or not is_instance_valid(NetClient._room_manager):
+	if NetClient == null or not NetClient.has_method("save_server_room_manager_with_store"):
 		return
 	var span := OnlinePerfTraceClass.begin_span("server.persistence.persist_rooms", {
-		"room_count": int(NetClient._room_manager.rooms.size()) if NetClient._room_manager.get("rooms") is Dictionary else 0,
+		"room_count": int(NetClient.get_server_room_count()) if NetClient.has_method("get_server_room_count") else 0,
 		"snapshot_path": _room_persistence_store.get_snapshot_path() if _room_persistence_store.has_method("get_snapshot_path") else "",
 	})
-	var save_r: Result = _room_persistence_store.save_room_manager(NetClient._room_manager)
+	var save_r: Result = NetClient.save_server_room_manager_with_store(_room_persistence_store)
 	if not save_r.ok:
 		OnlinePerfTraceClass.end_span(span, {
 			"ok": false,
@@ -636,19 +630,8 @@ func _send_heartbeat() -> void:
 		return
 
 	var room_codes: Array[String] = []
-	if NetClient != null and NetClient._room_manager != null and is_instance_valid(NetClient._room_manager):
-		if NetClient._room_manager.rooms is Dictionary:
-			for code_val in NetClient._room_manager.rooms.keys():
-				var code := str(code_val).strip_edges().to_upper()
-				if code.is_empty():
-					continue
-				var room = NetClient._room_manager.rooms.get(code_val, null)
-				if room == null:
-					continue
-				var room_status := str(room.status).strip_edges()
-				if room_status != "Lobby" and room_status != "Starting" and room_status != "InGame":
-					continue
-				room_codes.append(code)
+	if NetClient != null and NetClient.has_method("list_active_server_room_codes"):
+		room_codes = NetClient.list_active_server_room_codes()
 
 	var base := str(_backend_url)
 	if base.ends_with("/"):

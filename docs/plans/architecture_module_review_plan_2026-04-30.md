@@ -2706,3 +2706,27 @@
 结论：
 
 - 已完成该 P1 边界整改：联机恢复缓存层不再直接依赖 Game 场景日志 formatter/builder；autoload 只持有可独立于 UI 演进的 timeline 数据，日志 entries 回到 UI adapter 层生成。
+
+### Fix 49：DedicatedServer 不再直接访问 NetClient 房间管理内部字段
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 1 `[P1] server/dedicated_server.gd 大量直接访问 NetClient._room_manager 与其内部 rooms`。
+
+改动：
+
+- `autoload/net_client.gd`：新增 server-side facade：`has_server_room_manager()`、`restore_server_room_manager_from_persistence(...)`、`create_server_room_persistence_snapshot(...)`、`save_server_room_manager_with_store(...)`、`get_server_room_by_code(...)`、`force_remove_server_room(...)`、`get_server_room_count()`、`list_active_server_room_codes()`、`build_empty_room_state()` 与 `broadcast_server_room_list(...)`。
+- `server/dedicated_server.gd`：持久化恢复、round autosave、远端结束房间裁剪、目录同步、定时持久化和 heartbeat 房间列表全部改走 NetClient facade，不再读取 `NetClient._room_manager`、`rooms`、`_empty_room_state()` 或 `_broadcast_room_list(...)`。
+- `core/tests/core_architecture_boundary_contract_test.gd`：新增守卫，禁止 `DedicatedServer` 回到 `NetClient._room_manager` / 私有 room-state helper / 私有 broadcast helper。
+
+验证：
+
+- `rg -n "NetClient\\._" server/dedicated_server.gd`：无命中。
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`391/391`。
+
+结论：
+
+- 已完成该 P1 边界整改：DedicatedServer 不再耦合 `NetClient` 的房间管理字段布局；后续 RoomManager 内部字段重命名或封装调整只需要维护 NetClient facade。
