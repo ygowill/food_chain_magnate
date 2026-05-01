@@ -11,6 +11,7 @@
 	"current_index": -1,
 	"final_hash": "0ee748cab4d898640eb598c1d0cf70f2",
 	"game_version": "0.4.2",
+	"ui_load_mode": "playable_snapshot",
 	"initial_state": {
 		"bank": {
 			"broke_count": 0,

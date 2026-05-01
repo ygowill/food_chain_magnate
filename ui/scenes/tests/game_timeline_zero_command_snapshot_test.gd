@@ -2,8 +2,10 @@ class_name GameTimelineZeroCommandSnapshotTest
 extends RefCounted
 
 const GameTimelineControllerClass = preload("res://ui/scenes/game/timeline/controller.gd")
+const ArchiveClass = preload("res://core/engine/game_engine/archive.gd")
 const GameScene: PackedScene = preload("res://ui/scenes/game/game.tscn")
 const SAVE_RES_PATH := "res://testdata/saves/manual_cases/employees/lobbyist.json"
+const UNMARKED_SAVE_USER_PATH := "user://zero_command_unmarked_snapshot_test.json"
 
 class _FakeGameLogPanel:
 	extends Control
@@ -96,6 +98,9 @@ static func run() -> Result:
 	var r := _case_controller_loads_zero_command_snapshot_as_playable()
 	if not r.ok:
 		return r
+	r = _case_controller_keeps_unmarked_zero_command_archive_as_replay()
+	if not r.ok:
+		return r
 	return await _case_game_scene_loads_lobbyist_snapshot_with_action_panel()
 
 static func _case_controller_loads_zero_command_snapshot_as_playable() -> Result:
@@ -135,6 +140,57 @@ static func _case_controller_loads_zero_command_snapshot_as_playable() -> Result
 	host.free()
 	if Globals != null:
 		Globals.replay_load_playable = prev_replay_load_playable
+	return result
+
+static func _case_controller_keeps_unmarked_zero_command_archive_as_replay() -> Result:
+	var archive_r: Result = ArchiveClass.load_archive_from_file(SAVE_RES_PATH)
+	if not archive_r.ok:
+		return Result.failure("读取测试存档失败: %s" % archive_r.error)
+	var archive: Dictionary = Dictionary(archive_r.value).duplicate(true)
+	archive.erase("ui_load_mode")
+	var save_r: Result = ArchiveClass.save_archive_to_file(archive, UNMARKED_SAVE_USER_PATH)
+	if not save_r.ok:
+		return Result.failure("写入未标记测试存档失败: %s" % save_r.error)
+
+	var prev_replay_load_playable := false
+	if Globals != null:
+		prev_replay_load_playable = bool(Globals.replay_load_playable)
+		Globals.replay_load_playable = false
+
+	var host := Control.new()
+	var log_panel := _FakeGameLogPanel.new()
+	var action_panel := _FakeActionPanel.new()
+	host.add_child(log_panel)
+	host.add_child(action_panel)
+
+	var harness := _Harness.new()
+	harness.action_panel = action_panel
+	harness.controller = GameTimelineControllerClass.new(
+		host,
+		log_panel,
+		action_panel,
+		Callable(harness, "get_engine"),
+		Callable(harness, "get_runtime_engine"),
+		Callable(harness, "set_active_engine"),
+		Callable(harness, "set_display_engine"),
+		Callable(harness, "update_ui"),
+		Callable(harness, "show_confirm"),
+		Callable(harness, "show_game_log_panel_in_right_panel"),
+		Callable(harness, "open_replay_load_dialog"),
+		Callable(harness, "get_online_resync_in_progress")
+	)
+
+	harness.controller.start_replay_from_file(UNMARKED_SAVE_USER_PATH)
+	var result := _assert_unmarked_loaded_as_readonly_replay(harness)
+
+	if harness.controller != null and harness.controller.has_method("dispose"):
+		harness.controller.dispose()
+	host.free()
+	if Globals != null:
+		Globals.replay_load_playable = prev_replay_load_playable
+	var abs_path := ProjectSettings.globalize_path(UNMARKED_SAVE_USER_PATH)
+	if FileAccess.file_exists(abs_path):
+		DirAccess.remove_absolute(abs_path)
 	return result
 
 static func _case_game_scene_loads_lobbyist_snapshot_with_action_panel() -> Result:
@@ -286,4 +342,19 @@ static func _assert_loaded_as_playable_snapshot(harness: _Harness) -> Result:
 		return Result.failure("零命令手工存档进入可操作模式后 ActionPanel 不应全局禁用，实际=%s" % str(harness.action_panel.disabled_reason))
 	if harness.update_ui_count != 1:
 		return Result.failure("进入可操作模式应触发一次 UI 刷新，实际=%d" % harness.update_ui_count)
+	return Result.success()
+
+static func _assert_unmarked_loaded_as_readonly_replay(harness: _Harness) -> Result:
+	if not harness.confirm_messages.is_empty():
+		return Result.failure("未标记零命令 archive 不应加载失败: %s" % str(harness.confirm_messages))
+	if harness.active_engine == null:
+		return Result.failure("未标记零命令 archive 仍应加载为回放 engine")
+	if harness.active_engine.command_history.size() != 0:
+		return Result.failure("测试前提错误：未标记 archive 应为零命令，实际命令数=%d" % harness.active_engine.command_history.size())
+	if not harness.controller.is_replay_mode_active():
+		return Result.failure("未标记零命令 archive 不应仅凭空命令历史进入可操作模式")
+	if harness.show_log_count != 1:
+		return Result.failure("未标记零命令 archive 应按只读回放打开日志面板，实际 show_log_count=%d" % harness.show_log_count)
+	if harness.update_ui_count != 1:
+		return Result.failure("未标记零命令 archive 回放加载应触发一次 UI 刷新，实际=%d" % harness.update_ui_count)
 	return Result.success()

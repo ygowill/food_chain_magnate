@@ -14,6 +14,7 @@ const GameTimelineUiStateSupportClass = preload("res://ui/scenes/game/timeline/u
 const GameTimelineReplaySessionSupportClass = preload("res://ui/scenes/game/timeline/replay_session_support.gd")
 const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 const LIVE_HISTORY_REFRESH_DEBOUNCE_SEC := 0.12
+const UI_LOAD_MODE_PLAYABLE_SNAPSHOT := "playable_snapshot"
 
 var _host: Control = null
 var _game_log_panel: Control = null
@@ -460,7 +461,7 @@ func start_replay_from_file(file_path: String) -> void:
 		_replay_mode_active
 	)
 
-	var load_r := GameTimelineReplaySessionSupportClass.load_engine_from_file(file_path)
+	var load_r := GameTimelineReplaySessionSupportClass.load_replay_import_from_file(file_path)
 	if not load_r.ok:
 		GameLog.error("Game", "回放加载失败: %s" % load_r.error)
 		if started_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
@@ -468,19 +469,27 @@ func start_replay_from_file(file_path: String) -> void:
 		if _show_confirm.is_valid():
 			_show_confirm.call("回放加载失败", load_r.error, Callable(), Callable())
 		return
-	if not (load_r.value is GameEngine):
+	if not (load_r.value is Dictionary):
 		if started_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
 			SceneManager.hide_loading()
 		if _show_confirm.is_valid():
 			_show_confirm.call("回放加载失败", "内部错误：载入结果类型错误", Callable(), Callable())
 		return
-	var engine: GameEngine = load_r.value
+	var load_info: Dictionary = Dictionary(load_r.value)
+	var engine_val = load_info.get("engine", null)
+	if not (engine_val is GameEngine):
+		if started_from_main_menu and SceneManager != null and SceneManager.has_method("hide_loading"):
+			SceneManager.hide_loading()
+		if _show_confirm.is_valid():
+			_show_confirm.call("回放加载失败", "内部错误：载入 engine 类型错误", Callable(), Callable())
+		return
+	var engine: GameEngine = engine_val
+	var archive: Dictionary = Dictionary(load_info.get("archive", {})).duplicate(true)
 
 	if started_from_main_menu and Globals != null and Globals.has_method("sync_runtime_config_from_engine"):
 		Globals.sync_runtime_config_from_engine(engine)
 
-	# 零命令 archive 是手工状态快照，没有可回放日志；按只读回放打开会把右栏切到空日志面板。
-	var should_enter_playable := bool(replay_load_playable) or engine.command_history.is_empty()
+	var should_enter_playable := bool(replay_load_playable) or _archive_requests_playable_load(archive)
 	if should_enter_playable:
 		var to_latest := GameTimelineReplaySessionSupportClass.move_engine_to_latest_state(engine)
 		if not to_latest.ok:
@@ -506,6 +515,10 @@ func start_replay_from_file(file_path: String) -> void:
 		SceneManager.hide_loading()
 	if started_from_main_menu and _host != null and is_instance_valid(_host):
 		_host.call_deferred("_start_background_ui_warmup")
+
+func _archive_requests_playable_load(archive: Dictionary) -> bool:
+	var mode := str(archive.get("ui_load_mode", "")).strip_edges()
+	return mode == UI_LOAD_MODE_PLAYABLE_SNAPSHOT
 
 func _enter_loaded_archive_as_playable(engine: GameEngine) -> void:
 	if engine == null:

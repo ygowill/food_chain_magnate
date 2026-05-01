@@ -8,8 +8,10 @@ extends SceneTree
 #   godot --headless --path . --script res://tools/generate_manual_test_saves.gd -- --id kitchen_trainee
 
 const ManifestClass = preload("res://tools/generate_manual_test_saves_manifest.gd")
+const ArchiveClass = preload("res://core/engine/game_engine/archive.gd")
 
 const OUTPUT_ROOT := "res://testdata/saves/manual_cases"
+const UI_LOAD_MODE_PLAYABLE_SNAPSHOT := "playable_snapshot"
 
 const BASELINE_MODULES: Array[String] = [
 	"base_rules",
@@ -148,9 +150,18 @@ func _generate_case(c: Dictionary) -> Result:
 	if not DirAccess.dir_exists_absolute(abs_dir):
 		DirAccess.make_dir_recursive_absolute(abs_dir)
 
-	var save := engine.save_to_file(abs_json_path)
+	var archive_r := engine.create_archive()
+	if not archive_r.ok:
+		return Result.failure("create_archive failed: %s" % archive_r.error)
+	var archive: Dictionary = Dictionary(archive_r.value).duplicate(true)
+	var ui_load_mode := str(c.get("ui_load_mode", "")).strip_edges()
+	if ui_load_mode.is_empty() and freeze_as_initial:
+		ui_load_mode = UI_LOAD_MODE_PLAYABLE_SNAPSHOT
+	if not ui_load_mode.is_empty():
+		archive["ui_load_mode"] = ui_load_mode
+	var save := ArchiveClass.save_archive_to_file(archive, abs_json_path)
 	if not save.ok:
-		return Result.failure("save_to_file failed: %s" % save.error)
+		return Result.failure("save archive failed: %s" % save.error)
 
 	var md_text := _build_markdown(c, build_ctx, rel_json_res_path, engine.get_state())
 	var abs_md_path := abs_json_path.trim_suffix(".json") + ".md"

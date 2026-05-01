@@ -2551,3 +2551,28 @@
 结论：
 
 - 已完成该 P2 strict 化：损坏的 snapshot 分片不会让客户端只靠超时脱离恢复等待；失败会通过既有 resync failure channel 传播，并明确要求后续恢复走强制快照。
+
+### Fix 43：零命令 archive 不再隐式进入可操作模式
+
+日期：2026-05-01
+
+对应问题：
+
+- main 增量 `[P2] 零命令 archive 被无条件视为“可继续操作”的手工 snapshot，回放语义与存档语义继续混在同一入口`。
+
+改动：
+
+- `ui/scenes/game/timeline/controller.gd`：移除 `engine.command_history.is_empty()` 作为进入可操作模式的判断；现在只有设置项 `Globals.replay_load_playable` 或 archive 显式声明 `ui_load_mode == "playable_snapshot"` 时才进入可操作模式。
+- `ui/scenes/game/timeline/replay_session_support.gd`：新增保留 archive metadata 的 `load_replay_import_from_file(...)`，供 timeline controller 读取加载语义；原 `load_engine_from_file(...)` 保持兼容。
+- `tools/generate_manual_test_saves.gd`：冻结为 initial_state 的手工复核存档会写出 `ui_load_mode: "playable_snapshot"`，后续生成的手工 snapshot 不再依赖空命令历史推断。
+- `testdata/saves/manual_cases/employees/lobbyist.json`：为当前自动化覆盖的 lobbyist 手工快照补充显式 `ui_load_mode`。
+- `ui/scenes/tests/game_timeline_zero_command_snapshot_test.gd`：新增“移除 `ui_load_mode` 的零命令 archive 必须保持只读回放”的负例，同时保留 lobbyist 手工快照按显式标记进入可操作模式的覆盖。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 边界整改：回放入口不再把“零命令”解释为“可继续操作”，手工 snapshot 语义由 archive metadata 显式表达。

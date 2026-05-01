@@ -23,16 +23,22 @@ static func capture_original_log_entries(game_log_panel: Object, replay_mode_act
 	return out
 
 static func load_engine_from_file(file_path: String) -> Result:
-	if str(file_path).is_empty():
-		return Result.failure("file_path 为空")
-	var load_result: Result = ArchiveRecoveryClass.load_file_for_replay_import(file_path)
+	var load_result := load_replay_import_from_file(file_path)
 	if not load_result.ok:
-		return Result.failure(str(load_result.error))
+		return load_result
 	var info: Dictionary = Dictionary(load_result.value) if load_result.value is Dictionary else {}
 	var engine_val = info.get("engine", null)
 	if not (engine_val is GameEngine):
 		return Result.failure("回放载入失败：engine 类型错误")
 	return Result.success(engine_val).with_warnings(load_result.warnings)
+
+static func load_replay_import_from_file(file_path: String) -> Result:
+	if str(file_path).is_empty():
+		return Result.failure("file_path 为空")
+	var load_result: Result = ArchiveRecoveryClass.load_file_for_replay_import(file_path)
+	if not load_result.ok:
+		return Result.failure(str(load_result.error))
+	return load_result
 
 static func move_engine_to_latest_state(engine: GameEngine) -> Result:
 	if engine == null:
