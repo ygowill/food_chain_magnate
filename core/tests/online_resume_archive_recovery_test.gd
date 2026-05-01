@@ -27,10 +27,13 @@ static func run() -> Result:
 	var replay_import_tail_r := _run_replay_import_rejects_bad_tail_case()
 	if not replay_import_tail_r.ok:
 		return replay_import_tail_r
-	var recover_r := _run_recover_bad_tail_command_case()
+	var strict_resume_tail_r := _run_online_resume_rejects_bad_tail_by_default_case()
+	if not strict_resume_tail_r.ok:
+		return strict_resume_tail_r
+	var recover_r := _run_explicit_prefix_recovery_bad_tail_command_case()
 	if not recover_r.ok:
 		return recover_r
-	return _run_resume_room_accepts_recovered_archive_case()
+	return _run_resume_room_rejects_bad_tail_archive_case()
 
 static func _run_prepare_persists_online_confirm_markers_case() -> Result:
 	var engine := GameEngineClass.new()
@@ -242,7 +245,21 @@ static func _run_replay_import_rejects_bad_tail_case() -> Result:
 		return Result.failure("回放导入坏尾部失败时应返回错误信息")
 	return Result.success()
 
-static func _run_recover_bad_tail_command_case() -> Result:
+static func _run_online_resume_rejects_bad_tail_by_default_case() -> Result:
+	var bad_r := _build_corrupted_tail_archive()
+	if not bad_r.ok:
+		return bad_r
+	var bad_info: Dictionary = Dictionary(bad_r.value)
+	var archive: Dictionary = Dictionary(bad_info.get("archive", {})).duplicate(true)
+
+	var recover_r: Result = ArchiveRecoveryClass.load_for_online_resume(archive)
+	if recover_r.ok:
+		return Result.failure("普通 online resume 不应默认截断损坏尾部命令")
+	if str(recover_r.error).is_empty():
+		return Result.failure("普通 online resume 拒绝坏尾部时应返回错误信息")
+	return Result.success()
+
+static func _run_explicit_prefix_recovery_bad_tail_command_case() -> Result:
 	var bad_r := _build_corrupted_tail_archive()
 	if not bad_r.ok:
 		return bad_r
@@ -256,9 +273,9 @@ static func _run_recover_bad_tail_command_case() -> Result:
 	if full_load.ok:
 		return Result.failure("损坏尾部命令的存档不应能完整加载")
 
-	var recover_r: Result = ArchiveRecoveryClass.load_for_online_resume(archive)
+	var recover_r: Result = ArchiveRecoveryClass.load_for_online_resume_with_prefix_recovery(archive)
 	if not recover_r.ok:
-		return Result.failure("恢复坏尾部存档失败: %s" % recover_r.error)
+		return Result.failure("显式 prefix recovery 恢复坏尾部存档失败: %s" % recover_r.error)
 	var info: Dictionary = Dictionary(recover_r.value)
 	if not bool(info.get("truncated", false)):
 		return Result.failure("恢复结果应标记 truncated: %s" % str(info))
@@ -280,13 +297,12 @@ static func _run_recover_bad_tail_command_case() -> Result:
 		return Result.failure("恢复后的存档仍无法加载: %s" % verify_load.error)
 	return Result.success()
 
-static func _run_resume_room_accepts_recovered_archive_case() -> Result:
+static func _run_resume_room_rejects_bad_tail_archive_case() -> Result:
 	var bad_r := _build_corrupted_tail_archive()
 	if not bad_r.ok:
 		return bad_r
 	var bad_info: Dictionary = Dictionary(bad_r.value)
 	var archive: Dictionary = Dictionary(bad_info.get("archive", {})).duplicate(true)
-	var bad_index := int(bad_info.get("bad_index", -1))
 	var rm = RoomManagerClass.new()
 	var room_code := "RSR001"
 	var host_profile := {
@@ -310,15 +326,8 @@ static func _run_resume_room_accepts_recovered_archive_case() -> Result:
 		},
 		archive
 	)
-	if not create_r.ok:
-		return Result.failure("恢复房间应接受可截断存档: %s" % create_r.error)
-	var room = rm.rooms.get(room_code, null)
-	if room == null:
-		return Result.failure("恢复房间缺失")
-	var recovered_archive: Dictionary = room.get_resume_lobby_archive()
-	var recovered_commands: Array = Array(recovered_archive.get("commands", [])) if recovered_archive.get("commands", null) is Array else []
-	if recovered_commands.size() != bad_index:
-		return Result.failure("恢复房间存档命令数错误: got=%d want=%d" % [recovered_commands.size(), bad_index])
-	if int(recovered_archive.get("current_index", -999)) != bad_index - 1:
-		return Result.failure("恢复房间 current_index 错误: got=%d want=%d" % [int(recovered_archive.get("current_index", -999)), bad_index - 1])
+	if create_r.ok:
+		return Result.failure("普通恢复房不应接受可截断坏尾部存档")
+	if rm.rooms.has(room_code):
+		return Result.failure("恢复房创建失败后不应留下房间: %s" % room_code)
 	return Result.success()

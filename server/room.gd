@@ -1115,7 +1115,7 @@ func configure_resume_lobby(archive: Dictionary) -> Result:
 	_clear_prepared_resume_start_cache()
 	room_mode = ROOM_MODE_RESUME_ARCHIVE
 	config["room_mode"] = ROOM_MODE_RESUME_ARCHIVE
-	var load_r: Result = ArchiveRecoveryClass.load_for_online_resume(Dictionary(archive).duplicate(true))
+	var load_r: Result = ArchiveRecoveryClass.load_for_online_resume(Dictionary(archive).duplicate(true), false)
 	if not load_r.ok:
 		return Result.failure("resume archive load failed: %s" % load_r.error)
 	var loaded_info: Dictionary = Dictionary(load_r.value) if load_r.value is Dictionary else {}

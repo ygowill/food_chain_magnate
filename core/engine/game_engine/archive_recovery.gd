@@ -25,7 +25,7 @@ class _SilentEventSink:
 	func record_event(_event_type: String, _data: Dictionary) -> void:
 		pass
 
-static func load_for_online_resume(archive: Dictionary, allow_prefix_recovery: bool = true) -> Result:
+static func load_for_online_resume(archive: Dictionary, allow_prefix_recovery: bool = false) -> Result:
 	if archive.is_empty():
 		return Result.failure("resume archive missing")
 
@@ -92,6 +92,9 @@ static func load_for_online_resume(archive: Dictionary, allow_prefix_recovery: b
 		}).with_warnings(repair_warnings).with_warnings(full_load.warnings).with_warnings(load_r.warnings).with_warnings(recovered_archive_r.warnings).with_warning(warning)
 
 	return Result.failure("存档无法截断到任何可回放点：%s" % full_load.error).with_warnings(repair_warnings).with_warnings(full_load.warnings)
+
+static func load_for_online_resume_with_prefix_recovery(archive: Dictionary) -> Result:
+	return load_for_online_resume(archive, true)
 
 static func load_file_for_replay_import(path: String) -> Result:
 	var archive_result := ArchiveClass.load_archive_from_file(path)

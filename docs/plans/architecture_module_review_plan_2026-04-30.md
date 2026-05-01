@@ -1489,3 +1489,30 @@
 - 本轮 main 增量未发现新的 P0/P1。
 - 新增 P2 主要集中在“为了修复 UI 流程而引入新的隐式推断/动态兜底”：零命令 archive 自动变 playable、module UI extension 静默加载、staff picker 表达的具体员工语义没有进入权威 action。
 - 这些问题与前面总审查中的主线一致：strict runtime、显式 metadata、显式 extension contract，需要和 best-effort UI/手工测试工具分开。
+
+## 整改记录
+
+### Fix 1：online resume prefix recovery 默认 strict
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 8 `[P1] Online resume archive recovery 默认允许 prefix 截断并返回成功`。
+- Step 9 `[P1] Server 恢复房创建实际使用了 prefix recovery 默认截断路径`。
+- Step 10 `[P1] 测试已经明确固定 online resume archive prefix truncation 为成功行为`。
+
+改动：
+
+- `core/engine/game_engine/archive_recovery.gd`：`load_for_online_resume(...)` 默认改为 `allow_prefix_recovery=false`；新增显式 `load_for_online_resume_with_prefix_recovery(...)`，把灾难恢复/截断语义从普通 online resume 入口分离出来。
+- `server/room.gd`：`configure_resume_lobby(...)` 显式以 strict 模式调用 `load_for_online_resume(..., false)`，普通恢复房不再接受可截断坏尾部存档。
+- `core/tests/online_resume_archive_recovery_test.gd`：拆分测试契约。普通 online resume 默认拒绝坏尾部命令；显式 prefix recovery helper 仍允许截断并要求返回 `truncated/recovered_command_count/failed_command_index`；普通恢复房创建失败后不得留下房间。
+
+验证：
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`389/389`。
+
+结论：
+
+- 已完成该 P1 的第一阶段整改：普通 UI/server 恢复入口回到 strict load；prefix truncation 只保留在显式 recovery helper 中。
+- 后续如果需要面向运维/用户暴露 prefix recovery，需要另建带明确 UI/后台标记的恢复模式，并把截断审计信息写入房间状态或后端 artifact。
