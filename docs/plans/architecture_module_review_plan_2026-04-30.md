@@ -1182,6 +1182,7 @@
   - 证据：观战策略解析 `config_json` 失败时将 `allow_spectators` 设为 true。证据：`backend/app/rooms.py:594-603`。
   - 风险：房间配置是平台后端和 Godot 房间服之间的边界契约。坏配置被当成 `{}` 会改变房间类型、seat binding、观战策略，属于权限/恢复语义上的过度兜底。
   - 建议：创建/同步房间时校验 config schema；读取已损坏 config 时返回 500/room unhealthy，而不是默认公开可观战。`allow_spectators` 在解析失败时应默认拒绝。
+  - 状态：Fix 68 复核当前后端已通过 `backend/app/room_config.py` 统一解析 `config_json`；创建请求坏配置返回 400，已存坏配置返回 409，观战坏配置不再默认允许。
 
 - [P2] `PlatformApi.parse_http_json_response(...)` 对 2xx 非 JSON 响应返回 `{"ok": {}}`，会把后端协议错误伪装成成功。
   - 证据：JSON 解析为 `null` 时直接改成 `{}`；只要 HTTP status 是 2xx，就返回 `{"ok": parsed}`。证据：`autoload/platform_api.gd:116-131`。
@@ -3170,6 +3171,29 @@
 验证：
 
 - Fix 65 过程中已跑 `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`392/392`，包含 `GameOnlineResyncRequestRejectionTest`。
+
+结论：
+
+- 该 P2 在当前代码中已完成，不需要额外运行时代码改动；本次更新仅把审查文档从旧证据状态修正为当前实现状态。
+
+### Fix 68：复核后端房间配置坏 JSON 不再回退为空配置
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 9 `[P2] 后端房间配置解析失败会退回 {}，可能把坏配置解释成非恢复房或允许观战`。
+
+复核结论：
+
+- 当前 `backend/app/room_config.py` 提供 `parse_room_config_json(...)`，空配置仍允许为 `{}`，但 JSON 解析失败或顶层不是 object 会抛 `RoomConfigParseError`。
+- `backend/app/rooms.py` 将请求配置解析失败映射为 HTTP 400，将已存房间配置解析失败映射为 HTTP 409；恢复房判定、房间列表和观战策略都走该 strict parser。
+- `backend/app/internal.py` 在 game server 同步房间目录时也会校验每个 `rooms[index].config_json`，坏配置不再进入同步路径。
+- `backend/tests/test_rooms.py::test_spectate_room_rejects_corrupt_config_json` 已覆盖已存坏配置下观战请求返回 409，且不会把 `allow_spectators` 默认为 true。
+
+验证：
+
+- `pytest backend/tests/test_rooms.py::test_spectate_room_rejects_corrupt_config_json`：PASS，`1 passed`。
 
 结论：
 
