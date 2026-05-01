@@ -2277,3 +2277,29 @@
 结论：
 
 - 已完成 lobbyists 部分 strict 化：模块私有 map state 由 initializer 明确创建，运行期规则和 action 不再承担隐式修复。UI overlay provider 的 best-effort 展示逻辑本次未改，它只负责把已存在的私有状态转换成可视 overlay，不再作为权威规则入口。
+
+### Fix 32：rural_marketeers 模块私有 state 与冲突查询改为 strict runtime
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 7 `[P2] lobbyists/rural_marketeers 模块私有状态边界仍存在初始化、运行期访问和 UI 兜底混杂` 中的 rural_marketeers 部分。
+- 具体问题：`rural_marketeers` 在重组 hook 中自动创建/修补 `rural_area` 和 offramp supply；offramp 冲突查询、dinnertime 入口更新、offramp action 与 airplane overlap 查询把缺失 offramps/marketing placements 或坏 entry 当成空数据跳过。
+
+改动：
+
+- `modules/rural_marketeers/rules/entry.gd`：新增 state initializer，负责初始化 `rural_area`、`rural_marketeers_offramp_supply_remaining` 与 `rural_marketeers_offramps=[]`。
+- `modules/rural_marketeers/rules/entry.gd`：`_on_restructuring_before_enter(...)` 仅校验已初始化状态；缺失/损坏 `rural_area`、offramp supply、offramps 直接失败，不再自动创建或补字段。
+- `modules/rural_marketeers/rules/entry.gd`：placement conflict provider 与 airplane-offramp validator 改为要求 `rural_marketeers_offramps` 显式存在且结构合法；坏 entry、缺失 pos/side 直接失败。
+- `modules/rural_marketeers/actions/place_highway_offramp_action.gd`：offramp placements、external_cells、marketing_placements/airplane placement 读取改为 strict；`has_offramp_at_pos(...)` 改为返回 `Result`，避免 malformed offramps 被解释成“不存在冲突”。
+- `core/tests/rural_marketeers_state_access_test.gd`、`core/tests/rural_offramp_state_access_test.gd`、`core/tests/rural_marketeers_dinnertime_state_access_test.gd`、`core/tests/rural_marketeers_marketing_state_access_test.gd`、`core/tests/rural_offramp_airplane_overlap_state_access_test.gd`：更新旧初始化/空数据契约，新增缺失 offramps、坏 offramps entry、坏 airplane placement、缺失 marketing_placements 的 fail-fast 覆盖。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：首次运行旧测试仍固定 fail-soft 契约，更新测试夹具后重跑 PASS，`390/390`。
+
+结论：
+
+- 已完成 rural_marketeers 部分 strict 化：模块私有 rural/offramp state 由 initializer 明确创建，运行期 hook、offramp action 与冲突查询不再把缺失或损坏的模块状态解释为空状态。

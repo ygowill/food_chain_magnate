@@ -6,7 +6,10 @@ const EntryClass = preload("res://modules/rural_marketeers/rules/entry.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 
 static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
-	var r := _test_restructuring_initializes_rural_area_and_supply()
+	var r := _test_init_state_initializes_rural_area_supply_and_offramps()
+	if not r.ok:
+		return r
+	r = _test_restructuring_fails_fast_on_missing_rural_area()
 	if not r.ok:
 		return r
 	r = _test_restructuring_fails_fast_on_missing_houses()
@@ -22,6 +25,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r.ok:
 		return r
 	r = _test_placement_conflicts_detects_offramp_connection()
+	if not r.ok:
+		return r
+	r = _test_placement_conflicts_fails_fast_on_missing_offramps()
 	if not r.ok:
 		return r
 	r = _test_placement_conflicts_fail_fast_on_invalid_offramps_type()
@@ -57,7 +63,7 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	r = _test_milestone_effect_fails_fast_on_invalid_pending_flag_type()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 17})
+	return Result.success({"cases": 19})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -74,7 +80,9 @@ static func _make_airplane_validation_state(seed_val: int) -> Result:
 	var init := engine.initialize(2, seed_val)
 	if not init.ok:
 		return Result.failure("初始化 engine 失败: %s" % init.error)
-	return Result.success(engine.get_state())
+	var state := engine.get_state()
+	state.map["rural_marketeers_offramps"] = []
+	return Result.success(state)
 
 static func _make_airplane_command() -> Command:
 	return Command.create("initiate_marketing", 0, {
@@ -83,12 +91,12 @@ static func _make_airplane_command() -> Command:
 		"axis": "col",
 	})
 
-static func _test_restructuring_initializes_rural_area_and_supply() -> Result:
+static func _test_init_state_initializes_rural_area_supply_and_offramps() -> Result:
 	var entry = EntryClass.new()
 	var state := _make_state()
-	var result := entry._on_restructuring_before_enter(state)
+	var result := entry._init_state(state, null)
 	if not result.ok:
-		return Result.failure("_on_restructuring_before_enter 失败: %s" % result.error)
+		return Result.failure("_init_state 失败: %s" % result.error)
 	if not state.map.has("houses") or not (state.map["houses"] is Dictionary):
 		return Result.failure("执行后 state.map.houses 应存在")
 	var houses: Dictionary = state.map["houses"]
@@ -99,6 +107,21 @@ static func _test_restructuring_initializes_rural_area_and_supply() -> Result:
 		return Result.failure("rural_area.house_number 应为 zzzz_rural_area，实际: %s" % str(rural))
 	if int(state.map.get("rural_marketeers_offramp_supply_remaining", -1)) != 3:
 		return Result.failure("offramp supply 应初始化为 3，实际: %s" % str(state.map.get("rural_marketeers_offramp_supply_remaining", null)))
+	if not (state.map.get("rural_marketeers_offramps", null) is Array):
+		return Result.failure("rural_marketeers_offramps 应初始化为 Array")
+	return Result.success()
+
+static func _test_restructuring_fails_fast_on_missing_rural_area() -> Result:
+	var entry = EntryClass.new()
+	var state := _make_state()
+	state.map["rural_marketeers_offramp_supply_remaining"] = 3
+	state.map["rural_marketeers_offramps"] = []
+	var result := entry._on_restructuring_before_enter(state)
+	if result.ok:
+		return Result.failure("缺失 rural_area 时 restructuring hook 应失败")
+	var err := str(result.error)
+	if err.find("rural_area") < 0:
+		return Result.failure("错误信息应包含 rural_area，实际: %s" % err)
 	return Result.success()
 
 static func _test_restructuring_fails_fast_on_missing_houses() -> Result:
@@ -116,19 +139,25 @@ static func _test_restructuring_fails_fast_on_missing_houses() -> Result:
 static func _test_restructuring_fails_fast_on_invalid_rural_area_type() -> Result:
 	var entry = EntryClass.new()
 	var state := _make_state()
+	var init_result := entry._init_state(state, null)
+	if not init_result.ok:
+		return init_result
 	state.map["houses"]["rural_area"] = []
 	var result := entry._on_restructuring_before_enter(state)
 	if result.ok:
 		return Result.failure("rural_area 类型错误时应失败")
 	var err := str(result.error)
-	if err.find("houses[rural_area]") < 0:
-		return Result.failure("错误信息应包含 houses[rural_area]，实际: %s" % err)
+	if err.find("rural_area") < 0:
+		return Result.failure("错误信息应包含 rural_area，实际: %s" % err)
 	return Result.success()
 
 
 static func _test_restructuring_fails_fast_on_invalid_offramp_supply_type() -> Result:
 	var entry = EntryClass.new()
 	var state := _make_state()
+	var init_result := entry._init_state(state, null)
+	if not init_result.ok:
+		return init_result
 	state.map["rural_marketeers_offramp_supply_remaining"] = "bad"
 	var result := entry._on_restructuring_before_enter(state)
 	if result.ok:
@@ -141,6 +170,9 @@ static func _test_restructuring_fails_fast_on_invalid_offramp_supply_type() -> R
 static func _test_restructuring_fails_fast_on_negative_offramp_supply() -> Result:
 	var entry = EntryClass.new()
 	var state := _make_state()
+	var init_result := entry._init_state(state, null)
+	if not init_result.ok:
+		return init_result
 	state.map["rural_marketeers_offramp_supply_remaining"] = -1
 	var result := entry._on_restructuring_before_enter(state)
 	if result.ok:
@@ -164,6 +196,18 @@ static func _test_placement_conflicts_detects_offramp_connection() -> Result:
 	var conflicts: Array = result.value
 	if conflicts.size() != 1 or str(conflicts[0]).find("offramp_connection") < 0:
 		return Result.failure("应返回 offramp connection conflict，实际: %s" % str(conflicts))
+	return Result.success()
+
+static func _test_placement_conflicts_fails_fast_on_missing_offramps() -> Result:
+	var entry = EntryClass.new()
+	var state := GameState.new()
+	state.map = {}
+	var result := entry._get_placement_conflicts_at_world_pos(state, Vector2i(1, 0), {})
+	if result.ok:
+		return Result.failure("缺失 offramps 时应失败")
+	var err := str(result.error)
+	if err.find("state.map.rural_marketeers_offramps") < 0:
+		return Result.failure("错误信息应包含 state.map.rural_marketeers_offramps，实际: %s" % err)
 	return Result.success()
 
 static func _test_placement_conflicts_fail_fast_on_invalid_offramps_type() -> Result:

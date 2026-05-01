@@ -78,7 +78,10 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	var side: String = str(side_read.value)
 
 	# 同一连接格子不能重复放置 offramp
-	if has_offramp_at_pos(state, connect_pos):
+	var existing_offramp_read := has_offramp_at_pos(state, connect_pos)
+	if not existing_offramp_read.ok:
+		return existing_offramp_read
+	if bool(existing_offramp_read.value):
 		return Result.failure("该边缘格子已存在 offramp: %s" % str(connect_pos))
 
 	# 与 airplane 冲突：不能与任何飞机营销的“外侧占用段”重叠（同边 segment overlap）
@@ -99,7 +102,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		return Result.failure("offramp 必须连接到地图内道路（连接格道路必须同时连接至少一个内部方向）: %s" % str(connect_pos))
 
 	# 外部占用格子必须不冲突
-	var external_cells_read := MapStateAccessClass.require_optional_dict_field_or_empty(state, "external_cells", MODULE_ID)
+	var external_cells_read := MapStateAccessClass.require_dict_field(state, "external_cells", MODULE_ID)
 	if not external_cells_read.ok:
 		return external_cells_read
 	var external_cells: Dictionary = external_cells_read.value
@@ -152,7 +155,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 static func get_offramp_connection_cells(state: GameState) -> Result:
 	if state == null or not (state.map is Dictionary):
 		return Result.failure("get_offramp_connection_cells: state.map 类型错误")
-	var placements_read := MapStateAccessClass.require_optional_array_field_or_empty(state, OFFRAMP_PLACEMENTS_KEY, "get_offramp_connection_cells")
+	var placements_read := MapStateAccessClass.require_array_field(state, OFFRAMP_PLACEMENTS_KEY, "get_offramp_connection_cells")
 	if not placements_read.ok:
 		return placements_read
 	var placements: Array = placements_read.value
@@ -176,7 +179,7 @@ func _apply_external_offramp_piece(state: GameState, owner_id: int, connect_pos:
 	var external_cells_read := MapStateAccessClass.require_dict_field(state, "external_cells", MODULE_ID)
 	if not external_cells_read.ok:
 		return external_cells_read
-	var placements_read := MapStateAccessClass.require_optional_array_field_or_empty(state, OFFRAMP_PLACEMENTS_KEY, MODULE_ID)
+	var placements_read := MapStateAccessClass.require_array_field(state, OFFRAMP_PLACEMENTS_KEY, MODULE_ID)
 	if not placements_read.ok:
 		return placements_read
 
@@ -324,9 +327,6 @@ static func _has_airplane_overlap_at_connection_cell(state: GameState, connect_p
 	var map_read := MapStateAccessClass.require_map(state, "_has_airplane_overlap_at_connection_cell")
 	if not map_read.ok:
 		return Result.failure("_has_airplane_overlap_at_connection_cell: state.map 类型错误")
-	var map: Dictionary = map_read.value
-	if not map.has("marketing_placements"):
-		return Result.success(false)
 	var placements_read := MapStateAccessClass.require_marketing_placements(state, "_has_airplane_overlap_at_connection_cell")
 	if not placements_read.ok:
 		return placements_read
@@ -343,28 +343,25 @@ static func _has_airplane_overlap_at_connection_cell(state: GameState, connect_p
 	for k in placements.keys():
 		var pv = placements[k]
 		if not (pv is Dictionary):
-			continue
+			return Result.failure("_has_airplane_overlap_at_connection_cell: marketing_placements[%s] 类型错误（期望 Dictionary）" % str(k))
 		var p: Dictionary = pv
-		if str(p.get("type", "")) != "airplane":
+		var type_val = p.get("type", null)
+		if not (type_val is String):
+			return Result.failure("_has_airplane_overlap_at_connection_cell: marketing_placements[%s].type 类型错误（期望 String）" % str(k))
+		if str(type_val) != "airplane":
 			continue
 		var wp_val = p.get("world_pos", null)
 		if not (wp_val is Vector2i):
-			continue
+			return Result.failure("_has_airplane_overlap_at_connection_cell: marketing_placements[%s].world_pos 类型错误（期望 Vector2i）" % str(k))
 		var wp: Vector2i = wp_val
 		var axis := str(p.get("axis", "")).strip_edges()
-		var fs := Vector2i.ONE
 		var fs_val = p.get("footprint_size", null)
-		if fs_val is Vector2i:
-			fs = Vector2i(fs_val)
-		elif fs_val is Array:
-			var arr: Array = fs_val
-			if arr.size() == 2:
-				fs = Vector2i(int(arr[0]), int(arr[1]))
+		if not (fs_val is Vector2i):
+			return Result.failure("_has_airplane_overlap_at_connection_cell: marketing_placements[%s].footprint_size 类型错误（期望 Vector2i）" % str(k))
+		var fs: Vector2i = fs_val
 
 		if axis != "row" and axis != "col":
-			axis = _infer_airplane_axis(state, wp, fs)
-		if axis != "row" and axis != "col":
-			continue
+			return Result.failure("_has_airplane_overlap_at_connection_cell: marketing_placements[%s].axis 非法: %s" % [str(k), axis])
 
 		var seg_read := compute_airplane_segment(state, wp, fs, axis)
 		if not seg_read.ok:
@@ -449,21 +446,19 @@ static func _infer_airplane_axis(state: GameState, pos: Vector2i, size: Vector2i
 		return "col"
 	return ""
 
-static func has_offramp_at_pos(state: GameState, pos: Vector2i) -> bool:
-	if state == null or not (state.map is Dictionary):
-		return false
-	if not state.map.has(OFFRAMP_PLACEMENTS_KEY):
-		return false
-	var v = state.map.get(OFFRAMP_PLACEMENTS_KEY, null)
-	if not (v is Array):
-		return false
-	var placements: Array = v
+static func has_offramp_at_pos(state: GameState, pos: Vector2i) -> Result:
+	var placements_read := MapStateAccessClass.require_array_field(state, OFFRAMP_PLACEMENTS_KEY, MODULE_ID)
+	if not placements_read.ok:
+		return placements_read
+	var placements: Array = placements_read.value
 	for i in range(placements.size()):
 		var p_val = placements[i]
 		if not (p_val is Dictionary):
-			continue
+			return Result.failure("%s[%d] 类型错误（期望 Dictionary）" % [OFFRAMP_PLACEMENTS_KEY, i])
 		var p: Dictionary = p_val
 		var wp = p.get("pos", null)
+		if not (wp is Vector2i):
+			return Result.failure("%s[%d].pos 类型错误（期望 Vector2i）" % [OFFRAMP_PLACEMENTS_KEY, i])
 		if wp is Vector2i and wp == pos:
-			return true
-	return false
+			return Result.success(true)
+	return Result.success(false)

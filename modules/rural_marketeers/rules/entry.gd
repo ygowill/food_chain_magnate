@@ -25,6 +25,7 @@ const RURAL_HOUSE_NUMBER := "zzzz_rural_area"
 const OFFRAMP_SUPPLY_TOTAL := 3
 const OFFRAMP_PENDING_KEY := "rural_marketeers_offramp_pending"
 const OFFRAMP_SUPPLY_KEY := "rural_marketeers_offramp_supply_remaining"
+const OFFRAMP_PLACEMENTS_KEY := "rural_marketeers_offramps"
 
 const BILLBOARD_SIDES: Array[String] = ["N", "E", "S", "W"]
 const BILLBOARD_BOARD_NUMBER_BY_SIDE := {
@@ -41,10 +42,10 @@ const STATE_SCHEMA_ID_OFFRAMP_PENDING := "rural_marketeers:round_state_int_keys:
 
 func register(registrar) -> Result:
 	var steps: Array[Callable] = [
+		Callable(registrar, "register_state_initializer").bind("%s:init_state" % MODULE_ID, Callable(self, "_init_state"), 50),
 		Callable(registrar, "register_employee_patch").bind("marketing_trainee", {"add_train_to": ["rural_marketeer"]}),
 		Callable(registrar, "register_milestone_effect").bind("rural_marketeers:grant_offramp_placement", Callable(self, "_milestone_effect_grant_offramp_placement")),
 		Callable(registrar, "register_milestone_effect_ui_text").bind("rural_marketeers:grant_offramp_placement", "获得一次高速出口（offramp）放置机会（需本回合放置）", 100),
-		# 初始化：确保 rural_area 与 offramp supply 存在
 		Callable(registrar, "register_phase_hook").bind(Phase.RESTRUCTURING, HookType.BEFORE_ENTER, Callable(self, "_on_restructuring_before_enter"), 0),
 		# 乡村地区需求：在 Marketing 阶段按轮次添加（巨型广告牌每轮 +2）
 		Callable(registrar, "register_extension_settlement").bind(Phase.MARKETING, SettlementRegistryClass.Point.ENTER, Callable(self, "_on_marketing_enter_extension"), 200),
@@ -80,6 +81,85 @@ func register(registrar) -> Result:
 			return r
 	return Result.success()
 
+func _init_state(state: GameState, _rng_manager) -> Result:
+	if state == null:
+		return Result.failure("%s:init_state: state 为空" % MODULE_ID)
+	var houses_read := MapStateAccessClass.require_houses(state, "%s:init_state" % MODULE_ID)
+	if not houses_read.ok:
+		return houses_read
+	var houses: Dictionary = houses_read.value
+	var rural_read := _ensure_initialized_rural_area(houses)
+	if not rural_read.ok:
+		return rural_read
+	state.map["houses"] = houses
+
+	if not state.map.has(OFFRAMP_SUPPLY_KEY):
+		state.map[OFFRAMP_SUPPLY_KEY] = OFFRAMP_SUPPLY_TOTAL
+	var supply_read := MapStateAccessClass.require_int_field(state, OFFRAMP_SUPPLY_KEY, "%s:init_state" % MODULE_ID)
+	if not supply_read.ok:
+		return supply_read
+	var supply_remaining := int(supply_read.value)
+	if supply_remaining < 0:
+		return Result.failure("%s:init_state: state.map.%s 不能为负数: %d" % [MODULE_ID, OFFRAMP_SUPPLY_KEY, supply_remaining])
+
+	if not state.map.has(OFFRAMP_PLACEMENTS_KEY):
+		state.map[OFFRAMP_PLACEMENTS_KEY] = []
+	var offramps_read := MapStateAccessClass.require_array_field(state, OFFRAMP_PLACEMENTS_KEY, "%s:init_state" % MODULE_ID)
+	if not offramps_read.ok:
+		return offramps_read
+
+	return Result.success()
+
+func _ensure_initialized_rural_area(houses: Dictionary) -> Result:
+	if not houses.has(RURAL_HOUSE_ID):
+		houses[RURAL_HOUSE_ID] = {
+			"house_id": RURAL_HOUSE_ID,
+			"house_number": RURAL_HOUSE_NUMBER,
+			"has_garden": false,
+			"no_demand_cap": true,
+			"cells": [],
+			"demands": [],
+			"giant_billboards": {},
+		}
+		return Result.success(houses[RURAL_HOUSE_ID])
+	var h_val = houses[RURAL_HOUSE_ID]
+	if not (h_val is Dictionary):
+		return Result.failure("%s:init_state: houses[%s] 类型错误（期望 Dictionary）" % [MODULE_ID, RURAL_HOUSE_ID])
+	var house: Dictionary = h_val
+	house["house_id"] = RURAL_HOUSE_ID
+	house["house_number"] = RURAL_HOUSE_NUMBER
+	house["no_demand_cap"] = true
+	if not house.has("has_garden"):
+		house["has_garden"] = false
+	if not house.has("cells"):
+		house["cells"] = []
+	if not house.has("demands"):
+		house["demands"] = []
+	if not house.has("giant_billboards"):
+		house["giant_billboards"] = {}
+	houses[RURAL_HOUSE_ID] = house
+	return Result.success(house)
+
+func _require_rural_area(houses: Dictionary, context: String) -> Result:
+	if not houses.has(RURAL_HOUSE_ID) or not (houses[RURAL_HOUSE_ID] is Dictionary):
+		return Result.failure("%s: 缺少 rural_area（模块未正确初始化）" % context)
+	var rural: Dictionary = houses[RURAL_HOUSE_ID]
+	if str(rural.get("house_id", "")) != RURAL_HOUSE_ID:
+		return Result.failure("%s: rural_area.house_id 非法: %s" % [context, str(rural.get("house_id", null))])
+	if str(rural.get("house_number", "")) != RURAL_HOUSE_NUMBER:
+		return Result.failure("%s: rural_area.house_number 非法: %s" % [context, str(rural.get("house_number", null))])
+	if not (rural.get("has_garden", null) is bool):
+		return Result.failure("%s: rural_area.has_garden 缺失或类型错误（期望 bool）" % context)
+	if not (rural.get("no_demand_cap", null) is bool) or not bool(rural.get("no_demand_cap", false)):
+		return Result.failure("%s: rural_area.no_demand_cap 必须为 true" % context)
+	if not (rural.get("cells", null) is Array):
+		return Result.failure("%s: rural_area.cells 缺失或类型错误（期望 Array）" % context)
+	if not (rural.get("demands", null) is Array):
+		return Result.failure("%s: rural_area.demands 缺失或类型错误（期望 Array）" % context)
+	if not (rural.get("giant_billboards", null) is Dictionary):
+		return Result.failure("%s: rural_area.giant_billboards 缺失或类型错误（期望 Dictionary）" % context)
+	return Result.success(rural)
+
 func _build_reserve_supply_counts(state: GameState) -> Dictionary:
 	return {
 		OFFRAMP_SUPPLY_KEY: OFFRAMP_SUPPLY_TOTAL,
@@ -101,9 +181,9 @@ func _get_rural_billboard_supply_remaining(state: GameState) -> int:
 	return maxi(0, BILLBOARD_SIDES.size() - occupied)
 
 func _get_placement_conflicts_at_world_pos(state: GameState, world_pos: Vector2i, _ctx: Dictionary) -> Result:
-	var offramps_read := MapStateAccessClass.require_optional_array_field_or_empty(
+	var offramps_read := MapStateAccessClass.require_array_field(
 		state,
-		"rural_marketeers_offramps",
+		OFFRAMP_PLACEMENTS_KEY,
 		"%s: placement_conflicts" % MODULE_ID
 	)
 	if not offramps_read.ok:
@@ -130,48 +210,19 @@ func _on_restructuring_before_enter(state: GameState) -> Result:
 		return houses_read
 	var houses: Dictionary = houses_read.value
 
-	if not houses.has(RURAL_HOUSE_ID):
-		houses[RURAL_HOUSE_ID] = {
-			"house_id": RURAL_HOUSE_ID,
-			"house_number": RURAL_HOUSE_NUMBER,
-			"has_garden": false,
-			"no_demand_cap": true,
-			"cells": [],
-			"demands": [],
-			"giant_billboards": {},
-		}
-	else:
-		var h_val = houses[RURAL_HOUSE_ID]
-		if not (h_val is Dictionary):
-			return Result.failure("%s: houses[%s] 类型错误（期望 Dictionary）" % [MODULE_ID, RURAL_HOUSE_ID])
-		var house: Dictionary = h_val
-		house["house_id"] = RURAL_HOUSE_ID
-		house["house_number"] = RURAL_HOUSE_NUMBER
-		house["no_demand_cap"] = true
-		if not house.has("has_garden"):
-			house["has_garden"] = false
-		if not house.has("cells"):
-			house["cells"] = []
-		if not house.has("demands"):
-			house["demands"] = []
-		if not house.has("giant_billboards"):
-			house["giant_billboards"] = {}
-		houses[RURAL_HOUSE_ID] = house
+	var rural_read := _require_rural_area(houses, MODULE_ID)
+	if not rural_read.ok:
+		return rural_read
 
-	state.map["houses"] = houses
-
-	var supply_read := MapStateAccessClass.require_optional_int_field_or_default(
-		state,
-		OFFRAMP_SUPPLY_KEY,
-		OFFRAMP_SUPPLY_TOTAL,
-		MODULE_ID
-	)
+	var supply_read := MapStateAccessClass.require_int_field(state, OFFRAMP_SUPPLY_KEY, MODULE_ID)
 	if not supply_read.ok:
 		return supply_read
 	var supply_remaining: int = int(supply_read.value)
 	if supply_remaining < 0:
 		return Result.failure("%s: state.map.%s 不能为负数: %d" % [MODULE_ID, OFFRAMP_SUPPLY_KEY, supply_remaining])
-	state.map[OFFRAMP_SUPPLY_KEY] = supply_remaining
+	var offramps_read := MapStateAccessClass.require_array_field(state, OFFRAMP_PLACEMENTS_KEY, MODULE_ID)
+	if not offramps_read.ok:
+		return offramps_read
 
 	return Result.success()
 
@@ -182,9 +233,10 @@ func _on_marketing_enter_extension(state: GameState, phase_manager: PhaseManager
 	if not houses_read.ok:
 		return houses_read
 	var houses: Dictionary = houses_read.value
-	if not houses.has(RURAL_HOUSE_ID) or not (houses[RURAL_HOUSE_ID] is Dictionary):
-		return Result.failure("%s: 缺少 rural_area（模块未正确初始化）" % MODULE_ID)
-	var rural: Dictionary = houses[RURAL_HOUSE_ID]
+	var rural_read := _require_rural_area(houses, MODULE_ID)
+	if not rural_read.ok:
+		return rural_read
+	var rural: Dictionary = rural_read.value
 
 	if not rural.has("demands") or not (rural["demands"] is Array):
 		return Result.failure("%s: rural_area.demands 缺失或类型错误（期望 Array）" % MODULE_ID)
@@ -285,9 +337,10 @@ func _on_dinnertime_enter_before_primary(state: GameState, _phase_manager: Phase
 	if not houses_read.ok:
 		return houses_read
 	var houses: Dictionary = houses_read.value
-	if not houses.has(RURAL_HOUSE_ID) or not (houses[RURAL_HOUSE_ID] is Dictionary):
-		return Result.failure("%s: 缺少 rural_area（模块未正确初始化）" % MODULE_ID)
-	var rural: Dictionary = houses[RURAL_HOUSE_ID]
+	var rural_read := _require_rural_area(houses, MODULE_ID)
+	if not rural_read.ok:
+		return rural_read
+	var rural: Dictionary = rural_read.value
 
 	var entry_cells_read := PlaceHighwayOfframpActionClass.get_offramp_connection_cells(state)
 	if not entry_cells_read.ok:
@@ -396,7 +449,10 @@ func _validate_airplane_offramp_conflict(state: GameState, command: Command) -> 
 	var world_pos := Vector2i(int(x_read.value), int(y_read.value))
 
 	# Determine airplane axis & segment range.
-	var footprint_size: Vector2i = board_spec.get("footprint_size", Vector2i.ONE)
+	var footprint_val = board_spec.get("footprint_size", null)
+	if not (footprint_val is Vector2i):
+		return Result.failure("%s: board_spec.footprint_size 缺失或类型错误（期望 Vector2i）" % MODULE_ID)
+	var footprint_size: Vector2i = footprint_val
 
 	var axis := ""
 	if command.params.has("axis"):
@@ -418,22 +474,22 @@ func _validate_airplane_offramp_conflict(state: GameState, command: Command) -> 
 	var end := int(seg.get("end", -1))
 
 	# Check overlap against existing offramps.
-	var offramps_read := MapStateAccessClass.require_optional_array_field_or_empty(state, "rural_marketeers_offramps", MODULE_ID)
+	var offramps_read := MapStateAccessClass.require_array_field(state, OFFRAMP_PLACEMENTS_KEY, MODULE_ID)
 	if not offramps_read.ok:
 		return offramps_read
 	var offramps: Array = offramps_read.value
 	for i in range(offramps.size()):
 		var o_val = offramps[i]
 		if not (o_val is Dictionary):
-			continue
+			return Result.failure("%s: offramps[%d] 类型错误（期望 Dictionary）" % [MODULE_ID, i])
 		var o: Dictionary = o_val
 		var off_pos_val = o.get("pos", null)
 		if not (off_pos_val is Vector2i):
-			continue
+			return Result.failure("%s: offramps[%d].pos 类型错误（期望 Vector2i）" % [MODULE_ID, i])
 		var pos: Vector2i = off_pos_val
 		var off_side := str(o.get("side", "")).strip_edges()
-		if off_side.is_empty():
-			off_side = _infer_edge_side(state, pos)
+		if off_side.is_empty() or not BILLBOARD_SIDES.has(off_side):
+			return Result.failure("%s: offramps[%d].side 非法: %s" % [MODULE_ID, i, off_side])
 		if off_side != seg_side:
 			continue
 		var coord := pos.x if (seg_side == "N" or seg_side == "S") else pos.y

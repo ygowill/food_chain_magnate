@@ -8,7 +8,7 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var r := _test_overlap_detects_airplane_segment()
 	if not r.ok:
 		return r
-	r = _test_overlap_is_fail_soft_without_marketing_placements()
+	r = _test_overlap_fails_fast_without_marketing_placements()
 	if not r.ok:
 		return r
 	r = _test_overlap_fails_fast_on_invalid_marketing_placements_type()
@@ -39,14 +39,15 @@ static func _test_overlap_detects_airplane_segment() -> Result:
 		return Result.failure("应检测到 airplane segment overlap")
 	return Result.success()
 
-static func _test_overlap_is_fail_soft_without_marketing_placements() -> Result:
+static func _test_overlap_fails_fast_without_marketing_placements() -> Result:
 	var state := _make_state()
 	state.map.erase("marketing_placements")
 	var result := ActionClass._has_airplane_overlap_at_connection_cell(state, Vector2i(2, 0), "N")
-	if not result.ok:
-		return Result.failure("缺失 marketing_placements 时应保持 fail-soft: %s" % result.error)
-	if bool(result.value):
-		return Result.failure("缺失 marketing_placements 时应返回 false")
+	if result.ok:
+		return Result.failure("缺失 marketing_placements 时应失败")
+	var err := str(result.error)
+	if err.find("state.map.marketing_placements") < 0:
+		return Result.failure("错误信息应包含 state.map.marketing_placements，实际: %s" % err)
 	return Result.success()
 
 static func _test_overlap_fails_fast_on_invalid_marketing_placements_type() -> Result:

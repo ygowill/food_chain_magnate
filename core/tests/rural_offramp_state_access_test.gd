@@ -20,7 +20,22 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	r = _test_get_offramp_connection_cells_fails_fast_on_invalid_offramp_array_type()
 	if not r.ok:
 		return r
-	return Result.success({"cases": 5})
+	r = _test_get_offramp_connection_cells_fails_fast_on_missing_offramp_array()
+	if not r.ok:
+		return r
+	r = _test_has_offramp_at_pos_fails_fast_on_missing_offramps()
+	if not r.ok:
+		return r
+	r = _test_has_offramp_at_pos_fails_fast_on_malformed_entry()
+	if not r.ok:
+		return r
+	r = _test_airplane_overlap_fails_fast_on_malformed_marketing_placement()
+	if not r.ok:
+		return r
+	r = _test_airplane_overlap_fails_fast_on_malformed_airplane_placement()
+	if not r.ok:
+		return r
+	return Result.success({"cases": 10})
 
 static func _make_state() -> GameState:
 	var state := GameState.new()
@@ -101,4 +116,67 @@ static func _test_get_offramp_connection_cells_fails_fast_on_invalid_offramp_arr
 	var err := str(result.error)
 	if err.find("state.map.rural_marketeers_offramps") < 0:
 		return Result.failure("错误信息应包含 state.map.rural_marketeers_offramps，实际: %s" % err)
+	return Result.success()
+
+static func _test_get_offramp_connection_cells_fails_fast_on_missing_offramp_array() -> Result:
+	var state := _make_state()
+	state.map.erase("rural_marketeers_offramps")
+	var result := ActionClass.get_offramp_connection_cells(state)
+	if result.ok:
+		return Result.failure("缺失 offramps 时应失败")
+	var err := str(result.error)
+	if err.find("state.map.rural_marketeers_offramps") < 0:
+		return Result.failure("错误信息应包含 state.map.rural_marketeers_offramps，实际: %s" % err)
+	return Result.success()
+
+static func _test_has_offramp_at_pos_fails_fast_on_missing_offramps() -> Result:
+	var state := _make_state()
+	state.map.erase("rural_marketeers_offramps")
+	var result := ActionClass.has_offramp_at_pos(state, Vector2i(0, 0))
+	if result.ok:
+		return Result.failure("缺失 offramps 时 has_offramp_at_pos 应失败")
+	var err := str(result.error)
+	if err.find("state.map.rural_marketeers_offramps") < 0:
+		return Result.failure("错误信息应包含 state.map.rural_marketeers_offramps，实际: %s" % err)
+	return Result.success()
+
+static func _test_has_offramp_at_pos_fails_fast_on_malformed_entry() -> Result:
+	var state := _make_state()
+	state.map["rural_marketeers_offramps"] = [{}]
+	var result := ActionClass.has_offramp_at_pos(state, Vector2i(0, 0))
+	if result.ok:
+		return Result.failure("offramp entry 缺失 pos 时 has_offramp_at_pos 应失败")
+	var err := str(result.error)
+	if err.find("rural_marketeers_offramps[0].pos") < 0:
+		return Result.failure("错误信息应包含 rural_marketeers_offramps[0].pos，实际: %s" % err)
+	return Result.success()
+
+static func _test_airplane_overlap_fails_fast_on_malformed_marketing_placement() -> Result:
+	var state := _make_state()
+	state.map["marketing_placements"] = {
+		500: [],
+	}
+	var result := ActionClass._has_airplane_overlap_at_connection_cell(state, Vector2i(0, 0), "N")
+	if result.ok:
+		return Result.failure("marketing_placements entry 类型错误时应失败")
+	var err := str(result.error)
+	if err.find("marketing_placements[500]") < 0:
+		return Result.failure("错误信息应包含 marketing_placements[500]，实际: %s" % err)
+	return Result.success()
+
+static func _test_airplane_overlap_fails_fast_on_malformed_airplane_placement() -> Result:
+	var state := _make_state()
+	state.map["marketing_placements"] = {
+		500: {
+			"type": "airplane",
+			"world_pos": Vector2i(0, 0),
+			"footprint_size": Vector2i(2, 5),
+		},
+	}
+	var result := ActionClass._has_airplane_overlap_at_connection_cell(state, Vector2i(0, 0), "N")
+	if result.ok:
+		return Result.failure("airplane placement 缺失 axis 时应失败")
+	var err := str(result.error)
+	if err.find("marketing_placements[500].axis") < 0:
+		return Result.failure("错误信息应包含 marketing_placements[500].axis，实际: %s" % err)
 	return Result.success()

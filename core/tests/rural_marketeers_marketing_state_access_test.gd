@@ -26,7 +26,12 @@ static func _make_state() -> GameState:
 		"houses": {
 			"rural_area": {
 				"house_id": "rural_area",
+				"house_number": "zzzz_rural_area",
+				"has_garden": false,
+				"no_demand_cap": true,
+				"cells": [],
 				"demands": [],
+				"giant_billboards": {},
 			}
 		}
 	}
