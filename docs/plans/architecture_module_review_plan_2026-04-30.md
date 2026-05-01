@@ -1622,3 +1622,29 @@
 
 - 已完成 validator 职责拆分的第一步：预览/校验调用不再污染原始恢复点；实际恢复房启动仍通过显式 prepare 路径写入运行所需 marker。
 - 尚未完全移除 `prepare_engine_for_online_resume(...)` 内部对 pending/confirmed_players 的修复逻辑；该部分仍对应 Step 8 的“repair 过度兜底”后续整改。
+
+### Fix 6：Dinnertime/Marketing settlement 拒绝损坏的 online confirmed_players
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 6 `[P1] Dinnertime/Marketing confirmed_players 损坏时静默重建，并仅 warning pending mismatch`。
+- Step 8 中关于 `OnlineResumePointValidator`/online pending repair 的后续拆分：权威结算路径不应把已经存在但损坏的 confirmed 状态覆盖成默认值。
+
+改动：
+
+- `modules/base_rules/rules/phase/dinnertime/dinnertime_settlement_impl.gd`：online confirm 启用时，`online_dinnertime_confirmed_players` 缺失才创建默认数组；字段已存在但不是 Array、长度不等于玩家数、元素不是 bool/int/整数 float 时直接 `Result.failure`。
+- `modules/base_rules/rules/phase/marketing_settlement.gd`：同样 strict 校验 `online_marketing_confirmed_players`，不再把损坏字段静默覆盖为默认 confirmed 数组。
+- `core/tests/dinnertime_settlement_test.gd`：新增非法 `online_dinnertime_confirmed_players` 负例，断言晚餐结算失败且失败时不改写原字段。
+- `core/tests/marketing_settlement_fail_fast_test.gd`：新增非法 `online_marketing_confirmed_players` 负例，断言营销结算失败且失败时不改写原字段。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成 confirmed_players 损坏重建路径的 strict 化：缺失字段表示新进入 confirm gate，可以初始化；损坏字段表示状态不可信，必须失败。
+- confirm action 中 legacy global pending 与 missing pending recovery 仍是单独 P2 问题，尚未在本次提交中改动。

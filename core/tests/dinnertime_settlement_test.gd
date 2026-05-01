@@ -8,6 +8,8 @@ const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
+const ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY := "online_dinnertime_confirmed_players"
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	EmployeeRegistryClass.reset()
@@ -39,10 +41,14 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not r6.ok:
 		return r6
 
+	var r7 := _test_online_confirmed_players_fail_fast(seed_val)
+	if not r7.ok:
+		return r7
+
 	return Result.success({
 		"player_count": player_count,
 		"seed": seed_val,
-		"cases": 6,
+		"cases": 7,
 	})
 
 static func _test_distance_winner(seed_val: int) -> Result:
@@ -83,6 +89,34 @@ static func _test_distance_winner(seed_val: int) -> Result:
 		return Result.failure("左侧房屋需求应被清空，实际: %s" % str(left.get("demands", null)))
 	if not (right.get("demands", []) is Array) or right.get("demands", []).size() != 0:
 		return Result.failure("右侧房屋需求应被清空，实际: %s" % str(right.get("demands", null)))
+
+	return Result.success()
+
+static func _test_online_confirmed_players_fail_fast(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := engine.get_state()
+	_force_turn_order(state)
+	_apply_test_map(state)
+	_set_house_demands(state, "house_left", [{"product": "burger"}])
+	state.players[0]["inventory"]["burger"] = 1
+	state.players[1]["inventory"]["burger"] = 1
+	if not (state.rules is Dictionary):
+		state.rules = {}
+	state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
+	state.round_state[ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY] = [false, {}]
+	var confirmed_before := str(state.round_state.get(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, null))
+
+	var adv := _advance_to_dinnertime(engine)
+	if adv.ok:
+		return Result.failure("非法 online_dinnertime_confirmed_players 应导致晚餐结算失败")
+	if str(adv.error).find(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY) < 0:
+		return Result.failure("错误信息应包含 %s，实际: %s" % [ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, adv.error])
+	if str(state.round_state.get(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, null)) != confirmed_before:
+		return Result.failure("失败时不应重建或覆盖 online_dinnertime_confirmed_players")
 
 	return Result.success()
 

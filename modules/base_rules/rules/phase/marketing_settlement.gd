@@ -250,9 +250,13 @@ static func _inject_marketing_confirm_pending_if_needed(state: GameState, has_an
 	if not should_inject_pending:
 		return Result.success()
 
+	var confirmed_players: Array[bool] = []
 	if online_marketing_confirm_enabled:
-		state.round_state[ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY] = _build_online_marketing_confirmed_players(state)
-	var pending := _build_marketing_confirm_pending(state)
+		var confirmed_r := _ensure_online_marketing_confirmed_players(state)
+		if not confirmed_r.ok:
+			return confirmed_r
+		confirmed_players = Array(confirmed_r.value, TYPE_BOOL, "", null)
+	var pending := _build_marketing_confirm_pending(state, confirmed_players)
 	return RoundStatePendingPhaseActionsClass.set_phase_pending_players(
 		state.round_state, DefsClass.PHASE_MARKETING, pending, "营销结算"
 	)
@@ -282,12 +286,11 @@ static func _read_online_marketing_confirm_marker(state: GameState):
 			return rs.get(ONLINE_MARKETING_CONFIRM_KEY, null)
 	return null
 
-static func _build_marketing_confirm_pending(state: GameState) -> Array:
+static func _build_marketing_confirm_pending(state: GameState, confirmed_players: Array[bool] = []) -> Array:
 	if state == null or not (state.players is Array):
 		return []
 	if not _is_online_marketing_confirm_enabled(state):
 		return [KIND_CONFIRM_MARKETING]
-	var confirmed_players := _read_online_marketing_confirmed_players(state)
 	if confirmed_players.is_empty():
 		confirmed_players = _build_online_marketing_confirmed_players(state)
 	var pending: Array[Dictionary] = []
@@ -311,20 +314,35 @@ static func _build_online_marketing_confirmed_players(state: GameState) -> Array
 		confirmed.append(_is_player_forfeited(state, pid))
 	return confirmed
 
-static func _read_online_marketing_confirmed_players(state: GameState) -> Array[bool]:
+static func _ensure_online_marketing_confirmed_players(state: GameState) -> Result:
+	if state == null or not (state.players is Array):
+		return Result.failure("MarketingSettlement: state.players 类型错误（期望 Array）")
+	if not (state.round_state is Dictionary):
+		return Result.failure("MarketingSettlement: state.round_state 类型错误（期望 Dictionary）")
+	var rs: Dictionary = state.round_state
+	if not rs.has(ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY):
+		var confirmed := _build_online_marketing_confirmed_players(state)
+		rs[ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY] = confirmed
+		return Result.success(confirmed)
+	return _read_online_marketing_confirmed_players(state)
+
+static func _read_online_marketing_confirmed_players(state: GameState) -> Result:
 	var out: Array[bool] = []
 	if state == null or not (state.players is Array):
-		return out
+		return Result.failure("MarketingSettlement: state.players 类型错误（期望 Array）")
 	if not (state.round_state is Dictionary):
-		return out
+		return Result.failure("MarketingSettlement: state.round_state 类型错误（期望 Dictionary）")
 	var rs: Dictionary = state.round_state
+	if not rs.has(ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY):
+		return Result.success(out)
 	var val = rs.get(ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY, null)
 	if not (val is Array):
-		return out
+		return Result.failure("MarketingSettlement: round_state.%s 类型错误（期望 Array）" % ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY)
 	var raw: Array = Array(val)
 	if raw.size() != state.players.size():
-		return out
-	for v in raw:
+		return Result.failure("MarketingSettlement: round_state.%s 长度错误（期望 %d，实际 %d）" % [ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY, state.players.size(), raw.size()])
+	for i in range(raw.size()):
+		var v = raw[i]
 		if v is bool:
 			out.append(bool(v))
 			continue
@@ -336,8 +354,8 @@ static func _read_online_marketing_confirmed_players(state: GameState) -> Array[
 			if f == floor(f):
 				out.append(int(f) != 0)
 				continue
-		return []
-	return out
+		return Result.failure("MarketingSettlement: round_state.%s[%d] 类型错误（期望 bool/int/float）" % [ONLINE_MARKETING_CONFIRMED_PLAYERS_KEY, i])
+	return Result.success(out)
 
 static func _is_player_forfeited(state: GameState, player_id: int) -> bool:
 	if state == null or not (state.players is Array):

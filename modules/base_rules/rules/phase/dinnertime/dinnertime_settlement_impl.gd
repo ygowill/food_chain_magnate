@@ -82,12 +82,11 @@ static func _read_online_dinnertime_confirm_marker(state: GameState):
 			return rs.get(ONLINE_DINNERTIME_CONFIRM_KEY, null)
 	return null
 
-static func _build_dinnertime_confirm_pending(state: GameState) -> Array:
+static func _build_dinnertime_confirm_pending(state: GameState, confirmed_players: Array[bool] = []) -> Array:
 	if state == null or not (state.players is Array):
 		return []
 	if not _is_online_dinnertime_confirm_enabled(state):
 		return [KIND_CONFIRM_DINNERTIME]
-	var confirmed_players := _read_online_dinnertime_confirmed_players(state)
 	if confirmed_players.is_empty():
 		confirmed_players = _build_online_dinnertime_confirmed_players(state)
 	var pending: Array[Dictionary] = []
@@ -111,20 +110,35 @@ static func _build_online_dinnertime_confirmed_players(state: GameState) -> Arra
 		confirmed.append(_is_player_forfeited(state, pid))
 	return confirmed
 
-static func _read_online_dinnertime_confirmed_players(state: GameState) -> Array[bool]:
+static func _ensure_online_dinnertime_confirmed_players(state: GameState) -> Result:
+	if state == null or not (state.players is Array):
+		return Result.failure("DinnertimeSettlement: state.players 类型错误（期望 Array）")
+	if not (state.round_state is Dictionary):
+		return Result.failure("DinnertimeSettlement: state.round_state 类型错误（期望 Dictionary）")
+	var rs: Dictionary = state.round_state
+	if not rs.has(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY):
+		var confirmed := _build_online_dinnertime_confirmed_players(state)
+		rs[ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY] = confirmed
+		return Result.success(confirmed)
+	return _read_online_dinnertime_confirmed_players(state)
+
+static func _read_online_dinnertime_confirmed_players(state: GameState) -> Result:
 	var out: Array[bool] = []
 	if state == null or not (state.players is Array):
-		return out
+		return Result.failure("DinnertimeSettlement: state.players 类型错误（期望 Array）")
 	if not (state.round_state is Dictionary):
-		return out
+		return Result.failure("DinnertimeSettlement: state.round_state 类型错误（期望 Dictionary）")
 	var rs: Dictionary = state.round_state
+	if not rs.has(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY):
+		return Result.success(out)
 	var val = rs.get(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, null)
 	if not (val is Array):
-		return out
+		return Result.failure("DinnertimeSettlement: round_state.%s 类型错误（期望 Array）" % ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY)
 	var raw: Array = Array(val)
 	if raw.size() != state.players.size():
-		return out
-	for v in raw:
+		return Result.failure("DinnertimeSettlement: round_state.%s 长度错误（期望 %d，实际 %d）" % [ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, state.players.size(), raw.size()])
+	for i in range(raw.size()):
+		var v = raw[i]
 		if v is bool:
 			out.append(bool(v))
 			continue
@@ -136,8 +150,8 @@ static func _read_online_dinnertime_confirmed_players(state: GameState) -> Array
 			if f == floor(f):
 				out.append(int(f) != 0)
 				continue
-		return []
-	return out
+		return Result.failure("DinnertimeSettlement: round_state.%s[%d] 类型错误（期望 bool/int/float）" % [ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, i])
+	return Result.success(out)
 
 static func _is_player_forfeited(state: GameState, player_id: int) -> bool:
 	if state == null or not (state.players is Array):
@@ -424,9 +438,13 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 	var online_dinnertime_confirm_enabled := _is_online_dinnertime_confirm_enabled(state)
 	var should_inject_pending := (DisplayServer.get_name() != "headless") or online_dinnertime_confirm_enabled
 	if should_inject_pending:
+		var confirmed_players: Array[bool] = []
 		if online_dinnertime_confirm_enabled and state.round_state is Dictionary:
-			state.round_state[ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY] = _build_online_dinnertime_confirmed_players(state)
-		var pending := _build_dinnertime_confirm_pending(state)
+			var confirmed_r := _ensure_online_dinnertime_confirmed_players(state)
+			if not confirmed_r.ok:
+				return confirmed_r
+			confirmed_players = Array(confirmed_r.value, TYPE_BOOL, "", null)
+		var pending := _build_dinnertime_confirm_pending(state, confirmed_players)
 		var set_pending := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
 			state.round_state, DefsClass.PHASE_DINNERTIME, pending, "晚餐结算"
 		)
@@ -448,7 +466,7 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 							str(DisplayServer.get_name()),
 							expected,
 							pending.size(),
-							_bool_array_preview(_read_online_dinnertime_confirmed_players(state)),
+							_bool_array_preview(confirmed_players),
 							_pending_preview(pending),
 						]
 				)
@@ -460,7 +478,7 @@ static func apply(state: GameState, phase_manager = null) -> Result:
 							int(state.round_number),
 							_net_mode_name(),
 							str(DisplayServer.get_name()),
-							_bool_array_preview(_read_online_dinnertime_confirmed_players(state)),
+							_bool_array_preview(confirmed_players),
 							_pending_preview(pending),
 						]
 				)
