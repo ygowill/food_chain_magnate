@@ -1471,6 +1471,7 @@
   - 证据：`place_lobbyists_road` 与 `place_lobbyists_park` 的校验只看 `EmployeeRules.count_active_by_usage_tag_for_working(...)` 和 `RoundStateCounters.get_player_count(...)`，apply 时也只递增 `lobbyists_place_counts`；动作实现没有读取或校验 command.params.staff_id。证据：`modules/lobbyists/actions/place_lobbyists_road_action.gd:54-64`、`230-249`；`modules/lobbyists/actions/place_lobbyists_park_action.gd:48-58`、`152-168`。
   - 风险：UI 现在表现为“选择哪一个说客”，但 server/core 权威层实际只消费“本玩家本子阶段用了几次说客”。如果 staff order、staff_registry、旧存档迁移或客户端传参异常，UI 灰显/选择与规则消耗会漂移；联机下恶意/坏客户端传不可用 `staff_id` 也不会被权威 action 拒绝。
   - 建议：二选一：要么 Lobbyists action 正式接入 `StaffState`，校验并消耗具体 `staff_id` 的 `use:lobbyists` track；要么 UI 不暴露具体 staff_id，只展示聚合可用次数，避免伪造一个不存在的权威语义。
+  - 状态：Fix 71 复核当前 road/park action 已接入 `LobbyistsStaffUsage`，会校验显式 `staff_id` 的可用性并消耗 `StaffState` 的 `lobbyists` track；`LobbyistsRoadStateAccessTest` 已覆盖指定第二个说客只消耗第二个、指定已用完说客会失败。
 
 - [P2] 新增 `lobbyists_placement_flow_controller.gd` 硬编码 `NetContext.Mode.ONLINE_CLIENT == 1`，和其它模块 UI 的联机判断方式不一致。
   - 证据：该文件定义 `const NET_MODE_ONLINE_CLIENT := 1`，再通过 `/root/NetContext` 读取 `mode` 并与常量比较。证据：`modules/lobbyists/ui/lobbyists_placement_flow_controller.gd:12`、`321-337`。
@@ -3240,6 +3241,29 @@
 验证：
 
 - Fix 65 过程中已跑 `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`392/392`，包含 `OnlineClientConfigBootstrapOverridesTest`。
+
+结论：
+
+- 该 P2 在当前代码中已完成，不需要额外运行时代码改动；本次更新仅把审查文档从旧证据状态修正为当前实现状态。
+
+### Fix 71：复核 Lobbyists 放置动作已校验并消耗具体 staff_id
+
+日期：2026-05-01
+
+对应问题：
+
+- main 增量 `[P2] Lobbyists 新 UI 选择具体 staff_id，但 road/park action 仍只按聚合次数计数，UI 表达的“具体员工选择”与权威规则不一致`。
+
+复核结论：
+
+- 当前 `modules/lobbyists/actions/lobbyists_staff_usage.gd` 统一从 `StaffState` 派生可用说客，读取 `use:lobbyists` usage tag 与 working multiplier，并基于 `lobbyists` track 计算每个 staff 的剩余次数。
+- `place_lobbyists_road_action.gd` 与 `place_lobbyists_park_action.gd` 在 validate/apply 阶段都调用 `_resolve_lobbyist_staff(...)`；显式 `staff_id` 不存在或次数用完会失败。
+- apply 成功后两个 action 都调用 `increment_lobbyist_usage(...)`，在权威状态中消耗具体 staff 的 `lobbyists` track，同时事件 payload 带回被消耗的 `staff_id`。
+- `core/tests/lobbyists_road_state_access_test.gd` 已覆盖指定第二个说客执行 road action 后只消耗第二个 staff，并覆盖已用完的指定 staff 会被拒绝。
+
+验证：
+
+- Fix 65 过程中已跑 `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`392/392`，包含 `LobbyistsRoadStateAccessTest` 与 `LobbyistsParkStateAccessTest`。
 
 结论：
 
