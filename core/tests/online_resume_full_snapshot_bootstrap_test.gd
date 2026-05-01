@@ -318,7 +318,7 @@ static func run() -> Result:
 			prev_is_game_active,
 			"single full-engine bootstrap 后应直接预构建 step timeline cache"
 		)
-	if not bool(session_snapshot.get("full_history_step_timeline_entries_ready", false)):
+	if bool(session_snapshot.get("full_history_step_timeline_entries_ready", false)):
 		return _restore_and_fail(
 			prev_mode,
 			prev_local_player_id,
@@ -331,7 +331,7 @@ static func run() -> Result:
 			prev_resume_state,
 			prev_engine,
 			prev_is_game_active,
-			"single full-engine bootstrap 后应直接预构建日志 entries cache"
+			"single full-engine bootstrap 不应在 NetClient 中预构建 UI 日志 entries cache"
 		)
 	if int(session_snapshot.get("runtime_command_count", -1)) != full_history_size:
 		return _restore_and_fail(

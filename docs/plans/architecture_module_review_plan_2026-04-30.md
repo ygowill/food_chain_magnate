@@ -2682,3 +2682,27 @@
 结论：
 
 - 已完成该 P2 strict 化：online Dinnertime 的普通运行期不再用 auto-advance 修补损坏 state；旧 archive/resume 需要补 pending 时，只能经过显式 online resume repair 入口。
+
+### Fix 48：NetClient 恢复缓存不再依赖 Game 场景日志构建器
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 1 `[P1] NetClient 恢复缓存支持直接依赖 Game 场景日志构建器`。
+
+改动：
+
+- `autoload/net_client_online_resume_support.gd`：移除对 `res://ui/scenes/game/timeline/log_entries_builder.gd` 的 preload；NetClient full-history cache 只负责构建和保存中立的 step timeline，不再在 autoload 层预构建 UI 日志 entries。
+- `autoload/net_client_online_resume_support.gd`：timeline cache refresh 后显式清空 entries cache（`processed_command_count=-1`），避免把过期 UI entries 标记为可用；UI entries 由 `OnlineResumeFullHistoryAdapter` / `StepTimelineBuildHelpers` 在渲染需要时构建并回写。
+- `core/tests/online_resume_full_snapshot_bootstrap_test.gd`：更新 bootstrap 契约，要求 single full-engine 启动后 timeline cache ready，但 NetClient 不应预构建 UI 日志 entries cache。
+
+验证：
+
+- `rg -n "res://ui/scenes/game/timeline/log_entries_builder|GameTimelineLogEntriesBuilderClass" autoload/net_client_online_resume_support.gd autoload core/tests/online_resume_full_snapshot_bootstrap_test.gd`：无命中。
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`391/391`。
+
+结论：
+
+- 已完成该 P1 边界整改：联机恢复缓存层不再直接依赖 Game 场景日志 formatter/builder；autoload 只持有可独立于 UI 演进的 timeline 数据，日志 entries 回到 UI adapter 层生成。

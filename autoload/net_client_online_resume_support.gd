@@ -5,7 +5,6 @@ extends RefCounted
 const OnlineResumeSessionStateClass = preload("res://autoload/online_resume_session_state.gd")
 const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
 const StepTimelineHelpersClass = preload("res://gameplay/replay/step_timeline_build/helpers.gd")
-const GameTimelineLogEntriesBuilderClass = preload("res://ui/scenes/game/timeline/log_entries_builder.gd")
 const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 
 var _net = null
@@ -216,24 +215,8 @@ func _refresh_full_history_step_timeline_cache(engine: GameEngine, allow_increme
 			var append_timeline_val = append_info.get("timeline", null)
 			if append_timeline_val is Dictionary:
 				var append_timeline: Dictionary = Dictionary(append_timeline_val).duplicate(false)
-				var next_entries: Array[Dictionary] = []
 				var append_applied := bool(append_info.get("append_applied", false))
-				var cached_entries_ready := _session_state.has_full_history_step_timeline_entries()
-				var previous_entries := _session_state.get_full_history_step_timeline_entries()
-				if append_applied and cached_entries_ready:
-					var appended_events_val = append_info.get("appended_events", [])
-					var appended_events: Array = appended_events_val if (appended_events_val is Array) else []
-					next_entries = previous_entries
-					for appended_entry in GameTimelineLogEntriesBuilderClass.build(appended_events):
-						if appended_entry is Dictionary:
-							next_entries.append(Dictionary(appended_entry).duplicate(false))
-				elif cached_entries_ready and int(previous_processed_count) >= 0:
-					next_entries = previous_entries
-				else:
-					var append_events_val = append_timeline.get("events", [])
-					var append_events_all: Array = append_events_val if (append_events_val is Array) else []
-					next_entries = GameTimelineLogEntriesBuilderClass.build(append_events_all)
-				_store_full_history_step_timeline_cache(append_timeline, next_entries)
+				_store_full_history_step_timeline_cache(append_timeline)
 				_emit_resume_cache_event("resume_cache.timeline_cache_refresh.done", {
 					"mode": "append" if append_applied else "reuse",
 					"allow_incremental_append": bool(allow_incremental_append),
@@ -242,7 +225,7 @@ func _refresh_full_history_step_timeline_cache(engine: GameEngine, allow_increme
 						StepTimelineHelpersClass.read_processed_command_count(append_timeline)
 					),
 					"timeline_step_count": int(Array(append_timeline.get("steps", [])).size()),
-					"timeline_entry_count": int(next_entries.size()),
+					"timeline_entry_count": 0,
 				})
 				return Result.success({
 					"timeline": append_timeline,
@@ -277,10 +260,7 @@ func _refresh_full_history_step_timeline_cache(engine: GameEngine, allow_increme
 		return Result.failure("step timeline cache build 返回类型错误")
 
 	var timeline: Dictionary = Dictionary(build_r.value).duplicate(true)
-	var events_val = timeline.get("events", [])
-	var events: Array = events_val if (events_val is Array) else []
-	var entries := GameTimelineLogEntriesBuilderClass.build(events)
-	_store_full_history_step_timeline_cache(timeline, entries)
+	_store_full_history_step_timeline_cache(timeline)
 	_emit_resume_cache_event("resume_cache.timeline_cache_refresh.done", {
 		"mode": "full_rebuild",
 		"allow_incremental_append": bool(allow_incremental_append),
@@ -289,7 +269,7 @@ func _refresh_full_history_step_timeline_cache(engine: GameEngine, allow_increme
 			StepTimelineHelpersClass.read_processed_command_count(timeline)
 		),
 		"timeline_step_count": int(Array(timeline.get("steps", [])).size()),
-		"timeline_entry_count": int(entries.size()),
+		"timeline_entry_count": 0,
 	})
 	return Result.success({
 		"timeline": timeline,
@@ -328,12 +308,12 @@ func _emit_resume_cache_event(event: String, fields: Dictionary = {}) -> void:
 		out[str(key)] = fields[key]
 	OnlinePerfTraceClass.emit_event(str(event).strip_edges(), out)
 
-func _store_full_history_step_timeline_cache(timeline: Dictionary, entries: Array) -> void:
+func _store_full_history_step_timeline_cache(timeline: Dictionary, entries: Array = [], entries_processed_command_count: int = -1) -> void:
 	var normalized_timeline := Dictionary(timeline).duplicate(false) if (timeline is Dictionary) else {}
 	_session_state.set_full_history_step_timeline(normalized_timeline)
 	_session_state.set_full_history_step_timeline_entries(
 		entries,
-		StepTimelineHelpersClass.read_processed_command_count(normalized_timeline)
+		int(entries_processed_command_count)
 	)
 
 func _maybe_emit_match_bootstrap_local_failed(message: String, room_code: String = "") -> void:
