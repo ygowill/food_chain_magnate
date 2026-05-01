@@ -9,10 +9,10 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var r := _test_brand_director_radio_updates_marketing_placement_when_present()
 	if not r.ok:
 		return r
-	r = _test_brand_director_radio_is_fail_soft_without_marketing_placements()
+	r = _test_brand_director_radio_fails_fast_without_marketing_placements()
 	if not r.ok:
 		return r
-	r = _test_brand_director_radio_is_fail_soft_on_invalid_marketing_placements_type()
+	r = _test_brand_director_radio_fails_fast_on_invalid_marketing_placements_type()
 	if not r.ok:
 		return r
 	return Result.success({"cases": 3})
@@ -61,30 +61,36 @@ static func _test_brand_director_radio_updates_marketing_placement_when_present(
 		return Result.failure("marketing_placements#1.remaining_duration 应更新为 -1，实际: %s" % str(placement.get("remaining_duration", null)))
 	return Result.success()
 
-static func _test_brand_director_radio_is_fail_soft_without_marketing_placements() -> Result:
+static func _test_brand_director_radio_fails_fast_without_marketing_placements() -> Result:
 	var entry = EntryClass.new()
 	var state := _make_state()
 	state.map.erase("marketing_placements")
 	var marketing_instance := _make_marketing_instance()
 	var result := entry._on_marketing_initiated_brand_director(state, _make_command(), marketing_instance)
-	if not result.ok:
-		return Result.failure("缺失 marketing_placements 时应保持 fail-soft，实际: %s" % result.error)
-	if int(marketing_instance.get("remaining_duration", 0)) != -1:
-		return Result.failure("缺失 marketing_placements 时仍应让 radio 永久，实际: %s" % str(marketing_instance.get("remaining_duration", null)))
-	if not bool(marketing_instance.get("no_release", false)):
-		return Result.failure("缺失 marketing_placements 时仍应标记 no_release")
+	if result.ok:
+		return Result.failure("缺失 marketing_placements 时应失败")
+	var err := str(result.error)
+	if err.find("state.map.marketing_placements") < 0:
+		return Result.failure("错误信息应包含 state.map.marketing_placements，实际: %s" % err)
+	if int(marketing_instance.get("remaining_duration", 0)) != 1:
+		return Result.failure("失败时不应提前修改 remaining_duration，实际: %s" % str(marketing_instance.get("remaining_duration", null)))
+	if bool(marketing_instance.get("no_release", false)):
+		return Result.failure("失败时不应提前标记 no_release")
 	return Result.success()
 
-static func _test_brand_director_radio_is_fail_soft_on_invalid_marketing_placements_type() -> Result:
+static func _test_brand_director_radio_fails_fast_on_invalid_marketing_placements_type() -> Result:
 	var entry = EntryClass.new()
 	var state := _make_state()
 	state.map["marketing_placements"] = []
 	var marketing_instance := _make_marketing_instance()
 	var result := entry._on_marketing_initiated_brand_director(state, _make_command(), marketing_instance)
-	if not result.ok:
-		return Result.failure("marketing_placements 类型错误时应保持 fail-soft，实际: %s" % result.error)
-	if int(marketing_instance.get("remaining_duration", 0)) != -1:
-		return Result.failure("marketing_placements 类型错误时仍应让 radio 永久，实际: %s" % str(marketing_instance.get("remaining_duration", null)))
-	if not bool(marketing_instance.get("no_release", false)):
-		return Result.failure("marketing_placements 类型错误时仍应标记 no_release")
+	if result.ok:
+		return Result.failure("marketing_placements 类型错误时应失败")
+	var err := str(result.error)
+	if err.find("state.map.marketing_placements") < 0:
+		return Result.failure("错误信息应包含 state.map.marketing_placements，实际: %s" % err)
+	if int(marketing_instance.get("remaining_duration", 0)) != 1:
+		return Result.failure("失败时不应提前修改 remaining_duration，实际: %s" % str(marketing_instance.get("remaining_duration", null)))
+	if bool(marketing_instance.get("no_release", false)):
+		return Result.failure("失败时不应提前标记 no_release")
 	return Result.success()

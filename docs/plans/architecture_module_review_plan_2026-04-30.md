@@ -2176,3 +2176,29 @@
 
 - 已完成该 P2 strict 化：营销占地、饮品点冲突、飞机冲突和营销范围计算不再把损坏 state 或坏配置解释成默认 1x1/0 或空冲突。
 - 旧存档/旧手工测试数据如缺少营销 footprint/rotation，应通过显式迁移或测试夹具更新处理；运行期规则路径不再承担隐式数据修复。
+
+### Fix 28：new_milestones 不再跳过损坏的 Dinnertime 报告
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 7 `[P2] new_milestones 的 extension settlement 对 Dinnertime 报告结构采取“缺失即不适用、坏 entry 跳过”，会隐藏上游结算输出损坏`。
+- 同项附带问题：Brand Director provider 修改 `marketing_instance.remaining_duration = -1` 后，只在 `marketing_placements` 读取成功时同步 map placement，读取失败不会让 provider 失败。
+
+改动：
+
+- `modules/new_milestones/rules/settlement_and_hooks.gd`：`_after_dinnertime_primary(...)` 要求 `round_state.dinnertime` 与 `sales` 显式存在且类型正确；`sales[*]` 必须是 Dictionary，`winner_owner`、`required`、required product key/value 必须合法。坏报告不再被 `continue` 跳过。
+- `modules/new_milestones/rules/settlement_and_hooks.gd`：First Pizza Sold 的 radio pending 构建必须能读取合法 `marketing_placements`；placement key、`marketing_instances[*].board_number` 损坏时直接失败。pizza sale 需要的 `house_id/house_number` 也改为 strict 校验。
+- `modules/new_milestones/rules/marketing_initiation.gd`：Brand Director radio 永久化必须同步到合法 `state.map.marketing_placements[board_number]`；缺失、类型错误或 board_number 非法时失败，并避免失败前部分修改 `marketing_instance`。
+- `core/tests/new_milestones_pizza_pending_state_access_test.gd`：把缺失/错误 `marketing_placements` 的 fail-soft 用例改为 fail-fast，并新增缺失 `dinnertime`、错误 `sales`、坏 sale entry、坏 `required` 的负例。
+- `core/tests/new_milestones_brand_director_state_access_test.gd`：Brand Director 的缺失/错误 `marketing_placements` 用例改为 fail-fast，并断言失败时不提前修改 `remaining_duration/no_release`。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：`new_milestones` 的 Dinnertime 扩展结算不再把 primary settlement 的坏报告解释成“没有相关事件”，也不再允许 Brand Director 状态只改实例、不改 map placement。

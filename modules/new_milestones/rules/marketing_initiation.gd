@@ -280,16 +280,30 @@ func _on_marketing_initiated_brand_director(state: GameState, command: Command, 
 	# 里程碑获得后：玩家放置的 radio 永久（duration=-1）
 	if StateUpdater.player_has_milestone(state, int(command.actor), MILESTONE_ID_BRAND_DIRECTOR):
 		if str(marketing_instance.get("type", "")) == "radio":
-			marketing_instance["remaining_duration"] = -1
+			var board_number_read := _parse_int_value(
+				marketing_instance.get("board_number", null),
+				"new_milestones:brand_director: marketing_instance.board_number"
+			)
+			if not board_number_read.ok:
+				return board_number_read
+			var board_number := int(board_number_read.value)
+			if board_number <= 0:
+				return Result.failure("new_milestones:brand_director: marketing_instance.board_number 必须 > 0，实际: %d" % board_number)
+
 			var placements_read := MapStateAccessClass.require_marketing_placements(state, BD_PROVIDER_ID)
-			var key := str(int(marketing_instance.get("board_number", -1)))
-			if placements_read.ok:
-				var placements: Dictionary = placements_read.value
-				if placements.has(key) and (placements[key] is Dictionary):
-					var p: Dictionary = placements[key]
-					p["remaining_duration"] = -1
-					placements[key] = p
-					state.map["marketing_placements"] = placements
+			if not placements_read.ok:
+				return placements_read
+			var placements: Dictionary = placements_read.value
+			var key := str(board_number)
+			if not placements.has(key):
+				return Result.failure("new_milestones:brand_director: marketing_placements 缺少 board_number: #%d" % board_number)
+			if not (placements[key] is Dictionary):
+				return Result.failure("new_milestones:brand_director: marketing_placements[%s] 类型错误（期望 Dictionary）" % key)
+			var p: Dictionary = placements[key]
+			marketing_instance["remaining_duration"] = -1
+			p["remaining_duration"] = -1
+			placements[key] = p
+			state.map["marketing_placements"] = placements
 
 	# 品牌总监：忙碌到游戏结束（即使本次不是 radio）
 	if str(marketing_instance.get("employee_type", "")) == "brand_director":
@@ -297,3 +311,13 @@ func _on_marketing_initiated_brand_director(state: GameState, command: Command, 
 			marketing_instance["no_release"] = true
 
 	return Result.success()
+
+func _parse_int_value(value, path: String) -> Result:
+	if value is int:
+		return Result.success(int(value))
+	if value is float:
+		var f: float = float(value)
+		if f != floor(f):
+			return Result.failure("%s 必须为整数，实际: %s" % [path, str(value)])
+		return Result.success(int(f))
+	return Result.failure("%s 缺失或类型错误（期望 int）" % path)

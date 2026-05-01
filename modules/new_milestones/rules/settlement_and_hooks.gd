@@ -62,40 +62,31 @@ func _after_dinnertime_primary(state: GameState, _phase_manager: PhaseManager) -
 	if not (state.players is Array):
 		return Result.failure("new_milestones:dinnertime: state.players 类型错误（期望 Array）")
 
-	var ds_val = state.round_state.get("dinnertime", null)
-	if not (ds_val is Dictionary):
-		return Result.success()
-	var ds: Dictionary = ds_val
-	var sales_val = ds.get("sales", null)
-	if not (sales_val is Array):
-		return Result.success()
-	var sales: Array = sales_val
+	var ds_read := _require_dinnertime_report(state)
+	if not ds_read.ok:
+		return ds_read
+	var ds: Dictionary = ds_read.value
+	var sales_read := _require_sales_report(ds)
+	if not sales_read.ok:
+		return sales_read
+	var sales: Array = sales_read.value
 	if sales.is_empty():
 		return Result.success()
 
 	var timeline_events := DinnertimeTimelineClass.ensure_state_timeline_events(state)
+	var sale_reports: Array[Dictionary] = []
 
 	for sale_index in range(sales.size()):
-		var s_val = sales[sale_index]
-		if not (s_val is Dictionary):
-			continue
-		var s: Dictionary = s_val
+		var sale_read := _require_sale_report(state, sale_index, sales[sale_index])
+		if not sale_read.ok:
+			return sale_read
+		var s: Dictionary = sale_read.value
+		sale_reports.append(s)
 		var owner_val = s.get("winner_owner", null)
-		if not (owner_val is int):
-			continue
 		var owner: int = int(owner_val)
-		if owner < 0 or owner >= state.players.size():
-			return Result.failure("new_milestones:dinnertime: winner_owner 越界: %d" % owner)
-		var req_val = s.get("required", null)
-		if not (req_val is Dictionary):
-			continue
-		var required: Dictionary = req_val
+		var required: Dictionary = s.get("required", {})
 		for product_id_val in required.keys():
-			if not (product_id_val is String):
-				continue
 			var product_id: String = str(product_id_val)
-			if product_id.is_empty():
-				continue
 			var r2 := MilestoneSystemClass.process_event(state, "ProductSold", {
 				"player_id": owner,
 				"product": product_id,
@@ -127,42 +118,44 @@ func _after_dinnertime_primary(state: GameState, _phase_manager: PhaseManager) -
 		var pending_list: Array = []
 		var used_radio_boards := {}
 		var placements_read := MapStateAccessClass.require_marketing_placements(state, "new_milestones:pizza")
-		if placements_read.ok:
-			var placements: Dictionary = placements_read.value
-			for k in placements.keys():
-				if k is String:
-					used_radio_boards[str(k)] = true
+		if not placements_read.ok:
+			return placements_read
+		var placements: Dictionary = placements_read.value
+		for k in placements.keys():
+			if not (k is String):
+				return Result.failure("new_milestones:pizza: marketing_placements key 类型错误（期望 String）: %s" % str(k))
+			var placement_key := str(k).strip_edges()
+			if placement_key.is_empty():
+				return Result.failure("new_milestones:pizza: marketing_placements key 不能为空")
+			used_radio_boards[placement_key] = true
 		for inst_val in state.marketing_instances:
-			if inst_val is Dictionary:
-				var bn = Dictionary(inst_val).get("board_number", null)
-				if bn is int:
-					used_radio_boards[str(int(bn))] = true
+			if not (inst_val is Dictionary):
+				return Result.failure("new_milestones:pizza: marketing_instances 元素类型错误（期望 Dictionary）")
+			var bn = Dictionary(inst_val).get("board_number", null)
+			if not (bn is int):
+				return Result.failure("new_milestones:pizza: marketing_instances.board_number 缺失或类型错误（期望 int）")
+			used_radio_boards[str(int(bn))] = true
 
 		var pizza_count := 0
-		for s_val in sales:
-			if not (s_val is Dictionary):
-				continue
-			var s: Dictionary = s_val
+		for sale_index in range(sale_reports.size()):
+			var s: Dictionary = sale_reports[sale_index]
 			if pizza_count >= 3:
 				break
-			var req_val = s.get("required", null)
-			if not (req_val is Dictionary):
-				continue
-			var required: Dictionary = req_val
+			var required: Dictionary = s.get("required", {})
 			if not required.has("pizza"):
 				continue
 
-			var owner_val = s.get("winner_owner", null)
-			if not (owner_val is int):
-				continue
-			var seller: int = int(owner_val)
+			var seller: int = int(s.get("winner_owner", -1))
 
 			var house_id_val = s.get("house_id", null)
 			if not (house_id_val is String):
-				continue
+				return Result.failure("new_milestones:pizza: sales[%d].house_id 缺失或类型错误（期望 String）" % sale_index)
 			var house_id: String = str(house_id_val)
 			if house_id.is_empty():
-				continue
+				return Result.failure("new_milestones:pizza: sales[%d].house_id 不能为空" % sale_index)
+			var house_number_read := _parse_int_value(s.get("house_number", null), "new_milestones:pizza: sales[%d].house_number" % sale_index)
+			if not house_number_read.ok:
+				return house_number_read
 			var houses_read := MapStateAccessClass.require_houses(state, "new_milestones:pizza")
 			if not houses_read.ok:
 				return houses_read
@@ -193,7 +186,7 @@ func _after_dinnertime_primary(state: GameState, _phase_manager: PhaseManager) -
 			pending_list.append({
 				"seller": seller,
 				"house_id": house_id,
-				"house_number": s.get("house_number", -1),
+				"house_number": int(house_number_read.value),
 				"tile_min": tile_min,
 				"tile_max": tile_max,
 				"board_number": board_number,
@@ -245,6 +238,72 @@ func _after_dinnertime_primary(state: GameState, _phase_manager: PhaseManager) -
 			state.players[player_id] = p
 
 	return Result.success()
+
+func _require_dinnertime_report(state: GameState) -> Result:
+	if not state.round_state.has("dinnertime"):
+		return Result.failure("new_milestones:dinnertime: round_state.dinnertime 缺失")
+	var ds_val = state.round_state.get("dinnertime", null)
+	if not (ds_val is Dictionary):
+		return Result.failure("new_milestones:dinnertime: round_state.dinnertime 类型错误（期望 Dictionary）")
+	return Result.success(ds_val)
+
+func _require_sales_report(dinnertime_report: Dictionary) -> Result:
+	if not dinnertime_report.has("sales"):
+		return Result.failure("new_milestones:dinnertime: round_state.dinnertime.sales 缺失")
+	var sales_val = dinnertime_report.get("sales", null)
+	if not (sales_val is Array):
+		return Result.failure("new_milestones:dinnertime: round_state.dinnertime.sales 类型错误（期望 Array）")
+	return Result.success(sales_val)
+
+func _require_sale_report(state: GameState, sale_index: int, sale_val) -> Result:
+	var path := "new_milestones:dinnertime: sales[%d]" % sale_index
+	if not (sale_val is Dictionary):
+		return Result.failure("%s 类型错误（期望 Dictionary）" % path)
+	var sale: Dictionary = sale_val
+
+	var owner_read := _parse_int_value(sale.get("winner_owner", null), "%s.winner_owner" % path)
+	if not owner_read.ok:
+		return owner_read
+	var owner: int = int(owner_read.value)
+	if owner < 0 or owner >= state.players.size():
+		return Result.failure("%s.winner_owner 越界: %d" % [path, owner])
+
+	var required_read := _require_required_products(sale.get("required", null), "%s.required" % path)
+	if not required_read.ok:
+		return required_read
+	sale["winner_owner"] = owner
+	sale["required"] = required_read.value
+	return Result.success(sale)
+
+func _require_required_products(required_val, path: String) -> Result:
+	if not (required_val is Dictionary):
+		return Result.failure("%s 缺失或类型错误（期望 Dictionary）" % path)
+	var required: Dictionary = required_val
+	if required.is_empty():
+		return Result.failure("%s 不能为空" % path)
+	for product_id_val in required.keys():
+		if not (product_id_val is String):
+			return Result.failure("%s key 类型错误（期望 String）: %s" % [path, str(product_id_val)])
+		var product_id := str(product_id_val).strip_edges()
+		if product_id.is_empty():
+			return Result.failure("%s key 不能为空" % path)
+		var amount_read := _parse_int_value(required.get(product_id_val, null), "%s[%s]" % [path, product_id])
+		if not amount_read.ok:
+			return amount_read
+		var amount := int(amount_read.value)
+		if amount <= 0:
+			return Result.failure("%s[%s] 必须 > 0，实际: %d" % [path, product_id, amount])
+	return Result.success(required)
+
+func _parse_int_value(value, path: String) -> Result:
+	if value is int:
+		return Result.success(int(value))
+	if value is float:
+		var f: float = float(value)
+		if f != floor(f):
+			return Result.failure("%s 必须为整数，实际: %s" % [path, str(value)])
+		return Result.success(int(f))
+	return Result.failure("%s 缺失或类型错误（期望 int）" % path)
 
 func _pick_available_radio_board_number(state: GameState, used_board_numbers: Dictionary) -> int:
 	# base_marketing：radio #1-#3
