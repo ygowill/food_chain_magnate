@@ -61,6 +61,8 @@ static func apply(ruleset, phase_manager) -> Result:
 				return Result.failure("RulesetV2: named_sub_phase_hooks[%d].sub_phase 不能为空" % i)
 			if not cb0.is_valid():
 				return Result.failure("RulesetV2: named_sub_phase_hooks[%d] callback 无效" % i)
+			if hook_type0 < 0 or hook_type0 > 3:
+				return Result.failure("RulesetV2: named_sub_phase_hooks[%d].hook_type 越界: %d" % [i, hook_type0])
 			phase_manager.register_sub_phase_hook_by_name(name0, hook_type0, cb0, prio0, src0)
 
 	# working subphase order (base + insertions)

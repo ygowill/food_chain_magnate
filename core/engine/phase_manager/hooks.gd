@@ -11,6 +11,9 @@ var _sub_phase_hooks: Dictionary = {}
 var _sub_phase_hooks_by_name: Dictionary = {}
 var _hook_types: Array = []
 
+func _is_valid_hook_type(hook_type: int) -> bool:
+	return _hook_types.has(hook_type)
+
 func _init(phase_ids: Array, sub_phase_ids: Array, hook_types: Array) -> void:
 	_hook_types = hook_types.duplicate()
 
@@ -33,6 +36,9 @@ func register_phase_hook(
 ) -> void:
 	if not _phase_hooks.has(phase):
 		AutoloadAccessClass.log_warn("PhaseManager", "未知阶段: %d" % phase)
+		return
+	if not _is_valid_hook_type(hook_type):
+		AutoloadAccessClass.log_warn("PhaseManager", "未知阶段 hook_type: %d" % hook_type)
 		return
 
 	var hook := {
@@ -65,6 +71,9 @@ func register_sub_phase_hook(
 	if not _sub_phase_hooks.has(sub_phase):
 		AutoloadAccessClass.log_warn("PhaseManager", "未知子阶段: %d" % sub_phase)
 		return
+	if not _is_valid_hook_type(hook_type):
+		AutoloadAccessClass.log_warn("PhaseManager", "未知子阶段 hook_type: %d" % hook_type)
+		return
 
 	var hook := {
 		"callback": callback,
@@ -88,6 +97,9 @@ func register_sub_phase_hook_by_name(
 ) -> void:
 	if sub_phase_name.is_empty():
 		AutoloadAccessClass.log_warn("PhaseManager", "未知子阶段名: <empty>")
+		return
+	if not _is_valid_hook_type(hook_type):
+		AutoloadAccessClass.log_warn("PhaseManager", "未知命名子阶段 hook_type: %d" % hook_type)
 		return
 
 	if not _sub_phase_hooks_by_name.has(sub_phase_name):

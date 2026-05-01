@@ -2,6 +2,12 @@
 class_name ModuleSystemV2BootstrapTest
 extends RefCounted
 
+class HookHost:
+	extends RefCounted
+
+	func ok(_state: GameState) -> Result:
+		return Result.success()
+
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var engine := GameEngine.new()
 
@@ -47,4 +53,31 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if str(invalid_init.error).find("modules_v2_base_dir") < 0:
 		return Result.failure("错误信息应包含 modules_v2_base_dir，实际: %s" % invalid_init.error)
 
+	var invalid_hook_r := _test_named_sub_phase_hook_rejects_invalid_hook_type()
+	if not invalid_hook_r.ok:
+		return invalid_hook_r
+
+	return Result.success()
+
+static func _test_named_sub_phase_hook_rejects_invalid_hook_type() -> Result:
+	var host := HookHost.new()
+	var ruleset := RulesetV2.new()
+	var reg_r := ruleset.register_named_sub_phase_hook("CustomPhase", 99, Callable(host, "ok"), 100, "test")
+	if reg_r.ok:
+		return Result.failure("register_named_sub_phase_hook 应拒绝非法 hook_type")
+	if str(reg_r.error).find("hook_type") < 0:
+		return Result.failure("非法 hook_type 注册错误信息应包含 hook_type，实际: %s" % reg_r.error)
+
+	ruleset.named_sub_phase_hooks.append({
+		"sub_phase": "CustomPhase",
+		"hook_type": 99,
+		"callback": Callable(host, "ok"),
+		"priority": 100,
+		"source": "test",
+	})
+	var apply_r := RulesetV2PhaseHooks.apply(ruleset, PhaseManager.new())
+	if apply_r.ok:
+		return Result.failure("RulesetV2PhaseHooks.apply 应拒绝手工写入的非法 hook_type")
+	if str(apply_r.error).find("hook_type") < 0:
+		return Result.failure("非法 hook_type apply 错误信息应包含 hook_type，实际: %s" % apply_r.error)
 	return Result.success()

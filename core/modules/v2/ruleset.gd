@@ -151,6 +151,8 @@ func register_named_sub_phase_hook(sub_phase_name: String, hook_type: int, callb
 		return Result.failure("RulesetV2: named_sub_phase_hook sub_phase_name 不能为空")
 	if not callback.is_valid():
 		return Result.failure("RulesetV2: named_sub_phase_hook callback 无效")
+	if hook_type < 0 or hook_type > 3:
+		return Result.failure("RulesetV2: named_sub_phase_hook hook_type 越界: %d" % hook_type)
 	named_sub_phase_hooks.append({
 		"sub_phase": sub_phase_name,
 		"hook_type": hook_type,

@@ -1942,3 +1942,27 @@
 
 - 已完成该 P2 strict 化：完整事件时间线不再产生缺 `state_hash` 的 `GAME_STARTED` 事件。
 - 需要 best-effort 展示时，应提供单独的 UI 宽松构建入口，而不是让完整 replay/timeline 构建吞掉初始状态损坏。
+
+### Fix 19：named sub-phase hook 拒绝非法 hook_type
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 4 `[P2] register_named_sub_phase_hook(...) 缺少 hook_type 范围校验，错误模块输入不会以 Result.failure 形式在注册阶段暴露`。
+
+改动：
+
+- `core/modules/v2/ruleset.gd`：`register_named_sub_phase_hook(...)` 与普通 phase/sub-phase hook 一样校验 `hook_type` 范围，非法值直接 `Result.failure`。
+- `core/modules/v2/ruleset/phase_hooks.gd`：`RulesetV2PhaseHooks.apply(...)` 对手工写入的 `named_sub_phase_hooks` 字典补防御性校验。
+- `core/engine/phase_manager/hooks.gd`：PhaseManager 直接注册 phase/sub-phase/named sub-phase hook 时，对未知 `hook_type` 记录 warning 并拒绝写入内部 hook 字典。
+- `core/tests/module_system_v2_bootstrap_test.gd`：新增非法 named sub-phase `hook_type` 的注册与 apply 负例。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：非法 named sub-phase hook 类型会在模块注册/装配阶段暴露，不再延迟成 PhaseManager 内部字典访问风险。
