@@ -52,7 +52,7 @@ static func build(engine: GameEngine, target_index: int) -> Result:
 		var new_state: GameState = step_result.value
 
 		# 生成事件（与 CommandRunner.execute_command 对齐）
-		var events := executor.generate_events(replay_state, new_state, cmd)
+		var events: Array = executor.generate_events(replay_state, new_state, cmd)
 		events.append_array(CommandRunnerClass.build_player_cash_changed_events(replay_state, new_state, cmd))
 
 		var auto_r: Result = CommandRunnerClass.drain_auto_advances(engine, new_state)
@@ -71,12 +71,13 @@ static func build(engine: GameEngine, target_index: int) -> Result:
 
 		events.append_array(CommandRunnerClass.build_milestone_achieved_events(replay_state, new_state, cmd))
 
-		for e_val in events:
-			if not (e_val is Dictionary):
-				continue
+		var normalized_events_r := CommandRunnerClass.normalize_event_list(events, "EventHistoryRebuild command #%d" % i)
+		if not normalized_events_r.ok:
+			return Result.failure("EventHistoryRebuild: %s" % normalized_events_r.error).with_warnings(all_warnings)
+		var normalized_events: Array = normalized_events_r.value
+		for e_val in normalized_events:
 			var e: Dictionary = e_val
-			var d_val = e.get("data", {})
-			var d: Dictionary = d_val if (d_val is Dictionary) else {}
+			var d: Dictionary = Dictionary(e.get("data")).duplicate(true)
 			d["command_index"] = i
 			e["data"] = d
 			all_events.append(e)

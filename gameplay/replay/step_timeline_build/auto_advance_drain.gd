@@ -42,7 +42,10 @@ static func drain(
 		var phase_events := CommandRunnerClass.build_phase_change_events(before, state_in)
 		var cash_events := CommandRunnerClass.build_player_cash_changed_events(before, state_in, Command.create_system("auto_advance"))
 		var milestone_events := CommandRunnerClass.build_milestone_achieved_events(before, state_in, cmd)
-		milestone_events = StepTimelineHelpersClass.filter_out_first_throw_away_milestone_events(milestone_events, pending_cleanup_throw_away_milestone_events)
+		var milestone_filter_r := StepTimelineHelpersClass.filter_out_first_throw_away_milestone_events(milestone_events, pending_cleanup_throw_away_milestone_events)
+		if not milestone_filter_r.ok:
+			return milestone_filter_r.with_warnings(warnings)
+		milestone_events = milestone_filter_r.value
 
 		if phase_changed:
 			# 冻结旧 step 的快照：停在“离开前阶段”的最后稳定状态
@@ -85,12 +88,18 @@ static func drain(
 		else:
 			# sub_phase 等变化：打包在当前 step，并更新快照到最新稳定状态
 			steps[current_step_index] = StepTimelineHelpersClass.update_step_snapshot(steps[current_step_index], state_in)
-			StepTimelineHelpersClass.append_events(out_events, phase_events, command_index, current_step_index, str(state_in.phase), seq)
-			seq = _sync_seq(out_events, seq)
-			StepTimelineHelpersClass.append_events(out_events, cash_events, command_index, current_step_index, str(state_in.phase), seq)
-			seq = _sync_seq(out_events, seq)
-			StepTimelineHelpersClass.append_events(out_events, milestone_events, command_index, current_step_index, str(state_in.phase), seq)
-			seq = _sync_seq(out_events, seq)
+			var append_phase_r := StepTimelineHelpersClass.append_events(out_events, phase_events, command_index, current_step_index, str(state_in.phase), seq)
+			if not append_phase_r.ok:
+				return append_phase_r.with_warnings(warnings)
+			seq = int(append_phase_r.value)
+			var append_cash_r := StepTimelineHelpersClass.append_events(out_events, cash_events, command_index, current_step_index, str(state_in.phase), seq)
+			if not append_cash_r.ok:
+				return append_cash_r.with_warnings(warnings)
+			seq = int(append_cash_r.value)
+			var append_milestone_r := StepTimelineHelpersClass.append_events(out_events, milestone_events, command_index, current_step_index, str(state_in.phase), seq)
+			if not append_milestone_r.ok:
+				return append_milestone_r.with_warnings(warnings)
+			seq = int(append_milestone_r.value)
 
 	if safety >= 32:
 		return Result.failure("StepTimelineBuild: auto_advance exceeded max steps (possible loop)").with_warnings(warnings)
@@ -109,4 +118,3 @@ static func _sync_seq(out_events: Array[Dictionary], seq_fallback: int) -> int:
 	if last is Dictionary and Dictionary(last).has("sequence"):
 		return int(Dictionary(last).get("sequence", seq_fallback))
 	return int(seq_fallback)
-

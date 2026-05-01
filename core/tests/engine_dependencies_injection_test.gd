@@ -2,7 +2,10 @@
 class_name EngineDependenciesInjectionTest
 extends RefCounted
 
+const EventHistoryRebuildClass = preload("res://core/engine/game_engine/event_history_rebuild.gd")
+const EventTimelineBuildClass = preload("res://gameplay/replay/event_timeline_build.gd")
 const GameplayActionSetupClass = preload("res://gameplay/action_setup.gd")
+const StepTimelineBuildClass = preload("res://gameplay/replay/step_timeline_build.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 
 class StubActionSetupProvider:
@@ -56,6 +59,33 @@ class StubEventBuildProvider:
 
 	func build_cleanup_inventory_discarded_events(_cleanup_state: GameState) -> Array[Dictionary]:
 		return []
+
+class BadDataEventBuildProvider:
+	extends StubEventBuildProvider
+
+	func build_player_cash_changed_events(_old_state: GameState, _new_state: GameState, _command: Command) -> Array[Dictionary]:
+		return [{
+			"type": EventBus.EventType.PLAYER_CASH_CHANGED,
+			"data": "bad_data",
+		}]
+
+class BadGeneratedEventAction:
+	extends ActionExecutor
+
+	func _init() -> void:
+		action_id = "bad_generated_event"
+		display_name = "Bad Generated Event"
+		requires_actor = false
+		is_internal = true
+
+	func _apply_changes(_state: GameState, _command: Command) -> Result:
+		return Result.success()
+
+	func _generate_specific_events(_old_state: GameState, _new_state: GameState, _command: Command) -> Array[Dictionary]:
+		return [{
+			"type": "bad_generated_event",
+			"data": "bad_data",
+		}]
 
 class MissingEventBuildProvider:
 	extends RefCounted
@@ -169,6 +199,9 @@ static func run(seed_val: int = 12345) -> Result:
 	var invalid_event_provider_r := _test_invalid_command_runner_event_provider_fails_fast(seed_val + 4)
 	if not invalid_event_provider_r.ok:
 		return invalid_event_provider_r
+	var malformed_event_r := _test_malformed_event_envelope_fails_fast(seed_val + 5)
+	if not malformed_event_r.ok:
+		return malformed_event_r
 	return Result.success({
 		"cash_calls": event_provider.cash_calls,
 		"milestone_calls": event_provider.milestone_calls,
@@ -178,6 +211,7 @@ static func run(seed_val: int = 12345) -> Result:
 		"short_game_verified": true,
 		"invalid_action_provider_verified": true,
 		"invalid_event_provider_verified": true,
+		"malformed_event_envelope_verified": true,
 		"event_sink_events": event_sink.emitted_types.size(),
 	})
 
@@ -275,4 +309,80 @@ static func _test_invalid_command_runner_event_provider_fails_fast(seed_val: int
 	var err := str(init_r.error)
 	if err.find("CommandRunner") < 0 or err.find("事件构建 provider") < 0:
 		return Result.failure("事件构建 provider 错误信息应包含 CommandRunner/事件构建 provider，实际: %s" % err)
+	return Result.success()
+
+static func _test_malformed_event_envelope_fails_fast(seed_val: int) -> Result:
+	var runtime_engine := GameEngine.new()
+	var runtime_init_r := runtime_engine.initialize(2, seed_val)
+	if not runtime_init_r.ok:
+		runtime_engine.dispose()
+		return Result.failure("malformed event runtime 初始化失败: %s" % runtime_init_r.error)
+	var runtime_setup_r := TestPhaseUtilsClass.complete_setup(runtime_engine)
+	if not runtime_setup_r.ok:
+		runtime_engine.dispose()
+		return Result.failure("malformed event runtime setup 失败: %s" % runtime_setup_r.error)
+	var runtime_before_hash := str(runtime_engine.state.compute_hash())
+	var runtime_before_command_count := runtime_engine.command_history.size()
+	runtime_engine.set_command_runner_event_build_provider(BadDataEventBuildProvider.new())
+	var bad_runtime_r: Result = runtime_engine.execute_command(Command.create("debug_give_money", -1, {
+		"player_id": 0,
+		"amount": 5,
+	}))
+	if bad_runtime_r.ok:
+		runtime_engine.dispose()
+		return Result.failure("CommandRunner 不应接受 data 非 Dictionary 的事件")
+	var runtime_err := str(bad_runtime_r.error)
+	if runtime_err.find("event.data") < 0:
+		runtime_engine.dispose()
+		return Result.failure("CommandRunner 坏事件错误应包含 event.data，实际: %s" % runtime_err)
+	if str(runtime_engine.state.compute_hash()) != runtime_before_hash:
+		runtime_engine.dispose()
+		return Result.failure("CommandRunner 坏事件失败后不应写入 state")
+	if runtime_engine.command_history.size() != runtime_before_command_count:
+		runtime_engine.dispose()
+		return Result.failure("CommandRunner 坏事件失败后不应记录命令")
+	runtime_engine.dispose()
+
+	var replay_engine := GameEngine.new()
+	var replay_init_r := replay_engine.initialize(2, seed_val + 1)
+	if not replay_init_r.ok:
+		replay_engine.dispose()
+		return Result.failure("malformed event replay 初始化失败: %s" % replay_init_r.error)
+	var replay_setup_r := TestPhaseUtilsClass.complete_setup(replay_engine)
+	if not replay_setup_r.ok:
+		replay_engine.dispose()
+		return Result.failure("malformed event replay setup 失败: %s" % replay_setup_r.error)
+	replay_engine.action_registry.register_executor(BadGeneratedEventAction.new())
+	var bad_history_cmd := Command.create("bad_generated_event", -1, {})
+	bad_history_cmd.timestamp = PhaseManager.compute_timestamp(replay_engine.state)
+	bad_history_cmd.index = replay_engine.command_history.size()
+	replay_engine.command_history.append(bad_history_cmd)
+	replay_engine.current_command_index = bad_history_cmd.index
+	var last_index := replay_engine.command_history.size() - 1
+
+	var history_r: Result = EventHistoryRebuildClass.build(replay_engine, last_index)
+	if history_r.ok:
+		replay_engine.dispose()
+		return Result.failure("EventHistoryRebuild 不应跳过 data 非 Dictionary 的事件")
+	if str(history_r.error).find("event.data") < 0:
+		replay_engine.dispose()
+		return Result.failure("EventHistoryRebuild 坏事件错误应包含 event.data，实际: %s" % history_r.error)
+
+	var event_timeline_r: Result = EventTimelineBuildClass.build_full(replay_engine)
+	if event_timeline_r.ok:
+		replay_engine.dispose()
+		return Result.failure("EventTimelineBuild 不应跳过 data 非 Dictionary 的事件")
+	if str(event_timeline_r.error).find("event.data") < 0:
+		replay_engine.dispose()
+		return Result.failure("EventTimelineBuild 坏事件错误应包含 event.data，实际: %s" % event_timeline_r.error)
+
+	var step_timeline_r: Result = StepTimelineBuildClass.build_full(replay_engine)
+	if step_timeline_r.ok:
+		replay_engine.dispose()
+		return Result.failure("StepTimelineBuild 不应跳过 data 非 Dictionary 的事件")
+	if str(step_timeline_r.error).find("event.data") < 0:
+		replay_engine.dispose()
+		return Result.failure("StepTimelineBuild 坏事件错误应包含 event.data，实际: %s" % step_timeline_r.error)
+
+	replay_engine.dispose()
 	return Result.success()

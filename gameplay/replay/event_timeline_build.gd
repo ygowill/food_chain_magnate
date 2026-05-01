@@ -6,6 +6,7 @@ extends RefCounted
 
 const EventHistoryRebuildClass = preload("res://core/engine/game_engine/event_history_rebuild.gd")
 const GameStartedEventBuildClass = preload("res://core/engine/game_engine/game_started_event_build.gd")
+const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
 const TimelineEventHelpersClass = preload("res://gameplay/replay/timeline_event_helpers.gd")
 
 static func build_full(engine: GameEngine) -> Result:
@@ -39,16 +40,16 @@ static func build_full(engine: GameEngine) -> Result:
 		return Result.failure("EventTimelineBuild: 重建事件失败: %s" % history_r.error).with_warnings(warnings).with_warnings(history_r.warnings)
 
 	var events_val = history_r.value
-	var events: Array = events_val if (events_val is Array) else []
-	for ev_val in events:
-		if not (ev_val is Dictionary):
-			continue
-		var ev: Dictionary = ev_val
-		var t: String = str(ev.get("type", "")).strip_edges()
-		if t.is_empty():
-			continue
-		var d_val = ev.get("data", {})
-		var d: Dictionary = d_val if (d_val is Dictionary) else {}
+	if not (events_val is Array):
+		return Result.failure("EventTimelineBuild: history events 类型错误（期望 Array）").with_warnings(warnings).with_warnings(history_r.warnings)
+	var events: Array = events_val
+	for i in range(events.size()):
+		var ev_r := CommandRunnerClass.normalize_event_envelope(events[i], "EventTimelineBuild.history[%d]" % i)
+		if not ev_r.ok:
+			return Result.failure("EventTimelineBuild: %s" % ev_r.error).with_warnings(warnings).with_warnings(history_r.warnings)
+		var ev: Dictionary = ev_r.value
+		var t: String = str(ev.get("type", ""))
+		var d: Dictionary = Dictionary(ev.get("data")).duplicate(true)
 		var cmd_index := int(d.get("command_index", -1))
 
 		seq = TimelineEventHelpersClass.append_timeline_event(out, t, d, seq, cmd_index)

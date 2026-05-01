@@ -34,10 +34,11 @@ static func append_phase_transition_events(
 	var before_phase_events: Array[Dictionary] = []
 	var after_phase_events: Array[Dictionary] = []
 	var seen_phase_changed := false
-	for ev_val in transition_events:
-		if not (ev_val is Dictionary):
-			continue
-		var ev: Dictionary = ev_val
+	for i in range(transition_events.size()):
+		var ev_r := CommandRunnerClass.normalize_event_envelope(transition_events[i], "StepTimelineBuild phase transition event[%d]" % i)
+		if not ev_r.ok:
+			return Result.failure("StepTimelineBuild: %s" % ev_r.error)
+		var ev: Dictionary = ev_r.value
 		var t: String = str(ev.get("type", "")).strip_edges()
 		if t == EventBus.EventType.PHASE_CHANGED:
 			seen_phase_changed = true
@@ -53,8 +54,6 @@ static func append_phase_transition_events(
 	if not before_phase_events.is_empty():
 		var kept_before_phase_events: Array[Dictionary] = []
 		for before_ev_val in before_phase_events:
-			if not (before_ev_val is Dictionary):
-				continue
 			var before_ev: Dictionary = before_ev_val
 			var before_type := str(before_ev.get("type", "")).strip_edges()
 			if before_type.ends_with("_report"):
@@ -64,13 +63,17 @@ static func append_phase_transition_events(
 		before_phase_events = kept_before_phase_events
 
 	if not before_phase_events.is_empty():
-		StepTimelineHelpersClass.append_events(out_events, before_phase_events, command_index, old_step_index, old_phase_name, seq)
-		seq = _sync_seq(out_events, seq)
+		var append_before_r := StepTimelineHelpersClass.append_events(out_events, before_phase_events, command_index, old_step_index, old_phase_name, seq)
+		if not append_before_r.ok:
+			return append_before_r
+		seq = int(append_before_r.value)
 
 	# Marketing: 先输出汇总事件（如 DEMAND_GENERATED），再输出进入 Marketing 时产生的 cash/milestone。
 	if old_phase_name == PhaseDefsClass.PHASE_MARKETING and pending_marketing_enter_effect_events != null and not pending_marketing_enter_effect_events.is_empty():
-		StepTimelineHelpersClass.append_events(out_events, pending_marketing_enter_effect_events, command_index, old_step_index, PhaseDefsClass.PHASE_MARKETING, seq)
-		seq = _sync_seq(out_events, seq)
+		var append_pending_marketing_r := StepTimelineHelpersClass.append_events(out_events, pending_marketing_enter_effect_events, command_index, old_step_index, PhaseDefsClass.PHASE_MARKETING, seq)
+		if not append_pending_marketing_r.ok:
+			return append_pending_marketing_r
+		seq = int(append_pending_marketing_r.value)
 		pending_marketing_enter_effect_events.clear()
 		pending_anchor = -1
 
@@ -113,50 +116,88 @@ static func append_phase_transition_events(
 			cash_events_new = cash_events_full
 			milestone_events_new = milestone_events_full
 
-	milestone_events_old = StepTimelineHelpersClass.filter_out_first_throw_away_milestone_events(milestone_events_old, pending_cleanup_throw_away_milestone_events)
-	milestone_events_new = StepTimelineHelpersClass.filter_out_first_throw_away_milestone_events(milestone_events_new, pending_cleanup_throw_away_milestone_events)
+	var old_milestone_filter_r := StepTimelineHelpersClass.filter_out_first_throw_away_milestone_events(milestone_events_old, pending_cleanup_throw_away_milestone_events)
+	if not old_milestone_filter_r.ok:
+		return old_milestone_filter_r
+	milestone_events_old = old_milestone_filter_r.value
+	var new_milestone_filter_r := StepTimelineHelpersClass.filter_out_first_throw_away_milestone_events(milestone_events_new, pending_cleanup_throw_away_milestone_events)
+	if not new_milestone_filter_r.ok:
+		return new_milestone_filter_r
+	milestone_events_new = new_milestone_filter_r.value
 
 	if not cash_events_old.is_empty():
-		StepTimelineHelpersClass.append_events(out_events, StepTimelineHelpersClass.override_events_phase_fields(cash_events_old, old_state), command_index, old_step_index, old_phase_name, seq)
-		seq = _sync_seq(out_events, seq)
+		var old_cash_override_r := StepTimelineHelpersClass.override_events_phase_fields(cash_events_old, old_state)
+		if not old_cash_override_r.ok:
+			return old_cash_override_r
+		var append_old_cash_r := StepTimelineHelpersClass.append_events(out_events, old_cash_override_r.value, command_index, old_step_index, old_phase_name, seq)
+		if not append_old_cash_r.ok:
+			return append_old_cash_r
+		seq = int(append_old_cash_r.value)
 	if not milestone_events_old.is_empty():
-		StepTimelineHelpersClass.append_events(out_events, StepTimelineHelpersClass.override_events_phase_fields(milestone_events_old, old_state), command_index, old_step_index, old_phase_name, seq)
-		seq = _sync_seq(out_events, seq)
+		var old_milestone_override_r := StepTimelineHelpersClass.override_events_phase_fields(milestone_events_old, old_state)
+		if not old_milestone_override_r.ok:
+			return old_milestone_override_r
+		var append_old_milestone_r := StepTimelineHelpersClass.append_events(out_events, old_milestone_override_r.value, command_index, old_step_index, old_phase_name, seq)
+		if not append_old_milestone_r.ok:
+			return append_old_milestone_r
+		seq = int(append_old_milestone_r.value)
 
 	if not phase_report_events.is_empty():
 		# 报告事件（例如 PAYDAY_REPORT）语义仍归属旧阶段，但应挂到触发阶段推进的当前命令 step。
 		# 这样实时日志增量 append 能在玩家点击“确认结束”后立刻显示报告，
 		# 避免把新报告 backfill 到已渲染过的旧 step。
-		StepTimelineHelpersClass.append_events(out_events, phase_report_events, command_index, new_step_index, old_phase_name, seq)
-		seq = _sync_seq(out_events, seq)
+		var append_report_r := StepTimelineHelpersClass.append_events(out_events, phase_report_events, command_index, new_step_index, old_phase_name, seq)
+		if not append_report_r.ok:
+			return append_report_r
+		seq = int(append_report_r.value)
 
 	if not after_phase_events.is_empty():
-		StepTimelineHelpersClass.append_events(out_events, after_phase_events, command_index, new_step_index, new_phase_name, seq)
-		seq = _sync_seq(out_events, seq)
+		var append_after_r := StepTimelineHelpersClass.append_events(out_events, after_phase_events, command_index, new_step_index, new_phase_name, seq)
+		if not append_after_r.ok:
+			return append_after_r
+		seq = int(append_after_r.value)
 
 	if not cash_events_new.is_empty() or not milestone_events_new.is_empty():
 		if new_phase_name == PhaseDefsClass.PHASE_MARKETING:
 			pending_anchor = command_index
 			if pending_marketing_enter_effect_events != null:
 				if not cash_events_new.is_empty():
-					pending_marketing_enter_effect_events.append_array(StepTimelineHelpersClass.override_events_phase_fields(cash_events_new, new_state))
+					var new_cash_pending_override_r := StepTimelineHelpersClass.override_events_phase_fields(cash_events_new, new_state)
+					if not new_cash_pending_override_r.ok:
+						return new_cash_pending_override_r
+					pending_marketing_enter_effect_events.append_array(new_cash_pending_override_r.value)
 				if not milestone_events_new.is_empty():
-					pending_marketing_enter_effect_events.append_array(StepTimelineHelpersClass.override_events_phase_fields(milestone_events_new, new_state))
+					var new_milestone_pending_override_r := StepTimelineHelpersClass.override_events_phase_fields(milestone_events_new, new_state)
+					if not new_milestone_pending_override_r.ok:
+						return new_milestone_pending_override_r
+					pending_marketing_enter_effect_events.append_array(new_milestone_pending_override_r.value)
 		else:
 			if not cash_events_new.is_empty():
-				StepTimelineHelpersClass.append_events(out_events, StepTimelineHelpersClass.override_events_phase_fields(cash_events_new, new_state), command_index, new_step_index, new_phase_name, seq)
-				seq = _sync_seq(out_events, seq)
+				var new_cash_override_r := StepTimelineHelpersClass.override_events_phase_fields(cash_events_new, new_state)
+				if not new_cash_override_r.ok:
+					return new_cash_override_r
+				var append_new_cash_r := StepTimelineHelpersClass.append_events(out_events, new_cash_override_r.value, command_index, new_step_index, new_phase_name, seq)
+				if not append_new_cash_r.ok:
+					return append_new_cash_r
+				seq = int(append_new_cash_r.value)
 			if not milestone_events_new.is_empty():
-				StepTimelineHelpersClass.append_events(out_events, StepTimelineHelpersClass.override_events_phase_fields(milestone_events_new, new_state), command_index, new_step_index, new_phase_name, seq)
-				seq = _sync_seq(out_events, seq)
+				var new_milestone_override_r := StepTimelineHelpersClass.override_events_phase_fields(milestone_events_new, new_state)
+				if not new_milestone_override_r.ok:
+					return new_milestone_override_r
+				var append_new_milestone_r := StepTimelineHelpersClass.append_events(out_events, new_milestone_override_r.value, command_index, new_step_index, new_phase_name, seq)
+				if not append_new_milestone_r.ok:
+					return append_new_milestone_r
+				seq = int(append_new_milestone_r.value)
 
 	# CleanupDiscard: 若进入 Cleanup 时无需 pending（无 choose_fridge_keep），则在该 step 末尾刷出 first_throw_away。
 	var cleanup_pending_read := StepTimelineHelpersClass.read_has_pending_cleanup_actions(new_state)
 	if not cleanup_pending_read.ok:
 		return Result.failure("StepTimelineBuild: %s" % cleanup_pending_read.error)
 	if new_phase_name == PhaseDefsClass.PHASE_CLEANUP and (not bool(cleanup_pending_read.value)) and pending_cleanup_throw_away_milestone_events != null and not pending_cleanup_throw_away_milestone_events.is_empty():
-		StepTimelineHelpersClass.append_events(out_events, pending_cleanup_throw_away_milestone_events, command_index, new_step_index, PhaseDefsClass.PHASE_CLEANUP, seq)
-		seq = _sync_seq(out_events, seq)
+		var append_cleanup_r := StepTimelineHelpersClass.append_events(out_events, pending_cleanup_throw_away_milestone_events, command_index, new_step_index, PhaseDefsClass.PHASE_CLEANUP, seq)
+		if not append_cleanup_r.ok:
+			return append_cleanup_r
+		seq = int(append_cleanup_r.value)
 		pending_cleanup_throw_away_milestone_events.clear()
 
 	return Result.success({

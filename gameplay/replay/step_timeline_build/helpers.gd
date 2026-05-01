@@ -2,6 +2,7 @@
 # 用途：收敛 StepTimelineBuild 内部的 step dict / 事件封装 / 阶段归属等样板代码。
 extends RefCounted
 
+const CommandRunnerClass = preload("res://core/engine/game_engine/command_runner.gd")
 const TimelineEventHelpersClass = preload("res://gameplay/replay/timeline_event_helpers.gd")
 const PhaseDefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const SettlementRegistryClass = preload("res://core/rules/settlement_registry.gd")
@@ -35,19 +36,18 @@ static func append_events(
 	step_index: int,
 	phase_segment: String,
 	seq_in: int
-) -> void:
+) -> Result:
 	# seq_in 表示“上一条已写入事件的 sequence”（即 next = seq_in + 1），与 TimelineEventHelpers.append_step_event 保持一致。
 	var seq := int(seq_in)
-	for ev_val in events:
-		if not (ev_val is Dictionary):
-			continue
-		var ev: Dictionary = ev_val
-		var t: String = str(ev.get("type", "")).strip_edges()
-		if t.is_empty():
-			continue
-		var d_val = ev.get("data", {})
-		var d: Dictionary = d_val if (d_val is Dictionary) else {}
+	for i in range(events.size()):
+		var ev_r := CommandRunnerClass.normalize_event_envelope(events[i], "StepTimelineBuild events command #%d[%d]" % [command_index, i])
+		if not ev_r.ok:
+			return Result.failure("StepTimelineBuild: %s" % ev_r.error)
+		var ev: Dictionary = ev_r.value
+		var t: String = str(ev.get("type", ""))
+		var d: Dictionary = Dictionary(ev.get("data")).duplicate(true)
 		seq = TimelineEventHelpersClass.append_step_event(out_events, t, d, seq, command_index, step_index, phase_segment)
+	return Result.success(seq)
 
 static func should_attribute_settlement_effects_to_old_phase(engine: GameEngine, old_phase: String, new_phase: String) -> bool:
 	# 目的：避免“离开 Payday 的 EXIT settlement”产生的现金/里程碑被归到新阶段（典型：Marketing）。
@@ -69,49 +69,46 @@ static func should_attribute_settlement_effects_to_old_phase(engine: GameEngine,
 
 	return false
 
-static func override_events_phase_fields(events: Array[Dictionary], state: GameState) -> Array[Dictionary]:
+static func override_events_phase_fields(events: Array[Dictionary], state: GameState) -> Result:
 	# 用于：现金/里程碑等事件在跨阶段时需要“按实际发生点”的 phase/sub_phase/round 字段，而不是 final_state。
 	var out: Array[Dictionary] = []
 	if events == null or events.is_empty():
-		return out
-	for ev_val in events:
-		if not (ev_val is Dictionary):
-			continue
-		var ev: Dictionary = Dictionary(ev_val).duplicate(true)
-		var d_val = ev.get("data", {})
-		var d: Dictionary = d_val if (d_val is Dictionary) else {}
+		return Result.success(out)
+	for i in range(events.size()):
+		var ev_r := CommandRunnerClass.normalize_event_envelope(events[i], "StepTimelineBuild override phase event[%d]" % i)
+		if not ev_r.ok:
+			return Result.failure("StepTimelineBuild: %s" % ev_r.error)
+		var ev: Dictionary = Dictionary(ev_r.value).duplicate(true)
+		var d: Dictionary = Dictionary(ev.get("data")).duplicate(true)
 		if state != null:
 			d["phase"] = str(state.phase)
 			d["sub_phase"] = str(state.sub_phase)
 			d["round"] = int(state.round_number)
 		ev["data"] = d
 		out.append(ev)
-	return out
+	return Result.success(out)
 
-static func filter_out_first_throw_away_milestone_events(events: Array[Dictionary], pending: Array[Dictionary]) -> Array[Dictionary]:
+static func filter_out_first_throw_away_milestone_events(events: Array[Dictionary], pending: Array[Dictionary]) -> Result:
 	# 目的：首个丢弃里程碑（first_throw_away）显示顺序应在“清理库存”之后，避免出现在清理动作之前。
 	var out: Array[Dictionary] = []
 	if events == null or events.is_empty():
-		return out
-	for ev_val in events:
-		if not (ev_val is Dictionary):
-			continue
-		var ev: Dictionary = ev_val
+		return Result.success(out)
+	for i in range(events.size()):
+		var ev_r := CommandRunnerClass.normalize_event_envelope(events[i], "StepTimelineBuild cleanup milestone event[%d]" % i)
+		if not ev_r.ok:
+			return Result.failure("StepTimelineBuild: %s" % ev_r.error)
+		var ev: Dictionary = ev_r.value
 		if str(ev.get("type", "")).strip_edges() != EventBus.EventType.MILESTONE_ACHIEVED:
 			out.append(ev)
 			continue
-		var d_val = ev.get("data", null)
-		if not (d_val is Dictionary):
-			out.append(ev)
-			continue
-		var d: Dictionary = d_val
+		var d: Dictionary = Dictionary(ev.get("data"))
 		var mid := str(d.get("milestone_id", "")).strip_edges()
 		if mid == "first_throw_away":
 			if pending != null:
 				pending.append(ev)
 			continue
 		out.append(ev)
-	return out
+	return Result.success(out)
 
 static func read_has_pending_cleanup_actions(state: GameState) -> Result:
 	if state == null:

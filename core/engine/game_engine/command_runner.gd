@@ -118,6 +118,34 @@ static func _resolve_event_build_provider(engine: GameEngine = null) -> Result:
 static func validate_event_build_provider(engine: GameEngine = null) -> Result:
 	return _resolve_event_build_provider(engine)
 
+static func normalize_event_envelope(event_val, context: String) -> Result:
+	if not (event_val is Dictionary):
+		return Result.failure("%s event envelope 类型错误（期望 Dictionary）" % context)
+	var event: Dictionary = event_val
+	if not event.has("type") or not (event.get("type", null) is String):
+		return Result.failure("%s event.type 缺失或类型错误（期望 String）" % context)
+	var event_type := str(event.get("type", "")).strip_edges()
+	if event_type.is_empty():
+		return Result.failure("%s event.type 不能为空" % context)
+	if not event.has("data") or not (event.get("data", null) is Dictionary):
+		return Result.failure("%s event.data 缺失或类型错误（期望 Dictionary）" % context)
+	return Result.success({
+		"type": event_type,
+		"data": Dictionary(event.get("data")).duplicate(true),
+	})
+
+static func normalize_event_list(events_val, context: String) -> Result:
+	if not (events_val is Array):
+		return Result.failure("%s events 类型错误（期望 Array）" % context)
+	var out: Array[Dictionary] = []
+	var events: Array = events_val
+	for i in range(events.size()):
+		var event_r := normalize_event_envelope(events[i], "%s[%d]" % [context, i])
+		if not event_r.ok:
+			return event_r
+		out.append(Dictionary(event_r.value).duplicate(true))
+	return Result.success(out)
+
 static func _get_event_build_provider(engine: GameEngine = null):
 	var provider_r := _resolve_event_build_provider(engine)
 	if not provider_r.ok:
@@ -175,7 +203,7 @@ static func execute_command(engine: GameEngine, command: Command, is_replay: boo
 	var new_state: GameState = execute_result.value
 
 	# 生成事件
-	var events := executor.generate_events(old_state, new_state, command)
+	var events: Array = executor.generate_events(old_state, new_state, command)
 	var event_build_provider = _get_event_build_provider(engine)
 	if event_build_provider != null:
 		events.append_array(event_build_provider.build_player_cash_changed_events(old_state, new_state, command))
@@ -194,6 +222,11 @@ static func execute_command(engine: GameEngine, command: Command, is_replay: boo
 	# 里程碑事件：从 state 差异中推导（用于 UI 日志/提示）
 	if event_build_provider != null:
 		events.append_array(event_build_provider.build_milestone_achieved_events(old_state, new_state, command))
+
+	var normalized_events_r := normalize_event_list(events, "CommandRunner command %s" % str(command.action_id))
+	if not normalized_events_r.ok:
+		return normalized_events_r.with_warnings(execute_result.warnings).with_warnings(auto_r.warnings)
+	events = normalized_events_r.value
 
 	# 更新状态
 	engine.state = new_state
@@ -222,17 +255,10 @@ static func execute_command(engine: GameEngine, command: Command, is_replay: boo
 	# 重要：为每条事件补齐 command_index，确保读档后从 EventBus.history 恢复日志时不会把整段历史压扁到同一个索引。
 	var cmd_index := int(command.index)
 	for event_val in events:
-		if not (event_val is Dictionary):
-			continue
 		var event: Dictionary = event_val
-		var t: String = str(event.get("type", "")).strip_edges()
-		if t.is_empty():
-			continue
-
-		var data_val = event.get("data", null)
-		var data: Dictionary = data_val if (data_val is Dictionary) else {}
+		var t: String = str(event.get("type", ""))
+		var data: Dictionary = Dictionary(event.get("data")).duplicate(true)
 		data["command_index"] = cmd_index
-		event["data"] = data
 
 		engine.emit_event(t, data)
 

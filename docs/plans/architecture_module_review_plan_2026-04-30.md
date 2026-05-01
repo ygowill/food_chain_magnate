@@ -1029,6 +1029,7 @@
   - 证据：`EventTimelineBuild` 与 `StepTimelineHelpers.append_events(...)` 也跳过坏事件，data 错误时替换为空字典。证据：`gameplay/replay/event_timeline_build.gd:43-54`、`gameplay/replay/step_timeline_build/helpers.gd:31-50`。
   - 风险：事件是 UI 日志、回放 timeline、自动验证的重要中间契约。坏事件被跳过会造成日志缺失、timeline 与 EventBus.history 不一致，并隐藏 action/rule event builder 的 bug。
   - 建议：core/event rebuild/strict timeline 应验证 event schema 并 failure；只有纯 UI formatter 层可以 best-effort 跳过无法展示的 entry，并且应记录 debug diagnostics。
+  - 状态：Fix 36 已新增统一 event envelope 校验，runtime、EventHistoryRebuild、EventTimelineBuild 与 StepTimelineBuild 都会在坏事件上失败。
 
 - [P2] EventTimeline 的 `GAME_STARTED` 在缺 checkpoint 或 state_dict 错误时仍返回成功，只把 `state_hash` 留空。
   - 证据：缺少初始 checkpoint、checkpoint 类型错误、`state_dict` 缺失/类型错误、`build_from_state_dict` 失败都会 `Result.success({... "state_hash": ""}).with_warning(...)`。证据：`gameplay/replay/event_timeline_build.gd:64-99`。
@@ -2380,3 +2381,28 @@
 结论：
 
 - 已完成该 P2 strict 化：普通 archive import/resume 不再承担 online confirm marker migration；显式灾难恢复模式也不再制造不可审计的空 hash checkpoint。
+
+### Fix 36：事件 envelope 损坏不再被日志/时间线链路跳过
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 8 `[P2] 事件 envelope 在 core runner、event history rebuild、EventTimeline、StepTimeline 多处被静默过滤，坏事件不会暴露`。
+- 具体问题：多个链路遇到非 Dictionary event、空 `type` 或非 Dictionary `data` 时会跳过或替换为空字典，导致 runtime、EventBus history 与 timeline 可以接受不完整事件契约。
+
+改动：
+
+- `core/engine/game_engine/command_runner.gd`：新增 `normalize_event_envelope(...)` / `normalize_event_list(...)`，统一要求事件为 `{type: String 非空, data: Dictionary}`；runtime command 在写入 state、记录命令和 emit 事件之前校验完整事件列表，坏事件会让命令失败且不落 state/history。
+- `core/engine/game_engine/event_history_rebuild.gd`、`gameplay/replay/event_timeline_build.gd`：重建/完整事件时间线不再跳过坏事件或把坏 data 替换为 `{}`，统一失败并携带 `event.data` 等具体错误。
+- `gameplay/replay/step_timeline_build/*`：`append_events(...)`、phase override、first_throw_away 过滤与 phase transition 事件拆分均改为 strict `Result` 传播；StepTimeline full/append/auto-advance 构建遇到坏 envelope 会失败。
+- `core/tests/engine_dependencies_injection_test.gd`：新增 malformed event provider / bad generated event action 负例，覆盖 runtime CommandRunner、EventHistoryRebuild、EventTimelineBuild、StepTimelineBuild 都必须拒绝 `data` 非 Dictionary 的事件。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1106`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：事件 envelope 从 core runtime 到 replay/timeline 派生视图都变成显式契约，坏事件不再被日志链路悄悄丢弃或降级展示。

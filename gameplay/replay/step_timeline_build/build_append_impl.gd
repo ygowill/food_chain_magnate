@@ -113,10 +113,13 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 		var command_events := executor.generate_events(old_state, state_in, cmd)
 		var cash_events_cmd := CommandRunnerClass.build_player_cash_changed_events(old_state, state_in, cmd)
 		var milestone_events_cmd := CommandRunnerClass.build_milestone_achieved_events(old_state, state_in, cmd)
-		milestone_events_cmd = _filter_out_first_throw_away_milestone_events(
+		var milestone_filter_r := _filter_out_first_throw_away_milestone_events(
 			milestone_events_cmd,
 			pending_cleanup_throw_away_milestone_events
 		)
+		if not milestone_filter_r.ok:
+			return milestone_filter_r.with_warnings(warnings)
+		milestone_events_cmd = milestone_filter_r.value
 
 		var phase_changed_in_command := (str(old_state.phase) != str(state_in.phase))
 		if phase_changed_in_command and prev_step_index >= -1:
@@ -151,14 +154,20 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 				)
 			)
 		else:
-			_append_events(events_out, command_events, i, command_step_index, str(state_in.phase), seq)
-			seq = _sync_seq(events_out, seq)
+			var append_command_r := _append_events(events_out, command_events, i, command_step_index, str(state_in.phase), seq)
+			if not append_command_r.ok:
+				return append_command_r.with_warnings(warnings)
+			seq = int(append_command_r.value)
 			if not cash_events_cmd.is_empty():
-				_append_events(events_out, cash_events_cmd, i, command_step_index, str(state_in.phase), seq)
-				seq = _sync_seq(events_out, seq)
+				var append_cash_r := _append_events(events_out, cash_events_cmd, i, command_step_index, str(state_in.phase), seq)
+				if not append_cash_r.ok:
+					return append_cash_r.with_warnings(warnings)
+				seq = int(append_cash_r.value)
 			if not milestone_events_cmd.is_empty():
-				_append_events(events_out, milestone_events_cmd, i, command_step_index, str(state_in.phase), seq)
-				seq = _sync_seq(events_out, seq)
+				var append_milestone_r := _append_events(events_out, milestone_events_cmd, i, command_step_index, str(state_in.phase), seq)
+				if not append_milestone_r.ok:
+					return append_milestone_r.with_warnings(warnings)
+				seq = int(append_milestone_r.value)
 
 			var cleanup_pending_read := _read_has_pending_cleanup_actions(state_in)
 			if not cleanup_pending_read.ok:
@@ -166,7 +175,7 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 			if str(cmd.action_id).strip_edges() == "choose_fridge_keep" \
 				and (not bool(cleanup_pending_read.value)) \
 				and not pending_cleanup_throw_away_milestone_events.is_empty():
-				_append_events(
+				var append_cleanup_r := _append_events(
 					events_out,
 					pending_cleanup_throw_away_milestone_events,
 					i,
@@ -174,7 +183,9 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 					str(state_in.phase),
 					seq
 				)
-				seq = _sync_seq(events_out, seq)
+				if not append_cleanup_r.ok:
+					return append_cleanup_r.with_warnings(warnings)
+				seq = int(append_cleanup_r.value)
 				pending_cleanup_throw_away_milestone_events.clear()
 
 		var current_step_index := command_step_index
@@ -235,7 +246,7 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 			var flush_ci := pending_marketing_enter_anchor_command_index
 			if flush_ci < 0:
 				flush_ci = total_command_count - 1
-			_append_events(
+			var append_marketing_flush_r := _append_events(
 				events_out,
 				pending_marketing_enter_effect_events,
 				flush_ci,
@@ -243,14 +254,16 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 				DefsClass.PHASE_MARKETING,
 				seq
 			)
-			seq = _sync_seq(events_out, seq)
+			if not append_marketing_flush_r.ok:
+				return append_marketing_flush_r.with_warnings(warnings)
+			seq = int(append_marketing_flush_r.value)
 		pending_marketing_enter_effect_events = []
 		pending_marketing_enter_anchor_command_index = -1
 
 	if not pending_cleanup_throw_away_milestone_events.is_empty():
 		var flush_step_index2 := steps.size() - 1
 		if flush_step_index2 >= 0:
-			_append_events(
+			var append_cleanup_flush_r := _append_events(
 				events_out,
 				pending_cleanup_throw_away_milestone_events,
 				total_command_count - 1,
@@ -258,7 +271,9 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 				DefsClass.PHASE_CLEANUP,
 				seq
 			)
-			seq = _sync_seq(events_out, seq)
+			if not append_cleanup_flush_r.ok:
+				return append_cleanup_flush_r.with_warnings(warnings)
+			seq = int(append_cleanup_flush_r.value)
 		pending_cleanup_throw_away_milestone_events = []
 
 	timeline["steps"] = steps
@@ -311,10 +326,10 @@ static func _append_events(
 	step_index: int,
 	phase_segment: String,
 	seq_in: int
-) -> void:
-	StepTimelineHelpersClass.append_events(out_events, events, command_index, step_index, phase_segment, seq_in)
+) -> Result:
+	return StepTimelineHelpersClass.append_events(out_events, events, command_index, step_index, phase_segment, seq_in)
 
-static func _filter_out_first_throw_away_milestone_events(events: Array[Dictionary], pending: Array[Dictionary]) -> Array[Dictionary]:
+static func _filter_out_first_throw_away_milestone_events(events: Array[Dictionary], pending: Array[Dictionary]) -> Result:
 	return StepTimelineHelpersClass.filter_out_first_throw_away_milestone_events(events, pending)
 
 static func _read_has_pending_cleanup_actions(state: GameState) -> Result:

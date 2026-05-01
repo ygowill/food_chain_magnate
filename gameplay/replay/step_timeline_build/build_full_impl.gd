@@ -138,7 +138,10 @@ static func build_full_impl(engine: GameEngine) -> Result:
 		var command_events := executor.generate_events(old_state, state_in, cmd)
 		var cash_events_cmd := CommandRunnerClass.build_player_cash_changed_events(old_state, state_in, cmd)
 		var milestone_events_cmd := CommandRunnerClass.build_milestone_achieved_events(old_state, state_in, cmd)
-		milestone_events_cmd = _filter_out_first_throw_away_milestone_events(milestone_events_cmd, pending_cleanup_throw_away_milestone_events)
+		var milestone_filter_r := _filter_out_first_throw_away_milestone_events(milestone_events_cmd, pending_cleanup_throw_away_milestone_events)
+		if not milestone_filter_r.ok:
+			return milestone_filter_r.with_warnings(warnings)
+		milestone_events_cmd = milestone_filter_r.value
 
 		# 若命令本身发生了 phase 切换（如 advance_phase），则：
 		# - PHASE_CHANGED 之前的事件（含 *_REPORT）归属到“命令前”的 step（旧阶段）
@@ -172,22 +175,30 @@ static func build_full_impl(engine: GameEngine) -> Result:
 			seq = int(update.get("seq", seq))
 			pending_marketing_enter_anchor_command_index = int(update.get("pending_marketing_enter_anchor_command_index", pending_marketing_enter_anchor_command_index))
 		else:
-			_append_events(events_out, command_events, i, command_step_index, str(state_in.phase), seq)
-			seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+			var append_command_r := _append_events(events_out, command_events, i, command_step_index, str(state_in.phase), seq)
+			if not append_command_r.ok:
+				return append_command_r.with_warnings(warnings)
+			seq = int(append_command_r.value)
 			if not cash_events_cmd.is_empty():
-				_append_events(events_out, cash_events_cmd, i, command_step_index, str(state_in.phase), seq)
-				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+				var append_cash_r := _append_events(events_out, cash_events_cmd, i, command_step_index, str(state_in.phase), seq)
+				if not append_cash_r.ok:
+					return append_cash_r.with_warnings(warnings)
+				seq = int(append_cash_r.value)
 			if not milestone_events_cmd.is_empty():
-				_append_events(events_out, milestone_events_cmd, i, command_step_index, str(state_in.phase), seq)
-				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+				var append_milestone_r := _append_events(events_out, milestone_events_cmd, i, command_step_index, str(state_in.phase), seq)
+				if not append_milestone_r.ok:
+					return append_milestone_r.with_warnings(warnings)
+				seq = int(append_milestone_r.value)
 
 			# CleanupDiscard: first_throw_away 必须在所有 choose_fridge_keep（清理库存）之后出现。
 			var cleanup_pending_read := _read_has_pending_cleanup_actions(state_in)
 			if not cleanup_pending_read.ok:
 				return Result.failure("StepTimelineBuild: %s" % cleanup_pending_read.error).with_warnings(warnings)
 			if str(cmd.action_id).strip_edges() == "choose_fridge_keep" and (not bool(cleanup_pending_read.value)) and not pending_cleanup_throw_away_milestone_events.is_empty():
-				_append_events(events_out, pending_cleanup_throw_away_milestone_events, i, command_step_index, str(state_in.phase), seq)
-				seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+				var append_cleanup_r := _append_events(events_out, pending_cleanup_throw_away_milestone_events, i, command_step_index, str(state_in.phase), seq)
+				if not append_cleanup_r.ok:
+					return append_cleanup_r.with_warnings(warnings)
+				seq = int(append_cleanup_r.value)
 				pending_cleanup_throw_away_milestone_events.clear()
 
 		# auto-advance：逐步执行。sub_phase 变化打包在当前 step；phase 变化插入新 step。
@@ -250,8 +261,10 @@ static func build_full_impl(engine: GameEngine) -> Result:
 			var flush_ci := pending_marketing_enter_anchor_command_index
 			if flush_ci < 0:
 				flush_ci = engine.command_history.size() - 1
-			_append_events(events_out, pending_marketing_enter_effect_events, flush_ci, flush_step_index, DefsClass.PHASE_MARKETING, seq)
-			seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+			var append_marketing_flush_r := _append_events(events_out, pending_marketing_enter_effect_events, flush_ci, flush_step_index, DefsClass.PHASE_MARKETING, seq)
+			if not append_marketing_flush_r.ok:
+				return append_marketing_flush_r.with_warnings(warnings)
+			seq = int(append_marketing_flush_r.value)
 		pending_marketing_enter_effect_events = []
 		pending_marketing_enter_anchor_command_index = -1
 
@@ -260,8 +273,10 @@ static func build_full_impl(engine: GameEngine) -> Result:
 		var flush_step_index2 := steps.size() - 1
 		if flush_step_index2 >= 0:
 			var flush_ci2 := engine.command_history.size() - 1
-			_append_events(events_out, pending_cleanup_throw_away_milestone_events, flush_ci2, flush_step_index2, DefsClass.PHASE_CLEANUP, seq)
-			seq = int(events_out.back().get("sequence", seq)) if not events_out.is_empty() else seq
+			var append_cleanup_flush_r := _append_events(events_out, pending_cleanup_throw_away_milestone_events, flush_ci2, flush_step_index2, DefsClass.PHASE_CLEANUP, seq)
+			if not append_cleanup_flush_r.ok:
+				return append_cleanup_flush_r.with_warnings(warnings)
+			seq = int(append_cleanup_flush_r.value)
 		pending_cleanup_throw_away_milestone_events = []
 
 	return Result.success(StepTimelineHelpersClass.attach_build_meta({
@@ -283,16 +298,16 @@ static func _append_events(
 	step_index: int,
 	phase_segment: String,
 	seq_in: int
-) -> void:
-	StepTimelineHelpersClass.append_events(out_events, events, command_index, step_index, phase_segment, seq_in)
+) -> Result:
+	return StepTimelineHelpersClass.append_events(out_events, events, command_index, step_index, phase_segment, seq_in)
 
 static func _should_attribute_settlement_effects_to_old_phase(engine: GameEngine, old_phase: String, new_phase: String) -> bool:
 	return StepTimelineHelpersClass.should_attribute_settlement_effects_to_old_phase(engine, old_phase, new_phase)
 
-static func _override_events_phase_fields(events: Array[Dictionary], state: GameState) -> Array[Dictionary]:
+static func _override_events_phase_fields(events: Array[Dictionary], state: GameState) -> Result:
 	return StepTimelineHelpersClass.override_events_phase_fields(events, state)
 
-static func _filter_out_first_throw_away_milestone_events(events: Array[Dictionary], pending: Array[Dictionary]) -> Array[Dictionary]:
+static func _filter_out_first_throw_away_milestone_events(events: Array[Dictionary], pending: Array[Dictionary]) -> Result:
 	return StepTimelineHelpersClass.filter_out_first_throw_away_milestone_events(events, pending)
 
 static func _read_has_pending_cleanup_actions(state: GameState) -> Result:
