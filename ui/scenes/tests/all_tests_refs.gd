@@ -104,6 +104,7 @@ const GameOnlineResumeProgressSyncTestClass = preload("res://core/tests/game_onl
 const GameOnlineResyncRequestRejectionTestClass = preload("res://core/tests/game_online_resync_request_rejection_test.gd")
 const OnlineRoomPersistenceRecoveryTestClass = preload("res://core/tests/online_room_persistence_recovery_test.gd")
 const OnlineRoundAutosaveTestClass = preload("res://core/tests/online_round_autosave_test.gd")
+const ExportMatchArtifactsContractTestClass = preload("res://core/tests/export_match_artifacts_contract_test.gd")
 const OnlineLobbyResumeControllerTestClass = preload("res://core/tests/online_lobby_resume_controller_test.gd")
 const OnlineLobbyInGameEntryFallbackTestClass = preload("res://core/tests/online_lobby_in_game_entry_fallback_test.gd")
 const OnlineLobbyPersistenceRecoveryTestClass = preload("res://core/tests/online_lobby_persistence_recovery_test.gd")

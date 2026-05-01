@@ -2576,3 +2576,26 @@
 结论：
 
 - 已完成该 P2 边界整改：回放入口不再把“零命令”解释为“可继续操作”，手工 snapshot 语义由 archive metadata 显式表达。
+
+### Fix 44：latest autosave 导出不再猜测最终 snapshot event
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 10 `[P2] Tooling 导出 latest autosave 时会猜测最终 snapshot event，可能输出与 replay event 不一致的 artifact`。
+
+改动：
+
+- `tools/export_match_artifacts_from_replay.gd`：删除 `_fallback_final_snapshot_event(...)`；`latest_autosave.json` 导出必须基于 `_snapshot_event_for_state_after_command(...)` 得到明确的 `round_end` 或 `game_over` snapshot event，否则导出失败并报告当前 `state_phase / command_phase / round`。
+- `core/tests/export_match_artifacts_contract_test.gd`：新增工具契约测试，覆盖明确 round_end、明确 game_over，以及非 snapshot 最终状态不得被猜测为成功。
+- `ui/scenes/tests/all_tests_refs.gd`、`ui/scenes/tests/all_tests_plan.gd`：将新测试接入 AllTests。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`391/391`。
+
+结论：
+
+- 已完成该 P2 strict 化：artifact backfill 工具不会再为不明确的最终状态合成 latest autosave 元数据，避免输出与 replay 真实事件边界不一致的产物。

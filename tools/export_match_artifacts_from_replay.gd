@@ -155,9 +155,10 @@ static func _export_latest_autosave(engine, output_dir_abs: String, room_code: S
 	if state == null:
 		return ResultClass.failure("最终状态为空")
 	var final_cmd = command_history[final_index] if final_index >= 0 and final_index < command_history.size() else null
-	var event := _snapshot_event_for_state_after_command(final_cmd, state)
-	if event.is_empty():
-		event = _fallback_final_snapshot_event(final_cmd, state)
+	var event_r = _final_snapshot_event_for_latest_autosave(final_cmd, state)
+	if not event_r.ok:
+		return event_r
+	var event: Dictionary = Dictionary(event_r.value)
 
 	var archive_r = engine.create_archive()
 	if not archive_r.ok:
@@ -225,6 +226,18 @@ static func _write_map_snapshot(state, snapshots_dir: String, round_number: int,
 		"height": int(render_info.get("height", 0)),
 	})
 
+static func _final_snapshot_event_for_latest_autosave(cmd, state):
+	var event := _snapshot_event_for_state_after_command(cmd, state)
+	if event.is_empty():
+		var command_phase := str(cmd.phase) if cmd != null else "<none>"
+		var state_phase := str(state.phase) if state != null else "<null>"
+		var round_number := int(state.round_number) if state != null else -1
+		return ResultClass.failure(
+			"latest autosave 导出失败：最终状态不是明确的 round snapshot event（state_phase=%s command_phase=%s round=%d）"
+				% [state_phase, command_phase, round_number]
+		)
+	return ResultClass.success(event)
+
 static func _snapshot_event_for_state_after_command(cmd, state) -> Dictionary:
 	if state == null:
 		return {}
@@ -248,25 +261,6 @@ static func _snapshot_event_for_state_after_command(cmd, state) -> Dictionary:
 	return {
 		"round_number": completed_round_number,
 		"snapshot_kind": SNAPSHOT_KIND_ROUND_END,
-	}
-
-static func _fallback_final_snapshot_event(cmd, state) -> Dictionary:
-	if state == null:
-		return {
-			"round_number": 0,
-			"snapshot_kind": SNAPSHOT_KIND_ROUND_END,
-		}
-	var kind := SNAPSHOT_KIND_GAME_OVER if str(state.phase) == DefsClass.PHASE_GAME_OVER else SNAPSHOT_KIND_ROUND_END
-	var round_number := int(state.round_number)
-	if kind == SNAPSHOT_KIND_GAME_OVER and cmd != null and str(cmd.phase) == DefsClass.PHASE_CLEANUP and round_number > 1:
-		round_number -= 1
-	elif kind == SNAPSHOT_KIND_ROUND_END and str(state.phase) == DefsClass.PHASE_RESTRUCTURING and round_number > 1:
-		round_number -= 1
-	if round_number <= 0:
-		round_number = 1
-	return {
-		"round_number": round_number,
-		"snapshot_kind": kind,
 	}
 
 static func _write_json(path: String, data: Dictionary):
