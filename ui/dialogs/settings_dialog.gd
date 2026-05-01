@@ -53,7 +53,6 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 @onready var confirm_actions_check: CheckBox = %ConfirmActionsCheck
 @onready var show_hints_check: CheckBox = %ShowHintsCheck
 @onready var replay_load_playable_check: CheckBox = %ReplayLoadPlayableCheck
-@onready var reset_tutorial_progress_button: Button = %ResetTutorialProgressButton
 @onready var animation_speed_slider: HSlider = %AnimSpeedSlider
 @onready var anim_speed_value_label: Label = %AnimSpeedValue
 
@@ -186,7 +185,6 @@ func _apply_form_control_styles() -> void:
 	UiStylesClass.apply_check_box_field(show_hints_check)
 	UiStylesClass.apply_check_box_field(replay_load_playable_check)
 	UiStylesClass.apply_option_button_field(resolution_option)
-	UiStylesClass.apply_button_secondary(reset_tutorial_progress_button)
 
 # ── 导航 ──────────────────────────────────────────────
 
@@ -311,6 +309,7 @@ func _save_settings() -> void:
 		config.erase_section_key("game", "tutorial_enabled")
 	if config.has_section_key("game", "tutorial_auto_popup"):
 		config.erase_section_key("game", "tutorial_auto_popup")
+	_erase_legacy_tutorial_settings(config)
 	config.set_value("game", "animation_speed", _current_settings.animation_speed)
 
 	config.save("user://settings.cfg")
@@ -450,8 +449,6 @@ func _connect_setting_change_signals() -> void:
 
 	_connect_checkbox_change(show_tile_ids_check)
 	_connect_checkbox_change(show_cell_hover_tooltip_check)
-	if reset_tutorial_progress_button != null:
-		reset_tutorial_progress_button.pressed.connect(_on_reset_tutorial_progress_pressed)
 
 func _connect_slider_change(slider: HSlider) -> void:
 	if slider == null:
@@ -483,9 +480,6 @@ func _on_reset_pressed() -> void:
 func _on_close_pressed() -> void:
 	close()
 	closed.emit()
-
-func _on_reset_tutorial_progress_pressed() -> void:
-	_reset_tutorial_progress()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
@@ -670,7 +664,9 @@ func _sync_globals_runtime_settings() -> void:
 	if Globals.has_method("apply_font_scale"):
 		Globals.apply_font_scale()
 
-func _reset_tutorial_progress() -> void:
-	if Globals == null or not Globals.has_method("reset_tutorial_progress"):
+func _erase_legacy_tutorial_settings(config: ConfigFile) -> void:
+	if config == null:
 		return
-	Globals.reset_tutorial_progress(true)
+	for key in ["progress_version", "setup_welcome_seen", "setup_tour_seen", "game_ui_tour_seen", "flow_hints_seen"]:
+		if config.has_section_key("tutorial", key):
+			config.erase_section_key("tutorial", key)

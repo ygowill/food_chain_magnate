@@ -83,7 +83,7 @@ func sync_start_flags() -> void:
 	if Globals == null:
 		return
 	Globals.tutorial_pending_setup_tour = false
-	Globals.tutorial_pending_game_ui_tour = _tutorial_start_requested and not Globals.tutorial_game_ui_tour_seen
+	Globals.tutorial_pending_game_ui_tour = _tutorial_start_requested
 	Globals.tutorial_pending_flow_tutorial = _tutorial_start_requested
 	Globals.tutorial_match_enabled = _tutorial_start_requested and _tutorial_match_requested
 
@@ -127,14 +127,12 @@ func _start_setup_tour() -> void:
 func _on_setup_tour_finished() -> void:
 	if Globals == null:
 		return
-	Globals.tutorial_setup_tour_seen = true
-	Globals.save_settings()
+	Globals.tutorial_pending_setup_tour = false
 
 func _on_setup_tour_skipped() -> void:
 	if Globals == null:
 		return
-	Globals.tutorial_setup_tour_seen = true
-	Globals.save_settings()
+	Globals.tutorial_pending_setup_tour = false
 
 func get_tutorial_targets(target_key: String = "") -> Dictionary:
 	if _targets_resolver == null or not _targets_resolver.has_method("get_targets"):

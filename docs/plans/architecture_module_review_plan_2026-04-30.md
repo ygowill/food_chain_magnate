@@ -1554,9 +1554,9 @@
 改动：
 
 - `autoload/globals.gd`：移除 `tutorial_enabled` 全局字段和 `apply_tutorial_preferences_from_settings(...)`；`is_tutorial_runtime_enabled()` 只根据规则教学入口写入的运行时标记判断，包括 `tutorial_pending_setup_tour`、`tutorial_pending_game_ui_tour`、`tutorial_pending_flow_tutorial`、`tutorial_match_enabled`。
-- `autoload/globals.gd`：新增 `clear_tutorial_runtime_flags()`，并在 `reset_tutorial_progress()`、`reset_game_config()` 中复用，避免规则教学运行标记散落清理。
+- `autoload/globals.gd`：新增 `clear_tutorial_runtime_flags()`，并在 `reset_game_config()` 中复用，避免规则教学运行标记散落清理。
 - `ui/scenes/menus/main_menu.gd`、`ui/scenes/game/game.gd`：进入本地新局、联机大厅、载入回放，以及 Game 场景消费 pending replay path 时，显式清理教学运行标记。
-- `ui/dialogs/settings_dialog.gd`、`ui/dialogs/settings_dialog.tscn`、`ui/scenes/game/overlay/controller.gd`：设置页移除“启用新手教学”开关；保存设置时清理旧 `game/tutorial_enabled` 配置键；保留并改名“重置规则教学进度”。
+- `ui/dialogs/settings_dialog.gd`、`ui/dialogs/settings_dialog.tscn`、`ui/scenes/game/overlay/controller.gd`：设置页移除“启用新手教学”开关；保存设置时清理旧 `game/tutorial_enabled` 配置键。后续补充更新已继续移除“重置规则教学进度”入口。
 - `ui/scenes/game/controllers/tutorials_controller.gd`、`ui/scenes/game/controllers/tutorial_match_runtime.gd`、`ui/components/modal_panel/reserve_card_selection_modal.gd`：移除对 `Globals.tutorial_enabled` 的兜底依赖。
 - `ui/scenes/tests/tutorial_runtime_scope_test.gd`：新增教学运行范围契约测试，固定“无规则教学运行标记时普通模式不启用教学；规则教学 pending/match 标记才启用教学”的行为。
 - `docs/architecture/22-ui-onboarding-tutorials.md`、`docs/tutorial_onboarding_design.md`：同步移除 `tutorial_enabled` 的设计记录。
@@ -1570,6 +1570,21 @@
 
 - 已完成本次补充修复：教学运行时不再有用户设置总开关，也不会因默认设置在普通模式、回放/加载路径误触发。
 - 后续如果需要新增其他教学类型，应新增明确入口和独立运行标记，不能复用全局“教学启用”式开关。
+
+补充更新（2026-05-01）：
+
+- 用户进一步明确：规则教学已有主动入口后，不再需要“已看过/重置进度”标记；设置页也不应保留教学进度入口。
+- `autoload/globals.gd`：删除 `TUTORIAL_PROGRESS_VERSION`、`tutorial_setup_tour_seen`、`tutorial_game_ui_tour_seen`、`tutorial_flow_hints_seen` 及相关读写方法；`request_rules_tutorial()` 仅清理并设置本次运行时标记。
+- `ui/dialogs/settings_dialog.gd`、`ui/dialogs/settings_dialog.tscn`：移除“教学”设置分组和“重置规则教学进度”按钮；保存设置时清理旧 `tutorial/progress_version`、`setup_tour_seen`、`game_ui_tour_seen`、`flow_hints_seen` 等历史键。
+- `ui/scenes/setup/controllers/tutorials_controller.gd`：Setup 导览完成/跳过只清理 pending 标记，不再写持久化进度；启动游戏时每次规则教学都继续触发 Game UI 导览和流程提示。
+- `ui/scenes/game/controllers/tutorials_controller.gd`：上下文导览与流程提示的去重改为控制器实例内 `_seen_tutorial_ids`，只约束本次规则教学，不再写入用户设置。
+- `ui/scenes/tests/tutorial_runtime_scope_test.gd`、`ui/scenes/tests/game_tutorial_targets_contract_test.gd`：同步移除对持久化教学进度字段的依赖。
+- `docs/architecture/22-ui-onboarding-tutorials.md`、`docs/tutorial_onboarding_design.md`：更新设计说明，明确教学进度不再持久化。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`390/390`。
 
 ### Fix 4：online archive/resync 加载不再临时切换 NetContext.mode
 

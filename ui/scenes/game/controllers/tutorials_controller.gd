@@ -40,6 +40,7 @@ var _tutorial_game_ui_tour_started: bool = false
 var _tutorial_restructuring_tour_started: bool = false
 var _employee_tree_tutorial_layout_pending: bool = false
 var _tutorial_flow_hint_card = null
+var _seen_tutorial_ids: Dictionary = {}
 
 var _contextual_update_queued: bool = false
 var _game_ui_tour_check_queued: bool = false
@@ -108,6 +109,7 @@ func dispose() -> void:
 	_contextual_update_queued = false
 	_game_ui_tour_check_queued = false
 	_employee_tree_tutorial_layout_pending = false
+	_seen_tutorial_ids.clear()
 
 	if _tutorial_controller != null and _tutorial_controller.has_method("dispose"):
 		_tutorial_controller.dispose()
@@ -180,7 +182,7 @@ func _maybe_start_game_ui_tour() -> void:
 		return
 	if not _is_tutorial_runtime_enabled():
 		return
-	if not Globals.tutorial_pending_game_ui_tour or Globals.tutorial_game_ui_tour_seen:
+	if not Globals.tutorial_pending_game_ui_tour:
 		return
 	if _is_tutorial_runtime_blocked():
 		return
@@ -224,9 +226,7 @@ func _on_game_ui_tour_skipped() -> void:
 func _complete_game_ui_tour() -> void:
 	_tutorial_game_ui_tour_started = true
 	if Globals != null:
-		Globals.tutorial_game_ui_tour_seen = true
 		Globals.tutorial_pending_game_ui_tour = false
-		Globals.save_settings()
 	on_ui_updated()
 
 func _maybe_start_restructuring_tutorial() -> bool:
@@ -235,7 +235,7 @@ func _maybe_start_restructuring_tutorial() -> bool:
 	if not _can_start_contextual_tour():
 		return false
 	var tour_id := GameTutorialContentClass.get_restructuring_tour_id()
-	if Globals.has_method("has_tutorial_flow_hint_seen") and Globals.has_tutorial_flow_hint_seen(tour_id):
+	if _has_tutorial_id_seen(tour_id):
 		_tutorial_restructuring_tour_started = true
 		return false
 
@@ -267,7 +267,7 @@ func _maybe_start_turn_order_tutorial() -> bool:
 	if not _can_start_contextual_tour():
 		return false
 	var tour_id := GameTutorialContentClass.get_turn_order_tour_id()
-	if Globals.has_method("has_tutorial_flow_hint_seen") and Globals.has_tutorial_flow_hint_seen(tour_id):
+	if _has_tutorial_id_seen(tour_id):
 		return false
 
 	var state := _get_game_state()
@@ -301,7 +301,7 @@ func _maybe_start_restaurant_placement_tutorial() -> bool:
 	if not _can_start_contextual_tour():
 		return false
 	var tour_id := GameTutorialContentClass.get_restaurant_placement_tour_id()
-	if Globals.has_method("has_tutorial_flow_hint_seen") and Globals.has_tutorial_flow_hint_seen(tour_id):
+	if _has_tutorial_id_seen(tour_id):
 		return false
 
 	var state := _get_game_state()
@@ -353,7 +353,7 @@ func _maybe_start_employee_tree_tutorial() -> bool:
 	if tour_id.is_empty():
 		_employee_tree_tutorial_layout_pending = false
 		return false
-	if Globals.has_method("has_tutorial_flow_hint_seen") and Globals.has_tutorial_flow_hint_seen(tour_id):
+	if _has_tutorial_id_seen(tour_id):
 		_employee_tree_tutorial_layout_pending = false
 		return false
 
@@ -452,7 +452,7 @@ func _maybe_start_match_sub_phase_tour(tour_id: String, sub_phase_name: String, 
 		return false
 	if not build_steps.is_valid():
 		return false
-	if Globals.has_method("has_tutorial_flow_hint_seen") and Globals.has_tutorial_flow_hint_seen(tour_id):
+	if _has_tutorial_id_seen(tour_id):
 		return false
 
 	var state := _get_game_state()
@@ -491,8 +491,7 @@ func _on_match_contextual_tour_skipped(tour_id: String) -> void:
 
 func _complete_context_tour(tour_id: String) -> void:
 	_employee_tree_tutorial_layout_pending = false
-	if Globals != null and Globals.has_method("mark_tutorial_flow_hint_seen"):
-		Globals.mark_tutorial_flow_hint_seen(tour_id, true)
+	_mark_tutorial_id_seen(tour_id)
 	on_ui_updated()
 
 func get_tutorial_targets(target_key: String = "") -> Dictionary:
@@ -532,10 +531,10 @@ func _maybe_update_flow_tutorial() -> void:
 	var hint_id := str(hint.get("id", "")).strip_edges()
 	if hint_id.is_empty():
 		return
-	if Globals.has_method("has_tutorial_flow_hint_seen") and Globals.has_tutorial_flow_hint_seen(hint_id):
+	if _has_tutorial_id_seen(hint_id):
 		return
 
-	Globals.mark_tutorial_flow_hint_seen(hint_id, true)
+	_mark_tutorial_id_seen(hint_id)
 	_ensure_tutorial_flow_hint_card()
 	if _tutorial_flow_hint_card != null and is_instance_valid(_tutorial_flow_hint_card) and _tutorial_flow_hint_card.has_method("show_hint"):
 		_tutorial_flow_hint_card.show_hint(
@@ -566,9 +565,21 @@ func _is_flow_tutorial_complete() -> bool:
 	if Globals == null:
 		return true
 	for hint_id in _get_required_flow_hint_ids():
-		if not Globals.has_tutorial_flow_hint_seen(hint_id):
+		if not _has_tutorial_id_seen(hint_id):
 			return false
 	return true
+
+func _has_tutorial_id_seen(tutorial_id: String) -> bool:
+	var id := str(tutorial_id).strip_edges()
+	if id.is_empty():
+		return false
+	return bool(_seen_tutorial_ids.get(id, false))
+
+func _mark_tutorial_id_seen(tutorial_id: String) -> void:
+	var id := str(tutorial_id).strip_edges()
+	if id.is_empty():
+		return
+	_seen_tutorial_ids[id] = true
 
 func _on_tutorial_flow_hint_dismissed(_hint_id: String) -> void:
 	_hide_flow_hint_card()

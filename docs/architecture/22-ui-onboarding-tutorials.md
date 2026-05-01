@@ -141,14 +141,10 @@ flowchart TB
 - `tutorials_controller.gd` 只做 orchestration
 - 具体步骤内容与 target 路径细节，不再混在同一个大 controller 里
 
-## 进度与设置：`autoload/globals.gd`
+## 运行时入口：`autoload/globals.gd`
 
 当前由 `Globals` 持有：
 
-- 已看过进度：
-	- `tutorial_setup_tour_seen`
-	- `tutorial_game_ui_tour_seen`
-	- `tutorial_flow_hints_seen`
 - 运行时待触发标记：
 	- `tutorial_pending_setup_tour`
 	- `tutorial_pending_game_ui_tour`
@@ -159,10 +155,8 @@ flowchart TB
 
 - `request_rules_tutorial()`
 - `is_tutorial_runtime_enabled()`
-- `has_tutorial_flow_hint_seen(...)`
-- `mark_tutorial_flow_hint_seen(...)`
-- `reset_tutorial_progress(...)`
-- `apply_tutorial_preferences_from_settings(...)`
+
+教学入口不再持久化“已看过”进度；规则教学按钮每次都会显式设置运行时标记并触发教学。上下文导览/流程提示的去重只存在于 `GameTutorialsController` 当前实例中，避免普通模式、回放和载入路径通过历史设置误触发教学。
 
 ## 设置页与帮助提示的关系
 

@@ -228,18 +228,9 @@
 
 - `docs/architecture/22-ui-onboarding-tutorials.md`
 
-## 持久化字段
+## 运行时字段
 
-建议统一存入 `user://settings.cfg`：
-
-### `tutorial` section
-
-- `progress_version: int`
-- `setup_tour_seen: bool`
-- `game_ui_tour_seen: bool`
-- `flow_hints_seen: Array[String]`
-
-### 运行时（不持久化）
+教学不再向 `user://settings.cfg` 写入进度字段；规则教学入口每次主动设置运行时标记，上下文导览/流程提示只在当前 `GameTutorialsController` 实例内做一次性去重。
 
 - `tutorial_pending_setup_tour`
 - `tutorial_pending_game_ui_tour`

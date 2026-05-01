@@ -47,10 +47,6 @@ static func run() -> Result:
 
 static func _capture_globals() -> Dictionary:
 	return {
-		"tutorial_progress_version": int(Globals.tutorial_progress_version),
-		"tutorial_setup_tour_seen": bool(Globals.tutorial_setup_tour_seen),
-		"tutorial_game_ui_tour_seen": bool(Globals.tutorial_game_ui_tour_seen),
-		"tutorial_flow_hints_seen": Globals.tutorial_flow_hints_seen.duplicate(true),
 		"tutorial_pending_setup_tour": bool(Globals.tutorial_pending_setup_tour),
 		"tutorial_pending_game_ui_tour": bool(Globals.tutorial_pending_game_ui_tour),
 		"tutorial_pending_flow_tutorial": bool(Globals.tutorial_pending_flow_tutorial),
@@ -58,14 +54,6 @@ static func _capture_globals() -> Dictionary:
 	}
 
 static func _restore_globals(snapshot: Dictionary) -> void:
-	Globals.tutorial_progress_version = int(snapshot.get("tutorial_progress_version", Globals.TUTORIAL_PROGRESS_VERSION))
-	Globals.tutorial_setup_tour_seen = bool(snapshot.get("tutorial_setup_tour_seen", false))
-	Globals.tutorial_game_ui_tour_seen = bool(snapshot.get("tutorial_game_ui_tour_seen", false))
-	var flow_seen_val = snapshot.get("tutorial_flow_hints_seen", [])
-	if flow_seen_val is Array:
-		Globals.tutorial_flow_hints_seen = Array(flow_seen_val, TYPE_STRING, "", null)
-	else:
-		Globals.tutorial_flow_hints_seen = []
 	Globals.tutorial_pending_setup_tour = bool(snapshot.get("tutorial_pending_setup_tour", false))
 	Globals.tutorial_pending_game_ui_tour = bool(snapshot.get("tutorial_pending_game_ui_tour", false))
 	Globals.tutorial_pending_flow_tutorial = bool(snapshot.get("tutorial_pending_flow_tutorial", false))
