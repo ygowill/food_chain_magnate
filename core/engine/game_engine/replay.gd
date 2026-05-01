@@ -2,10 +2,8 @@
 extends RefCounted
 
 const AutoAdvanceClass = preload("res://core/engine/game_engine/auto_advance.gd")
-const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const JsonValueParseHelpersClass = preload("res://core/utils/json_value_parse_helpers.gd")
 const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
-const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
 
 static func rewind_to_command(
 	command_history: Array[Command],
@@ -168,25 +166,11 @@ static func full_replay(
 		"current_command_index": command_history.size() - 1
 	}).with_warnings(all_warnings)
 
-static func should_force_execute_in_replay(command: Command, replay_state: GameState = null) -> bool:
-	if command == null:
-		return false
-	if not OS.has_feature("release"):
-		if command.metadata is Dictionary and bool(Dictionary(command.metadata).get("debug_force", false)):
-			return true
-	if replay_state == null:
-		return false
-	if str(command.action_id) == ActionIdsClass.SKIP:
-		var blocked_r := RoundStatePendingPhaseActionsClass.is_phase_blocked(
-			replay_state.round_state,
-			str(replay_state.phase),
-			"replay:skip"
-		)
-		if blocked_r.ok and bool(blocked_r.value):
-			return true
-	if command.actor < 0 or command.actor >= replay_state.players.size():
-		return false
-	return int(command.actor) != int(replay_state.get_current_player_id())
+static func should_force_execute_in_replay(_command: Command, _replay_state: GameState = null) -> bool:
+	# Replay/archive/timeline rebuild must be strict: command history is a persisted fact stream,
+	# not a runtime debug command source. Runtime debug_force remains handled by CommandRunner
+	# only when executing a new command outside replay mode.
+	return false
 
 static func _require_checkpoint_rng_calls(checkpoint: Dictionary, path: String) -> Result:
 	if not (checkpoint is Dictionary):

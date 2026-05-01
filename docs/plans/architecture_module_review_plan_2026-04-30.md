@@ -1516,3 +1516,28 @@
 
 - 已完成该 P1 的第一阶段整改：普通 UI/server 恢复入口回到 strict load；prefix truncation 只保留在显式 recovery helper 中。
 - 后续如果需要面向运维/用户暴露 prefix recovery，需要另建带明确 UI/后台标记的恢复模式，并把截断审计信息写入房间状态或后端 artifact。
+
+### Fix 2：replay/timeline rebuild 禁止 force execution 绕过动作校验
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 8 `[P1] Replay/EventHistory/StepTimeline 在 actor 不匹配或 pending-blocked skip 时会走 compute_new_state_force(...)`。
+- Step 10 中关于测试固定 `pending-blocked skip` 与 force replay 契约的缺口。
+
+改动：
+
+- `core/engine/game_engine/replay.gd`：`should_force_execute_in_replay(...)` 改为始终返回 `false`。archive load、full replay、rewind、EventHistoryRebuild、StepTimeline full/append 与 command index replay 不再因为 `debug_force`、actor mismatch 或 pending-blocked skip 进入 `compute_new_state_force(...)`。
+- `core/tests/step_timeline_force_execute_actor_mismatch_test.gd`：从“允许 out-of-turn/debug_force replay”改为 strict 负例，覆盖 replay execute、StepTimelineBuild、EventHistoryRebuild、full_replay、rewind_to_command 与 archive load。
+- `core/tests/skip_cleanup_pending_regression_test.gd`：坏 archive 中 `skip` 位于 Cleanup pending 之前时必须加载失败；正常 `choose_fridge_keep` archive 仍保持成功。
+- `core/tests/server_resync_guard_test.gd`：修正 actor-scope rewind 测试构造，直接修改 state 后同步初始 checkpoint，避免测试依赖 force replay 掩盖不一致 checkpoint。
+
+验证：
+
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`389/389`。
+
+结论：
+
+- 已完成该 P1 的严格化整改：历史命令重放链路不再使用 force execution 跳过 action-specific validation。
+- 运行时 debug 面板的显式 `compute_new_state_force(...)` 能力未在本次移除；它仍属于调试命令执行语义，不再被 replay/archive/timeline rebuild 自动复用。

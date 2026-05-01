@@ -448,6 +448,9 @@ static func _prepare_restructuring_actor_scope_history(room) -> Result:
 	if state == null:
 		return Result.failure("actor scope setup state 为空")
 	state.round_number = 1
+	var checkpoint_r := _sync_initial_checkpoint(engine)
+	if not checkpoint_r.ok:
+		return checkpoint_r
 	var adv: Result = engine.execute_command(CommandClass.create_system(ActionIdsClass.ADVANCE_PHASE))
 	if not adv.ok:
 		return Result.failure("actor scope setup 推进到 Restructuring 失败: %s" % adv.error)
@@ -482,6 +485,22 @@ static func _prepare_restructuring_actor_scope_history(room) -> Result:
 		"p0_submit_index": p0_submit_index,
 		"p1_direct_index": p1_direct_index,
 	})
+
+static func _sync_initial_checkpoint(engine) -> Result:
+	if engine == null:
+		return Result.failure("sync checkpoint: engine 为空")
+	var state: GameState = engine.get_state()
+	if state == null:
+		return Result.failure("sync checkpoint: state 为空")
+	if engine.checkpoints.is_empty() or not (engine.checkpoints[0] is Dictionary):
+		return Result.failure("sync checkpoint: 缺少初始 checkpoint")
+	var cp0: Dictionary = Dictionary(engine.checkpoints[0]).duplicate(true)
+	cp0["state_dict"] = state.to_dict().duplicate(true)
+	cp0["hash"] = state.compute_hash()
+	if engine.random_manager != null:
+		cp0["rng_calls"] = int(engine.random_manager.get_call_count())
+	engine.checkpoints[0] = cp0
+	return Result.success()
 
 static func _build_in_game_room_setup() -> Result:
 	var rng := RandomNumberGenerator.new()

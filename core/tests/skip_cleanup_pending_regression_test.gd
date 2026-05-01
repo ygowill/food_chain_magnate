@@ -1,4 +1,4 @@
-# skip：Cleanup pending 阶段不应允许“确认结束”，且回放旧命令时应被忽略
+# skip：Cleanup pending 阶段不应允许“确认结束”，坏 archive 也不能通过 replay 兜底忽略旧命令。
 class_name SkipCleanupPendingRegressionTest
 extends RefCounted
 
@@ -12,17 +12,17 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_count < 2:
 		player_count = 2
 
-	var runtime_r := _test_runtime_and_force_skip_ignore(player_count, seed_val)
+	var runtime_r := _test_runtime_and_direct_force_skip_ignore(player_count, seed_val)
 	if not runtime_r.ok:
 		return runtime_r
 
-	var archive_r := _test_archive_replay_skip_is_noop_before_choose_fridge_keep(player_count, seed_val)
+	var archive_r := _test_archive_replay_rejects_skip_before_choose_fridge_keep(player_count, seed_val)
 	if not archive_r.ok:
 		return archive_r
 
 	return Result.success({"cases": 2})
 
-static func _test_runtime_and_force_skip_ignore(player_count: int, seed_val: int) -> Result:
+static func _test_runtime_and_direct_force_skip_ignore(player_count: int, seed_val: int) -> Result:
 	var engine := GameEngine.new()
 	var init_r := engine.initialize(player_count, seed_val)
 	if not init_r.ok:
@@ -52,18 +52,18 @@ static func _test_runtime_and_force_skip_ignore(player_count: int, seed_val: int
 	var action = SkipActionClass.new(engine.phase_manager)
 	var force_r := action.compute_new_state_force(state, Command.create(ActionIdsClass.SKIP, 1, {}))
 	if not force_r.ok:
-		return Result.failure("force replay skip 应成功忽略旧命令: %s" % force_r.error)
+		return Result.failure("direct force skip 应成功忽略旧命令: %s" % force_r.error)
 	var forced_state: GameState = force_r.value
 	if forced_state == null:
-		return Result.failure("force replay skip 后 state 为空")
+		return Result.failure("direct force skip 后 state 为空")
 	if int(forced_state.get_current_player_id()) != 1:
-		return Result.failure("force replay skip 不应切走当前玩家，实际: %d" % int(forced_state.get_current_player_id()))
+		return Result.failure("direct force skip 不应切走当前玩家，实际: %d" % int(forced_state.get_current_player_id()))
 	if str(forced_state.round_state.get("pending_phase_actions", null)) != pending_before:
-		return Result.failure("force replay skip 不应改写 pending_phase_actions")
+		return Result.failure("direct force skip 不应改写 pending_phase_actions")
 
 	return Result.success({"error": err})
 
-static func _test_archive_replay_skip_is_noop_before_choose_fridge_keep(player_count: int, seed_val: int) -> Result:
+static func _test_archive_replay_rejects_skip_before_choose_fridge_keep(player_count: int, seed_val: int) -> Result:
 	var setup_engine := GameEngine.new()
 	var init_r := setup_engine.initialize(player_count, seed_val)
 	if not init_r.ok:
@@ -117,28 +117,24 @@ static func _test_archive_replay_skip_is_noop_before_choose_fridge_keep(player_c
 
 	var replay_engine := GameEngine.new()
 	var replay_bad_r := replay_engine.load_from_archive(bad_archive)
-	if not replay_bad_r.ok:
-		return Result.failure("bad archive load 失败: %s" % replay_bad_r.error)
+	if replay_bad_r.ok:
+		return Result.failure("bad archive 不应通过 replay 忽略 pending-blocked skip")
 	var reference_engine := GameEngine.new()
 	var replay_good_r := reference_engine.load_from_archive(good_archive)
 	if not replay_good_r.ok:
 		return Result.failure("good archive load 失败: %s" % replay_good_r.error)
 
-	var bad_state: GameState = replay_engine.get_state()
 	var good_state: GameState = reference_engine.get_state()
-	if bad_state == null or good_state == null:
+	if good_state == null:
 		return Result.failure("archive replay 后 state 为空")
 
-	var bad_hash := str(bad_state.compute_hash())
 	var good_hash := str(good_state.compute_hash())
-	if bad_hash != good_hash:
-		return Result.failure("旧 skip 回放后最终状态应与正常 choose_fridge_keep 一致: bad=%s good=%s" % [bad_hash, good_hash])
 
-	var pending_val = bad_state.round_state.get("pending_phase_actions", null)
+	var pending_val = good_state.round_state.get("pending_phase_actions", null)
 	if pending_val is Dictionary and Dictionary(pending_val).has(DefsClass.PHASE_CLEANUP):
 		return Result.failure("archive replay choose_fridge_keep 后不应残留 pending_phase_actions[Cleanup]")
 
-	var inv_val = bad_state.players[1].get("inventory", null)
+	var inv_val = good_state.players[1].get("inventory", null)
 	if not (inv_val is Dictionary):
 		return Result.failure("archive replay 后玩家 1 inventory 类型错误")
 	var inv: Dictionary = inv_val
@@ -149,8 +145,8 @@ static func _test_archive_replay_skip_is_noop_before_choose_fridge_keep(player_c
 		return Result.failure("archive replay choose_fridge_keep 结果错误: %s" % str(inv))
 
 	return Result.success({
-		"bad_hash": bad_hash,
-		"good_hash": good_hash
+		"bad_error": str(replay_bad_r.error),
+		"good_hash": good_hash,
 	})
 
 static func _build_archive(initial_state: Dictionary, rng_data: Dictionary, commands: Array[Dictionary]) -> Dictionary:
