@@ -92,8 +92,12 @@ static func run() -> Result:
 	if not r8.ok:
 		return r8
 
+	var r9 := _assert_game_runtime_log_does_not_reintroduce_eventbus_flat_source()
+	if not r9.ok:
+		return r9
+
 	return Result.success({
-		"checks": 8,
+		"checks": 9,
 	})
 
 static func _assert_no_direct_ui_refs() -> Result:
@@ -236,6 +240,22 @@ static func _assert_auto_advance_drain_loop_is_centralized() -> Result:
 			if hit.is_empty():
 				continue
 			return Result.failure("auto-advance drain 循环应集中在 core runner: %s:%d contains %s" % [path, int(hit.get("line", 1)), str(hit.get("pattern", ""))])
+	return Result.success()
+
+static func _assert_game_runtime_log_does_not_reintroduce_eventbus_flat_source() -> Result:
+	var runtime_paths := [
+		"res://ui/scenes/game/game.gd",
+		"res://ui/scenes/game/controllers/builder.gd",
+	]
+	for path in runtime_paths:
+		var hit := _find_code_pattern(path, [
+			"GameEventLogController",
+			"event_log/controller.gd",
+			"rebuild_from_history(",
+		])
+		if hit.is_empty():
+			continue
+		return Result.failure("Game 运行时日志应由 StepTimeline 驱动，EventBus flat log 仅保留为 legacy/test fallback: %s:%d contains %s" % [path, int(hit.get("line", 1)), str(hit.get("pattern", ""))])
 	return Result.success()
 
 static func _should_skip_file(path: String) -> bool:

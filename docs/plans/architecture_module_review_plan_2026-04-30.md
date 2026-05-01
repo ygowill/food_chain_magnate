@@ -1057,6 +1057,7 @@
   - 证据：当 `GameLogPanel` 已加载 step_timeline 时，EventBus 实时事件直接 return，以避免重复日志。证据：`ui/scenes/game/event_log/controller.gd:130-142`。Timeline controller 同时在实时局中构建并加载 step_timeline。证据：`ui/scenes/game/timeline/controller.gd:350-435`。
   - 风险：两个日志来源共享同一个 panel，但是否追加取决于 `has_step_timeline_loaded()` 的运行时状态。任何时序问题都会产生重复、丢失或命令索引错误；同时 formatter 与 timeline entries builder 需要维护两套文本规则。
   - 建议：确立单一日志数据源：优先让 StepTimeline 成为唯一 UI log model；EventBus formatter 只作为 StepTimeline entries builder 的内部格式化器或 debug 视图。迁移前需增加 “同一 command history 下 EventBus flat log 与 StepTimeline entries 数量/命令索引一致” 的回归测试。
+  - 状态：Fix 61 已补运行时架构守卫，确保 `game.gd` 与 Game 控制器构建器不再重新接入 `GameEventLogController` / EventBus flat log；当前 `event_log/controller.gd` 保留为 legacy/test fallback 与格式化兼容，不是 Game 运行时主链路。
 
 暂不列为问题：
 
@@ -3004,3 +3005,25 @@
 结论：
 
 - 已完成该 P2 的普通恢复路径 strict 化：恢复房启动现在只接受已显式准备好的在线恢复档；旧档/坏档需要走显式准备或迁移入口，不能在常规启动校验中被静默修补。
+
+### Fix 61：Game 运行时日志链路增加 StepTimeline 单源守卫
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 8 `[P2] Game 日志仍有 StepTimeline 与 EventBus EventLog 双链路，靠 runtime 条件避免重复，职责划分仍不清晰`。
+
+改动：
+
+- `core/tests/core_architecture_boundary_contract_test.gd`：新增架构守卫，检查 `ui/scenes/game/game.gd` 与 `ui/scenes/game/controllers/builder.gd` 不得重新引用 `GameEventLogController`、`event_log/controller.gd` 或 `rebuild_from_history(...)`。
+- 当前运行时 Game 控制器构建路径已经由 `GameTimelineController.apply_live_log_timeline_from_engine(...)` 驱动日志；`ui/scenes/game/event_log/controller.gd` 保留为 legacy/test fallback，避免历史恢复测试与 formatter 兼容性被一次性移除。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1112`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`392/392`。
+
+结论：
+
+- 已完成该 P2 的运行时边界收敛：Game 场景主链路现在有测试防止 EventBus flat log 被重新接入；剩余 `GameEventLogController` 只作为兼容/测试兜底存在，后续可单独清理旧文档和 legacy 测试入口。
