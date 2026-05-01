@@ -21,6 +21,11 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		_reset_net_context()
 		return strict_guard_r
 
+	var strict_prepare_r := _test_prepare_resume_fails_on_missing_confirm_pending(player_count, seed_val)
+	if not strict_prepare_r.ok:
+		_reset_net_context()
+		return strict_prepare_r
+
 	var engine := GameEngine.new()
 	var init := engine.initialize(player_count, seed_val)
 	if not init.ok:
@@ -92,6 +97,55 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("双方确认后应进入 Payday，实际: %s" % str(engine.get_state().phase))
 
 	_reset_net_context()
+	return Result.success()
+
+static func _test_prepare_resume_fails_on_missing_confirm_pending(player_count: int, seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val)
+	if not init.ok:
+		return Result.failure("strict prepare 初始化失败: %s" % init.error)
+
+	var state: GameState = engine.get_state()
+	if state == null:
+		return Result.failure("strict prepare state 为空")
+	var prepare_r: Result = OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
+	if not prepare_r.ok:
+		return Result.failure("strict prepare 初始 prepare_engine_for_online_resume 失败: %s" % prepare_r.error)
+	var setup_r := TestPhaseUtilsClass.complete_setup(engine)
+	if not setup_r.ok:
+		return Result.failure("strict prepare complete_setup 失败: %s" % setup_r.error)
+	var restruct_r := TestPhaseUtilsClass.complete_restructuring(engine)
+	if not restruct_r.ok:
+		return Result.failure("strict prepare complete_restructuring 失败: %s" % restruct_r.error)
+	var oob_r := TestPhaseUtilsClass.complete_order_of_business(engine)
+	if not oob_r.ok:
+		return Result.failure("strict prepare complete_order_of_business 失败: %s" % oob_r.error)
+	var working_r := TestPhaseUtilsClass.complete_working_phase(engine)
+	if not working_r.ok:
+		return Result.failure("strict prepare complete_working_phase 失败: %s" % working_r.error)
+
+	var after_work: GameState = engine.get_state()
+	if after_work == null:
+		return Result.failure("strict prepare Working 完成后 state 为空")
+	if str(after_work.phase) != DefsClass.PHASE_DINNERTIME:
+		return Result.failure("strict prepare 应停留在 Dinnertime，实际: %s" % str(after_work.phase))
+	if not (after_work.round_state is Dictionary):
+		return Result.failure("strict prepare round_state 类型错误（期望 Dictionary）")
+	var rs: Dictionary = after_work.round_state
+	var ppa: Dictionary = {}
+	if rs.get("pending_phase_actions", null) is Dictionary:
+		ppa = Dictionary(rs.get("pending_phase_actions", {})).duplicate(true)
+	ppa.erase(DefsClass.PHASE_DINNERTIME)
+	rs["pending_phase_actions"] = ppa
+
+	var prepare_again: Result = OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
+	if prepare_again.ok:
+		return Result.failure("prepare_engine_for_online_resume 不应修复缺失的 Dinnertime pending 后继续")
+	if str(prepare_again.error).find("pending_phase_actions[Dinnertime]") < 0:
+		return Result.failure("strict prepare 错误信息应包含 pending_phase_actions[Dinnertime]，实际: %s" % prepare_again.error)
+	var ppa_after_val = rs.get("pending_phase_actions", null)
+	if ppa_after_val is Dictionary and Dictionary(ppa_after_val).has(DefsClass.PHASE_DINNERTIME):
+		return Result.failure("strict prepare 失败时不应重建 pending_phase_actions[Dinnertime]")
 	return Result.success()
 
 static func _test_auto_advance_fails_on_missing_confirm_pending(player_count: int, seed_val: int) -> Result:

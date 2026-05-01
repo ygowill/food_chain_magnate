@@ -22,12 +22,13 @@ static func prepare_engine_for_online_resume(
 		state.rules = {}
 	state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
 	state.rules[ONLINE_MARKETING_CONFIRM_KEY] = 1
-	_persist_online_confirm_markers_to_initial_checkpoint(engine)
 
 	if str(state.phase) == DefsClass.PHASE_DINNERTIME:
-		var repair_r: Result = AutoAdvanceTryStepClass._repair_online_dinnertime_pending_guard_for_resume(state)
-		if not repair_r.ok:
-			return repair_r
+		var guard_r: Result = AutoAdvanceTryStepClass._ensure_online_dinnertime_pending_guard(state)
+		if not guard_r.ok:
+			return guard_r
+
+	_persist_online_confirm_markers_to_initial_checkpoint(engine)
 
 	if persist_current_state_to_checkpoint and int(engine.current_command_index) < 0 and engine.checkpoints.size() > 0 and (engine.checkpoints[0] is Dictionary):
 		var checkpoint0: Dictionary = Dictionary(engine.checkpoints[0]).duplicate(true)

@@ -5,8 +5,6 @@ const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const PhaseBlockingClass = preload("res://core/engine/game_engine/auto_advance_phase_blocking.gd")
 const OrderOfBusinessRound1Class = preload("res://core/engine/game_engine/auto_advance_order_of_business_round1.gd")
 const WorkingMandatoryClass = preload("res://core/engine/game_engine/auto_advance_working_mandatory.gd")
-const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
-const AutoloadAccessClass = preload("res://core/utils/autoload_access.gd")
 
 const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
 const ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY := "online_dinnertime_confirmed_players"
@@ -210,91 +208,6 @@ static func _ensure_online_dinnertime_pending_guard(state_in: GameState) -> Resu
 		return match_r
 	return Result.success()
 
-static func _repair_online_dinnertime_pending_guard_for_resume(state_in: GameState) -> Result:
-	if state_in == null:
-		return Result.failure("online dinnertime resume repair: state 为空")
-	if not _is_online_dinnertime_confirm_enabled(state_in):
-		return Result.success()
-	if not (state_in.players is Array):
-		return Result.failure("online dinnertime resume repair: state.players 类型错误（期望 Array）")
-	if not (state_in.round_state is Dictionary):
-		return Result.failure("online dinnertime resume repair: state.round_state 类型错误（期望 Dictionary）")
-	var players: Array = state_in.players
-	var rs: Dictionary = state_in.round_state
-
-	var existing_kind := "missing"
-	var existing_list: Array = []
-	var ppa_val = rs.get("pending_phase_actions", null)
-	if ppa_val is Dictionary:
-		var ppa: Dictionary = Dictionary(ppa_val)
-		var list_val = ppa.get(DefsClass.PHASE_DINNERTIME, null)
-		if list_val == null:
-			existing_kind = "missing"
-		elif not (list_val is Array):
-			existing_kind = "invalid"
-		else:
-			existing_list = Array(list_val)
-			if existing_list.is_empty():
-				existing_kind = "empty"
-			elif _is_legacy_confirm_dinnertime_pending(existing_list):
-				existing_kind = "legacy"
-			elif _is_only_player_confirm_dinnertime_pending(existing_list):
-				existing_kind = "per_player"
-			else:
-				existing_kind = "other"
-	else:
-		existing_kind = "missing"
-
-	# 存在其它模块注入的 Dinnertime pending 时，不强行覆盖。
-	if existing_kind == "other":
-		return Result.success()
-
-	var confirmed := _read_or_build_online_dinnertime_confirmed_players_for_resume(state_in, players, rs)
-	if confirmed.is_empty():
-		return Result.failure("online dinnertime resume repair: 无法构造 confirmed players")
-
-	var repaired_pending: Array[Dictionary] = []
-	for pid in range(players.size()):
-		if bool(confirmed[pid]):
-			continue
-		repaired_pending.append({
-			"kind": KIND_CONFIRM_DINNERTIME,
-			"player_id": pid,
-		})
-
-	# 全员已确认/弃权：pending 为空是正常状态（允许 auto-advance 离开 Dinnertime）
-	if repaired_pending.is_empty():
-		return Result.success()
-
-	# 若已有正确的 per-player 列表且 confirmed 同步无误，则无需写回
-	if existing_kind == "per_player":
-		if _list_matches_pending_players(existing_list, repaired_pending):
-			var c_val = rs.get(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, null)
-			if c_val is Array and _array_matches_confirmed_players(Array(c_val), confirmed):
-				return Result.success()
-
-	# 写回 confirmed + pending_phase_actions[Dinnertime]
-	rs[ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY] = confirmed
-
-	var set_r := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
-		rs, DefsClass.PHASE_DINNERTIME, repaired_pending, "auto_advance:dinnertime_guard"
-	)
-	if not set_r.ok:
-		return Result.failure("online dinnertime resume repair: %s" % str(set_r.error))
-
-	if existing_kind != "per_player":
-		AutoloadAccessClass.log_warn(
-			"AutoAdvance",
-			"Repaired online dinnertime pending (kind=%s) round=%d confirmed=%s pending=%s"
-				% [
-					existing_kind,
-					int(state_in.round_number),
-					_bool_array_preview(confirmed),
-					_pending_preview(repaired_pending),
-				]
-		)
-	return Result.success()
-
 static func _is_online_dinnertime_confirm_enabled(state: GameState) -> bool:
 	if state == null:
 		return false
@@ -351,40 +264,6 @@ static func _read_online_dinnertime_confirmed_players_strict(state_in: GameState
 		return Result.failure("online dinnertime guard: round_state.%s[%d] 类型错误（期望 bool/int/float）" % [ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, i])
 	return Result.success(confirmed)
 
-static func _read_or_build_online_dinnertime_confirmed_players_for_resume(state_in: GameState, players: Array, rs: Dictionary) -> Array[bool]:
-	var confirmed: Array[bool] = []
-	var val = rs.get(ONLINE_DINNERTIME_CONFIRMED_PLAYERS_KEY, null)
-	if val is Array:
-		var raw: Array = Array(val)
-		if raw.size() == players.size():
-			var ok := true
-			for v in raw:
-				if v is bool:
-					confirmed.append(bool(v))
-				elif v is int:
-					confirmed.append(int(v) != 0)
-				elif v is float:
-					var f: float = float(v)
-					if f == floor(f):
-						confirmed.append(int(f) != 0)
-					else:
-						ok = false
-						break
-				else:
-					ok = false
-					break
-			if not ok:
-				confirmed.clear()
-	if confirmed.size() != players.size():
-		confirmed.clear()
-		for pid in range(players.size()):
-			confirmed.append(_is_player_forfeited(state_in, pid))
-
-	for pid2 in range(players.size()):
-		if _is_player_forfeited(state_in, pid2):
-			confirmed[pid2] = true
-	return confirmed
-
 static func _validate_online_dinnertime_confirm_pending_list(list: Array, expected_pending_players: Array[int]) -> Result:
 	var expected := {}
 	for pid in expected_pending_players:
@@ -428,80 +307,6 @@ static func _is_player_forfeited(state_in: GameState, player_id: int) -> bool:
 	if not (p_val is Dictionary):
 		return false
 	return bool(Dictionary(p_val).get("forfeited", false))
-
-static func _is_legacy_confirm_dinnertime_pending(list: Array) -> bool:
-	return list.size() == 1 and (list[0] is String) and str(list[0]) == KIND_CONFIRM_DINNERTIME
-
-static func _is_only_player_confirm_dinnertime_pending(list: Array) -> bool:
-	if list.is_empty():
-		return false
-	for item_val in list:
-		if not (item_val is Dictionary):
-			return false
-		var item: Dictionary = item_val
-		if str(item.get("kind", "")).strip_edges() != KIND_CONFIRM_DINNERTIME:
-			return false
-		var pid_val = item.get("player_id", null)
-		if not (pid_val is int):
-			if not (pid_val is float and float(pid_val) == floor(float(pid_val))):
-				return false
-	return true
-
-static func _list_matches_pending_players(existing_list: Array, expected_list: Array) -> bool:
-	if existing_list.size() != expected_list.size():
-		return false
-	var want := {}
-	for it in expected_list:
-		if not (it is Dictionary):
-			continue
-		var d: Dictionary = it
-		want[int(d.get("player_id", -1))] = true
-	for it2 in existing_list:
-		if not (it2 is Dictionary):
-			return false
-		var d2: Dictionary = it2
-		if str(d2.get("kind", "")).strip_edges() != KIND_CONFIRM_DINNERTIME:
-			return false
-		var pid_val2 = d2.get("player_id", null)
-		var pid := -1
-		if pid_val2 is int:
-			pid = int(pid_val2)
-		elif pid_val2 is float and float(pid_val2) == floor(float(pid_val2)):
-			pid = int(pid_val2)
-		if pid < 0 or not want.has(pid):
-			return false
-	return true
-
-static func _array_matches_confirmed_players(raw: Array, expected: Array[bool]) -> bool:
-	if raw.size() != expected.size():
-		return false
-	for i in range(raw.size()):
-		var v = raw[i]
-		var b := false
-		if v is bool:
-			b = bool(v)
-		elif v is int:
-			b = int(v) != 0
-		elif v is float:
-			var f: float = float(v)
-			if f == floor(f):
-				b = int(f) != 0
-			else:
-				return false
-		else:
-			return false
-		if b != bool(expected[i]):
-			return false
-	return true
-
-static func _bool_array_preview(arr: Array, limit: int = 12) -> String:
-	if arr == null:
-		return "null"
-	var parts: Array[String] = []
-	for i in range(min(arr.size(), limit)):
-		parts.append("1" if bool(arr[i]) else "0")
-	var suffix := "..." if arr.size() > parts.size() else ""
-	return "%d[%s%s]" % [arr.size(), "".join(parts), suffix]
 
 static func _pending_preview(pending: Array, limit: int = 6) -> String:
 	if pending == null:

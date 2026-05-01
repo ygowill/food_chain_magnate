@@ -3411,3 +3411,30 @@
 结论：
 
 - 已补齐现金里程碑支付路径的 P1 strict 化：银行向玩家支付导致现金达到 $20 / $100 时，里程碑触发失败不再被吞为 warning，避免权威现金状态与里程碑副作用状态分离。
+
+### Fix 78：Online resume 准备阶段不再修复 Dinnertime pending guard
+
+日期：2026-05-01
+
+对应问题：
+
+- Fix 7 遗留：`prepare_engine_for_online_resume(...)` 内部尚未完全移除对 pending/confirmed_players 的修复逻辑。
+- Step 6 `[P1] Dinnertime/Marketing confirmed_players 损坏时静默重建，并仅 warning pending mismatch`。
+- Step 7 `[P2] Dinnertime/Marketing confirm action 仍保留 legacy global pending 和 confirmed_players 长度恢复路径`。
+
+改动：
+
+- `core/engine/game_engine/online_resume_point_validator.gd`：`prepare_engine_for_online_resume(...)` 在 Dinnertime 恢复点上改为调用 `_ensure_online_dinnertime_pending_guard(...)` 做 strict 校验；缺失、legacy、错位或类型错误的 `pending_phase_actions[Dinnertime]` / `online_dinnertime_confirmed_players` 会直接失败，不再修复后继续。
+- `core/engine/game_engine/auto_advance_try_step.gd`：删除 `_repair_online_dinnertime_pending_guard_for_resume(...)` 以及其专用的 legacy/repair helper，移除恢复准备阶段的自动重建 pending 行为。
+- `core/tests/online_dinnertime_confirm_enforced_test.gd`：新增回归用例，验证 Dinnertime 恢复准备遇到缺失 pending 时会失败，且不会重建 `pending_phase_actions[Dinnertime]`。
+
+验证：
+
+- `rg -n "^[ ]+\S|\t +| +\t" core/engine/game_engine/auto_advance_try_step.gd core/engine/game_engine/online_resume_point_validator.gd core/tests/online_dinnertime_confirm_enforced_test.gd`：无匹配。
+- `rg -n "_repair_online_dinnertime_pending_guard_for_resume|online dinnertime resume repair|Repaired online dinnertime|_read_or_build_online_dinnertime_confirmed_players_for_resume" core ui gameplay server autoload --glob "*.gd"`：无匹配。
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1123`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120 --strict-exit`：PASS，`392/392`。
+
+结论：
+
+- 已完成 Fix 7 遗留的 strict 收敛：online resume 准备阶段只写入显式 online confirm marker，并校验现有 Dinnertime pending guard；损坏或旧格式 pending 不再被运行期修补。
