@@ -1801,3 +1801,27 @@
 
 - 已完成该 P2 strict 化：Cleanup 不再把 opening-soon pending 与地图结构不一致解释成可跳过状态。
 - 若未来要支持幂等恢复，应先验证 map/player/restaurants 三者已经一致，再由显式 recovery 路径清理 pending。
+
+### Fix 13：Restructuring 拒绝 CEO 位于待命区的损坏状态
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 6 `[P2] Restructuring phase hook 会自动修复 CEO 从 reserve 到 employees，掩盖上游状态损坏`。
+
+改动：
+
+- `modules/base_rules/rules/phase_and_map.gd`：进入重组与离开重组时，如果 `reserve_employees` 中出现 `ceo`，直接 `Result.failure`；不再从待命区移除 CEO 并自动追加到 `employees`。
+- 同一 hook 继续要求 `employees` 中存在 CEO；缺失时直接失败，不再把 reserve 中的 CEO 视为可恢复来源。
+- `core/tests/base_rules_phase_and_map_state_access_test.gd`：新增进入/离开重组两个负例，覆盖 `reserve_employees=["ceo", ...]` 时必须失败，并断言失败时不会把 CEO 搬回在岗区。
+
+验证：
+
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests`：PASS，`390/390`。
+
+结论：
+
+- 已完成该 P2 strict 化：Restructuring 不再把 CEO 错位状态解释为可自动修复状态。
+- 若旧存档确实存在 CEO 位于 reserve 的情况，应由显式 archive migration/recovery 处理，不能留在运行期阶段 hook 中。

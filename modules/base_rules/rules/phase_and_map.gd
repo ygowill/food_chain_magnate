@@ -130,16 +130,10 @@ func _on_restructuring_before_enter(state: GameState) -> Result:
 			# 忙碌营销员位于独立区域；同名 busy 不能抵消 employees 中的在岗实例。
 			moved.append(emp_id)
 
-		# CEO 必须存在：若被错误放入待命区，纠正回在岗
+		if reserve.has("ceo"):
+			return Result.failure("base_rules:restructuring_before_enter: player[%d].reserve_employees 不应包含 CEO" % pid2)
 		if not has_ceo:
-			if reserve.has("ceo"):
-				has_ceo = true
-			else:
-				return Result.failure("base_rules:restructuring_before_enter: player[%d] 缺少 CEO（在岗/待命均未找到）" % pid2)
-
-		# 确保 CEO 仅在在岗区
-		while reserve.has("ceo"):
-			reserve.erase("ceo")
+			return Result.failure("base_rules:restructuring_before_enter: player[%d].employees 缺少 CEO" % pid2)
 
 		# 重置在岗区为仅 CEO，其余全部进入待命区（按实例数搬运）
 		p["employees"] = ["ceo"]
@@ -212,18 +206,10 @@ func _on_restructuring_before_exit(state: GameState) -> Result:
 		var employees: Array = p["employees"]
 		var reserve: Array = p["reserve_employees"]
 
+		if reserve.has("ceo"):
+			return Result.failure("base_rules:restructuring_before_exit: player[%d].reserve_employees 不应包含 CEO" % pid)
 		if not employees.has("ceo"):
-			# 容错：若 CEO 被错误放到待命区，纠正回在岗（Fail Fast：若两边都没有 CEO 则直接失败）
-			if reserve.has("ceo"):
-				var removed := StateUpdater.remove_from_array(p, "reserve_employees", "ceo")
-				if removed:
-					StateUpdater.append_to_array(p, "employees", "ceo")
-					employees = p["employees"]
-					reserve = p["reserve_employees"]
-				else:
-					return Result.failure("base_rules:restructuring_before_exit: player[%d] CEO 修复失败" % pid)
-			else:
-				return Result.failure("base_rules:restructuring_before_exit: player[%d].employees 缺少 CEO" % pid)
+			return Result.failure("base_rules:restructuring_before_exit: player[%d].employees 缺少 CEO" % pid)
 
 		var cs: Dictionary = p["company_structure"]
 		if not cs.has("ceo_slots"):
