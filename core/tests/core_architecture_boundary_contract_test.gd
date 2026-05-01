@@ -84,8 +84,12 @@ static func run() -> Result:
 	if not r6.ok:
 		return r6
 
+	var r7 := _assert_runtime_command_paths_do_not_consume_rng()
+	if not r7.ok:
+		return r7
+
 	return Result.success({
-		"checks": 6,
+		"checks": 7,
 	})
 
 static func _assert_no_direct_ui_refs() -> Result:
@@ -176,6 +180,33 @@ static func _assert_server_has_no_direct_ui_refs() -> Result:
 		var hit := _find_code_pattern(path, ["res://ui/"])
 		if not hit.is_empty():
 			return Result.failure("server 不应直接引用 UI 资源: %s:%d contains %s" % [path, int(hit.get("line", 1)), str(hit.get("pattern", ""))])
+	return Result.success()
+
+static func _assert_runtime_command_paths_do_not_consume_rng() -> Result:
+	var roots := [
+		"res://core/actions",
+		"res://core/rules",
+		"res://gameplay/actions",
+		"res://modules",
+	]
+	var patterns := [
+		"RandomNumberGenerator",
+		"random_manager",
+		"randi(",
+		"randf(",
+		"randfn(",
+		"randomize(",
+	]
+	for root in roots:
+		var files: Array[String] = []
+		var list_r := _list_gd_files_recursive(root, files)
+		if not list_r.ok:
+			return list_r
+		for path in files:
+			var hit := _find_code_pattern(path, patterns)
+			if hit.is_empty():
+				continue
+			return Result.failure("运行期 command/rules 路径不得直接消耗 RNG，需先扩展 replay API: %s:%d contains %s" % [path, int(hit.get("line", 1)), str(hit.get("pattern", ""))])
 	return Result.success()
 
 static func _should_skip_file(path: String) -> bool:

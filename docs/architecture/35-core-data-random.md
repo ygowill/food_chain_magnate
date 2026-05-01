@@ -60,6 +60,7 @@ flowchart TB
 - seed + call_count 可序列化（`to_dict`/`from_dict`）
 - `from_dict` 通过 fast_forward 恢复状态
 - 所有随机行为必须使用 `RandomManager`（禁止 `randi()`/真实时间等非确定性来源）
+- 运行期 command/rules 路径（`core/actions`、`core/rules`、`gameplay/actions`、`modules`）当前不得直接消耗 RNG；如果未来动作规则需要随机数，必须先扩展 replay/rewind/archive 的 command application API，使同一个 `RandomManager` 状态被记录、恢复和推进。
 
 ## 初始化的真实链路（入口指北）
 

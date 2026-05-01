@@ -49,6 +49,10 @@ flowchart TB
 - `compute_new_state(state, command) -> Result`：默认 copy-on-write（`duplicate_state` + `_apply_changes`）
 - `generate_events(old_state, new_state, command) -> Array[Dictionary]`
 
+确定性约束：
+
+- 运行期 action executor 与模块规则不得直接创建/读取 RNG（例如 `RandomNumberGenerator`、`randi()`、`randf()` 或 `engine.random_manager`）。当前 replay API 只把 `state + command` 传给 executor；如果动作规则需要随机，必须先把 RNG 状态推进纳入 replay/rewind/archive 契约。
+
 补充能力（当前代码已用到）：
 
 - `apply_changes_in_place(state, command)`：用于 AutoAdvance/in-place 语义（谨慎使用）

@@ -2780,3 +2780,28 @@
 结论：
 
 - 已完成该 P2 边界整改：联机恢复编排层不再反向依赖 online UI 场景目录；UI 可继续复用 autoload 中立层的错误策略。
+
+### Fix 52：运行期 RNG 约束写入架构并加守卫
+
+日期：2026-05-01
+
+对应问题：
+
+- Step 2 `[P2] 运行期 RNG 约束目前依赖约定，没有在 command replay API 上显式表达`。
+
+改动：
+
+- `docs/architecture/35-core-data-random.md`：明确运行期 command/rules 路径当前不得直接消耗 RNG；若未来动作规则需要随机，必须先扩展 replay/rewind/archive 的 command application API，使 RNG 状态可记录、恢复和推进。
+- `docs/architecture/32-core-actions-framework.md`：在 ActionExecutor 契约中补充确定性约束，禁止 `RandomNumberGenerator`、`randi()`、`randf()` 或 `engine.random_manager` 进入运行期 action executor / 模块规则。
+- `core/tests/core_architecture_boundary_contract_test.gd`：新增静态守卫，扫描 `core/actions`、`core/rules`、`gameplay/actions`、`modules` 下的 `.gd`，发现直接 RNG 消耗时失败并提示先扩展 replay API。
+- 同文件顺手修正 `server 不应直接引用 UI 资源` 守卫中的缩进漏 tab；此前编译失败已在本次验证前修复。
+
+验证：
+
+- `rg -n "RandomNumberGenerator|random_manager|randi\\(|randf\\(|randfn\\(|randomize\\(" gameplay/actions modules core/actions core/rules core/engine/game_engine/auto_advance*.gd --glob "*.gd" --glob "!modules/*/content/**"`：无命中。
+- `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`：PASS，`files=1107`。
+- `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120`：PASS，`391/391`。
+
+结论：
+
+- 已完成该 P2 架构约束：运行期随机不再只靠口头约定；新增随机规则前必须先调整可回放命令执行契约，否则架构测试会阻断。
