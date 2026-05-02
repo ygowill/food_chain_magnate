@@ -138,16 +138,26 @@ static func _assert_airplane_rect(map_data: Dictionary, grid_size: Vector2i, cel
 	var canvas := FakeCanvas.new(map_data, grid_size, {anchor: placement})
 	MapCanvasDrawerClass._draw_marketing(canvas, cell_size)
 
-	if canvas.filled_rects.is_empty():
-		return Result.failure("%s: expected a filled rect draw call" % name)
-
-	var rect: Rect2 = canvas.filled_rects[0]
 	var expected_pos: Vector2 = spec.get("expected_pos", Vector2.ZERO)
 	var expected_size: Vector2 = spec.get("expected_size", Vector2.ZERO)
-
-	if not rect.position.is_equal_approx(expected_pos):
-		return Result.failure("%s: rect.position=%s expected=%s" % [name, str(rect.position), str(expected_pos)])
-	if not rect.size.is_equal_approx(expected_size):
-		return Result.failure("%s: rect.size=%s expected=%s" % [name, str(rect.size), str(expected_size)])
+	var rect_read := _find_expected_airplane_rect(canvas.filled_rects, expected_pos, expected_size)
+	if not rect_read.ok:
+		return Result.failure("%s: %s" % [name, rect_read.error])
 
 	return Result.success({"case": name})
+
+static func _find_expected_airplane_rect(rects: Array[Rect2], expected_pos: Vector2, expected_size: Vector2) -> Result:
+	if rects.is_empty():
+		return Result.failure("expected a filled rect draw call")
+
+	var same_size_positions: Array[String] = []
+	for rect in rects:
+		if not rect.size.is_equal_approx(expected_size):
+			continue
+		if rect.position.is_equal_approx(expected_pos):
+			return Result.success(rect)
+		same_size_positions.append(str(rect.position))
+
+	if same_size_positions.is_empty():
+		return Result.failure("no filled rect with expected size=%s; rects=%s" % [str(expected_size), str(rects)])
+	return Result.failure("no filled rect at expected position=%s with size=%s; same-size positions=%s" % [str(expected_pos), str(expected_size), str(same_size_positions)])
