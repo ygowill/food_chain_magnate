@@ -653,6 +653,9 @@ func _auto_open_guided_action_ui(state: GameState) -> void:
 func _hide_open_guided_action_panels_if_not_initiatable(state: GameState) -> void:
 	if _scene == null or state == null:
 		return
+	if str(state.phase) == DefsClass.PHASE_GAME_OVER:
+		_hide_game_over_action_surfaces()
+		return
 	if not is_instance_valid(_scene.action_panel):
 		return
 	if not _scene.action_panel.has_method("get_action_enabled"):
@@ -679,6 +682,19 @@ func _hide_open_guided_action_panels_if_not_initiatable(state: GameState) -> voi
 		if is_instance_valid(_marketing_panels.marketing_panel) and _marketing_panels.marketing_panel.visible:
 			if not bool(_scene.action_panel.call("get_action_enabled", "initiate_marketing")):
 				_marketing_panels.marketing_panel.visible = false
+
+func _hide_game_over_action_surfaces() -> void:
+	_last_guided_action_id = ""
+	if _working_panels != null and _working_panels.has_method("hide"):
+		_working_panels.hide()
+	if _marketing_panels != null and _marketing_panels.has_method("hide"):
+		_marketing_panels.hide()
+	if _placement_overlays != null and _placement_overlays.has_method("hide"):
+		_placement_overlays.hide()
+	if _end_panels != null and is_instance_valid(_end_panels.payday_panel):
+		_end_panels.payday_panel.visible = false
+	if is_instance_valid(_scene.action_panel) and _scene.action_panel.has_method("clear_context_overlay"):
+		_scene.action_panel.call("clear_context_overlay")
 
 func _has_visible_right_panel_docked_panel(ignore_game_log: bool = false) -> bool:
 	if _scene == null:

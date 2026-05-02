@@ -3,6 +3,7 @@ extends RefCounted
 
 const ActionPanelScene: PackedScene = preload("res://ui/components/action_panel/action_panel.tscn")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 class _BlockReasonProvider:
 	extends RefCounted
@@ -54,6 +55,19 @@ static func run() -> Result:
 	if not action_panel.get_action_enabled("recruit"):
 		await _cleanup_panel(panel, st)
 		return Result.failure("外部 block reason 不应误伤其他动作")
+
+	var game_over_state := GameState.new()
+	game_over_state.phase = DefsClass.PHASE_GAME_OVER
+	action_panel.set_game_state(game_over_state)
+	var flow_cfg: Dictionary = action_panel.get_flow_controls_config()
+	var confirm_cfg: Dictionary = Dictionary(flow_cfg.get("confirm_end", {}))
+	var rewind_cfg: Dictionary = Dictionary(flow_cfg.get("rewind", {}))
+	if bool(confirm_cfg.get("visible", true)):
+		await _cleanup_panel(panel, st)
+		return Result.failure("GameOver 后确认结束按钮不应继续显示")
+	if bool(rewind_cfg.get("visible", true)):
+		await _cleanup_panel(panel, st)
+		return Result.failure("GameOver 后回退按钮不应继续显示")
 
 	await _cleanup_panel(panel, st)
 	return Result.success()

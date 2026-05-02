@@ -596,6 +596,9 @@ func _get_rollback_proposal_disabled_reason() -> String:
 	return ""
 
 func get_flow_controls_config() -> Dictionary:
+	if _game_state != null and str(_game_state.phase) == DefsClass.PHASE_GAME_OVER:
+		return _get_game_over_flow_controls_config()
+
 	var skip_sub_visible := _flow_skip_step_visible and _visible_action_ids.has(ActionIdsClass.SKIP_SUB_PHASE)
 	var skip_visible := _flow_confirm_end_visible and _visible_action_ids.has(ActionIdsClass.SKIP)
 
@@ -643,6 +646,42 @@ func get_flow_controls_config() -> Dictionary:
 		"rewind": {
 			"text": "回退到回合开始",
 			"enabled": rewind_enabled,
+		},
+	}
+
+func _get_game_over_flow_controls_config() -> Dictionary:
+	return {
+		"confirm_end": {
+			"visible": false,
+			"text": ACTION_DISPLAY_NAMES.get(ActionIdsClass.SKIP, "确认结束"),
+			"enabled": false,
+			"disabled_reason": "游戏已结束",
+		},
+		"skip_step": {
+			"visible": false,
+			"text": _get_skip_sub_phase_display_name(),
+			"enabled": false,
+			"disabled_reason": "游戏已结束",
+		},
+		"rollback_last": {
+			"visible": false,
+			"text": "回退一步",
+			"enabled": false,
+			"disabled_reason": "游戏已结束",
+			"action_id": "rollback_last_command",
+		},
+		"rollback_proposal": {
+			"visible": false,
+			"text": "提议回退",
+			"enabled": false,
+			"disabled_reason": "游戏已结束",
+			"action_id": "rollback_proposal",
+		},
+		"rewind": {
+			"visible": false,
+			"text": "回退到回合开始",
+			"enabled": false,
+			"action_id": "rewind_to_turn_start",
 		},
 	}
 

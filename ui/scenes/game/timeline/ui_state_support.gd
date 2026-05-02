@@ -2,6 +2,7 @@
 # 负责：日志面板 timeline 指针、ReplayBar 显隐，以及 ActionPanel 只读原因。
 extends RefCounted
 
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
 
 static func sync_ui(
@@ -73,6 +74,8 @@ static func resolve_action_panel_disable_reason(
 		return "回放中不可操作"
 	if int(cursor_index) < int(head_index) and not bool(timeline_edit_mode_active):
 		return "查看历史中不可操作"
+	if state != null and str(state.phase) == DefsClass.PHASE_GAME_OVER:
+		return "游戏已结束"
 	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
 		return ""
 
