@@ -1,0 +1,20 @@
+{
+	"schema_version": 1,
+	"id": "balanced_maps",
+	"name": "平衡地图候选（10选1）",
+	"version": "0.1.0",
+	"priority": 80,
+	"dependencies": ["base_rules", "base_pieces", "base_tiles", "base_maps"],
+	"conflicts": [],
+	"entry_script": "res://modules/balanced_maps/rules/entry.gd",
+	"provides": {
+		"ui": {
+			"module_selector": {
+				"group_id": "map_expansion",
+				"group_title": "地图变体",
+				"group_order": 40,
+				"order": 3
+			}
+		}
+	}
+}

@@ -47,6 +47,9 @@ class RulesetRegistrarV2:
 	func register_primary_map_generator(callback: Callable) -> Result:
 		return _ruleset.map_generation_registry.register_primary(callback, _module_id)
 
+	func register_map_candidate_selector(callback: Callable) -> Result:
+		return _ruleset.map_generation_registry.register_candidate_selector(callback, _module_id)
+
 	func register_employee_patch(target_employee_id: String, patch: Dictionary) -> Result:
 		return _ruleset.register_employee_patch(target_employee_id, patch, _module_id)
 

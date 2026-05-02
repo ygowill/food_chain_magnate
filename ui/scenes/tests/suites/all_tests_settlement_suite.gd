@@ -18,6 +18,14 @@ static func build_tests(_host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.RandomMapGenerationTestClass.run(2, 12345),
 			},
 			{
+				"name": "MapBalanceAnalyzerTest",
+				"fn": func() -> Result: return TestRefs.MapBalanceAnalyzerTestClass.run(2, 12345),
+			},
+			{
+				"name": "BalancedMapsModuleTest",
+				"fn": func() -> Result: return TestRefs.BalancedMapsModuleTestClass.run(2, 12345),
+			},
+			{
 				"name": "DinnertimeSettlementTest",
 				"fn": func() -> Result: return TestRefs.DinnertimeSettlementTestClass.run(2, 12345),
 			},
