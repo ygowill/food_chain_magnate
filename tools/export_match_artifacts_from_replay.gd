@@ -61,6 +61,7 @@ static func _run(args: Dictionary):
 	if room_code.is_empty():
 		return ResultClass.failure("--room-code 不能为空")
 	var match_id := _require_arg(args, "match-id")
+	_configure_online_export_context(room_code)
 
 	var replay_path := _absolute_path(replay_file)
 	if not FileAccess.file_exists(replay_path):
@@ -110,6 +111,24 @@ static func _run(args: Dictionary):
 	if not write_manifest_r.ok:
 		return write_manifest_r
 	return ResultClass.success(manifest)
+
+static func _configure_online_export_context(room_code: String) -> void:
+	var net_context = _get_net_context()
+	if net_context == null:
+		return
+	net_context.mode = 2 # NetContext.Mode.ONLINE_SERVER
+	net_context.local_player_id = -1
+	net_context.local_role = "server"
+	net_context.room_state = {
+		"room_code": str(room_code).strip_edges().to_upper(),
+		"status": "InGame",
+	}
+
+static func _get_net_context():
+	var loop := Engine.get_main_loop()
+	if loop is SceneTree:
+		return (loop as SceneTree).root.get_node_or_null("NetContext")
+	return null
 
 static func _export_map_snapshots(engine, output_dir_abs: String):
 	var command_history: Array = engine.get_command_history()
@@ -251,6 +270,13 @@ static func _snapshot_event_for_state_after_command(cmd, state) -> Dictionary:
 			"round_number": final_round_number,
 			"snapshot_kind": SNAPSHOT_KIND_GAME_OVER,
 		}
+	if str(state.phase) == DefsClass.PHASE_RESTRUCTURING:
+		var completed_round_number_from_state := int(state.round_number) - 1
+		if completed_round_number_from_state > 0:
+			return {
+				"round_number": completed_round_number_from_state,
+				"snapshot_kind": SNAPSHOT_KIND_ROUND_END,
+			}
 	if cmd == null or str(cmd.phase) != DefsClass.PHASE_CLEANUP:
 		return {}
 	if str(state.phase) != DefsClass.PHASE_RESTRUCTURING:
