@@ -325,7 +325,7 @@ func _ready() -> void:
 		var keep_loading_until_reserve_modal := false
 		if game_engine != null:
 			var s := game_engine.get_state()
-			if s != null and str(s.phase) == DefsClass.PHASE_SETUP and str(s.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS:
+			if not _startup_intro_running and s != null and str(s.phase) == DefsClass.PHASE_SETUP and str(s.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS:
 				keep_loading_until_reserve_modal = true
 		if not keep_loading_until_reserve_modal:
 			if bootstrap_loading_active and OnlineMatchBootstrap != null and OnlineMatchBootstrap.has_method("finish_after_game_ui_ready"):
@@ -720,14 +720,12 @@ func _prepare_startup_intro_before_ui_sync() -> bool:
 	var state: GameState = game_engine.get_state()
 	if state == null:
 		return false
-	# 仅在新开局（Setup，且 ReserveCards 已结束/跳过）播放一次。
+	# 仅在新开局（Setup，且玩家尚未放置起始餐厅）播放一次。
 	if int(state.round_number) != 0:
 		_startup_intro_played = true
 		return false
 	if str(state.phase) != DefsClass.PHASE_SETUP:
 		_startup_intro_played = true
-		return false
-	if str(state.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS:
 		return false
 	# 玩家已经开始放置起始餐厅后，不再播放开局动画。
 	for p_val in Array(state.players):
@@ -795,6 +793,7 @@ func _run_startup_intro() -> void:
 	_startup_intro_played = true
 	if _tutorials_controller != null and _tutorials_controller.has_method("on_startup_intro_finished"):
 		_tutorials_controller.on_startup_intro_finished()
+	call_deferred("_update_ui")
 
 func _on_debug_command_executed(command: String, _result: String) -> void:
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("on_debug_command_executed"):

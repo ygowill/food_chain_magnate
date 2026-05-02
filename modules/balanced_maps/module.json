@@ -1,7 +1,7 @@
 {
 	"schema_version": 1,
 	"id": "balanced_maps",
-	"name": "平衡地图候选（10选1）",
+	"name": "平衡地图生成",
 	"version": "0.1.0",
 	"priority": 80,
 	"dependencies": ["base_rules", "base_pieces", "base_tiles", "base_maps"],
@@ -13,7 +13,8 @@
 				"group_id": "map_expansion",
 				"group_title": "地图变体",
 				"group_order": 40,
-				"order": 3
+				"order": 3,
+				"default_enabled": true
 			}
 		}
 	}

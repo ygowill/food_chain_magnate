@@ -192,13 +192,22 @@ func set_setup_player_count(player_count: int) -> void:
 
 func set_initial_enabled_modules_v2(enabled_modules_v2: Array) -> void:
 	_requested_optional_modules.clear()
+	var has_optional_input := false
 	for mid_val in enabled_modules_v2:
 		var id := str(mid_val).strip_edges()
 		if id.is_empty():
 			continue
 		if id.begins_with("base_"):
 			continue
+		has_optional_input = true
 		_requested_optional_modules[id] = true
+	if not has_optional_input:
+		var default_optional := _logic.compute_default_requested_optional_modules()
+		for mid_val2 in default_optional.keys():
+			var id2 := str(mid_val2).strip_edges()
+			if id2.is_empty() or id2.begins_with("base_"):
+				continue
+			_requested_optional_modules[id2] = true
 	_recompute_modules_and_apply_to_ui()
 
 func set_forced_optional_modules(module_ids: Array, reason: String = "") -> void:

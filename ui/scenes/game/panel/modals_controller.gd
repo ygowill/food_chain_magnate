@@ -145,6 +145,12 @@ func sync_for_state(state: GameState, covered: Rect2) -> void:
 	if state == null:
 		return
 
+	if _scene != null and _scene.has_method("_is_startup_intro_running"):
+		var intro_val = _scene.call("_is_startup_intro_running")
+		if intro_val is bool and bool(intro_val):
+			hide()
+			return
+
 	var current_player_id := state.get_current_player_id()
 	var is_online := false
 	var local_player_id := -1

@@ -30,6 +30,8 @@ static func _test_module_selector_metadata() -> Result:
 	var manifest = manifests.get(MODULE_ID, null)
 	if manifest == null:
 		return Result.failure("%s manifest 为空" % MODULE_ID)
+	if str(manifest.name) != "平衡地图生成":
+		return Result.failure("%s manifest 名称应为 平衡地图生成，实际: %s" % [MODULE_ID, str(manifest.name)])
 	var provides: Dictionary = manifest.provides
 	var ui_val = provides.get("ui", null)
 	if not (ui_val is Dictionary):
@@ -41,6 +43,8 @@ static func _test_module_selector_metadata() -> Result:
 	var selector: Dictionary = selector_val
 	if str(selector.get("group_id", "")) != "map_expansion":
 		return Result.failure("%s 应归入地图变体分组，实际: %s" % [MODULE_ID, str(selector.get("group_id", ""))])
+	if not bool(selector.get("default_enabled", false)):
+		return Result.failure("%s 应在模块选择器中默认勾选" % MODULE_ID)
 	return Result.success()
 
 static func _test_selects_lowest_score_candidate(player_count: int, seed_val: int) -> Result:

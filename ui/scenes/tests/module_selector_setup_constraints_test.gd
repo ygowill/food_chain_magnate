@@ -20,6 +20,9 @@ static func run(seed_val: int = 12345) -> Result:
 		return _finish(Result.failure("ModuleSelector 加载模块列表失败: %s" % load_r.error), selector, selector2, engine, engine2)
 
 	selector.set_initial_enabled_modules_v2(GameDefaultsClass.build_default_enabled_modules_v2())
+	var default_enabled: Array[String] = selector.get_enabled_modules_v2()
+	if not default_enabled.has("balanced_maps"):
+		return _finish(Result.failure("ModuleSelector 未默认勾选平衡地图生成模块"), selector, selector2, engine, engine2)
 
 	if selector.has_method("set_setup_player_count"):
 		selector.call("set_setup_player_count", 6)

@@ -53,6 +53,17 @@ func _get_module_selector_order_in_group(module_id: String) -> int:
 	var meta := _get_module_selector_meta(module_id)
 	return int(meta.get("order", 999))
 
+func _get_module_selector_default_enabled(module_id: String) -> bool:
+	var meta := _get_module_selector_meta(module_id)
+	return bool(meta.get("default_enabled", false))
+
+func compute_default_requested_optional_modules() -> Dictionary:
+	var out: Dictionary = {}
+	for mid in _optional_module_ids:
+		if _get_module_selector_default_enabled(mid):
+			out[mid] = true
+	return out
+
 func compute_module_groups() -> Array[Dictionary]:
 	var groups_by_id: Dictionary = {} # group_id -> {id, title, order, modules}
 	for mid in _optional_module_ids:
@@ -401,4 +412,3 @@ func compute_required_optional_modules_for_player_count(player_count: int, reque
 				queue.append(req_mid)
 
 	return out
-
