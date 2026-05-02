@@ -290,8 +290,7 @@ static func _draw_structure_preview_piece(canvas, cell_size: int, preview_info: 
 				var style := str(hints.get("structure_style", "")).strip_edges()
 				var drew := false
 				if style == "house_id":
-					var bg_col := _read_color_hint(hints, "bg_color", Color("#814e60"))
-					StructuresPassClass.draw_house_id_structure(canvas, cell_size, info, structure_rect, bg_col, alpha)
+					StructuresPassClass.draw_house_id_structure(canvas, cell_size, info, structure_rect, StructuresPassClass.HOUSE_BG_COLOR, alpha)
 					drew = true
 				elif style == "player_logo_bg":
 					var owner2 := int(info.get("owner", -1))

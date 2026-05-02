@@ -6,7 +6,6 @@ func register(registrar) -> Result:
 		"apartment",
 		{
 			"structure_style": "house_id",
-			"bg_color": Color("#814e60"),
 		},
 		100
 	)

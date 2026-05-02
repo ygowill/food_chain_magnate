@@ -7,10 +7,14 @@ const MapDefClass = preload("res://core/map/map_def.gd")
 const MapBakeClass = preload("res://core/map/map_baker/bake.gd")
 const BakedMapClass = preload("res://core/map/map_runtime/baked_map.gd")
 const MarketingSettlementClass = preload("res://modules/base_rules/rules/phase/marketing_settlement.gd")
+const HouseNumberManagerClass = preload("res://core/map/house_number_manager.gd")
 
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_count != 2:
 		return Result.failure("本测试固定为 2 人局（实际: %d）" % player_count)
+	var display_labels := _test_apartment_display_labels_preserve_special_ids()
+	if not display_labels.ok:
+		return display_labels
 
 	var engine := GameEngine.new()
 	var enabled_modules: Array[String] = [
@@ -96,4 +100,18 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if demands.size() != 20:
 		return Result.failure("公寓应生成 20 个需求（10 * 2），实际: %d" % demands.size())
 
+	return Result.success()
+
+static func _test_apartment_display_labels_preserve_special_ids() -> Result:
+	var cases := [
+		{"house_id": "π", "number": 3.14, "expected": "π"},
+		{"house_id": "9¾", "number": 9.75, "expected": "9¾"},
+		{"house_id": "√2", "number": 1.41, "expected": "√2"},
+	]
+	for case_val in cases:
+		var case: Dictionary = case_val
+		var actual := HouseNumberManagerClass.format_display_label(case.get("number", null), str(case.get("house_id", "")), "")
+		var expected := str(case.get("expected", ""))
+		if actual != expected:
+			return Result.failure("公寓特殊编号显示错误: id=%s expected=%s actual=%s" % [str(case.get("house_id", "")), expected, actual])
 	return Result.success()

@@ -9,16 +9,40 @@ const PiecePreviewLayoutClass = preload("res://ui/utils/piece_preview_layout.gd"
 const DrinkSourcesPassClass = preload("res://ui/scenes/game/map/drawer/passes/drink_sources_pass.gd")
 const HouseNumberManagerClass = preload("res://core/map/house_number_manager.gd")
 const HOUSE_ID_FONT_PATH := "res://assets/fonts/NotoSansSC-Regular.otf"
+const HOUSE_ID_LABEL_TEXTURE_PATHS := {
+	"π": "res://assets/images/house_labels/pi.png",
+	"9¾": "res://assets/images/house_labels/nine_three_quarters.png",
+	"√2": "res://assets/images/house_labels/sqrt2.png",
+}
 const HOUSE_BG_COLOR := Color("#733651")
 const GARDEN_BG_COLOR := Color("#699055")
 const BOARD_EDGE_COLOR := Color("#2f261f")
 const BOARD_SHADOW_COLOR := Color(0, 0, 0, 0.22)
 
+static var _house_id_label_textures: Dictionary = {}
+
 static func clear_drink_source_texture_cache() -> void:
 	DrinkSourcesPassClass.clear_drink_source_texture_cache()
+	_house_id_label_textures.clear()
 
 static func _get_house_id_font() -> Font:
 	return load(HOUSE_ID_FONT_PATH)
+
+static func _get_house_id_label_texture(text: String) -> Texture2D:
+	var key := str(text)
+	if not HOUSE_ID_LABEL_TEXTURE_PATHS.has(key):
+		return null
+	if _house_id_label_textures.has(key):
+		var cached = _house_id_label_textures[key]
+		if cached is Texture2D:
+			return cached
+		return null
+	var tex = load(str(HOUSE_ID_LABEL_TEXTURE_PATHS[key]))
+	if tex is Texture2D:
+		_house_id_label_textures[key] = tex
+		return tex
+	_house_id_label_textures[key] = null
+	return null
 
 static func _read_color_hint(hints: Dictionary, key: String, fallback: Color) -> Color:
 	if hints == null or hints.is_empty():
@@ -136,8 +160,7 @@ static func draw_structures(canvas, cell_size: int, restaurant_logo_piece_ids: A
 		var hints := PieceUiHintsRegistryClass.get_hints(piece_id)
 		var style := str(hints.get("structure_style", "")).strip_edges()
 		if style == "house_id":
-			var bg_col := _read_color_hint(hints, "bg_color", Color("#814e60"))
-			draw_house_id_structure(canvas, cell_size, info, footprint_rect, bg_col, 1.0)
+			draw_house_id_structure(canvas, cell_size, info, footprint_rect, HOUSE_BG_COLOR, 1.0)
 			continue
 		if style == "player_logo":
 			var owner_logo := int(info.get("owner", -1))
@@ -574,16 +597,132 @@ static func compute_house_id_rect(cell_size: int, structure_rect: Rect2) -> Rect
 	var pos := structure_rect.position + Vector2(structure_rect.size.x - bg_size.x - pad, pad)
 	return Rect2(pos, bg_size)
 
+static func _fit_house_id_font_size(font: Font, text: String, max_width: float, base_size: int, min_size: int) -> int:
+	if font == null or text.is_empty() or max_width <= 1.0:
+		return base_size
+	var size := maxi(min_size, base_size)
+	while size > min_size:
+		var text_size := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size)
+		if text_size.x <= max_width:
+			return size
+		size -= 1
+	return min_size
+
+static func _draw_special_house_id_label(canvas, label_rect: Rect2, text: String, font: Font) -> bool:
+	var tex := _get_house_id_label_texture(text)
+	if tex != null:
+		_draw_house_id_label_texture(canvas, label_rect, tex, Vector2(1, 1), Color(0, 0, 0, 0.85))
+		_draw_house_id_label_texture(canvas, label_rect, tex, Vector2.ZERO, Color(1, 1, 1, 1))
+		return true
+	match text:
+		"π":
+			_draw_pi_house_id_label(canvas, label_rect, Vector2(1, 1), Color(0, 0, 0, 0.85))
+			_draw_pi_house_id_label(canvas, label_rect, Vector2.ZERO, Color(1, 1, 1, 1))
+			return true
+		"9¾":
+			if font == null:
+				return false
+			_draw_fraction_house_id_label(canvas, label_rect, "9", "3/4", font, Vector2(1, 1), Color(0, 0, 0, 0.85))
+			_draw_fraction_house_id_label(canvas, label_rect, "9", "3/4", font, Vector2.ZERO, Color(1, 1, 1, 1))
+			return true
+		"√2":
+			if font == null:
+				return false
+			_draw_sqrt_house_id_label(canvas, label_rect, font, Vector2(1, 1), Color(0, 0, 0, 0.85))
+			_draw_sqrt_house_id_label(canvas, label_rect, font, Vector2.ZERO, Color(1, 1, 1, 1))
+			return true
+	return false
+
+static func _draw_house_id_label_texture(canvas, label_rect: Rect2, tex: Texture2D, offset: Vector2, color: Color) -> void:
+	if canvas == null or tex == null:
+		return
+	var tex_size := tex.get_size()
+	if tex_size.x <= 0.0 or tex_size.y <= 0.0:
+		return
+	var max_size := Vector2(maxf(1.0, label_rect.size.x - 2.0), maxf(1.0, label_rect.size.y - 2.0))
+	var scale := minf(max_size.x / tex_size.x, max_size.y / tex_size.y)
+	var draw_size := tex_size * scale
+	var pos := label_rect.position + (label_rect.size - draw_size) * 0.5 + offset
+	canvas.draw_texture_rect(tex, Rect2(pos, draw_size), false, color)
+
+static func _draw_pi_house_id_label(canvas, label_rect: Rect2, offset: Vector2, color: Color) -> void:
+	if canvas == null:
+		return
+	var glyph_h := label_rect.size.y * 0.62
+	var glyph_w := minf(label_rect.size.x * 0.52, glyph_h * 0.88)
+	var center_x := label_rect.position.x + label_rect.size.x * 0.5
+	var top_y := label_rect.position.y + label_rect.size.y * 0.30
+	var bottom_y := top_y + glyph_h
+	var left_x := center_x - glyph_w * 0.5
+	var right_x := center_x + glyph_w * 0.5
+	var stroke := maxf(2.0, glyph_h * 0.15)
+	var top_slant := stroke * 0.45
+	var serif := stroke * 0.65
+	var top_points := PackedVector2Array([
+		Vector2(left_x - serif, top_y + top_slant) + offset,
+		Vector2(left_x - serif * 0.35, top_y) + offset,
+		Vector2(right_x + serif, top_y) + offset,
+		Vector2(right_x + serif * 0.35, top_y + stroke) + offset,
+		Vector2(left_x - serif * 0.70, top_y + stroke) + offset,
+	])
+	canvas.draw_colored_polygon(top_points, color)
+
+	var left_leg_x := left_x + glyph_w * 0.25
+	var right_leg_x := left_x + glyph_w * 0.72
+	var leg_top := top_y + stroke * 0.78
+	var leg_h := maxf(1.0, bottom_y - leg_top)
+	canvas.draw_rect(Rect2(Vector2(left_leg_x, leg_top) + offset, Vector2(stroke, leg_h)), color, true)
+	canvas.draw_rect(Rect2(Vector2(right_leg_x, leg_top) + offset, Vector2(stroke, leg_h * 0.94)), color, true)
+
+	var foot_w := stroke * 1.45
+	var foot_h := maxf(1.0, stroke * 0.42)
+	canvas.draw_rect(Rect2(Vector2(left_leg_x - foot_w * 0.25, bottom_y - foot_h) + offset, Vector2(foot_w, foot_h)), color, true)
+	canvas.draw_rect(Rect2(Vector2(right_leg_x - foot_w * 0.15, bottom_y - foot_h - leg_h * 0.06) + offset, Vector2(foot_w, foot_h)), color, true)
+
+static func _draw_fraction_house_id_label(canvas, label_rect: Rect2, whole: String, fraction: String, font: Font, offset: Vector2, color: Color) -> void:
+	if canvas == null or font == null:
+		return
+	var whole_size := maxi(8, int(round(label_rect.size.y * 0.68)))
+	var frac_size := maxi(7, int(round(label_rect.size.y * 0.42)))
+	var gap := maxf(1.0, label_rect.size.x * 0.05)
+	for _i in range(12):
+		var whole_w := font.get_string_size(whole, HORIZONTAL_ALIGNMENT_LEFT, -1.0, whole_size).x
+		var frac_w := font.get_string_size(fraction, HORIZONTAL_ALIGNMENT_LEFT, -1.0, frac_size).x
+		if whole_w + gap + frac_w <= label_rect.size.x - 2.0:
+			break
+		whole_size = maxi(7, whole_size - 1)
+		frac_size = maxi(6, frac_size - 1)
+	var final_whole_w := font.get_string_size(whole, HORIZONTAL_ALIGNMENT_LEFT, -1.0, whole_size).x
+	var final_frac_w := font.get_string_size(fraction, HORIZONTAL_ALIGNMENT_LEFT, -1.0, frac_size).x
+	var start_x := label_rect.position.x + label_rect.size.x - final_whole_w - gap - final_frac_w
+	var whole_baseline := label_rect.position.y + label_rect.size.y * 0.78
+	var frac_baseline := label_rect.position.y + label_rect.size.y * 0.56
+	canvas.draw_string(font, Vector2(start_x, whole_baseline) + offset, whole, HORIZONTAL_ALIGNMENT_LEFT, final_whole_w, whole_size, color)
+	canvas.draw_string(font, Vector2(start_x + final_whole_w + gap, frac_baseline) + offset, fraction, HORIZONTAL_ALIGNMENT_LEFT, final_frac_w, frac_size, color)
+
+static func _draw_sqrt_house_id_label(canvas, label_rect: Rect2, font: Font, offset: Vector2, color: Color) -> void:
+	if canvas == null or font == null:
+		return
+	var text := "sqrt2"
+	var font_size := _fit_house_id_font_size(font, text, label_rect.size.x - 2.0, maxi(8, int(round(label_rect.size.y * 0.52))), 7)
+	var text_size := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size)
+	var baseline := label_rect.position + Vector2(label_rect.size.x - text_size.x, label_rect.size.y * 0.72)
+	canvas.draw_string(font, baseline + offset, text, HORIZONTAL_ALIGNMENT_LEFT, text_size.x, font_size, color)
+
 static func draw_house_id(canvas, cell_size: int, structure_rect: Rect2, display_label) -> void:
 	var text := str(display_label).strip_edges()
 	if text.is_empty():
 		return
 	var pad := maxf(3.0, float(cell_size) * 0.12)
-	var font_size := maxi(11, int(round(float(cell_size) * 0.34)))
 	var label_rect := compute_house_id_rect(cell_size, structure_rect)
 
 	var house_id_font := _get_house_id_font()
 	var font: Font = house_id_font if house_id_font != null else ThemeDB.fallback_font
+	if _draw_special_house_id_label(canvas, label_rect, text, font):
+		return
+	var base_font_size := maxi(11, int(round(float(cell_size) * 0.34)))
+	var min_font_size := maxi(8, int(round(float(cell_size) * 0.22)))
+	var font_size := _fit_house_id_font_size(font, text, maxf(1.0, label_rect.size.x - 2.0), base_font_size, min_font_size)
 	var baseline := label_rect.position + Vector2(0.0, label_rect.size.y - pad)
 	canvas.draw_string(font, baseline + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_RIGHT, label_rect.size.x, font_size, Color(0, 0, 0, 0.85))
 	canvas.draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_RIGHT, label_rect.size.x, font_size, Color(1, 1, 1, 1))

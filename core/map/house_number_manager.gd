@@ -107,6 +107,9 @@ static func _get_sort_key(house_number) -> Dictionary:
 		var special_values := {
 			"π": 3.14159,
 			"pi": 3.14159,
+			"9¾": 9.75,
+			"9_3_4": 9.75,
+			"9 3/4": 9.75,
 			"√2": 1.41421,
 			"sqrt2": 1.41421,
 			"e": 2.71828
