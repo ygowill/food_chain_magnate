@@ -5,6 +5,9 @@ extends Control
 # UI 节点引用
 @onready var ui_root: Control = $UIRoot
 @onready var status_bar: PanelContainer = $UIRoot/TopBar/StatusBar
+@onready var elapsed_time_panel: PanelContainer = $UIRoot/TopBar/ElapsedTimePanel
+@onready var elapsed_time_icon: TextureRect = $UIRoot/TopBar/ElapsedTimePanel/ElapsedTimeContent/ElapsedTimeIcon
+@onready var elapsed_time_value_label: Label = $UIRoot/TopBar/ElapsedTimePanel/ElapsedTimeContent/ElapsedTimeValueLabel
 @onready var round_label: Label = $UIRoot/TopBar/StatusBar/StatusContent/RoundSection/RoundValueLabel
 @onready var phase_track: Control = $UIRoot/TopBar/StatusBar/StatusContent/PhaseTrack
 @onready var turn_order_display: Control = $UIRoot/MainContent/CenterSplit/GameArea/TurnOrderOverlay/TurnOrderDisplay
@@ -23,6 +26,7 @@ extends Control
 @onready var menu_rules_button: Button = $MenuDialog/VBoxContainer/RulesButton
 @onready var menu_settings_button: Button = $MenuDialog/VBoxContainer/SettingsButton
 @onready var menu_quit_to_menu_button: Button = $MenuDialog/VBoxContainer/QuitToMenuButton
+@onready var menu_forfeit_button: Button = $MenuDialog/VBoxContainer/ForfeitButton
 @onready var main_content: Control = $UIRoot/MainContent
 @onready var center_split: HSplitContainer = $UIRoot/MainContent/CenterSplit
 @onready var map_view: ScrollContainer = $UIRoot/MainContent/CenterSplit/GameArea/MapView
@@ -111,6 +115,8 @@ var _online_waiting_action_ui_hidden: bool = false
 var _startup_online_resume_ui_hidden: bool = false
 var _match_details_request_id: String = ""
 var _match_details_requested_allow_spectators: Variant = null
+var _elapsed_time_start_msec: int = 0
+var _elapsed_time_last_seconds: int = -1
 
 func _is_headless_runtime() -> bool:
 	return DisplayServer.get_name() == "headless"
@@ -121,6 +127,7 @@ func _is_startup_intro_running() -> bool:
 func _ready() -> void:
 	var span_ready := PerfTraceClass.begin_span("game:_ready")
 	GameLog.info("Game", "游戏场景已加载")
+	_reset_elapsed_time_counter()
 	var startup_direct_resume := _should_startup_online_resume_direct_to_game()
 	if startup_direct_resume:
 		_set_startup_online_resume_ui_hidden(true)
@@ -335,6 +342,34 @@ func _ready() -> void:
 	if PerfTraceClass.enabled() and not _startup_profile_reported and not _is_headless_runtime():
 		_startup_profile_reported = true
 		call_deferred("_report_startup_profile")
+
+func _process(_delta: float) -> void:
+	_update_elapsed_time_label()
+
+func _reset_elapsed_time_counter() -> void:
+	_elapsed_time_start_msec = int(Time.get_ticks_msec())
+	_elapsed_time_last_seconds = -1
+	_update_elapsed_time_label()
+
+func _update_elapsed_time_label() -> void:
+	if not is_instance_valid(elapsed_time_value_label):
+		return
+	if _elapsed_time_start_msec <= 0:
+		_elapsed_time_start_msec = int(Time.get_ticks_msec())
+	var elapsed_seconds := maxi(0, int((int(Time.get_ticks_msec()) - _elapsed_time_start_msec) / 1000))
+	if elapsed_seconds == _elapsed_time_last_seconds:
+		return
+	_elapsed_time_last_seconds = elapsed_seconds
+	elapsed_time_value_label.text = _format_elapsed_time(elapsed_seconds)
+
+func _format_elapsed_time(total_seconds: int) -> String:
+	var seconds := int(total_seconds) % 60
+	var total_minutes := int(total_seconds / 60)
+	var minutes := total_minutes % 60
+	var hours := int(total_minutes / 60)
+	if hours > 0:
+		return "%d:%02d:%02d" % [hours, minutes, seconds]
+	return "%02d:%02d" % [minutes, seconds]
 
 func _report_startup_profile() -> void:
 	# 让首帧/次帧的 deferred/UI queue 跑完，避免漏掉 MapSkin 构建等同步耗时的尾部。
@@ -1024,6 +1059,10 @@ func _on_replay_pressed() -> void:
 func _on_quit_to_menu_pressed() -> void:
 	if _menu_controller != null and _menu_controller.has_method("on_quit_to_menu_pressed"):
 		_menu_controller.call("on_quit_to_menu_pressed")
+
+func _on_forfeit_pressed() -> void:
+	if _menu_controller != null and _menu_controller.has_method("on_forfeit_pressed"):
+		_menu_controller.call("on_forfeit_pressed")
 
 func _bind_online_match_details_signals() -> void:
 	if online_game_details_dialog != null and is_instance_valid(online_game_details_dialog):

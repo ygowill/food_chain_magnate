@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3 uid="uid://dph5rwtgn6tq8"]
+[gd_scene load_steps=21 format=3 uid="uid://dph5rwtgn6tq8"]
 
 [ext_resource type="Script" uid="uid://ckmoescpu6tet" path="res://ui/scenes/game/game.gd" id="1_game"]
 [ext_resource type="Script" uid="uid://c7bjun5j7en8b" path="res://ui/scenes/game/map/view.gd" id="2_map_view"]
@@ -19,6 +19,7 @@
 [ext_resource type="Texture2D" path="res://assets/ui/icons/kenney/game/arrow_left.png" id="17_arrow_left"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/kenney/game/close_cross.png" id="18_close_cross"]
 [ext_resource type="Script" path="res://ui/scenes/game/dialogs/online_game_details_dialog.gd" id="19_online_game_details_dialog"]
+[ext_resource type="Texture2D" path="res://assets/images/stopwatch.png" id="20_stopwatch"]
 
 [node name="Game" type="Control"]
 layout_mode = 3
@@ -70,6 +71,28 @@ layout_mode = 2
 expand_mode = 1
 stretch_mode = 5
 tooltip_text = "点击静音"
+
+[node name="ElapsedTimePanel" type="PanelContainer" parent="UIRoot/TopBar"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="ElapsedTimeContent" type="HBoxContainer" parent="UIRoot/TopBar/ElapsedTimePanel"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ElapsedTimeIcon" type="TextureRect" parent="UIRoot/TopBar/ElapsedTimePanel/ElapsedTimeContent"]
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "对局计时"
+texture = ExtResource("20_stopwatch")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ElapsedTimeValueLabel" type="Label" parent="UIRoot/TopBar/ElapsedTimePanel/ElapsedTimeContent"]
+custom_minimum_size = Vector2(56, 0)
+layout_mode = 2
+text = "00:00"
 
 [node name="LeftSpacer" type="Control" parent="UIRoot/TopBar"]
 layout_mode = 2
@@ -429,6 +452,11 @@ text = "显示/隐藏底部面板"
 layout_mode = 2
 text = "返回主菜单"
 
+[node name="ForfeitButton" type="Button" parent="MenuDialog/VBoxContainer"]
+visible = false
+layout_mode = 2
+text = "弃权"
+
 [node name="OnlineGameDetailsDialog" type="Control" parent="."]
 layout_mode = 1
 anchors_preset = 15
@@ -457,3 +485,4 @@ script = ExtResource("19_online_game_details_dialog")
 [connection signal="pressed" from="MenuDialog/VBoxContainer/SettingsButton" to="." method="_on_settings_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/ToggleBottomPanelButton" to="." method="_on_toggle_bottom_panel_pressed"]
 [connection signal="pressed" from="MenuDialog/VBoxContainer/QuitToMenuButton" to="." method="_on_quit_to_menu_pressed"]
+[connection signal="pressed" from="MenuDialog/VBoxContainer/ForfeitButton" to="." method="_on_forfeit_pressed"]

@@ -277,6 +277,16 @@ func apply_responsive_layout() -> void:
 	var bank_title_label = _scene.get_node_or_null("UIRoot/TopBar/StatusBar/StatusContent/BankSection/BankTitleLabel")
 	if bank_title_label is Label:
 		(bank_title_label as Label).add_theme_font_size_override("font_size", scaled_font_size)
+	var elapsed_time_icon = _scene.get_node_or_null("UIRoot/TopBar/ElapsedTimePanel/ElapsedTimeContent/ElapsedTimeIcon")
+	if elapsed_time_icon is TextureRect:
+		var mute_icon = _scene.get_node_or_null("UIRoot/TopBar/MuteIcon")
+		var icon_size := 32
+		if mute_icon is TextureRect:
+			icon_size = maxi(1, int(round((mute_icon as TextureRect).custom_minimum_size.x)))
+		(elapsed_time_icon as TextureRect).custom_minimum_size = Vector2(icon_size, icon_size)
+	var elapsed_time_value_label = _scene.get_node_or_null("UIRoot/TopBar/ElapsedTimePanel/ElapsedTimeContent/ElapsedTimeValueLabel")
+	if elapsed_time_value_label is Label:
+		(elapsed_time_value_label as Label).add_theme_font_size_override("font_size", scaled_font_size)
 
 func _get_layout_player_count() -> int:
 	var count := 0

@@ -105,7 +105,7 @@ func on_menu_pressed() -> void:
 		var can_open_val = _can_open_menu.call()
 		if can_open_val is bool and not bool(can_open_val):
 			return
-	_sync_quit_to_menu_button_text()
+	_sync_menu_button_state()
 	if is_instance_valid(_menu_debug_controller) and _menu_debug_controller.has_method("open_menu"):
 		_menu_debug_controller.call("open_menu")
 	elif is_instance_valid(_menu_dialog):
@@ -188,13 +188,37 @@ func on_quit_to_menu_pressed() -> void:
 		"取消"
 	)
 
-func _sync_quit_to_menu_button_text() -> void:
+func on_forfeit_pressed() -> void:
+	if not _is_online_forfeit_available():
+		on_quit_to_menu_pressed()
+		return
+	on_menu_dialog_close_requested()
+	show_confirm(
+		"弃权",
+		"确定要弃权吗？\n这将会认输并退出当前联机对局。",
+		Callable(self, "_confirm_quit_to_menu"),
+		Callable(self, "_cancel_quit_to_menu"),
+		"认输并退出",
+		"取消"
+	)
+
+func _sync_menu_button_state() -> void:
 	if not is_instance_valid(_menu_dialog):
 		return
 	var quit_button = _menu_dialog.get_node_or_null("VBoxContainer/QuitToMenuButton")
-	if quit_button == null or not (quit_button is Button):
-		return
-	(quit_button as Button).text = "返回房间列表" if _is_online_game_over_return_to_lobby() else "返回主菜单"
+	if quit_button != null and quit_button is Button:
+		(quit_button as Button).text = "返回房间列表" if _is_online_game_over_return_to_lobby() else "返回主菜单"
+	var forfeit_button = _menu_dialog.get_node_or_null("VBoxContainer/ForfeitButton")
+	if forfeit_button != null and forfeit_button is Button:
+		(forfeit_button as Button).visible = _is_online_forfeit_available()
+
+func _is_online_forfeit_available() -> bool:
+	if not is_instance_valid(_menu_debug_controller):
+		return false
+	if not _menu_debug_controller.has_method("will_forfeit_online_match_on_quit"):
+		return false
+	var value = _menu_debug_controller.call("will_forfeit_online_match_on_quit")
+	return value is bool and bool(value)
 
 func _is_online_game_over_return_to_lobby() -> bool:
 	if not is_instance_valid(_menu_debug_controller):
@@ -267,7 +291,7 @@ func _confirm_quit_to_menu() -> void:
 		SceneManager.goto_main_menu()
 
 func _cancel_quit_to_menu() -> void:
-	_sync_quit_to_menu_button_text()
+	_sync_menu_button_state()
 	if is_instance_valid(_menu_debug_controller) and _menu_debug_controller.has_method("open_menu"):
 		_menu_debug_controller.call("open_menu")
 	elif is_instance_valid(_menu_dialog):

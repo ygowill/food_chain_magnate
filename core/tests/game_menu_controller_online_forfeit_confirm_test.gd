@@ -12,6 +12,7 @@ class _MockMenuDebugController:
 
 	var close_menu_count: int = 0
 	var open_menu_count: int = 0
+	var quit_to_menu_count: int = 0
 	var will_forfeit_on_quit: bool = false
 	var online_game_over_return_to_lobby: bool = false
 	var game_over: bool = false
@@ -21,6 +22,9 @@ class _MockMenuDebugController:
 
 	func close_menu() -> void:
 		close_menu_count += 1
+
+	func quit_to_menu() -> void:
+		quit_to_menu_count += 1
 
 	func will_forfeit_online_match_on_quit() -> bool:
 		return bool(will_forfeit_on_quit)
@@ -75,9 +79,75 @@ static func run() -> Result:
 		return await _cleanup_and_fail(tree, host, controller, "联机确认按钮文案错误: %s" % str(dialog.confirm_btn.text if dialog.confirm_btn != null else ""))
 
 	await _cleanup(tree, host, controller)
+	var forfeit_button_result := await _run_online_forfeit_button_case(tree)
+	if not forfeit_button_result.ok:
+		return forfeit_button_result
 	var game_over_confirm_result := await _run_online_game_over_return_confirm(tree)
 	if not game_over_confirm_result.ok:
 		return game_over_confirm_result
+	return Result.success()
+
+
+static func _run_online_forfeit_button_case(tree: SceneTree) -> Result:
+	var host := Control.new()
+	tree.root.add_child(host)
+	var menu_dialog := Control.new()
+	host.add_child(menu_dialog)
+	var box := VBoxContainer.new()
+	box.name = "VBoxContainer"
+	menu_dialog.add_child(box)
+	var quit_btn := Button.new()
+	quit_btn.name = "QuitToMenuButton"
+	quit_btn.text = "返回主菜单"
+	box.add_child(quit_btn)
+	var forfeit_btn := Button.new()
+	forfeit_btn.name = "ForfeitButton"
+	forfeit_btn.visible = false
+	box.add_child(forfeit_btn)
+
+	var mock_debug := _MockMenuDebugController.new()
+	mock_debug.will_forfeit_on_quit = true
+
+	var controller = ControllerClass.new(
+		host,
+		mock_debug,
+		menu_dialog,
+		ConfirmDialogScene,
+		null,
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable()
+	)
+
+	controller.on_menu_pressed()
+	if not bool(forfeit_btn.visible):
+		return await _cleanup_and_fail(tree, host, controller, "联机可弃权时菜单应显示弃权按钮")
+	if str(quit_btn.text) != "返回主菜单":
+		return await _cleanup_and_fail(tree, host, controller, "普通联机局返回按钮仍应显示返回主菜单，实际: %s" % str(quit_btn.text))
+
+	controller.on_forfeit_pressed()
+	await tree.process_frame
+
+	if mock_debug.close_menu_count != 1:
+		return await _cleanup_and_fail(tree, host, controller, "点击弃权前应先关闭菜单")
+	var dialog = controller._confirm_dialog
+	if dialog == null or not is_instance_valid(dialog):
+		return await _cleanup_and_fail(tree, host, controller, "点击弃权后未弹出确认框")
+	if dialog.title_label == null or str(dialog.title_label.text) != "弃权":
+		return await _cleanup_and_fail(tree, host, controller, "弃权确认框标题错误: %s" % str(dialog.title_label.text if dialog.title_label != null else ""))
+	if dialog.message_label == null or dialog.message_label.text.find("认输并退出") < 0:
+		return await _cleanup_and_fail(tree, host, controller, "弃权确认框未提示认输并退出: %s" % str(dialog.message_label.text if dialog.message_label != null else ""))
+	if dialog.confirm_btn == null or str(dialog.confirm_btn.text) != "认输并退出":
+		return await _cleanup_and_fail(tree, host, controller, "弃权确认按钮文案错误: %s" % str(dialog.confirm_btn.text if dialog.confirm_btn != null else ""))
+
+	controller._on_confirm_dialog_confirmed()
+	if mock_debug.quit_to_menu_count != 1:
+		return await _cleanup_and_fail(tree, host, controller, "确认弃权应复用 quit_to_menu 流程")
+
+	await _cleanup(tree, host, controller)
 	return Result.success()
 
 
@@ -95,6 +165,10 @@ static func _run_online_game_over_return_confirm(tree: SceneTree) -> Result:
 	quit_btn.name = "QuitToMenuButton"
 	quit_btn.text = "返回主菜单"
 	box.add_child(quit_btn)
+	var forfeit_btn := Button.new()
+	forfeit_btn.name = "ForfeitButton"
+	forfeit_btn.visible = true
+	box.add_child(forfeit_btn)
 
 	var mock_debug := _MockMenuDebugController.new()
 	mock_debug.online_game_over_return_to_lobby = true
@@ -117,6 +191,8 @@ static func _run_online_game_over_return_confirm(tree: SceneTree) -> Result:
 	controller.on_menu_pressed()
 	if str(quit_btn.text) != "返回房间列表":
 		return await _cleanup_and_fail(tree, host, controller, "GameOver 联机菜单按钮应显示返回房间列表，实际: %s" % str(quit_btn.text))
+	if bool(forfeit_btn.visible):
+		return await _cleanup_and_fail(tree, host, controller, "GameOver 联机返回房间列表菜单不应显示弃权按钮")
 	if mock_debug.open_menu_count != 1:
 		return await _cleanup_and_fail(tree, host, controller, "打开菜单应委托 menu_debug_controller.open_menu")
 	if menu_dialog.get_index() <= phase_modal.get_index():

@@ -59,6 +59,7 @@ static func _disable_removed_panel_toggles(game) -> void:
 
 static func _apply_status_bar_styles(game) -> void:
 	UiStylesClass.apply_status_panel(game.status_bar)
+	UiStylesClass.apply_status_panel(game.elapsed_time_panel)
 	UiStylesClass.apply_break_tag(game.bank_break_tag)
 	# Icon labels - accent colors
 	var icon_styles: Array[Array] = [
@@ -76,7 +77,7 @@ static func _apply_status_bar_styles(game) -> void:
 		UiStylesClass.apply_label_dark(title_lbl)
 		(title_lbl as Label).add_theme_font_size_override("font_size", 17)
 	# Value labels - primary, larger
-	for lbl in [game.round_label, game.bank_label]:
+	for lbl in [game.round_label, game.bank_label, game.elapsed_time_value_label]:
 		if lbl is Label:
 			UiStylesClass.apply_label_dark(lbl)
 			(lbl as Label).add_theme_font_size_override("font_size", 17)
