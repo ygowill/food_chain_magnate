@@ -305,7 +305,7 @@ static func _draw_structure_preview_piece(canvas, cell_size: int, preview_info: 
 					if tex2 != null:
 						var rot_offset := int(hints.get("rotation_offset_deg", 0))
 						var bg_col3 := _read_color_hint(hints, "bg_color", Color("#4c8078"))
-						StructuresPassClass.draw_opaque_rotated_piece(canvas, structure_rect, tex2, rotation, rot_offset, bg_col3, alpha)
+						StructuresPassClass.draw_opaque_rotated_piece(canvas, cell_size, structure_rect, tex2, rotation, rot_offset, bg_col3, alpha)
 						drew = true
 
 				if not drew:

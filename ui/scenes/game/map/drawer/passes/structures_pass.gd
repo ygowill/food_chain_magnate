@@ -11,6 +11,9 @@ const HouseNumberManagerClass = preload("res://core/map/house_number_manager.gd"
 const HOUSE_ID_FONT_PATH := "res://assets/fonts/NotoSansSC-Regular.otf"
 const HOUSE_BG_COLOR := Color("#733651")
 const GARDEN_BG_COLOR := Color("#699055")
+const BOARD_EDGE_COLOR := Color("#2f261f")
+const BOARD_SHADOW_COLOR := Color(0, 0, 0, 0.22)
+const BOARD_GRID_COLOR := Color(0, 0, 0, 0.18)
 
 static func clear_drink_source_texture_cache() -> void:
 	DrinkSourcesPassClass.clear_drink_source_texture_cache()
@@ -29,6 +32,98 @@ static func _read_color_hint(hints: Dictionary, key: String, fallback: Color) ->
 		if not s.is_empty():
 			return Color(s)
 	return fallback
+
+static func _board_edge_px(cell_size: int) -> float:
+	return maxf(1.0, minf(5.0, float(cell_size) * 0.07))
+
+static func _draw_board_piece_shadow(canvas, rect: Rect2, cell_size: int, alpha: float) -> void:
+	if canvas == null:
+		return
+	if rect.size.x <= 1.0 or rect.size.y <= 1.0:
+		return
+	var a := clampf(alpha, 0.0, 1.0)
+	if a <= 0.001:
+		return
+	var offset := maxf(1.0, minf(6.0, float(cell_size) * 0.08))
+	var shadow := BOARD_SHADOW_COLOR
+	shadow.a *= a
+	canvas.draw_rect(Rect2(rect.position + Vector2(offset, offset), rect.size), shadow, true)
+
+static func _draw_board_piece_fill(canvas, rect: Rect2, fill_color: Color, alpha: float) -> void:
+	if canvas == null:
+		return
+	if rect.size.x <= 1.0 or rect.size.y <= 1.0:
+		return
+	var face := fill_color
+	face.a = clampf(alpha, 0.0, 1.0)
+	canvas.draw_rect(rect, face, true)
+
+static func _draw_board_piece_bevel(canvas, rect: Rect2, cell_size: int, fill_color: Color, alpha: float) -> void:
+	if canvas == null:
+		return
+	if rect.size.x <= 1.0 or rect.size.y <= 1.0:
+		return
+	var a := clampf(alpha, 0.0, 1.0)
+	if a <= 0.001:
+		return
+	var edge := _board_edge_px(cell_size)
+	if rect.size.x <= edge * 2.0 or rect.size.y <= edge * 2.0:
+		return
+
+	var highlight := fill_color.lightened(0.26)
+	highlight.a = 0.48 * a
+	var shade := Color("#4b3828")
+	shade.a = 0.50 * a
+
+	canvas.draw_rect(Rect2(rect.position, Vector2(rect.size.x, edge)), highlight, true)
+	canvas.draw_rect(Rect2(rect.position, Vector2(edge, rect.size.y)), highlight, true)
+	canvas.draw_rect(Rect2(rect.position + Vector2(rect.size.x - edge, 0.0), Vector2(edge, rect.size.y)), shade, true)
+	canvas.draw_rect(Rect2(rect.position + Vector2(0.0, rect.size.y - edge), Vector2(rect.size.x, edge)), shade, true)
+
+static func _draw_board_piece_surface_lines(canvas, rect: Rect2, cell_size: int, alpha: float, draw_internal_grid: bool = true) -> void:
+	if canvas == null:
+		return
+	if rect.size.x <= 1.0 or rect.size.y <= 1.0:
+		return
+	var a := clampf(alpha, 0.0, 1.0)
+	if a <= 0.001:
+		return
+
+	var edge := _board_edge_px(cell_size)
+	var line_w := maxf(1.0, minf(2.0, float(cell_size) * 0.025))
+	if draw_internal_grid and cell_size > 1:
+		var grid := BOARD_GRID_COLOR
+		grid.a *= a
+		var step := float(cell_size)
+		var x := rect.position.x + step
+		var end_x := rect.position.x + rect.size.x - line_w * 0.5
+		while x < end_x:
+			canvas.draw_rect(
+				Rect2(Vector2(x - line_w * 0.5, rect.position.y + edge), Vector2(line_w, maxf(0.0, rect.size.y - edge * 2.0))),
+				grid,
+				true
+			)
+			x += step
+
+		var y := rect.position.y + step
+		var end_y := rect.position.y + rect.size.y - line_w * 0.5
+		while y < end_y:
+			canvas.draw_rect(
+				Rect2(Vector2(rect.position.x + edge, y - line_w * 0.5), Vector2(maxf(0.0, rect.size.x - edge * 2.0), line_w)),
+				grid,
+				true
+			)
+			y += step
+
+	var border := BOARD_EDGE_COLOR
+	border.a = 0.82 * a
+	canvas.draw_rect(rect, border, false, maxf(1.0, minf(3.0, float(cell_size) * 0.045)))
+
+static func _draw_board_piece_background(canvas, rect: Rect2, cell_size: int, fill_color: Color, alpha: float = 1.0, with_shadow: bool = true) -> void:
+	if with_shadow:
+		_draw_board_piece_shadow(canvas, rect, cell_size, alpha)
+	_draw_board_piece_fill(canvas, rect, fill_color, alpha)
+	_draw_board_piece_bevel(canvas, rect, cell_size, fill_color, alpha)
 
 static func draw_drink_sources(canvas, cell_size: int) -> void:
 	DrinkSourcesPassClass.draw_drink_sources(canvas, cell_size)
@@ -89,10 +184,9 @@ static func draw_structures(canvas, cell_size: int, restaurant_logo_piece_ids: A
 			if tex2 != null:
 				var rot_offset := int(hints.get("rotation_offset_deg", 0))
 				var bg_col3 := _read_color_hint(hints, "bg_color", Color("#4c8078"))
-				draw_opaque_rotated_piece(canvas, footprint_rect, tex2, int(info.get("rotation", 0)), rot_offset, bg_col3, 1.0)
+				draw_opaque_rotated_piece(canvas, cell_size, footprint_rect, tex2, int(info.get("rotation", 0)), rot_offset, bg_col3, 1.0)
 				continue
 		if piece_id == "restaurant":
-			var tex: Texture2D = canvas._skin.get_piece_texture(piece_id)
 			var offset_px: Vector2i = canvas._skin.get_piece_offset_px(piece_id)
 			var scale: Vector2 = canvas._skin.get_piece_scale(piece_id)
 			var pos_px := Vector2(min_pos.x * cell_size, min_pos.y * cell_size) + Vector2(offset_px.x, offset_px.y)
@@ -133,7 +227,10 @@ static func draw_player_logo_piece(
 
 	var tex: Texture2D = canvas._skin.get_piece_texture(logo_key)
 	var mod := Color(1, 1, 1, 0.92 * clampf(alpha, 0.0, 1.0))
-	canvas.draw_texture_rect(tex, structure_rect, false, mod)
+	_draw_board_piece_background(canvas, structure_rect, cell_size, Color("#f4edd1"), alpha)
+	var pad := maxf(2.0, float(cell_size) * 0.10)
+	TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, structure_rect.grow(-pad), mod)
+	_draw_board_piece_surface_lines(canvas, structure_rect, cell_size, alpha)
 
 static func draw_house_id_structure(canvas, cell_size: int, info: Dictionary, structure_rect: Rect2, bg_color: Color, alpha: float = 1.0) -> void:
 	if canvas == null or canvas._skin == null:
@@ -142,20 +239,19 @@ static func draw_house_id_structure(canvas, cell_size: int, info: Dictionary, st
 		return
 
 	var a := clampf(alpha, 0.0, 1.0)
-	var bg := bg_color
-	bg.a = a
-	canvas.draw_rect(structure_rect, bg, true)
+	_draw_board_piece_background(canvas, structure_rect, cell_size, bg_color, a)
 
 	var pid: String = str(info.get("piece_id", "")).strip_edges()
 	if pid.is_empty():
 		return
 	var tex: Texture2D = canvas._skin.get_piece_texture(pid)
 
-	var pad := maxf(1.0, float(cell_size) * 0.08)
+	var pad := maxf(2.0, float(cell_size) * 0.10)
 	var bottom_gap := maxf(2.0, float(cell_size) * 0.10)
 	var tex_rect := structure_rect.grow(-pad)
 	tex_rect.size.y = maxf(0.0, tex_rect.size.y - bottom_gap)
 	TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, tex_rect, Color(1, 1, 1, 0.9 * a), "bottom")
+	_draw_board_piece_surface_lines(canvas, structure_rect, cell_size, a)
 
 	draw_house_id(canvas, cell_size, structure_rect, _get_house_display_label(canvas, info))
 
@@ -192,24 +288,20 @@ static func draw_player_logo_structure(
 			logo_key = var_key
 
 	var tex: Texture2D = canvas._skin.get_piece_texture(logo_key)
-	var bg := bg_color
-	bg.a = clampf(alpha, 0.0, 1.0)
-	canvas.draw_rect(structure_rect, bg, true)
+	_draw_board_piece_background(canvas, structure_rect, cell_size, bg_color, alpha)
 
 	var pad := maxf(2.0, float(cell_size) * 0.10)
 	var logo_rect := structure_rect.grow(-pad)
 	TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, logo_rect, Color(1, 1, 1, 0.98 * alpha))
+	_draw_board_piece_surface_lines(canvas, structure_rect, cell_size, alpha)
 
-static func draw_opaque_rotated_piece(canvas, rect: Rect2, tex: Texture2D, rotation_deg: int, rotation_offset_deg: int, bg_color: Color, alpha: float = 1.0) -> void:
+static func draw_opaque_rotated_piece(canvas, cell_size: int, rect: Rect2, tex: Texture2D, rotation_deg: int, rotation_offset_deg: int, bg_color: Color, alpha: float = 1.0) -> void:
 	if canvas == null:
 		return
 	if tex == null:
 		return
 
-	# Paint an opaque background first (useful for pieces that should hide roads underneath).
-	var bg := bg_color
-	bg.a = clampf(alpha, 0.0, 1.0)
-	canvas.draw_rect(rect, bg, true)
+	_draw_board_piece_background(canvas, rect, cell_size, bg_color, alpha)
 
 	# Shrink inside the footprint; fill remaining space with background color.
 	var pad := maxf(2.0, minf(rect.size.x, rect.size.y) * 0.10)
@@ -234,6 +326,7 @@ static func draw_opaque_rotated_piece(canvas, rect: Rect2, tex: Texture2D, rotat
 	canvas.draw_set_transform(center, deg_to_rad(float(tex_rot)), Vector2.ONE)
 	TextureUtilsClass.draw_texture_aspect_fill(canvas, tex, Rect2(-local_size * 0.5, local_size), mod)
 	canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	_draw_board_piece_surface_lines(canvas, rect, cell_size, alpha)
 
 static func draw_restaurant(
 	canvas,
@@ -259,12 +352,11 @@ static func draw_restaurant(
 
 	var logo_key: String = restaurant_logo_piece_ids[logo_id]
 	var tex: Texture2D = canvas._skin.get_piece_texture(logo_key)
-	var bg := Color("#f4edd1")
-	bg.a = clampf(alpha, 0.0, 1.0)
-	canvas.draw_rect(structure_rect, bg, true)
+	_draw_board_piece_background(canvas, structure_rect, cell_size, Color("#f4edd1"), alpha)
 
 	var logo_rect := structure_rect.grow(-maxf(2.0, float(cell_size) * 0.10))
 	TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, logo_rect, Color(1, 1, 1, 0.98 * alpha))
+	_draw_board_piece_surface_lines(canvas, structure_rect, cell_size, alpha)
 
 	draw_restaurant_entrance_marker(canvas, cell_size, anchor, info, alpha)
 
@@ -450,13 +542,12 @@ static func draw_house_and_garden(canvas, cell_size: int, anchor: Vector2i, info
 
 	var house_size_cells := (house_max - house_min) + Vector2i.ONE
 	var house_rect := Rect2(Vector2(house_min.x * cell_size, house_min.y * cell_size), Vector2(house_size_cells.x * cell_size, house_size_cells.y * cell_size))
+	var structure_rect := Rect2(Vector2(min_pos.x * cell_size, min_pos.y * cell_size), Vector2(size_cells.x * cell_size, size_cells.y * cell_size))
 
-	# 底色：房屋
 	var house_bg := HOUSE_BG_COLOR
-	house_bg.a = clampf(alpha, 0.0, 1.0)
-	canvas.draw_rect(house_rect, house_bg, true)
+	_draw_board_piece_shadow(canvas, structure_rect, cell_size, alpha)
+	_draw_board_piece_fill(canvas, house_rect, house_bg, alpha)
 
-	# 底色：花园（绿，仅 house_with_garden）
 	var garden_rect := Rect2()
 	var has_garden := str(info.get("piece_id", "")) == "house_with_garden"
 	if has_garden:
@@ -476,27 +567,30 @@ static func draw_house_and_garden(canvas, cell_size: int, anchor: Vector2i, info
 		if any:
 			var garden_size_cells := (garden_max - garden_min) + Vector2i.ONE
 			garden_rect = Rect2(Vector2(garden_min.x * cell_size, garden_min.y * cell_size), Vector2(garden_size_cells.x * cell_size, garden_size_cells.y * cell_size))
-			var garden_bg := GARDEN_BG_COLOR
-			canvas.draw_rect(garden_rect, garden_bg, true)
+			_draw_board_piece_fill(canvas, garden_rect, GARDEN_BG_COLOR, alpha)
+	_draw_board_piece_bevel(canvas, structure_rect, cell_size, house_bg, alpha)
 
-	# 贴图：房屋主体
 	var bottom_gap := maxf(2.0, float(cell_size) * 0.10)
-	var house_tex_rect := Rect2(house_rect.position, house_rect.size)
+	var house_pad := maxf(2.0, float(cell_size) * 0.08)
+	var house_tex_rect := house_rect.grow(-house_pad)
 	house_tex_rect.size.y = maxf(0.0, house_tex_rect.size.y - bottom_gap)
 	TextureUtilsClass.draw_texture_aspect_fit(canvas, house_tex, house_tex_rect, Color(1, 1, 1, 0.9 * alpha), "bottom")
 
-	# 贴图：花园围栏
 	if has_garden and garden_rect.size != Vector2.ZERO:
 		var mod := Color(1, 1, 1, 0.9 * alpha)
+		var garden_pad := maxf(2.0, float(cell_size) * 0.08)
+		var garden_tex_rect := garden_rect.grow(-garden_pad)
 		# garden_large.png is authored as a horizontal strip; rotate for vertical gardens (E/W).
-		if garden_rect.size.y > garden_rect.size.x:
-			var center := garden_rect.position + garden_rect.size * 0.5
-			var draw_size := Vector2(garden_rect.size.y, garden_rect.size.x)
+		if garden_tex_rect.size.y > garden_tex_rect.size.x:
+			var center := garden_tex_rect.position + garden_tex_rect.size * 0.5
+			var draw_size := Vector2(garden_tex_rect.size.y, garden_tex_rect.size.x)
 			canvas.draw_set_transform(center, deg_to_rad(90.0), Vector2.ONE)
 			TextureUtilsClass.draw_texture_aspect_fit(canvas, garden_tex, Rect2(-draw_size * 0.5, draw_size), mod)
 			canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		else:
-			TextureUtilsClass.draw_texture_aspect_fit(canvas, garden_tex, garden_rect, mod)
+			TextureUtilsClass.draw_texture_aspect_fit(canvas, garden_tex, garden_tex_rect, mod)
+
+	_draw_board_piece_surface_lines(canvas, structure_rect, cell_size, alpha)
 
 	# 房屋 ID：右上角（仅房屋 2x2 区域）
 	draw_house_id(canvas, cell_size, house_rect, _get_house_display_label(canvas, info))
@@ -716,4 +810,7 @@ static func draw_generic_piece(canvas, cell_size: int, info: Dictionary, alpha: 
 
 	var tex: Texture2D = canvas._skin.get_piece_texture(piece_id)
 	var mod := Color(1, 1, 1, 0.85 * clampf(alpha, 0.0, 1.0))
-	canvas.draw_texture_rect(tex, rect, false, mod)
+	_draw_board_piece_background(canvas, rect, cell_size, Color("#e8dfc9"), alpha)
+	var pad := maxf(2.0, float(cell_size) * 0.10)
+	TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, rect.grow(-pad), mod)
+	_draw_board_piece_surface_lines(canvas, rect, cell_size, alpha)
