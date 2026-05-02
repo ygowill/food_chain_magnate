@@ -2,6 +2,7 @@
 extends RefCounted
 
 const TextureUtilsClass = preload("res://ui/scenes/game/map/drawer/texture_utils.gd")
+const BoardPieceStyleClass = preload("res://ui/scenes/game/map/drawer/board_piece_style.gd")
 
 static func draw_marketing(canvas, cell_size: int) -> void:
 	for pos_val in canvas._marketing_by_pos.keys():
@@ -183,12 +184,8 @@ static func draw_marketing_placement(canvas, cell_size: int, placement: Dictiona
 		key = str(type_val)
 	var tex: Texture2D = canvas._skin.get_marketing_texture(key)
 
-	# Background (opaque after placement; semi-transparent for preview via alpha).
-	# Marketing piece should NOT have a border (issue_tracker #36).
 	var base := Color("#98a295")
-	var fill := base
-	fill.a = a
-	canvas.draw_rect(rect, fill, true)
+	BoardPieceStyleClass.draw_background(canvas, rect, cell_size, base, a)
 
 	# Marketing type texture as a faint background.
 	var icon_pad := float(cell_size) * 0.08
@@ -203,6 +200,8 @@ static func draw_marketing_placement(canvas, cell_size: int, placement: Dictiona
 		canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	else:
 		TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, icon_rect, type_mod)
+
+	BoardPieceStyleClass.draw_outline(canvas, rect, cell_size, a)
 
 	# Board number badge (top-right): draw before product icon so 1x1 boards keep token readable.
 	var bn := 0
