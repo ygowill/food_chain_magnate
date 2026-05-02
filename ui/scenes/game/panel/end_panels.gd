@@ -475,7 +475,10 @@ func _begin_online_game_over_leave_to_lobby() -> void:
 		scene_manager.show_loading("正在返回房间列表...")
 	var net_client = _get_net_client()
 	if net_client != null and net_client.has_method("request_leave_room"):
-		net_client.request_leave_room()
+		if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("request_leave_room"):
+			OnlineSessionCoordinator.request_leave_room(net_client)
+		else:
+			net_client.request_leave_room()
 		if _online_game_over_leave_pending and _is_online_game_over_room_cleared(NetContext.room_state if NetContext != null else {}):
 			_complete_online_game_over_leave_to_lobby()
 		return

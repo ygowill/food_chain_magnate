@@ -6,6 +6,7 @@ extends RefCounted
 const ModuleUiMetadataBootstrapClass = preload("res://gameplay/module_ui_metadata_bootstrap.gd")
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const RECONNECT_MAX_ATTEMPTS := 6
 const RECONNECT_CONNECT_TIMEOUT_SEC := 3.0
 const RECONNECT_RESTORE_TIMEOUT_SEC := 6.0
@@ -135,6 +136,8 @@ func _take_action_id_for_request(request_id: String) -> String:
 	return action_id
 
 func _should_ignore_request_rejected(action_id: String, code: String, message: String) -> bool:
+	if str(code).strip_edges() == "not_in_game" and _is_local_game_over():
+		return true
 	if str(code).strip_edges() != "action_failed":
 		return false
 	var aid := str(action_id).strip_edges()
@@ -150,6 +153,17 @@ func _should_ignore_request_rejected(action_id: String, code: String, message: S
 	if msg.begins_with("玩家") and msg.find("无需确认营销结算") != -1:
 		return true
 	return false
+
+func _is_local_game_over() -> bool:
+	if not _get_game_engine.is_valid():
+		return false
+	var engine_val = _get_game_engine.call()
+	if engine_val == null or not (engine_val is GameEngine):
+		return false
+	var state = (engine_val as GameEngine).get_state()
+	if state == null:
+		return false
+	return str(state.phase) == DefsClass.PHASE_GAME_OVER
 
 func _begin_full_resync_request(reason: String, force: bool = false) -> bool:
 	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:

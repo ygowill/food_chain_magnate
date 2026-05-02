@@ -112,6 +112,7 @@ func update_ui(do_profile: bool) -> void:
 	var state: GameState = game_engine.get_state()
 	if state == null:
 		return
+	_mark_online_resume_terminal_if_game_over(state)
 	var online_span_total := OnlinePerfTraceClass.begin_span("ui.online_sync.total", {
 		"phase": str(state.phase),
 		"round": int(state.round_number),
@@ -244,6 +245,20 @@ func update_ui(do_profile: bool) -> void:
 		"history_size": int(game_engine.command_history.size()),
 		"cursor_command_index": int(game_engine.current_command_index),
 	})
+
+func _mark_online_resume_terminal_if_game_over(state: GameState) -> void:
+	if state == null or str(state.phase) != DefsClass.PHASE_GAME_OVER:
+		return
+	if NetContext == null or int(NetContext.mode) != int(NetContext.Mode.ONLINE_CLIENT):
+		return
+	if not NetContext.has_method("has_online_resume_context"):
+		return
+	if not NetContext.has_online_resume_context():
+		return
+	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("mark_resume_terminal"):
+		OnlineSessionCoordinator.mark_resume_terminal("game_over")
+	elif NetContext.has_method("set_online_resume_terminal"):
+		NetContext.set_online_resume_terminal("game_over")
 
 func _maybe_open_first_have_20_overview(game_engine: GameEngine, state: GameState) -> void:
 	if state == null or not (state.players is Array):

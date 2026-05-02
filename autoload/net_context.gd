@@ -223,13 +223,17 @@ func sync_online_resume_context_from_room_state(room_state_dict: Dictionary) -> 
 		return
 	if room_code != get_online_resume_room_code():
 		return
+	var room_status := str(room_state_dict.get("status", "")).strip_edges()
+	if room_status == "Ended":
+		set_online_resume_terminal("game_over")
+		return
 	var self_seat_val = room_state_dict.get("self_seat_index", null)
 	if self_seat_val is int or self_seat_val is float:
 		online_resume_state["seat_index"] = int(self_seat_val)
 	var self_role := str(room_state_dict.get("self_role", "")).strip_edges()
 	if not self_role.is_empty():
 		online_resume_state["role"] = self_role
-	mark_online_resume_in_game(str(room_state_dict.get("status", "")).strip_edges() == "InGame")
+	mark_online_resume_in_game(room_status == "InGame")
 
 func reset() -> void:
 	mode = Mode.HOTSEAT

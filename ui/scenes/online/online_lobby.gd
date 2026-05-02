@@ -154,6 +154,7 @@ func _ready() -> void:
 	if my_logo_row != null and is_instance_valid(my_logo_row):
 		my_logo_row.visible = false
 	_apply_defaults()
+	_restore_platform_ready_from_active_session()
 	_refresh_ui()
 	_ensure_resume_controller()
 	_sync_room_auto_refresh_timer()
@@ -794,6 +795,18 @@ func _mark_platform_ready() -> void:
 	_platform_entered = true
 	_update_account_status()
 	_refresh_ui()
+
+func _restore_platform_ready_from_active_session() -> void:
+	if _platform_entered:
+		return
+	if PlatformSession == null or not PlatformSession.is_logged_in:
+		return
+	_apply_selected_server_to_platform_api()
+	_platform_entered = true
+	_update_account_status()
+	if connect_status_label != null and is_instance_valid(connect_status_label):
+		if connect_status_label.text.strip_edges().is_empty():
+			_set_connect_status("平台已就绪：创建/加入房间将自动连接服务器。")
 
 func _platform_ensure_session() -> Result:
 	if PlatformSession == null:

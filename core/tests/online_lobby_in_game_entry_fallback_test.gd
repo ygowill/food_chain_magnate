@@ -12,6 +12,8 @@ static func run() -> Result:
 		return Result.failure("NetClient autoload missing")
 	if Globals == null:
 		return Result.failure("Globals autoload missing")
+	if PlatformSession == null:
+		return Result.failure("PlatformSession autoload missing")
 
 	var prev_engine = Globals.current_game_engine
 	var prev_is_game_active := bool(Globals.is_game_active)
@@ -23,10 +25,25 @@ static func run() -> Result:
 	var prev_pending_manifest := Dictionary(NetClient._pending_resync_snapshot_manifest).duplicate(true)
 	var prev_pending_delta := Dictionary(NetClient._pending_resync_delta).duplicate(true)
 	var prev_online_client_engine_room_code := str(NetClient._online_client_engine_room_code)
+	var prev_platform_session_id := str(PlatformSession.session_id)
+	var prev_platform_user_id := str(PlatformSession.user_id)
 	var lobby = LobbyScript.new()
 	var cb_rejected := Callable(lobby, "_on_request_rejected")
 	var cb_game_started := Callable(lobby, "_on_game_started")
 	var cb_resync_archive := Callable(lobby, "_on_online_resync_archive_received")
+
+	PlatformSession.session_id = "ready-session"
+	PlatformSession.user_id = "ready-user"
+	var ready_lobby = LobbyScript.new()
+	ready_lobby.set("_platform_entered", false)
+	ready_lobby.call("_restore_platform_ready_from_active_session")
+	if not bool(ready_lobby.get("_platform_entered")):
+		_safe_free(ready_lobby)
+		_restore_platform_session(prev_platform_session_id, prev_platform_user_id)
+		_safe_free(lobby)
+		return Result.failure("已有平台会话进入新 Lobby 时应恢复 platform ready 状态")
+	_safe_free(ready_lobby)
+	_restore_platform_session(prev_platform_session_id, prev_platform_user_id)
 
 	if not NetClient.request_rejected.is_connected(cb_rejected):
 		NetClient.request_rejected.connect(cb_rejected)
@@ -372,3 +389,9 @@ static func _safe_free(node) -> void:
 		return
 	if node is Node:
 		(node as Node).free()
+
+static func _restore_platform_session(prev_session_id: String, prev_user_id: String) -> void:
+	if PlatformSession == null:
+		return
+	PlatformSession.session_id = prev_session_id
+	PlatformSession.user_id = prev_user_id

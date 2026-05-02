@@ -223,6 +223,40 @@ static func run() -> Result:
 		)
 
 	NetContext.clear_online_resume_context()
+	NetContext.set_online_resume_context("ended01", "player", "https://platform.example.test")
+	NetContext.mark_online_resume_in_game(true)
+	NetContext.sync_online_resume_context_from_room_state({
+		"room_code": "ENDED01",
+		"status": "Ended",
+		"self_seat_index": 0,
+		"self_role": "player",
+	})
+	if NetContext.has_online_resume_context():
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			"Ended room_state 后不应继续保留可恢复上下文"
+		)
+	if NetContext.get_online_resume_terminal_reason() != "game_over":
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			"Ended room_state 应写入 game_over 终态，实际: %s" % NetContext.get_online_resume_terminal_reason()
+		)
+
+	NetContext.clear_online_resume_context()
 	if NetContext.has_online_resume_context():
 		return _restore_and_fail(
 			prev_mode,
