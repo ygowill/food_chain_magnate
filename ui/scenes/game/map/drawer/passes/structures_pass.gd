@@ -13,7 +13,6 @@ const HOUSE_BG_COLOR := Color("#733651")
 const GARDEN_BG_COLOR := Color("#699055")
 const BOARD_EDGE_COLOR := Color("#2f261f")
 const BOARD_SHADOW_COLOR := Color(0, 0, 0, 0.22)
-const BOARD_GRID_COLOR := Color(0, 0, 0, 0.18)
 
 static func clear_drink_source_texture_cache() -> void:
 	DrinkSourcesPassClass.clear_drink_source_texture_cache()
@@ -80,7 +79,7 @@ static func _draw_board_piece_bevel(canvas, rect: Rect2, cell_size: int, fill_co
 	canvas.draw_rect(Rect2(rect.position + Vector2(rect.size.x - edge, 0.0), Vector2(edge, rect.size.y)), shade, true)
 	canvas.draw_rect(Rect2(rect.position + Vector2(0.0, rect.size.y - edge), Vector2(rect.size.x, edge)), shade, true)
 
-static func _draw_board_piece_surface_lines(canvas, rect: Rect2, cell_size: int, alpha: float, draw_internal_grid: bool = true) -> void:
+static func _draw_board_piece_surface_lines(canvas, rect: Rect2, cell_size: int, alpha: float) -> void:
 	if canvas == null:
 		return
 	if rect.size.x <= 1.0 or rect.size.y <= 1.0:
@@ -88,32 +87,6 @@ static func _draw_board_piece_surface_lines(canvas, rect: Rect2, cell_size: int,
 	var a := clampf(alpha, 0.0, 1.0)
 	if a <= 0.001:
 		return
-
-	var edge := _board_edge_px(cell_size)
-	var line_w := maxf(1.0, minf(2.0, float(cell_size) * 0.025))
-	if draw_internal_grid and cell_size > 1:
-		var grid := BOARD_GRID_COLOR
-		grid.a *= a
-		var step := float(cell_size)
-		var x := rect.position.x + step
-		var end_x := rect.position.x + rect.size.x - line_w * 0.5
-		while x < end_x:
-			canvas.draw_rect(
-				Rect2(Vector2(x - line_w * 0.5, rect.position.y + edge), Vector2(line_w, maxf(0.0, rect.size.y - edge * 2.0))),
-				grid,
-				true
-			)
-			x += step
-
-		var y := rect.position.y + step
-		var end_y := rect.position.y + rect.size.y - line_w * 0.5
-		while y < end_y:
-			canvas.draw_rect(
-				Rect2(Vector2(rect.position.x + edge, y - line_w * 0.5), Vector2(maxf(0.0, rect.size.x - edge * 2.0), line_w)),
-				grid,
-				true
-			)
-			y += step
 
 	var border := BOARD_EDGE_COLOR
 	border.a = 0.82 * a
