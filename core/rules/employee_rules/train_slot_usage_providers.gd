@@ -52,13 +52,15 @@ static func try_get_train_providers_for_working(state: GameState, player_id: int
 		var mult_read := WorkingMultiplierClass.try_get_working_employee_multiplier(state, player_id, emp_id)
 		if not mult_read.ok:
 			return mult_read
-		var instances := int(active_counts.get(emp_id, 0)) * int(mult_read.value)
+		var multiplier := int(mult_read.value)
+		var instances := int(active_counts.get(emp_id, 0)) * multiplier
 		if instances <= 0:
 			continue
 		out.append({
 			"id": emp_id,
 			"instances": instances,
-			"cap_per_instance": cap_per_instance
+			"cap_per_instance": cap_per_instance,
+			"multiplier": multiplier
 		})
 
 	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:

@@ -1,11 +1,12 @@
 extends RefCounted
 
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 const ROUND_STATE_KEY := "train_employee_locks"
 
 # 记录 Train 子阶段内“同一名员工只能由同一名培训员(具体实例)继续培训”的锁。
-# 由于玩家状态里员工仅以 employee_type 字符串存储（没有实例 id），这里用“token 多重集”来模拟：
+# 通过 staff_id 绑定具体员工实例；缺货预支等无实体来源则使用临时 token。
 # - round_state.train_employee_locks[player_id][employee_type] = Array[token]
 # - token 表示“一张员工卡的身份”，培训后会随着职位升级从 from_employee 移动到 to_employee。
 # - token 的锁字段：
@@ -31,7 +32,69 @@ static func _require_player_string_array(player: Dictionary, key: String, path: 
 			return Result.failure("%s[%d] 类型错误（期望 String）" % [path, i])
 	return Result.success(arr)
 
+static func _append_token(tokens_by_employee: Dictionary, employee_id: String, staff_id: int) -> Result:
+	if employee_id.is_empty():
+		return Result.failure("train_locks: employee_id 不能为空")
+	if not tokens_by_employee.has(employee_id):
+		tokens_by_employee[employee_id] = []
+	var tokens_val = tokens_by_employee.get(employee_id, null)
+	if not (tokens_val is Array):
+		return Result.failure("train_locks: tokens_by_employee.%s 类型错误（期望 Array）" % employee_id)
+	var tokens: Array = tokens_val
+	tokens.append({
+		"staff_id": staff_id,
+		"trainer_id": "",
+		"instance_idx": 0,
+	})
+	tokens_by_employee[employee_id] = tokens
+	return Result.success()
+
+static func _append_staff_zone_tokens(tokens_by_employee: Dictionary, player: Dictionary, staff_zone_key: String, zone_label: String) -> Result:
+	if not player.has(staff_zone_key):
+		return Result.failure("train_locks: player.%s 缺失" % staff_zone_key)
+	var ids_val = player.get(staff_zone_key, null)
+	if not (ids_val is Array):
+		return Result.failure("train_locks: player.%s 类型错误（期望 Array[int]）" % staff_zone_key)
+	var ids: Array = ids_val
+	var registry_val = player.get("staff_registry", null)
+	if not (registry_val is Dictionary):
+		return Result.failure("train_locks: player.staff_registry 缺失或类型错误（期望 Dictionary）")
+	var registry: Dictionary = registry_val
+	for i in range(ids.size()):
+		var staff_id := int(ids[i])
+		if staff_id <= 0:
+			return Result.failure("train_locks: player.%s[%d] 必须为正整数，实际: %s" % [staff_zone_key, i, str(ids[i])])
+		if not registry.has(staff_id):
+			return Result.failure("train_locks: %s staff_id 不存在: %d" % [zone_label, staff_id])
+		var record_val = registry.get(staff_id, null)
+		if not (record_val is Dictionary):
+			return Result.failure("train_locks: staff_registry[%d] 类型错误（期望 Dictionary）" % staff_id)
+		var record: Dictionary = record_val
+		var emp_id := str(record.get("employee_type", "")).strip_edges()
+		if emp_id.is_empty():
+			return Result.failure("train_locks: staff_registry[%d].employee_type 不能为空" % staff_id)
+		var add := _append_token(tokens_by_employee, emp_id, staff_id)
+		if not add.ok:
+			return add
+	return Result.success()
+
 static func _compute_initial_token_counts(state: GameState, player_id: int, reserve: Array) -> Result:
+	var tokens_read := _compute_initial_tokens_by_employee(state, player_id, reserve)
+	if not tokens_read.ok:
+		return tokens_read
+	var tokens_by_employee: Dictionary = tokens_read.value
+	var counts: Dictionary = {}
+	for k in tokens_by_employee.keys():
+		if not (k is String):
+			return Result.failure("train_locks: tokens_by_employee key 类型错误（期望 String）")
+		var emp_id: String = str(k)
+		var tokens_val = tokens_by_employee.get(k, null)
+		if not (tokens_val is Array):
+			return Result.failure("train_locks: tokens_by_employee.%s 类型错误（期望 Array）" % emp_id)
+		counts[emp_id] = (tokens_val as Array).size()
+	return Result.success(counts)
+
+static func _compute_initial_tokens_by_employee(state: GameState, player_id: int, reserve: Array) -> Result:
 	if state == null:
 		return Result.failure("train_locks: state 为空")
 	if not (state.round_state is Dictionary):
@@ -39,34 +102,16 @@ static func _compute_initial_token_counts(state: GameState, player_id: int, rese
 	if player_id < 0 or player_id >= state.players.size():
 		return Result.failure("train_locks: player_id 越界: %d" % player_id)
 
-	var player_val = state.players[player_id]
-	if not (player_val is Dictionary):
-		return Result.failure("train_locks: player 类型错误: players[%d]（期望 Dictionary）" % player_id)
-	var player: Dictionary = player_val
-
-	var counts: Dictionary = {}
-
-	# 待命区
-	for emp_val in reserve:
-		if not (emp_val is String):
+	for i in range(reserve.size()):
+		if not (reserve[i] is String):
 			return Result.failure("train_locks: reserve_employees 元素类型错误（期望 String）")
-		var emp_id: String = str(emp_val)
-		if emp_id.is_empty():
+		if str(reserve[i]).is_empty():
 			return Result.failure("train_locks: reserve_employees 不应包含空字符串")
-		counts[emp_id] = int(counts.get(emp_id, 0)) + 1
 
-	# 在岗区（用于 FIRST LEMONADE SOLD 的“在岗培训”，以及统一 token 计数口径）
-	var active_read := _require_player_string_array(player, "employees", "train_locks: player.employees")
-	if not active_read.ok:
-		return active_read
-	var employees: Array = active_read.value
-	for emp_val in employees:
-		var emp_id: String = str(emp_val)
-		if emp_id.is_empty():
-			return Result.failure("train_locks: employees 不应包含空字符串")
-		counts[emp_id] = int(counts.get(emp_id, 0)) + 1
+	var tokens_by_employee: Dictionary = {}
 
-	# 缺货预支：视为本子阶段开始时就存在的“可培训来源 token”
+	# 缺货预支：视为本子阶段开始时就存在的“可培训来源 token”。
+	# 先校验 pending 结构，保持原有 fail-fast 错误优先级。
 	var pending_val = state.round_state.get("immediate_train_pending", null)
 	if pending_val != null:
 		if not (pending_val is Dictionary):
@@ -90,9 +135,35 @@ static func _compute_initial_token_counts(state: GameState, player_id: int, rese
 					return Result.failure("train_locks: round_state.immediate_train_pending[%d].%s 类型错误（期望 int）" % [player_id, emp_id])
 				if int(v) <= 0:
 					continue
-				counts[emp_id] = int(counts.get(emp_id, 0)) + int(v)
+				for _i in range(int(v)):
+					var pending_staff_id := -1
+					var add_pending := _append_token(tokens_by_employee, emp_id, pending_staff_id)
+					if not add_pending.ok:
+						return add_pending
 
-	return Result.success(counts)
+	var sync_read := StaffStateClass.ensure_state_staff_support(state)
+	if not sync_read.ok:
+		return sync_read
+
+	var player_val = state.players[player_id]
+	if not (player_val is Dictionary):
+		return Result.failure("train_locks: player 类型错误: players[%d]（期望 Dictionary）" % player_id)
+	var player: Dictionary = player_val
+
+	# 待命区
+	var reserve_tokens := _append_staff_zone_tokens(tokens_by_employee, player, "reserve_staff_ids", "reserve")
+	if not reserve_tokens.ok:
+		return reserve_tokens
+
+	# 在岗区（用于 FIRST LEMONADE SOLD 的“在岗培训”，以及统一 token 计数口径）
+	var active_read := _require_player_string_array(player, "employees", "train_locks: player.employees")
+	if not active_read.ok:
+		return active_read
+	var active_tokens := _append_staff_zone_tokens(tokens_by_employee, player, "employees_staff_ids", "employees")
+	if not active_tokens.ok:
+		return active_tokens
+
+	return Result.success(tokens_by_employee)
 
 static func _build_tokens_from_counts(counts: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
@@ -107,7 +178,7 @@ static func _build_tokens_from_counts(counts: Dictionary) -> Dictionary:
 			continue
 		var tokens: Array = []
 		for _i in range(count):
-			tokens.append({"trainer_id": "", "instance_idx": 0})
+			tokens.append({"staff_id": 0, "trainer_id": "", "instance_idx": 0})
 		out[emp_id] = tokens
 	return out
 
@@ -153,11 +224,10 @@ static func _ensure_player_locks(state: GameState, player_id: int, reserve: Arra
 	if all.has(player_id):
 		return Result.success(all[player_id])
 
-	var counts_read := _compute_initial_token_counts(state, player_id, reserve)
-	if not counts_read.ok:
-		return counts_read
-	var counts: Dictionary = counts_read.value
-	var per := _build_tokens_from_counts(counts)
+	var tokens_read := _compute_initial_tokens_by_employee(state, player_id, reserve)
+	if not tokens_read.ok:
+		return tokens_read
+	var per: Dictionary = tokens_read.value
 	all[player_id] = per
 	state.round_state[ROUND_STATE_KEY] = all
 	return Result.success(per)
@@ -172,7 +242,8 @@ static func plan_training(
 	init_if_missing: bool,
 	to_employee: String = "",
 	preferred_trainer_id: String = "",
-	preferred_instance_idx: int = -1
+	preferred_instance_idx: int = -1,
+	preferred_source_staff_id: int = -1
 ) -> Result:
 	if from_employee.is_empty():
 		return Result.failure("train_locks: from_employee 不能为空")
@@ -187,10 +258,10 @@ static func plan_training(
 		if not locks_read.ok:
 			return locks_read
 		if locks_read.value == null:
-			var counts_read := _compute_initial_token_counts(state, player_id, reserve)
-			if not counts_read.ok:
-				return counts_read
-			locks_read = Result.success(_build_tokens_from_counts(counts_read.value))
+			var tokens_read := _compute_initial_tokens_by_employee(state, player_id, reserve)
+			if not tokens_read.ok:
+				return tokens_read
+			locks_read = Result.success(tokens_read.value)
 
 	if not locks_read.ok:
 		return locks_read
@@ -214,12 +285,18 @@ static func plan_training(
 	var best_trainer_id := ""
 	var best_instance_idx := 0
 	var best_token_idx := -1
+	var saw_source_token := false
 
 	for i in range(tokens.size()):
 		var token_val = tokens[i]
 		if not (token_val is Dictionary):
 			return Result.failure("train_locks: token 类型错误（期望 Dictionary）: %s[%d]" % [from_employee, i])
 		var token: Dictionary = token_val
+		var token_staff_id := int(token.get("staff_id", 0))
+		if preferred_source_staff_id > 0:
+			if token_staff_id != preferred_source_staff_id:
+				continue
+			saw_source_token = true
 		var locked_trainer_id: String = str(token.get("trainer_id", ""))
 		var locked_instance_idx: int = int(token.get("instance_idx", 0))
 
@@ -271,6 +348,7 @@ static func plan_training(
 			best_token_idx = i
 			best_plan = {
 				"token_index": i,
+				"source_staff_id": token_staff_id,
 				"trainer_id": trainer_id,
 				"instance_idx": instance_idx,
 				"slots": steps_needed,
@@ -278,6 +356,9 @@ static func plan_training(
 
 	if not best_plan.is_empty():
 		return Result.success(best_plan)
+
+	if preferred_source_staff_id > 0 and not saw_source_token:
+		return Result.failure("本回合没有可继续培训的员工: staff_id=%d" % preferred_source_staff_id)
 
 	# 若存在培训员容量但因“锁”被禁止（需要里程碑），给出更明确的提示。
 	if not multi_trainer_on_one:
@@ -304,7 +385,8 @@ static func apply_move_token_and_lock(
 	to_employee: String,
 	plan: Dictionary,
 	multi_trainer_on_one: bool,
-	reserve: Array
+	reserve: Array,
+	target_staff_id: int = -1
 ) -> Result:
 	if from_employee.is_empty() or to_employee.is_empty():
 		return Result.failure("train_locks: from/to_employee 不能为空")
@@ -335,6 +417,10 @@ static func apply_move_token_and_lock(
 	if not multi_trainer_on_one:
 		token["trainer_id"] = trainer_id
 		token["instance_idx"] = instance_idx
+	if target_staff_id > 0:
+		token["staff_id"] = target_staff_id
+	elif not token.has("staff_id"):
+		token["staff_id"] = 0
 
 	from_tokens.remove_at(token_index)
 	locks[from_employee] = from_tokens

@@ -4,6 +4,7 @@ extends RefCounted
 const Support = preload("res://core/tests/milestone_system/milestone_system_test_support.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const CleanupSettlementClass = preload("res://modules/base_rules/rules/phase/cleanup_settlement.gd")
 const PaydaySettlementClass = preload("res://modules/base_rules/rules/phase/payday_settlement.gd")
@@ -15,7 +16,7 @@ static func run(seed_val: int) -> Result:
 	var r := _run_all(seed_val)
 	if not r.ok:
 		return r
-	return Result.success({"cases": 8})
+	return Result.success({"cases": 9})
 
 static func _run_all(seed_val: int) -> Result:
 	var r_chain_train_restricted_without_milestone := _test_chain_train_restricted_without_milestone(seed_val)
@@ -49,6 +50,10 @@ static func _run_all(seed_val: int) -> Result:
 	var r_switch_between_two_coaches_disallowed_without_milestone := _test_switch_between_two_coaches_disallowed_without_milestone(seed_val)
 	if not r_switch_between_two_coaches_disallowed_without_milestone.ok:
 		return r_switch_between_two_coaches_disallowed_without_milestone
+
+	var r_duplicate_target_source_staff_lock := _test_duplicate_target_source_staff_lock_disallows_new_card_switch(seed_val)
+	if not r_duplicate_target_source_staff_lock.ok:
+		return r_duplicate_target_source_staff_lock
 
 	return Result.success()
 
@@ -88,6 +93,90 @@ static func _test_chain_train_restricted_without_milestone(seed_val: int) -> Res
 	var t2 := engine.execute_command(Command.create("train", 0, {"from_employee": "campaign_manager", "to_employee": "brand_manager"}))
 	if t2.ok:
 		return Result.failure("默认规则下不应允许链式培训（campaign_manager -> brand_manager）")
+
+	return Result.success()
+
+static func _test_duplicate_target_source_staff_lock_disallows_new_card_switch(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+
+	var state := engine.get_state()
+	Support._force_turn_order(state)
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
+
+	var trainer_staff_ids: Array[int] = []
+	for _i in range(2):
+		var take_trainer := StateUpdaterClass.take_from_pool(state, "trainer", 1)
+		if not take_trainer.ok:
+			return Result.failure("从员工池取出 trainer 失败: %s" % take_trainer.error)
+		var add_trainer := StateUpdaterClass.add_employee(state, 0, "trainer", false)
+		if not add_trainer.ok:
+			return Result.failure("添加 trainer 失败: %s" % add_trainer.error)
+		trainer_staff_ids.append(int(Dictionary(add_trainer.value).get("staff_id", -1)))
+	if trainer_staff_ids.size() != 2 or trainer_staff_ids[0] <= 0 or trainer_staff_ids[1] <= 0:
+		return Result.failure("测试前置条件失败：trainer staff_ids 无效: %s" % str(trainer_staff_ids))
+
+	var take_existing_campaign := StateUpdaterClass.take_from_pool(state, "campaign_manager", 1)
+	if not take_existing_campaign.ok:
+		return Result.failure("从员工池取出既有 campaign_manager 失败: %s" % take_existing_campaign.error)
+	var add_existing_campaign := StateUpdaterClass.add_employee(state, 0, "campaign_manager", true)
+	if not add_existing_campaign.ok:
+		return Result.failure("添加既有 campaign_manager 到待命区失败: %s" % add_existing_campaign.error)
+	var existing_campaign_staff_id := int(Dictionary(add_existing_campaign.value).get("staff_id", -1))
+	if existing_campaign_staff_id <= 0:
+		return Result.failure("既有 campaign_manager staff_id 无效: %s" % str(add_existing_campaign.value))
+
+	var take_trainee := StateUpdaterClass.take_from_pool(state, "marketing_trainee", 1)
+	if not take_trainee.ok:
+		return Result.failure("从员工池取出 marketing_trainee 失败: %s" % take_trainee.error)
+	var add_trainee := StateUpdaterClass.add_employee(state, 0, "marketing_trainee", true)
+	if not add_trainee.ok:
+		return Result.failure("添加 marketing_trainee 到待命区失败: %s" % add_trainee.error)
+	var trainee_staff_id := int(Dictionary(add_trainee.value).get("staff_id", -1))
+	if trainee_staff_id <= 0:
+		return Result.failure("marketing_trainee staff_id 无效: %s" % str(add_trainee.value))
+
+	var t1 := engine.execute_command(Command.create("train", 0, {
+		"trainer_staff_id": trainer_staff_ids[0],
+		"source_staff_id": trainee_staff_id,
+		"from_employee": "marketing_trainee",
+		"to_employee": "campaign_manager",
+	}))
+	if not t1.ok:
+		return Result.failure("train #1 失败: %s" % t1.error)
+
+	var t2 := engine.execute_command(Command.create("train", 0, {
+		"trainer_staff_id": trainer_staff_ids[1],
+		"source_staff_id": trainee_staff_id,
+		"from_employee": "campaign_manager",
+		"to_employee": "brand_manager",
+	}))
+	if t2.ok:
+		return Result.failure("默认规则下不应允许用第二名 trainer 继续培训刚训练出的同一 staff_id")
+
+	var t3 := engine.execute_command(Command.create("train", 0, {
+		"trainer_staff_id": trainer_staff_ids[1],
+		"source_staff_id": existing_campaign_staff_id,
+		"from_employee": "campaign_manager",
+		"to_employee": "brand_manager",
+	}))
+	if not t3.ok:
+		return Result.failure("同类型但本子阶段开始时已存在的 campaign_manager 应仍可被第二名 trainer 培训，实际: %s" % t3.error)
+
+	state = engine.get_state()
+	var trained_type_read := StaffStateClass.get_staff_employee_type(state, 0, existing_campaign_staff_id)
+	if not trained_type_read.ok:
+		return Result.failure("读取既有 campaign_manager staff 类型失败: %s" % trained_type_read.error)
+	if str(trained_type_read.value) != "brand_manager":
+		return Result.failure("既有 campaign_manager 应被训练为 brand_manager，实际: %s" % str(trained_type_read.value))
+	var new_type_read := StaffStateClass.get_staff_employee_type(state, 0, trainee_staff_id)
+	if not new_type_read.ok:
+		return Result.failure("读取刚训练出的 campaign_manager staff 类型失败: %s" % new_type_read.error)
+	if str(new_type_read.value) != "campaign_manager":
+		return Result.failure("刚训练出的 staff_id 不应被第二名 trainer 继续升级，实际: %s" % str(new_type_read.value))
 
 	return Result.success()
 

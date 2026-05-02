@@ -305,7 +305,7 @@ func _on_trainer_selected(_employee_type: String) -> void:
 		_selected_trainer_key = key
 		_selected_trainer_staff_id = int(info.get("staff_id", -1))
 		_selected_trainer_employee_type = str(info.get("employee_type", info.get("id", ""))).strip_edges()
-		_selected_trainer_remaining = int(info.get("remaining", 0))
+		_selected_trainer_remaining = int(info.get("max_step_remaining", info.get("remaining", 0)))
 	_clear_source_selection()
 	_clear_target_selection()
 	_update_confirm_state()

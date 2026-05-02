@@ -41,6 +41,9 @@ static func run() -> Result:
 	r = await _case_train_controller_show_populates_cached_items_after_ready()
 	if not r.ok:
 		return r
+	r = await _case_train_controller_clears_trainer_selection_after_success()
+	if not r.ok:
+		return r
 	r = await _case_multi_trainers_save_real_click_flow_shows_visible_targets()
 	if not r.ok:
 		return r
@@ -600,6 +603,107 @@ static func _case_train_controller_show_populates_cached_items_after_ready() -> 
 	engine.dispose()
 	return Result.success()
 
+static func _case_train_controller_clears_trainer_selection_after_success() -> Result:
+	var tree = Engine.get_main_loop()
+	if not (tree is SceneTree):
+		return Result.failure("MainLoop 不是 SceneTree（无法运行 TrainController UI 测试）")
+	var st: SceneTree = tree
+	var host_scene := st.current_scene
+	if host_scene == null or not is_instance_valid(host_scene):
+		return Result.failure("current_scene 为空（无法挂载 TrainController host）")
+
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, 12345)
+	if not init.ok:
+		return Result.failure("初始化失败: %s" % init.error)
+	var state := engine.get_state()
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
+	state.turn_order = [0, 1]
+	state.current_player_index = 0
+
+	var take_coach := StateUpdaterClass.take_from_pool(state, "coach", 1)
+	if not take_coach.ok:
+		engine.dispose()
+		return Result.failure("取出 coach 失败: %s" % take_coach.error)
+	var add_coach := StateUpdaterClass.add_employee(state, 0, "coach", false)
+	if not add_coach.ok:
+		engine.dispose()
+		return Result.failure("添加 coach 失败: %s" % add_coach.error)
+	var coach_staff_id := int(Dictionary(add_coach.value).get("staff_id", -1))
+	if coach_staff_id <= 0:
+		engine.dispose()
+		return Result.failure("coach staff_id 无效: %s" % str(add_coach.value))
+
+	for _i in range(5):
+		var take_source := StateUpdaterClass.take_from_pool(state, "marketing_trainee", 1)
+		if not take_source.ok:
+			engine.dispose()
+			return Result.failure("取出 marketing_trainee 失败: %s" % take_source.error)
+		var add_source := StateUpdaterClass.add_employee(state, 0, "marketing_trainee", true)
+		if not add_source.ok:
+			engine.dispose()
+			return Result.failure("添加 marketing_trainee 失败: %s" % add_source.error)
+
+	var host := _TrainControllerHost.new()
+	host.game_engine = engine
+	host_scene.add_child(host)
+	var executor := _TrainCommandExecutor.new(engine)
+	var controller = TrainControllerClass.new(host, Callable(executor, "execute"), Callable(), Callable())
+	controller.show()
+	for _i in range(6):
+		await st.process_frame
+
+	var panel = controller.train_panel
+	if panel == null or not is_instance_valid(panel):
+		_safe_free(host)
+		engine.dispose()
+		return Result.failure("TrainController.show() 后 train_panel 为空")
+
+	panel.trainer_container.set_selected("staff:%d" % coach_staff_id)
+	panel.trainer_container.employee_selected.emit("coach")
+	for _i in range(4):
+		await st.process_frame
+
+	if panel.source_container.get_child_count() != 5:
+		_safe_free(panel)
+		_safe_free(host)
+		engine.dispose()
+		return Result.failure("选择 trainer 后测试应仍有 5 名可培训来源，实际: %d" % panel.source_container.get_child_count())
+
+	var first_source_key := str(panel.source_container.get_child(0).get("item_key"))
+	panel.source_container.set_selected(first_source_key)
+	panel.source_container.employee_selected.emit("marketing_trainee")
+	for _i in range(8):
+		await st.process_frame
+
+	if panel.target_container.get_child_count() <= 0:
+		_safe_free(panel)
+		_safe_free(host)
+		engine.dispose()
+		return Result.failure("选择 coach/source 后应显示目标")
+	panel.target_container.set_selected("campaign_manager")
+	panel._on_target_selected("campaign_manager")
+	panel._on_confirm_pressed()
+	for _i in range(8):
+		await st.process_frame
+
+	if int(panel.get_selected_trainer_staff_id()) > 0:
+		_safe_free(panel)
+		_safe_free(host)
+		engine.dispose()
+		return Result.failure("成功培训后 TrainController 应清空 trainer 选择，避免来源列表被旧培训员过滤")
+	if panel.source_container.get_child_count() != 5:
+		_safe_free(panel)
+		_safe_free(host)
+		engine.dispose()
+		return Result.failure("成功培训后来源列表应恢复为当前 5 名可培训员工，实际: %d" % panel.source_container.get_child_count())
+
+	_safe_free(panel)
+	_safe_free(host)
+	engine.dispose()
+	return Result.success()
+
 static func _case_multi_trainers_save_real_click_flow_shows_visible_targets() -> Result:
 	var tree = Engine.get_main_loop()
 	if not (tree is SceneTree):
@@ -875,3 +979,14 @@ static func _cleanup_game_instance(game: Node) -> void:
 
 class _TrainControllerHost extends Control:
 	var game_engine = null
+
+class _TrainCommandExecutor extends RefCounted:
+	var engine = null
+
+	func _init(engine_value) -> void:
+		engine = engine_value
+
+	func execute(command: Command) -> Result:
+		if engine == null:
+			return Result.failure("测试执行器缺少 engine")
+		return engine.execute_command(command)

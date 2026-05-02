@@ -5,6 +5,24 @@ const StaffStateClass = preload("res://core/state/staff_state.gd")
 const TrainSlotUsageStorageClass = preload("res://core/rules/employee_rules/train_slot_usage_storage.gd")
 const TrainSlotUsageProvidersClass = preload("res://core/rules/employee_rules/train_slot_usage_providers.gd")
 
+static func _choose_virtual_instance_for_slots(virtual_instances: Array[Dictionary], slots_needed: int) -> int:
+	var best_idx := -1
+	var best_used := -1
+	var slots := maxi(1, slots_needed)
+	for item_val in virtual_instances:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		var instance_idx := int(item.get("instance_idx", -1))
+		var used := int(item.get("used", 0))
+		var remaining := int(item.get("remaining", 0))
+		if instance_idx < 0 or remaining < slots:
+			continue
+		if used > best_used:
+			best_used = used
+			best_idx = instance_idx
+	return best_idx
+
 static func try_get_trainers_for_working(state: GameState, player_id: int) -> Result:
 	var prefix := "get_trainers_for_working: "
 	if state == null:
@@ -42,6 +60,7 @@ static func try_get_trainers_for_working(state: GameState, player_id: int) -> Re
 		var employee_type := str(group.get("id", "")).strip_edges()
 		var instances := int(group.get("instances", 0))
 		var cap_per_instance := int(group.get("cap_per_instance", 0))
+		var multiplier := maxi(1, int(group.get("multiplier", 1)))
 		if employee_type.is_empty() or instances <= 0 or cap_per_instance <= 0:
 			continue
 
@@ -67,21 +86,48 @@ static func try_get_trainers_for_working(state: GameState, player_id: int) -> Re
 			return used_read
 		var used_by_instance: Array[int] = used_read.value
 
-		var count := mini(ids.size(), used_by_instance.size())
+		var count := mini(ids.size(), int(ceil(float(used_by_instance.size()) / float(multiplier))))
 		for i in range(count):
 			var staff_id := int(ids[i])
-			var used := int(used_by_instance[i])
-			var remaining := maxi(0, cap_per_instance - used)
+			var virtual_instances: Array[Dictionary] = []
+			var instance_indices: Array[int] = []
+			var used_total := 0
+			var remaining_total := 0
+			var max_step_remaining := 0
+			for offset in range(multiplier):
+				var instance_idx := i * multiplier + offset
+				if instance_idx >= used_by_instance.size():
+					break
+				var used := int(used_by_instance[instance_idx])
+				var remaining := maxi(0, cap_per_instance - used)
+				instance_indices.append(instance_idx)
+				virtual_instances.append({
+					"instance_idx": instance_idx,
+					"used": used,
+					"remaining": remaining,
+				})
+				used_total += used
+				remaining_total += remaining
+				if remaining > max_step_remaining:
+					max_step_remaining = remaining
+			if virtual_instances.is_empty():
+				continue
+			var default_instance_idx := _choose_virtual_instance_for_slots(virtual_instances, 1)
+			if default_instance_idx < 0:
+				default_instance_idx = int(instance_indices[0])
 			out.append({
 				"staff_id": staff_id,
 				"id": employee_type,
 				"employee_type": employee_type,
-				"instance_idx": i,
+				"instance_idx": default_instance_idx,
+				"instance_indices": instance_indices,
+				"virtual_instances": virtual_instances,
 				"cap_per_instance": cap_per_instance,
-				"multiplier": 1,
-				"capacity": cap_per_instance,
-				"used": used,
-				"remaining": remaining,
+				"multiplier": multiplier,
+				"capacity": cap_per_instance * virtual_instances.size(),
+				"used": used_total,
+				"remaining": remaining_total,
+				"max_step_remaining": max_step_remaining,
 			})
 
 	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
@@ -98,7 +144,10 @@ static func get_trainers_for_working(state: GameState, player_id: int) -> Array[
 static func try_resolve_trainer_for_working(state: GameState, player_id: int, trainer_staff_id: int) -> Result:
 	if trainer_staff_id <= 0:
 		return Result.failure("trainer_staff_id 必须 > 0")
-	var providers := get_trainers_for_working(state, player_id)
+	var providers_read := try_get_trainers_for_working(state, player_id)
+	if not providers_read.ok:
+		return providers_read
+	var providers: Array = providers_read.value
 	for provider_val in providers:
 		if not (provider_val is Dictionary):
 			continue

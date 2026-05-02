@@ -130,10 +130,40 @@ func _read_optional_trainer_staff_id(command: Command) -> Result:
 		return Result.failure("trainer_staff_id 必须 > 0，实际: %d" % trainer_staff_id)
 	return Result.success(trainer_staff_id)
 
-func _extract_trainer_identity(provider: Dictionary, staff_id: int) -> Result:
+func _extract_trainer_identity_for_slots(provider: Dictionary, staff_id: int, slots_needed: int) -> Result:
 	var trainer_employee_type := str(provider.get("employee_type", provider.get("id", ""))).strip_edges()
+	if trainer_employee_type.is_empty():
+		return Result.failure("trainer_staff_id=%d 对应的培训员实例信息无效" % staff_id)
+	var slots := maxi(1, slots_needed)
+	var virtual_val = provider.get("virtual_instances", null)
+	if virtual_val is Array:
+		var virtual_instances: Array = virtual_val
+		var best_idx := -1
+		var best_used := -1
+		for item_val in virtual_instances:
+			if not (item_val is Dictionary):
+				return Result.failure("trainer_staff_id=%d 对应的培训员虚拟实例信息无效" % staff_id)
+			var item: Dictionary = item_val
+			var instance_idx := int(item.get("instance_idx", -1))
+			var used := int(item.get("used", 0))
+			var remaining := int(item.get("remaining", 0))
+			if instance_idx < 0:
+				return Result.failure("trainer_staff_id=%d 对应的培训员实例信息无效" % staff_id)
+			if remaining < slots:
+				continue
+			if used > best_used:
+				best_used = used
+				best_idx = instance_idx
+		if best_idx >= 0:
+			return Result.success({
+				"trainer_id": trainer_employee_type,
+				"instance_idx": best_idx,
+			})
+		return Result.failure("培训员 slot 不足: staff_id=%d（需求 %d）" % [staff_id, slots])
+
 	var trainer_instance_idx := int(provider.get("instance_idx", -1))
-	if trainer_employee_type.is_empty() or trainer_instance_idx < 0:
+	var remaining := int(provider.get("remaining", 0))
+	if trainer_instance_idx < 0 or remaining < slots:
 		return Result.failure("trainer_staff_id=%d 对应的培训员实例信息无效" % staff_id)
 	return Result.success({
 		"trainer_id": trainer_employee_type,
@@ -158,8 +188,29 @@ func _resolve_trainer_staff_id_for_allocation(
 	var idx := int(instance_idx)
 	if idx < 0:
 		return Result.failure("train: trainer_instance_idx 无效: %d" % idx)
-	var mapped_idx := idx % ids.size()
-	return Result.success(int(ids[mapped_idx]))
+	var providers_read := EmployeeRulesClass.try_get_trainers_for_working(state, player_id)
+	if not providers_read.ok:
+		return providers_read
+	var providers: Array = providers_read.value
+	for provider_val in providers:
+		if not (provider_val is Dictionary):
+			continue
+		var provider: Dictionary = provider_val
+		var provider_type := str(provider.get("employee_type", provider.get("id", ""))).strip_edges()
+		if provider_type != trainer_id:
+			continue
+		var staff_id := int(provider.get("staff_id", -1))
+		if staff_id <= 0:
+			continue
+		var indices_val = provider.get("instance_indices", [])
+		if indices_val is Array:
+			var indices: Array = indices_val
+			for idx_val in indices:
+				if int(idx_val) == idx:
+					return Result.success(staff_id)
+		elif int(provider.get("instance_idx", -1)) == idx:
+			return Result.success(staff_id)
+	return Result.failure("train: 找不到培训员 staff_id: %s[%d]" % [trainer_id, idx])
 
 func _init() -> void:
 	action_id = "train"
@@ -275,6 +326,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		source_zone_keys.append("reserve_employees")
 	elif can_train_from_active and has_active:
 		source_zone_keys.append("employees")
+	var source_staff_id := -1
 
 	# 若存在“缺货预支”待培训员工，则必须优先清账（避免占用培训次数导致无法离开 Train 子阶段）
 	if pending_total > 0 and not has_pending:
@@ -300,18 +352,19 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		if not trainer_read.ok:
 			return trainer_read
 		trainer = trainer_read.value
-		max_steps_one = int(trainer.get("remaining", 0))
-		var trainer_identity_read := _extract_trainer_identity(trainer, trainer_staff_id)
-		if not trainer_identity_read.ok:
-			return trainer_identity_read
-		var trainer_identity: Dictionary = trainer_identity_read.value
-		explicit_trainer_id = str(trainer_identity.get("trainer_id", "")).strip_edges()
-		explicit_trainer_instance_idx = int(trainer_identity.get("instance_idx", -1))
+		max_steps_one = int(trainer.get("max_step_remaining", trainer.get("remaining", 0)))
 	var steps_required := _compute_train_steps_within_limit(from_employee, to_employee, maxi(1, max_steps_one))
 	if steps_required <= 0:
 		return Result.failure("无法按培训路径培训: %s -> %s（本次最多 %d 步）" % [from_employee, to_employee, maxi(1, max_steps_one)])
 	if used + steps_required > limit:
 		return Result.failure("本子阶段培训次数不足: %d/%d（需要 %d）" % [used, limit, steps_required])
+	if trainer_staff_id > 0:
+		var trainer_identity_read := _extract_trainer_identity_for_slots(trainer, trainer_staff_id, steps_required)
+		if not trainer_identity_read.ok:
+			return trainer_identity_read
+		var trainer_identity: Dictionary = trainer_identity_read.value
+		explicit_trainer_id = str(trainer_identity.get("trainer_id", "")).strip_edges()
+		explicit_trainer_instance_idx = int(trainer_identity.get("instance_idx", -1))
 
 	var multi_val = player.get("multi_trainer_on_one", false)
 	if not (multi_val is bool):
@@ -328,6 +381,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		)
 		if not source_staff_read.ok:
 			return source_staff_read
+		source_staff_id = int(source_staff_read.value)
 	var lock_check := TrainEmployeeLocksClass.plan_training(
 		state,
 		command.actor,
@@ -338,7 +392,8 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 		false,
 		to_employee,
 		explicit_trainer_id,
-		explicit_trainer_instance_idx
+		explicit_trainer_instance_idx,
+		source_staff_id
 	)
 	if not lock_check.ok:
 		return lock_check
@@ -467,7 +522,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		var requested_trainer_read := EmployeeRulesClass.try_resolve_trainer_for_working(state, player_id, requested_trainer_staff_id)
 		if not requested_trainer_read.ok:
 			return requested_trainer_read
-		var requested_trainer_identity_read := _extract_trainer_identity(requested_trainer_read.value, requested_trainer_staff_id)
+		var requested_trainer_identity_read := _extract_trainer_identity_for_slots(requested_trainer_read.value, requested_trainer_staff_id, steps_required)
 		if not requested_trainer_identity_read.ok:
 			return requested_trainer_identity_read
 		var requested_trainer_identity: Dictionary = requested_trainer_identity_read.value
@@ -484,7 +539,8 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		true,
 		to_employee,
 		requested_trainer_id,
-		requested_trainer_instance_idx
+		requested_trainer_instance_idx,
+		source_staff_id
 	)
 	if not lock_plan_read.ok:
 		return lock_plan_read
@@ -566,7 +622,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 
 	# 同步“培训锁 token”：培训成功后，将 token 从 from_employee 移动到 to_employee，并在需要时锁定到具体培训员实例。
 	var lock_apply := TrainEmployeeLocksClass.apply_move_token_and_lock(
-		state, player_id, from_employee, to_employee, lock_plan, multi, reserve
+		state, player_id, from_employee, to_employee, lock_plan, multi, reserve, target_staff_id
 	)
 	if not lock_apply.ok:
 		return lock_apply

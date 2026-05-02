@@ -247,7 +247,7 @@ func _build_target_items_for_selection(
 	if not trainer_read.ok:
 		return out
 	var trainer: Dictionary = trainer_read.value
-	var trainer_remaining := int(trainer.get("remaining", 0))
+	var trainer_remaining := int(trainer.get("max_step_remaining", trainer.get("remaining", 0)))
 	if trainer_remaining <= 0:
 		return out
 
@@ -372,14 +372,18 @@ func _on_train_requested(trainer_staff_id: int, source_staff_id: int, from_emplo
 		return
 	var was_visible: bool = is_instance_valid(train_panel) and bool(train_panel.visible)
 	var current_player_id = _scene.game_engine.get_state().get_current_player_id()
-	var result: Result = _execute_command.call(Command.create("train", current_player_id, {
+	var params := {
 		"trainer_staff_id": trainer_staff_id,
 		"from_employee": from_employee,
 		"to_employee": to_employee,
-		"source_staff_id": source_staff_id
-	}))
+	}
+	if source_staff_id > 0:
+		params["source_staff_id"] = source_staff_id
+	var result: Result = _execute_command.call(Command.create("train", current_player_id, params))
 
 	if result.ok:
+		if is_instance_valid(train_panel) and train_panel.has_method("clear_selection"):
+			train_panel.clear_selection()
 		var state: GameState = _scene.game_engine.get_state()
 		if state != null and state.phase == DefsClass.PHASE_WORKING and state.sub_phase == DefsClass.SUB_PHASE_TRAIN:
 			# 执行命令后 UI 会立刻同步；再调用 show() 会触发 hide_all()，
