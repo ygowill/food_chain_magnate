@@ -1,4 +1,4 @@
-# milestone/first_waitress - 首个使用女服务员（first_waitress）
+# milestone/first_waitress - 首个使用服务员（first_waitress）
 
 ## 存档
 

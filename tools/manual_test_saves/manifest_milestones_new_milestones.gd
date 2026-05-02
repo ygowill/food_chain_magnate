@@ -213,7 +213,7 @@ static func get_cases() -> Array[Dictionary]:
 	cases.append(_case({
 		"kind": "milestone",
 		"id": "first_waitress_used",
-		"title": "首个使用女服务员（first_waitress_used）",
+		"title": "首个使用服务员（first_waitress_used）",
 		"enabled_modules": ["new_milestones"],
 		"exclude_modules": ["base_milestones"],
 		"builder": "milestone_first_waitress_used",

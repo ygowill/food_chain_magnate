@@ -1,6 +1,6 @@
 {
   "id": "first_waitress",
-  "name": "首个使用女服务员",
+  "name": "首个使用服务员",
   "trigger": {
     "event": "UseEmployee",
     "filter": {

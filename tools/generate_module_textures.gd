@@ -357,7 +357,7 @@ static func _generate_product_icons(errors: Array[String]) -> void:
 	))
 	_write_png("res://modules/base_products/assets/map/icons/pizza.png", img_pizza, errors)
 
-	# 4. 苏打水 (Soda) - 蓝色背景，易拉罐形状
+	# 4. 可乐 (Soda) - 蓝色背景，易拉罐形状
 	var img_soda := _new_image(SIZE_ICON, SIZE_ICON)
 	_draw_icon_bg(img_soda, Color("3498db")) # 蓝色
 	# 罐身

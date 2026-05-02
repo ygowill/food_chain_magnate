@@ -298,7 +298,7 @@ static func get_cases() -> Array[Dictionary]:
 	cases.append(_case({
 		"kind": "milestone",
 		"id": "first_waitress",
-		"title": "首个使用女服务员（first_waitress）",
+		"title": "首个使用服务员（first_waitress）",
 		"enabled_modules": [],
 		"builder": "milestone_first_waitress",
 		"purpose": "验证晚餐结算时 UseEmployee(waitress) 会触发 first_waitress，并将 tips 提升到 5。",

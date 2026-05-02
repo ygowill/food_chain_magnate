@@ -740,7 +740,7 @@
 	- 后续路线采购：每个来源的饮料数量应 +1。
 - 参考单测：`core/tests/procure_drinks_route_rules_test.gd`
 
-#### first_waitress（首个使用女服务员）
+#### first_waitress（首个使用服务员）
 
 - 触发：`UseEmployee`（id=waitress）
 - 效果：`waitress_tips=5`

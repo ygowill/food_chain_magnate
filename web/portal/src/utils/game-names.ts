@@ -131,8 +131,8 @@ export const MILESTONE_NAMES: Record<string, string> = {
   first_throw_away: '首个丢弃食物/饮品',
   first_train: '首个培训员工',
   first_trainer_used: '首个使用培训讲师',
-  first_waitress: '首个使用女服务员',
-  first_waitress_used: '首个使用女服务员',
+  first_waitress: '首个使用服务员',
+  first_waitress_used: '首个使用服务员',
   ketchup_sold_your_demand: '有人卖了你的需求',
 }
 

@@ -254,7 +254,7 @@ static func _test_garden_does_not_affect_decision(seed_val: int) -> Result:
 	state = engine.get_state()
 
 	# 花园仅影响收入：单价 11，数量 1 => 单价部分翻倍为 22；
-	# 首个使用女服务员会自动获得里程碑（小费 5）=> 合计 27
+	# 首个使用服务员会自动获得里程碑（小费 5）=> 合计 27
 	if int(state.players[0].get("cash", 0)) != 27:
 		return Result.failure("花园不应影响选店，女服务员平局应使玩家0 获得 27，实际: %d" % int(state.players[0].get("cash", 0)))
 
@@ -295,7 +295,7 @@ static func _test_waitress_tiebreak(seed_val: int) -> Result:
 
 	state = engine.get_state()
 	# 收入：售卖 1 个 burger，单价 11 => 11；
-	# 首个使用女服务员会自动获得里程碑（小费 5）=> 合计 16
+	# 首个使用服务员会自动获得里程碑（小费 5）=> 合计 16
 	if int(state.players[0].get("cash", 0)) != 16:
 		return Result.failure("女服务员平局应使玩家0 胜出并获得 16，实际: %d" % int(state.players[0].get("cash", 0)))
 
