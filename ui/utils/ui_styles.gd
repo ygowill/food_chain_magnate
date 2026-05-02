@@ -32,6 +32,15 @@ const PAPER_TEXTURE_PATHS: PackedStringArray = [
 	"res://assets/textures/paper_texture.png",
 	"res://assets/textures/old_paper.png",
 ]
+const SYMBOL_SAFE_BASE_FONT_PATH := "res://assets/fonts/NotoSansSC-Regular.otf"
+const SYMBOL_SAFE_FALLBACK_FONT_PATHS: PackedStringArray = [
+	"/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+	"/System/Library/Fonts/Supplemental/STIXGeneral.otf",
+	"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+	"/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+	"C:/Windows/Fonts/seguisym.ttf",
+	"C:/Windows/Fonts/arial.ttf",
+]
 
 const COLOR_TEXT_PRIMARY := Color(0.17, 0.13, 0.09, 1.0)
 const COLOR_TEXT_MUTED := Color(0.5, 0.45, 0.35, 1.0)
@@ -43,6 +52,52 @@ const COLOR_FIELD_BG := Color(0.95, 0.91, 0.82, 0.9)
 const COLOR_FIELD_BG_DISABLED := Color(0.92, 0.88, 0.78, 0.7)
 const COLOR_FIELD_BORDER := Color(0.17, 0.13, 0.09, 0.26)
 const COLOR_FIELD_BORDER_FOCUS := Color(0.73, 0.23, 0.18, 0.72)
+
+static var _symbol_safe_font: Font = null
+
+static func get_symbol_safe_font() -> Font:
+	if _symbol_safe_font != null:
+		return _symbol_safe_font
+
+	var base := FontFile.new()
+	if not FileAccess.file_exists(SYMBOL_SAFE_BASE_FONT_PATH):
+		return ThemeDB.fallback_font
+	if base.load_dynamic_font(SYMBOL_SAFE_BASE_FONT_PATH) != OK:
+		return ThemeDB.fallback_font
+	base.set_allow_system_fallback(true)
+
+	var fallbacks: Array[Font] = []
+	for path in SYMBOL_SAFE_FALLBACK_FONT_PATHS:
+		if not FileAccess.file_exists(path):
+			continue
+		var fallback := FontFile.new()
+		if fallback.load_dynamic_font(path) != OK:
+			continue
+		fallback.set_allow_system_fallback(true)
+		fallbacks.append(fallback)
+	if not fallbacks.is_empty():
+		base.set_fallbacks(fallbacks)
+
+	_symbol_safe_font = base
+	return _symbol_safe_font
+
+static func apply_symbol_safe_label_font(label: Label) -> void:
+	if label == null:
+		return
+	var font := get_symbol_safe_font()
+	if font != null:
+		label.add_theme_font_override("font", font)
+
+static func apply_symbol_safe_rich_text_font(rich_text: RichTextLabel) -> void:
+	if rich_text == null:
+		return
+	var font := get_symbol_safe_font()
+	if font == null:
+		return
+	rich_text.add_theme_font_override("normal_font", font)
+	rich_text.add_theme_font_override("bold_font", font)
+	rich_text.add_theme_font_override("italics_font", font)
+	rich_text.add_theme_font_override("bold_italics_font", font)
 
 static func get_overlay_dim_color(alpha: float = -1.0) -> Color:
 	var color := COLOR_OVERLAY_DIM
@@ -137,6 +192,9 @@ static func apply_native_tooltip_theme(root: Control) -> void:
 	t.set_stylebox("panel", "TooltipPanel", _TOOLTIP_PANEL)
 	t.set_color("font_color", "TooltipLabel", COLOR_TEXT_PRIMARY)
 	t.set_font_size("font_size", "TooltipLabel", 12)
+	var font := get_symbol_safe_font()
+	if font != null:
+		t.set_font("font", "TooltipLabel", font)
 
 static func apply_overlay_dim(overlay: ColorRect, alpha: float = -1.0) -> void:
 	if overlay == null:

@@ -311,12 +311,11 @@ func _create_milestone_compact_row(milestone_id: String, milestone_def, is_claim
 		strike.color = Color(MILESTONE_COLOR_GONE.r, MILESTONE_COLOR_GONE.g, MILESTONE_COLOR_GONE.b, 0.95)
 		wrapper.add_child(strike)
 
-	# Tooltip: 里程碑效果描述
-	var tip := _get_milestone_tooltip(milestone_id)
-	wrapper.tooltip_text = tip
-	row.tooltip_text = tip
-	icon_container.tooltip_text = tip
-	name_label.tooltip_text = tip
+	# 悬停时会显示 MilestonePreviewCard；不要再叠加 Godot 原生 tooltip。
+	wrapper.tooltip_text = ""
+	row.tooltip_text = ""
+	icon_container.tooltip_text = ""
+	name_label.tooltip_text = ""
 	wrapper.mouse_entered.connect(Callable(self, "_on_milestone_mouse_entered").bind(milestone_id, wrapper))
 	wrapper.mouse_exited.connect(_on_milestone_mouse_exited)
 	wrapper.gui_input.connect(Callable(self, "_on_milestone_gui_input").bind(milestone_id, wrapper))

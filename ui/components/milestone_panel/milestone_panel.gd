@@ -553,7 +553,7 @@ class MilestoneItem extends PanelContainer:
 				name = str((milestone_def as MilestoneDef).name)
 			name = _strip_id_suffix(name)
 			_name_label.text = name
-			_name_label.tooltip_text = name
+			_name_label.tooltip_text = ""
 
 		if _desc_label != null:
 			var text := effect_text

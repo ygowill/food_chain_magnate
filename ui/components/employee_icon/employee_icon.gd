@@ -62,7 +62,8 @@ func _update_display() -> void:
 		fallback_label.visible = not is_instance_valid(icon_texture) or (icon_texture.texture == null)
 		fallback_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1))
 
-	tooltip_text = "%s%s" % [name, "（忙碌）" if is_busy else ""]
+	# 悬停时由 HelpTooltipManager 显示说明；不要再叠加 Godot 原生 tooltip。
+	tooltip_text = ""
 
 func _update_style() -> void:
 	var role := "special"

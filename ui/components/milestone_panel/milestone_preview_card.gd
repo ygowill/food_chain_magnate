@@ -73,7 +73,7 @@ func _update_display() -> void:
 			name = milestone_id
 		name = _strip_id_suffix(name)
 		_name_label.text = name
-		_name_label.tooltip_text = name
+		_name_label.tooltip_text = ""
 
 	if _desc_label != null:
 		var text := effect_text

@@ -4,7 +4,6 @@ extends RefCounted
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const EmployeeRoleColorsClass = preload("res://ui/visual/employee_role_colors.gd")
-const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const UiPointerInputClass = preload("res://ui/utils/pointer_input.gd")
 
 var _panel = null
@@ -208,23 +207,8 @@ func _create_employee_tag(emp_id: String, is_busy: bool, player: Dictionary) -> 
 	tag.mouse_exited.connect(Callable(self, "_on_tag_mouse_exited"))
 	tag.gui_input.connect(Callable(self, "_on_tag_gui_input").bind(emp_id, tag))
 
-	# Tooltip
-	var tooltip_lines: Array[String] = []
-	tooltip_lines.append(display_name)
-	if def != null:
-		if not def.description.is_empty():
-			tooltip_lines.append(def.description)
-		var requires_salary := false
-		if EmployeeRegistry.is_loaded():
-			requires_salary = EmployeeRulesClass.requires_salary(emp_id, player)
-		if requires_salary:
-			var salary_cost := _resolve_salary_cost(player)
-			tooltip_lines.append("薪资: 需支付 ($%d/回合)" % salary_cost)
-		else:
-			tooltip_lines.append("薪资: 无需支付")
-	if is_busy:
-		tooltip_lines.append("（忙碌中）")
-	tag.tooltip_text = "\n".join(tooltip_lines)
+	# 悬停时会显示 EmployeeCard 预览；不要再叠加 Godot 原生 tooltip。
+	tag.tooltip_text = ""
 
 	return tag
 

@@ -817,7 +817,7 @@ class MilestoneCard extends PanelContainer:
 				display_name = str((milestone_def as MilestoneDef).name)
 			display_name = _strip_id_suffix(display_name)
 			_name_label.text = display_name
-			_name_label.tooltip_text = display_name
+			_name_label.tooltip_text = ""
 
 		if _desc_label != null:
 			_desc_label.text = effect_text if not effect_text.is_empty() else milestone_id

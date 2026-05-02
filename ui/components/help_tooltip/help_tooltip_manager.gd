@@ -163,8 +163,10 @@ func _ready() -> void:
 		tooltip_panel.visible = false
 	if title_label != null:
 		UiStylesClass.apply_label_dark(title_label)
+		UiStylesClass.apply_symbol_safe_label_font(title_label)
 	if content_label != null:
 		UiStylesClass.apply_rich_text_dark(content_label)
+		UiStylesClass.apply_symbol_safe_rich_text_font(content_label)
 
 func request_tooltip(key: String, position: Vector2) -> void:
 	if key == _current_key and _is_visible:
