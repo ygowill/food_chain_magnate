@@ -53,6 +53,7 @@ var _online_ui_refresh_scheduled: bool = false
 var _online_ui_refresh_meta: Dictionary = {}
 var _online_ui_refresh_apply_end_mono_usec: int = 0
 var _online_ui_refresh_force_log_apply: bool = false
+var _hide_loading_after_next_online_ui_refresh: bool = false
 
 func _init(
 	host: Node,
@@ -104,11 +105,32 @@ func dispose() -> void:
 	_online_ui_refresh_meta.clear()
 	_online_ui_refresh_apply_end_mono_usec = 0
 	_online_ui_refresh_force_log_apply = false
+	_hide_loading_after_next_online_ui_refresh = false
 	_active_rollback_proposal_id = ""
 	_handled_rollback_proposal_ids.clear()
 
 func is_resync_in_progress() -> bool:
 	return _resync_in_progress
+
+func _show_sync_loading(message: String) -> void:
+	if _reconnect_flow_active:
+		return
+	if not _show_loading.is_valid():
+		return
+	_show_loading.call(str(message).strip_edges())
+
+func _hide_sync_loading() -> void:
+	_hide_loading_after_next_online_ui_refresh = false
+	if _reconnect_flow_active:
+		return
+	if not _hide_loading.is_valid():
+		return
+	_hide_loading.call()
+
+func _hide_sync_loading_after_next_ui_refresh() -> void:
+	if _reconnect_flow_active:
+		return
+	_hide_loading_after_next_online_ui_refresh = true
 
 func initialize() -> void:
 	_setup_online_client_bindings()
@@ -190,6 +212,7 @@ func _begin_full_resync_request(reason: String, force: bool = false) -> bool:
 		return false
 	_resync_in_progress = true
 	_rollback_request_id = ""
+	_show_sync_loading("正在同步对局...")
 	var request_id := ""
 	if _request_resync.is_valid():
 		var request_result = _request_resync.call(bool(force))
@@ -228,6 +251,7 @@ func begin_rewind_to_turn_start_request() -> bool:
 		return false
 	_resync_in_progress = true
 	_resync_request_id = ""
+	_show_sync_loading("正在回滚对局...")
 	var request_id := NetClient.request_rewind_to_turn_start()
 	_rollback_request_id = str(request_id)
 	GameLog.warn("Game", "联机请求回退到回合开始 request_id=%s" % str(request_id))
@@ -249,12 +273,15 @@ func begin_rollback_last_command_request() -> bool:
 		return false
 	_resync_in_progress = true
 	_resync_request_id = ""
+	_show_sync_loading("正在回滚对局...")
 	var request_id := NetClient.request_rollback_last_command()
 	_rollback_request_id = str(request_id)
 	GameLog.warn("Game", "联机请求回退上一步 request_id=%s" % str(request_id))
 	_resync_ticket += 1
-	if _update_ui.is_valid() or _sync_dirty_ui.is_valid():
+	if _update_ui.is_valid():
 		_update_ui.call()
+	elif _sync_dirty_ui.is_valid():
+		_sync_dirty_ui.call(GameUiSyncControllerClass.DIRTY_FULL, {"source": "rollback_last_command_request"})
 	_online_schedule_resync_timeout(_resync_ticket, _rollback_request_id)
 	return true
 
@@ -574,6 +601,8 @@ func _flush_online_command_ui_refresh() -> void:
 		})
 	if apply_end_mono_usec > 0:
 		_trace_online_command_ui_settled(meta, apply_end_mono_usec)
+	if _hide_loading_after_next_online_ui_refresh:
+		_hide_sync_loading()
 
 func _build_online_command_dirty_flags(meta: Dictionary, force_log_apply: bool) -> int:
 	if bool(force_log_apply) or bool(meta.get("phase_changed", false)):
@@ -606,6 +635,7 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 	var engine = _get_engine()
 	if engine == null:
 		return
+	_show_sync_loading("正在应用对局同步...")
 	if NetClient != null and NetClient.has_method("clear_pending_resync_archive"):
 		NetClient.clear_pending_resync_archive()
 	_resync_in_progress = true
@@ -620,12 +650,13 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 		_rollback_request_id = ""
 		_resync_request_id = ""
 		_pending_cmds.clear()
+		_hide_sync_loading()
 		if _update_ui.is_valid():
 			_update_ui.call()
 		if not OS.has_feature("headless"):
 			if _show_confirm.is_valid():
 				_show_confirm.call("联机同步失败", r.error, Callable(), Callable(), "确定", "关闭")
-			return
+		return
 
 	var prepare_r: Result = OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
 	if not prepare_r.ok:
@@ -637,6 +668,7 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 		_rollback_request_id = ""
 		_resync_request_id = ""
 		_pending_cmds.clear()
+		_hide_sync_loading()
 		if _update_ui.is_valid():
 			_update_ui.call()
 		if not OS.has_feature("headless"):
@@ -659,6 +691,7 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 	_resync_request_id = ""
 	if _reset_timeline_state_after_resync.is_valid():
 		_reset_timeline_state_after_resync.call()
+	_hide_sync_loading_after_next_ui_refresh()
 	_schedule_online_command_ui_refresh({}, 0, true)
 
 	_flush_online_pending_commands_after_resync()
@@ -681,6 +714,7 @@ func _on_online_resync_delta_applied(payload: Dictionary) -> void:
 	_resync_request_id = ""
 	if _reset_timeline_state_after_resync.is_valid():
 		_reset_timeline_state_after_resync.call()
+	_hide_sync_loading_after_next_ui_refresh()
 	_schedule_online_command_ui_refresh({}, 0, true)
 	_flush_online_pending_commands_after_resync()
 	if _reconnect_flow_active or (NetContext != null and NetContext.has_method("is_online_reconnecting") and NetContext.is_online_reconnecting()):
@@ -697,6 +731,7 @@ func _on_online_resync_delta_failed(message: String) -> void:
 	_resync_in_progress = false
 	_resync_request_id = ""
 	_pending_cmds.clear()
+	_hide_sync_loading()
 	if _update_ui.is_valid():
 		_update_ui.call()
 	_begin_full_resync_request("delta_apply_failed", true)
@@ -711,6 +746,7 @@ func _on_online_rollback_meta(payload: Dictionary) -> void:
 		return
 	if NetClient.has_method("clear_pending_rollback_meta"):
 		NetClient.clear_pending_rollback_meta()
+	_show_sync_loading("正在应用回滚...")
 
 	var request_id := str(payload.get("request_id", ""))
 	var target_index := int(payload.get("target_index", -999))
@@ -730,6 +766,7 @@ func _on_online_rollback_meta(payload: Dictionary) -> void:
 		_resync_request_id = ""
 		if _reset_timeline_state_after_resync.is_valid():
 			_reset_timeline_state_after_resync.call()
+		_hide_sync_loading_after_next_ui_refresh()
 		_schedule_online_command_ui_refresh({}, 0, true)
 		_flush_online_pending_commands_after_resync()
 		return
@@ -795,6 +832,7 @@ func _on_online_rollback_meta(payload: Dictionary) -> void:
 	_resync_request_id = ""
 	if _reset_timeline_state_after_resync.is_valid():
 		_reset_timeline_state_after_resync.call()
+	_hide_sync_loading_after_next_ui_refresh()
 	_schedule_online_command_ui_refresh({}, 0, true)
 	_flush_online_pending_commands_after_resync()
 
@@ -941,12 +979,14 @@ func _on_online_request_rejected(request_id: String, code: String, message: Stri
 		_resync_in_progress = false
 		_rollback_request_id = ""
 		_resync_request_id = ""
+		_hide_sync_loading()
 		_flush_online_pending_commands_after_resync()
 		if _update_ui.is_valid():
 			_update_ui.call()
 	elif matched_resync_rejection:
 		_resync_in_progress = false
 		_resync_request_id = ""
+		_hide_sync_loading()
 		if _update_ui.is_valid():
 			_update_ui.call()
 		if str(code).strip_edges() == "resync_rate_limited":
@@ -1171,6 +1211,7 @@ func _finish_online_reconnect_success(ticket: int) -> void:
 	_reconnect_attempt_failed = false
 	_reconnect_attempt_failure_reason = ""
 	_resync_request_id = ""
+	_hide_loading_after_next_online_ui_refresh = false
 	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("finish_in_game_reconnect"):
 		OnlineSessionCoordinator.finish_in_game_reconnect(true)
 	elif NetContext != null and NetContext.has_method("set_online_reconnecting"):
@@ -1190,6 +1231,7 @@ func _finish_online_reconnect_failure(ticket: int, error_message: String) -> voi
 	_reconnect_attempt_failed = false
 	_reconnect_attempt_failure_reason = ""
 	_resync_request_id = ""
+	_hide_loading_after_next_online_ui_refresh = false
 	if OnlineSessionCoordinator != null and OnlineSessionCoordinator.has_method("finish_in_game_reconnect"):
 		OnlineSessionCoordinator.finish_in_game_reconnect(false, error_message)
 	elif NetContext != null and NetContext.has_method("set_online_reconnecting"):

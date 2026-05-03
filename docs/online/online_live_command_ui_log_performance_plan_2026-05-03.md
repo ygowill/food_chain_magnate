@@ -572,7 +572,7 @@ live command 后根据 action/event 标记 dirty：
 
 ### 阶段 5：日志面板虚拟化 / 窗口化
 
-状态：**进行中**。
+状态：**已完成当前计划项**。
 
 2026-05-03 增量更新：
 
@@ -622,6 +622,16 @@ live command 后根据 action/event 标记 dirty：
 - append、scroll、seek 都不会因完整日志长度线性变慢到秒级。
 
 ### 阶段 6：resync / rollback / load 的重任务显式化
+
+状态：**已完成当前计划项**。
+
+2026-05-03 增量更新：
+
+- 普通 full resync request 会立即显示 blocking loading，避免用户把后续 snapshot/delta/load 重任务误认为普通 live action 卡死。
+- rewind / rollback last command request 会显示回滚 loading；只在收到回灌并完成强制 UI refresh 后关闭。
+- ResyncArchive / DeltaResync / RollbackMeta 成功后把 loading 关闭延后到下一次强制 UI refresh 完成，避免重日志/重 UI 刷新期间出现“遮罩提前消失但界面还不可交互”。
+- request rejected / delta failed / archive load failed 等失败路径会显式隐藏 loading，并刷新 UI 状态；重连流程保留原有独立 loading，不被普通 resync hide 抢占。
+- 新增 `GameOnlineResyncLoadingStateTest` 覆盖 full resync request 显示 loading、resync rejected 后隐藏 loading 并刷新 UI。
 
 目标：
 
