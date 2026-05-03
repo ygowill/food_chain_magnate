@@ -2,6 +2,7 @@ extends RefCounted
 
 const CommandClass = preload("res://core/types/command.gd")
 const ResyncSnapshotTransferClass = preload("res://core/utils/resync_snapshot_transfer.gd")
+const RecordOnlyEventSinkClass = preload("res://core/engine/game_engine/record_only_event_sink.gd")
 
 var _net = null
 
@@ -301,7 +302,7 @@ func apply_delta(payload: Dictionary) -> void:
 					% [current_sequence, int(cmd.index)]
 			)
 			return
-		var exec_r: Result = engine.execute_command(cmd, true)
+		var exec_r: Result = _execute_replay_command_record_only(engine, cmd)
 		if not exec_r.ok:
 			_emit_delta_failure("delta 恢复失败：命令回放失败：%s" % exec_r.error)
 			return
@@ -342,6 +343,17 @@ func apply_delta(payload: Dictionary) -> void:
 		"entry_count": entries.size(),
 		"checkpoint_id": checkpoint_id,
 	})
+
+func _execute_replay_command_record_only(engine, cmd) -> Result:
+	if engine == null or not engine.has_method("execute_command"):
+		return Result.failure("delta 恢复失败：engine 无法执行命令")
+	if not engine.has_method("set_event_sink"):
+		return engine.execute_command(cmd, true)
+	var previous_sink = engine.get_event_sink() if engine.has_method("get_event_sink") else null
+	engine.set_event_sink(RecordOnlyEventSinkClass.new(previous_sink))
+	var exec_r: Result = engine.execute_command(cmd, true)
+	engine.set_event_sink(previous_sink)
+	return exec_r
 
 func _emit_delta_failure(message: String) -> void:
 	if _net != null and is_instance_valid(_net):

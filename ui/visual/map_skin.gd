@@ -192,12 +192,15 @@ func _load_texture_or_placeholder(path: String, kind: String, warnings: Array[St
 	if path.is_empty():
 		return _get_placeholder(kind)
 
-	# ResourceLoader.exists() may return false for raw assets that haven't been imported yet
-	# (i.e., the `*.import` sidecar isn't generated). If the file exists on disk, still try
-	# to load it and let Godot import on demand.
 	var exists := ResourceLoader.exists(path)
-	if not exists and path.begins_with("res://") and FileAccess.file_exists(path):
-		exists = true
+	var can_load_raw := path.begins_with("res://") or path.begins_with("user://")
+	var raw_file_exists := can_load_raw and FileAccess.file_exists(path)
+	if raw_file_exists and (not exists or _is_import_target_missing(path)):
+		var raw_tex := _load_raw_image_texture(path)
+		if raw_tex != null:
+			PerfTraceClass.counter_add("skin:texture_load_raw_ok", 1)
+			warnings.append("MapSkin: 导入贴图不可用，已从原始图片加载: %s (%s)" % [label, path])
+			return raw_tex
 
 	if not exists:
 		PerfTraceClass.counter_add("skin:texture_missing", 1)
@@ -208,9 +211,44 @@ func _load_texture_or_placeholder(path: String, kind: String, warnings: Array[St
 	if res is Texture2D:
 		PerfTraceClass.counter_add("skin:texture_load_ok", 1)
 		return res
+
 	PerfTraceClass.counter_add("skin:texture_load_bad_type", 1)
 	warnings.append("MapSkin: 贴图类型错误，使用占位: %s (%s)" % [label, path])
 	return _get_placeholder(kind)
+
+static func _is_import_target_missing(path: String) -> bool:
+	var p := str(path).strip_edges()
+	if not p.begins_with("res://"):
+		return false
+	var import_path := "%s.import" % p
+	if not FileAccess.file_exists(import_path):
+		return false
+	var file := FileAccess.open(import_path, FileAccess.READ)
+	if file == null:
+		return false
+	var prefix := "path=\""
+	while not file.eof_reached():
+		var line := file.get_line().strip_edges()
+		if not line.begins_with(prefix):
+			continue
+		var import_target := line.substr(prefix.length())
+		if import_target.ends_with("\""):
+			import_target = import_target.substr(0, import_target.length() - 1)
+		return import_target.begins_with("res://") and not FileAccess.file_exists(import_target)
+	return false
+
+static func _load_raw_image_texture(path: String) -> Texture2D:
+	var p := str(path).strip_edges()
+	if p.is_empty():
+		return null
+	if not (p.begins_with("res://") or p.begins_with("user://")):
+		return null
+	if not FileAccess.file_exists(p):
+		return null
+	var img := Image.load_from_file(p)
+	if img == null or img.is_empty():
+		return null
+	return ImageTexture.create_from_image(img)
 
 func _maybe_make_transparent_logo_texture(piece_id: String, base_tex: Texture2D, warnings: Array[String]) -> Texture2D:
 	if base_tex == null:

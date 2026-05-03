@@ -42,6 +42,7 @@ const UiModulesBaseDirContractTestClass = preload("res://ui/scenes/tests/ui_modu
 const UiProductNameMappingContractTestClass = preload("res://ui/scenes/tests/ui_product_name_mapping_contract_test.gd")
 const UiFryChefEmployeeIdContractTestClass = preload("res://ui/scenes/tests/ui_fry_chef_employee_id_contract_test.gd")
 const ModuleUiMetadataBootstrapTestClass = preload("res://ui/scenes/tests/module_ui_metadata_bootstrap_test.gd")
+const MapSkinRawImageFallbackTestClass = preload("res://ui/scenes/tests/map_skin_raw_image_fallback_test.gd")
 const EmployeeTreeLayoutBottomTagTestClass = preload("res://ui/scenes/tests/employee_tree_layout_bottom_tag_test.gd")
 const EmployeeCardDescriptionWrapTestClass = preload("res://ui/scenes/tests/employee_card_description_wrap_test.gd")
 const GamePanelModalsControllerKindContractTestClass = preload("res://ui/scenes/tests/game_panel_modals_controller_kind_contract_test.gd")

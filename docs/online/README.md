@@ -9,6 +9,7 @@
 
 补充文档：
 
+- `docs/online/online_live_command_ui_log_performance_plan_2026-05-03.md`：当前计划。记录联机后半段 live command 后跳字/UI 卡顿的链路、已落地 hotfix、日志 timeline append 与 UI sync 的长期优化顺序
 - `docs/online/online_resume_single_full_engine_startup_2026-04-17.md`：当前已采纳方案。恢复房改为“单 full-engine 启动 + 完整 archive 本地回放 + 预构建 timeline/log cache”
 - `docs/online/online_resume_fastload_full_history_design_2026-04-14.md`：只读历史归档，记录双轨方案背景与权衡；旧 `full_replay_*` 术语不代表当前实现字段
 - `docs/online/online_resume_hot_path_rebuild_plan_2026-04-16.md`：只读历史归档，记录热路径收敛过程；当前最终落点已更新为单 full-engine 启动

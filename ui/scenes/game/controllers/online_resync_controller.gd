@@ -7,10 +7,12 @@ const ModuleUiMetadataBootstrapClass = preload("res://gameplay/module_ui_metadat
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const RecordOnlyEventSinkClass = preload("res://core/engine/game_engine/record_only_event_sink.gd")
 const RECONNECT_MAX_ATTEMPTS := 6
 const RECONNECT_CONNECT_TIMEOUT_SEC := 3.0
 const RECONNECT_RESTORE_TIMEOUT_SEC := 6.0
 const RECONNECT_RETRY_DELAY_SEC := 1.0
+const ONLINE_UI_REFRESH_DEFER_FRAMES := 1
 
 var _host: Node = null
 var _game_log_panel: Control = null
@@ -45,6 +47,10 @@ var _reconnect_attempt_failed: bool = false
 var _reconnect_attempt_failure_reason: String = ""
 var _active_rollback_proposal_id: String = ""
 var _handled_rollback_proposal_ids: Dictionary = {}
+var _online_ui_refresh_scheduled: bool = false
+var _online_ui_refresh_meta: Dictionary = {}
+var _online_ui_refresh_apply_end_mono_usec: int = 0
+var _online_ui_refresh_force_log_apply: bool = false
 
 func _init(
 	host: Node,
@@ -88,6 +94,10 @@ func dispose() -> void:
 	_action_request_ids.clear()
 	_resync_request_id = ""
 	_request_live_log_timeline_refresh = Callable()
+	_online_ui_refresh_scheduled = false
+	_online_ui_refresh_meta.clear()
+	_online_ui_refresh_apply_end_mono_usec = 0
+	_online_ui_refresh_force_log_apply = false
 	_active_rollback_proposal_id = ""
 	_handled_rollback_proposal_ids.clear()
 
@@ -488,25 +498,55 @@ func _on_online_command_applied(cmd_dict: Dictionary, state_hash: String) -> voi
 	if should_sync_resume_progress and NetContext != null and NetContext.has_method("sync_online_resume_progress_from_engine"):
 		NetContext.sync_online_resume_progress_from_engine(engine)
 
-	if _request_live_log_timeline_refresh.is_valid():
+	_schedule_online_command_ui_refresh(apply_done_meta, apply_end_mono_usec)
+
+func _schedule_online_command_ui_refresh(meta: Dictionary, apply_end_mono_usec: int, force_log_apply: bool = false) -> void:
+	_online_ui_refresh_meta = Dictionary(meta).duplicate(true)
+	_online_ui_refresh_apply_end_mono_usec = int(apply_end_mono_usec)
+	_online_ui_refresh_force_log_apply = _online_ui_refresh_force_log_apply or force_log_apply
+	if _online_ui_refresh_scheduled:
+		return
+	_online_ui_refresh_scheduled = true
+	call_deferred("_flush_online_command_ui_refresh")
+
+func _flush_online_command_ui_refresh() -> void:
+	if _host != null and is_instance_valid(_host):
+		var tree := _host.get_tree()
+		if tree != null:
+			for _i in range(ONLINE_UI_REFRESH_DEFER_FRAMES):
+				await tree.process_frame
+	_online_ui_refresh_scheduled = false
+	var meta := _online_ui_refresh_meta.duplicate(true)
+	var apply_end_mono_usec := int(_online_ui_refresh_apply_end_mono_usec)
+	var force_log_apply := _online_ui_refresh_force_log_apply
+	_online_ui_refresh_meta.clear()
+	_online_ui_refresh_apply_end_mono_usec = 0
+	_online_ui_refresh_force_log_apply = false
+
+	if force_log_apply and is_instance_valid(_game_log_panel) and _game_log_panel.visible and _apply_live_log_timeline_from_engine.is_valid():
+		_apply_live_log_timeline_from_engine.call(true)
+	elif _request_live_log_timeline_refresh.is_valid():
 		_request_live_log_timeline_refresh.call()
 	if _update_ui.is_valid():
 		var ui_update_span := OnlinePerfTraceClass.begin_span("client.command_applied.ui_update", {
-			"request_id": str(perf_meta.get("request_id", "")),
-			"action_id": str(cmd.action_id),
-			"actor_id": int(cmd.actor),
-			"command_index": int(cmd.index),
-			"room_code": str(NetContext.room_state.get("room_code", "")).strip_edges().to_upper(),
+			"request_id": str(meta.get("request_id", "")),
+			"action_id": str(meta.get("action_id", "")),
+			"actor_id": int(meta.get("actor_id", -1)),
+			"command_index": int(meta.get("command_index", -1)),
+			"room_code": str(meta.get("room_code", "")),
+			"deferred": true,
 		})
 		_update_ui.call()
 		OnlinePerfTraceClass.end_span(ui_update_span, {
-			"request_id": str(perf_meta.get("request_id", "")),
-			"action_id": str(cmd.action_id),
-			"actor_id": int(cmd.actor),
-			"command_index": int(cmd.index),
-			"room_code": str(NetContext.room_state.get("room_code", "")).strip_edges().to_upper(),
+			"request_id": str(meta.get("request_id", "")),
+			"action_id": str(meta.get("action_id", "")),
+			"actor_id": int(meta.get("actor_id", -1)),
+			"command_index": int(meta.get("command_index", -1)),
+			"room_code": str(meta.get("room_code", "")),
+			"deferred": true,
 		})
-	_trace_online_command_ui_settled(apply_done_meta, apply_end_mono_usec)
+	if apply_end_mono_usec > 0:
+		_trace_online_command_ui_settled(meta, apply_end_mono_usec)
 
 func _trace_online_command_ui_settled(meta: Dictionary, apply_end_mono_usec: int) -> void:
 	if not OnlinePerfTraceClass.enabled():
@@ -580,13 +620,7 @@ func _on_online_resync_archive_received(archive: Dictionary) -> void:
 	_resync_request_id = ""
 	if _reset_timeline_state_after_resync.is_valid():
 		_reset_timeline_state_after_resync.call()
-	if is_instance_valid(_game_log_panel) and _game_log_panel.visible:
-		if _apply_live_log_timeline_from_engine.is_valid():
-			_apply_live_log_timeline_from_engine.call(true)
-	elif _request_live_log_timeline_refresh.is_valid():
-		_request_live_log_timeline_refresh.call()
-	if _update_ui.is_valid():
-		_update_ui.call()
+	_schedule_online_command_ui_refresh({}, 0, true)
 
 	_flush_online_pending_commands_after_resync()
 	if _reconnect_flow_active or (NetContext != null and NetContext.has_method("is_online_reconnecting") and NetContext.is_online_reconnecting()):
@@ -608,13 +642,7 @@ func _on_online_resync_delta_applied(payload: Dictionary) -> void:
 	_resync_request_id = ""
 	if _reset_timeline_state_after_resync.is_valid():
 		_reset_timeline_state_after_resync.call()
-	if is_instance_valid(_game_log_panel) and _game_log_panel.visible:
-		if _apply_live_log_timeline_from_engine.is_valid():
-			_apply_live_log_timeline_from_engine.call(true)
-	elif _request_live_log_timeline_refresh.is_valid():
-		_request_live_log_timeline_refresh.call()
-	if _update_ui.is_valid():
-		_update_ui.call()
+	_schedule_online_command_ui_refresh({}, 0, true)
 	_flush_online_pending_commands_after_resync()
 	if _reconnect_flow_active or (NetContext != null and NetContext.has_method("is_online_reconnecting") and NetContext.is_online_reconnecting()):
 		_reconnect_restore_completed = true
@@ -663,13 +691,7 @@ func _on_online_rollback_meta(payload: Dictionary) -> void:
 		_resync_request_id = ""
 		if _reset_timeline_state_after_resync.is_valid():
 			_reset_timeline_state_after_resync.call()
-		if is_instance_valid(_game_log_panel) and _game_log_panel.visible:
-			if _apply_live_log_timeline_from_engine.is_valid():
-				_apply_live_log_timeline_from_engine.call(true)
-		elif _request_live_log_timeline_refresh.is_valid():
-			_request_live_log_timeline_refresh.call()
-		if _update_ui.is_valid():
-			_update_ui.call()
+		_schedule_online_command_ui_refresh({}, 0, true)
 		_flush_online_pending_commands_after_resync()
 		return
 
@@ -734,13 +756,7 @@ func _on_online_rollback_meta(payload: Dictionary) -> void:
 	_resync_request_id = ""
 	if _reset_timeline_state_after_resync.is_valid():
 		_reset_timeline_state_after_resync.call()
-	if is_instance_valid(_game_log_panel) and _game_log_panel.visible:
-		if _apply_live_log_timeline_from_engine.is_valid():
-			_apply_live_log_timeline_from_engine.call(true)
-	elif _request_live_log_timeline_refresh.is_valid():
-		_request_live_log_timeline_refresh.call()
-	if _update_ui.is_valid():
-		_update_ui.call()
+	_schedule_online_command_ui_refresh({}, 0, true)
 	_flush_online_pending_commands_after_resync()
 
 func _online_schedule_resync_timeout(ticket: int, request_id: String) -> void:
@@ -811,7 +827,7 @@ func _flush_online_pending_commands_after_resync() -> void:
 			if int(cmd.index) > expected_index:
 				continue
 
-			var r: Result = engine.execute_command(cmd, true)
+			var r: Result = _execute_replay_command_record_only(engine, cmd)
 			if not r.ok:
 				GameLog.error("Game", "联机回放待处理命令失败: %s" % r.error)
 				_request_online_force_resync("pending_command_apply_failed")
@@ -840,13 +856,18 @@ func _flush_online_pending_commands_after_resync() -> void:
 		_request_online_resync("pending_queue_overflow")
 		return
 
-	if is_instance_valid(_game_log_panel) and _game_log_panel.visible:
-		if _apply_live_log_timeline_from_engine.is_valid():
-			_apply_live_log_timeline_from_engine.call(true)
-	elif _request_live_log_timeline_refresh.is_valid():
-		_request_live_log_timeline_refresh.call()
-	if _update_ui.is_valid():
-		_update_ui.call()
+	_schedule_online_command_ui_refresh({}, 0, true)
+
+func _execute_replay_command_record_only(engine, cmd) -> Result:
+	if engine == null or not engine.has_method("execute_command"):
+		return Result.failure("联机回放失败：engine 无法执行命令")
+	if not engine.has_method("set_event_sink"):
+		return engine.execute_command(cmd, true)
+	var previous_sink = engine.get_event_sink() if engine.has_method("get_event_sink") else null
+	engine.set_event_sink(RecordOnlyEventSinkClass.new(previous_sink))
+	var r: Result = engine.execute_command(cmd, true)
+	engine.set_event_sink(previous_sink)
+	return r
 
 func _request_online_resync(reason: String) -> void:
 	_begin_full_resync_request(reason)

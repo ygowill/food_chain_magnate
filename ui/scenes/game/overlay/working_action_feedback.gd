@@ -17,16 +17,127 @@ const PULSE_SEC := 0.90
 const PLACEMENT_FLASH_SEC := 1.55
 const MOVE_GHOST_SEC := 1.05
 const MAX_TOKENS_PER_FEEDBACK := 5
+const MAX_DRAWN_BURSTS := 8
+const MAX_EFFECT_NODES := 18
+const MAX_BURST_WIDTH_PX := 360.0
+
+class BurstDrawLayer:
+	extends Control
+
+	const MAX_BURSTS := 8
+	const DEFAULT_DURATION_SEC := 1.80
+
+	var _bursts: Array[Dictionary] = []
+	var _clock: float = 0.0
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		set_process(false)
+
+	func add_burst(text: String, center: Vector2, width: float, font_size: int, color: Color, delay_sec: float, duration_sec: float, rise_px: float) -> void:
+		var label_text := str(text).strip_edges()
+		if label_text.is_empty():
+			return
+		_bursts.append({
+			"text": label_text,
+			"center": center,
+			"width": maxf(1.0, float(width)),
+			"font_size": maxi(10, int(font_size)),
+			"color": color,
+			"delay": maxf(0.0, float(delay_sec)),
+			"duration": maxf(0.08, float(duration_sec)),
+			"rise": maxf(0.0, float(rise_px)),
+			"start": _clock,
+		})
+		while _bursts.size() > MAX_BURSTS:
+			_bursts.pop_front()
+		set_process(true)
+		queue_redraw()
+
+	func clear_bursts() -> void:
+		_bursts.clear()
+		set_process(false)
+		queue_redraw()
+
+	func active_count() -> int:
+		return _bursts.size()
+
+	func _process(delta: float) -> void:
+		_clock += maxf(0.0, float(delta))
+		for i in range(_bursts.size() - 1, -1, -1):
+			var item: Dictionary = _bursts[i]
+			var age := _clock - float(item.get("start", 0.0))
+			var done_at := float(item.get("delay", 0.0)) + float(item.get("duration", DEFAULT_DURATION_SEC))
+			if age >= done_at:
+				_bursts.remove_at(i)
+		if _bursts.is_empty():
+			set_process(false)
+		queue_redraw()
+
+	func _draw() -> void:
+		if _bursts.is_empty():
+			return
+		var font: Font = ThemeDB.fallback_font
+		for item in _bursts:
+			_draw_burst(font, item)
+
+	func _draw_burst(font: Font, item: Dictionary) -> void:
+		if font == null:
+			return
+		var age := _clock - float(item.get("start", 0.0)) - float(item.get("delay", 0.0))
+		if age < 0.0:
+			return
+		var duration := maxf(0.08, float(item.get("duration", DEFAULT_DURATION_SEC)))
+		var t := clampf(age / duration, 0.0, 1.0)
+		var alpha := _burst_alpha(t)
+		if alpha <= 0.001:
+			return
+		var scale := _burst_scale(t)
+		var font_size := maxi(10, int(round(float(item.get("font_size", 16)) * scale)))
+		var width := maxf(1.0, float(item.get("width", 120.0)))
+		var center: Vector2 = item.get("center", Vector2.ZERO)
+		var eased_rise := 1.0 - pow(1.0 - t, 3.0)
+		center.y -= float(item.get("rise", 0.0)) * eased_rise
+		var baseline := Vector2(center.x - width * 0.5, center.y + float(font_size) * 0.35)
+		var color: Color = item.get("color", Color(1, 1, 1, 1))
+		color.a *= alpha
+		var shadow := Color(0, 0, 0, 0.62 * alpha)
+		var outline := Color(0.04, 0.05, 0.04, 0.92 * alpha)
+		var outline_px := maxf(1.0, float(font_size) * 0.10)
+		draw_string(font, baseline + Vector2(outline_px + 1.0, outline_px + 1.0), str(item.get("text", "")), HORIZONTAL_ALIGNMENT_CENTER, width, font_size, shadow)
+		draw_string(font, baseline + Vector2(-outline_px, 0.0), str(item.get("text", "")), HORIZONTAL_ALIGNMENT_CENTER, width, font_size, outline)
+		draw_string(font, baseline + Vector2(outline_px, 0.0), str(item.get("text", "")), HORIZONTAL_ALIGNMENT_CENTER, width, font_size, outline)
+		draw_string(font, baseline + Vector2(0.0, -outline_px), str(item.get("text", "")), HORIZONTAL_ALIGNMENT_CENTER, width, font_size, outline)
+		draw_string(font, baseline + Vector2(0.0, outline_px), str(item.get("text", "")), HORIZONTAL_ALIGNMENT_CENTER, width, font_size, outline)
+		draw_string(font, baseline, str(item.get("text", "")), HORIZONTAL_ALIGNMENT_CENTER, width, font_size, color)
+
+	func _burst_alpha(t: float) -> float:
+		if t <= 0.06:
+			return clampf(t / 0.06, 0.0, 1.0)
+		if t >= 0.82:
+			return clampf((1.0 - t) / 0.18, 0.0, 1.0)
+		return 1.0
+
+	func _burst_scale(t: float) -> float:
+		if t <= 0.08:
+			return lerpf(0.80, 1.18, t / 0.08)
+		if t <= 0.18:
+			return lerpf(1.18, 0.98, (t - 0.08) / 0.10)
+		if t <= 0.30:
+			return lerpf(0.98, 1.04, (t - 0.18) / 0.12)
+		return 1.0
 
 var _scene = null
 var _map_canvas = null
 var _layer: Control = null
+var _burst_layer: BurstDrawLayer = null
 var _skin = null
 var _speed: float = 1.0
 var _eventbus_source: String = ""
 var _pending_events: Array[Dictionary] = []
 var _flush_scheduled: bool = false
 var _active_tweens: Array[Tween] = []
+var _active_effect_nodes: Array[Node] = []
 var _handled_sequences: Dictionary = {}
 var _last_seen_sequence: int = 0
 var _initialized: bool = false
@@ -62,9 +173,11 @@ func dispose() -> void:
 	_last_seen_sequence = 0
 	_initialized = false
 	_kill_tweens()
+	_active_effect_nodes.clear()
 	if is_instance_valid(_layer):
 		_layer.queue_free()
 	_layer = null
+	_burst_layer = null
 	_scene = null
 	_map_canvas = null
 	_skin = null
@@ -193,7 +306,7 @@ func _play_food_produced(state: GameState, data: Dictionary) -> void:
 	var player_id := int(data.get("player_id", -1))
 	var food_type := _normalize_product_id(str(data.get("food_type", data.get("product", ""))).strip_edges())
 	var amount := maxi(1, int(data.get("amount", 1)))
-	var rect := _get_player_restaurant_rect(state, player_id)
+	var rect := _get_player_restaurant_rect(state, player_id, str(data.get("restaurant_id", "")).strip_edges())
 	if rect.size == Vector2.ZERO:
 		rect = _get_map_center_rect()
 	_start_rect_pulse(rect, Color(0.94, 0.64, 0.24, 0.28))
@@ -256,7 +369,7 @@ func _play_employee_recruited(state: GameState, data: Dictionary) -> void:
 	var employee_type := str(data.get("employee_type", "")).strip_edges()
 	if employee_type.is_empty():
 		return
-	var rect := _get_player_restaurant_rect(state, player_id)
+	var rect := _get_player_restaurant_rect(state, player_id, str(data.get("restaurant_id", "")).strip_edges())
 	if rect.size == Vector2.ZERO:
 		rect = _get_map_center_rect()
 	_start_rect_pulse(rect, Color(0.76, 0.72, 0.72, 0.24))
@@ -272,7 +385,7 @@ func _play_employee_trained(state: GameState, data: Dictionary) -> void:
 	var to_employee := str(data.get("to_employee", "")).strip_edges()
 	if from_employee.is_empty() or to_employee.is_empty():
 		return
-	var rect := _get_player_restaurant_rect(state, player_id)
+	var rect := _get_player_restaurant_rect(state, player_id, str(data.get("restaurant_id", "")).strip_edges())
 	if rect.size == Vector2.ZERO:
 		rect = _get_map_center_rect()
 	_start_rect_pulse(rect, Color(0.70, 0.66, 1.0, 0.24))
@@ -295,7 +408,7 @@ func _play_price_modifier(state: GameState, data: Dictionary) -> void:
 	var player_id := int(data.get("player_id", -1))
 	var action_id := str(data.get("action_id", "")).strip_edges()
 	var modifier := int(data.get("price_modifier", 0))
-	var rect := _get_player_restaurant_rect(state, player_id)
+	var rect := _get_player_restaurant_rect(state, player_id, str(data.get("restaurant_id", "")).strip_edges())
 	if rect.size == Vector2.ZERO:
 		rect = _get_map_center_rect()
 	var label := ""
@@ -368,55 +481,19 @@ func _play_restaurant_moved(state: GameState, data: Dictionary) -> void:
 func _start_action_burst(anchor_rect: Rect2, text: String, color: Color, delay_sec: float = 0.0) -> void:
 	if not is_instance_valid(_layer):
 		return
+	if not _ensure_burst_layer():
+		return
 	var label_text := str(text).strip_edges()
 	if label_text.is_empty():
 		return
 	var cell_size := maxf(_get_cell_size(), 1.0)
-	var min_w := maxf(anchor_rect.size.x * 1.45, cell_size * 2.65)
-	min_w = maxf(min_w, float(label_text.length()) * cell_size * 0.42)
-	var marker_size := Vector2(min_w, maxf(anchor_rect.size.y * 0.95, cell_size * 1.18))
-	var start_pos := anchor_rect.position + anchor_rect.size * 0.5 - marker_size * 0.5
-
-	var marker := Label.new()
-	marker.name = "WorkingActionFeedbackBurst"
-	marker.text = label_text
-	marker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	marker.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	marker.add_theme_font_size_override("font_size", maxi(16, int(cell_size * 0.45)))
-	marker.add_theme_color_override("font_color", color)
-	marker.add_theme_color_override("font_outline_color", Color(0.04, 0.05, 0.04, 0.95))
-	marker.add_theme_constant_override("outline_size", maxi(2, int(round(cell_size * 0.07))))
-	marker.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.70))
-	marker.add_theme_constant_override("shadow_offset_x", 2)
-	marker.add_theme_constant_override("shadow_offset_y", 2)
-	marker.position = start_pos
-	marker.size = marker_size
-	marker.pivot_offset = marker.size * 0.5
-	marker.scale = Vector2(0.45, 0.45)
-	marker.rotation_degrees = -8.0
-	marker.modulate.a = 0.0
-	marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_layer.add_child(marker)
-
-	var tw := marker.create_tween().set_parallel(true)
-	_active_tweens.append(tw)
-	var d := maxf(0.0, delay_sec) / _speed
+	var font_size := clampi(int(round(cell_size * 0.45)), 14, 24)
+	var text_w := ThemeDB.fallback_font.get_string_size(label_text, HORIZONTAL_ALIGNMENT_CENTER, -1.0, font_size).x if ThemeDB.fallback_font != null else float(label_text.length()) * float(font_size)
+	var burst_w := maxf(cell_size * 2.65, text_w + cell_size * 0.75)
+	burst_w = minf(burst_w, maxf(MAX_BURST_WIDTH_PX, cell_size * 6.5))
 	var rise := maxf(18.0, cell_size * 0.56)
-	var fade_start := maxf(0.36, BURST_TOTAL_SEC - 0.34)
-	tw.tween_property(marker, "modulate:a", 1.0, 0.08 / _speed).set_delay(d)
-	tw.tween_property(marker, "scale", Vector2(1.30, 1.30), 0.14 / _speed).set_delay(d).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-	tw.tween_property(marker, "scale", Vector2(0.96, 0.96), 0.10 / _speed).set_delay(d + 0.14 / _speed).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(marker, "scale", Vector2(1.06, 1.06), 0.12 / _speed).set_delay(d + 0.24 / _speed).set_ease(Tween.EASE_OUT)
-	tw.tween_property(marker, "rotation_degrees", 7.0, 0.14 / _speed).set_delay(d).set_ease(Tween.EASE_OUT)
-	tw.tween_property(marker, "rotation_degrees", -3.0, 0.10 / _speed).set_delay(d + 0.14 / _speed).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(marker, "rotation_degrees", 0.0, 0.16 / _speed).set_delay(d + 0.24 / _speed).set_ease(Tween.EASE_OUT)
-	tw.tween_property(marker, "position:y", marker.position.y - rise, BURST_TOTAL_SEC / _speed).set_delay(d).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	tw.tween_property(marker, "modulate:a", 0.0, 0.30 / _speed).set_delay(d + fade_start / _speed)
-	tw.chain().tween_callback(func():
-		if is_instance_valid(marker):
-			marker.queue_free()
-		_active_tweens.erase(tw)
-	)
+	_burst_layer.add_burst(label_text, anchor_rect.position + anchor_rect.size * 0.5, burst_w, font_size, color, maxf(0.0, delay_sec) / _speed, BURST_TOTAL_SEC / _speed, rise)
+	_burst_layer.move_to_front()
 
 func _start_rect_pulse(rect: Rect2, color: Color) -> void:
 	if not is_instance_valid(_layer):
@@ -431,14 +508,13 @@ func _start_rect_pulse(rect: Rect2, color: Color) -> void:
 	pulse.color = color
 	pulse.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_layer.add_child(pulse)
+	_track_effect_node(pulse)
 	var tw := pulse.create_tween().set_parallel(true)
 	_active_tweens.append(tw)
 	tw.tween_property(pulse, "scale", Vector2(1.10, 1.10), PULSE_SEC / _speed).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 	tw.tween_property(pulse, "modulate:a", 0.0, PULSE_SEC / _speed).set_ease(Tween.EASE_IN)
 	tw.chain().tween_callback(func():
-		if is_instance_valid(pulse):
-			pulse.queue_free()
-		_active_tweens.erase(tw)
+		_finish_effect_node(pulse, tw)
 	)
 
 func _start_placement_feedback(rect: Rect2, label: String, color: Color) -> void:
@@ -461,15 +537,14 @@ func _start_placement_flash(rect: Rect2, color: Color) -> void:
 	flash.modulate.a = 0.0
 	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_layer.add_child(flash)
+	_track_effect_node(flash)
 	var tw := flash.create_tween().set_parallel(true)
 	_active_tweens.append(tw)
 	tw.tween_property(flash, "modulate:a", 1.0, 0.16 / _speed).set_ease(Tween.EASE_OUT)
 	tw.tween_property(flash, "scale", Vector2(1.0, 1.0), 0.36 / _speed).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	tw.tween_property(flash, "modulate:a", 0.0, 0.62 / _speed).set_delay(maxf(0.0, PLACEMENT_FLASH_SEC - 0.62) / _speed).set_ease(Tween.EASE_IN)
 	tw.chain().tween_callback(func():
-		if is_instance_valid(flash):
-			flash.queue_free()
-		_active_tweens.erase(tw)
+		_finish_effect_node(flash, tw)
 	)
 
 func _start_move_ghost(from_rect: Rect2, to_rect: Rect2, color: Color) -> void:
@@ -486,6 +561,7 @@ func _start_move_ghost(from_rect: Rect2, to_rect: Rect2, color: Color) -> void:
 	ghost.modulate.a = 0.0
 	ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_layer.add_child(ghost)
+	_track_effect_node(ghost)
 
 	var tw := ghost.create_tween().set_parallel(true)
 	_active_tweens.append(tw)
@@ -495,9 +571,7 @@ func _start_move_ghost(from_rect: Rect2, to_rect: Rect2, color: Color) -> void:
 	tw.tween_property(ghost, "scale", Vector2(1.0, 1.0), 0.24 / _speed).set_delay(0.18 / _speed).set_ease(Tween.EASE_IN_OUT)
 	tw.tween_property(ghost, "modulate:a", 0.0, 0.28 / _speed).set_delay(maxf(0.0, MOVE_GHOST_SEC - 0.28) / _speed).set_ease(Tween.EASE_IN)
 	tw.chain().tween_callback(func():
-		if is_instance_valid(ghost):
-			ghost.queue_free()
-		_active_tweens.erase(tw)
+		_finish_effect_node(ghost, tw)
 	)
 
 func _start_product_token_flight(
@@ -535,6 +609,7 @@ func _start_product_token_flight(
 	token.scale = Vector2(0.64, 0.64)
 	token.rotation_degrees = -5.0 if index % 2 == 0 else 5.0
 	_layer.add_child(token)
+	_track_effect_node(token)
 	_add_product_visual(token, product_id, amount)
 
 	var tw := token.create_tween()
@@ -564,9 +639,7 @@ func _start_product_token_flight(
 	tw.tween_property(token, "scale", Vector2(1.10, 1.10), 0.06 / _speed)
 	tw.parallel().tween_property(token, "modulate:a", 0.0, 0.16 / _speed)
 	tw.tween_callback(func():
-		if is_instance_valid(token):
-			token.queue_free()
-		_active_tweens.erase(tw)
+		_finish_effect_node(token, tw)
 	)
 
 func _add_product_visual(token: Control, product_id: String, amount: int) -> void:
@@ -682,36 +755,55 @@ func _get_player_restaurant_rect(state: GameState, player_id: int, preferred_res
 	if not (restaurants_val is Dictionary):
 		return Rect2()
 	var restaurants: Dictionary = restaurants_val
-	var out := Rect2()
-	var has_rect := false
 	var preferred := str(preferred_restaurant_id).strip_edges()
-	for rid_val in restaurants.keys():
-		var rid := str(rid_val).strip_edges()
-		var rest_val = restaurants.get(rid_val, null)
+	var candidate_ids := _get_feedback_restaurant_ids(state, player_id, preferred, restaurants)
+	for rid in candidate_ids:
+		var rest_val = restaurants.get(rid, null)
 		if not (rest_val is Dictionary):
 			continue
 		var rest: Dictionary = rest_val
-		if not preferred.is_empty():
-			if rid != preferred:
-				continue
-		else:
-			var owner := int(rest.get("owner", rest.get("owner_id", rest.get("player_id", -1))))
-			if owner != player_id:
-				continue
 		var cells := _read_vector2i_array(rest.get("cells", null))
 		if cells.is_empty():
 			var ep := _read_vector2i(rest.get("entrance_pos", null), Vector2i(-1, -1))
 			if ep != Vector2i(-1, -1):
 				cells.append(ep)
 		var rect := _cells_rect(cells)
-		if rect.size == Vector2.ZERO:
+		if rect.size != Vector2.ZERO:
+			return rect
+	return Rect2()
+
+func _get_feedback_restaurant_ids(state: GameState, player_id: int, preferred_restaurant_id: String, restaurants: Dictionary) -> Array[String]:
+	var preferred := str(preferred_restaurant_id).strip_edges()
+	if not preferred.is_empty():
+		var preferred_only: Array[String] = []
+		preferred_only.append(preferred)
+		return preferred_only
+	var out: Array[String] = []
+	if player_id >= 0 and player_id < state.players.size():
+		var player_val = state.players[player_id]
+		if player_val is Dictionary:
+			var player: Dictionary = player_val
+			var list_val = player.get("restaurants", null)
+			if list_val is Array:
+				for rid_val in Array(list_val):
+					var rid := str(rid_val).strip_edges()
+					if not rid.is_empty() and restaurants.has(rid):
+						out.append(rid)
+	if not out.is_empty():
+		return out
+	for rid_val in restaurants.keys():
+		var rid := str(rid_val).strip_edges()
+		if rid.is_empty():
 			continue
-		if has_rect:
-			out = out.merge(rect)
-		else:
-			out = rect
-			has_rect = true
-	return out if has_rect else Rect2()
+		var rest_val = restaurants.get(rid_val, null)
+		if not (rest_val is Dictionary):
+			continue
+		var rest: Dictionary = rest_val
+		var owner := int(rest.get("owner", rest.get("owner_id", rest.get("player_id", -1))))
+		if owner == player_id:
+			out.append(rid)
+	out.sort()
+	return out
 
 func _get_house_rect(state: GameState, house_id: String) -> Rect2:
 	if state == null or not (state.map is Dictionary):
@@ -861,6 +953,9 @@ func _ensure_layer() -> bool:
 	if not (_map_canvas is Control):
 		return false
 	if is_instance_valid(_layer) and _layer.get_parent() == _map_canvas:
+		_layer.size = (_map_canvas as Control).size
+		if is_instance_valid(_burst_layer):
+			_burst_layer.size = _layer.size
 		return true
 	_layer = Control.new()
 	_layer.name = "WorkingActionFeedbackLayer"
@@ -870,6 +965,22 @@ func _ensure_layer() -> bool:
 	_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	UiZClass.apply_absolute(_layer, UiZClass.MAP_OVERLAY)
 	(_map_canvas as Control).add_child(_layer)
+	_burst_layer = null
+	return true
+
+func _ensure_burst_layer() -> bool:
+	if not is_instance_valid(_layer):
+		return false
+	if is_instance_valid(_burst_layer) and _burst_layer.get_parent() == _layer:
+		_burst_layer.size = _layer.size
+		return true
+	_burst_layer = BurstDrawLayer.new()
+	_burst_layer.name = "WorkingActionFeedbackBurst"
+	_burst_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_burst_layer.position = Vector2.ZERO
+	_burst_layer.size = _layer.size
+	_burst_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_layer.add_child(_burst_layer)
 	return true
 
 func _ensure_skin(state: GameState) -> void:
@@ -982,8 +1093,47 @@ func _get_cell_size() -> float:
 		return maxf(1.0, float(_map_canvas.call("get_cell_size")))
 	return 40.0
 
+func _track_effect_node(node: Node) -> void:
+	_cleanup_effect_nodes()
+	if not is_instance_valid(node):
+		return
+	_active_effect_nodes.append(node)
+	while _active_effect_nodes.size() > MAX_EFFECT_NODES:
+		var old_node: Node = _active_effect_nodes.pop_front()
+		if is_instance_valid(old_node):
+			old_node.queue_free()
+
+func _finish_effect_node(node: Node, tween: Tween) -> void:
+	if is_instance_valid(node):
+		node.queue_free()
+	_active_effect_nodes.erase(node)
+	_active_tweens.erase(tween)
+
+func _cleanup_effect_nodes() -> void:
+	for i in range(_active_effect_nodes.size() - 1, -1, -1):
+		if not is_instance_valid(_active_effect_nodes[i]):
+			_active_effect_nodes.remove_at(i)
+	for i in range(_active_tweens.size() - 1, -1, -1):
+		if not is_instance_valid(_active_tweens[i]):
+			_active_tweens.remove_at(i)
+
+func get_debug_active_burst_count() -> int:
+	if is_instance_valid(_burst_layer):
+		return _burst_layer.active_count()
+	return 0
+
+func get_debug_effect_node_count() -> int:
+	_cleanup_effect_nodes()
+	return _active_effect_nodes.size()
+
 func _kill_tweens() -> void:
 	for tween in _active_tweens:
 		if is_instance_valid(tween):
 			tween.kill()
 	_active_tweens.clear()
+	for node in _active_effect_nodes:
+		if is_instance_valid(node):
+			node.queue_free()
+	_active_effect_nodes.clear()
+	if is_instance_valid(_burst_layer):
+		_burst_layer.clear_bursts()
