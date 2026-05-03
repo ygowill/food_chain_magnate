@@ -108,6 +108,42 @@ static func run() -> Result:
 			"event_seq": 2,
 		},
 	]
+	var entries2: Array[Dictionary] = []
+	entries2.append(entries1[0].duplicate(true))
+	entries2.append(appended_entries[0].duplicate(true))
+	if not bool(panel.call("_can_append_step_timeline", timeline2, entries2, false)):
+		_cleanup(panel)
+		return Result.failure("signature append 校验应接受正常尾部追加")
+	var bad_initial_timeline := timeline2.duplicate(true)
+	bad_initial_timeline["initial_state_dict"] = {
+		"round_number": 0,
+		"phase": "Different",
+	}
+	if bool(panel.call("_can_append_step_timeline", bad_initial_timeline, entries2, false)):
+		_cleanup(panel)
+		return Result.failure("signature append 校验应拒绝 initial_state 不一致")
+	var bad_tail_timeline := timeline2.duplicate(true)
+	var bad_tail_steps: Array = bad_tail_timeline.get("steps", [])
+	bad_tail_steps[0] = Dictionary(bad_tail_steps[0]).duplicate(true)
+	bad_tail_steps[0]["action_id"] = "fire"
+	bad_tail_timeline["steps"] = bad_tail_steps
+	if bool(panel.call("_can_append_step_timeline", bad_tail_timeline, entries2, false)):
+		_cleanup(panel)
+		return Result.failure("signature append 校验应拒绝旧 tail step 不一致")
+	var bad_boundary_entries: Array[Dictionary] = []
+	bad_boundary_entries.append(entries1[0].duplicate(true))
+	bad_boundary_entries[0]["message"] = "玩家1: 被篡改"
+	bad_boundary_entries.append(appended_entries[0].duplicate(true))
+	if bool(panel.call("_can_append_step_timeline", timeline2, bad_boundary_entries, false)):
+		_cleanup(panel)
+		return Result.failure("signature append 校验应拒绝旧 tail entry 不一致")
+	var bad_sequence_entries: Array[Dictionary] = []
+	bad_sequence_entries.append(entries1[0].duplicate(true))
+	bad_sequence_entries.append(appended_entries[0].duplicate(true))
+	bad_sequence_entries[1]["event_seq"] = 1
+	if bool(panel.call("_can_append_step_timeline", timeline2, bad_sequence_entries, false)):
+		_cleanup(panel)
+		return Result.failure("signature append 校验应拒绝新增 entry sequence 未增长")
 	var append_ok := bool(panel.call("append_step_timeline", timeline2, appended_entries))
 	await tree.process_frame
 

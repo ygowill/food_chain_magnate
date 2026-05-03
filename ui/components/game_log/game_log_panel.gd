@@ -78,6 +78,8 @@ var _step_timeline: Dictionary = {} # {initial_state_dict, steps[], events[]}
 var _timeline_entries: Array[Dictionary] = [] # timeline events formatted as entries
 var _extra_entries: Array[Dictionary] = [] # UI-only logs (e.g. failed action)
 var _entries_all: Array[Dictionary] = []  # merged entries for details lookup
+var _step_timeline_signature: Dictionary = {}
+var _timeline_entries_signature: Dictionary = {}
 var _entry_id_counter: int = 0
 var _log_items: Array[Control] = [] # GameLogItem / GameLogRoundHeaderItem / GameLogPhaseHeaderItem / GameLogActionGroupHeaderItem / GameLogEventItem
 var _log_item_pool: Dictionary = {} # kind -> Array[Control]
@@ -466,6 +468,7 @@ func _apply_committed_step_timeline_state(timeline: Dictionary, timeline_entries
 	_timeline_entries = _duplicate_entry_array(timeline_entries)
 	_extra_entries = _duplicate_entry_array(extra_entries)
 	_rebuild_entries_all()
+	_refresh_step_timeline_signatures()
 
 func _apply_background_job_state(job: Dictionary) -> void:
 	var mode := str(job.get("mode", "")).strip_edges()
@@ -510,6 +513,7 @@ func _apply_committed_step_timeline_state_owned(timeline: Dictionary, timeline_e
 	_extra_entries = committed_extra_entries
 
 	_rebuild_entries_all()
+	_refresh_step_timeline_signatures()
 
 func _build_append_committed_state_from_job(job: Dictionary) -> Dictionary:
 	var timeline_val = job.get("timeline", {})
@@ -770,6 +774,7 @@ func load_entries(entries: Array[Dictionary]) -> void:
 	_timeline_entries.clear()
 	_extra_entries.clear()
 	_entries_all.clear()
+	_reset_step_timeline_signatures()
 	_visible_entry_count_cached = -1
 	_blank_display_warned = false
 	_entry_id_counter = 0
@@ -1040,6 +1045,7 @@ func clear_logs() -> void:
 	_timeline_entries.clear()
 	_extra_entries.clear()
 	_entries_all.clear()
+	_reset_step_timeline_signatures()
 	_visible_entry_count_cached = -1
 	_blank_display_warned = false
 	_fold_details_enabled = false
@@ -1201,14 +1207,104 @@ func _get_step_count(timeline: Dictionary) -> int:
 	var steps_val = timeline.get("steps", null)
 	return int((steps_val as Array).size()) if (steps_val is Array) else 0
 
-func _entry_equals_ignoring_id(lhs: Dictionary, rhs: Dictionary) -> bool:
-	var a := lhs.duplicate(true) if (lhs is Dictionary) else {}
-	var b := rhs.duplicate(true) if (rhs is Dictionary) else {}
-	if a.has("id"):
-		a.erase("id")
-	if b.has("id"):
-		b.erase("id")
-	return a == b
+func _reset_step_timeline_signatures() -> void:
+	_step_timeline_signature.clear()
+	_timeline_entries_signature.clear()
+
+func _refresh_step_timeline_signatures() -> void:
+	_step_timeline_signature = _build_step_timeline_signature(_step_timeline)
+	_timeline_entries_signature = _build_timeline_entries_signature(_timeline_entries)
+
+func _build_step_timeline_signature(timeline: Dictionary) -> Dictionary:
+	if timeline == null or not (timeline is Dictionary) or timeline.is_empty():
+		return {}
+	var steps_val = timeline.get("steps", null)
+	if not (steps_val is Array):
+		return {}
+	var steps: Array = steps_val
+	var events_val = timeline.get("events", [])
+	var events: Array = events_val if (events_val is Array) else []
+	var meta_val = timeline.get("_build_meta", {})
+	var meta: Dictionary = meta_val if (meta_val is Dictionary) else {}
+	var processed_command_count := _read_optional_int(meta.get("processed_command_count", -1), -1)
+	var last_event_sequence := _read_optional_int(meta.get("last_event_sequence", -1), -1)
+	if last_event_sequence < 0 and not events.is_empty():
+		var last_event_val = events[events.size() - 1]
+		if last_event_val is Dictionary:
+			last_event_sequence = _read_optional_int(Dictionary(last_event_val).get("sequence", -1), -1)
+
+	var last_step_hash := 0
+	if not steps.is_empty():
+		var last_step_val = steps[steps.size() - 1]
+		if last_step_val is Dictionary:
+			last_step_hash = hash(last_step_val)
+
+	var init_val = timeline.get("initial_state_dict", {})
+	return {
+		"initial_state_hash": hash(init_val) if (init_val is Dictionary) else 0,
+		"processed_command_count": int(processed_command_count),
+		"step_count": int(steps.size()),
+		"event_count": int(events.size()),
+		"last_event_sequence": int(last_event_sequence),
+		"last_step_hash": int(last_step_hash),
+		"head_step_index": int(steps.size()) - 1,
+	}
+
+func _build_timeline_entries_signature(entries: Array) -> Dictionary:
+	if not (entries is Array):
+		return {}
+	var entry_count := entries.size()
+	var first_event_sequence := -1
+	var last_event_sequence := -1
+	var first_entry_hash := 0
+	var last_entry_hash := 0
+	if entry_count > 0:
+		var first_entry_val = entries[0]
+		if first_entry_val is Dictionary:
+			var first_entry: Dictionary = first_entry_val
+			first_event_sequence = _read_entry_event_sequence(first_entry)
+			first_entry_hash = _entry_signature_hash(first_entry)
+		var last_entry_val = entries[entry_count - 1]
+		if last_entry_val is Dictionary:
+			var last_entry: Dictionary = last_entry_val
+			last_event_sequence = _read_entry_event_sequence(last_entry)
+			last_entry_hash = _entry_signature_hash(last_entry)
+	return {
+		"entry_count": int(entry_count),
+		"first_event_sequence": int(first_event_sequence),
+		"last_event_sequence": int(last_event_sequence),
+		"first_entry_hash": int(first_entry_hash),
+		"last_entry_hash": int(last_entry_hash),
+	}
+
+func _entry_signature_hash(entry: Dictionary) -> int:
+	if entry == null or not (entry is Dictionary):
+		return 0
+	var d := entry.duplicate(true)
+	if d.has("id"):
+		d.erase("id")
+	return hash(d)
+
+func _read_entry_event_sequence(entry: Dictionary) -> int:
+	if entry == null or not (entry is Dictionary):
+		return -1
+	var event_seq := _read_optional_int(entry.get("event_seq", -1), -1)
+	if event_seq >= 0:
+		return event_seq
+	return _read_optional_int(entry.get("timestamp", -1), -1)
+
+func _read_optional_int(value, default_value: int = -1) -> int:
+	if value is int:
+		return int(value)
+	if value is float:
+		var f := float(value)
+		if f == floor(f):
+			return int(f)
+	if value is String:
+		var s := str(value).strip_edges()
+		if s.is_valid_int():
+			return int(s)
+	return int(default_value)
 
 func _can_append_step_timeline(timeline: Dictionary, entries: Array, reset_extra_entries: bool) -> bool:
 	if bool(reset_extra_entries):
@@ -1220,38 +1316,62 @@ func _can_append_step_timeline(timeline: Dictionary, entries: Array, reset_extra
 	if _log_items.is_empty():
 		return false
 
-	var old_steps_val = _step_timeline.get("steps", null)
 	var new_steps_val = timeline.get("steps", null)
-	if not (old_steps_val is Array) or not (new_steps_val is Array):
+	if not (new_steps_val is Array):
 		return false
-	var old_steps: Array = old_steps_val
 	var new_steps: Array = new_steps_val
-	if new_steps.size() <= old_steps.size():
-		return false
-
-	var old_init := Dictionary(_step_timeline.get("initial_state_dict", {}))
-	var new_init := Dictionary(timeline.get("initial_state_dict", {}))
-	if old_init != new_init:
-		return false
-
-	for idx in range(old_steps.size()):
-		var old_step_val = old_steps[idx]
-		var new_step_val = new_steps[idx]
-		if not (old_step_val is Dictionary) or not (new_step_val is Dictionary):
-			return false
-		if Dictionary(old_step_val) != Dictionary(new_step_val):
-			return false
-
 	if not (entries is Array):
 		return false
-	if entries.size() < _timeline_entries.size():
+
+	var old_timeline_sig := _step_timeline_signature
+	if old_timeline_sig.is_empty():
+		old_timeline_sig = _build_step_timeline_signature(_step_timeline)
+	var old_entries_sig := _timeline_entries_signature
+	if old_entries_sig.is_empty():
+		old_entries_sig = _build_timeline_entries_signature(_timeline_entries)
+	var new_timeline_sig := _build_step_timeline_signature(timeline)
+	var incoming_entries_sig := _build_timeline_entries_signature(entries)
+	if old_timeline_sig.is_empty() or new_timeline_sig.is_empty() or old_entries_sig.is_empty() or incoming_entries_sig.is_empty():
 		return false
-	for idx in range(_timeline_entries.size()):
-		var old_entry_val = _timeline_entries[idx]
-		var new_entry_val = entries[idx]
-		if not (old_entry_val is Dictionary) or not (new_entry_val is Dictionary):
+
+	var old_step_count := int(old_timeline_sig.get("step_count", 0))
+	var new_step_count := int(new_timeline_sig.get("step_count", 0))
+	if new_step_count <= old_step_count:
+		return false
+	if int(new_timeline_sig.get("initial_state_hash", 0)) != int(old_timeline_sig.get("initial_state_hash", 0)):
+		return false
+	var old_processed_count := int(old_timeline_sig.get("processed_command_count", -1))
+	var new_processed_count := int(new_timeline_sig.get("processed_command_count", -1))
+	if old_processed_count >= 0 and new_processed_count >= 0 and new_processed_count <= old_processed_count:
+		return false
+	if int(new_timeline_sig.get("event_count", 0)) < int(old_timeline_sig.get("event_count", 0)):
+		return false
+	if old_step_count > 0:
+		var old_tail_val = new_steps[old_step_count - 1]
+		if not (old_tail_val is Dictionary):
 			return false
-		if not _entry_equals_ignoring_id(Dictionary(old_entry_val), Dictionary(new_entry_val)):
+		if hash(old_tail_val) != int(old_timeline_sig.get("last_step_hash", 0)):
+			return false
+
+	var old_entry_count := int(old_entries_sig.get("entry_count", 0))
+	if entries.size() < old_entry_count:
+		return false
+	if old_entry_count > 0:
+		var first_entry_val = entries[0]
+		var old_tail_entry_val = entries[old_entry_count - 1]
+		if not (first_entry_val is Dictionary) or not (old_tail_entry_val is Dictionary):
+			return false
+		if _entry_signature_hash(first_entry_val) != int(old_entries_sig.get("first_entry_hash", 0)):
+			return false
+		if _entry_signature_hash(old_tail_entry_val) != int(old_entries_sig.get("last_entry_hash", 0)):
+			return false
+	if entries.size() > old_entry_count:
+		var first_appended_val = entries[old_entry_count]
+		if not (first_appended_val is Dictionary):
+			return false
+		var old_last_seq := int(old_entries_sig.get("last_event_sequence", -1))
+		var first_appended_seq := _read_entry_event_sequence(first_appended_val)
+		if old_last_seq >= 0 and first_appended_seq >= 0 and first_appended_seq <= old_last_seq:
 			return false
 
 	return true
