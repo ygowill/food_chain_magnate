@@ -400,6 +400,7 @@ StepTimelineBuild.append_from_existing_mutating(engine, owned_timeline) -> Resul
 - `load_step_timeline()` 的 append 预检改为浅层读取 incoming timeline；只有 fallback rebuild 才 deep duplicate 整条 timeline。`GameLogPanelStepTimelineAppendTest` 增加通过 `load_step_timeline()` 触发 append 的回归覆盖。
 - `append_step_timeline()` 后台阈值改为按本次新增 step/entry 数判断，不再因为总历史超过阈值就把 1 条 live append 转成后台 descriptor job。`GameLogPanelStepTimelineAppendTest` 覆盖 119 -> 120 的后期小 delta 同步 append。
 - entry 边界签名改为投影非 `id` 字段后 hash，避免为了忽略 UI 分配的 `id` 而 deep copy 整条 entry；测试覆盖旧 entry `id` 差异不影响 append 校验。
+- `GameLogPanelStepTimelineAppendTest` 补充 processed command count 未增长时拒绝 append，以及 `load_step_timeline()` 遇到旧 tail 不一致时 fallback rebuild 的回归覆盖。
 
 目标：
 

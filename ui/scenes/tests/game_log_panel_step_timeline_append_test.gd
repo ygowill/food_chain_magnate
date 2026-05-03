@@ -50,6 +50,9 @@ static func run() -> Result:
 			"round_number": 0,
 			"phase": "Setup",
 		},
+		"_build_meta": {
+			"processed_command_count": 1,
+		},
 		"steps": [
 			{
 				"round": 1,
@@ -107,6 +110,9 @@ static func run() -> Result:
 		"initial_state_dict": {
 			"round_number": 0,
 			"phase": "Setup",
+		},
+		"_build_meta": {
+			"processed_command_count": 2,
 		},
 		"steps": [
 			{
@@ -168,6 +174,13 @@ static func run() -> Result:
 	if bool(panel.call("_can_append_step_timeline", bad_tail_timeline, entries2, false)):
 		_cleanup(panel)
 		return Result.failure("signature append 校验应拒绝旧 tail step 不一致")
+	var stale_processed_timeline := timeline2.duplicate(true)
+	var stale_meta: Dictionary = stale_processed_timeline.get("_build_meta", {})
+	stale_meta["processed_command_count"] = 1
+	stale_processed_timeline["_build_meta"] = stale_meta
+	if bool(panel.call("_can_append_step_timeline", stale_processed_timeline, entries2, false)):
+		_cleanup(panel)
+		return Result.failure("signature append 校验应拒绝 processed_command_count 未增长")
 	var bad_boundary_entries: Array[Dictionary] = []
 	bad_boundary_entries.append(entries1[0].duplicate(true))
 	bad_boundary_entries[0]["message"] = "玩家1: 被篡改"
@@ -343,6 +356,21 @@ static func _run_load_step_timeline_append_case(tree: SceneTree) -> Result:
 	var loaded_entries = panel.call("get_step_timeline_entries")
 	if not (loaded_entries is Array) or loaded_entries.size() != entries2.size():
 		return await _finish_with_panel(Result.failure("load_step_timeline append 后 step entries 应为 2 条"), panel, tree)
+
+	var timeline3 := _build_linear_timeline(3)
+	var bad_tail_steps: Array = timeline3.get("steps", [])
+	bad_tail_steps[1] = Dictionary(bad_tail_steps[1]).duplicate(true)
+	bad_tail_steps[1]["action_id"] = "rollback_diverged"
+	timeline3["steps"] = bad_tail_steps
+	var entries3 := _build_linear_entries(3)
+	panel.call("load_step_timeline", timeline3, entries3)
+	await tree.process_frame
+
+	if panel.call("get_last_step_timeline_update_mode") != "rebuild":
+		return await _finish_with_panel(Result.failure("load_step_timeline 旧 tail 不一致时应 fallback rebuild"), panel, tree)
+	var fallback_entries = panel.call("get_step_timeline_entries")
+	if not (fallback_entries is Array) or fallback_entries.size() != entries3.size():
+		return await _finish_with_panel(Result.failure("load_step_timeline fallback rebuild 后 step entries 应为 3 条"), panel, tree)
 
 	return await _finish_with_panel(Result.success({}), panel, tree)
 
