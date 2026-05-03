@@ -27,6 +27,12 @@ class RealAssetMapPreview:
 	const CELL_SIZE := 54
 	const GRID_SIZE := Vector2i(10, 5)
 	const GROUND_COLOR := Color("#faf4da")
+	const HOUSE_ID_FONT_PATH := "res://assets/fonts/NotoSansSC-Regular.otf"
+	const HOUSE_ID_LABEL_TEXTURE_PATHS := {
+		"π": "res://assets/images/house_labels/pi.png",
+		"9¾": "res://assets/images/house_labels/nine_three_quarters.png",
+		"√2": "res://assets/images/house_labels/sqrt2.png",
+	}
 	const ROAD_STRAIGHT_TEXTURE_PATH := "res://modules/base_tiles/assets/map/roads/road_straight_new.png"
 	const ROAD_CORNER_TEXTURE_PATH := "res://modules/base_tiles/assets/map/roads/road_corner_new.png"
 	const ROAD_TEE_TEXTURE_PATH := "res://modules/base_tiles/assets/map/roads/road_tee_new.png"
@@ -34,6 +40,7 @@ class RealAssetMapPreview:
 	const ROAD_BRIDGE_TEXTURE_PATH := "res://modules/base_tiles/assets/map/roads/bridge_default_new.png"
 	const HOUSE_TEXTURE_PATH := "res://modules/base_pieces/assets/map/pieces/house.png"
 	const GARDEN_TEXTURE_PATH := "res://modules/base_pieces/assets/map/pieces/garden_large.png"
+	const APARTMENT_TEXTURE_PATH := "res://modules/new_districts/assets/map/pieces/apartment.png"
 	const RESTAURANT_LOGOS := [
 		"res://modules/base_pieces/assets/map/logos/fried_geese_donkey.png",
 		"res://modules/base_pieces/assets/map/logos/gluttony_inc_burgers.png",
@@ -49,6 +56,8 @@ class RealAssetMapPreview:
 	var preview_state: Dictionary = {}
 	var preview_options: Dictionary = {}
 	var textures: Dictionary = {}
+	var house_id_label_textures: Dictionary = {}
+	var house_id_font: Font = null
 
 	func setup(state_data: Dictionary, options: Dictionary) -> void:
 		preview_state = state_data.duplicate(true)
@@ -70,6 +79,7 @@ class RealAssetMapPreview:
 		textures["road_bridge"] = _load_texture_raw(ROAD_BRIDGE_TEXTURE_PATH)
 		textures["house"] = _load_texture_raw(HOUSE_TEXTURE_PATH)
 		textures["garden_large"] = _load_texture_raw(GARDEN_TEXTURE_PATH)
+		textures["apartment"] = _load_texture_raw(APARTMENT_TEXTURE_PATH)
 		for i in range(RESTAURANT_LOGOS.size()):
 			textures["logo_%d" % i] = _load_texture_raw(str(RESTAURANT_LOGOS[i]))
 
@@ -284,7 +294,7 @@ class RealAssetMapPreview:
 		var info: Dictionary = anchor_val if (anchor_val is Dictionary) else {}
 		var anchor_val2 = info.get("anchor", anchor_val)
 		var anchor: Vector2i = anchor_val2 if anchor_val2 is Vector2i else Vector2i.ZERO
-		var house_cells := _restaurant_cells(anchor)
+		var house_cells := _structure_cells_for_info(info, anchor)
 		var garden_cells := _get_garden_cells(info, anchor)
 		var all_cells: Array[Vector2i] = []
 		all_cells.append_array(house_cells)
@@ -298,7 +308,8 @@ class RealAssetMapPreview:
 			_draw_board_piece_fill(_rect_for_cells(garden_cells), GARDEN_BG_COLOR, 1.0)
 		_draw_board_piece_bevel(structure_rect, HOUSE_BG_COLOR, 1.0)
 
-		var house_tex: Texture2D = textures.get("house", null)
+		var piece_id := str(info.get("piece_id", "house")).strip_edges()
+		var house_tex: Texture2D = textures.get("apartment", null) if piece_id == "apartment" else textures.get("house", null)
 		if house_tex != null:
 			var bottom_gap := maxf(2.0, float(CELL_SIZE) * 0.10)
 			var house_pad := maxf(2.0, float(CELL_SIZE) * 0.08)
@@ -316,7 +327,16 @@ class RealAssetMapPreview:
 				else:
 					_draw_texture_aspect_fit(garden_tex, garden_rect, Color(1, 1, 1, 0.9))
 		_draw_board_piece_surface_lines(structure_rect, 1.0)
-		_draw_house_id(house_rect, str(info.get("house_number", info.get("house_id", ""))))
+		_draw_house_id(house_rect, _format_house_display_label(info))
+
+	func _structure_cells_for_info(info: Dictionary, anchor: Vector2i) -> Array[Vector2i]:
+		if str(info.get("piece_id", "")).strip_edges() == "apartment":
+			var cells: Array[Vector2i] = []
+			for y in range(3):
+				for x in range(3):
+					cells.append(anchor + Vector2i(x, y))
+			return cells
+		return _restaurant_cells(anchor)
 
 	func _restaurant_cells(anchor: Vector2i) -> Array[Vector2i]:
 		return [
@@ -431,22 +451,212 @@ class RealAssetMapPreview:
 		draw_texture_rect(texture, Rect2(-size * 0.5, size), false, modulate)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-	func _draw_house_id(house_rect: Rect2, text: String) -> void:
-		var label := str(text).strip_edges()
-		if label.is_empty():
-			return
+	func _format_house_display_label(info: Dictionary) -> String:
+		var house_number = info.get("house_number", null)
+		var house_id := str(info.get("house_id", "")).strip_edges()
+		match house_id:
+			"π", "9¾", "√2":
+				return house_id
+		return _format_house_display_number(house_number, "")
+
+	func _format_house_display_number(value, fallback: String = "?") -> String:
+		if value is int:
+			return str(int(value))
+		if value is float:
+			var f: float = float(value)
+			if f == floor(f):
+				return str(int(f))
+			var rounded := snappedf(f, 0.01)
+			var text := "%.2f" % rounded
+			while text.ends_with("0"):
+				text = text.left(text.length() - 1)
+			if text.ends_with("."):
+				text = text.left(text.length() - 1)
+			return text if not text.is_empty() else fallback
+		if value is String:
+			var s := str(value).strip_edges()
+			if s.is_empty():
+				return fallback
+			var aliases := {
+				"π": "3.14",
+				"pi": "3.14",
+				"9¾": "9.75",
+				"√2": "1.41",
+				"sqrt2": "1.41",
+				"e": "2.72",
+			}
+			if aliases.has(s):
+				return str(aliases[s])
+			if s.is_valid_float():
+				return _format_house_display_number(s.to_float(), fallback)
+			var ascii_only := true
+			for i in range(s.length()):
+				if s.unicode_at(i) > 127:
+					ascii_only = false
+					break
+			return s if ascii_only else fallback
+		return fallback
+
+	func _get_house_id_font() -> Font:
+		if house_id_font != null:
+			return house_id_font
+		if not FileAccess.file_exists(HOUSE_ID_FONT_PATH):
+			return ThemeDB.fallback_font
+		var font := FontFile.new()
+		if font.load_dynamic_font(HOUSE_ID_FONT_PATH) != OK:
+			return ThemeDB.fallback_font
+		font.set_allow_system_fallback(true)
+		house_id_font = font
+		return house_id_font
+
+	func _get_house_id_label_texture(text: String) -> Texture2D:
+		var key := str(text)
+		if not HOUSE_ID_LABEL_TEXTURE_PATHS.has(key):
+			return null
+		if house_id_label_textures.has(key):
+			var cached = house_id_label_textures[key]
+			if cached is Texture2D:
+				return cached
+			return null
+		var tex = _load_texture_raw(str(HOUSE_ID_LABEL_TEXTURE_PATHS[key]))
+		if tex is Texture2D:
+			house_id_label_textures[key] = tex
+			return tex
+		house_id_label_textures[key] = null
+		return null
+
+	func _compute_house_id_rect(structure_rect: Rect2) -> Rect2:
 		var pad := maxf(3.0, float(CELL_SIZE) * 0.10)
-		var label_rect := Rect2(
-			house_rect.position + Vector2(house_rect.size.x - float(CELL_SIZE) * 0.90 - pad, pad),
-			Vector2(float(CELL_SIZE) * 0.90, float(CELL_SIZE) * 0.58)
-		)
-		var bg := Color(0, 0, 0, 0.48)
-		draw_rect(label_rect, bg, true)
-		var font: Font = ThemeDB.fallback_font
-		var font_size := maxi(11, int(round(float(CELL_SIZE) * 0.34)))
-		var baseline := label_rect.position + Vector2(0.0, label_rect.size.y - maxf(3.0, float(CELL_SIZE) * 0.12))
-		draw_string(font, baseline + Vector2(1, 1), label, HORIZONTAL_ALIGNMENT_RIGHT, label_rect.size.x, font_size, Color(0, 0, 0, 0.85))
-		draw_string(font, baseline, label, HORIZONTAL_ALIGNMENT_RIGHT, label_rect.size.x, font_size, Color(1, 1, 1, 1))
+		var bg_size := Vector2(float(CELL_SIZE) * 0.90, float(CELL_SIZE) * 0.58)
+		var pos := structure_rect.position + Vector2(structure_rect.size.x - bg_size.x - pad, pad)
+		return Rect2(pos, bg_size)
+
+	func _fit_house_id_font_size(font: Font, text: String, max_width: float, base_size: int, min_size: int) -> int:
+		if font == null or text.is_empty() or max_width <= 1.0:
+			return base_size
+		var size := maxi(min_size, base_size)
+		while size > min_size:
+			var text_size := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size)
+			if text_size.x <= max_width:
+				return size
+			size -= 1
+		return min_size
+
+	func _draw_house_id(house_rect: Rect2, display_label) -> void:
+		var text := str(display_label).strip_edges()
+		if text.is_empty():
+			return
+		var pad := maxf(3.0, float(CELL_SIZE) * 0.12)
+		var label_rect := _compute_house_id_rect(house_rect)
+		var house_id_font := _get_house_id_font()
+		var font: Font = house_id_font if house_id_font != null else ThemeDB.fallback_font
+		if _draw_special_house_id_label(label_rect, text, font):
+			return
+		var base_font_size := maxi(11, int(round(float(CELL_SIZE) * 0.34)))
+		var min_font_size := maxi(8, int(round(float(CELL_SIZE) * 0.22)))
+		var font_size := _fit_house_id_font_size(font, text, maxf(1.0, label_rect.size.x - 2.0), base_font_size, min_font_size)
+		var baseline := label_rect.position + Vector2(0.0, label_rect.size.y - pad)
+		draw_string(font, baseline + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_RIGHT, label_rect.size.x, font_size, Color(0, 0, 0, 0.85))
+		draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_RIGHT, label_rect.size.x, font_size, Color(1, 1, 1, 1))
+
+	func _draw_special_house_id_label(label_rect: Rect2, text: String, font: Font) -> bool:
+		var tex := _get_house_id_label_texture(text)
+		if tex != null:
+			_draw_house_id_label_texture(label_rect, tex, Vector2(1, 1), Color(0, 0, 0, 0.85))
+			_draw_house_id_label_texture(label_rect, tex, Vector2.ZERO, Color(1, 1, 1, 1))
+			return true
+		match text:
+			"π":
+				_draw_pi_house_id_label(label_rect, Vector2(1, 1), Color(0, 0, 0, 0.85))
+				_draw_pi_house_id_label(label_rect, Vector2.ZERO, Color(1, 1, 1, 1))
+				return true
+			"9¾":
+				if font == null:
+					return false
+				_draw_fraction_house_id_label(label_rect, "9", "3/4", font, Vector2(1, 1), Color(0, 0, 0, 0.85))
+				_draw_fraction_house_id_label(label_rect, "9", "3/4", font, Vector2.ZERO, Color(1, 1, 1, 1))
+				return true
+			"√2":
+				if font == null:
+					return false
+				_draw_sqrt_house_id_label(label_rect, font, Vector2(1, 1), Color(0, 0, 0, 0.85))
+				_draw_sqrt_house_id_label(label_rect, font, Vector2.ZERO, Color(1, 1, 1, 1))
+				return true
+		return false
+
+	func _draw_house_id_label_texture(label_rect: Rect2, tex: Texture2D, offset: Vector2, color: Color) -> void:
+		if tex == null:
+			return
+		var tex_size := tex.get_size()
+		if tex_size.x <= 0.0 or tex_size.y <= 0.0:
+			return
+		var max_size := Vector2(maxf(1.0, label_rect.size.x - 2.0), maxf(1.0, label_rect.size.y - 2.0))
+		var scale := minf(max_size.x / tex_size.x, max_size.y / tex_size.y)
+		var draw_size := tex_size * scale
+		var pos := label_rect.position + (label_rect.size - draw_size) * 0.5 + offset
+		draw_texture_rect(tex, Rect2(pos, draw_size), false, color)
+
+	func _draw_pi_house_id_label(label_rect: Rect2, offset: Vector2, color: Color) -> void:
+		var glyph_h := label_rect.size.y * 0.62
+		var glyph_w := minf(label_rect.size.x * 0.52, glyph_h * 0.88)
+		var center_x := label_rect.position.x + label_rect.size.x * 0.5
+		var top_y := label_rect.position.y + label_rect.size.y * 0.30
+		var bottom_y := top_y + glyph_h
+		var left_x := center_x - glyph_w * 0.5
+		var right_x := center_x + glyph_w * 0.5
+		var stroke := maxf(2.0, glyph_h * 0.15)
+		var top_slant := stroke * 0.45
+		var serif := stroke * 0.65
+		var top_points := PackedVector2Array([
+			Vector2(left_x - serif, top_y + top_slant) + offset,
+			Vector2(left_x - serif * 0.35, top_y) + offset,
+			Vector2(right_x + serif, top_y) + offset,
+			Vector2(right_x + serif * 0.35, top_y + stroke) + offset,
+			Vector2(left_x - serif * 0.70, top_y + stroke) + offset,
+		])
+		draw_colored_polygon(top_points, color)
+
+		var left_leg_x := left_x + glyph_w * 0.25
+		var right_leg_x := left_x + glyph_w * 0.72
+		var leg_top := top_y + stroke * 0.78
+		var leg_h := maxf(1.0, bottom_y - leg_top)
+		draw_rect(Rect2(Vector2(left_leg_x, leg_top) + offset, Vector2(stroke, leg_h)), color, true)
+		draw_rect(Rect2(Vector2(right_leg_x, leg_top) + offset, Vector2(stroke, leg_h * 0.94)), color, true)
+
+		var foot_w := stroke * 1.45
+		var foot_h := maxf(1.0, stroke * 0.42)
+		draw_rect(Rect2(Vector2(left_leg_x - foot_w * 0.25, bottom_y - foot_h) + offset, Vector2(foot_w, foot_h)), color, true)
+		draw_rect(Rect2(Vector2(right_leg_x - foot_w * 0.15, bottom_y - foot_h - leg_h * 0.06) + offset, Vector2(foot_w, foot_h)), color, true)
+
+	func _draw_fraction_house_id_label(label_rect: Rect2, whole: String, fraction: String, font: Font, offset: Vector2, color: Color) -> void:
+		if font == null:
+			return
+		var whole_size := maxi(8, int(round(label_rect.size.y * 0.68)))
+		var frac_size := maxi(7, int(round(label_rect.size.y * 0.42)))
+		var gap := maxf(1.0, label_rect.size.x * 0.05)
+		for _i in range(12):
+			var whole_w := font.get_string_size(whole, HORIZONTAL_ALIGNMENT_LEFT, -1.0, whole_size).x
+			var frac_w := font.get_string_size(fraction, HORIZONTAL_ALIGNMENT_LEFT, -1.0, frac_size).x
+			if whole_w + gap + frac_w <= label_rect.size.x - 2.0:
+				break
+			whole_size = maxi(7, whole_size - 1)
+			frac_size = maxi(6, frac_size - 1)
+		var final_whole_w := font.get_string_size(whole, HORIZONTAL_ALIGNMENT_LEFT, -1.0, whole_size).x
+		var final_frac_w := font.get_string_size(fraction, HORIZONTAL_ALIGNMENT_LEFT, -1.0, frac_size).x
+		var start_x := label_rect.position.x + label_rect.size.x - final_whole_w - gap - final_frac_w
+		var whole_baseline := label_rect.position.y + label_rect.size.y * 0.78
+		var frac_baseline := label_rect.position.y + label_rect.size.y * 0.56
+		draw_string(font, Vector2(start_x, whole_baseline) + offset, whole, HORIZONTAL_ALIGNMENT_LEFT, final_whole_w, whole_size, color)
+		draw_string(font, Vector2(start_x + final_whole_w + gap, frac_baseline) + offset, fraction, HORIZONTAL_ALIGNMENT_LEFT, final_frac_w, frac_size, color)
+
+	func _draw_sqrt_house_id_label(label_rect: Rect2, font: Font, offset: Vector2, color: Color) -> void:
+		if font == null:
+			return
+		var text := "sqrt2"
+		var font_size := _fit_house_id_font_size(font, text, label_rect.size.x - 2.0, maxi(8, int(round(label_rect.size.y * 0.52))), 7)
+		var text_size := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size)
+		var baseline := label_rect.position + Vector2(label_rect.size.x - text_size.x, label_rect.size.y * 0.72)
+		draw_string(font, baseline + offset, text, HORIZONTAL_ALIGNMENT_LEFT, text_size.x, font_size, color)
 
 	func _draw_restaurant_entrance_marker(anchor: Vector2i, cells: Array[Vector2i], alpha: float, drive_thru: bool) -> void:
 		if cells.is_empty():
@@ -514,6 +724,30 @@ const LESSONS := [
 		"title": "4. 距离不是格子数",
 		"kicker": "地图距离",
 		"summary": "游戏里的道路距离以跨越地图板块边界的次数为主。道路步数只是辅助信息，不等于晚餐选店里使用的距离。",
+	},
+	{
+		"id": "dinnertime",
+		"title": "5. 晚餐阶段如何选店",
+		"kicker": "结算核心",
+		"summary": "已经有需求的房屋会按房屋编号顺序结算。每个房屋只考虑能完整供应它全部需求的餐厅，然后比较“决策单价 + 距离”，数值最小的餐厅获得这笔销售。",
+	},
+	{
+		"id": "housing",
+		"title": "6. 房屋、花园与公寓",
+		"kicker": "需求容量与收入",
+		"summary": "普通房屋默认最多容纳 3 个需求；带花园房屋默认最多 5 个需求，晚餐售卖时单价部分翻倍；公寓来自新区域扩展，营销放置需求会翻倍且没有需求上限。",
+	},
+	{
+		"id": "marketing",
+		"title": "7. 营销板块与街区",
+		"kicker": "广告如何生效",
+		"summary": "营销板块在 Marketing 阶段按编号结算并向覆盖房屋添加需求。广告牌看邻接，邮箱看街区，电波看周围板块，飞机看整条行或列。",
+	},
+	{
+		"id": "employees",
+		"title": "8. 员工与经理体系",
+		"kicker": "谁负责什么",
+		"summary": "员工的作用由公司结构、员工标签和阶段共同决定。经理负责扩展槽位；厨师生产食物；采购员拿饮料；营销员投广告；区域经理和大区经理负责开店，并会让你的餐厅获得免下车服务。",
 	},
 ]
 
@@ -721,6 +955,14 @@ func _render_lesson() -> void:
 			_render_initial_restaurant_lesson()
 		"distance":
 			_render_distance_lesson()
+		"dinnertime":
+			_render_dinnertime_lesson()
+		"housing":
+			_render_housing_lesson()
+		"marketing":
+			_render_marketing_lesson()
+		"employees":
+			_render_employees_lesson()
 
 func _clear_content_body() -> void:
 	for child in _content_body.get_children():
@@ -806,6 +1048,84 @@ func _render_distance_lesson() -> void:
 	else:
 		card.add_child(_make_rich_text("跨板块路线：示意路径穿过左、右两个板块之间的边界 1 次，所以规则距离 = 1。\n\n如果两家餐厅价格相同，这 1 点距离就可能改变房屋选择。", 130))
 	_content_body.add_child(card)
+
+func _render_dinnertime_lesson() -> void:
+	var overview := _make_section("房屋会怎样选择餐厅")
+	overview.add_child(_build_real_map_preview(_build_dinnertime_preview_state(), _build_dinnertime_preview_options()))
+	overview.add_child(_make_rich_text(
+		"晚餐阶段按房屋编号从小到大处理。一个房屋如果没有需求，会直接跳过；如果有需求，会把这些需求合并成“需要哪些商品、各几个”。\n\n候选餐厅必须能完整供应这张需求清单。比如房屋有 1 个汉堡和 1 瓶可乐需求，餐厅库存里两种商品都够，才有资格参与比较；缺任意一种就不会被考虑。",
+		150
+	))
+	_content_body.add_child(overview)
+
+	var choice := _make_section("比较链")
+	choice.add_child(_make_rich_text(
+		"核心分数 = 决策单价 + 距离，分数越小越优先。\n\n决策单价来自基础单价和定价类效果：定价经理 -1，折扣经理 -3，奢侈品经理 +10，里程碑或扩展也可能修改基础单价。距离使用前一章介绍的板块边界距离，并可被扩展效果修正。\n\n如果分数相同，先比较平局分；基础规则里服务员会提高平局分。仍相同则按商业秩序靠前者获胜；如果还是同一玩家的多个餐厅，再选距离更短、道路步数更短、餐厅 ID 更靠前的那个。",
+		190
+	))
+	_content_body.add_child(choice)
+
+	var payout := _make_section("卖出后发生什么")
+	payout.add_child(_make_rich_text(
+		"获胜餐厅会扣除对应库存，房屋需求被清空。基础收入 = 单价 × 商品数量；花园只让这部分收入翻倍，不会让“单价 + 距离”的选店分数翻倍，也不会翻倍额外奖金。\n\n之后会叠加销售奖金、服务员收入、CFO 收入加成等效果。所有这些从银行付给玩家，因此晚餐阶段也是最常触发银行第一次或第二次破产的阶段。",
+		165
+	))
+	_content_body.add_child(payout)
+
+func _render_housing_lesson() -> void:
+	var preview := _make_section("普通房屋、花园房屋、公寓")
+	preview.add_child(_build_real_map_preview(_build_housing_preview_state(), _build_housing_preview_options()))
+	preview.add_child(_make_rich_text(
+		"普通房屋是 2×2 结构，默认最多容纳 3 个需求。\n\n带花园房屋仍然只有房屋主体承载编号，但 `has_garden=true`：默认需求上限提高到 5，并且晚餐售卖时“单价 × 数量”这部分收入翻倍。玩家口头说的豪宅效果，本实现里对应的就是带花园房屋的规则效果。\n\n公寓来自 New Districts / 新区域扩展，使用 3×3 公寓素材。它设置了 `is_apartment=true`、`no_demand_cap=true` 和 `marketing_demand_multiplier=2`：营销每次给它添加 2 个需求，而且没有普通需求上限。",
+		210
+	))
+	_content_body.add_child(preview)
+
+	var placement := _make_section("花园怎么来")
+	placement.add_child(_make_rich_text(
+		"新业务拓展经理可以放置房屋或给已有普通房屋加花园。加花园时，花园必须贴在房屋外侧，占地不能越界，不能压道路、建筑、阻塞格，也不能与已放置的营销板件重叠。\n\n花园改变的是房屋属性和收入结算，不会改变房屋编号顺序；晚餐仍然按房屋编号处理。",
+		140
+	))
+	_content_body.add_child(placement)
+
+func _render_marketing_lesson() -> void:
+	var ranges := _make_section("四种基础营销覆盖")
+	ranges.add_child(_build_real_map_preview(_build_marketing_preview_state(), _build_marketing_preview_options()))
+	ranges.add_child(_make_rich_text(
+		"广告牌：影响与营销板件占地正交相邻的房屋。\n邮箱：影响同一个街区里的房屋。这里的街区不是地图板块，而是道路图切出来的一片连续非道路区域；道路会把街区隔开。\n电波：影响营销板件所在地图板块周围 3×3 板块范围内的房屋。\n飞机：放在地图边缘外，影响飞过的一整条横向或纵向带状区域。",
+		190
+	))
+	_content_body.add_child(ranges)
+
+	var settlement := _make_section("广告何时生效")
+	settlement.add_child(_make_rich_text(
+		"营销员在 Working 阶段发起广告，通常选择 1 种商品和持续时间。基础员工的上限不同：营销实习生只能放广告牌，最多 2 回合；营销经理可放邮箱或广告牌，最多 3 回合；品牌经理可放飞机或以下广告，最多 4 回合；品牌总监可放电波或以下广告，最多 5 回合。\n\nMarketing 阶段按营销板块编号从小到大结算。每次结算会向覆盖房屋添加需求，受普通房屋/花园房屋上限影响；公寓因为扩展规则会翻倍添加且没有上限。结算后持续时间 -1，到 0 的广告会移除，对应忙碌营销员才释放。",
+		210
+	))
+	_content_body.add_child(settlement)
+
+func _render_employees_lesson() -> void:
+	var structure := _make_section("公司结构先决定谁能工作")
+	structure.add_child(_make_rich_text(
+		"CEO 默认有 3 个直属槽位，第一次破产后基础储备卡规则可能把这个值改成 2 / 3 / 4。CEO 下面可以直接放普通员工或经理；经理只能向 CEO 汇报，不能放在另一个经理下面；经理下面只能放普通员工。\n\n员工放不进结构就留在储备区，本回合不会执行在岗效果。忙碌中的营销员不占结构槽位，直到广告到期才回来。",
+		165
+	))
+	_content_body.add_child(structure)
+
+	var roles := _make_section("基础员工怎么分工")
+	roles.add_child(_make_rich_text(
+		"招聘/培训：人力资源专员、招聘经理、人力资源总监负责拿员工或减少薪水；培训讲师、培训指导员、培训专家负责升级员工。\n生产：见习厨师、汉堡厨师/主厨、披萨厨师/主厨生产食物。\n采购：跑腿伙计拿 1 瓶饮料；手推车操作员和货车驾驶员沿道路从进货点拿饮料；飞艇驾驶员无视道路。\n定价：定价经理 -1，折扣经理 -3，奢侈品经理 +10；这些是强制动作。\n营销：营销实习生、营销经理、品牌经理、品牌总监决定能放哪类广告和持续多久。\n开店/地图：区域经理放置即将开业餐厅；大区经理可放置立即开业餐厅或移动现有餐厅；新业务拓展经理放房屋或花园。\n结算辅助：服务员提供收入并赢平局；CFO 让本回合收入增加 50%。",
+		260
+	))
+	_content_body.add_child(roles)
+
+	var drive_thru := _make_section("区域经理、大区经理与免下车")
+	drive_thru.add_child(_build_real_map_preview(_build_drive_thru_preview_state(), _build_drive_thru_preview_options()))
+	drive_thru.add_child(_make_rich_text(
+		"只要你本回合在岗员工里有 `drivethrough` 标签，你的所有餐厅都会获得免下车服务。当前基础员工里，区域经理和大区经理都有这个标签。\n\n免下车的含义是：晚餐距离计算时，餐厅四个角都可以视为入口/出口，而不是只有原本放置时的那个入口角。这会让某些房屋到你餐厅的距离变短，也会让地图上的入口标记从一个角扩展到四个角。",
+		160
+	))
+	_content_body.add_child(drive_thru)
 
 func _get_reserve_cards() -> Array[Dictionary]:
 	var fallback: Array[Dictionary] = []
@@ -1017,10 +1337,14 @@ func _apply_preview_tile(state: Dictionary, tile_id: String, origin: Vector2i) -
 				continue
 			var structure: Dictionary = (structure_val as Dictionary).duplicate(true)
 			var piece_id := str(structure.get("piece_id", "")).strip_edges()
-			if piece_id != "house" and piece_id != "house_with_garden":
+			if piece_id != "house" and piece_id != "house_with_garden" and piece_id != "apartment":
 				continue
 			var local_anchor := _variant_to_vector2i(structure.get("anchor", [0, 0]))
 			structure["anchor"] = origin + local_anchor
+			var props_val = structure.get("house_props", {})
+			if props_val is Dictionary:
+				for prop_key in (props_val as Dictionary).keys():
+					structure[prop_key] = (props_val as Dictionary)[prop_key]
 			houses.append(structure)
 	state["houses"] = houses
 
@@ -1043,6 +1367,141 @@ func _variant_to_vector2i(value) -> Vector2i:
 		if arr.size() >= 2:
 			return Vector2i(int(arr[0]), int(arr[1]))
 	return Vector2i.ZERO
+
+func _build_dinnertime_preview_state() -> Dictionary:
+	var state := _build_preview_map_state()
+	var restaurants: Array = state.get("restaurants", [])
+	restaurants.append({"restaurant_id": "rest_dinner_close", "owner": 0, "anchor": Vector2i(3, 3)})
+	restaurants.append({"restaurant_id": "rest_dinner_far", "owner": 1, "anchor": Vector2i(8, 3)})
+	state["restaurants"] = restaurants
+	return state
+
+func _build_dinnertime_preview_options() -> Dictionary:
+	return {
+		"overlays": [
+			{
+				"id": "active_house",
+				"cells": _restaurant_cells_for_anchor(Vector2i(0, 0), 0),
+				"style": {
+					"fill": MAP_DISTANCE_FILL,
+					"border": MAP_DISTANCE_BORDER,
+					"border_width": 2,
+				},
+			},
+		],
+	}
+
+func _build_housing_preview_state() -> Dictionary:
+	return {
+		"road_segments": {},
+		"houses": [
+			{
+				"piece_id": "house",
+				"anchor": Vector2i(0, 0),
+				"house_id": "2",
+				"house_number": 2,
+			},
+			{
+				"piece_id": "house_with_garden",
+				"anchor": Vector2i(3, 0),
+				"house_id": "5",
+				"house_number": 5,
+				"garden_cells": [Vector2i(5, 0), Vector2i(6, 0)],
+			},
+			{
+				"piece_id": "apartment",
+				"anchor": Vector2i(7, 1),
+				"house_id": "π",
+				"house_number": 3.14,
+				"is_apartment": true,
+				"no_demand_cap": true,
+				"marketing_demand_multiplier": 2,
+			},
+		],
+		"restaurants": [],
+	}
+
+func _build_housing_preview_options() -> Dictionary:
+	return {
+		"overlays": [
+			{
+				"id": "garden_house",
+				"cells": [Vector2i(3, 0), Vector2i(4, 0), Vector2i(3, 1), Vector2i(4, 1), Vector2i(5, 0), Vector2i(6, 0)],
+				"style": {
+					"fill": MAP_VALID_FILL,
+					"border": MAP_VALID_BORDER,
+					"border_width": 2,
+				},
+			},
+			{
+				"id": "apartment",
+				"cells": [Vector2i(7, 1), Vector2i(8, 1), Vector2i(9, 1), Vector2i(7, 2), Vector2i(8, 2), Vector2i(9, 2), Vector2i(7, 3), Vector2i(8, 3), Vector2i(9, 3)],
+				"style": {
+					"fill": MAP_DISTANCE_FILL,
+					"border": MAP_DISTANCE_BORDER,
+					"border_width": 2,
+				},
+			},
+		],
+	}
+
+func _build_marketing_preview_state() -> Dictionary:
+	return _build_preview_map_state()
+
+func _build_marketing_preview_options() -> Dictionary:
+	var left_block: Array[Vector2i] = []
+	for y in range(5):
+		for x in range(5):
+			left_block.append(Vector2i(x, y))
+	return {
+		"overlays": [
+			{
+				"id": "mailbox_block",
+				"cells": left_block,
+				"style": {
+					"fill": Color(0.29, 0.55, 0.90, 0.16),
+					"border": Color(0.16, 0.31, 0.62, 0.86),
+					"border_width": 2,
+				},
+			},
+			{
+				"id": "billboard_adjacent",
+				"cells": [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)],
+				"style": {
+					"fill": MAP_VALID_FILL,
+					"border": MAP_VALID_BORDER,
+					"border_width": 2,
+				},
+			},
+		],
+	}
+
+func _build_drive_thru_preview_state() -> Dictionary:
+	var state := _build_preview_map_state()
+	state["restaurants"] = [
+		{
+			"restaurant_id": "rest_drive_thru",
+			"owner": 0,
+			"anchor": Vector2i(3, 3),
+			"drive_thru": true,
+		},
+	]
+	return state
+
+func _build_drive_thru_preview_options() -> Dictionary:
+	return {
+		"overlays": [
+			{
+				"id": "drive_thru_restaurant",
+				"cells": _restaurant_cells_for_anchor(Vector2i(3, 3), 0),
+				"style": {
+					"fill": MAP_VALID_FILL,
+					"border": MAP_VALID_BORDER,
+					"border_width": 2,
+				},
+			},
+		],
+	}
 
 func _build_restaurant_preview_state(_case_id: String) -> Dictionary:
 	var state := _build_preview_map_state()
