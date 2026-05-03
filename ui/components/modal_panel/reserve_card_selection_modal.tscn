@@ -20,7 +20,7 @@ mouse_filter = 0
 color = Color(0.05, 0.04, 0.03, 0.75)
 
 [node name="Panel" type="PanelContainer" parent="."]
-custom_minimum_size = Vector2(720, 440)
+custom_minimum_size = Vector2(780, 520)
 layout_mode = 0
 mouse_filter = 0
 
@@ -51,6 +51,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
+vertical_scroll_mode = 0
 
 [node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/ContentHost"]
 layout_mode = 2
@@ -71,14 +72,16 @@ size_flags_horizontal = 3
 theme_override_constants/separation = 12
 alignment = 1
 
-[node name="CardButton0" type="Button" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow"]
-custom_minimum_size = Vector2(0, 156)
+[node name="CardButton0" type="TextureButton" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow"]
+custom_minimum_size = Vector2(193, 300)
 layout_mode = 2
-size_flags_horizontal = 3
+size_flags_horizontal = 4
 toggle_mode = true
-text = ""
+ignore_texture_size = true
+stretch_mode = 5
 
 [node name="Content" type="MarginContainer" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0"]
+visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -96,15 +99,17 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="ImagePlaceholder" type="ColorRect" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0/Content/VBoxContainer"]
-visible = false
-custom_minimum_size = Vector2(0, 0)
+[node name="CardImage" type="TextureRect" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0/Content/VBoxContainer"]
+custom_minimum_size = Vector2(180, 320)
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 3
 mouse_filter = 2
-color = Color(0, 0, 0, 0.08)
+expand_mode = 1
+stretch_mode = 5
 
 [node name="CardTitle" type="Label" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0/Content/VBoxContainer"]
+visible = false
 layout_mode = 2
 mouse_filter = 2
 theme_override_font_sizes/font_size = 14
@@ -112,6 +117,7 @@ text = "储备卡"
 horizontal_alignment = 1
 
 [node name="CardDesc" type="Label" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0/Content/VBoxContainer"]
+visible = false
 layout_mode = 2
 mouse_filter = 2
 theme_override_font_sizes/font_size = 12
@@ -119,14 +125,16 @@ text = "起始现金：+$0\nCEO 卡槽：0"
 horizontal_alignment = 1
 autowrap_mode = 2
 
-[node name="CardButton1" type="Button" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow"]
-custom_minimum_size = Vector2(0, 156)
+[node name="CardButton1" type="TextureButton" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow"]
+custom_minimum_size = Vector2(193, 300)
 layout_mode = 2
-size_flags_horizontal = 3
+size_flags_horizontal = 4
 toggle_mode = true
-text = ""
+ignore_texture_size = true
+stretch_mode = 5
 
 [node name="Content" type="MarginContainer" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1"]
+visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -144,15 +152,17 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="ImagePlaceholder" type="ColorRect" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1/Content/VBoxContainer"]
-visible = false
-custom_minimum_size = Vector2(0, 0)
+[node name="CardImage" type="TextureRect" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1/Content/VBoxContainer"]
+custom_minimum_size = Vector2(180, 320)
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 3
 mouse_filter = 2
-color = Color(0, 0, 0, 0.08)
+expand_mode = 1
+stretch_mode = 5
 
 [node name="CardTitle" type="Label" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1/Content/VBoxContainer"]
+visible = false
 layout_mode = 2
 mouse_filter = 2
 theme_override_font_sizes/font_size = 14
@@ -160,6 +170,7 @@ text = "储备卡"
 horizontal_alignment = 1
 
 [node name="CardDesc" type="Label" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1/Content/VBoxContainer"]
+visible = false
 layout_mode = 2
 mouse_filter = 2
 theme_override_font_sizes/font_size = 12
@@ -167,14 +178,16 @@ text = "起始现金：+$0\nCEO 卡槽：0"
 horizontal_alignment = 1
 autowrap_mode = 2
 
-[node name="CardButton2" type="Button" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow"]
-custom_minimum_size = Vector2(0, 156)
+[node name="CardButton2" type="TextureButton" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow"]
+custom_minimum_size = Vector2(193, 300)
 layout_mode = 2
-size_flags_horizontal = 3
+size_flags_horizontal = 4
 toggle_mode = true
-text = ""
+ignore_texture_size = true
+stretch_mode = 5
 
 [node name="Content" type="MarginContainer" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2"]
+visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -192,15 +205,17 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="ImagePlaceholder" type="ColorRect" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2/Content/VBoxContainer"]
-visible = false
-custom_minimum_size = Vector2(0, 0)
+[node name="CardImage" type="TextureRect" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2/Content/VBoxContainer"]
+custom_minimum_size = Vector2(180, 320)
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 3
 mouse_filter = 2
-color = Color(0, 0, 0, 0.08)
+expand_mode = 1
+stretch_mode = 5
 
 [node name="CardTitle" type="Label" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2/Content/VBoxContainer"]
+visible = false
 layout_mode = 2
 mouse_filter = 2
 theme_override_font_sizes/font_size = 14
@@ -208,6 +223,7 @@ text = "储备卡"
 horizontal_alignment = 1
 
 [node name="CardDesc" type="Label" parent="Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2/Content/VBoxContainer"]
+visible = false
 layout_mode = 2
 mouse_filter = 2
 theme_override_font_sizes/font_size = 12

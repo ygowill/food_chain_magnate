@@ -277,6 +277,7 @@ func _maybe_open_first_have_20_overview(game_engine: GameEngine, state: GameStat
 					_panel_controller.call("show_reserve_cards_overview", _pending_first_have_20_overview_player_id)
 			_pending_first_have_20_overview_player_id = -1
 	if _last_can_peek_all_reserve_cards_by_player.size() != current_flags.size():
+		_maybe_open_initial_first_have_20_overview(state, current_flags)
 		_last_can_peek_all_reserve_cards_by_player = current_flags
 		return
 
@@ -297,6 +298,23 @@ func _maybe_open_first_have_20_overview(game_engine: GameEngine, state: GameStat
 		break
 
 	_last_can_peek_all_reserve_cards_by_player = current_flags
+
+func _maybe_open_initial_first_have_20_overview(state: GameState, current_flags: Array[bool]) -> void:
+	if current_flags.is_empty():
+		return
+	for pid in range(current_flags.size()):
+		if not bool(current_flags[pid]):
+			continue
+		if not _should_auto_open_first_have_20_for_player(pid):
+			continue
+		if str(state.phase) == DefsClass.PHASE_DINNERTIME:
+			_pending_first_have_20_overview_player_id = pid
+			return
+		if _is_reserve_cards_overview_visible():
+			return
+		if is_instance_valid(_panel_controller) and _panel_controller.has_method("show_reserve_cards_overview"):
+			_panel_controller.call("show_reserve_cards_overview", pid)
+		return
 
 func _read_can_peek_flags(state: GameState) -> Array[bool]:
 	var out: Array[bool] = []

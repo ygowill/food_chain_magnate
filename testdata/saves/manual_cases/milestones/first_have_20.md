@@ -9,17 +9,17 @@
 
 ## 目的
 
-- 验证 pay_bank_to_player 后 cash>=20 会触发 first_have_20。
+- 验证获得 first_have_20 后可查看全部玩家储备卡，且存档保留真实基础地图。
 
 ## 复核步骤
 
-1. 载入后应处于 Working/PlaceRestaurants，且本回合已准备好一笔晚餐收入（cash 约为 15）。
-2. 点击「推进子阶段」离开 Working：进入晚餐结算后会自动跳到 Payday。
+1. 载入后应处于 Working/PlaceRestaurants，并使用真实基础地图板块。
+2. 打开「储备卡」总览。
 
 ## 预期结果
 
-- 玩家 0 获得里程碑 first_have_20（player.milestones）。
-- 玩家 0 现金应 >= 20。
+- 玩家 0 已获得里程碑 first_have_20（player.milestones），现金应 >= 20。
+- 玩家 0 可查看全部玩家已选择的储备卡。
 
 ## 关联单元测试
 

@@ -37,6 +37,7 @@ theme_override_constants/margin_right = 20
 theme_override_constants/margin_bottom = 20
 
 [node name="PanelContainer" type="PanelContainer" parent="CenterContainer/MarginContainer"]
+custom_minimum_size = Vector2(560, 420)
 layout_mode = 2
 
 [node name="MarginContainer2" type="MarginContainer" parent="CenterContainer/MarginContainer/PanelContainer"]
@@ -83,9 +84,11 @@ theme_override_colors/font_color = Color(0.5, 0.45, 0.35, 1.0)
 text = "加载中..."
 
 [node name="ScrollContainer" type="ScrollContainer" parent="CenterContainer/MarginContainer/PanelContainer/MarginContainer2/VBoxContainer"]
+custom_minimum_size = Vector2(520, 320)
 layout_mode = 2
+size_flags_vertical = 3
 horizontal_scroll_mode = 0
-vertical_scroll_mode = 0
+vertical_scroll_mode = 1
 
 [node name="Sections" type="GridContainer" parent="CenterContainer/MarginContainer/PanelContainer/MarginContainer2/VBoxContainer/ScrollContainer"]
 layout_mode = 2

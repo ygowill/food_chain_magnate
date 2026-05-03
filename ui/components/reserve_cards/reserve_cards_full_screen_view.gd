@@ -15,6 +15,16 @@ signal build_finished()
 const ReserveCardsViewDataClass = preload("res://ui/components/reserve_cards/reserve_cards_view_data.gd")
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
+const PANEL_MIN_SIZE := Vector2(560, 420)
+const PANEL_MAX_SIZE := Vector2(920, 680)
+const VIEWPORT_MARGIN := 40.0
+const PANEL_INNER_MARGIN := 40.0
+const SCROLL_MIN_HEIGHT := 320.0
+const SECTION_MIN_WIDTH := 244.0
+const SECTION_GAP := 12.0
+const CARD_ART_SIZE := Vector2(180, 280)
+const CARD_ART_CORNER_RADIUS := 18
+
 var _opened: bool = false
 var _viewer_player_id_override: int = -999
 var _focus_player_id: int = -1
@@ -30,9 +40,16 @@ func _ready() -> void:
 		hint_label.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_MUTED)
 	if is_instance_valid(panel_container):
 		panel_container.add_theme_stylebox_override("panel", _make_modal_panel_style())
+	_apply_layout_constraints()
 	_set_loading_visible(false)
 	if not _opened:
 		visible = false
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED:
+		_apply_layout_constraints()
+	if what == NOTIFICATION_VISIBILITY_CHANGED and visible:
+		_apply_layout_constraints()
 
 func set_viewer_player_id_override(viewer_player_id: int) -> void:
 	_viewer_player_id_override = viewer_player_id
@@ -44,6 +61,7 @@ func open_with_state(state: GameState, focus_player_id: int = -1) -> void:
 	_opened = true
 	_focus_player_id = focus_player_id
 	visible = true
+	_apply_layout_constraints()
 	_rebuild_from_state(state)
 
 func request_close() -> void:
@@ -117,34 +135,46 @@ func _clear_sections() -> void:
 		if is_instance_valid(child):
 			child.free()
 
+func _apply_layout_constraints() -> void:
+	if not is_instance_valid(panel_container):
+		return
+
+	var viewport_size := get_viewport_rect().size
+	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
+		viewport_size = Vector2(960, 640)
+
+	var panel_w := maxf(PANEL_MIN_SIZE.x, minf(PANEL_MAX_SIZE.x, viewport_size.x - VIEWPORT_MARGIN))
+	var panel_h := maxf(PANEL_MIN_SIZE.y, minf(PANEL_MAX_SIZE.y, viewport_size.y - VIEWPORT_MARGIN))
+	panel_container.custom_minimum_size = Vector2(panel_w, panel_h)
+
+	if is_instance_valid(scroll_container):
+		var scroll_w := maxf(0.0, panel_w - PANEL_INNER_MARGIN)
+		var scroll_h := maxf(SCROLL_MIN_HEIGHT, panel_h - 120.0)
+		scroll_container.custom_minimum_size = Vector2(scroll_w, scroll_h)
+
+	if is_instance_valid(sections):
+		var usable_w := maxf(SECTION_MIN_WIDTH, panel_w - PANEL_INNER_MARGIN)
+		var columns := int(floor((usable_w + SECTION_GAP) / (SECTION_MIN_WIDTH + SECTION_GAP)))
+		sections.columns = maxi(1, mini(3, columns))
+
 func _build_player_section(section_data: Dictionary) -> Control:
 	var player_id := int(section_data.get("player_id", -1))
-	var wrapper := PanelContainer.new()
+	var wrapper := VBoxContainer.new()
 	wrapper.name = "PlayerSection%d" % player_id
-	wrapper.add_theme_stylebox_override("panel", _make_section_style(player_id == _focus_player_id))
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_top", 12)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_bottom", 12)
-	wrapper.add_child(margin)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 10)
-	margin.add_child(vbox)
+	wrapper.custom_minimum_size = Vector2(220, 0)
+	wrapper.add_theme_constant_override("separation", 8)
 
 	var player_label := Label.new()
 	player_label.name = "PlayerLabel"
 	player_label.text = _player_display_name(player_id)
 	player_label.add_theme_font_size_override("font_size", 15)
 	player_label.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_PRIMARY)
-	vbox.add_child(player_label)
+	wrapper.add_child(player_label)
 
 	var cards_vbox := VBoxContainer.new()
 	cards_vbox.name = "CardsVBox"
-	cards_vbox.add_theme_constant_override("separation", 8)
-	vbox.add_child(cards_vbox)
+	cards_vbox.add_theme_constant_override("separation", 6)
+	wrapper.add_child(cards_vbox)
 
 	var cards_val = section_data.get("cards", [])
 	if cards_val is Array:
@@ -157,69 +187,102 @@ func _build_player_section(section_data: Dictionary) -> Control:
 
 func _build_card_panel(card_entry: Dictionary) -> Control:
 	var visible_card := bool(card_entry.get("visible", false))
-	var selected := bool(card_entry.get("selected", false))
 	var card_index := int(card_entry.get("index", -1))
 
-	var panel := PanelContainer.new()
-	panel.name = "Card%d" % card_index if card_index >= 0 else "Card"
-	panel.custom_minimum_size = Vector2(220, 85)
-	panel.add_theme_stylebox_override("panel", _make_card_style(visible_card, selected))
+	var card := VBoxContainer.new()
+	card.name = "Card%d" % card_index if card_index >= 0 else "Card"
+	card.custom_minimum_size = Vector2(220, CARD_ART_SIZE.y)
+	card.add_theme_constant_override("separation", 4)
 
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 10)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_right", 10)
-	margin.add_theme_constant_override("margin_bottom", 10)
-	panel.add_child(margin)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	margin.add_child(vbox)
+	if visible_card:
+		var image := _build_card_image(str(card_entry.get("image_path", "")).strip_edges())
+		if image != null:
+			card.add_child(image)
+		else:
+			card.add_child(_build_card_missing_art())
+	else:
+		card.add_child(_build_card_hidden_art())
 
 	var title := Label.new()
 	title.name = "TitleLabel"
 	title.text = str(card_entry.get("title", "")).strip_edges()
+	title.visible = false
 	title.add_theme_font_size_override("font_size", 14)
 	title.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_PRIMARY if visible_card else UiStylesClass.COLOR_TEXT_MUTED)
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD
 	title.max_lines_visible = 1
-	vbox.add_child(title)
+	card.add_child(title)
 
 	var desc := Label.new()
 	desc.name = "DescLabel"
 	desc.text = str(card_entry.get("desc", "")).strip_edges()
+	desc.visible = false
 	desc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD
 	desc.add_theme_font_size_override("font_size", 12)
 	desc.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_MUTED)
 	desc.max_lines_visible = 2
-	vbox.add_child(desc)
+	card.add_child(desc)
 
-	var footer := HBoxContainer.new()
-	footer.add_theme_constant_override("separation", 4)
-	vbox.add_child(footer)
+	return card
 
-	if selected:
-		var badge := Label.new()
-		badge.text = "✓"
-		badge.add_theme_font_size_override("font_size", 11)
-		badge.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_SUCCESS)
-		footer.add_child(badge)
+func _build_card_image(image_path: String) -> TextureRect:
+	if image_path.is_empty():
+		return null
+	var loaded = load(image_path)
+	if not (loaded is Texture2D):
+		return null
 
-	var footer_label := Label.new()
-	footer_label.name = "FooterLabel"
-	footer_label.add_theme_font_size_override("font_size", 11)
-	if selected:
-		footer_label.text = "已选择"
-		footer_label.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_SUCCESS)
-	elif not visible_card:
-		footer_label.text = "?"
-		footer_label.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_MUTED)
-	else:
-		footer_label.text = ""
-	footer.add_child(footer_label)
+	var image := TextureRect.new()
+	image.name = "CardImage"
+	image.custom_minimum_size = CARD_ART_SIZE
+	image.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	image.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	image.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	image.texture = loaded as Texture2D
+	return image
 
+func _build_card_hidden_art() -> Control:
+	var panel := PanelContainer.new()
+	panel.name = "HiddenCardArt"
+	panel.custom_minimum_size = CARD_ART_SIZE
+	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_theme_stylebox_override("panel", _make_hidden_card_style())
+
+	var center := CenterContainer.new()
+	center.name = "HiddenQuestionCenter"
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(center)
+
+	var question := Label.new()
+	question.name = "HiddenQuestionLabel"
+	question.text = "?"
+	question.add_theme_font_size_override("font_size", 72)
+	question.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	center.add_child(question)
 	return panel
+
+func _build_card_missing_art() -> Control:
+	var center := CenterContainer.new()
+	center.name = "MissingCardArt"
+	center.custom_minimum_size = CARD_ART_SIZE
+	center.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	center.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var label := Label.new()
+	label.name = "MissingCardLabel"
+	label.text = str("卡图缺失")
+	label.add_theme_font_size_override("font_size", 13)
+	label.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_MUTED)
+	center.add_child(label)
+	return center
 
 func _make_modal_panel_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -232,42 +295,10 @@ func _make_modal_panel_style() -> StyleBoxFlat:
 	style.shadow_offset = Vector2(0, 4)
 	return style
 
-func _make_section_style(highlighted: bool) -> StyleBoxFlat:
+func _make_hidden_card_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.99, 0.97, 0.92, 0.98) if highlighted else Color(0.98, 0.96, 0.90, 0.96)
-	style.border_color = Color(0.73, 0.23, 0.18, 0.45) if highlighted else Color(0.35, 0.29, 0.18, 0.22)
-	style.set_border_width_all(2 if highlighted else 1)
-	style.set_corner_radius_all(14)
-	style.shadow_color = Color(0.17, 0.13, 0.09, 0.04) if highlighted else Color(0.17, 0.13, 0.09, 0.02)
-	style.shadow_size = 4 if highlighted else 2
-	style.shadow_offset = Vector2(0, 1)
-	return style
-
-func _make_card_style(visible_card: bool, selected: bool) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.set_corner_radius_all(12)
-
-	if not visible_card:
-		style.bg_color = Color(0.90, 0.87, 0.80, 1.0)
-		style.border_color = Color(0.48, 0.43, 0.36, 0.35)
-		style.set_border_width_all(1)
-		style.border_blend = true
-		return style
-
-	style.bg_color = Color(1.0, 0.98, 0.93, 1.0)
-	style.border_color = Color(0.35, 0.29, 0.18, 0.3)
-	style.set_border_width_all(1)
-	style.shadow_color = Color(0.17, 0.13, 0.09, 0.06)
-	style.shadow_size = 3
-	style.shadow_offset = Vector2(0, 1)
-
-	if selected:
-		style.bg_color = Color(0.94, 0.98, 0.92, 1.0)
-		style.border_color = Color(0.28, 0.55, 0.22, 0.75)
-		style.set_border_width_all(2)
-		style.shadow_color = Color(0.28, 0.55, 0.22, 0.12)
-		style.shadow_size = 4
-
+	style.bg_color = Color(0.015, 0.015, 0.015, 1.0)
+	style.set_corner_radius_all(CARD_ART_CORNER_RADIUS)
 	return style
 
 func _player_display_name(player_id: int) -> String:

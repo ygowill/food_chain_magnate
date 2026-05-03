@@ -1,6 +1,17 @@
 class_name ReserveCardsViewData
 extends RefCounted
 
+const RESERVE_CARD_IMAGE_PATHS: Array[String] = [
+	"res://assets/images/reserve_cards/reserve_2.png",
+	"res://assets/images/reserve_cards/reserve_3.png",
+	"res://assets/images/reserve_cards/reserve_4.png",
+]
+
+static func get_card_image_path(index: int) -> String:
+	if index < 0 or index >= RESERVE_CARD_IMAGE_PATHS.size():
+		return ""
+	return RESERVE_CARD_IMAGE_PATHS[index]
+
 static func resolve_viewer_player_id(state: GameState) -> int:
 	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
 		return int(NetContext.get_command_privacy_viewer_player_id())
@@ -73,6 +84,7 @@ static func build_card_entry(card_val, index: int, visible: bool, selected: bool
 			"title": "?",
 			"desc": "",
 			"summary": "?",
+			"image_path": "",
 		}
 
 	var card: Dictionary = card_val if (card_val is Dictionary) else {}
@@ -103,6 +115,7 @@ static func describe_card(card: Dictionary, index: int) -> Dictionary:
 			"title": title,
 			"desc": desc,
 			"summary": "，".join(summary_parts),
+			"image_path": get_card_image_path(index),
 		}
 	var price := _read_int(card.get("type", null), -1)
 	var price_text := "$?" if price < 0 else "$%d" % price
@@ -111,6 +124,7 @@ static func describe_card(card: Dictionary, index: int) -> Dictionary:
 		"title": option_text,
 		"desc": "基础单价候选：%s\n首次破产后按多数决定（平局 20 > 5 > 10）" % price_text,
 		"summary": "选项#%d，基础单价候选 %s" % [index + 1, price_text],
+		"image_path": get_card_image_path(index),
 	}
 
 static func format_revealed_card_summary(card: Dictionary, selected_index: int) -> String:

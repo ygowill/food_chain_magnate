@@ -3,14 +3,19 @@
 class_name ReserveCardSelectionModal
 extends "res://ui/components/modal_panel/modal_panel_base.gd"
 
+const ReserveCardsViewDataClass = preload("res://ui/components/reserve_cards/reserve_cards_view_data.gd")
 const ReserveUiStylesClass = preload("res://ui/utils/ui_styles.gd")
-const FIXED_PANEL_HEIGHT := 440.0
-const MIN_PANEL_WIDTH := 720.0
+const FIXED_PANEL_HEIGHT := 520.0
+const MIN_PANEL_WIDTH := 780.0
 
 @onready var selection_label: Label = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/SelectionLabel
-@onready var card_button_0: Button = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0
-@onready var card_button_1: Button = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1
-@onready var card_button_2: Button = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2
+@onready var card_button_0: TextureButton = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0
+@onready var card_button_1: TextureButton = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1
+@onready var card_button_2: TextureButton = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2
+
+@onready var card_image_0: TextureRect = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0/Content/VBoxContainer/CardImage
+@onready var card_image_1: TextureRect = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1/Content/VBoxContainer/CardImage
+@onready var card_image_2: TextureRect = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2/Content/VBoxContainer/CardImage
 
 @onready var card_title_0: Label = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0/Content/VBoxContainer/CardTitle
 @onready var card_title_1: Label = $Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1/Content/VBoxContainer/CardTitle
@@ -54,10 +59,6 @@ func _apply_visual_styles() -> void:
 	if is_instance_valid(hint_label):
 		ReserveUiStylesClass.apply_label_error(hint_label)
 
-	for btn in [card_button_0, card_button_1, card_button_2]:
-		if btn is Button and is_instance_valid(btn):
-			ReserveUiStylesClass.apply_button_secondary(btn)
-
 	for label in [card_title_0, card_title_1, card_title_2]:
 		if label is Label and is_instance_valid(label):
 			ReserveUiStylesClass.apply_label_dark(label)
@@ -65,6 +66,12 @@ func _apply_visual_styles() -> void:
 	for label in [card_desc_0, card_desc_1, card_desc_2]:
 		if label is Label and is_instance_valid(label):
 			ReserveUiStylesClass.apply_label_hint_dark(label)
+
+	for image in [card_image_0, card_image_1, card_image_2]:
+		if image is TextureRect and is_instance_valid(image):
+			image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			image.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func open(_covered_rect: Rect2) -> void:
 	super.open(_covered_rect)
@@ -212,17 +219,25 @@ func setup_waiting(current_player_id: int) -> void:
 
 	_reset_card_buttons()
 	for i in range(3):
-		var btn: Button = _get_card_button(i)
+		var btn: TextureButton = _get_card_button(i)
 		var title_label: Label = _get_card_title_label(i)
 		var desc_label: Label = _get_card_desc_label(i)
+		var image_rect: TextureRect = _get_card_image(i)
 		if is_instance_valid(btn):
 			btn.disabled = true
-			btn.visible = true
+			btn.visible = false
 			btn.button_pressed = false
+			btn.tooltip_text = ""
+			_set_card_button_texture(btn, null)
+		if is_instance_valid(image_rect):
+			image_rect.texture = null
+			image_rect.visible = false
 		if is_instance_valid(title_label):
 			title_label.text = "保密中"
+			title_label.visible = true
 		if is_instance_valid(desc_label):
 			desc_label.text = ""
+			desc_label.visible = true
 
 func _on_confirm_pressed() -> void:
 	if _selected_index < 0:
@@ -233,34 +248,46 @@ func _on_cancel_pressed() -> void:
 	cancelled.emit()
 	close()
 
-func _bind_card_button(btn: Button, index: int) -> void:
+func _bind_card_button(btn: TextureButton, index: int) -> void:
 	if not is_instance_valid(btn):
 		return
 
 	btn.toggle_mode = true
 	btn.button_group = _card_button_group
 	btn.disabled = true
+	btn.ignore_texture_size = true
+	btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 	if not btn.pressed.is_connected(_on_card_pressed.bind(index)):
 		btn.pressed.connect(_on_card_pressed.bind(index))
 
 func _reset_card_buttons() -> void:
-	_reset_card_button(card_button_0, card_title_0, card_desc_0)
-	_reset_card_button(card_button_1, card_title_1, card_desc_1)
-	_reset_card_button(card_button_2, card_title_2, card_desc_2)
+	_reset_card_button(card_button_0, card_image_0, card_title_0, card_desc_0)
+	_reset_card_button(card_button_1, card_image_1, card_title_1, card_desc_1)
+	_reset_card_button(card_button_2, card_image_2, card_title_2, card_desc_2)
 
-func _reset_card_button(btn: Button, title_label: Label, desc_label: Label) -> void:
+func _reset_card_button(btn: TextureButton, image_rect: TextureRect, title_label: Label, desc_label: Label) -> void:
 	if is_instance_valid(btn):
 		btn.disabled = true
 		btn.visible = true
 		btn.button_pressed = false
+		btn.tooltip_text = ""
+		btn.modulate = Color(1, 1, 1, 1)
+		_set_card_button_texture(btn, null)
+	if is_instance_valid(image_rect):
+		image_rect.texture = null
+		image_rect.visible = false
 	if is_instance_valid(title_label):
 		title_label.text = "储备卡"
+		title_label.visible = true
 	if is_instance_valid(desc_label):
 		desc_label.text = ""
+		desc_label.visible = true
 
 func _apply_card(index: int, cards: Array) -> void:
-	var btn: Button = _get_card_button(index)
+	var btn: TextureButton = _get_card_button(index)
+	var image_rect: TextureRect = _get_card_image(index)
 	var title_label: Label = _get_card_title_label(index)
 	var desc_label: Label = _get_card_desc_label(index)
 
@@ -277,34 +304,44 @@ func _apply_card(index: int, cards: Array) -> void:
 		return
 	var c: Dictionary = c_val
 
-	var option_text := "储备卡 %d" % (index + 1)
-	var has_bank_fields := (
-		c.has("cash") and (c.get("cash", null) is int)
-		and c.has("ceo_slots") and (c.get("ceo_slots", null) is int)
-	)
+	var details: Dictionary = ReserveCardsViewDataClass.describe_card(c, index)
+	title_label.text = "储备卡 %d" % (index + 1)
+	desc_label.text = str(details.get("desc", "")).strip_edges()
 
-	if not has_bank_fields:
-		var price: int = int(c.get("type", 0))
-		title_label.text = option_text
-		desc_label.text = "基础单价候选：$%d\n首次破产后按多数决定（平局 20 > 5 > 10）" % price
+	var summary := "储备卡 %d：%s" % [index + 1, str(details.get("summary", "")).strip_edges()]
+	while _card_summaries.size() <= index:
+		_card_summaries.append("")
+	_card_summaries[index] = summary
 
-		var summary := "储备卡 %d：基础单价候选 $%d" % [index + 1, price]
-		while _card_summaries.size() <= index:
-			_card_summaries.append("")
-		_card_summaries[index] = summary
-	else:
-		var cash: int = int(c.get("cash", 0))
-		var slots: int = int(c.get("ceo_slots", 0))
-
-		title_label.text = option_text
-		desc_label.text = "首次破产注资：+$%d\n首次破产后 CEO 卡槽：%d" % [cash, slots]
-
-		var summary := "储备卡 %d：首次破产注资 +$%d，CEO 卡槽=%d" % [index + 1, cash, slots]
-		while _card_summaries.size() <= index:
-			_card_summaries.append("")
-		_card_summaries[index] = summary
+	var texture_loaded := _apply_card_image(btn, str(details.get("image_path", "")).strip_edges())
+	if is_instance_valid(image_rect):
+		image_rect.texture = null
+		image_rect.visible = false
+	title_label.visible = false
+	desc_label.visible = false
+	btn.tooltip_text = summary
 
 	btn.disabled = false
+	btn.visible = texture_loaded
+
+func _apply_card_image(btn: TextureButton, image_path: String) -> bool:
+	if not is_instance_valid(btn) or image_path.is_empty():
+		return false
+	var loaded = load(image_path)
+	if not (loaded is Texture2D):
+		_set_card_button_texture(btn, null)
+		return false
+	_set_card_button_texture(btn, loaded as Texture2D)
+	return true
+
+func _set_card_button_texture(btn: TextureButton, texture: Texture2D) -> void:
+	if not is_instance_valid(btn):
+		return
+	btn.texture_normal = texture
+	btn.texture_pressed = texture
+	btn.texture_hover = texture
+	btn.texture_disabled = texture
+	btn.texture_focused = texture
 
 func _build_reserve_card_rule_hint(has_any_bank_fields: bool, has_any_price_only: bool) -> String:
 	if has_any_price_only and not has_any_bank_fields:
@@ -318,17 +355,35 @@ func _build_reserve_card_rule_hint(has_any_bank_fields: bool, has_any_price_only
 func _on_card_pressed(index: int) -> void:
 	_selected_index = int(index)
 	set_confirm_enabled(true)
+	_refresh_card_selection_visuals()
 
 	if not is_instance_valid(selection_label):
 		return
 
 	selection_label.text = "已选择储备卡 %d。（确认后不可更改）" % (index + 1)
 
-func _get_card_button(index: int) -> Button:
+func _refresh_card_selection_visuals() -> void:
+	for i in range(3):
+		var btn := _get_card_button(i)
+		if not is_instance_valid(btn):
+			continue
+		if _selected_index < 0 or i == _selected_index:
+			btn.modulate = Color(1, 1, 1, 1)
+		else:
+			btn.modulate = Color(0.68, 0.68, 0.68, 0.92)
+
+func _get_card_button(index: int) -> TextureButton:
 	match index:
 		0: return card_button_0
 		1: return card_button_1
 		2: return card_button_2
+		_: return null
+
+func _get_card_image(index: int) -> TextureRect:
+	match index:
+		0: return card_image_0
+		1: return card_image_1
+		2: return card_image_2
 		_: return null
 
 func _get_card_title_label(index: int) -> Label:

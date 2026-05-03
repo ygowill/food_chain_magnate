@@ -29,15 +29,18 @@ static func run() -> Result:
 
 	var btn0 = modal.get("card_button_0")
 	var desc0 = modal.get("card_desc_0")
-	if not is_instance_valid(btn0) or not (btn0 is Button):
+	if not is_instance_valid(btn0) or not (btn0 is TextureButton):
 		_safe_free(modal)
-		return Result.failure("card_button_0 无效（节点结构变更）")
+		return Result.failure("card_button_0 应为 TextureButton")
 	if not is_instance_valid(desc0) or not (desc0 is Label):
 		_safe_free(modal)
 		return Result.failure("card_desc_0 无效（节点结构变更）")
-	if bool((btn0 as Button).disabled):
+	if bool((btn0 as TextureButton).disabled):
 		_safe_free(modal)
 		return Result.failure("交互态下 card_button_0 不应禁用")
+	if (btn0 as TextureButton).texture_normal == null:
+		_safe_free(modal)
+		return Result.failure("交互态下 card_button_0 应展示卡图")
 	if str((desc0 as Label).text).strip_edges().is_empty():
 		_safe_free(modal)
 		return Result.failure("交互态下 card_desc_0 不应为空（应展示卡片信息）")
@@ -48,9 +51,12 @@ static func run() -> Result:
 		return Result.failure("ReserveCardSelectionModal 缺少 setup_waiting")
 	modal.call("setup_waiting", 0)
 
-	if not bool((btn0 as Button).disabled):
+	if not bool((btn0 as TextureButton).disabled):
 		_safe_free(modal)
 		return Result.failure("等待态下 card_button_0 应禁用")
+	if (btn0 as TextureButton).texture_normal != null:
+		_safe_free(modal)
+		return Result.failure("等待态下 card_button_0 不应保留卡图")
 	if not str((desc0 as Label).text).strip_edges().is_empty():
 		_safe_free(modal)
 		return Result.failure("等待态下 card_desc_0 应为空（不得泄露卡片信息）")
@@ -77,6 +83,9 @@ static func _bind_modal_nodes(modal) -> void:
 	modal.set("card_button_0", modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0"))
 	modal.set("card_button_1", modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1"))
 	modal.set("card_button_2", modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2"))
+	modal.set("card_image_0", modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0/Content/VBoxContainer/CardImage"))
+	modal.set("card_image_1", modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1/Content/VBoxContainer/CardImage"))
+	modal.set("card_image_2", modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2/Content/VBoxContainer/CardImage"))
 	modal.set("card_title_0", modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0/Content/VBoxContainer/CardTitle"))
 	modal.set("card_title_1", modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1/Content/VBoxContainer/CardTitle"))
 	modal.set("card_title_2", modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2/Content/VBoxContainer/CardTitle"))
@@ -87,4 +96,3 @@ static func _bind_modal_nodes(modal) -> void:
 static func _safe_free(node: Node) -> void:
 	if node != null and is_instance_valid(node):
 		node.free()
-

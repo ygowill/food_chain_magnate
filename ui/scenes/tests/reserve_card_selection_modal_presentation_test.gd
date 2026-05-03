@@ -39,6 +39,23 @@ static func run() -> Result:
 	if str((base_desc0 as Label).text).find("首次破产注资") < 0:
 		_safe_free(modal_base)
 		return Result.failure("base: 应展示首次破产注资字段（Reserve Prices 不启用）")
+	var base_button0 = modal_base.get("card_button_0")
+	if not (base_button0 is TextureButton):
+		_safe_free(modal_base)
+		return Result.failure("base: card_button_0 应为 TextureButton")
+	if (base_button0 as TextureButton).texture_normal == null:
+		_safe_free(modal_base)
+		return Result.failure("base: 应把储备卡卡图加载到按钮自身")
+	if not bool((base_button0 as TextureButton).ignore_texture_size):
+		_safe_free(modal_base)
+		return Result.failure("base: TextureButton 应忽略原图尺寸，避免撑出滚动条")
+	var base_content_host = modal_base.get("content_host")
+	if not (base_content_host is ScrollContainer):
+		_safe_free(modal_base)
+		return Result.failure("base: ContentHost 应为 ScrollContainer")
+	if int((base_content_host as ScrollContainer).vertical_scroll_mode) != 0:
+		_safe_free(modal_base)
+		return Result.failure("base: 选择弹窗不应显示垂直滚动条")
 	_safe_free(modal_base)
 
 	var rp_engine := GameEngine.new()
@@ -87,6 +104,13 @@ static func run() -> Result:
 	if rp_text.find("首次破产注资") >= 0:
 		_safe_free(modal_rp)
 		return Result.failure("reserve_prices: 不应展示首次破产注资字段")
+	var rp_button0 = modal_rp.get("card_button_0")
+	if not (rp_button0 is TextureButton):
+		_safe_free(modal_rp)
+		return Result.failure("reserve_prices: card_button_0 应为 TextureButton")
+	if (rp_button0 as TextureButton).texture_normal == null:
+		_safe_free(modal_rp)
+		return Result.failure("reserve_prices: 应把储备卡卡图加载到按钮自身")
 
 	var hint = modal_rp.get("hint_label")
 	if hint is Label:
@@ -116,6 +140,9 @@ static func _bind_modal_nodes(modal) -> void:
 	modal.set("card_button_0", modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0"))
 	modal.set("card_button_1", modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1"))
 	modal.set("card_button_2", modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2"))
+	modal.set("card_image_0", modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0/Content/VBoxContainer/CardImage"))
+	modal.set("card_image_1", modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1/Content/VBoxContainer/CardImage"))
+	modal.set("card_image_2", modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2/Content/VBoxContainer/CardImage"))
 	modal.set("card_title_0", modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton0/Content/VBoxContainer/CardTitle"))
 	modal.set("card_title_1", modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton1/Content/VBoxContainer/CardTitle"))
 	modal.set("card_title_2", modal.get_node("Panel/MarginContainer/VBoxContainer/ContentHost/VBoxContainer/CardsRow/CardButton2/Content/VBoxContainer/CardTitle"))

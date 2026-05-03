@@ -182,6 +182,8 @@ func _apply_test_map_single_sale(state: GameState) -> void:
 	}
 
 	state.players[0]["restaurants"] = ["rest_0"]
+	for pid in range(1, state.players.size()):
+		state.players[pid]["restaurants"] = []
 	_invalidate_road_graph(state)
 
 func _apply_test_map_dinnertime_sale_complex(state: GameState) -> void:

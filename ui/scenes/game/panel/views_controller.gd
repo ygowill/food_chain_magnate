@@ -141,11 +141,15 @@ func show_reserve_cards_full_screen_view(state: GameState, focus_player_id: int 
 	_ensure_reserve_cards_full_screen_view()
 	if not is_instance_valid(_reserve_cards_full_screen_view):
 		return
+	if _scene != null and _reserve_cards_full_screen_view is Control:
+		_apply_full_rect(_reserve_cards_full_screen_view as Control)
+	if focus_player_id >= 0 and _reserve_cards_full_screen_view.has_method("set_viewer_player_id_override"):
+		_reserve_cards_full_screen_view.call("set_viewer_player_id_override", focus_player_id)
+	elif _reserve_cards_full_screen_view.has_method("clear_viewer_player_id_override"):
+		_reserve_cards_full_screen_view.call("clear_viewer_player_id_override")
 	if _reserve_cards_full_screen_view.has_method("open_with_state"):
 		_reserve_cards_full_screen_view.call("open_with_state", state, focus_player_id)
 
-	if _scene != null and _reserve_cards_full_screen_view is Control:
-		_apply_full_rect(_reserve_cards_full_screen_view as Control)
 	_reserve_cards_full_screen_view.visible = true
 
 func hide_reserve_cards_full_screen_view() -> void:

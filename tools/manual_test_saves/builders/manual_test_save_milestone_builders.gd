@@ -164,15 +164,10 @@ func _build_milestone_first_have_20(engine: GameEngine, _c: Dictionary) -> Resul
 
 	var state := engine.get_state()
 	_force_turn_order(state)
-	_apply_test_map_single_sale(state)
 
-	var houses: Dictionary = state.map["houses"]
-	var h: Dictionary = houses["h0"]
-	h["demands"] = [{"product": "burger"}]
-	houses["h0"] = h
-	state.map["houses"] = houses
-	state.players[0]["inventory"]["burger"] = 1
-	state.players[0]["cash"] = 15
+	var pay := BankruptcyRules.pay_bank_to_player(state, 0, 20, "manual_first_have_20")
+	if not pay.ok:
+		return Result.failure("触发 first_have_20 失败: %s" % pay.error)
 
 	return _mark_all_players_passed_for_working(state)
 

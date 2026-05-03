@@ -59,6 +59,10 @@ class FakeOverlayController:
 static func run(seed_val: int = 12345) -> Result:
 	var prev_mode = NetContext.mode if NetContext != null else 0
 	var prev_local_player_id := int(NetContext.local_player_id) if NetContext != null else -1
+	var initial_true_r := _test_initial_true_opens_overview(seed_val)
+	if not initial_true_r.ok:
+		return _finish(initial_true_r, null, null, prev_mode, prev_local_player_id)
+
 	var engine := GameEngine.new()
 	var init := engine.initialize(2, seed_val)
 	if not init.ok:
@@ -106,6 +110,41 @@ static func run(seed_val: int = 12345) -> Result:
 		return _finish(Result.failure("同一状态不应重复弹出储备卡总览，实际: %s" % str(panel.shown_focus_ids)), ctrl, engine, prev_mode, prev_local_player_id)
 
 	return _finish(Result.success({}), ctrl, engine, prev_mode, prev_local_player_id)
+
+static func _test_initial_true_opens_overview(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return _finish(Result.failure("初始化失败(initial_true): %s" % init.error), null, engine, NetContext.mode if NetContext != null else 0, int(NetContext.local_player_id) if NetContext != null else -1)
+	if NetContext != null:
+		NetContext.mode = NetContext.Mode.HOTSEAT
+		NetContext.local_player_id = -1
+	engine.get_state().phase = "Payday"
+	engine.get_state().players[0]["can_peek_all_reserve_cards"] = true
+
+	var panel := FakePanelController.new()
+	var timeline := FakeTimelineController.new()
+	var overlay := FakeOverlayController.new()
+	var ctrl := GameUiSyncControllerClass.new(
+		func() -> GameEngine: return engine,
+		Callable(),
+		Callable(),
+		null,
+		null,
+		null,
+		null,
+		null,
+		null,
+		panel,
+		overlay,
+		timeline
+	)
+
+	ctrl.update_ui(false)
+	if panel.shown_focus_ids.size() != 1 or int(panel.shown_focus_ids[0]) != 0:
+		return _finish(Result.failure("初始同步时已有 first_have_20 权限也应弹出储备卡总览，实际: %s" % str(panel.shown_focus_ids)), ctrl, engine, NetContext.mode if NetContext != null else 0, int(NetContext.local_player_id) if NetContext != null else -1)
+
+	return _finish(Result.success({}), ctrl, engine, NetContext.mode if NetContext != null else 0, int(NetContext.local_player_id) if NetContext != null else -1)
 
 static func _finish(result: Result, ctrl, engine, prev_mode, prev_local_player_id: int) -> Result:
 	if ctrl != null and ctrl.has_method("get"):
