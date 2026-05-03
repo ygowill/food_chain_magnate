@@ -162,6 +162,14 @@ static func run() -> Result:
 	if _count_message_occurrences(log_container, "玩家1: 培训") != 1:
 		_cleanup(panel)
 		return Result.failure("append 后主日志不应重复显示“玩家1: 培训”")
+	var step_entries_after_append = panel.call("get_step_timeline_entries")
+	if not (step_entries_after_append is Array) or step_entries_after_append.size() != 2:
+		_cleanup(panel)
+		return Result.failure("append 后 step timeline entries 应只增加新增项")
+	var entries_after_append = panel.call("get_entries")
+	if not (entries_after_append is Array) or entries_after_append.size() != 2:
+		_cleanup(panel)
+		return Result.failure("append 后 merged entries 应只增加新增项")
 	if int(last_phase_header.end_step_index) != 1:
 		_cleanup(panel)
 		return Result.failure("append 后最后一个 phase header.end_step_index 应扩展到 1，实际=%d" % int(last_phase_header.end_step_index))

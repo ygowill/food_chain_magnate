@@ -394,6 +394,7 @@ StepTimelineBuild.append_from_existing_mutating(engine, owned_timeline) -> Resul
 - `GameLogPanel` 在提交 step timeline 状态时保存轻量 timeline/entries signature。
 - `_can_append_step_timeline()` 已从逐项比较旧 `steps`/`entries` prefix，改为 O(1) 校验 initial hash、旧尾部 step/entry hash、counts、processed command count 与新增 entry sequence 起点。
 - 补充 `GameLogPanelStepTimelineAppendTest` 覆盖正常 signature append，以及 initial state、旧 tail step、旧 tail entry、entry sequence 不一致时拒绝 append。
+- append 显示成功后的状态提交改为直接追加新增 timeline entries；不再复制已有 `_timeline_entries` 后整体提交。后台 append job 也复用同一增量提交路径。
 
 目标：
 

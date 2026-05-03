@@ -473,18 +473,12 @@ func _apply_committed_step_timeline_state(timeline: Dictionary, timeline_entries
 func _apply_background_job_state(job: Dictionary) -> void:
 	var mode := str(job.get("mode", "")).strip_edges()
 	if mode == "append":
-		var append_state := _build_append_committed_state_from_job(job)
-		var append_timeline_val = append_state.get("timeline", {})
+		_emit_background_append_state_mismatch(job)
+		var append_timeline_val = job.get("timeline", {})
 		var append_timeline: Dictionary = append_timeline_val if (append_timeline_val is Dictionary) else {}
-		var append_timeline_entries_val = append_state.get("timeline_entries", [])
-		var append_timeline_entries: Array = append_timeline_entries_val if (append_timeline_entries_val is Array) else []
-		var append_extra_entries_val = append_state.get("extra_entries", [])
-		var append_extra_entries: Array = append_extra_entries_val if (append_extra_entries_val is Array) else []
-		_apply_committed_step_timeline_state_owned(
-			append_timeline,
-			append_timeline_entries,
-			append_extra_entries
-		)
+		var appended_entries_val = job.get("appended_timeline_entries", [])
+		var appended_entries: Array = appended_entries_val if (appended_entries_val is Array) else []
+		_apply_appended_step_timeline_state_owned(append_timeline, appended_entries)
 		return
 
 	var timeline_val = job.get("timeline", {})
@@ -515,34 +509,33 @@ func _apply_committed_step_timeline_state_owned(timeline: Dictionary, timeline_e
 	_rebuild_entries_all()
 	_refresh_step_timeline_signatures()
 
-func _build_append_committed_state_from_job(job: Dictionary) -> Dictionary:
-	var timeline_val = job.get("timeline", {})
-	var timeline: Dictionary = timeline_val if (timeline_val is Dictionary) else {}
+func _apply_appended_step_timeline_state_owned(timeline: Dictionary, appended_timeline_entries: Array) -> void:
+	_step_timeline = timeline.duplicate(false) if (timeline is Dictionary) else {}
+	for entry_val in appended_timeline_entries:
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
+		_timeline_entries.append(entry)
+		if _extra_entries.is_empty():
+			_entries_all.append(entry)
+	if not _extra_entries.is_empty():
+		_rebuild_entries_all()
+	_refresh_step_timeline_signatures()
+
+func _emit_background_append_state_mismatch(job: Dictionary) -> void:
+	if not OnlinePerfTraceClass.enabled():
+		return
 	var base_timeline_entry_count := int(job.get("base_timeline_entry_count", -1))
 	var base_extra_entry_count := int(job.get("base_extra_entry_count", -1))
-	if OnlinePerfTraceClass.enabled():
-		var timeline_count_mismatch := base_timeline_entry_count >= 0 and base_timeline_entry_count != _timeline_entries.size()
-		var extra_count_mismatch := base_extra_entry_count >= 0 and base_extra_entry_count != _extra_entries.size()
-		if timeline_count_mismatch or extra_count_mismatch:
-			OnlinePerfTraceClass.emit_event("ui.game_log.append_background_state_mismatch", {
-				"expected_timeline_entry_count": int(base_timeline_entry_count),
-				"actual_timeline_entry_count": int(_timeline_entries.size()),
-				"expected_extra_entry_count": int(base_extra_entry_count),
-				"actual_extra_entry_count": int(_extra_entries.size()),
-			})
-
-	var next_timeline_entries: Array = _timeline_entries.duplicate(false)
-	var appended_entries_val = job.get("appended_timeline_entries", [])
-	if appended_entries_val is Array:
-		for entry_val in appended_entries_val:
-			if entry_val is Dictionary:
-				next_timeline_entries.append(entry_val)
-
-	return {
-		"timeline": timeline,
-		"timeline_entries": next_timeline_entries,
-		"extra_entries": _extra_entries.duplicate(false),
-	}
+	var timeline_count_mismatch := base_timeline_entry_count >= 0 and base_timeline_entry_count != _timeline_entries.size()
+	var extra_count_mismatch := base_extra_entry_count >= 0 and base_extra_entry_count != _extra_entries.size()
+	if timeline_count_mismatch or extra_count_mismatch:
+		OnlinePerfTraceClass.emit_event("ui.game_log.append_background_state_mismatch", {
+			"expected_timeline_entry_count": int(base_timeline_entry_count),
+			"actual_timeline_entry_count": int(_timeline_entries.size()),
+			"expected_extra_entry_count": int(base_extra_entry_count),
+			"actual_extra_entry_count": int(_extra_entries.size()),
+		})
 
 func _update_visible_entry_count_cache_from_background_result(job: Dictionary, descriptor_info: Dictionary) -> void:
 	var mode := str(job.get("mode", "")).strip_edges()
@@ -919,15 +912,11 @@ func append_step_timeline(timeline: Dictionary, appended_entries: Array[Dictiona
 		})
 		return true
 
-	var next_timeline_entries := _duplicate_entry_array(_timeline_entries)
-	for appended in normalized_appended_entries:
-		next_timeline_entries.append(appended)
-	var next_extra_entries := _duplicate_entry_array(_extra_entries)
 	if not _append_step_timeline_display(next_timeline, normalized_appended_entries):
 		OnlinePerfTraceClass.end_span(span, {"ok": false, "reason": "append_display_failed"})
 		return false
 
-	_apply_committed_step_timeline_state(next_timeline, next_timeline_entries, next_extra_entries)
+	_apply_appended_step_timeline_state_owned(next_timeline, normalized_appended_entries)
 	_blank_display_warned = false
 	_prune_expanded_action_groups()
 	if fold_details_check != null:
