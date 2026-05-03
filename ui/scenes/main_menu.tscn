@@ -113,7 +113,7 @@ text = "规则教学"
 custom_minimum_size = Vector2(420, 56)
 layout_mode = 2
 size_flags_horizontal = 4
-text = "教学战役"
+text = "游戏介绍"
 
 [node name="LoadGameButton" type="Button" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
 custom_minimum_size = Vector2(420, 56)

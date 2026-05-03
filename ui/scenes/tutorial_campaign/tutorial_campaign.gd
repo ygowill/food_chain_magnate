@@ -11,6 +11,8 @@ const MAP_VALID_FILL := Color(0.20, 0.75, 0.36, 0.20)
 const MAP_VALID_BORDER := Color(0.20, 0.62, 0.28, 0.92)
 const MAP_DISTANCE_FILL := Color(0.97, 0.73, 0.18, 0.42)
 const MAP_DISTANCE_BORDER := Color(0.65, 0.38, 0.05, 0.95)
+const TILE_SIZE := 5
+const TILE_CONTENT_PATH_TEMPLATE := "res://modules/base_tiles/content/tiles/%s.json"
 
 const FALLBACK_RESERVE_CARDS := [
 	{"cash": 50, "ceo_slots": 2},
@@ -25,15 +27,23 @@ class RealAssetMapPreview:
 	const GRID_SIZE := Vector2i(10, 5)
 	const GROUND_TEXTURE_PATH := "res://modules/base_tiles/assets/map/ground/ground.png"
 	const ROAD_STRAIGHT_TEXTURE_PATH := "res://modules/base_tiles/assets/map/roads/road_straight_new.png"
+	const ROAD_CORNER_TEXTURE_PATH := "res://modules/base_tiles/assets/map/roads/road_corner_new.png"
+	const ROAD_TEE_TEXTURE_PATH := "res://modules/base_tiles/assets/map/roads/road_tee_new.png"
 	const ROAD_CROSS_TEXTURE_PATH := "res://modules/base_tiles/assets/map/roads/road_cross_new.png"
-	const RESTAURANT_TEXTURE_PATH := "res://modules/base_pieces/assets/map/pieces/restaurant.png"
-	const HOUSE_WITH_GARDEN_TEXTURE_PATH := "res://modules/base_pieces/assets/map/pieces/house_with_garden.png"
+	const ROAD_BRIDGE_TEXTURE_PATH := "res://modules/base_tiles/assets/map/roads/bridge_default_new.png"
+	const HOUSE_TEXTURE_PATH := "res://modules/base_pieces/assets/map/pieces/house.png"
+	const GARDEN_TEXTURE_PATH := "res://modules/base_pieces/assets/map/pieces/garden_large.png"
 	const RESTAURANT_LOGOS := [
 		"res://modules/base_pieces/assets/map/logos/fried_geese_donkey.png",
 		"res://modules/base_pieces/assets/map/logos/gluttony_inc_burgers.png",
 		"res://modules/base_pieces/assets/map/logos/golden_duck_diner.png",
 		"res://modules/base_pieces/assets/map/logos/santa_maria_pizza.png",
 	]
+	const HOUSE_BG_COLOR := Color("#733651")
+	const GARDEN_BG_COLOR := Color("#699055")
+	const RESTAURANT_BG_COLOR := Color("#f4edd1")
+	const BOARD_EDGE_COLOR := Color("#2f261f")
+	const BOARD_SHADOW_COLOR := Color(0, 0, 0, 0.22)
 
 	var preview_state: Dictionary = {}
 	var preview_options: Dictionary = {}
@@ -54,9 +64,12 @@ class RealAssetMapPreview:
 	func _load_textures() -> void:
 		textures["ground"] = _load_texture_raw(GROUND_TEXTURE_PATH)
 		textures["road_straight"] = _load_texture_raw(ROAD_STRAIGHT_TEXTURE_PATH)
+		textures["road_corner"] = _load_texture_raw(ROAD_CORNER_TEXTURE_PATH)
+		textures["road_tee"] = _load_texture_raw(ROAD_TEE_TEXTURE_PATH)
 		textures["road_cross"] = _load_texture_raw(ROAD_CROSS_TEXTURE_PATH)
-		textures["restaurant"] = _load_texture_raw(RESTAURANT_TEXTURE_PATH)
-		textures["house_with_garden"] = _load_texture_raw(HOUSE_WITH_GARDEN_TEXTURE_PATH)
+		textures["road_bridge"] = _load_texture_raw(ROAD_BRIDGE_TEXTURE_PATH)
+		textures["house"] = _load_texture_raw(HOUSE_TEXTURE_PATH)
+		textures["garden_large"] = _load_texture_raw(GARDEN_TEXTURE_PATH)
 		for i in range(RESTAURANT_LOGOS.size()):
 			textures["logo_%d" % i] = _load_texture_raw(str(RESTAURANT_LOGOS[i]))
 
@@ -70,8 +83,8 @@ class RealAssetMapPreview:
 	func _draw() -> void:
 		_draw_cells()
 		_draw_tile_boundary()
-		_draw_houses()
 		_draw_option_overlays()
+		_draw_houses()
 		_draw_restaurants()
 		_draw_structure_preview()
 
@@ -84,25 +97,114 @@ class RealAssetMapPreview:
 					draw_texture_rect(ground, rect, false)
 				else:
 					draw_rect(rect, Color(0.95, 0.91, 0.80, 1.0), true)
-				_draw_road_if_needed(Vector2i(x, y), rect)
+				_draw_road_segments(Vector2i(x, y), rect, _get_road_segments(Vector2i(x, y)))
 				draw_rect(rect, Color(0.17, 0.13, 0.09, 0.14), false, 1.0)
 
-	func _draw_road_if_needed(pos: Vector2i, rect: Rect2) -> void:
-		var is_horizontal := pos.y == 2
-		var is_vertical := pos.x == 2 or pos.x == 7
-		if not is_horizontal and not is_vertical:
+	func _get_road_segments(pos: Vector2i) -> Array:
+		var road_map_val = preview_state.get("road_segments", {})
+		if not (road_map_val is Dictionary):
+			return []
+		var road_map: Dictionary = road_map_val
+		var segments_val = road_map.get(pos, [])
+		return segments_val if (segments_val is Array) else []
+
+	func _draw_road_segments(_pos: Vector2i, rect: Rect2, segments: Array) -> void:
+		if segments.is_empty():
 			return
-		var tex: Texture2D = textures.get("road_cross" if is_horizontal and is_vertical else "road_straight", null)
-		if tex == null:
-			draw_rect(rect.grow(-8), Color(0.42, 0.40, 0.35, 1.0), true)
-			return
-		if is_vertical and not is_horizontal:
-			var center := rect.position + rect.size * 0.5
-			draw_set_transform(center, deg_to_rad(90.0), Vector2.ONE)
-			draw_texture_rect(tex, Rect2(-rect.size * 0.5, rect.size), false)
-			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var has_bridge := false
+		for seg_val in segments:
+			if seg_val is Dictionary and bool((seg_val as Dictionary).get("bridge", false)):
+				has_bridge = true
+				break
+		var segments_to_draw: Array = []
+		if has_bridge:
+			for seg_val in segments:
+				if seg_val is Dictionary and bool((seg_val as Dictionary).get("bridge", false)):
+					segments_to_draw.append(seg_val)
 		else:
-			draw_texture_rect(tex, rect, false)
+			segments_to_draw = segments
+
+		var center := rect.position + rect.size * 0.5
+		for seg_index in range(segments_to_draw.size()):
+			var seg_val = segments_to_draw[seg_index]
+			if not (seg_val is Dictionary):
+				continue
+			var seg: Dictionary = seg_val
+			var dirs_val = seg.get("dirs", [])
+			if not (dirs_val is Array):
+				continue
+			var shape_info := _compute_road_shape_info(dirs_val)
+			if shape_info.is_empty():
+				continue
+			var shape := str(shape_info.get("shape", "straight"))
+			var tex_key := "road_bridge" if bool(seg.get("bridge", false)) else "road_%s" % shape
+			var tex: Texture2D = textures.get(tex_key, null)
+			if tex == null and shape == "end":
+				tex = textures.get("road_straight", null)
+			var margin := 0.0 if seg_index == 0 else 1.0
+			var size := rect.size - Vector2(margin * 2.0, margin * 2.0)
+			var offset := Vector2.ZERO if seg_index == 0 else Vector2(0.8, 0.8) * float(seg_index)
+			if tex == null:
+				draw_rect(Rect2(rect.position + offset, size).grow(-8), Color(0.42, 0.40, 0.35, 1.0), true)
+				continue
+			draw_set_transform(center + offset, deg_to_rad(float(shape_info.get("rotation_deg", 0))), Vector2.ONE)
+			draw_texture_rect(tex, Rect2(-size * 0.5, size), false)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+	func _compute_road_shape_info(dirs: Array) -> Dictionary:
+		if dirs.is_empty():
+			return {"shape": "straight", "rotation_deg": 0}
+		var set := {}
+		var unique: Array[String] = []
+		for dir_val in dirs:
+			var dir := str(dir_val).strip_edges()
+			if dir.is_empty() or set.has(dir):
+				continue
+			set[dir] = true
+			unique.append(dir)
+		var n := unique.size()
+		if n <= 0:
+			return {"shape": "straight", "rotation_deg": 0}
+		if n == 1:
+			match unique[0]:
+				"N":
+					return {"shape": "end", "rotation_deg": 180}
+				"S":
+					return {"shape": "end", "rotation_deg": 0}
+				"E":
+					return {"shape": "end", "rotation_deg": 270}
+				"W":
+					return {"shape": "end", "rotation_deg": 90}
+				_:
+					return {"shape": "end", "rotation_deg": 0}
+		if n == 2:
+			var a := unique[0]
+			var b := unique[1]
+			var opp := (a == "N" and b == "S") or (a == "S" and b == "N") or (a == "E" and b == "W") or (a == "W" and b == "E")
+			if opp:
+				if (a == "N" and b == "S") or (a == "S" and b == "N"):
+					return {"shape": "straight", "rotation_deg": 0}
+				return {"shape": "straight", "rotation_deg": 90}
+			if set.has("N") and set.has("E"):
+				return {"shape": "corner", "rotation_deg": 180}
+			if set.has("E") and set.has("S"):
+				return {"shape": "corner", "rotation_deg": 270}
+			if set.has("S") and set.has("W"):
+				return {"shape": "corner", "rotation_deg": 0}
+			if set.has("W") and set.has("N"):
+				return {"shape": "corner", "rotation_deg": 90}
+			return {"shape": "corner", "rotation_deg": 0}
+		if n == 3:
+			if not set.has("E"):
+				return {"shape": "tee", "rotation_deg": 0}
+			if not set.has("S"):
+				return {"shape": "tee", "rotation_deg": 90}
+			if not set.has("W"):
+				return {"shape": "tee", "rotation_deg": 180}
+			if not set.has("N"):
+				return {"shape": "tee", "rotation_deg": 270}
+			return {"shape": "tee", "rotation_deg": 0}
+		return {"shape": "cross", "rotation_deg": 0}
 
 	func _draw_tile_boundary() -> void:
 		var x := float(5 * CELL_SIZE)
@@ -142,7 +244,8 @@ class RealAssetMapPreview:
 				restaurant.get("anchor", Vector2i.ZERO),
 				int(restaurant.get("owner", 0)),
 				Color(1, 1, 1, 1),
-				true
+				true,
+				restaurant
 			)
 
 	func _draw_houses() -> void:
@@ -153,7 +256,7 @@ class RealAssetMapPreview:
 			if not (house_val is Dictionary):
 				continue
 			var house: Dictionary = house_val
-			_draw_house(house.get("anchor", Vector2i.ZERO))
+			_draw_house(house)
 
 	func _draw_structure_preview() -> void:
 		var preview_val = preview_options.get("structure_preview", null)
@@ -164,44 +267,229 @@ class RealAssetMapPreview:
 		var anchor: Vector2i = info.get("anchor", Vector2i.ZERO)
 		var owner := int(info.get("owner", 0))
 		var valid := bool(preview.get("valid", true))
-		_draw_restaurant(anchor, owner, Color(1, 1, 1, 0.72), valid)
+		_draw_restaurant(anchor, owner, Color(1, 1, 1, 0.72), valid, info)
 
-	func _draw_restaurant(anchor_val, owner: int, modulate: Color, valid: bool) -> void:
+	func _draw_restaurant(anchor_val, owner: int, modulate: Color, valid: bool, info: Dictionary) -> void:
 		var anchor: Vector2i = anchor_val if anchor_val is Vector2i else Vector2i.ZERO
-		var rect := Rect2(Vector2(anchor.x * CELL_SIZE, anchor.y * CELL_SIZE), Vector2(CELL_SIZE * 2, CELL_SIZE * 2))
-		draw_rect(Rect2(rect.position + Vector2(4, 4), rect.size), Color(0, 0, 0, 0.22 * modulate.a), true)
-		var restaurant: Texture2D = textures.get("restaurant", null)
-		if restaurant != null:
-			draw_texture_rect(restaurant, rect, false, modulate)
-		else:
-			draw_rect(rect, Color(0.96, 0.91, 0.78, 0.96 * modulate.a), true)
-		draw_rect(rect, Color(0.17, 0.13, 0.09, 0.75 * modulate.a), false, 2.0)
+		var cells := _restaurant_cells(anchor)
+		var rect := _rect_for_cells(cells)
+		_draw_board_piece_background(rect, RESTAURANT_BG_COLOR, modulate.a)
 		var logo: Texture2D = textures.get("logo_%d" % abs(owner % RESTAURANT_LOGOS.size()), null)
 		if logo != null:
-			draw_texture_rect(logo, rect.grow(-30), false, modulate)
-		_draw_entrance_marker(_cell_rect(anchor), modulate.a)
+			_draw_texture_aspect_fit(logo, rect.grow(-maxf(2.0, float(CELL_SIZE) * 0.10)), Color(1, 1, 1, 0.98 * modulate.a))
+		_draw_board_piece_surface_lines(rect, modulate.a)
+		var drive_thru := bool(info.get("drive_thru", false))
+		_draw_restaurant_entrance_marker(anchor, cells, modulate.a, drive_thru)
 		if not valid:
 			draw_rect(rect, Color(0.84, 0.12, 0.10, 0.22), true)
 			draw_rect(rect, Color(0.84, 0.12, 0.10, 0.95), false, 4.0)
 
 	func _draw_house(anchor_val) -> void:
-		var anchor: Vector2i = anchor_val if anchor_val is Vector2i else Vector2i.ZERO
-		var rect := Rect2(Vector2(anchor.x * CELL_SIZE, anchor.y * CELL_SIZE), Vector2(CELL_SIZE * 2, CELL_SIZE * 2))
-		draw_rect(Rect2(rect.position + Vector2(3, 3), rect.size), Color(0, 0, 0, 0.16), true)
-		var house: Texture2D = textures.get("house_with_garden", null)
-		if house != null:
-			draw_texture_rect(house, rect, false)
-		else:
-			draw_rect(rect, Color(0.78, 0.23, 0.18, 1.0), true)
-		draw_rect(rect, Color(0.17, 0.13, 0.09, 0.45), false, 1.5)
+		var info: Dictionary = anchor_val if (anchor_val is Dictionary) else {}
+		var anchor_val2 = info.get("anchor", anchor_val)
+		var anchor: Vector2i = anchor_val2 if anchor_val2 is Vector2i else Vector2i.ZERO
+		var house_cells := _restaurant_cells(anchor)
+		var garden_cells := _get_garden_cells(info, anchor)
+		var all_cells: Array[Vector2i] = []
+		all_cells.append_array(house_cells)
+		all_cells.append_array(garden_cells)
+		var house_rect := _rect_for_cells(house_cells)
+		var structure_rect := _rect_for_cells(all_cells)
 
-	func _draw_entrance_marker(rect: Rect2, alpha: float) -> void:
+		_draw_board_piece_shadow(structure_rect, 1.0)
+		_draw_board_piece_fill(house_rect, HOUSE_BG_COLOR, 1.0)
+		if not garden_cells.is_empty():
+			_draw_board_piece_fill(_rect_for_cells(garden_cells), GARDEN_BG_COLOR, 1.0)
+		_draw_board_piece_bevel(structure_rect, HOUSE_BG_COLOR, 1.0)
+
+		var house_tex: Texture2D = textures.get("house", null)
+		if house_tex != null:
+			var bottom_gap := maxf(2.0, float(CELL_SIZE) * 0.10)
+			var house_pad := maxf(2.0, float(CELL_SIZE) * 0.08)
+			var house_tex_rect := house_rect.grow(-house_pad)
+			house_tex_rect.size.y = maxf(0.0, house_tex_rect.size.y - bottom_gap)
+			_draw_texture_aspect_fit(house_tex, house_tex_rect, Color(1, 1, 1, 0.9), "bottom")
+		else:
+			draw_rect(house_rect.grow(-5), Color(0.78, 0.23, 0.18, 1.0), true)
+		if not garden_cells.is_empty():
+			var garden_tex: Texture2D = textures.get("garden_large", null)
+			var garden_rect := _rect_for_cells(garden_cells).grow(-maxf(2.0, float(CELL_SIZE) * 0.08))
+			if garden_tex != null:
+				if garden_rect.size.y > garden_rect.size.x:
+					_draw_texture_aspect_fit_rotated(garden_tex, garden_rect, 90.0, Color(1, 1, 1, 0.9))
+				else:
+					_draw_texture_aspect_fit(garden_tex, garden_rect, Color(1, 1, 1, 0.9))
+		_draw_board_piece_surface_lines(structure_rect, 1.0)
+		_draw_house_id(house_rect, str(info.get("house_number", info.get("house_id", ""))))
+
+	func _restaurant_cells(anchor: Vector2i) -> Array[Vector2i]:
+		return [
+			anchor,
+			anchor + Vector2i(1, 0),
+			anchor + Vector2i(0, 1),
+			anchor + Vector2i(1, 1),
+		]
+
+	func _get_garden_cells(info: Dictionary, anchor: Vector2i) -> Array[Vector2i]:
+		var raw_cells = info.get("garden_cells", [])
+		var out: Array[Vector2i] = []
+		if raw_cells is Array:
+			for cell_val in raw_cells:
+				if cell_val is Vector2i:
+					out.append(cell_val)
+			if not out.is_empty():
+				return out
+		if str(info.get("piece_id", "house")) != "house_with_garden":
+			return []
+		var dir := str(info.get("garden_dir", "E")).strip_edges()
+		match dir:
+			"W":
+				return [anchor + Vector2i(-2, 0), anchor + Vector2i(-1, 0)]
+			"N":
+				return [anchor + Vector2i(0, -1), anchor + Vector2i(1, -1)]
+			"S":
+				return [anchor + Vector2i(0, 2), anchor + Vector2i(1, 2)]
+			_:
+				return [anchor + Vector2i(2, 0), anchor + Vector2i(3, 0)]
+
+	func _rect_for_cells(cells: Array[Vector2i]) -> Rect2:
+		if cells.is_empty():
+			return Rect2()
+		var min_pos := Vector2i(2147483647, 2147483647)
+		var max_pos := Vector2i(-2147483648, -2147483648)
+		for cell_pos in cells:
+			min_pos.x = mini(min_pos.x, cell_pos.x)
+			min_pos.y = mini(min_pos.y, cell_pos.y)
+			max_pos.x = maxi(max_pos.x, cell_pos.x)
+			max_pos.y = maxi(max_pos.y, cell_pos.y)
+		var size_cells := (max_pos - min_pos) + Vector2i.ONE
+		return Rect2(Vector2(min_pos.x * CELL_SIZE, min_pos.y * CELL_SIZE), Vector2(size_cells.x * CELL_SIZE, size_cells.y * CELL_SIZE))
+
+	func _draw_board_piece_shadow(rect: Rect2, alpha: float) -> void:
+		if rect.size.x <= 1.0 or rect.size.y <= 1.0:
+			return
+		var offset := maxf(1.0, minf(6.0, float(CELL_SIZE) * 0.08))
+		var shadow := BOARD_SHADOW_COLOR
+		shadow.a *= clampf(alpha, 0.0, 1.0)
+		draw_rect(Rect2(rect.position + Vector2(offset, offset), rect.size), shadow, true)
+
+	func _draw_board_piece_fill(rect: Rect2, fill_color: Color, alpha: float) -> void:
+		if rect.size.x <= 1.0 or rect.size.y <= 1.0:
+			return
+		var face := fill_color
+		face.a = clampf(alpha, 0.0, 1.0)
+		draw_rect(rect, face, true)
+
+	func _draw_board_piece_bevel(rect: Rect2, fill_color: Color, alpha: float) -> void:
+		if rect.size.x <= 1.0 or rect.size.y <= 1.0:
+			return
+		var a := clampf(alpha, 0.0, 1.0)
+		var edge := maxf(1.0, minf(5.0, float(CELL_SIZE) * 0.07))
+		var highlight := fill_color.lightened(0.26)
+		highlight.a = 0.48 * a
+		var shade := Color("#4b3828")
+		shade.a = 0.50 * a
+		draw_rect(Rect2(rect.position, Vector2(rect.size.x, edge)), highlight, true)
+		draw_rect(Rect2(rect.position, Vector2(edge, rect.size.y)), highlight, true)
+		draw_rect(Rect2(rect.position + Vector2(rect.size.x - edge, 0.0), Vector2(edge, rect.size.y)), shade, true)
+		draw_rect(Rect2(rect.position + Vector2(0.0, rect.size.y - edge), Vector2(rect.size.x, edge)), shade, true)
+
+	func _draw_board_piece_background(rect: Rect2, fill_color: Color, alpha: float) -> void:
+		_draw_board_piece_shadow(rect, alpha)
+		_draw_board_piece_fill(rect, fill_color, alpha)
+		_draw_board_piece_bevel(rect, fill_color, alpha)
+
+	func _draw_board_piece_surface_lines(rect: Rect2, alpha: float) -> void:
+		if rect.size.x <= 1.0 or rect.size.y <= 1.0:
+			return
+		var border := BOARD_EDGE_COLOR
+		border.a = 0.82 * clampf(alpha, 0.0, 1.0)
+		draw_rect(rect, border, false, maxf(1.0, minf(3.0, float(CELL_SIZE) * 0.045)))
+
+	func _draw_texture_aspect_fit(texture: Texture2D, rect: Rect2, modulate: Color = Color(1, 1, 1, 1), v_align: String = "center") -> void:
+		if texture == null or rect.size.x <= 0.0 or rect.size.y <= 0.0:
+			return
+		var tex_size := texture.get_size()
+		if tex_size.x <= 0.0 or tex_size.y <= 0.0:
+			return
+		var scale := minf(rect.size.x / tex_size.x, rect.size.y / tex_size.y)
+		var size := tex_size * scale
+		var pos := rect.position + (rect.size - size) * 0.5
+		if v_align == "top":
+			pos.y = rect.position.y
+		elif v_align == "bottom":
+			pos.y = rect.position.y + rect.size.y - size.y
+		draw_texture_rect(texture, Rect2(pos, size), false, modulate)
+
+	func _draw_texture_aspect_fit_rotated(texture: Texture2D, rect: Rect2, rotation_degrees: float, modulate: Color = Color(1, 1, 1, 1)) -> void:
+		if texture == null or rect.size.x <= 0.0 or rect.size.y <= 0.0:
+			return
+		var tex_size := texture.get_size()
+		if tex_size.x <= 0.0 or tex_size.y <= 0.0:
+			return
+		var effective_size := Vector2(tex_size.y, tex_size.x)
+		var scale := minf(rect.size.x / effective_size.x, rect.size.y / effective_size.y)
+		var size := tex_size * scale
+		var center := rect.position + rect.size * 0.5
+		draw_set_transform(center, deg_to_rad(rotation_degrees), Vector2.ONE)
+		draw_texture_rect(texture, Rect2(-size * 0.5, size), false, modulate)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+	func _draw_house_id(house_rect: Rect2, text: String) -> void:
+		var label := str(text).strip_edges()
+		if label.is_empty():
+			return
+		var pad := maxf(3.0, float(CELL_SIZE) * 0.10)
+		var label_rect := Rect2(
+			house_rect.position + Vector2(house_rect.size.x - float(CELL_SIZE) * 0.90 - pad, pad),
+			Vector2(float(CELL_SIZE) * 0.90, float(CELL_SIZE) * 0.58)
+		)
+		var bg := Color(0, 0, 0, 0.48)
+		draw_rect(label_rect, bg, true)
+		var font: Font = ThemeDB.fallback_font
+		var font_size := maxi(11, int(round(float(CELL_SIZE) * 0.34)))
+		var baseline := label_rect.position + Vector2(0.0, label_rect.size.y - maxf(3.0, float(CELL_SIZE) * 0.12))
+		draw_string(font, baseline + Vector2(1, 1), label, HORIZONTAL_ALIGNMENT_RIGHT, label_rect.size.x, font_size, Color(0, 0, 0, 0.85))
+		draw_string(font, baseline, label, HORIZONTAL_ALIGNMENT_RIGHT, label_rect.size.x, font_size, Color(1, 1, 1, 1))
+
+	func _draw_restaurant_entrance_marker(anchor: Vector2i, cells: Array[Vector2i], alpha: float, drive_thru: bool) -> void:
+		if cells.is_empty():
+			return
+		if drive_thru:
+			for cell_pos in cells:
+				_draw_entrance_l_marker(cell_pos, cells, alpha)
+			return
+		_draw_entrance_l_marker(anchor, cells, alpha)
+
+	func _draw_entrance_l_marker(entrance_view: Vector2i, cells: Array[Vector2i], alpha: float) -> void:
+		var min_pos := Vector2i(2147483647, 2147483647)
+		var max_pos := Vector2i(-2147483648, -2147483648)
+		for cell_pos in cells:
+			min_pos.x = mini(min_pos.x, cell_pos.x)
+			min_pos.y = mini(min_pos.y, cell_pos.y)
+			max_pos.x = maxi(max_pos.x, cell_pos.x)
+			max_pos.y = maxi(max_pos.y, cell_pos.y)
+		var rect := _cell_rect(entrance_view)
 		var col := Color(0, 0, 0, 0.88 * alpha)
-		var pad := 8.0
-		var length := 18.0
-		var thickness := 4.0
-		draw_rect(Rect2(rect.position + Vector2(pad, pad), Vector2(length, thickness)), col, true)
-		draw_rect(Rect2(rect.position + Vector2(pad, pad), Vector2(thickness, length)), col, true)
+		var pad := maxf(2.0, float(CELL_SIZE) * 0.12)
+		var thickness := maxf(1.0, float(CELL_SIZE) * 0.06)
+		var length := float(CELL_SIZE) * 0.32
+		var is_left := entrance_view.x <= min_pos.x
+		var is_right := entrance_view.x >= max_pos.x
+		var is_top := entrance_view.y <= min_pos.y
+		var is_bottom := entrance_view.y >= max_pos.y
+		if is_top and is_left:
+			draw_rect(Rect2(rect.position + Vector2(pad, pad), Vector2(length, thickness)), col, true)
+			draw_rect(Rect2(rect.position + Vector2(pad, pad), Vector2(thickness, length)), col, true)
+		elif is_top and is_right:
+			draw_rect(Rect2(rect.position + Vector2(rect.size.x - pad - length, pad), Vector2(length, thickness)), col, true)
+			draw_rect(Rect2(rect.position + Vector2(rect.size.x - pad - thickness, pad), Vector2(thickness, length)), col, true)
+		elif is_bottom and is_left:
+			draw_rect(Rect2(rect.position + Vector2(pad, rect.size.y - pad - thickness), Vector2(length, thickness)), col, true)
+			draw_rect(Rect2(rect.position + Vector2(pad, rect.size.y - pad - length), Vector2(thickness, length)), col, true)
+		elif is_bottom and is_right:
+			draw_rect(Rect2(rect.position + Vector2(rect.size.x - pad - length, rect.size.y - pad - thickness), Vector2(length, thickness)), col, true)
+			draw_rect(Rect2(rect.position + Vector2(rect.size.x - pad - thickness, rect.size.y - pad - length), Vector2(thickness, length)), col, true)
 
 	func _cell_rect(pos: Vector2i) -> Rect2:
 		return Rect2(Vector2(pos.x * CELL_SIZE, pos.y * CELL_SIZE), Vector2(CELL_SIZE, CELL_SIZE))
@@ -209,48 +497,21 @@ class RealAssetMapPreview:
 const LESSONS := [
 	{
 		"id": "reserve_bank",
-		"title": "1. 储备卡、银行和正式局目标",
+		"title": "1. 储备卡与银行",
 		"kicker": "开局 Setup",
-		"summary": "开局选择储备卡不是获得现金，而是在银行第一次破产时决定备用规则。正式规则通常在第二次破产后的晚餐结束时终局。",
-		"goals": [
-			"阅读三张储备卡效果",
-			"确认选择后不可更改",
-			"看到第一次破产继续游戏，第二次破产结束游戏",
-		],
+		"summary": "储备卡是开局暗选的保险，不是立刻获得的现金。银行第一次破产时会揭示所有玩家已选储备卡，按卡面注资，并决定之后公司结构可用的 CEO 槽位。",
 	},
 	{
 		"id": "initial_restaurant",
 		"title": "2. 起始餐厅放置",
 		"kicker": "入口与板块",
 		"summary": "起始餐厅必须入口邻接道路；起始放置阶段还要求每个地图板块最多只有一个餐厅入口。这个限制看入口所在板块，不看整个餐厅占地。",
-		"goals": [
-			"识别餐厅占地和入口角",
-			"看到入口不邻接道路的非法原因",
-			"看到入口所在板块冲突的非法原因",
-			"完成一个入口邻路且入口板块不冲突的合法放置",
-		],
 	},
 	{
 		"id": "distance",
 		"title": "3. 距离不是格子数",
 		"kicker": "地图距离",
 		"summary": "游戏里的道路距离以跨越地图板块边界的次数为主。道路步数只是辅助信息，不等于晚餐选店里使用的距离。",
-		"goals": [
-			"比较同板块长路线和跨板块短路线",
-			"看到同板块内绕路仍可能距离为 0",
-			"看到跨过板块边界后距离增加",
-		],
-	},
-	{
-		"id": "bankruptcy",
-		"title": "4. 第一次破产与第二次破产",
-		"kicker": "经济终局",
-		"summary": "银行支付不足或支付后刚好耗尽会触发破产。第一次破产揭示储备卡并注资；第二次破产允许透支完成当前晚餐，然后跳过 Payday 进入终局。",
-		"goals": [
-			"触发第一次破产并查看储备卡揭示",
-			"确认第一次破产不是游戏结束",
-			"触发第二次破产并看到晚餐后终局",
-		],
 	},
 ]
 
@@ -265,13 +526,11 @@ var _lesson_buttons: Array[Button] = []
 
 var _selected_lesson: int = 0
 var _selected_reserve_index: int = 1
-var _reserve_break_revealed: bool = false
 var _placement_case: String = "no_road"
 var _distance_case: String = "same_board"
-var _bankruptcy_step: int = 0
 
 func _ready() -> void:
-	GameLog.info("TutorialCampaign", "教学战役已加载")
+	GameLog.info("TutorialCampaign", "游戏介绍已加载")
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, 0)
 	_build_shell()
 	_select_lesson(0)
@@ -328,13 +587,13 @@ func _build_sidebar_panel() -> Control:
 	pad.add_child(_sidebar)
 
 	var title := Label.new()
-	title.text = "教学战役"
+	title.text = "游戏介绍"
 	title.add_theme_font_size_override("font_size", 28)
 	UiStylesClass.apply_label_dark(title)
 	_sidebar.add_child(title)
 
 	var hint := Label.new()
-	hint.text = "前四关原型"
+	hint.text = "规则说明"
 	hint.add_theme_font_size_override("font_size", 15)
 	UiStylesClass.apply_label_hint_dark(hint)
 	_sidebar.add_child(hint)
@@ -345,7 +604,7 @@ func _build_sidebar_panel() -> Control:
 	for i in range(LESSONS.size()):
 		var lesson: Dictionary = LESSONS[i]
 		var btn := Button.new()
-		btn.text = str(lesson.get("title", "关卡"))
+		btn.text = str(lesson.get("title", "章节"))
 		btn.custom_minimum_size = Vector2(0, 48)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -415,7 +674,7 @@ func _build_content_panel() -> Control:
 	vbox.add_child(nav)
 
 	_prev_button = Button.new()
-	_prev_button.text = "上一关"
+	_prev_button.text = "上一节"
 	_prev_button.custom_minimum_size = Vector2(140, 44)
 	_prev_button.pressed.connect(_on_prev_pressed)
 	UiStylesClass.apply_button_secondary(_prev_button)
@@ -426,7 +685,7 @@ func _build_content_panel() -> Control:
 	nav.add_child(nav_spacer)
 
 	_next_button = Button.new()
-	_next_button.text = "下一关"
+	_next_button.text = "下一节"
 	_next_button.custom_minimum_size = Vector2(140, 44)
 	_next_button.pressed.connect(_on_next_pressed)
 	UiStylesClass.apply_button_primary(_next_button)
@@ -440,9 +699,9 @@ func _select_lesson(index: int) -> void:
 		var btn := _lesson_buttons[i]
 		btn.disabled = i == _selected_lesson
 		if i == _selected_lesson:
-			btn.text = "▶ %s" % str(LESSONS[i].get("title", "关卡"))
+			btn.text = "▶ %s" % str(LESSONS[i].get("title", "章节"))
 		else:
-			btn.text = str(LESSONS[i].get("title", "关卡"))
+			btn.text = str(LESSONS[i].get("title", "章节"))
 	_render_lesson()
 
 func _render_lesson() -> void:
@@ -454,7 +713,6 @@ func _render_lesson() -> void:
 	_next_button.disabled = _selected_lesson >= LESSONS.size() - 1
 
 	_clear_content_body()
-	_add_goals_card(Array(lesson.get("goals", [])))
 	match str(lesson.get("id", "")):
 		"reserve_bank":
 			_render_reserve_lesson()
@@ -462,21 +720,11 @@ func _render_lesson() -> void:
 			_render_initial_restaurant_lesson()
 		"distance":
 			_render_distance_lesson()
-		"bankruptcy":
-			_render_bankruptcy_lesson()
 
 func _clear_content_body() -> void:
 	for child in _content_body.get_children():
 		_content_body.remove_child(child)
 		child.queue_free()
-
-func _add_goals_card(goals: Array) -> void:
-	var card := _make_section("本关目标")
-	var text := ""
-	for i in range(goals.size()):
-		text += "%d. %s\n" % [i + 1, str(goals[i])]
-	card.add_child(_make_rich_text(text.strip_edges(), 110))
-	_content_body.add_child(card)
 
 func _render_reserve_lesson() -> void:
 	var card := _make_section("储备卡选择")
@@ -493,18 +741,11 @@ func _render_reserve_lesson() -> void:
 
 	var selected_details := _describe_reserve_card(_selected_reserve_index)
 	card.add_child(_make_label(
-		"当前选择：%s。确认后不可更改；它不会立刻给你现金。" % str(selected_details.get("summary", "")),
+		"示例选择：%s。储备卡在开局暗选，确认后不可更改；它不会立刻给你现金。" % str(selected_details.get("summary", "")),
 		15,
 		UiStylesClass.COLOR_TEXT_PRIMARY
 	))
-	var demo_button := Button.new()
-	demo_button.text = "演示第一次破产揭示"
-	demo_button.custom_minimum_size = Vector2(240, 44)
-	demo_button.pressed.connect(_on_reveal_reserve_break_pressed)
-	UiStylesClass.apply_button_primary(demo_button)
-	card.add_child(demo_button)
-	if _reserve_break_revealed:
-		card.add_child(_build_bank_break_preview(1, 15, 165, _build_first_break_event_data()))
+	card.add_child(_build_first_bankruptcy_case_card())
 	_content_body.add_child(card)
 
 func _render_initial_restaurant_lesson() -> void:
@@ -532,35 +773,9 @@ func _render_distance_lesson() -> void:
 	var preview_state = _build_distance_preview_state(_distance_case)
 	card.add_child(_build_real_map_preview(preview_state, _build_distance_preview_options(_distance_case)))
 	if _distance_case == "same_board":
-		card.add_child(_make_rich_text("同板块长路线：道路步数 8，但没有跨过地图板块边界，所以规则距离 = 0。\n\n这就是为什么距离不能理解成格子数。晚餐选店使用的是跨板块次数。", 130))
+		card.add_child(_make_rich_text("同板块路线：示意路径都留在左侧板块内，没有跨过地图板块边界，所以规则距离 = 0。\n\n这就是为什么距离不能理解成格子数。晚餐选店使用的是跨板块次数。", 130))
 	else:
-		card.add_child(_make_rich_text("跨板块短路线：道路步数 3，但路径穿过 1 次板块边界，所以规则距离 = 1。\n\n如果两家餐厅价格相同，这 1 点距离就可能改变房屋选择。", 130))
-	_content_body.add_child(card)
-
-func _render_bankruptcy_lesson() -> void:
-	var card := _make_section("破产流程演示")
-	card.add_child(_make_label(_get_bankruptcy_status_text(), 16, UiStylesClass.COLOR_TEXT_PRIMARY))
-	if _bankruptcy_step >= 4:
-		card.add_child(_build_bank_break_preview(2, 5, -25, _build_second_break_event_data()))
-	elif _bankruptcy_step >= 2:
-		card.add_child(_build_bank_break_preview(1, 15, 165, _build_first_break_event_data()))
-	card.add_child(_build_bankruptcy_timeline())
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	var reset := Button.new()
-	reset.text = "重置"
-	reset.custom_minimum_size = Vector2(120, 42)
-	reset.pressed.connect(_on_bankruptcy_reset_pressed)
-	UiStylesClass.apply_button_secondary(reset)
-	row.add_child(reset)
-	var next := Button.new()
-	next.text = "推进一步"
-	next.custom_minimum_size = Vector2(160, 42)
-	next.disabled = _bankruptcy_step >= 4
-	next.pressed.connect(_on_bankruptcy_next_pressed)
-	UiStylesClass.apply_button_primary(next)
-	row.add_child(next)
-	card.add_child(row)
+		card.add_child(_make_rich_text("跨板块路线：示意路径穿过左、右两个板块之间的边界 1 次，所以规则距离 = 1。\n\n如果两家餐厅价格相同，这 1 点距离就可能改变房屋选择。", 130))
 	_content_body.add_child(card)
 
 func _get_reserve_cards() -> Array[Dictionary]:
@@ -587,8 +802,8 @@ func _describe_reserve_card_data(card_data: Dictionary, index: int) -> Dictionar
 		return {
 			"index": index,
 			"title": "已选储备卡",
-			"desc": "首次破产注资：+$%d\n首次破产后 CEO 卡槽：%d" % [cash, slots],
-			"summary": "选项#%d，首次破产注资 $%d，CEO 槽位 %d" % [index + 1, cash, slots],
+			"desc": "首次破产注资：+$%d\n候选 CEO 直属槽位：%d" % [cash, slots],
+			"summary": "选项#%d，首次破产注资 $%d，候选 CEO 直属槽位 %d" % [index + 1, cash, slots],
 			"image_path": "res://assets/images/reserve_cards/reserve_%d.png" % (index + 2),
 		}
 	var price := int(card_data.get("type", 0))
@@ -606,9 +821,7 @@ func _build_reserve_card_choice(card_data: Dictionary, index: int, selected: boo
 	panel.name = "ReserveCardChoice%d" % (index + 1)
 	panel.custom_minimum_size = Vector2(190, 0)
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	panel.gui_input.connect(_on_reserve_card_choice_input.bind(index))
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var border := Color(0.17, 0.13, 0.09, 0.24)
 	var border_width := 1
 	if selected:
@@ -665,98 +878,133 @@ func _build_reserve_card_art(image_path: String) -> Control:
 	frame.add_child(image)
 	return frame
 
-func _build_first_break_event_data() -> Dictionary:
-	var self_card := _get_reserve_card(_selected_reserve_index)
-	var opponent_index := 1
-	if opponent_index == _selected_reserve_index and _get_reserve_cards().size() > 2:
-		opponent_index = 2
-	var opponent_card := _get_reserve_card(opponent_index)
-	var self_cash := int(self_card.get("cash", 0))
-	var opponent_cash := int(opponent_card.get("cash", 0))
-	if self_cash <= 0:
-		self_cash = int(self_card.get("type", 0))
-	if opponent_cash <= 0:
-		opponent_cash = int(opponent_card.get("type", 0))
-	return {
-		"kind": "first",
-		"max_breaks": 2,
-		"bank_total_before": 15,
-		"bank_total_after": 15 + self_cash + opponent_cash,
-		"reserve_added": self_cash + opponent_cash,
-		"required_payment": 20,
-		"trigger_reason": "房屋购买需要 $20，但银行只有 $15",
-		"revealed_cards": [
-			{"player_id": 0, "selected_index": _selected_reserve_index, "card": self_card},
-			{"player_id": 1, "selected_index": opponent_index, "card": opponent_card},
-		],
-	}
-
-func _build_second_break_event_data() -> Dictionary:
-	return {
-		"kind": "second",
-		"max_breaks": 2,
-		"bank_total_before": 5,
-		"bank_total_after": -25,
-		"required_payment": 30,
-		"trigger_reason": "银行第二次无法覆盖当前晚餐支付",
-	}
-
-func _build_bank_break_preview(count: int, bank_before: int, bank_after: int, event_data: Dictionary) -> Control:
-	var frame := PanelContainer.new()
-	frame.name = "BankBreakPreviewFrame"
-	frame.custom_minimum_size = Vector2(560, 360)
-	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	frame.add_theme_stylebox_override("panel", _make_style(Color(0.10, 0.08, 0.06, 0.18), Color(0.17, 0.13, 0.09, 0.20), 1, 6))
-	frame.add_child(_build_bank_break_fallback(count, bank_before, bank_after, event_data))
-	return frame
-
-func _build_bank_break_fallback(count: int, bank_before: int, bank_after: int, event_data: Dictionary) -> Control:
+func _build_first_bankruptcy_case_card() -> Control:
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 22)
 	margin.add_theme_constant_override("margin_top", 22)
 	margin.add_theme_constant_override("margin_right", 22)
 	margin.add_theme_constant_override("margin_bottom", 22)
+
+	var frame := PanelContainer.new()
+	frame.name = "FirstBankruptcyCaseFrame"
+	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	frame.add_theme_stylebox_override("panel", _make_style(Color(0.95, 0.89, 0.76, 0.92), Color(0.17, 0.13, 0.09, 0.24), 1, 6))
+	frame.add_child(margin)
+
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 10)
 	margin.add_child(vbox)
-	var title := _make_label("银行%s破产" % ("二次" if count >= 2 else "首次"), 22, UiStylesClass.COLOR_TEXT_PRIMARY)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title)
-	var details := "破产前银行余额：$%d\n破产后银行余额：$%d\n累计破产次数：%d / %d" % [
-		bank_before,
-		bank_after,
-		count,
-		int(event_data.get("max_breaks", 2)),
-	]
-	var reason := str(event_data.get("trigger_reason", "")).strip_edges()
-	if not reason.is_empty():
-		details += "\n触发原因：%s" % reason
-	vbox.add_child(_make_rich_text(details, 140))
-	return margin
 
-func _build_restaurant_preview_state(case_id: String):
-	return {
-		"restaurants": [
-			{"restaurant_id": "rest_demo_opponent", "owner": 1, "anchor": Vector2i(0, 0)},
-		],
-		"houses": [
-			{"house_id": "house_demo_left", "anchor": Vector2i(0, 3)},
-			{"house_id": "house_demo_right", "anchor": Vector2i(8, 0)},
-		],
+	var title := _make_label("案例：第一次破产后发生什么", 20, UiStylesClass.COLOR_TEXT_PRIMARY)
+	vbox.add_child(title)
+
+	var details := "假设银行只剩 $15，但当前晚餐需要向玩家支付 $20：\n"
+	details += "1. 银行余额不足，触发第一次破产。\n"
+	details += "2. 所有玩家翻开开局暗选的储备卡；甲选择选项 2，注资 $100，候选 CEO 直属槽位为 3；乙选择选项 3，注资 $150，候选 CEO 直属槽位为 4。\n"
+	details += "3. 银行先获得 $250 注资，余额变为 $265，然后继续完成当前支付；游戏不会在第一次破产时结束。\n"
+	details += "4. 之后重组公司结构时，全局采用最终 CEO 直属槽位。多人局按所有已选储备卡的槽位投票；票数相同采用更大的槽位，所以本例最终生效槽位为 4。\n"
+	details += "5. 如果之后银行第二次破产，仍会完成当前晚餐结算；晚餐结束后跳过 Payday，并进入游戏结束。"
+	vbox.add_child(_make_rich_text(details, 140))
+
+	var slot_note := _make_label(
+		"槽位的作用：CEO 直属槽位决定 CEO 下面能直接放多少个员工或经理。区域经理、大区经理等经理员工再提供自己的下级槽位；免下车服务等能力也要依附在这套公司结构里生效。",
+		15,
+		UiStylesClass.COLOR_TEXT_MUTED
+	)
+	vbox.add_child(slot_note)
+	return frame
+
+func _build_preview_map_state(tile_ids: Array = []) -> Dictionary:
+	var ids := tile_ids.duplicate()
+	if ids.is_empty():
+		ids = ["tile_a", "tile_b"]
+	var state := {
+		"road_segments": {},
+		"houses": [],
+		"restaurants": [],
 	}
+	for i in range(ids.size()):
+		_apply_preview_tile(state, str(ids[i]), Vector2i(i * TILE_SIZE, 0))
+	return state
+
+func _apply_preview_tile(state: Dictionary, tile_id: String, origin: Vector2i) -> void:
+	var tile_data := _load_json_dict(TILE_CONTENT_PATH_TEMPLATE % tile_id)
+	if tile_data.is_empty():
+		return
+
+	var road_map: Dictionary = state.get("road_segments", {})
+	var road_rows_val = tile_data.get("road_segments", [])
+	if road_rows_val is Array:
+		var road_rows: Array = road_rows_val
+		for y in range(road_rows.size()):
+			var row_val = road_rows[y]
+			if not (row_val is Array):
+				continue
+			var row: Array = row_val
+			for x in range(row.size()):
+				var segments_val = row[x]
+				if not (segments_val is Array):
+					continue
+				var segments: Array = segments_val
+				if segments.is_empty():
+					continue
+				road_map[origin + Vector2i(x, y)] = segments.duplicate(true)
+	state["road_segments"] = road_map
+
+	var houses: Array = state.get("houses", [])
+	var structures_val = tile_data.get("printed_structures", [])
+	if structures_val is Array:
+		for structure_val in structures_val:
+			if not (structure_val is Dictionary):
+				continue
+			var structure: Dictionary = (structure_val as Dictionary).duplicate(true)
+			var piece_id := str(structure.get("piece_id", "")).strip_edges()
+			if piece_id != "house" and piece_id != "house_with_garden":
+				continue
+			var local_anchor := _variant_to_vector2i(structure.get("anchor", [0, 0]))
+			structure["anchor"] = origin + local_anchor
+			houses.append(structure)
+	state["houses"] = houses
+
+func _load_json_dict(path: String) -> Dictionary:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return {}
+	var parsed = JSON.parse_string(file.get_as_text())
+	file.close()
+	return parsed if parsed is Dictionary else {}
+
+func _variant_to_vector2i(value) -> Vector2i:
+	if value is Vector2i:
+		return value
+	if value is Vector2:
+		var vec2: Vector2 = value
+		return Vector2i(int(vec2.x), int(vec2.y))
+	if value is Array:
+		var arr: Array = value
+		if arr.size() >= 2:
+			return Vector2i(int(arr[0]), int(arr[1]))
+	return Vector2i.ZERO
+
+func _build_restaurant_preview_state(_case_id: String) -> Dictionary:
+	var state := _build_preview_map_state()
+	var restaurants: Array = state.get("restaurants", [])
+	restaurants.append({"restaurant_id": "rest_demo_opponent", "owner": 1, "anchor": Vector2i(3, 3)})
+	state["restaurants"] = restaurants
+	return state
 
 func _build_restaurant_preview_options(case_id: String) -> Dictionary:
-	var preview_anchor := Vector2i(5, 3)
+	var preview_anchor := Vector2i(8, 3)
 	var valid := true
 	match case_id:
 		"no_road":
 			preview_anchor = Vector2i(5, 0)
 			valid = false
 		"same_board":
-			preview_anchor = Vector2i(3, 3)
+			preview_anchor = Vector2i(0, 3)
 			valid = false
 		_:
-			preview_anchor = Vector2i(5, 3)
+			preview_anchor = Vector2i(8, 3)
 			valid = true
 	var cells := _restaurant_cells_for_anchor(preview_anchor, 0)
 	return {
@@ -783,27 +1031,17 @@ func _build_restaurant_preview_options(case_id: String) -> Dictionary:
 		],
 	}
 
-func _build_distance_preview_state(case_id: String):
+func _build_distance_preview_state(case_id: String) -> Dictionary:
+	var state := _build_preview_map_state()
+	var restaurants: Array = state.get("restaurants", [])
 	if case_id == "same_board":
-		return {
-			"restaurants": [
-				{"restaurant_id": "rest_distance_a", "owner": 0, "anchor": Vector2i(0, 0)},
-				{"restaurant_id": "rest_distance_b", "owner": 1, "anchor": Vector2i(3, 3)},
-			],
-			"houses": [
-				{"house_id": "house_distance_right", "anchor": Vector2i(8, 0)},
-			],
-		}
-	return {
-		"restaurants": [
-			{"restaurant_id": "rest_distance_a", "owner": 0, "anchor": Vector2i(3, 3)},
-			{"restaurant_id": "rest_distance_b", "owner": 1, "anchor": Vector2i(5, 3)},
-		],
-		"houses": [
-			{"house_id": "house_distance_left", "anchor": Vector2i(0, 0)},
-			{"house_id": "house_distance_right", "anchor": Vector2i(8, 0)},
-		],
-	}
+		restaurants.append({"restaurant_id": "rest_distance_a", "owner": 0, "anchor": Vector2i(0, 3)})
+		restaurants.append({"restaurant_id": "rest_distance_b", "owner": 1, "anchor": Vector2i(3, 3)})
+	else:
+		restaurants.append({"restaurant_id": "rest_distance_a", "owner": 0, "anchor": Vector2i(3, 3)})
+		restaurants.append({"restaurant_id": "rest_distance_b", "owner": 1, "anchor": Vector2i(8, 3)})
+	state["restaurants"] = restaurants
+	return state
 
 func _build_distance_preview_options(case_id: String) -> Dictionary:
 	var path: Array[Vector2i] = []
@@ -812,18 +1050,18 @@ func _build_distance_preview_options(case_id: String) -> Dictionary:
 			Vector2i(0, 2),
 			Vector2i(1, 2),
 			Vector2i(2, 2),
-			Vector2i(3, 2),
-			Vector2i(4, 2),
-			Vector2i(4, 3),
-			Vector2i(4, 4),
-			Vector2i(3, 4),
-			Vector2i(3, 3),
+			Vector2i(2, 3),
 		]
 	else:
 		path = [
+			Vector2i(2, 3),
+			Vector2i(2, 2),
 			Vector2i(3, 2),
 			Vector2i(4, 2),
 			Vector2i(5, 2),
+			Vector2i(6, 2),
+			Vector2i(7, 2),
+			Vector2i(7, 3),
 		]
 	return {
 		"highlights": path,
@@ -887,53 +1125,6 @@ func _build_real_map_preview(state, options: Dictionary) -> Control:
 	preview.setup(state if state is Dictionary else {}, options)
 	center.add_child(preview)
 	return frame
-
-func _build_bankruptcy_timeline() -> Control:
-	var timeline := VBoxContainer.new()
-	timeline.add_theme_constant_override("separation", 8)
-	var items := [
-		{"title": "初始状态", "body": "银行 $15，下一笔房屋销售需要支付 $20。", "active": _bankruptcy_step >= 0},
-		{"title": "第一笔销售", "body": "银行余额不足以支付 $20，触发第一次破产。", "active": _bankruptcy_step >= 1},
-		{"title": "首次破产", "body": "揭示储备卡并注资 $150，支付完成后继续游戏。", "active": _bankruptcy_step >= 2},
-		{"title": "第二笔销售", "body": "演示用银行压到 $5，再支付 $30，触发第二次破产。", "active": _bankruptcy_step >= 3},
-		{"title": "终局", "body": "银行可透支完成当前晚餐，晚餐结束后跳过 Payday 并进入游戏结束面板。", "active": _bankruptcy_step >= 4},
-	]
-	for i in range(items.size()):
-		var item: Dictionary = items[i]
-		var row := PanelContainer.new()
-		var bg := Color(0.91, 0.86, 0.74, 1.0)
-		var border := Color(0.17, 0.13, 0.09, 0.22)
-		if bool(item.get("active", false)):
-			bg = Color(0.94, 0.88, 0.70, 1.0)
-			border = Color(0.73, 0.23, 0.18, 0.65)
-		row.add_theme_stylebox_override("panel", _make_style(bg, border, 2, 6))
-		var margin := MarginContainer.new()
-		margin.add_theme_constant_override("margin_left", 12)
-		margin.add_theme_constant_override("margin_top", 8)
-		margin.add_theme_constant_override("margin_right", 12)
-		margin.add_theme_constant_override("margin_bottom", 8)
-		row.add_child(margin)
-		var label := Label.new()
-		label.text = "%d. %s\n%s" % [i + 1, str(item.get("title", "")), str(item.get("body", ""))]
-		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		label.add_theme_font_size_override("font_size", 15)
-		UiStylesClass.apply_label_dark(label)
-		margin.add_child(label)
-		timeline.add_child(row)
-	return timeline
-
-func _get_bankruptcy_status_text() -> String:
-	match _bankruptcy_step:
-		0:
-			return "银行：$15。准备结算第一栋房屋，需支付 $20。"
-		1:
-			return "银行不足，第一次破产触发。接下来会揭示储备卡并注资。"
-		2:
-			return "第一次破产完成：注资后支付继续，游戏没有结束。"
-		3:
-			return "第二笔销售示例：银行再次不足，触发第二次破产。"
-		_:
-			return "第二次破产完成：银行透支支付当前晚餐，之后跳过 Payday 并结束游戏。"
 
 func _get_placement_explanation(case_id: String) -> String:
 	match case_id:
@@ -1003,35 +1194,12 @@ func _make_style(bg: Color, border: Color, width: int = 1, radius: int = 6) -> S
 	style.corner_radius_bottom_right = radius
 	return style
 
-func _on_reserve_card_choice_input(event: InputEvent, index: int) -> void:
-	if event is InputEventMouseButton:
-		var mouse_event := event as InputEventMouseButton
-		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed:
-			_on_reserve_card_selected(index)
-
-func _on_reserve_card_selected(index: int) -> void:
-	_selected_reserve_index = clampi(index, 0, _get_reserve_cards().size() - 1)
-	_reserve_break_revealed = false
-	_render_lesson()
-
-func _on_reveal_reserve_break_pressed() -> void:
-	_reserve_break_revealed = true
-	_render_lesson()
-
 func _on_placement_case_selected(case_id: String) -> void:
 	_placement_case = case_id
 	_render_lesson()
 
 func _on_distance_case_selected(case_id: String) -> void:
 	_distance_case = case_id
-	_render_lesson()
-
-func _on_bankruptcy_next_pressed() -> void:
-	_bankruptcy_step = mini(4, _bankruptcy_step + 1)
-	_render_lesson()
-
-func _on_bankruptcy_reset_pressed() -> void:
-	_bankruptcy_step = 0
 	_render_lesson()
 
 func _on_prev_pressed() -> void:

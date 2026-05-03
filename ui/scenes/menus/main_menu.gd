@@ -136,7 +136,7 @@ func _on_rules_tutorial_pressed() -> void:
 	SceneManager.goto_game_setup()
 
 func _on_tutorial_campaign_pressed() -> void:
-	GameLog.info("MainMenu", "点击教学战役")
+	GameLog.info("MainMenu", "点击游戏介绍")
 	if Globals != null and Globals.has_method("clear_tutorial_runtime_flags"):
 		Globals.clear_tutorial_runtime_flags()
 	SceneManager.goto_tutorial_campaign()
