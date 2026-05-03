@@ -749,6 +749,30 @@ const LESSONS := [
 		"kicker": "谁负责什么",
 		"summary": "员工的作用由公司结构、员工标签和阶段共同决定。经理负责扩展槽位；厨师生产食物；采购员拿饮料；营销员投广告；区域经理和大区经理负责开店，并会让你的餐厅获得免下车服务。",
 	},
+	{
+		"id": "round_flow",
+		"title": "9. 一轮如何推进",
+		"kicker": "阶段顺序",
+		"summary": "每轮不是所有行动混在一起做，而是先重组公司，再决定商业秩序，然后依次进入 Working 的各个子阶段，最后由晚餐、发薪、营销和清理收尾。",
+	},
+	{
+		"id": "recruit_train_payday",
+		"title": "10. 招聘、培训与薪水",
+		"kicker": "员工成长",
+		"summary": "招聘只能直接拿入门员工，高级员工通常靠培训链升级。带薪员工会在 Payday 产生薪水压力，招聘经理和人力资源总监未用掉的招聘次数会转化为薪水折扣。",
+	},
+	{
+		"id": "inventory",
+		"title": "11. 生产、采购与库存",
+		"kicker": "供应链",
+		"summary": "晚餐销售必须先有库存。厨师生产汉堡或披萨，采购员工取得饮料；库存保留到晚餐后，Cleanup 默认会清空没有冰箱保护的食物和饮料。",
+	},
+	{
+		"id": "milestones",
+		"title": "12. 里程碑与终局",
+		"kicker": "长期加成",
+		"summary": "里程碑由事件触发，提供员工、价格、收入、冰箱、顺序等长期效果。同回合获得的里程碑会在 Cleanup 从公共池移除；第二次银行破产会结束游戏并按现金排名。",
+	},
 ]
 
 var _sidebar: VBoxContainer = null
@@ -837,6 +861,18 @@ func _build_sidebar_panel() -> Control:
 	var separator := HSeparator.new()
 	_sidebar.add_child(separator)
 
+	var lesson_scroll := ScrollContainer.new()
+	lesson_scroll.name = "LessonButtonScroll"
+	lesson_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lesson_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_sidebar.add_child(lesson_scroll)
+
+	var lesson_list := VBoxContainer.new()
+	lesson_list.name = "LessonButtonList"
+	lesson_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lesson_list.add_theme_constant_override("separation", 10)
+	lesson_scroll.add_child(lesson_list)
+
 	for i in range(LESSONS.size()):
 		var lesson: Dictionary = LESSONS[i]
 		var btn := Button.new()
@@ -847,11 +883,7 @@ func _build_sidebar_panel() -> Control:
 		btn.pressed.connect(_select_lesson.bind(i))
 		UiStylesClass.apply_button_secondary(btn)
 		_lesson_buttons.append(btn)
-		_sidebar.add_child(btn)
-
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_sidebar.add_child(spacer)
+		lesson_list.add_child(btn)
 
 	var back := Button.new()
 	back.text = "返回主菜单"
@@ -963,6 +995,14 @@ func _render_lesson() -> void:
 			_render_marketing_lesson()
 		"employees":
 			_render_employees_lesson()
+		"round_flow":
+			_render_round_flow_lesson()
+		"recruit_train_payday":
+			_render_recruit_train_payday_lesson()
+		"inventory":
+			_render_inventory_lesson()
+		"milestones":
+			_render_milestones_lesson()
 
 func _clear_content_body() -> void:
 	for child in _content_body.get_children():
@@ -1126,6 +1166,94 @@ func _render_employees_lesson() -> void:
 		160
 	))
 	_content_body.add_child(drive_thru)
+
+func _render_round_flow_lesson() -> void:
+	var full_round := _make_section("完整阶段顺序")
+	full_round.add_child(_make_rich_text(
+		"Setup 只在开局出现：选择储备卡并放起始餐厅。\n\n正常回合按这个顺序推进：Restructuring 重组公司结构；OrderOfBusiness 选择本轮行动顺序；Working 执行员工行动；Dinnertime 自动结算房屋购买；Payday 支付薪水；Marketing 结算广告；Cleanup 清理库存、打开即将开业餐厅，并处理里程碑池。",
+		180
+	))
+	_content_body.add_child(full_round)
+
+	var order := _make_section("商业秩序怎么选")
+	order.add_child(_make_rich_text(
+		"进入 OrderOfBusiness 时，系统先计算每位玩家公司结构里的空槽位。空槽位越多，越早选择自己在本轮行动顺序中的位置；空槽位相同则按上一轮顺序靠前者先选。\n\n最终选出来的 turn_order 会影响 Working 中谁先行动，也会参与晚餐阶段的平局决胜。",
+		145
+	))
+	_content_body.add_child(order)
+
+	var working := _make_section("Working 的子阶段")
+	working.add_child(_make_rich_text(
+		"Working 不是一个自由行动池，而是固定子阶段依次处理：Recruit 招聘、Train 培训、Marketing 发起广告、GetFood 生产食物、GetDrinks 采购饮料、PlaceHouses 放房屋/花园、PlaceRestaurants 放置或移动餐厅。\n\n每个子阶段内按本轮行动顺序轮流执行。某个阶段没有可用动作时可以跳过；强制定价类动作属于 Working 强制动作，可以在 Working 的任意子阶段处理。",
+		165
+	))
+	_content_body.add_child(working)
+
+func _render_recruit_train_payday_lesson() -> void:
+	var recruit := _make_section("招聘只拿入门员工")
+	recruit.add_child(_make_rich_text(
+		"基础规则里，直接招聘的目标必须是入门员工：管理培训生、见习厨师、跑腿伙计、人力资源专员、培训讲师、定价经理、营销实习生、服务员等。\n\nCEO 自带 1 次招聘能力；人力资源专员 1 次，人力资源经理 2 次，人力资源总监 4 次。招聘来的员工进入储备区，是否能立刻上班取决于下一次重组时公司结构有没有位置。",
+		175
+	))
+	_content_body.add_child(recruit)
+
+	var train := _make_section("培训沿着升级链走")
+	train.add_child(_make_rich_text(
+		"培训必须沿员工定义里的升级链逐步进行。例：见习厨师可以升汉堡厨师或披萨厨师，再升对应主厨；跑腿伙计可以升手推车操作员、货车驾驶员、飞艇驾驶员；营销实习生可以升营销经理、品牌经理、品牌总监。\n\n培训讲师提供 1 次培训，培训指导员 2 次，培训专家 3 次。默认同一名员工不能随意换不同培训员连续培训；获得“首个支付 $20+ 薪水”里程碑后，可以让多个培训员集中培训同一名员工。",
+		205
+	))
+	_content_body.add_child(train)
+
+	var payday := _make_section("Payday 会把扩张压力算回来")
+	payday.add_child(_make_rich_text(
+		"员工定义里 `salary=true` 的员工需要发薪，基础薪水是每人 $5。Payday 从玩家现金付给银行；如果现金不够且没有允许欠薪的效果，本阶段会要求先处理薪水问题。\n\n人力资源经理和人力资源总监带有薪水折扣效果：本回合未用掉的招聘次数会按每次 $5 抵扣薪水。首个培训员工的里程碑还会让总薪水永久 -$15，最低应付不会低于 $0。",
+		175
+	))
+	_content_body.add_child(payday)
+
+func _render_inventory_lesson() -> void:
+	var food := _make_section("食物先进入玩家库存")
+	food.add_child(_make_rich_text(
+		"生产食物发生在 Working 的 GetFood 子阶段。见习厨师可以选择生产 1 个汉堡或 1 个披萨；汉堡厨师/披萨厨师各生产 3 个对应食物；汉堡主厨/披萨主厨各生产 8 个。\n\n这些食物先进入玩家库存，不会自动分配给某一家餐厅。晚餐阶段检查的是玩家餐厅是否能用该玩家库存完整满足房屋需求。",
+		165
+	))
+	_content_body.add_child(food)
+
+	var drinks := _make_section("饮料来自采购")
+	drinks.add_child(_make_rich_text(
+		"采购饮料发生在 GetDrinks 子阶段，而且玩家必须已经有餐厅。跑腿伙计直接获得 1 瓶指定饮料；手推车操作员和货车驾驶员需要沿道路从路线经过的进货点拿饮料；飞艇驾驶员可以无视道路。\n\n基础路线采购每个饮料源提供 2 瓶。首个使用跑腿伙计的里程碑会让采购每个来源 +1；首个使用手推车操作员的里程碑会让手推车、货车、飞艇的采购距离能力提高。",
+		185
+	))
+	_content_body.add_child(drinks)
+
+	var cleanup := _make_section("Cleanup 为什么会丢库存")
+	cleanup.add_child(_make_rich_text(
+		"晚餐后没卖掉的食物和饮料仍在库存里。Cleanup 阶段默认会清空没有冰箱保护的食物/饮料；因此早期过量生产可能只是在浪费银行前的行动机会。\n\n首次在 Cleanup 丢弃食物或饮料会触发“首个丢弃食物/饮品”里程碑，获得容量 10 的冰箱。之后如果食物/饮料总量超过冰箱容量，Cleanup 会要求玩家选择保留哪些库存。",
+		170
+	))
+	_content_body.add_child(cleanup)
+
+func _render_milestones_lesson() -> void:
+	var trigger := _make_section("里程碑由事件触发")
+	trigger.add_child(_make_rich_text(
+		"里程碑不是手动购买，而是在动作或结算产生事件时自动检查。例：生产汉堡触发 Produce/burger；发起广告触发 InitiateMarketing；房屋被广告添加需求触发 DemandMarked；晚餐收入让现金达到 $20 或 $100 时触发 CashReached。\n\n同一回合内，多名玩家可能先后获得同一种里程碑；Cleanup 会根据本回合领取记录，从公共里程碑池移除对应数量。",
+		175
+	))
+	_content_body.add_child(trigger)
+
+	var effects := _make_section("基础里程碑给什么")
+	effects.add_child(_make_rich_text(
+		"生产类：首个生产汉堡/披萨会给对应厨师卡。\n营销类：首个营销汉堡/披萨/饮料会给对应商品销售奖金；首个广告牌让营销免薪并可永久；首个电波强化电波需求；首个飞机给商业秩序空槽位加成。\n经营类：首个拥有 $20 可查看所有储备卡；首个拥有 $100 让 CEO 从下一回合起获得 CFO 收入能力，并禁用 CFO 卡；首个降价让基础价格再 -1；首个服务员提高服务员小费。",
+		230
+	))
+	_content_body.add_child(effects)
+
+	var endgame := _make_section("终局和排名")
+	endgame.add_child(_make_rich_text(
+		"默认银行最多破产两次。第一次破产会处理储备卡或相关扩展规则，然后游戏继续；第二次破产会标记本局在当前 Dinnertime 结束后进入 GameOver，后续 Payday 不再结算。\n\nGameOver 排名只看现金：未弃权玩家排在弃权玩家前面；现金高者胜；现金相同则玩家编号靠前者排前。",
+		150
+	))
+	_content_body.add_child(endgame)
 
 func _get_reserve_cards() -> Array[Dictionary]:
 	var fallback: Array[Dictionary] = []
