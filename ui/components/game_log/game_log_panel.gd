@@ -743,6 +743,9 @@ func _cancel_pending_descriptor_commit() -> void:
 func _update_process_state() -> void:
 	set_process(_timeline_background_thread != null or _descriptor_commit_active)
 
+func _should_build_display_now() -> bool:
+	return is_inside_tree() and is_visible_in_tree()
+
 func _patch_last_phase_header_end_step_index(end_step_index: int) -> void:
 	var item := _get_last_timeline_phase_header_item()
 	if item == null:
@@ -813,7 +816,7 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 		"timeline_loaded": bool(_is_step_timeline_loaded()),
 	})
 	var next_timeline: Dictionary = timeline.duplicate(true) if (timeline is Dictionary) else {}
-	if _can_append_step_timeline(next_timeline, entries, bool(reset_extra_entries)):
+	if _should_build_display_now() and _can_append_step_timeline(next_timeline, entries, bool(reset_extra_entries)):
 		var appended_entries := _build_appended_timeline_entries(entries)
 		if append_step_timeline(next_timeline, appended_entries, bool(reset_extra_entries)):
 			OnlinePerfTraceClass.end_span(span, {
@@ -834,6 +837,24 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 	if not bool(reset_extra_entries):
 		next_extra_entries = _duplicate_entry_array(_extra_entries)
 	var next_entries_count := next_timeline_entries.size() + next_extra_entries.size()
+	if not _should_build_display_now():
+		_invalidate_background_timeline_jobs()
+		_apply_committed_step_timeline_state(next_timeline, next_timeline_entries, next_extra_entries)
+		_blank_display_warned = false
+		_prune_expanded_action_groups()
+		if fold_details_check != null:
+			fold_details_check.button_pressed = _fold_details_enabled
+		_clear_display()
+		_visible_entry_count_cached = -1
+		_update_entry_count()
+		_last_step_timeline_update_mode = "rebuild_hidden"
+		OnlinePerfTraceClass.end_span(span, {
+			"mode": "rebuild_hidden",
+			"skipped_display": true,
+			"entry_count": int(_entries_all.size()),
+			"timeline_step_count": int(_get_step_count(_step_timeline)),
+		})
+		return
 	if _should_use_background_timeline_job_for_count(next_timeline, next_entries_count):
 		var next_entries_all := _build_entries_all_for_state(next_timeline_entries, next_extra_entries)
 		_queue_background_timeline_job({
@@ -1649,6 +1670,17 @@ func _rebuild_display() -> void:
 		"visible_in_tree": bool(is_visible_in_tree()),
 	})
 	_clear_display()
+	if not _should_build_display_now():
+		_visible_entry_count_cached = -1
+		OnlinePerfTraceClass.end_span(span, {
+			"timeline_loaded": bool(_is_step_timeline_loaded()),
+			"entry_count": int(_entries_all.size()),
+			"child_count_after": int(log_container.get_child_count()) if log_container != null else 0,
+			"log_item_count": int(_log_items.size()),
+			"skipped_display": true,
+			"reason": "hidden",
+		})
+		return
 
 	if _is_step_timeline_loaded():
 		_build_unified_timeline_display()
@@ -1730,6 +1762,8 @@ func _update_entry_count() -> void:
 	if _is_step_timeline_loaded():
 		if _visible_entry_count_cached >= 0:
 			visible = int(_visible_entry_count_cached)
+		elif not _should_build_display_now():
+			visible = total
 		else:
 			var span := OnlinePerfTraceClass.begin_span("ui.game_log.compute_visible_entry_count", {
 				"entry_count": int(_entries_all.size()),

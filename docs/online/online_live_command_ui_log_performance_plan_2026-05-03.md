@@ -477,6 +477,14 @@ append 时只检查：
 
 ### 阶段 4：UI 同步从 full update 改为 dirty sync
 
+状态：**进行中**。
+
+2026-05-03 增量更新：
+
+- `GameLogPanel.load_step_timeline()` 在面板不可见时只提交 timeline/entry 状态并清空旧显示，不再启动 descriptor/background UI 构建；重新显示时复用现有 `ensure_display_ready()` 补建 UI。
+- `_rebuild_display()` 对隐藏态增加短路，避免隐藏日志面板仍创建完整控件树；隐藏态 `_update_entry_count()` 不再触发完整 visible count 计算。
+- 补充 `GameLogHiddenTimelineStateSkipTest` 覆盖隐藏态加载大时间线不构建 UI、不启动 descriptor commit，且显示后可补建。
+
 目标：
 
 - 普通 live command 不再调用“整套 UI 同步”。
