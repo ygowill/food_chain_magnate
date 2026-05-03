@@ -398,6 +398,7 @@ StepTimelineBuild.append_from_existing_mutating(engine, owned_timeline) -> Resul
 - append 新增控件由 builder 创建时应用当前 timeline cursor/head；同步 append 和后台分片 append 收尾不再对已有 `_log_items` 做全量 timeline state 刷新。`GameLogPanelStepTimelineAppendTest` 增加 spy 覆盖，防止 append 收尾重新扫描旧 item。
 - append display 改为从 `GameLogPanel` 维护的 phase header 索引读取尾部 header，并在直接 append 时增量索引新增控件；builder 不再需要反向扫描旧 `_log_items` 来寻找 phase header。测试增加 stray phase header，防止回退到旧扫描路径。
 - `load_step_timeline()` 的 append 预检改为浅层读取 incoming timeline；只有 fallback rebuild 才 deep duplicate 整条 timeline。`GameLogPanelStepTimelineAppendTest` 增加通过 `load_step_timeline()` 触发 append 的回归覆盖。
+- `append_step_timeline()` 后台阈值改为按本次新增 step/entry 数判断，不再因为总历史超过阈值就把 1 条 live append 转成后台 descriptor job。`GameLogPanelStepTimelineAppendTest` 覆盖 119 -> 120 的后期小 delta 同步 append。
 
 目标：
 
@@ -406,6 +407,7 @@ StepTimelineBuild.append_from_existing_mutating(engine, owned_timeline) -> Resul
 - append 成功收尾不再为了 timeline state 扫描完整日志控件列表。
 - append UI 构建不再为了续接 phase header 反向扫描旧 `_log_items`。
 - append 预检不应为了只读签名校验 deep copy 旧 `steps/events`。
+- 后期小 delta append 不应仅因总历史长度超过阈值而进入后台。
 
 建议新增或完善 timeline signature：
 
@@ -477,6 +479,7 @@ append 时只检查：
 - append 成功后 timeline state 应只随新增控件数量增长，旧日志项不被全量重刷。
 - 同阶段长日志 append 不应因为查找最后一个 phase header 扫描旧 item。
 - `load_step_timeline()` 的 append 分支不再在校验前复制完整 timeline。
+- 100+ steps 后追加 1 条 command 应仍走同步 delta append，不启动 descriptor commit。
 
 ### 阶段 4：UI 同步从 full update 改为 dirty sync
 

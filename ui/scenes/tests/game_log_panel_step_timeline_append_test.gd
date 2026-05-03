@@ -263,31 +263,35 @@ static func run() -> Result:
 	var async_timeline2 := _build_linear_timeline(120)
 	var async_entries2 := _build_linear_entries(120)
 	panel.call("load_step_timeline", async_timeline2, async_entries2)
-	var async_appended := await _wait_until(func() -> bool:
+	await tree.process_frame
+	var late_small_delta_appended := await _wait_until(func() -> bool:
 		var current_entries = panel.call("get_step_timeline_entries")
 		return current_entries is Array \
 			and current_entries.size() == async_entries2.size() \
 			and not bool(panel.call("has_pending_descriptor_commit")) \
 			and panel.call("get_last_step_timeline_update_mode") == "append"
 	, tree, 180)
-	if not async_appended:
+	if not late_small_delta_appended:
 		_cleanup(panel)
-		return Result.failure("大时间线尾部追加未在限定帧数内完成（后台线程 append）")
+		return Result.failure("大时间线小 delta 尾部追加应同步走 append")
+	if bool(panel.call("has_pending_descriptor_commit")):
+		_cleanup(panel)
+		return Result.failure("大时间线小 delta append 不应启动 descriptor commit")
 	if not is_instance_valid(async_first_child) or async_first_child.get_parent() != log_container:
 		_cleanup(panel)
-		return Result.failure("后台 append 后旧节点不应被整体替换出容器")
-	if log_container.get_child_count() <= async_old_child_count:
+		return Result.failure("后期小 delta append 后旧节点不应被整体替换出容器")
+	if log_container.get_child_count() != async_old_child_count + 1:
 		_cleanup(panel)
-		return Result.failure("后台 append 后 child_count 应增加: before=%d after=%d" % [async_old_child_count, log_container.get_child_count()])
+		return Result.failure("后期小 delta append 后 child_count 应仅增加 1: before=%d after=%d" % [async_old_child_count, log_container.get_child_count()])
 	if int(async_last_phase_header.end_step_index) != 119:
 		_cleanup(panel)
-		return Result.failure("后台 append 后最后一个 phase header.end_step_index 应扩展到 119，实际=%d" % int(async_last_phase_header.end_step_index))
+		return Result.failure("后期小 delta append 后最后一个 phase header.end_step_index 应扩展到 119，实际=%d" % int(async_last_phase_header.end_step_index))
 	if str(entry_count_label.text) != "显示 120 / 120":
 		_cleanup(panel)
-		return Result.failure("后台 append 后可见条目数错误，实际=%s" % str(entry_count_label.text))
+		return Result.failure("后期小 delta append 后可见条目数错误，实际=%s" % str(entry_count_label.text))
 	if async_sync_apply_spy.apply_calls != 0:
 		_cleanup(panel)
-		return Result.failure("后台 append 收尾不应全量刷新已有 log item timeline state，实际 apply_calls=%d" % async_sync_apply_spy.apply_calls)
+		return Result.failure("后期小 delta append 不应全量刷新已有 log item timeline state，实际 apply_calls=%d" % async_sync_apply_spy.apply_calls)
 
 	_cleanup(panel)
 	return Result.success()

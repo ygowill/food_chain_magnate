@@ -337,6 +337,11 @@ func _should_use_background_timeline_job(timeline: Dictionary, entries_all: Arra
 func _should_use_background_timeline_job_for_count(timeline: Dictionary, entry_count: int) -> bool:
 	return _get_step_count(timeline) >= _BACKGROUND_TIMELINE_MIN_STEPS or int(entry_count) >= _BACKGROUND_TIMELINE_MIN_ENTRIES
 
+func _should_use_background_append_timeline_job(timeline: Dictionary, appended_entry_count: int) -> bool:
+	var appended_step_count := maxi(0, _get_step_count(timeline) - _get_step_count(_step_timeline))
+	return int(appended_step_count) >= _BACKGROUND_TIMELINE_MIN_STEPS \
+		or int(appended_entry_count) >= _BACKGROUND_TIMELINE_MIN_ENTRIES
+
 func _invalidate_background_timeline_jobs() -> void:
 	_timeline_background_generation += 1
 	_timeline_background_pending_job.clear()
@@ -920,7 +925,8 @@ func append_step_timeline(timeline: Dictionary, appended_entries: Array[Dictiona
 	var next_timeline: Dictionary = timeline.duplicate(false)
 	var normalized_appended_entries := _duplicate_entry_array_with_fresh_ids(appended_entries)
 	var next_entries_count := _timeline_entries.size() + normalized_appended_entries.size() + _extra_entries.size()
-	if _should_use_background_timeline_job_for_count(next_timeline, next_entries_count):
+	var appended_step_count := maxi(0, _get_step_count(next_timeline) - _get_step_count(_step_timeline))
+	if _should_use_background_append_timeline_job(next_timeline, normalized_appended_entries.size()):
 		_queue_background_timeline_job({
 			"mode": "append",
 			"timeline": next_timeline,
@@ -940,6 +946,8 @@ func append_step_timeline(timeline: Dictionary, appended_entries: Array[Dictiona
 			"background": true,
 			"mode": "append_async",
 			"entry_count": int(next_entries_count),
+			"appended_entry_count": int(normalized_appended_entries.size()),
+			"appended_step_count": int(appended_step_count),
 			"timeline_step_count": int(_get_step_count(next_timeline)),
 		})
 		return true
@@ -959,6 +967,8 @@ func append_step_timeline(timeline: Dictionary, appended_entries: Array[Dictiona
 	OnlinePerfTraceClass.end_span(span, {
 		"ok": true,
 		"entry_count": int(_entries_all.size()),
+		"appended_entry_count": int(normalized_appended_entries.size()),
+		"appended_step_count": int(appended_step_count),
 		"timeline_step_count": int(_get_step_count(_step_timeline)),
 		"timeline_state_update_mode": "append_items_initialized",
 	})
