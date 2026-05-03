@@ -225,6 +225,11 @@ static func run() -> Result:
 	sync_apply_spy.queue_free()
 	stale_phase_header_spy.queue_free()
 
+	var load_append_result := await _run_load_step_timeline_append_case(tree)
+	if not load_append_result.ok:
+		_cleanup(panel)
+		return load_append_result
+
 	var async_timeline1 := _build_linear_timeline(119)
 	var async_entries1 := _build_linear_entries(119)
 	panel.call("load_step_timeline", async_timeline1, async_entries1)
@@ -286,6 +291,49 @@ static func run() -> Result:
 
 	_cleanup(panel)
 	return Result.success()
+
+static func _run_load_step_timeline_append_case(tree: SceneTree) -> Result:
+	var panel = GameLogPanelScene.instantiate()
+	if panel == null or not is_instance_valid(panel):
+		return Result.failure("load_step_timeline append 测试实例化 GameLogPanel 失败")
+	tree.root.add_child(panel)
+	await tree.process_frame
+
+	var log_container = panel.get_node_or_null("MarginContainer/VBoxContainer/ScrollContainer/LogContainer")
+	if log_container == null or not is_instance_valid(log_container):
+		return await _finish_with_panel(Result.failure("load_step_timeline append 测试未找到 LogContainer"), panel, tree)
+
+	var timeline1 := _build_linear_timeline(1)
+	var entries1 := _build_linear_entries(1)
+	panel.call("load_step_timeline", timeline1, entries1)
+	await tree.process_frame
+	if panel.call("get_last_step_timeline_update_mode") != "rebuild":
+		return await _finish_with_panel(Result.failure("load_step_timeline 首次加载应为 rebuild"), panel, tree)
+	if log_container.get_child_count() <= 0:
+		return await _finish_with_panel(Result.failure("load_step_timeline 首次加载后日志 UI 为空"), panel, tree)
+
+	var first_child = log_container.get_child(0)
+	var old_child_count := log_container.get_child_count()
+	var timeline2 := _build_linear_timeline(2)
+	var entries2 := _build_linear_entries(2)
+	panel.call("load_step_timeline", timeline2, entries2)
+	await tree.process_frame
+
+	if panel.call("get_last_step_timeline_update_mode") != "append":
+		return await _finish_with_panel(Result.failure("load_step_timeline 尾部增长应走 append"), panel, tree)
+	if not is_instance_valid(first_child) or first_child.get_parent() != log_container:
+		return await _finish_with_panel(Result.failure("load_step_timeline append 后旧节点不应被替换出容器"), panel, tree)
+	if log_container.get_child_count() <= old_child_count:
+		return await _finish_with_panel(
+			Result.failure("load_step_timeline append 后 child_count 应增加: before=%d after=%d" % [old_child_count, log_container.get_child_count()]),
+			panel,
+			tree
+		)
+	var loaded_entries = panel.call("get_step_timeline_entries")
+	if not (loaded_entries is Array) or loaded_entries.size() != entries2.size():
+		return await _finish_with_panel(Result.failure("load_step_timeline append 后 step entries 应为 2 条"), panel, tree)
+
+	return await _finish_with_panel(Result.success({}), panel, tree)
 
 static func _build_linear_timeline(step_count: int) -> Dictionary:
 	var steps: Array[Dictionary] = []
@@ -360,3 +408,9 @@ static func _count_message_occurrences(log_container: Node, expected_message: St
 static func _cleanup(panel: Node) -> void:
 	if panel != null and is_instance_valid(panel):
 		panel.free()
+
+static func _finish_with_panel(result: Result, panel: Node, tree: SceneTree) -> Result:
+	if panel != null and is_instance_valid(panel):
+		panel.queue_free()
+		await tree.process_frame
+	return result

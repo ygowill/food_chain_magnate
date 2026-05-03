@@ -815,18 +815,19 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 		"reset_extra_entries": bool(reset_extra_entries),
 		"timeline_loaded": bool(_is_step_timeline_loaded()),
 	})
-	var next_timeline: Dictionary = timeline.duplicate(true) if (timeline is Dictionary) else {}
-	if _should_build_display_now() and _can_append_step_timeline(next_timeline, entries, bool(reset_extra_entries)):
+	var append_timeline: Dictionary = timeline.duplicate(false) if (timeline is Dictionary) else {}
+	if _should_build_display_now() and _can_append_step_timeline(append_timeline, entries, bool(reset_extra_entries)):
 		var appended_entries := _build_appended_timeline_entries(entries)
-		if append_step_timeline(next_timeline, appended_entries, bool(reset_extra_entries)):
+		if append_step_timeline(append_timeline, appended_entries, bool(reset_extra_entries)):
 			OnlinePerfTraceClass.end_span(span, {
 				"mode": "append",
+				"append_precheck_copy": "shallow",
 				"entry_count": int(_entries_all.size()),
 				"timeline_step_count": int(_get_step_count(_step_timeline)),
 			})
 			return
 
-	next_timeline = timeline.duplicate(true) if (timeline is Dictionary) else {}
+	var next_timeline: Dictionary = timeline.duplicate(true) if (timeline is Dictionary) else {}
 	var next_timeline_entries: Array[Dictionary] = []
 	if not _is_step_timeline_loaded() and _timeline_entries.is_empty() and _extra_entries.is_empty():
 		next_timeline_entries = _adopt_entry_array_preserving_ids(entries)
