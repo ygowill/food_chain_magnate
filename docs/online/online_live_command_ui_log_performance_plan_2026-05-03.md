@@ -309,6 +309,7 @@
 - 保留 `append_from_existing(engine, existing_timeline)` 的非变异契约，避免影响共享/只读调用方。
 - live history refresh 与 full-history timeline cache refresh 已改用 owned append 路径，append 成功时不再复制旧 `steps/events`。
 - 补充 `StepTimelineIncrementalAppendTest` 覆盖 owned append 成功原地更新、旧 API 不变异、以及 malformed event append 失败后回滚旧 timeline。
+- `append_from_existing()` / `append_tail_delta_owned()` 在 `processed_command_count == total_command_count` 的 no-op append 中只校验数组类型，不再 deep copy 旧 `steps/events`；测试覆盖 no-op 返回复用历史数组且不修改输入 timeline。
 
 目标：
 

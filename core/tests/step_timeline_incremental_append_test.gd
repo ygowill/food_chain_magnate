@@ -34,6 +34,9 @@ static func run(seed_val: int = 12345) -> Result:
 	var mutating_rollback_r := _test_mutating_append_rolls_back_on_event_failure(seed_val + 31)
 	if not mutating_rollback_r.ok:
 		return mutating_rollback_r
+	var noop_r := _test_noop_append_reuses_history_arrays(seed_val + 43)
+	if not noop_r.ok:
+		return noop_r
 
 	var engine := GameEngine.new()
 	var init := engine.initialize(2, seed_val)
@@ -201,6 +204,64 @@ static func _test_mutating_append_rolls_back_on_event_failure(seed_val: int) -> 
 		return Result.failure("mutating rollback: bad event error should mention event.data, got: %s" % append_r.error)
 	if owned_timeline != before_timeline:
 		return Result.failure("mutating rollback: owned timeline should be restored after failed append")
+
+	return Result.success()
+
+static func _test_noop_append_reuses_history_arrays(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("noop append: init failed: %s" % init.error)
+
+	var base_r: Result = StepTimelineBuildClass.build_full(engine)
+	if not base_r.ok:
+		return Result.failure("noop append: build_full(base) failed: %s" % base_r.error)
+	if not (base_r.value is Dictionary):
+		return Result.failure("noop append: build_full(base).value type error (expected Dictionary)")
+	var base_timeline: Dictionary = Dictionary(base_r.value).duplicate(true)
+	var base_timeline_before_append := base_timeline.duplicate(true)
+	var base_steps_val = base_timeline.get("steps", null)
+	var base_events_val = base_timeline.get("events", null)
+	if not (base_steps_val is Array) or not (base_events_val is Array):
+		return Result.failure("noop append: base timeline steps/events type error")
+
+	var append_r: Result = StepTimelineBuildClass.append_from_existing(engine, base_timeline)
+	if not append_r.ok:
+		return Result.failure("noop append: append_from_existing failed: %s" % append_r.error)
+	if not (append_r.value is Dictionary):
+		return Result.failure("noop append: append_from_existing.value type error (expected Dictionary)")
+	if base_timeline != base_timeline_before_append:
+		return Result.failure("noop append: append_from_existing must not mutate the baseline timeline")
+	var append_info: Dictionary = append_r.value
+	if bool(append_info.get("append_applied", true)):
+		return Result.failure("noop append: append_applied should be false when no commands were added")
+	var returned_timeline_val = append_info.get("timeline", null)
+	if not (returned_timeline_val is Dictionary):
+		return Result.failure("noop append: returned timeline type error")
+	var returned_timeline: Dictionary = returned_timeline_val
+	if not is_same(returned_timeline.get("steps", null), base_steps_val):
+		return Result.failure("noop append: append_from_existing should reuse unchanged steps array")
+	if not is_same(returned_timeline.get("events", null), base_events_val):
+		return Result.failure("noop append: append_from_existing should reuse unchanged events array")
+	if int(append_info.get("old_step_count", -1)) != _read_array_size(base_steps_val):
+		return Result.failure("noop append: old_step_count mismatch")
+	if int(append_info.get("old_event_count", -1)) != _read_array_size(base_events_val):
+		return Result.failure("noop append: old_event_count mismatch")
+
+	var owned_timeline: Dictionary = base_timeline.duplicate(true)
+	var owned_steps_val = owned_timeline.get("steps", null)
+	var owned_events_val = owned_timeline.get("events", null)
+	var owned_r: Result = StepTimelineBuildClass.append_tail_delta_owned(engine, owned_timeline)
+	if not owned_r.ok:
+		return Result.failure("noop append: append_tail_delta_owned failed: %s" % owned_r.error)
+	if not (owned_r.value is Dictionary):
+		return Result.failure("noop append: append_tail_delta_owned.value type error (expected Dictionary)")
+	if bool(Dictionary(owned_r.value).get("append_applied", true)):
+		return Result.failure("noop append: owned append_applied should be false when no commands were added")
+	if not is_same(owned_timeline.get("steps", null), owned_steps_val):
+		return Result.failure("noop append: append_tail_delta_owned should keep owned steps array")
+	if not is_same(owned_timeline.get("events", null), owned_events_val):
+		return Result.failure("noop append: append_tail_delta_owned should keep owned events array")
 
 	return Result.success()
 
