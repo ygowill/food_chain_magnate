@@ -500,6 +500,7 @@ append 时只检查：
 - `GameLogPanel.load_step_timeline()` 在面板不可见时只提交 timeline/entry 状态并清空旧显示，不再启动 descriptor/background UI 构建；重新显示时复用现有 `ensure_display_ready()` 补建 UI。
 - `_rebuild_display()` 对隐藏态增加短路，避免隐藏日志面板仍创建完整控件树；隐藏态 `_update_entry_count()` 不再触发完整 visible count 计算。
 - 补充 `GameLogHiddenTimelineStateSkipTest` 覆盖隐藏态加载大时间线不构建 UI、不启动 descriptor commit，且显示后可补建。
+- `GameUiSyncController` 新增 dirty flags 常量与 `sync_dirty(dirty_flags, context, do_profile)` 入口；当前先统一 full fallback，不改变现有 UI 同步语义。`UiSyncDirtyFallbackTest` 覆盖 `DIRTY_FULL`、已知局部 dirty、未知 dirty 都仍走完整同步。
 
 目标：
 
@@ -538,7 +539,7 @@ live command 后根据 action/event 标记 dirty：
 实现路径：
 
 - `GameUiSyncController.update_ui()` 保留作为 full sync。
-- 新增 `sync_dirty(state, dirty_flags, context)`。
+- 新增 `sync_dirty(dirty_flags, context, do_profile)`，内部从当前 engine 读取 state；未覆盖的 dirty 组合保持 full sync fallback。
 - `GameOnlineResyncController` 的 delayed refresh 改为传 dirty context。
 - 先支持最常见 live action，再逐步扩展。
 - 未识别 action 默认 full sync，保证正确性优先。

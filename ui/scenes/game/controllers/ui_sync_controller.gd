@@ -20,6 +20,26 @@ const PHASE_DISPLAY_NAMES: Dictionary = {
 	"GameOver": "游戏结束",
 }
 
+const DIRTY_TOP_STATUS := 1 << 0
+const DIRTY_TIMELINE_CURSOR := 1 << 1
+const DIRTY_LOG_APPEND := 1 << 2
+const DIRTY_MAP_VIEW := 1 << 3
+const DIRTY_PANEL_STATE := 1 << 4
+const DIRTY_ACTION_CONTROLS := 1 << 5
+const DIRTY_OVERLAYS := 1 << 6
+const DIRTY_DEBUG_PANEL := 1 << 7
+const DIRTY_FULL := 1 << 30
+const DIRTY_KNOWN_MASK := \
+	DIRTY_TOP_STATUS \
+	| DIRTY_TIMELINE_CURSOR \
+	| DIRTY_LOG_APPEND \
+	| DIRTY_MAP_VIEW \
+	| DIRTY_PANEL_STATE \
+	| DIRTY_ACTION_CONTROLS \
+	| DIRTY_OVERLAYS \
+	| DIRTY_DEBUG_PANEL \
+	| DIRTY_FULL
+
 var _get_game_engine: Callable = Callable()
 var _refresh_ui: Callable = Callable()
 var _sync_right_panel_docked_view: Callable = Callable()
@@ -101,6 +121,21 @@ func set_online_resync_controller(controller: Object) -> void:
 
 func set_debug_panel(panel: Window) -> void:
 	_debug_panel = panel
+
+func sync_dirty(dirty_flags: int, context: Dictionary = {}, do_profile: bool = false) -> void:
+	var flags := int(dirty_flags)
+	var full_fallback := flags <= 0 or bool(flags & DIRTY_FULL) or bool(flags & ~DIRTY_KNOWN_MASK)
+	var online_span_dirty := OnlinePerfTraceClass.begin_span("ui.online_sync.dirty", {
+		"dirty_flags": int(flags),
+		"full_fallback": bool(full_fallback),
+		"context": context,
+	})
+	update_ui(bool(do_profile))
+	OnlinePerfTraceClass.end_span(online_span_dirty, {
+		"dirty_flags": int(flags),
+		"mode": "full_fallback",
+		"full_fallback": true,
+	})
 
 func update_ui(do_profile: bool) -> void:
 	if not _get_game_engine.is_valid():

@@ -229,6 +229,7 @@ const ReserveCardsOverviewAccessTestClass = preload("res://ui/scenes/tests/reser
 const ReserveCardsFullScreenViewPrivacyTestClass = preload("res://ui/scenes/tests/reserve_cards_full_screen_view_privacy_test.gd")
 const GameOverlayFirstHave20PopupTestClass = preload("res://ui/scenes/tests/game_overlay_first_have_20_popup_test.gd")
 const UiSyncFirstHave20PopupTestClass = preload("res://ui/scenes/tests/ui_sync_first_have_20_popup_test.gd")
+const UiSyncDirtyFallbackTestClass = preload("res://ui/scenes/tests/ui_sync_dirty_fallback_test.gd")
 const TimelineUiStateSupportBatchUpdateTestClass = preload("res://ui/scenes/tests/timeline_ui_state_support_batch_update_test.gd")
 const UiComponentsBinderBatchContextTestClass = preload("res://ui/scenes/tests/ui_components_binder_batch_context_test.gd")
 const ReplayBarSupportNoopTestClass = preload("res://ui/scenes/tests/replay_bar_support_noop_test.gd")
