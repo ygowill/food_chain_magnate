@@ -11,6 +11,7 @@ const MAP_VALID_FILL := Color(0.20, 0.75, 0.36, 0.20)
 const MAP_VALID_BORDER := Color(0.20, 0.62, 0.28, 0.92)
 const MAP_DISTANCE_FILL := Color(0.97, 0.73, 0.18, 0.42)
 const MAP_DISTANCE_BORDER := Color(0.65, 0.38, 0.05, 0.95)
+const MAP_GROUND_COLOR := Color("#faf4da")
 const TILE_SIZE := 5
 const TILE_CONTENT_PATH_TEMPLATE := "res://modules/base_tiles/content/tiles/%s.json"
 
@@ -25,7 +26,7 @@ class RealAssetMapPreview:
 
 	const CELL_SIZE := 54
 	const GRID_SIZE := Vector2i(10, 5)
-	const GROUND_TEXTURE_PATH := "res://modules/base_tiles/assets/map/ground/ground.png"
+	const GROUND_COLOR := Color("#faf4da")
 	const ROAD_STRAIGHT_TEXTURE_PATH := "res://modules/base_tiles/assets/map/roads/road_straight_new.png"
 	const ROAD_CORNER_TEXTURE_PATH := "res://modules/base_tiles/assets/map/roads/road_corner_new.png"
 	const ROAD_TEE_TEXTURE_PATH := "res://modules/base_tiles/assets/map/roads/road_tee_new.png"
@@ -62,7 +63,6 @@ class RealAssetMapPreview:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	func _load_textures() -> void:
-		textures["ground"] = _load_texture_raw(GROUND_TEXTURE_PATH)
 		textures["road_straight"] = _load_texture_raw(ROAD_STRAIGHT_TEXTURE_PATH)
 		textures["road_corner"] = _load_texture_raw(ROAD_CORNER_TEXTURE_PATH)
 		textures["road_tee"] = _load_texture_raw(ROAD_TEE_TEXTURE_PATH)
@@ -92,11 +92,7 @@ class RealAssetMapPreview:
 		for y in range(GRID_SIZE.y):
 			for x in range(GRID_SIZE.x):
 				var rect := _cell_rect(Vector2i(x, y))
-				var ground: Texture2D = textures.get("ground", null)
-				if ground != null:
-					draw_texture_rect(ground, rect, false)
-				else:
-					draw_rect(rect, Color(0.95, 0.91, 0.80, 1.0), true)
+				draw_rect(rect, GROUND_COLOR, true)
 				_draw_road_segments(Vector2i(x, y), rect, _get_road_segments(Vector2i(x, y)))
 				draw_rect(rect, Color(0.17, 0.13, 0.09, 0.14), false, 1.0)
 
@@ -496,20 +492,26 @@ class RealAssetMapPreview:
 
 const LESSONS := [
 	{
+		"id": "overview",
+		"title": "1. 游戏背景与胜利目标",
+		"kicker": "先知道自己在做什么",
+		"summary": "你经营一家快餐公司，通过雇人、开店、定价、生产和广告，把地图上的需求转化成现金。默认规则下，游戏结束时现金最多的未弃权玩家获胜。",
+	},
+	{
 		"id": "reserve_bank",
-		"title": "1. 储备卡与银行",
+		"title": "2. 储备卡与银行",
 		"kicker": "开局 Setup",
-		"summary": "储备卡是开局暗选的保险，不是立刻获得的现金。银行第一次破产时会揭示所有玩家已选储备卡，按卡面注资，并决定之后公司结构可用的 CEO 槽位。",
+		"summary": "储备卡是开局暗选的银行保险，不是玩家收入。基础规则下，第一次破产会揭示所有玩家已选储备卡，按卡面向银行注资，并用已选卡决定之后的 CEO 直属槽位。",
 	},
 	{
 		"id": "initial_restaurant",
-		"title": "2. 起始餐厅放置",
+		"title": "3. 起始餐厅放置",
 		"kicker": "入口与板块",
 		"summary": "起始餐厅必须入口邻接道路；起始放置阶段还要求每个地图板块最多只有一个餐厅入口。这个限制看入口所在板块，不看整个餐厅占地。",
 	},
 	{
 		"id": "distance",
-		"title": "3. 距离不是格子数",
+		"title": "4. 距离不是格子数",
 		"kicker": "地图距离",
 		"summary": "游戏里的道路距离以跨越地图板块边界的次数为主。道路步数只是辅助信息，不等于晚餐选店里使用的距离。",
 	},
@@ -698,10 +700,7 @@ func _select_lesson(index: int) -> void:
 	for i in range(_lesson_buttons.size()):
 		var btn := _lesson_buttons[i]
 		btn.disabled = i == _selected_lesson
-		if i == _selected_lesson:
-			btn.text = "▶ %s" % str(LESSONS[i].get("title", "章节"))
-		else:
-			btn.text = str(LESSONS[i].get("title", "章节"))
+		btn.text = str(LESSONS[i].get("title", "章节"))
 	_render_lesson()
 
 func _render_lesson() -> void:
@@ -714,6 +713,8 @@ func _render_lesson() -> void:
 
 	_clear_content_body()
 	match str(lesson.get("id", "")):
+		"overview":
+			_render_overview_lesson()
 		"reserve_bank":
 			_render_reserve_lesson()
 		"initial_restaurant":
@@ -726,8 +727,35 @@ func _clear_content_body() -> void:
 		_content_body.remove_child(child)
 		child.queue_free()
 
+func _render_overview_lesson() -> void:
+	var premise := _make_section("你经营什么")
+	premise.add_child(_make_rich_text(
+		"这是一局快餐连锁经营游戏。每位玩家代表一家餐厅公司，核心循环是：安排公司结构、用员工执行行动、生产食物饮料、开餐厅、投放广告，然后在晚餐阶段把房屋需求卖出去。\n\n餐厅数量、员工数量和广告覆盖都只是手段；最后真正比较的是玩家手里的现金。",
+		145
+	))
+	_content_body.add_child(premise)
+
+	var win := _make_section("胜利目标")
+	win.add_child(_make_rich_text(
+		"游戏结束时，未弃权玩家按现金从高到低排名，现金最多者获胜；现金相同则玩家编号靠前者排名靠前。\n\n最常见的终局来自银行破产：默认两次破产规则下，第一次破产后游戏继续；第二次破产会完成当前晚餐结算，然后跳过 Payday 进入最终排名。",
+		145
+	))
+	_content_body.add_child(win)
+
+	var phases := _make_section("一轮大致做什么")
+	phases.add_child(_make_rich_text(
+		"重组结构：决定哪些员工上班、哪些留在储备区。\n商业秩序：确定玩家行动顺序。\n工作时间：招聘、培训、生产、开店、定价、投放营销等。\n晚餐时间：房屋按需求、价格、距离等规则选择餐厅并购买。\nPayday / 营销 / 清理：支付薪水、结算广告持续时间、清理库存并进入下一轮。",
+		170
+	))
+	_content_body.add_child(phases)
+
 func _render_reserve_lesson() -> void:
-	var card := _make_section("储备卡选择")
+	var card := _make_section("开局暗选")
+
+	card.add_child(_make_rich_text(
+		"银行是游戏的公共现金池，不属于任何玩家。晚餐销售收入、部分奖金等从银行付给玩家；Payday 发薪等玩家支出则会回到银行。储备卡只在银行破产时影响银行和公司结构，不会在开局直接变成玩家现金。",
+		105
+	))
 
 	var row := HBoxContainer.new()
 	row.name = "ReserveCardArtRow"
@@ -741,11 +769,12 @@ func _render_reserve_lesson() -> void:
 
 	var selected_details := _describe_reserve_card(_selected_reserve_index)
 	card.add_child(_make_label(
-		"示例选择：%s。储备卡在开局暗选，确认后不可更改；它不会立刻给你现金。" % str(selected_details.get("summary", "")),
+		"示例选择：%s。每位玩家在 Setup 的储备卡阶段秘密选择 1 张；确认后不可更改。选择结果在第一次破产前对其他玩家隐藏。" % str(selected_details.get("summary", "")),
 		15,
 		UiStylesClass.COLOR_TEXT_PRIMARY
 	))
 	card.add_child(_build_first_bankruptcy_case_card())
+	card.add_child(_build_reserve_prices_variant_card())
 	_content_body.add_child(card)
 
 func _render_initial_restaurant_lesson() -> void:
@@ -802,16 +831,16 @@ func _describe_reserve_card_data(card_data: Dictionary, index: int) -> Dictionar
 		return {
 			"index": index,
 			"title": "已选储备卡",
-			"desc": "首次破产注资：+$%d\n候选 CEO 直属槽位：%d" % [cash, slots],
-			"summary": "选项#%d，首次破产注资 $%d，候选 CEO 直属槽位 %d" % [index + 1, cash, slots],
+			"desc": "基础规则：银行注资 +$%d\n参与 CEO 槽位投票：%d" % [cash, slots],
+			"summary": "选项#%d，基础规则下注资 $%d，CEO 槽位候选 %d" % [index + 1, cash, slots],
 			"image_path": "res://assets/images/reserve_cards/reserve_%d.png" % (index + 2),
 		}
 	var price := int(card_data.get("type", 0))
 	return {
 		"index": index,
 		"title": "已选储备卡",
-		"desc": "基础单价候选：$%d\n首次破产后按多数决定" % price,
-		"summary": "选项#%d，基础单价候选 $%d" % [index + 1, price],
+		"desc": "储备价格扩展：基础单价候选 $%d\n首次破产后按多数决定" % price,
+		"summary": "选项#%d，储备价格扩展候选 $%d" % [index + 1, price],
 		"image_path": "res://assets/images/reserve_cards/reserve_%d.png" % (index + 2),
 	}
 
@@ -895,23 +924,52 @@ func _build_first_bankruptcy_case_card() -> Control:
 	vbox.add_theme_constant_override("separation", 10)
 	margin.add_child(vbox)
 
-	var title := _make_label("案例：第一次破产后发生什么", 20, UiStylesClass.COLOR_TEXT_PRIMARY)
+	var title := _make_label("基础规则：第一次破产案例", 20, UiStylesClass.COLOR_TEXT_PRIMARY)
 	vbox.add_child(title)
 
 	var details := "假设银行只剩 $15，但当前晚餐需要向玩家支付 $20：\n"
-	details += "1. 银行余额不足，触发第一次破产。\n"
-	details += "2. 所有玩家翻开开局暗选的储备卡；甲选择选项 2，注资 $100，候选 CEO 直属槽位为 3；乙选择选项 3，注资 $150，候选 CEO 直属槽位为 4。\n"
-	details += "3. 银行先获得 $250 注资，余额变为 $265，然后继续完成当前支付；游戏不会在第一次破产时结束。\n"
-	details += "4. 之后重组公司结构时，全局采用最终 CEO 直属槽位。多人局按所有已选储备卡的槽位投票；票数相同采用更大的槽位，所以本例最终生效槽位为 4。\n"
-	details += "5. 如果之后银行第二次破产，仍会完成当前晚餐结算；晚餐结束后跳过 Payday，并进入游戏结束。"
+	details += "1. 银行余额不足，触发第一次破产；如果某次支付后银行刚好变成 $0，也会立刻触发破产。\n"
+	details += "2. 所有玩家翻开自己已选的储备卡。未选中的卡仍然不公开。\n"
+	details += "3. 例：甲选第 2 张，银行注资 $100、CEO 槽位候选 3；乙选第 3 张，银行注资 $150、CEO 槽位候选 4。\n"
+	details += "4. 银行先获得 $250 注资，余额从 $15 变为 $265，然后继续完成刚才那笔 $20 支付，支付后剩 $245；第一次破产不会立刻结束游戏。\n"
+	details += "5. CEO 槽位按所有已选卡投票决定，票数相同取更大的槽位。本例 3 和 4 各一票，所以之后所有玩家的 CEO 直属槽位变为 4。"
 	vbox.add_child(_make_rich_text(details, 140))
 
 	var slot_note := _make_label(
-		"槽位的作用：CEO 直属槽位决定 CEO 下面能直接放多少个员工或经理。区域经理、大区经理等经理员工再提供自己的下级槽位；免下车服务等能力也要依附在这套公司结构里生效。",
+		"槽位的作用：CEO 直属槽位决定 CEO 下面能直接放多少个员工或经理。经理员工再提供自己的下级槽位；如果重组时员工放不进结构，就只能留在储备区。",
 		15,
 		UiStylesClass.COLOR_TEXT_MUTED
 	)
 	vbox.add_child(slot_note)
+	return frame
+
+func _build_reserve_prices_variant_card() -> Control:
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 22)
+	margin.add_theme_constant_override("margin_top", 22)
+	margin.add_theme_constant_override("margin_right", 22)
+	margin.add_theme_constant_override("margin_bottom", 22)
+
+	var frame := PanelContainer.new()
+	frame.name = "ReservePricesVariantFrame"
+	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	frame.add_theme_stylebox_override("panel", _make_style(Color(0.92, 0.87, 0.76, 0.92), Color(0.17, 0.13, 0.09, 0.24), 1, 6))
+	frame.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+	margin.add_child(vbox)
+
+	var title := _make_label("储备价格扩展：规则会替换", 20, UiStylesClass.COLOR_TEXT_PRIMARY)
+	vbox.add_child(title)
+
+	var details := "如果房间启用了 Reserve Prices / 储备价格扩展，第一次破产规则不是上面的基础规则：\n"
+	details += "1. 开局储备卡改为 5 / 10 / 20 三种基础单价候选。\n"
+	details += "2. 第一次破产时，银行固定注资 $200 × 玩家人数，不再按卡面现金相加。\n"
+	details += "3. 这些卡不再改变 CEO 槽位；第一次破产不会因为储备卡投票去重设公司结构槽位。\n"
+	details += "4. 所有玩家已选的 5 / 10 / 20 参与投票，出现最多的数值成为之后晚餐使用的基础单价；平票按 20 > 5 > 10 决胜。\n"
+	details += "5. 第二次破产仍然是终局触发：完成当前晚餐结算后进入最终排名。"
+	vbox.add_child(_make_rich_text(details, 160))
 	return frame
 
 func _build_preview_map_state(tile_ids: Array = []) -> Dictionary:
@@ -1114,7 +1172,7 @@ func _build_real_map_preview(state, options: Dictionary) -> Control:
 	frame.name = "RealMapPreviewFrame"
 	frame.custom_minimum_size = MAP_PREVIEW_SIZE
 	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	frame.add_theme_stylebox_override("panel", _make_style(Color(0.93, 0.88, 0.77, 0.76), Color(0.17, 0.13, 0.09, 0.24), 1, 6))
+	frame.add_theme_stylebox_override("panel", _make_style(MAP_GROUND_COLOR, Color(0.17, 0.13, 0.09, 0.24), 1, 6))
 
 	var center := CenterContainer.new()
 	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
