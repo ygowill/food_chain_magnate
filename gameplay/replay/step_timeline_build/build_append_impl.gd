@@ -11,12 +11,18 @@ const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 
 static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary) -> Result:
+	return _build_append_impl(engine, existing_timeline, false)
+
+static func build_append_impl_mutating_owned(engine: GameEngine, owned_timeline: Dictionary) -> Result:
+	return _build_append_impl(engine, owned_timeline, true)
+
+static func _build_append_impl(engine: GameEngine, existing_timeline: Dictionary, mutate_owned: bool) -> Result:
 	if engine == null:
 		return Result.failure("StepTimelineBuild: engine 为空")
 	if existing_timeline == null or not (existing_timeline is Dictionary) or existing_timeline.is_empty():
 		return Result.failure("StepTimelineBuild: existing_timeline 为空")
 
-	var timeline: Dictionary = existing_timeline.duplicate(false)
+	var timeline: Dictionary = existing_timeline if bool(mutate_owned) else existing_timeline.duplicate(false)
 	var meta := StepTimelineHelpersClass.read_build_meta(timeline)
 	if meta.is_empty():
 		return Result.failure("StepTimelineBuild: existing_timeline 缺少 _build_meta，不能增量 append")
@@ -24,26 +30,6 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 		return Result.failure("StepTimelineBuild: existing_timeline._build_meta.processed_command_count 缺失或类型错误")
 	if not meta.has("last_event_sequence") or not (meta.get("last_event_sequence", null) is int):
 		return Result.failure("StepTimelineBuild: existing_timeline._build_meta.last_event_sequence 缺失或类型错误")
-	var steps: Array[Dictionary] = []
-	var steps_val = existing_timeline.get("steps", null)
-	if not (steps_val is Array):
-		return Result.failure("StepTimelineBuild: existing_timeline.steps 缺失或类型错误（期望 Array）")
-	var steps_src: Array = steps_val
-	for i in range(steps_src.size()):
-		var step_val = steps_src[i]
-		if not (step_val is Dictionary):
-			return Result.failure("StepTimelineBuild: existing_timeline.steps[%d] 类型错误（期望 Dictionary）" % i)
-		steps.append(Dictionary(step_val).duplicate(true))
-	var events_out: Array[Dictionary] = []
-	var events_val = existing_timeline.get("events", null)
-	if not (events_val is Array):
-		return Result.failure("StepTimelineBuild: existing_timeline.events 缺失或类型错误（期望 Array）")
-	var events_src: Array = events_val
-	for i in range(events_src.size()):
-		var event_val = events_src[i]
-		if not (event_val is Dictionary):
-			return Result.failure("StepTimelineBuild: existing_timeline.events[%d] 类型错误（期望 Dictionary）" % i)
-		events_out.append(Dictionary(event_val).duplicate(true))
 	var processed_command_count := int(meta.get("processed_command_count", 0))
 	if processed_command_count < 0:
 		return Result.failure("StepTimelineBuild: existing_timeline._build_meta.processed_command_count 不能为负数")
@@ -54,8 +40,6 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 				% [processed_command_count, total_command_count]
 		)
 
-	var old_step_count := int(steps.size())
-	var old_event_count := int(events_out.size())
 	var last_event_sequence := int(meta.get("last_event_sequence", 0))
 	if last_event_sequence < 0:
 		return Result.failure("StepTimelineBuild: existing_timeline._build_meta.last_event_sequence 不能为负数")
@@ -70,6 +54,14 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 	var pending_cleanup_throw_away_milestone_events: Array[Dictionary] = pending_cleanup_r.value
 
 	if processed_command_count == total_command_count:
+		var noop_steps_r := _read_dictionary_array_ref(existing_timeline, "steps", "existing_timeline")
+		if not noop_steps_r.ok:
+			return noop_steps_r
+		var noop_events_r := _read_dictionary_array_ref(existing_timeline, "events", "existing_timeline")
+		if not noop_events_r.ok:
+			return noop_events_r
+		var noop_steps: Array = noop_steps_r.value
+		var noop_events: Array = noop_events_r.value
 		timeline = StepTimelineHelpersClass.attach_build_meta_owned(
 			timeline,
 			total_command_count,
@@ -79,11 +71,30 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 		)
 		return Result.success({
 			"timeline": timeline,
-			"head_step_index": int(steps.size()) - 1,
+			"head_step_index": int(noop_steps.size()) - 1,
 			"append_applied": false,
+			"old_step_count": int(noop_steps.size()),
+			"old_event_count": int(noop_events.size()),
+			"processed_command_count": total_command_count,
 			"appended_steps": [],
 			"appended_events": [],
 		})
+
+	var steps_r := _read_or_duplicate_dictionary_array(existing_timeline, "steps", "existing_timeline", bool(mutate_owned))
+	if not steps_r.ok:
+		return steps_r
+	var steps: Array[Dictionary] = steps_r.value
+	var events_r := _read_or_duplicate_dictionary_array(existing_timeline, "events", "existing_timeline", bool(mutate_owned))
+	if not events_r.ok:
+		return events_r
+	var events_out: Array[Dictionary] = events_r.value
+	var old_step_count := int(steps.size())
+	var old_event_count := int(events_out.size())
+	var rollback_last_step: Dictionary = {}
+	if old_step_count > 0:
+		rollback_last_step = Dictionary(steps[old_step_count - 1]).duplicate(true)
+	var rollback_meta := meta.duplicate(true)
+	var rollback_had_meta := bool(timeline.has("_build_meta"))
 
 	var restore_r := _restore_tail_state(timeline, processed_command_count)
 	if not restore_r.ok:
@@ -94,7 +105,80 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 
 	var warnings: Array[String] = []
 	var seq := int(last_event_sequence)
+	var append_r := _append_commands(
+		engine,
+		replay_state,
+		steps,
+		events_out,
+		processed_command_count,
+		total_command_count,
+		seq,
+		pending_phase_exit_effects,
+		pending_cleanup_throw_away_milestone_events,
+		warnings
+	)
+	if not append_r.ok:
+		if bool(mutate_owned):
+			_rollback_mutating_append(
+				timeline,
+				steps,
+				events_out,
+				old_step_count,
+				old_event_count,
+				rollback_last_step,
+				rollback_meta,
+				rollback_had_meta
+			)
+		return append_r
+	if not (append_r.value is Dictionary):
+		if bool(mutate_owned):
+			_rollback_mutating_append(
+				timeline,
+				steps,
+				events_out,
+				old_step_count,
+				old_event_count,
+				rollback_last_step,
+				rollback_meta,
+				rollback_had_meta
+			)
+		return Result.failure("StepTimelineBuild: append 返回值类型错误（期望 Dictionary）").with_warnings(warnings)
+	var append_info: Dictionary = append_r.value
+	seq = int(append_info.get("seq", seq))
 
+	timeline["steps"] = steps
+	timeline["events"] = events_out
+	timeline = StepTimelineHelpersClass.attach_build_meta_owned(
+		timeline,
+		total_command_count,
+		seq,
+		pending_phase_exit_effects,
+		pending_cleanup_throw_away_milestone_events
+	)
+
+	return Result.success({
+		"timeline": timeline,
+		"head_step_index": int(steps.size()) - 1,
+		"append_applied": true,
+		"old_step_count": old_step_count,
+		"old_event_count": old_event_count,
+		"processed_command_count": total_command_count,
+		"appended_steps": _slice_dict_items(steps, old_step_count),
+		"appended_events": _slice_dict_items(events_out, old_event_count),
+	}).with_warnings(warnings)
+
+static func _append_commands(
+	engine: GameEngine,
+	replay_state: GameState,
+	steps: Array[Dictionary],
+	events_out: Array[Dictionary],
+	processed_command_count: int,
+	total_command_count: int,
+	seq: int,
+	pending_phase_exit_effects: Dictionary,
+	pending_cleanup_throw_away_milestone_events: Array[Dictionary],
+	warnings: Array[String]
+) -> Result:
 	for i in range(processed_command_count, total_command_count):
 		var cmd: Command = engine.command_history[i]
 		var step_result := ReplayStepRunnerClass.apply_replay_command(replay_state, cmd, engine.action_registry, i, "StepTimelineBuild")
@@ -248,23 +332,69 @@ static func build_append_impl(engine: GameEngine, existing_timeline: Dictionary)
 
 		replay_state = state_in
 
+	return Result.success({
+		"seq": seq,
+	}).with_warnings(warnings)
+
+static func _read_or_duplicate_dictionary_array(
+	timeline: Dictionary,
+	key: String,
+	context: String,
+	mutate_owned: bool
+) -> Result:
+	if timeline == null or not (timeline is Dictionary):
+		return Result.failure("StepTimelineBuild: %s 类型错误（期望 Dictionary）" % context)
+	var arr_val = timeline.get(key, null)
+	if not (arr_val is Array):
+		return Result.failure("StepTimelineBuild: %s.%s 缺失或类型错误（期望 Array）" % [context, key])
+	var arr: Array = arr_val
+	for i in range(arr.size()):
+		var item_val = arr[i]
+		if not (item_val is Dictionary):
+			return Result.failure("StepTimelineBuild: %s.%s[%d] 类型错误（期望 Dictionary）" % [context, key, i])
+	if bool(mutate_owned):
+		var owned: Array[Dictionary] = arr_val
+		return Result.success(owned)
+	var out: Array[Dictionary] = []
+	for item_val in arr:
+		out.append(Dictionary(item_val).duplicate(true))
+	return Result.success(out)
+
+static func _read_dictionary_array_ref(timeline: Dictionary, key: String, context: String) -> Result:
+	if timeline == null or not (timeline is Dictionary):
+		return Result.failure("StepTimelineBuild: %s 类型错误（期望 Dictionary）" % context)
+	var arr_val = timeline.get(key, null)
+	if not (arr_val is Array):
+		return Result.failure("StepTimelineBuild: %s.%s 缺失或类型错误（期望 Array）" % [context, key])
+	var arr: Array = arr_val
+	for i in range(arr.size()):
+		var item_val = arr[i]
+		if not (item_val is Dictionary):
+			return Result.failure("StepTimelineBuild: %s.%s[%d] 类型错误（期望 Dictionary）" % [context, key, i])
+	return Result.success(arr)
+
+static func _rollback_mutating_append(
+	timeline: Dictionary,
+	steps: Array[Dictionary],
+	events_out: Array[Dictionary],
+	old_step_count: int,
+	old_event_count: int,
+	old_last_step: Dictionary,
+	old_meta: Dictionary,
+	had_meta: bool
+) -> void:
+	while steps.size() > old_step_count:
+		steps.pop_back()
+	if old_step_count > 0:
+		steps[old_step_count - 1] = old_last_step.duplicate(true)
+	while events_out.size() > old_event_count:
+		events_out.pop_back()
 	timeline["steps"] = steps
 	timeline["events"] = events_out
-	timeline = StepTimelineHelpersClass.attach_build_meta_owned(
-		timeline,
-		total_command_count,
-		seq,
-		pending_phase_exit_effects,
-		pending_cleanup_throw_away_milestone_events
-	)
-
-	return Result.success({
-		"timeline": timeline,
-		"head_step_index": int(steps.size()) - 1,
-		"append_applied": true,
-		"appended_steps": _slice_dict_items(steps, old_step_count),
-		"appended_events": _slice_dict_items(events_out, old_event_count),
-	}).with_warnings(warnings)
+	if bool(had_meta):
+		timeline["_build_meta"] = old_meta.duplicate(true)
+	else:
+		timeline.erase("_build_meta")
 
 static func _restore_tail_state(timeline: Dictionary, processed_command_count: int) -> Result:
 	var state_dict: Dictionary = {}

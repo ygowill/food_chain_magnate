@@ -20,6 +20,26 @@ const PHASE_DISPLAY_NAMES: Dictionary = {
 	"GameOver": "游戏结束",
 }
 
+const DIRTY_TOP_STATUS := 1 << 0
+const DIRTY_TIMELINE_CURSOR := 1 << 1
+const DIRTY_LOG_APPEND := 1 << 2
+const DIRTY_MAP_VIEW := 1 << 3
+const DIRTY_PANEL_STATE := 1 << 4
+const DIRTY_ACTION_CONTROLS := 1 << 5
+const DIRTY_OVERLAYS := 1 << 6
+const DIRTY_DEBUG_PANEL := 1 << 7
+const DIRTY_FULL := 1 << 30
+const DIRTY_KNOWN_MASK := \
+	DIRTY_TOP_STATUS \
+	| DIRTY_TIMELINE_CURSOR \
+	| DIRTY_LOG_APPEND \
+	| DIRTY_MAP_VIEW \
+	| DIRTY_PANEL_STATE \
+	| DIRTY_ACTION_CONTROLS \
+	| DIRTY_OVERLAYS \
+	| DIRTY_DEBUG_PANEL \
+	| DIRTY_FULL
+
 var _get_game_engine: Callable = Callable()
 var _refresh_ui: Callable = Callable()
 var _sync_right_panel_docked_view: Callable = Callable()
@@ -101,6 +121,233 @@ func set_online_resync_controller(controller: Object) -> void:
 
 func set_debug_panel(panel: Window) -> void:
 	_debug_panel = panel
+
+func sync_dirty(dirty_flags: int, context: Dictionary = {}, do_profile: bool = false) -> void:
+	var flags := int(dirty_flags)
+	var full_fallback := _dirty_requires_full_fallback(flags)
+	var online_span_dirty := OnlinePerfTraceClass.begin_span("ui.online_sync.dirty", {
+		"dirty_flags": int(flags),
+		"full_fallback": bool(full_fallback),
+		"context": context,
+	})
+	if full_fallback:
+		update_ui(bool(do_profile))
+		OnlinePerfTraceClass.end_span(online_span_dirty, {
+			"dirty_flags": int(flags),
+			"mode": "full_fallback",
+			"full_fallback": true,
+		})
+		return
+	if not _get_game_engine.is_valid():
+		OnlinePerfTraceClass.end_span(online_span_dirty, {
+			"dirty_flags": int(flags),
+			"mode": "skipped",
+			"reason": "engine_callable_invalid",
+			"full_fallback": false,
+		})
+		return
+	var engine_val = _get_game_engine.call()
+	var game_engine: GameEngine = engine_val if engine_val is GameEngine else null
+	if game_engine == null:
+		OnlinePerfTraceClass.end_span(online_span_dirty, {
+			"dirty_flags": int(flags),
+			"mode": "skipped",
+			"reason": "engine_missing",
+			"full_fallback": false,
+		})
+		return
+	var state: GameState = game_engine.get_state()
+	if state == null:
+		OnlinePerfTraceClass.end_span(online_span_dirty, {
+			"dirty_flags": int(flags),
+			"mode": "skipped",
+			"reason": "state_missing",
+			"full_fallback": false,
+		})
+		return
+	_mark_online_resume_terminal_if_game_over(state)
+
+	var head_index := int(game_engine.command_history.size() - 1)
+	var cursor_index := int(game_engine.current_command_index)
+	if is_instance_valid(_timeline_controller):
+		var hc = _timeline_controller.call("get_ui_head_cursor", game_engine)
+		if hc is Vector2i:
+			head_index = int(hc.x)
+			cursor_index = int(hc.y)
+
+	if bool(flags & DIRTY_TOP_STATUS):
+		_sync_top_status(state)
+	if bool(flags & DIRTY_TIMELINE_CURSOR):
+		_sync_timeline_ui(state, head_index, cursor_index)
+	if bool(flags & DIRTY_MAP_VIEW):
+		_sync_map_view(state, bool(do_profile))
+	if bool(flags & DIRTY_OVERLAYS):
+		_sync_overlays(state, head_index, cursor_index, bool(do_profile))
+	if bool(flags & DIRTY_PANEL_STATE):
+		if not _sync_panel_action_state(state):
+			update_ui(bool(do_profile))
+			OnlinePerfTraceClass.end_span(online_span_dirty, {
+				"dirty_flags": int(flags),
+				"mode": "full_fallback",
+				"reason": "panel_action_state_unavailable",
+				"full_fallback": true,
+			})
+			return
+	if bool(flags & DIRTY_ACTION_CONTROLS) or bool(flags & DIRTY_OVERLAYS):
+		_sync_action_flow_controls()
+	if bool(flags & DIRTY_DEBUG_PANEL):
+		_sync_debug_panel(state)
+
+	_maybe_show_online_turn_toast(head_index, cursor_index, state)
+	_maybe_show_phase_change_toast(head_index, cursor_index, state)
+	_maybe_open_first_have_20_overview(game_engine, state)
+
+	OnlinePerfTraceClass.end_span(online_span_dirty, {
+		"dirty_flags": int(flags),
+		"mode": "partial",
+		"full_fallback": false,
+	})
+
+func _dirty_requires_full_fallback(flags: int) -> bool:
+	if flags <= 0:
+		return true
+	if bool(flags & DIRTY_FULL):
+		return true
+	if bool(flags & ~DIRTY_KNOWN_MASK):
+		return true
+	var supported_partial_mask := \
+		DIRTY_TOP_STATUS \
+		| DIRTY_TIMELINE_CURSOR \
+		| DIRTY_LOG_APPEND \
+		| DIRTY_MAP_VIEW \
+		| DIRTY_PANEL_STATE \
+		| DIRTY_ACTION_CONTROLS \
+		| DIRTY_OVERLAYS \
+		| DIRTY_DEBUG_PANEL
+	return bool(flags & ~supported_partial_mask)
+
+func _sync_top_status(state: GameState) -> void:
+	if state == null:
+		return
+	if is_instance_valid(_round_label):
+		if str(state.phase) == DefsClass.PHASE_SETUP:
+			_round_label.text = "准备阶段"
+		else:
+			_round_label.text = "第 %d 回合" % int(state.round_number)
+	if is_instance_valid(_phase_track) and _phase_track.has_method("set_current_phase"):
+		_phase_track.set_current_phase(str(state.phase).strip_edges())
+
+	if is_instance_valid(_bank_label) and not _skip_bank_sync:
+		_bank_label.text = "$%d" % int(state.bank.get("total", 0))
+	if is_instance_valid(_bank_break_tag):
+		var broke_count := int(state.bank.get("broke_count", 0))
+		_bank_break_tag.visible = broke_count >= 1
+	if is_instance_valid(_game_log_panel) and _game_log_panel.has_method("set_player_count"):
+		_game_log_panel.call("set_player_count", int(state.players.size()))
+
+func _sync_timeline_ui(state: GameState, head_index: int, cursor_index: int) -> void:
+	if state == null:
+		return
+	if is_instance_valid(_timeline_controller) and _timeline_controller.has_method("sync_timeline_ui"):
+		var online_span_timeline := OnlinePerfTraceClass.begin_span("ui.online_sync.timeline_ui", {
+			"phase": str(state.phase),
+			"round": int(state.round_number),
+			"head_index": int(head_index),
+			"cursor_index": int(cursor_index),
+		})
+		_timeline_controller.call("sync_timeline_ui", head_index, cursor_index, state)
+		OnlinePerfTraceClass.end_span(online_span_timeline, {
+			"phase": str(state.phase),
+			"round": int(state.round_number),
+			"head_index": int(head_index),
+			"cursor_index": int(cursor_index),
+		})
+
+func _sync_map_view(state: GameState, do_profile: bool) -> void:
+	if state == null:
+		return
+	if is_instance_valid(_map_view) and _map_view.has_method("set_game_state"):
+		var span_map := PerfTraceClass.begin_span("ui:map_view.set_game_state") if do_profile else -1
+		var online_span_map := OnlinePerfTraceClass.begin_span("ui.online_sync.map_view", {
+			"phase": str(state.phase),
+			"round": int(state.round_number),
+		})
+		_map_view.call("set_game_state", state)
+		if do_profile:
+			PerfTraceClass.end_span(span_map)
+		OnlinePerfTraceClass.end_span(online_span_map, {
+			"phase": str(state.phase),
+			"round": int(state.round_number),
+		})
+
+func _sync_overlays(state: GameState, head_index: int, cursor_index: int, do_profile: bool) -> void:
+	if state == null:
+		return
+	if is_instance_valid(_overlay_controller):
+		var span_overlays := PerfTraceClass.begin_span("ui:overlay_controller.sync") if do_profile else -1
+		var online_span_overlays := OnlinePerfTraceClass.begin_span("ui.online_sync.overlay_controller", {
+			"phase": str(state.phase),
+			"round": int(state.round_number),
+			"timeline_at_head": bool(head_index == cursor_index),
+		})
+		if _overlay_controller.has_method("sync_demand_indicator"):
+			_overlay_controller.call("sync_demand_indicator", state)
+		if _overlay_controller.has_method("sync_dinnertime_overlay"):
+			_overlay_controller.call("sync_dinnertime_overlay", state, head_index == cursor_index)
+		if _overlay_controller.has_method("sync_marketing_overlay"):
+			_overlay_controller.call("sync_marketing_overlay", state, head_index == cursor_index)
+		if do_profile:
+			PerfTraceClass.end_span(span_overlays)
+		OnlinePerfTraceClass.end_span(online_span_overlays, {
+			"phase": str(state.phase),
+			"round": int(state.round_number),
+			"timeline_at_head": bool(head_index == cursor_index),
+		})
+
+func _sync_action_flow_controls() -> void:
+	if is_instance_valid(_panel_controller) and _panel_controller.has_method("sync_action_flow_controls"):
+		_panel_controller.call("sync_action_flow_controls")
+
+func _sync_panel_action_state(state: GameState) -> bool:
+	if state == null:
+		return false
+	if not is_instance_valid(_panel_controller):
+		return false
+	if not _panel_controller.has_method("sync_action_state"):
+		return false
+	var force_refresh := false
+	if is_instance_valid(_timeline_controller) and _timeline_controller.has_method("consume_force_full_panel_sync_next_update"):
+		force_refresh = bool(_timeline_controller.call("consume_force_full_panel_sync_next_update"))
+	var online_span_panels := OnlinePerfTraceClass.begin_span("ui.online_sync.panel_controller", {
+		"phase": str(state.phase),
+		"round": int(state.round_number),
+		"force_refresh": bool(force_refresh),
+		"mode": "action_state",
+	})
+	_panel_controller.call("sync_action_state", state, force_refresh)
+	if _sync_right_panel_docked_view.is_valid():
+		_sync_right_panel_docked_view.call()
+	OnlinePerfTraceClass.end_span(online_span_panels, {
+		"phase": str(state.phase),
+		"round": int(state.round_number),
+		"force_refresh": bool(force_refresh),
+		"mode": "action_state",
+	})
+	return true
+
+func _sync_debug_panel(state: GameState) -> void:
+	if state == null:
+		return
+	if _debug_panel != null and is_instance_valid(_debug_panel) and _debug_panel.visible and _debug_panel.has_method("refresh_state"):
+		var online_span_debug_panel := OnlinePerfTraceClass.begin_span("ui.online_sync.debug_panel", {
+			"phase": str(state.phase),
+			"round": int(state.round_number),
+		})
+		_debug_panel.call("refresh_state")
+		OnlinePerfTraceClass.end_span(online_span_debug_panel, {
+			"phase": str(state.phase),
+			"round": int(state.round_number),
+		})
 
 func update_ui(do_profile: bool) -> void:
 	if not _get_game_engine.is_valid():

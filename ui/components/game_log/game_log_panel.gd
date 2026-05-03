@@ -37,6 +37,12 @@ const _BACKGROUND_TIMELINE_MIN_ENTRIES := 192
 const _DESCRIPTOR_COMMIT_REBUILD_SLICE_SIZE := 24
 const _DESCRIPTOR_COMMIT_APPEND_SLICE_SIZE := 32
 
+var _timeline_window_min_steps: int = 512
+var _timeline_window_step_count: int = 240
+var _virtual_descriptor_window_item_count: int = 96
+var _virtual_descriptor_buffer_items: int = 16
+var _virtual_item_estimated_height: float = 34.0
+
 # 日志类型
 enum LogType {
 	SYSTEM,      # 系统消息
@@ -78,6 +84,9 @@ var _step_timeline: Dictionary = {} # {initial_state_dict, steps[], events[]}
 var _timeline_entries: Array[Dictionary] = [] # timeline events formatted as entries
 var _extra_entries: Array[Dictionary] = [] # UI-only logs (e.g. failed action)
 var _entries_all: Array[Dictionary] = []  # merged entries for details lookup
+var _timeline_entries_by_step_index: Dictionary = {} # step_index -> Array[Dictionary]
+var _step_timeline_signature: Dictionary = {}
+var _timeline_entries_signature: Dictionary = {}
 var _entry_id_counter: int = 0
 var _log_items: Array[Control] = [] # GameLogItem / GameLogRoundHeaderItem / GameLogPhaseHeaderItem / GameLogActionGroupHeaderItem / GameLogEventItem
 var _log_item_pool: Dictionary = {} # kind -> Array[Control]
@@ -118,6 +127,17 @@ var _descriptor_commit_patch_end_step_index: int = -999
 var _descriptor_commit_added_item_count: int = 0
 var _descriptor_commit_slice_count: int = 0
 var _descriptor_commit_span = null
+var _timeline_display_window_start_step_index: int = 0
+var _timeline_display_window_end_step_index: int = -1
+var _virtual_timeline_active: bool = false
+var _virtual_timeline_descriptors: Array = []
+var _virtual_visible_entry_count: int = -1
+var _virtual_descriptor_start_index: int = 0
+var _virtual_descriptor_end_exclusive: int = 0
+var _virtual_top_spacer: Control = null
+var _virtual_bottom_spacer: Control = null
+var _virtual_scroll_refresh_scheduled: bool = false
+var _virtual_scroll_syncing: bool = false
 
 func _ready() -> void:
 	set_process(false)
@@ -139,6 +159,11 @@ func _ready() -> void:
 	if fold_details_check != null:
 		fold_details_check.toggled.connect(_on_fold_details_toggled)
 		fold_details_check.button_pressed = _fold_details_enabled
+
+	if scroll_container != null:
+		var v_scroll = scroll_container.get_v_scroll_bar()
+		if v_scroll != null and not v_scroll.value_changed.is_connected(_on_virtual_scroll_value_changed):
+			v_scroll.value_changed.connect(_on_virtual_scroll_value_changed)
 
 	if options_row != null:
 		options_row.visible = false
@@ -247,6 +272,23 @@ func get_step_timeline_entries() -> Array[Dictionary]:
 func get_last_step_timeline_update_mode() -> String:
 	return _last_step_timeline_update_mode
 
+func get_display_item_count() -> int:
+	return int(_log_items.size())
+
+func get_step_timeline_display_window() -> Dictionary:
+	return {
+		"windowed": bool(_virtual_timeline_active or _is_timeline_display_windowed()),
+		"virtualized": bool(_virtual_timeline_active),
+		"start_step_index": int(_timeline_display_window_start_step_index),
+		"end_step_index": int(_timeline_display_window_end_step_index),
+		"step_count": int(_get_step_count(_step_timeline)),
+		"display_item_count": int(_log_items.size()),
+		"log_child_count": int(log_container.get_child_count()) if log_container != null else 0,
+		"descriptor_count": int(_virtual_timeline_descriptors.size()) if _virtual_timeline_active else 0,
+		"descriptor_start_index": int(_virtual_descriptor_start_index) if _virtual_timeline_active else 0,
+		"descriptor_end_exclusive": int(_virtual_descriptor_end_exclusive) if _virtual_timeline_active else 0,
+	}
+
 func has_step_timeline_loaded() -> bool:
 	return _is_step_timeline_loaded()
 
@@ -334,6 +376,11 @@ func _should_use_background_timeline_job(timeline: Dictionary, entries_all: Arra
 
 func _should_use_background_timeline_job_for_count(timeline: Dictionary, entry_count: int) -> bool:
 	return _get_step_count(timeline) >= _BACKGROUND_TIMELINE_MIN_STEPS or int(entry_count) >= _BACKGROUND_TIMELINE_MIN_ENTRIES
+
+func _should_use_background_append_timeline_job(timeline: Dictionary, appended_entry_count: int) -> bool:
+	var appended_step_count := maxi(0, _get_step_count(timeline) - _get_step_count(_step_timeline))
+	return int(appended_step_count) >= _BACKGROUND_TIMELINE_MIN_STEPS \
+		or int(appended_entry_count) >= _BACKGROUND_TIMELINE_MIN_ENTRIES
 
 func _invalidate_background_timeline_jobs() -> void:
 	_timeline_background_generation += 1
@@ -466,22 +513,17 @@ func _apply_committed_step_timeline_state(timeline: Dictionary, timeline_entries
 	_timeline_entries = _duplicate_entry_array(timeline_entries)
 	_extra_entries = _duplicate_entry_array(extra_entries)
 	_rebuild_entries_all()
+	_refresh_step_timeline_signatures()
 
 func _apply_background_job_state(job: Dictionary) -> void:
 	var mode := str(job.get("mode", "")).strip_edges()
 	if mode == "append":
-		var append_state := _build_append_committed_state_from_job(job)
-		var append_timeline_val = append_state.get("timeline", {})
+		_emit_background_append_state_mismatch(job)
+		var append_timeline_val = job.get("timeline", {})
 		var append_timeline: Dictionary = append_timeline_val if (append_timeline_val is Dictionary) else {}
-		var append_timeline_entries_val = append_state.get("timeline_entries", [])
-		var append_timeline_entries: Array = append_timeline_entries_val if (append_timeline_entries_val is Array) else []
-		var append_extra_entries_val = append_state.get("extra_entries", [])
-		var append_extra_entries: Array = append_extra_entries_val if (append_extra_entries_val is Array) else []
-		_apply_committed_step_timeline_state_owned(
-			append_timeline,
-			append_timeline_entries,
-			append_extra_entries
-		)
+		var appended_entries_val = job.get("appended_timeline_entries", [])
+		var appended_entries: Array = appended_entries_val if (appended_entries_val is Array) else []
+		_apply_appended_step_timeline_state_owned(append_timeline, appended_entries)
 		return
 
 	var timeline_val = job.get("timeline", {})
@@ -510,35 +552,36 @@ func _apply_committed_step_timeline_state_owned(timeline: Dictionary, timeline_e
 	_extra_entries = committed_extra_entries
 
 	_rebuild_entries_all()
+	_refresh_step_timeline_signatures()
 
-func _build_append_committed_state_from_job(job: Dictionary) -> Dictionary:
-	var timeline_val = job.get("timeline", {})
-	var timeline: Dictionary = timeline_val if (timeline_val is Dictionary) else {}
+func _apply_appended_step_timeline_state_owned(timeline: Dictionary, appended_timeline_entries: Array) -> void:
+	_step_timeline = timeline.duplicate(false) if (timeline is Dictionary) else {}
+	for entry_val in appended_timeline_entries:
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
+		_timeline_entries.append(entry)
+		if _extra_entries.is_empty():
+			_entries_all.append(entry)
+			_index_entry_by_step(entry)
+	if not _extra_entries.is_empty():
+		_rebuild_entries_all()
+	_refresh_step_timeline_signatures()
+
+func _emit_background_append_state_mismatch(job: Dictionary) -> void:
+	if not OnlinePerfTraceClass.enabled():
+		return
 	var base_timeline_entry_count := int(job.get("base_timeline_entry_count", -1))
 	var base_extra_entry_count := int(job.get("base_extra_entry_count", -1))
-	if OnlinePerfTraceClass.enabled():
-		var timeline_count_mismatch := base_timeline_entry_count >= 0 and base_timeline_entry_count != _timeline_entries.size()
-		var extra_count_mismatch := base_extra_entry_count >= 0 and base_extra_entry_count != _extra_entries.size()
-		if timeline_count_mismatch or extra_count_mismatch:
-			OnlinePerfTraceClass.emit_event("ui.game_log.append_background_state_mismatch", {
-				"expected_timeline_entry_count": int(base_timeline_entry_count),
-				"actual_timeline_entry_count": int(_timeline_entries.size()),
-				"expected_extra_entry_count": int(base_extra_entry_count),
-				"actual_extra_entry_count": int(_extra_entries.size()),
-			})
-
-	var next_timeline_entries: Array = _timeline_entries.duplicate(false)
-	var appended_entries_val = job.get("appended_timeline_entries", [])
-	if appended_entries_val is Array:
-		for entry_val in appended_entries_val:
-			if entry_val is Dictionary:
-				next_timeline_entries.append(entry_val)
-
-	return {
-		"timeline": timeline,
-		"timeline_entries": next_timeline_entries,
-		"extra_entries": _extra_entries.duplicate(false),
-	}
+	var timeline_count_mismatch := base_timeline_entry_count >= 0 and base_timeline_entry_count != _timeline_entries.size()
+	var extra_count_mismatch := base_extra_entry_count >= 0 and base_extra_entry_count != _extra_entries.size()
+	if timeline_count_mismatch or extra_count_mismatch:
+		OnlinePerfTraceClass.emit_event("ui.game_log.append_background_state_mismatch", {
+			"expected_timeline_entry_count": int(base_timeline_entry_count),
+			"actual_timeline_entry_count": int(_timeline_entries.size()),
+			"expected_extra_entry_count": int(base_extra_entry_count),
+			"actual_extra_entry_count": int(_extra_entries.size()),
+		})
 
 func _update_visible_entry_count_cache_from_background_result(job: Dictionary, descriptor_info: Dictionary) -> void:
 	var mode := str(job.get("mode", "")).strip_edges()
@@ -574,6 +617,8 @@ func _apply_descriptor_rebuild_result(descriptors: Array) -> void:
 		Callable(self, "_acquire_log_item")
 	)
 	_log_items = items
+	_timeline_display_window_start_step_index = 0
+	_timeline_display_window_end_step_index = _get_step_count(_step_timeline) - 1
 	for item in _log_items:
 		if item is Control:
 			_connect_item_hover_signals(item)
@@ -713,7 +758,13 @@ func _finish_descriptor_commit() -> void:
 	if fold_details_check != null:
 		fold_details_check.button_pressed = _fold_details_enabled
 	_last_step_timeline_update_mode = mode if not mode.is_empty() else "rebuild"
-	_apply_timeline_state_to_items()
+	if not _is_timeline_display_windowed():
+		_timeline_display_window_start_step_index = 0
+		_timeline_display_window_end_step_index = _get_step_count(_step_timeline) - 1
+	var timeline_state_update_mode := "append_items_initialized"
+	if mode != "append":
+		timeline_state_update_mode = "full"
+		_apply_timeline_state_to_items()
 	_request_scroll_to_bottom()
 	_update_entry_count()
 	_update_process_state()
@@ -723,6 +774,7 @@ func _finish_descriptor_commit() -> void:
 		"log_item_count": int(_log_items.size()),
 		"slice_count": int(slice_count),
 		"chunked": true,
+		"timeline_state_update_mode": str(timeline_state_update_mode),
 	}
 	if mode == "append":
 		span_fields["added_item_count"] = int(added_item_count)
@@ -742,7 +794,16 @@ func _cancel_pending_descriptor_commit() -> void:
 func _update_process_state() -> void:
 	set_process(_timeline_background_thread != null or _descriptor_commit_active)
 
+func _should_build_display_now() -> bool:
+	return is_inside_tree() and is_visible_in_tree()
+
 func _patch_last_phase_header_end_step_index(end_step_index: int) -> void:
+	var item := _get_last_timeline_phase_header_item()
+	if item == null:
+		return
+	item.end_step_index = int(end_step_index)
+
+func _get_last_timeline_phase_header_item() -> Control:
 	for idx in range(_timeline_phase_header_items.size() - 1, -1, -1):
 		var item_val = _timeline_phase_header_items[idx]
 		if not (item_val is Control):
@@ -750,8 +811,8 @@ func _patch_last_phase_header_end_step_index(end_step_index: int) -> void:
 		var item: Control = item_val
 		if not is_instance_valid(item):
 			continue
-		item.end_step_index = int(end_step_index)
-		return
+		return item
+	return null
 
 func _shutdown_background_timeline_worker() -> void:
 	_timeline_background_pending_job.clear()
@@ -770,6 +831,9 @@ func load_entries(entries: Array[Dictionary]) -> void:
 	_timeline_entries.clear()
 	_extra_entries.clear()
 	_entries_all.clear()
+	_timeline_entries_by_step_index.clear()
+	_reset_step_timeline_signatures()
+	_reset_timeline_display_window()
 	_visible_entry_count_cached = -1
 	_blank_display_warned = false
 	_entry_id_counter = 0
@@ -804,18 +868,19 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 		"reset_extra_entries": bool(reset_extra_entries),
 		"timeline_loaded": bool(_is_step_timeline_loaded()),
 	})
-	var next_timeline: Dictionary = timeline.duplicate(true) if (timeline is Dictionary) else {}
-	if _can_append_step_timeline(next_timeline, entries, bool(reset_extra_entries)):
+	var append_timeline: Dictionary = timeline.duplicate(false) if (timeline is Dictionary) else {}
+	if _should_build_display_now() and _can_append_step_timeline(append_timeline, entries, bool(reset_extra_entries)):
 		var appended_entries := _build_appended_timeline_entries(entries)
-		if append_step_timeline(next_timeline, appended_entries, bool(reset_extra_entries)):
+		if append_step_timeline(append_timeline, appended_entries, bool(reset_extra_entries)):
 			OnlinePerfTraceClass.end_span(span, {
 				"mode": "append",
+				"append_precheck_copy": "shallow",
 				"entry_count": int(_entries_all.size()),
 				"timeline_step_count": int(_get_step_count(_step_timeline)),
 			})
 			return
 
-	next_timeline = timeline.duplicate(true) if (timeline is Dictionary) else {}
+	var next_timeline: Dictionary = timeline.duplicate(true) if (timeline is Dictionary) else {}
 	var next_timeline_entries: Array[Dictionary] = []
 	if not _is_step_timeline_loaded() and _timeline_entries.is_empty() and _extra_entries.is_empty():
 		next_timeline_entries = _adopt_entry_array_preserving_ids(entries)
@@ -826,6 +891,43 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 	if not bool(reset_extra_entries):
 		next_extra_entries = _duplicate_entry_array(_extra_entries)
 	var next_entries_count := next_timeline_entries.size() + next_extra_entries.size()
+	if not _should_build_display_now():
+		_invalidate_background_timeline_jobs()
+		_apply_committed_step_timeline_state(next_timeline, next_timeline_entries, next_extra_entries)
+		_blank_display_warned = false
+		_prune_expanded_action_groups()
+		if fold_details_check != null:
+			fold_details_check.button_pressed = _fold_details_enabled
+		_clear_display()
+		_visible_entry_count_cached = -1
+		_update_entry_count()
+		_last_step_timeline_update_mode = "rebuild_hidden"
+		OnlinePerfTraceClass.end_span(span, {
+			"mode": "rebuild_hidden",
+			"skipped_display": true,
+			"entry_count": int(_entries_all.size()),
+			"timeline_step_count": int(_get_step_count(_step_timeline)),
+		})
+		return
+	if _should_use_timeline_window_for_timeline(next_timeline):
+		_invalidate_background_timeline_jobs()
+		_apply_committed_step_timeline_state(next_timeline, next_timeline_entries, next_extra_entries)
+		_blank_display_warned = false
+		_prune_expanded_action_groups()
+		if fold_details_check != null:
+			fold_details_check.button_pressed = _fold_details_enabled
+
+		_rebuild_display()
+		_request_scroll_to_bottom()
+		_update_entry_count()
+		_last_step_timeline_update_mode = "rebuild_virtual"
+		OnlinePerfTraceClass.end_span(span, {
+			"mode": "rebuild_virtual",
+			"entry_count": int(_entries_all.size()),
+			"timeline_step_count": int(_get_step_count(_step_timeline)),
+			"display_window": get_step_timeline_display_window(),
+		})
+		return
 	if _should_use_background_timeline_job_for_count(next_timeline, next_entries_count):
 		var next_entries_all := _build_entries_all_for_state(next_timeline_entries, next_extra_entries)
 		_queue_background_timeline_job({
@@ -890,7 +992,85 @@ func append_step_timeline(timeline: Dictionary, appended_entries: Array[Dictiona
 	var next_timeline: Dictionary = timeline.duplicate(false)
 	var normalized_appended_entries := _duplicate_entry_array_with_fresh_ids(appended_entries)
 	var next_entries_count := _timeline_entries.size() + normalized_appended_entries.size() + _extra_entries.size()
-	if _should_use_background_timeline_job_for_count(next_timeline, next_entries_count):
+	var appended_step_count := maxi(0, _get_step_count(next_timeline) - _get_step_count(_step_timeline))
+	if _should_use_timeline_window_for_timeline(next_timeline):
+		if _virtual_timeline_active:
+			var old_step_count := _get_step_count(_step_timeline)
+			var was_keep_scroll_at_bottom := _should_keep_scroll_at_bottom()
+			var virtual_append_info := _append_virtual_step_timeline_display(next_timeline, normalized_appended_entries, old_step_count)
+			if not bool(virtual_append_info.get("ok", false)):
+				OnlinePerfTraceClass.end_span(span, {
+					"ok": false,
+					"reason": str(virtual_append_info.get("reason", "virtual_append_failed")),
+				})
+				return false
+
+			_apply_appended_step_timeline_state_owned(next_timeline, normalized_appended_entries)
+			_blank_display_warned = false
+			_prune_expanded_action_groups()
+			if fold_details_check != null:
+				fold_details_check.button_pressed = _fold_details_enabled
+			if was_keep_scroll_at_bottom:
+				_render_virtual_descriptor_window(_get_virtual_tail_descriptor_start())
+			else:
+				_update_virtual_spacers()
+			_last_step_timeline_update_mode = "append_virtual"
+			_request_scroll_to_bottom()
+			_update_entry_count()
+			OnlinePerfTraceClass.end_span(span, {
+				"ok": true,
+				"mode": "append_virtual",
+				"entry_count": int(_entries_all.size()),
+				"appended_entry_count": int(normalized_appended_entries.size()),
+				"appended_step_count": int(appended_step_count),
+				"appended_descriptor_count": int(virtual_append_info.get("descriptor_count", 0)),
+				"timeline_step_count": int(_get_step_count(_step_timeline)),
+				"display_window": get_step_timeline_display_window(),
+			})
+			return true
+		if _can_slide_tail_timeline_window_for_append(next_timeline, appended_step_count):
+			if _append_step_timeline_display(next_timeline, normalized_appended_entries):
+				_apply_appended_step_timeline_state_owned(next_timeline, normalized_appended_entries)
+				_blank_display_warned = false
+				_prune_expanded_action_groups()
+				if fold_details_check != null:
+					fold_details_check.button_pressed = _fold_details_enabled
+				_trim_timeline_display_window_to_bounds(_get_timeline_display_window_bounds(_step_timeline))
+				_last_step_timeline_update_mode = "append_window"
+				_request_scroll_to_bottom()
+				_update_entry_count()
+				OnlinePerfTraceClass.end_span(span, {
+					"ok": true,
+					"mode": "append_window",
+					"window_slide": true,
+					"entry_count": int(_entries_all.size()),
+					"appended_entry_count": int(normalized_appended_entries.size()),
+					"appended_step_count": int(appended_step_count),
+					"timeline_step_count": int(_get_step_count(_step_timeline)),
+					"display_window": get_step_timeline_display_window(),
+				})
+				return true
+
+		_apply_appended_step_timeline_state_owned(next_timeline, normalized_appended_entries)
+		_blank_display_warned = false
+		_prune_expanded_action_groups()
+		if fold_details_check != null:
+			fold_details_check.button_pressed = _fold_details_enabled
+		_rebuild_display()
+		_last_step_timeline_update_mode = "append_window"
+		_request_scroll_to_bottom()
+		_update_entry_count()
+		OnlinePerfTraceClass.end_span(span, {
+			"ok": true,
+			"mode": "append_window",
+			"entry_count": int(_entries_all.size()),
+			"appended_entry_count": int(normalized_appended_entries.size()),
+			"appended_step_count": int(appended_step_count),
+			"timeline_step_count": int(_get_step_count(_step_timeline)),
+			"display_window": get_step_timeline_display_window(),
+		})
+		return true
+	if _should_use_background_append_timeline_job(next_timeline, normalized_appended_entries.size()):
 		_queue_background_timeline_job({
 			"mode": "append",
 			"timeline": next_timeline,
@@ -910,31 +1090,33 @@ func append_step_timeline(timeline: Dictionary, appended_entries: Array[Dictiona
 			"background": true,
 			"mode": "append_async",
 			"entry_count": int(next_entries_count),
+			"appended_entry_count": int(normalized_appended_entries.size()),
+			"appended_step_count": int(appended_step_count),
 			"timeline_step_count": int(_get_step_count(next_timeline)),
 		})
 		return true
 
-	var next_timeline_entries := _duplicate_entry_array(_timeline_entries)
-	for appended in normalized_appended_entries:
-		next_timeline_entries.append(appended)
-	var next_extra_entries := _duplicate_entry_array(_extra_entries)
 	if not _append_step_timeline_display(next_timeline, normalized_appended_entries):
 		OnlinePerfTraceClass.end_span(span, {"ok": false, "reason": "append_display_failed"})
 		return false
 
-	_apply_committed_step_timeline_state(next_timeline, next_timeline_entries, next_extra_entries)
+	_apply_appended_step_timeline_state_owned(next_timeline, normalized_appended_entries)
 	_blank_display_warned = false
 	_prune_expanded_action_groups()
 	if fold_details_check != null:
 		fold_details_check.button_pressed = _fold_details_enabled
+	_timeline_display_window_start_step_index = 0
+	_timeline_display_window_end_step_index = _get_step_count(_step_timeline) - 1
 	_last_step_timeline_update_mode = "append"
-	_apply_timeline_state_to_items()
 	_request_scroll_to_bottom()
 	_update_entry_count()
 	OnlinePerfTraceClass.end_span(span, {
 		"ok": true,
 		"entry_count": int(_entries_all.size()),
+		"appended_entry_count": int(normalized_appended_entries.size()),
+		"appended_step_count": int(appended_step_count),
 		"timeline_step_count": int(_get_step_count(_step_timeline)),
+		"timeline_state_update_mode": "append_items_initialized",
 	})
 	return true
 
@@ -949,6 +1131,8 @@ func set_timeline_head(head_index: int, update_visible_items: bool = true) -> vo
 	var previous_cursor_index := int(_timeline_cursor_index)
 	var previous_head_index := int(_timeline_head_index)
 	_timeline_head_index = h
+	if bool(update_visible_items) and _maybe_rebuild_timeline_display_window(false):
+		return
 	if bool(update_visible_items):
 		_apply_timeline_state_delta(previous_cursor_index, previous_head_index)
 
@@ -962,6 +1146,8 @@ func set_timeline_cursor(cursor_index: int, update_visible_items: bool = true) -
 	var previous_head_index := int(_timeline_head_index)
 	_timeline_cursor_index = c
 	var should_scroll_to_cursor := _timeline_cursor_index < _timeline_head_index
+	if bool(update_visible_items) and _maybe_rebuild_timeline_display_window(should_scroll_to_cursor):
+		return
 	if bool(update_visible_items):
 		_apply_timeline_state_delta(previous_cursor_index, previous_head_index, should_scroll_to_cursor)
 	if bool(update_visible_items) and not should_scroll_to_cursor:
@@ -979,6 +1165,8 @@ func set_timeline_head_cursor(head_index: int, cursor_index: int, update_visible
 	_timeline_head_index = h
 	_timeline_cursor_index = c
 	var should_scroll_to_cursor := c < h
+	if bool(update_visible_items) and _maybe_rebuild_timeline_display_window(should_scroll_to_cursor):
+		return
 	if bool(update_visible_items):
 		_apply_timeline_state_delta(previous_cursor_index, previous_head_index, should_scroll_to_cursor)
 	if bool(update_visible_items) and not should_scroll_to_cursor:
@@ -1000,6 +1188,7 @@ func set_entry_command_index(entry_id: int, command_index: int) -> void:
 		details["command_index"] = cmd
 		e["details"] = details
 		_entries_all[i] = e
+		_rebuild_entries_by_step_index()
 		break
 
 func add_system_log(message: String, details: Dictionary = {}) -> int:
@@ -1040,6 +1229,9 @@ func clear_logs() -> void:
 	_timeline_entries.clear()
 	_extra_entries.clear()
 	_entries_all.clear()
+	_timeline_entries_by_step_index.clear()
+	_reset_step_timeline_signatures()
+	_reset_timeline_display_window()
 	_visible_entry_count_cached = -1
 	_blank_display_warned = false
 	_fold_details_enabled = false
@@ -1134,6 +1326,479 @@ func _on_resized() -> void:
 func _should_keep_scroll_at_bottom() -> bool:
 	return _auto_scroll and _timeline_cursor_index >= _timeline_head_index
 
+func _reset_timeline_display_window() -> void:
+	_timeline_display_window_start_step_index = 0
+	_timeline_display_window_end_step_index = -1
+
+func _is_timeline_display_windowed() -> bool:
+	if _virtual_timeline_active:
+		return true
+	var step_count := _get_step_count(_step_timeline)
+	if step_count <= 0:
+		return false
+	return int(_timeline_display_window_start_step_index) > 0 \
+		or (int(_timeline_display_window_end_step_index) >= 0 and int(_timeline_display_window_end_step_index) < step_count - 1)
+
+func _should_use_timeline_window_for_timeline(timeline: Dictionary) -> bool:
+	var step_count := _get_step_count(timeline)
+	return int(_timeline_window_step_count) > 0 \
+		and step_count >= maxi(1, int(_timeline_window_min_steps)) \
+		and step_count > int(_timeline_window_step_count)
+
+func _get_timeline_display_window_bounds(timeline: Dictionary) -> Dictionary:
+	var step_count := _get_step_count(timeline)
+	if step_count <= 0:
+		return {
+			"windowed": false,
+			"start_step_index": 0,
+			"end_step_exclusive": 0,
+		}
+	if not _should_use_timeline_window_for_timeline(timeline):
+		return {
+			"windowed": false,
+			"start_step_index": 0,
+			"end_step_exclusive": int(step_count),
+		}
+
+	var window_size := clampi(int(_timeline_window_step_count), 1, step_count)
+	var anchor_index := step_count - 1
+	if int(_timeline_head_index) >= 0 and int(_timeline_cursor_index) >= 0 and int(_timeline_cursor_index) < int(_timeline_head_index):
+		anchor_index = clampi(int(_timeline_cursor_index), 0, step_count - 1)
+	var max_start := maxi(0, step_count - window_size)
+	var start_idx := max_start
+	if anchor_index < step_count - 1:
+		start_idx = clampi(anchor_index - int(window_size / 2), 0, max_start)
+	var end_idx := mini(step_count, start_idx + window_size)
+	return {
+		"windowed": true,
+		"start_step_index": int(start_idx),
+		"end_step_exclusive": int(end_idx),
+	}
+
+func _should_rebuild_display_for_timeline_window() -> bool:
+	if not _is_step_timeline_loaded():
+		return false
+	if _virtual_timeline_active:
+		return false
+	if not _should_use_timeline_window_for_timeline(_step_timeline):
+		return false
+	var bounds := _get_timeline_display_window_bounds(_step_timeline)
+	return int(bounds.get("start_step_index", 0)) != int(_timeline_display_window_start_step_index) \
+		or int(bounds.get("end_step_exclusive", 0)) - 1 != int(_timeline_display_window_end_step_index)
+
+func _maybe_rebuild_timeline_display_window(scroll_to_cursor: bool) -> bool:
+	if _virtual_timeline_active:
+		if bool(scroll_to_cursor):
+			var descriptor_start := _get_virtual_descriptor_start_for_step(_timeline_cursor_index, true)
+			_render_virtual_descriptor_window(descriptor_start)
+			_set_virtual_scroll_to_descriptor_start(descriptor_start)
+			_apply_timeline_state_to_items(true)
+			return true
+		return false
+	if not _should_rebuild_display_for_timeline_window():
+		return false
+	_rebuild_display()
+	_update_entry_count()
+	if bool(scroll_to_cursor):
+		_apply_timeline_state_to_items(true)
+	elif _should_keep_scroll_at_bottom():
+		_request_scroll_to_bottom()
+	return true
+
+func _can_slide_tail_timeline_window_for_append(next_timeline: Dictionary, appended_step_count: int) -> bool:
+	if not _is_timeline_display_windowed():
+		return false
+	if not _should_keep_scroll_at_bottom():
+		return false
+	if int(appended_step_count) <= 0:
+		return false
+	var current_step_count := _get_step_count(_step_timeline)
+	if int(_timeline_display_window_end_step_index) != current_step_count - 1:
+		return false
+	var next_bounds := _get_timeline_display_window_bounds(next_timeline)
+	if not bool(next_bounds.get("windowed", false)):
+		return false
+	var next_step_count := _get_step_count(next_timeline)
+	var next_start := int(next_bounds.get("start_step_index", 0))
+	var next_end := int(next_bounds.get("end_step_exclusive", 0)) - 1
+	if next_end != next_step_count - 1:
+		return false
+	if next_start < int(_timeline_display_window_start_step_index):
+		return false
+	return next_start - int(_timeline_display_window_start_step_index) <= maxi(1, int(appended_step_count))
+
+func _trim_timeline_display_window_to_bounds(bounds: Dictionary) -> void:
+	if not bool(bounds.get("windowed", false)):
+		_timeline_display_window_start_step_index = 0
+		_timeline_display_window_end_step_index = _get_step_count(_step_timeline) - 1
+		_rebuild_timeline_item_indexes()
+		return
+	var start_idx := int(bounds.get("start_step_index", 0))
+	var end_exclusive := int(bounds.get("end_step_exclusive", start_idx))
+	var kept_items: Array[Control] = []
+	for item_val in _log_items:
+		if not (item_val is Control):
+			continue
+		var item: Control = item_val
+		if not is_instance_valid(item):
+			continue
+		if _should_keep_log_item_for_display_window(item, start_idx, end_exclusive):
+			kept_items.append(item)
+		else:
+			_release_log_item(item)
+	_log_items = kept_items
+	_timeline_display_window_start_step_index = int(start_idx)
+	_timeline_display_window_end_step_index = int(end_exclusive) - 1
+	_rebuild_timeline_item_indexes()
+	_visible_entry_count_cached = _count_visible_entry_items_from_display()
+
+func _should_keep_log_item_for_display_window(item: Control, start_step_index: int, end_step_exclusive: int) -> bool:
+	var kind := str(item.get_meta("_log_pool_kind", "")).strip_edges()
+	var timeline_index := _get_log_item_timeline_index(item)
+	match kind:
+		"phase_header":
+			var phase_end := _read_optional_int(item.get("end_step_index"), timeline_index)
+			return int(phase_end) >= int(start_step_index) and int(timeline_index) < int(end_step_exclusive)
+		"round_header":
+			return int(timeline_index) < int(end_step_exclusive)
+		_:
+			return int(timeline_index) >= int(start_step_index) and int(timeline_index) < int(end_step_exclusive)
+
+func _get_log_item_timeline_index(item: Control) -> int:
+	if item == null or not is_instance_valid(item):
+		return -999999
+	if not item.has_method("get_timeline_index"):
+		return -999999
+	return int(item.call("get_timeline_index"))
+
+func _count_visible_entry_items_from_display() -> int:
+	var count := 0
+	for item_val in _log_items:
+		if not (item_val is Control):
+			continue
+		var item: Control = item_val
+		if not is_instance_valid(item):
+			continue
+		var kind := str(item.get_meta("_log_pool_kind", "")).strip_edges()
+		match kind:
+			"event_item", _POOL_KIND_FLAT_ENTRY:
+				count += 1
+			"action_group_header":
+				if item.has_meta("log_entry_id"):
+					count += 1
+			_:
+				pass
+	return count
+
+func _build_virtual_timeline_display(start_step_index: int, end_step_exclusive: int) -> void:
+	var descriptor_info_val = GameLogUnifiedTimelineBuilderClass.build_descriptors(
+		_step_timeline,
+		_entries_all,
+		_show_phase_events,
+		_fold_details_enabled,
+		_expanded_action_groups.duplicate(true),
+		_get_initial_round_number(),
+		_get_initial_phase_segment()
+	)
+	var descriptor_info: Dictionary = descriptor_info_val if (descriptor_info_val is Dictionary) else {}
+	var descriptors_val = descriptor_info.get("items", [])
+	_virtual_timeline_active = true
+	_virtual_timeline_descriptors = descriptors_val if (descriptors_val is Array) else []
+	_virtual_visible_entry_count = int(descriptor_info.get("visible_entry_count", -1))
+	_visible_entry_count_cached = int(_virtual_visible_entry_count)
+	var descriptor_start := _get_virtual_initial_descriptor_start(int(start_step_index), int(end_step_exclusive))
+	_render_virtual_descriptor_window(descriptor_start, true)
+
+func _append_virtual_step_timeline_display(next_timeline: Dictionary, appended_entries: Array[Dictionary], start_step_index: int) -> Dictionary:
+	if not _virtual_timeline_active:
+		return {"ok": false, "reason": "virtual_not_active"}
+	var append_info_val = GameLogUnifiedTimelineBuilderClass.build_append_descriptors(
+		next_timeline,
+		appended_entries,
+		int(start_step_index),
+		_show_phase_events,
+		_fold_details_enabled,
+		_expanded_action_groups.duplicate(true),
+		_get_initial_round_number(),
+		_get_initial_phase_segment()
+	)
+	if not (append_info_val is Dictionary):
+		return {"ok": false, "reason": "append_descriptor_info_invalid"}
+	var append_info: Dictionary = append_info_val
+	var descriptors_val = append_info.get("items", [])
+	if not (descriptors_val is Array):
+		return {"ok": false, "reason": "append_descriptors_invalid"}
+	var patch_end_step_index := int(append_info.get("patch_existing_last_phase_header_end_step_index", -999))
+	if patch_end_step_index > -999:
+		_patch_last_virtual_phase_descriptor_end_step_index(patch_end_step_index)
+	var descriptors: Array = descriptors_val
+	for descriptor_val in descriptors:
+		if descriptor_val is Dictionary:
+			_virtual_timeline_descriptors.append(descriptor_val)
+	var visible_delta := int(append_info.get("visible_entry_count_delta", -1))
+	if _virtual_visible_entry_count >= 0 and visible_delta >= 0:
+		_virtual_visible_entry_count += visible_delta
+	else:
+		_virtual_visible_entry_count = -1
+	_visible_entry_count_cached = int(_virtual_visible_entry_count)
+	return {
+		"ok": true,
+		"descriptor_count": int(descriptors.size()),
+		"visible_entry_count_delta": int(visible_delta),
+	}
+
+func _patch_last_virtual_phase_descriptor_end_step_index(end_step_index: int) -> void:
+	for idx in range(_virtual_timeline_descriptors.size() - 1, -1, -1):
+		var descriptor_val = _virtual_timeline_descriptors[idx]
+		if not (descriptor_val is Dictionary):
+			continue
+		var descriptor: Dictionary = descriptor_val
+		if str(descriptor.get("kind", "")).strip_edges() != "phase_header":
+			continue
+		descriptor["end_step_index"] = int(end_step_index)
+		_virtual_timeline_descriptors[idx] = descriptor
+		return
+
+func _get_virtual_initial_descriptor_start(start_step_index: int, end_step_exclusive: int) -> int:
+	if int(_timeline_head_index) >= 0 and int(_timeline_cursor_index) >= 0 and int(_timeline_cursor_index) < int(_timeline_head_index):
+		return _get_virtual_descriptor_start_for_step(int(_timeline_cursor_index), true)
+	if int(end_step_exclusive) < _get_step_count(_step_timeline):
+		return _get_virtual_descriptor_start_for_step(int(start_step_index), false)
+	return _get_virtual_tail_descriptor_start()
+
+func _get_virtual_tail_descriptor_start() -> int:
+	var descriptor_count := int(_virtual_timeline_descriptors.size())
+	var window_count := _get_virtual_descriptor_window_count()
+	return maxi(0, descriptor_count - window_count)
+
+func _get_virtual_descriptor_window_count() -> int:
+	return maxi(1, int(_virtual_descriptor_window_item_count))
+
+func _get_virtual_descriptor_start_for_step(step_index: int, center_step: bool) -> int:
+	var descriptor_index := _find_descriptor_index_for_timeline_step(int(step_index))
+	if descriptor_index < 0:
+		return _get_virtual_tail_descriptor_start()
+	var window_count := _get_virtual_descriptor_window_count()
+	var max_start := maxi(0, _virtual_timeline_descriptors.size() - window_count)
+	var offset := int(window_count / 2) if bool(center_step) else maxi(0, int(_virtual_descriptor_buffer_items))
+	return clampi(descriptor_index - offset, 0, max_start)
+
+func _find_descriptor_index_for_timeline_step(step_index: int) -> int:
+	var target := int(step_index)
+	var fallback := -1
+	for idx in range(_virtual_timeline_descriptors.size()):
+		var descriptor_val = _virtual_timeline_descriptors[idx]
+		if not (descriptor_val is Dictionary):
+			continue
+		var descriptor: Dictionary = descriptor_val
+		var timeline_index := _get_descriptor_timeline_index(descriptor)
+		if timeline_index == target:
+			return idx
+		if fallback < 0 and timeline_index > target:
+			fallback = idx
+	if fallback >= 0:
+		return fallback
+	if _virtual_timeline_descriptors.is_empty():
+		return -1
+	return _virtual_timeline_descriptors.size() - 1
+
+func _get_descriptor_timeline_index(descriptor: Dictionary) -> int:
+	var kind := str(descriptor.get("kind", "")).strip_edges()
+	match kind:
+		"round_header":
+			return int(descriptor.get("start_step_index", -999999))
+		"phase_header":
+			return int(descriptor.get("start_step_index", -999999))
+		"action_group_header":
+			return int(descriptor.get("step_index", -999999))
+		"event_item":
+			var entry_val = descriptor.get("entry", {})
+			var entry: Dictionary = entry_val if (entry_val is Dictionary) else {}
+			return int(GameLogEntryUtilsClass.get_entry_step_index(entry))
+		_:
+			return -999999
+
+func _render_virtual_descriptor_window(start_descriptor_index: int, force: bool = false) -> bool:
+	if log_container == null or not is_instance_valid(log_container):
+		return false
+	if not _virtual_timeline_active:
+		return false
+	var descriptor_count := int(_virtual_timeline_descriptors.size())
+	var window_count := _get_virtual_descriptor_window_count()
+	var max_start := maxi(0, descriptor_count - window_count)
+	var start_idx := clampi(int(start_descriptor_index), 0, max_start)
+	var end_idx := mini(descriptor_count, start_idx + window_count)
+	if not bool(force) and start_idx == int(_virtual_descriptor_start_index) and end_idx == int(_virtual_descriptor_end_exclusive):
+		_update_virtual_spacers()
+		_update_virtual_display_step_window_from_items()
+		return true
+
+	_release_rendered_log_items()
+	_ensure_virtual_spacers()
+	if _virtual_bottom_spacer != null and is_instance_valid(_virtual_bottom_spacer) and _virtual_bottom_spacer.get_parent() == log_container:
+		log_container.remove_child(_virtual_bottom_spacer)
+
+	var items: Array[Control] = []
+	GameLogUnifiedTimelineBuilderClass.append_descriptor_slice(
+		items,
+		log_container,
+		_virtual_timeline_descriptors,
+		start_idx,
+		end_idx,
+		_timeline_cursor_index,
+		_timeline_head_index,
+		Callable(self, "_on_timeline_header_clicked"),
+		Callable(self, "_on_entry_clicked"),
+		Callable(self, "_on_entry_double_clicked"),
+		Callable(self, "_on_action_group_fold_toggled"),
+		Callable(self, "_acquire_log_item")
+	)
+	_log_items = items
+	for item in _log_items:
+		if item is Control:
+			_connect_item_hover_signals(item)
+
+	if _virtual_bottom_spacer != null and is_instance_valid(_virtual_bottom_spacer):
+		if _virtual_bottom_spacer.get_parent() != null:
+			_virtual_bottom_spacer.get_parent().remove_child(_virtual_bottom_spacer)
+		log_container.add_child(_virtual_bottom_spacer)
+
+	_virtual_descriptor_start_index = int(start_idx)
+	_virtual_descriptor_end_exclusive = int(end_idx)
+	_update_virtual_spacers()
+	_rebuild_timeline_item_indexes()
+	_update_virtual_display_step_window_from_items()
+	return true
+
+func _release_rendered_log_items() -> void:
+	_clear_timeline_item_indexes()
+	for item in _log_items:
+		if item is Control and is_instance_valid(item):
+			_release_log_item(item)
+	_log_items.clear()
+
+func _ensure_virtual_spacers() -> void:
+	if log_container == null or not is_instance_valid(log_container):
+		return
+	if _virtual_top_spacer == null or not is_instance_valid(_virtual_top_spacer):
+		_virtual_top_spacer = Control.new()
+		_virtual_top_spacer.name = "VirtualTopSpacer"
+		_virtual_top_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if _virtual_bottom_spacer == null or not is_instance_valid(_virtual_bottom_spacer):
+		_virtual_bottom_spacer = Control.new()
+		_virtual_bottom_spacer.name = "VirtualBottomSpacer"
+		_virtual_bottom_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	if _virtual_top_spacer.get_parent() != log_container:
+		if _virtual_top_spacer.get_parent() != null:
+			_virtual_top_spacer.get_parent().remove_child(_virtual_top_spacer)
+		log_container.add_child(_virtual_top_spacer)
+	if _virtual_bottom_spacer.get_parent() != log_container:
+		if _virtual_bottom_spacer.get_parent() != null:
+			_virtual_bottom_spacer.get_parent().remove_child(_virtual_bottom_spacer)
+		log_container.add_child(_virtual_bottom_spacer)
+
+	log_container.move_child(_virtual_top_spacer, 0)
+	log_container.move_child(_virtual_bottom_spacer, log_container.get_child_count() - 1)
+
+func _update_virtual_spacers() -> void:
+	if not _virtual_timeline_active:
+		return
+	_ensure_virtual_spacers()
+	var estimated_height := maxf(1.0, float(_virtual_item_estimated_height))
+	var top_height := float(maxi(0, int(_virtual_descriptor_start_index))) * estimated_height
+	var bottom_count := maxi(0, _virtual_timeline_descriptors.size() - int(_virtual_descriptor_end_exclusive))
+	var bottom_height := float(bottom_count) * estimated_height
+	if _virtual_top_spacer != null and is_instance_valid(_virtual_top_spacer):
+		_virtual_top_spacer.custom_minimum_size = Vector2(1.0, top_height)
+	if _virtual_bottom_spacer != null and is_instance_valid(_virtual_bottom_spacer):
+		_virtual_bottom_spacer.custom_minimum_size = Vector2(1.0, bottom_height)
+
+func _clear_virtual_timeline_state(clear_descriptors: bool = true) -> void:
+	_virtual_timeline_active = false
+	if bool(clear_descriptors):
+		_virtual_timeline_descriptors.clear()
+	_virtual_visible_entry_count = -1
+	_virtual_descriptor_start_index = 0
+	_virtual_descriptor_end_exclusive = 0
+	_virtual_scroll_refresh_scheduled = false
+	_virtual_scroll_syncing = false
+	_clear_virtual_spacer(_virtual_top_spacer)
+	_clear_virtual_spacer(_virtual_bottom_spacer)
+	_virtual_top_spacer = null
+	_virtual_bottom_spacer = null
+
+func _clear_virtual_spacer(spacer: Control) -> void:
+	if spacer == null or not is_instance_valid(spacer):
+		return
+	if spacer.get_parent() != null:
+		spacer.get_parent().remove_child(spacer)
+	spacer.queue_free()
+
+func _update_virtual_display_step_window_from_items() -> void:
+	if not _virtual_timeline_active:
+		return
+	var min_index := 999999
+	var max_index := -999999
+	for item_val in _log_items:
+		if not (item_val is Control):
+			continue
+		var item: Control = item_val
+		if not is_instance_valid(item):
+			continue
+		var timeline_index := _get_log_item_timeline_index(item)
+		if timeline_index < -1:
+			continue
+		var item_max_index := timeline_index
+		if str(item.get_meta("_log_pool_kind", "")).strip_edges() == "phase_header":
+			item_max_index = _read_optional_int(item.get("end_step_index"), timeline_index)
+		min_index = mini(min_index, timeline_index)
+		max_index = maxi(max_index, item_max_index)
+	if min_index == 999999:
+		_timeline_display_window_start_step_index = 0
+		_timeline_display_window_end_step_index = -1
+		return
+	_timeline_display_window_start_step_index = int(min_index)
+	_timeline_display_window_end_step_index = int(max_index)
+
+func _get_virtual_descriptor_start_for_scroll_value(scroll_value: float) -> int:
+	var estimated_height := maxf(1.0, float(_virtual_item_estimated_height))
+	var anchor := int(floor(maxf(0.0, float(scroll_value)) / estimated_height))
+	var max_start := maxi(0, _virtual_timeline_descriptors.size() - _get_virtual_descriptor_window_count())
+	return clampi(anchor - maxi(0, int(_virtual_descriptor_buffer_items)), 0, max_start)
+
+func _set_virtual_scroll_to_descriptor_start(descriptor_start: int) -> void:
+	if scroll_container == null:
+		return
+	var estimated_height := maxf(1.0, float(_virtual_item_estimated_height))
+	_virtual_scroll_syncing = true
+	scroll_container.scroll_vertical = int(maxf(0.0, float(descriptor_start) * estimated_height))
+	_virtual_scroll_syncing = false
+
+func _on_virtual_scroll_value_changed(value: float) -> void:
+	if _virtual_scroll_syncing:
+		return
+	if not _virtual_timeline_active:
+		return
+	_schedule_virtual_scroll_refresh(float(value))
+
+func _schedule_virtual_scroll_refresh(_value: float) -> void:
+	if _virtual_scroll_refresh_scheduled:
+		return
+	_virtual_scroll_refresh_scheduled = true
+	call_deferred("_flush_virtual_scroll_refresh")
+
+func _flush_virtual_scroll_refresh() -> void:
+	_virtual_scroll_refresh_scheduled = false
+	if not _virtual_timeline_active:
+		return
+	if scroll_container == null:
+		return
+	var descriptor_start := _get_virtual_descriptor_start_for_scroll_value(float(scroll_container.scroll_vertical))
+	_virtual_scroll_syncing = true
+	_render_virtual_descriptor_window(descriptor_start)
+	_virtual_scroll_syncing = false
+
 func _scroll_scroll_container_to_bottom() -> void:
 	if scroll_container == null:
 		return
@@ -1175,6 +1840,43 @@ func _rebuild_entries_all() -> void:
 	for e2 in _extra_entries:
 		if e2 is Dictionary:
 			_entries_all.append(Dictionary(e2))
+	_rebuild_entries_by_step_index()
+
+func _rebuild_entries_by_step_index() -> void:
+	_timeline_entries_by_step_index.clear()
+	for entry_val in _entries_all:
+		if entry_val is Dictionary:
+			_index_entry_by_step(entry_val)
+
+func _index_entry_by_step(entry: Dictionary) -> void:
+	if entry == null or not (entry is Dictionary):
+		return
+	var step_index := int(GameLogEntryUtilsClass.get_entry_step_index(entry))
+	if step_index == -999:
+		return
+	var bucket_val = _timeline_entries_by_step_index.get(step_index, [])
+	var bucket: Array = bucket_val if (bucket_val is Array) else []
+	bucket.append(entry)
+	_timeline_entries_by_step_index[step_index] = bucket
+
+func _collect_window_entries(start_step_index: int, end_step_exclusive: int) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var start_idx := int(start_step_index)
+	var end_idx := int(end_step_exclusive)
+	if start_idx <= 0:
+		_append_entries_for_step_to(out, -1)
+	for idx in range(maxi(0, start_idx), maxi(maxi(0, start_idx), end_idx)):
+		_append_entries_for_step_to(out, idx)
+	return out
+
+func _append_entries_for_step_to(out: Array[Dictionary], step_index: int) -> void:
+	var list_val = _timeline_entries_by_step_index.get(int(step_index), [])
+	if not (list_val is Array):
+		return
+	var list: Array = list_val
+	for entry_val in list:
+		if entry_val is Dictionary:
+			out.append(entry_val)
 
 func _get_initial_state_dict() -> Dictionary:
 	var init_val = _step_timeline.get("initial_state_dict", null)
@@ -1201,14 +1903,106 @@ func _get_step_count(timeline: Dictionary) -> int:
 	var steps_val = timeline.get("steps", null)
 	return int((steps_val as Array).size()) if (steps_val is Array) else 0
 
-func _entry_equals_ignoring_id(lhs: Dictionary, rhs: Dictionary) -> bool:
-	var a := lhs.duplicate(true) if (lhs is Dictionary) else {}
-	var b := rhs.duplicate(true) if (rhs is Dictionary) else {}
-	if a.has("id"):
-		a.erase("id")
-	if b.has("id"):
-		b.erase("id")
-	return a == b
+func _reset_step_timeline_signatures() -> void:
+	_step_timeline_signature.clear()
+	_timeline_entries_signature.clear()
+
+func _refresh_step_timeline_signatures() -> void:
+	_step_timeline_signature = _build_step_timeline_signature(_step_timeline)
+	_timeline_entries_signature = _build_timeline_entries_signature(_timeline_entries)
+
+func _build_step_timeline_signature(timeline: Dictionary) -> Dictionary:
+	if timeline == null or not (timeline is Dictionary) or timeline.is_empty():
+		return {}
+	var steps_val = timeline.get("steps", null)
+	if not (steps_val is Array):
+		return {}
+	var steps: Array = steps_val
+	var events_val = timeline.get("events", [])
+	var events: Array = events_val if (events_val is Array) else []
+	var meta_val = timeline.get("_build_meta", {})
+	var meta: Dictionary = meta_val if (meta_val is Dictionary) else {}
+	var processed_command_count := _read_optional_int(meta.get("processed_command_count", -1), -1)
+	var last_event_sequence := _read_optional_int(meta.get("last_event_sequence", -1), -1)
+	if last_event_sequence < 0 and not events.is_empty():
+		var last_event_val = events[events.size() - 1]
+		if last_event_val is Dictionary:
+			last_event_sequence = _read_optional_int(Dictionary(last_event_val).get("sequence", -1), -1)
+
+	var last_step_hash := 0
+	if not steps.is_empty():
+		var last_step_val = steps[steps.size() - 1]
+		if last_step_val is Dictionary:
+			last_step_hash = hash(last_step_val)
+
+	var init_val = timeline.get("initial_state_dict", {})
+	return {
+		"initial_state_hash": hash(init_val) if (init_val is Dictionary) else 0,
+		"processed_command_count": int(processed_command_count),
+		"step_count": int(steps.size()),
+		"event_count": int(events.size()),
+		"last_event_sequence": int(last_event_sequence),
+		"last_step_hash": int(last_step_hash),
+		"head_step_index": int(steps.size()) - 1,
+	}
+
+func _build_timeline_entries_signature(entries: Array) -> Dictionary:
+	if not (entries is Array):
+		return {}
+	var entry_count := entries.size()
+	var first_event_sequence := -1
+	var last_event_sequence := -1
+	var first_entry_hash := 0
+	var last_entry_hash := 0
+	if entry_count > 0:
+		var first_entry_val = entries[0]
+		if first_entry_val is Dictionary:
+			var first_entry: Dictionary = first_entry_val
+			first_event_sequence = _read_entry_event_sequence(first_entry)
+			first_entry_hash = _entry_signature_hash(first_entry)
+		var last_entry_val = entries[entry_count - 1]
+		if last_entry_val is Dictionary:
+			var last_entry: Dictionary = last_entry_val
+			last_event_sequence = _read_entry_event_sequence(last_entry)
+			last_entry_hash = _entry_signature_hash(last_entry)
+	return {
+		"entry_count": int(entry_count),
+		"first_event_sequence": int(first_event_sequence),
+		"last_event_sequence": int(last_event_sequence),
+		"first_entry_hash": int(first_entry_hash),
+		"last_entry_hash": int(last_entry_hash),
+	}
+
+func _entry_signature_hash(entry: Dictionary) -> int:
+	if entry == null or not (entry is Dictionary):
+		return 0
+	var d := {}
+	for key in entry.keys():
+		if str(key) == "id":
+			continue
+		d[key] = entry.get(key)
+	return hash(d)
+
+func _read_entry_event_sequence(entry: Dictionary) -> int:
+	if entry == null or not (entry is Dictionary):
+		return -1
+	var event_seq := _read_optional_int(entry.get("event_seq", -1), -1)
+	if event_seq >= 0:
+		return event_seq
+	return _read_optional_int(entry.get("timestamp", -1), -1)
+
+func _read_optional_int(value, default_value: int = -1) -> int:
+	if value is int:
+		return int(value)
+	if value is float:
+		var f := float(value)
+		if f == floor(f):
+			return int(f)
+	if value is String:
+		var s := str(value).strip_edges()
+		if s.is_valid_int():
+			return int(s)
+	return int(default_value)
 
 func _can_append_step_timeline(timeline: Dictionary, entries: Array, reset_extra_entries: bool) -> bool:
 	if bool(reset_extra_entries):
@@ -1217,41 +2011,65 @@ func _can_append_step_timeline(timeline: Dictionary, entries: Array, reset_extra
 		return false
 	if log_container == null or not is_instance_valid(log_container):
 		return false
-	if _log_items.is_empty():
+	if _log_items.is_empty() and not _virtual_timeline_active:
 		return false
 
-	var old_steps_val = _step_timeline.get("steps", null)
 	var new_steps_val = timeline.get("steps", null)
-	if not (old_steps_val is Array) or not (new_steps_val is Array):
+	if not (new_steps_val is Array):
 		return false
-	var old_steps: Array = old_steps_val
 	var new_steps: Array = new_steps_val
-	if new_steps.size() <= old_steps.size():
-		return false
-
-	var old_init := Dictionary(_step_timeline.get("initial_state_dict", {}))
-	var new_init := Dictionary(timeline.get("initial_state_dict", {}))
-	if old_init != new_init:
-		return false
-
-	for idx in range(old_steps.size()):
-		var old_step_val = old_steps[idx]
-		var new_step_val = new_steps[idx]
-		if not (old_step_val is Dictionary) or not (new_step_val is Dictionary):
-			return false
-		if Dictionary(old_step_val) != Dictionary(new_step_val):
-			return false
-
 	if not (entries is Array):
 		return false
-	if entries.size() < _timeline_entries.size():
+
+	var old_timeline_sig := _step_timeline_signature
+	if old_timeline_sig.is_empty():
+		old_timeline_sig = _build_step_timeline_signature(_step_timeline)
+	var old_entries_sig := _timeline_entries_signature
+	if old_entries_sig.is_empty():
+		old_entries_sig = _build_timeline_entries_signature(_timeline_entries)
+	var new_timeline_sig := _build_step_timeline_signature(timeline)
+	var incoming_entries_sig := _build_timeline_entries_signature(entries)
+	if old_timeline_sig.is_empty() or new_timeline_sig.is_empty() or old_entries_sig.is_empty() or incoming_entries_sig.is_empty():
 		return false
-	for idx in range(_timeline_entries.size()):
-		var old_entry_val = _timeline_entries[idx]
-		var new_entry_val = entries[idx]
-		if not (old_entry_val is Dictionary) or not (new_entry_val is Dictionary):
+
+	var old_step_count := int(old_timeline_sig.get("step_count", 0))
+	var new_step_count := int(new_timeline_sig.get("step_count", 0))
+	if new_step_count <= old_step_count:
+		return false
+	if int(new_timeline_sig.get("initial_state_hash", 0)) != int(old_timeline_sig.get("initial_state_hash", 0)):
+		return false
+	var old_processed_count := int(old_timeline_sig.get("processed_command_count", -1))
+	var new_processed_count := int(new_timeline_sig.get("processed_command_count", -1))
+	if old_processed_count >= 0 and new_processed_count >= 0 and new_processed_count <= old_processed_count:
+		return false
+	if int(new_timeline_sig.get("event_count", 0)) < int(old_timeline_sig.get("event_count", 0)):
+		return false
+	if old_step_count > 0:
+		var old_tail_val = new_steps[old_step_count - 1]
+		if not (old_tail_val is Dictionary):
 			return false
-		if not _entry_equals_ignoring_id(Dictionary(old_entry_val), Dictionary(new_entry_val)):
+		if hash(old_tail_val) != int(old_timeline_sig.get("last_step_hash", 0)):
+			return false
+
+	var old_entry_count := int(old_entries_sig.get("entry_count", 0))
+	if entries.size() < old_entry_count:
+		return false
+	if old_entry_count > 0:
+		var first_entry_val = entries[0]
+		var old_tail_entry_val = entries[old_entry_count - 1]
+		if not (first_entry_val is Dictionary) or not (old_tail_entry_val is Dictionary):
+			return false
+		if _entry_signature_hash(first_entry_val) != int(old_entries_sig.get("first_entry_hash", 0)):
+			return false
+		if _entry_signature_hash(old_tail_entry_val) != int(old_entries_sig.get("last_entry_hash", 0)):
+			return false
+	if entries.size() > old_entry_count:
+		var first_appended_val = entries[old_entry_count]
+		if not (first_appended_val is Dictionary):
+			return false
+		var old_last_seq := int(old_entries_sig.get("last_event_sequence", -1))
+		var first_appended_seq := _read_entry_event_sequence(first_appended_val)
+		if old_last_seq >= 0 and first_appended_seq >= 0 and first_appended_seq <= old_last_seq:
 			return false
 
 	return true
@@ -1289,7 +2107,8 @@ func _append_step_timeline_display(next_timeline: Dictionary, appended_entries: 
 		Callable(self, "_on_action_group_fold_toggled"),
 		_get_initial_round_number(),
 		_get_initial_phase_segment(),
-		Callable(self, "_acquire_log_item")
+		Callable(self, "_acquire_log_item"),
+		_get_last_timeline_phase_header_item()
 	)
 	if not (append_info_val is Dictionary):
 		OnlinePerfTraceClass.end_span(span, {
@@ -1311,6 +2130,7 @@ func _append_step_timeline_display(next_timeline: Dictionary, appended_entries: 
 			continue
 		var ctrl: Control = item
 		_log_items.append(ctrl)
+		_index_log_item(ctrl)
 		_connect_item_hover_signals(ctrl)
 	var visible_entry_count_delta := int(append_info.get("visible_entry_count", -1))
 	if visible_entry_count_delta >= 0 and _visible_entry_count_cached >= 0:
@@ -1496,6 +2316,8 @@ func _apply_scroll_to_bottom() -> void:
 		return
 	if not is_visible_in_tree():
 		return
+	if _virtual_timeline_active:
+		_render_virtual_descriptor_window(_get_virtual_tail_descriptor_start())
 	_scroll_scroll_container_to_bottom()
 	# 某些布局/重建时序下，ScrollBar 的 max_value 会在下一帧才更新；这里补一次确保落到底部。
 	call_deferred("_apply_scroll_to_bottom_final")
@@ -1511,15 +2333,15 @@ func _apply_scroll_to_bottom_final() -> void:
 		return
 	if not is_visible_in_tree():
 		return
+	if _virtual_timeline_active:
+		_render_virtual_descriptor_window(_get_virtual_tail_descriptor_start())
 	_scroll_scroll_container_to_bottom()
 	_scroll_to_bottom_requested = false
 
 func _clear_display() -> void:
-	_clear_timeline_item_indexes()
-	for item in _log_items:
-		if item is Control and is_instance_valid(item):
-			_release_log_item(item)
-	_log_items.clear()
+	_release_rendered_log_items()
+	_clear_virtual_timeline_state(true)
+	_reset_timeline_display_window()
 
 func _rebuild_display() -> void:
 	var span := OnlinePerfTraceClass.begin_span("ui.game_log.rebuild_display", {
@@ -1528,10 +2350,22 @@ func _rebuild_display() -> void:
 		"visible_in_tree": bool(is_visible_in_tree()),
 	})
 	_clear_display()
+	if not _should_build_display_now():
+		_visible_entry_count_cached = -1
+		OnlinePerfTraceClass.end_span(span, {
+			"timeline_loaded": bool(_is_step_timeline_loaded()),
+			"entry_count": int(_entries_all.size()),
+			"child_count_after": int(log_container.get_child_count()) if log_container != null else 0,
+			"log_item_count": int(_log_items.size()),
+			"skipped_display": true,
+			"reason": "hidden",
+		})
+		return
 
 	if _is_step_timeline_loaded():
 		_build_unified_timeline_display()
 	else:
+		_reset_timeline_display_window()
 		for entry_val in _entries_all:
 			if entry_val is Dictionary:
 				_add_log_item(Dictionary(entry_val))
@@ -1547,11 +2381,33 @@ func _build_unified_timeline_display() -> void:
 	if log_container == null:
 		return
 
+	var bounds := _get_timeline_display_window_bounds(_step_timeline)
+	var windowed := bool(bounds.get("windowed", false))
+	var start_step_index := int(bounds.get("start_step_index", 0))
+	var end_step_exclusive := int(bounds.get("end_step_exclusive", _get_step_count(_step_timeline)))
 	var span := OnlinePerfTraceClass.begin_span("ui.game_log.build_unified_timeline_display", {
 		"entry_count": int(_entries_all.size()),
 		"timeline_step_count": int(_get_step_count(_step_timeline)),
+		"windowed": bool(windowed),
+		"start_step_index": int(start_step_index),
+		"end_step_exclusive": int(end_step_exclusive),
 	})
-	var build_info_val = GameLogUnifiedTimelineBuilderClass.build(
+	if bool(windowed):
+		_build_virtual_timeline_display(start_step_index, end_step_exclusive)
+		OnlinePerfTraceClass.end_span(span, {
+			"log_item_count": int(_log_items.size()),
+			"visible_entry_count": int(_visible_entry_count_cached),
+			"windowed": true,
+			"virtualized": true,
+			"descriptor_count": int(_virtual_timeline_descriptors.size()),
+			"descriptor_start_index": int(_virtual_descriptor_start_index),
+			"descriptor_end_exclusive": int(_virtual_descriptor_end_exclusive),
+			"start_step_index": int(_timeline_display_window_start_step_index),
+			"end_step_index": int(_timeline_display_window_end_step_index),
+		})
+		return
+	var build_info_val
+	build_info_val = GameLogUnifiedTimelineBuilderClass.build(
 		log_container,
 		_step_timeline,
 		_entries_all,
@@ -1572,6 +2428,8 @@ func _build_unified_timeline_display() -> void:
 	var items_val = build_info.get("items", [])
 	_log_items = items_val if (items_val is Array) else []
 	_visible_entry_count_cached = int(build_info.get("visible_entry_count", -1))
+	_timeline_display_window_start_step_index = 0
+	_timeline_display_window_end_step_index = _get_step_count(_step_timeline) - 1
 	for item in _log_items:
 		if item is Control:
 			_connect_item_hover_signals(item)
@@ -1579,6 +2437,9 @@ func _build_unified_timeline_display() -> void:
 	OnlinePerfTraceClass.end_span(span, {
 		"log_item_count": int(_log_items.size()),
 		"visible_entry_count": int(_visible_entry_count_cached),
+		"windowed": bool(_is_timeline_display_windowed()),
+		"start_step_index": int(_timeline_display_window_start_step_index),
+		"end_step_index": int(_timeline_display_window_end_step_index),
 	})
 
 func _on_timeline_header_clicked(timeline_index: int) -> void:
@@ -1609,6 +2470,8 @@ func _update_entry_count() -> void:
 	if _is_step_timeline_loaded():
 		if _visible_entry_count_cached >= 0:
 			visible = int(_visible_entry_count_cached)
+		elif not _should_build_display_now():
+			visible = total
 		else:
 			var span := OnlinePerfTraceClass.begin_span("ui.game_log.compute_visible_entry_count", {
 				"entry_count": int(_entries_all.size()),

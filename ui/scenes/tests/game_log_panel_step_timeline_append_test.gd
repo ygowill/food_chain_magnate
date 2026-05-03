@@ -2,6 +2,26 @@ extends RefCounted
 
 const GameLogPanelScene: PackedScene = preload("res://ui/components/game_log/game_log_panel.tscn")
 
+class _TimelineStateApplySpy:
+	extends Control
+
+	var apply_calls: int = 0
+
+	func apply_timeline_state(_cursor_index: int, _head_index: int) -> void:
+		apply_calls += 1
+
+class _PhaseHeaderTailSpy:
+	extends Control
+
+	var start_step_index: int = -1
+	var end_step_index: int = -1
+
+	func get_timeline_index() -> int:
+		return int(start_step_index)
+
+	func apply_timeline_state(_cursor_index: int, _head_index: int) -> void:
+		pass
+
 static func run() -> Result:
 	var tree_val = Engine.get_main_loop()
 	var tree: SceneTree = tree_val if tree_val is SceneTree else null
@@ -29,6 +49,9 @@ static func run() -> Result:
 		"initial_state_dict": {
 			"round_number": 0,
 			"phase": "Setup",
+		},
+		"_build_meta": {
+			"processed_command_count": 1,
 		},
 		"steps": [
 			{
@@ -71,11 +94,25 @@ static func run() -> Result:
 	if last_phase_header == null:
 		_cleanup(panel)
 		return Result.failure("首次加载后未找到 phase header")
+	var sync_apply_spy := _TimelineStateApplySpy.new()
+	sync_apply_spy.visible = false
+	panel.add_child(sync_apply_spy)
+	var stale_phase_header_spy := _PhaseHeaderTailSpy.new()
+	stale_phase_header_spy.visible = false
+	stale_phase_header_spy.set_meta("_log_pool_kind", "phase_header")
+	panel.add_child(stale_phase_header_spy)
+	var direct_log_items: Array = panel.get("_log_items")
+	direct_log_items.append(sync_apply_spy)
+	direct_log_items.append(stale_phase_header_spy)
+	panel.set("_log_items", direct_log_items)
 
 	var timeline2 := {
 		"initial_state_dict": {
 			"round_number": 0,
 			"phase": "Setup",
+		},
+		"_build_meta": {
+			"processed_command_count": 2,
 		},
 		"steps": [
 			{
@@ -108,6 +145,56 @@ static func run() -> Result:
 			"event_seq": 2,
 		},
 	]
+	var entries2: Array[Dictionary] = []
+	entries2.append(entries1[0].duplicate(true))
+	entries2.append(appended_entries[0].duplicate(true))
+	if not bool(panel.call("_can_append_step_timeline", timeline2, entries2, false)):
+		_cleanup(panel)
+		return Result.failure("signature append 校验应接受正常尾部追加")
+	var id_changed_entries: Array[Dictionary] = []
+	id_changed_entries.append(entries1[0].duplicate(true))
+	id_changed_entries[0]["id"] = 9999
+	id_changed_entries.append(appended_entries[0].duplicate(true))
+	if not bool(panel.call("_can_append_step_timeline", timeline2, id_changed_entries, false)):
+		_cleanup(panel)
+		return Result.failure("signature append 校验应忽略旧 entry id 差异")
+	var bad_initial_timeline := timeline2.duplicate(true)
+	bad_initial_timeline["initial_state_dict"] = {
+		"round_number": 0,
+		"phase": "Different",
+	}
+	if bool(panel.call("_can_append_step_timeline", bad_initial_timeline, entries2, false)):
+		_cleanup(panel)
+		return Result.failure("signature append 校验应拒绝 initial_state 不一致")
+	var bad_tail_timeline := timeline2.duplicate(true)
+	var bad_tail_steps: Array = bad_tail_timeline.get("steps", [])
+	bad_tail_steps[0] = Dictionary(bad_tail_steps[0]).duplicate(true)
+	bad_tail_steps[0]["action_id"] = "fire"
+	bad_tail_timeline["steps"] = bad_tail_steps
+	if bool(panel.call("_can_append_step_timeline", bad_tail_timeline, entries2, false)):
+		_cleanup(panel)
+		return Result.failure("signature append 校验应拒绝旧 tail step 不一致")
+	var stale_processed_timeline := timeline2.duplicate(true)
+	var stale_meta: Dictionary = stale_processed_timeline.get("_build_meta", {})
+	stale_meta["processed_command_count"] = 1
+	stale_processed_timeline["_build_meta"] = stale_meta
+	if bool(panel.call("_can_append_step_timeline", stale_processed_timeline, entries2, false)):
+		_cleanup(panel)
+		return Result.failure("signature append 校验应拒绝 processed_command_count 未增长")
+	var bad_boundary_entries: Array[Dictionary] = []
+	bad_boundary_entries.append(entries1[0].duplicate(true))
+	bad_boundary_entries[0]["message"] = "玩家1: 被篡改"
+	bad_boundary_entries.append(appended_entries[0].duplicate(true))
+	if bool(panel.call("_can_append_step_timeline", timeline2, bad_boundary_entries, false)):
+		_cleanup(panel)
+		return Result.failure("signature append 校验应拒绝旧 tail entry 不一致")
+	var bad_sequence_entries: Array[Dictionary] = []
+	bad_sequence_entries.append(entries1[0].duplicate(true))
+	bad_sequence_entries.append(appended_entries[0].duplicate(true))
+	bad_sequence_entries[1]["event_seq"] = 1
+	if bool(panel.call("_can_append_step_timeline", timeline2, bad_sequence_entries, false)):
+		_cleanup(panel)
+		return Result.failure("signature append 校验应拒绝新增 entry sequence 未增长")
 	var append_ok := bool(panel.call("append_step_timeline", timeline2, appended_entries))
 	await tree.process_frame
 
@@ -126,12 +213,42 @@ static func run() -> Result:
 	if _count_message_occurrences(log_container, "玩家1: 培训") != 1:
 		_cleanup(panel)
 		return Result.failure("append 后主日志不应重复显示“玩家1: 培训”")
+	var step_entries_after_append = panel.call("get_step_timeline_entries")
+	if not (step_entries_after_append is Array) or step_entries_after_append.size() != 2:
+		_cleanup(panel)
+		return Result.failure("append 后 step timeline entries 应只增加新增项")
+	var entries_after_append = panel.call("get_entries")
+	if not (entries_after_append is Array) or entries_after_append.size() != 2:
+		_cleanup(panel)
+		return Result.failure("append 后 merged entries 应只增加新增项")
 	if int(last_phase_header.end_step_index) != 1:
 		_cleanup(panel)
 		return Result.failure("append 后最后一个 phase header.end_step_index 应扩展到 1，实际=%d" % int(last_phase_header.end_step_index))
+	if stale_phase_header_spy.end_step_index != -1:
+		_cleanup(panel)
+		return Result.failure("append 不应通过扫描 _log_items 命中尾部 stray phase header，实际=%d" % stale_phase_header_spy.end_step_index)
+	var exact_index_after_append: Dictionary = panel.get("_timeline_exact_items_by_index")
+	var step_one_items_val = exact_index_after_append.get(1, [])
+	if not (step_one_items_val is Array) or (step_one_items_val as Array).is_empty():
+		_cleanup(panel)
+		return Result.failure("直接 append 新增 action header 应增量写入 timeline exact index")
 	if str(entry_count_label.text) != "显示 2 / 2":
 		_cleanup(panel)
 		return Result.failure("append 后可见条目数错误，实际=%s" % str(entry_count_label.text))
+	if sync_apply_spy.apply_calls != 0:
+		_cleanup(panel)
+		return Result.failure("直接 append 后不应全量刷新已有 log item timeline state，实际 apply_calls=%d" % sync_apply_spy.apply_calls)
+	var direct_log_items_after_checks: Array = panel.get("_log_items")
+	direct_log_items_after_checks.erase(sync_apply_spy)
+	direct_log_items_after_checks.erase(stale_phase_header_spy)
+	panel.set("_log_items", direct_log_items_after_checks)
+	sync_apply_spy.queue_free()
+	stale_phase_header_spy.queue_free()
+
+	var load_append_result := await _run_load_step_timeline_append_case(tree)
+	if not load_append_result.ok:
+		_cleanup(panel)
+		return load_append_result
 
 	var async_timeline1 := _build_linear_timeline(119)
 	var async_entries1 := _build_linear_entries(119)
@@ -156,35 +273,106 @@ static func run() -> Result:
 	if async_last_phase_header == null:
 		_cleanup(panel)
 		return Result.failure("大时间线加载后未找到 phase header")
+	var async_sync_apply_spy := _TimelineStateApplySpy.new()
+	async_sync_apply_spy.visible = false
+	panel.add_child(async_sync_apply_spy)
+	var async_log_items: Array = panel.get("_log_items")
+	async_log_items.append(async_sync_apply_spy)
+	panel.set("_log_items", async_log_items)
 
 	var async_timeline2 := _build_linear_timeline(120)
 	var async_entries2 := _build_linear_entries(120)
 	panel.call("load_step_timeline", async_timeline2, async_entries2)
-	var async_appended := await _wait_until(func() -> bool:
+	await tree.process_frame
+	var late_small_delta_appended := await _wait_until(func() -> bool:
 		var current_entries = panel.call("get_step_timeline_entries")
 		return current_entries is Array \
 			and current_entries.size() == async_entries2.size() \
 			and not bool(panel.call("has_pending_descriptor_commit")) \
 			and panel.call("get_last_step_timeline_update_mode") == "append"
 	, tree, 180)
-	if not async_appended:
+	if not late_small_delta_appended:
 		_cleanup(panel)
-		return Result.failure("大时间线尾部追加未在限定帧数内完成（后台线程 append）")
+		return Result.failure("大时间线小 delta 尾部追加应同步走 append")
+	if bool(panel.call("has_pending_descriptor_commit")):
+		_cleanup(panel)
+		return Result.failure("大时间线小 delta append 不应启动 descriptor commit")
 	if not is_instance_valid(async_first_child) or async_first_child.get_parent() != log_container:
 		_cleanup(panel)
-		return Result.failure("后台 append 后旧节点不应被整体替换出容器")
-	if log_container.get_child_count() <= async_old_child_count:
+		return Result.failure("后期小 delta append 后旧节点不应被整体替换出容器")
+	if log_container.get_child_count() != async_old_child_count + 1:
 		_cleanup(panel)
-		return Result.failure("后台 append 后 child_count 应增加: before=%d after=%d" % [async_old_child_count, log_container.get_child_count()])
+		return Result.failure("后期小 delta append 后 child_count 应仅增加 1: before=%d after=%d" % [async_old_child_count, log_container.get_child_count()])
 	if int(async_last_phase_header.end_step_index) != 119:
 		_cleanup(panel)
-		return Result.failure("后台 append 后最后一个 phase header.end_step_index 应扩展到 119，实际=%d" % int(async_last_phase_header.end_step_index))
+		return Result.failure("后期小 delta append 后最后一个 phase header.end_step_index 应扩展到 119，实际=%d" % int(async_last_phase_header.end_step_index))
 	if str(entry_count_label.text) != "显示 120 / 120":
 		_cleanup(panel)
-		return Result.failure("后台 append 后可见条目数错误，实际=%s" % str(entry_count_label.text))
+		return Result.failure("后期小 delta append 后可见条目数错误，实际=%s" % str(entry_count_label.text))
+	if async_sync_apply_spy.apply_calls != 0:
+		_cleanup(panel)
+		return Result.failure("后期小 delta append 不应全量刷新已有 log item timeline state，实际 apply_calls=%d" % async_sync_apply_spy.apply_calls)
 
 	_cleanup(panel)
 	return Result.success()
+
+static func _run_load_step_timeline_append_case(tree: SceneTree) -> Result:
+	var panel = GameLogPanelScene.instantiate()
+	if panel == null or not is_instance_valid(panel):
+		return Result.failure("load_step_timeline append 测试实例化 GameLogPanel 失败")
+	tree.root.add_child(panel)
+	await tree.process_frame
+
+	var log_container = panel.get_node_or_null("MarginContainer/VBoxContainer/ScrollContainer/LogContainer")
+	if log_container == null or not is_instance_valid(log_container):
+		return await _finish_with_panel(Result.failure("load_step_timeline append 测试未找到 LogContainer"), panel, tree)
+
+	var timeline1 := _build_linear_timeline(1)
+	var entries1 := _build_linear_entries(1)
+	panel.call("load_step_timeline", timeline1, entries1)
+	await tree.process_frame
+	if panel.call("get_last_step_timeline_update_mode") != "rebuild":
+		return await _finish_with_panel(Result.failure("load_step_timeline 首次加载应为 rebuild"), panel, tree)
+	if log_container.get_child_count() <= 0:
+		return await _finish_with_panel(Result.failure("load_step_timeline 首次加载后日志 UI 为空"), panel, tree)
+
+	var first_child = log_container.get_child(0)
+	var old_child_count := log_container.get_child_count()
+	var timeline2 := _build_linear_timeline(2)
+	var entries2 := _build_linear_entries(2)
+	panel.call("load_step_timeline", timeline2, entries2)
+	await tree.process_frame
+
+	if panel.call("get_last_step_timeline_update_mode") != "append":
+		return await _finish_with_panel(Result.failure("load_step_timeline 尾部增长应走 append"), panel, tree)
+	if not is_instance_valid(first_child) or first_child.get_parent() != log_container:
+		return await _finish_with_panel(Result.failure("load_step_timeline append 后旧节点不应被替换出容器"), panel, tree)
+	if log_container.get_child_count() <= old_child_count:
+		return await _finish_with_panel(
+			Result.failure("load_step_timeline append 后 child_count 应增加: before=%d after=%d" % [old_child_count, log_container.get_child_count()]),
+			panel,
+			tree
+		)
+	var loaded_entries = panel.call("get_step_timeline_entries")
+	if not (loaded_entries is Array) or loaded_entries.size() != entries2.size():
+		return await _finish_with_panel(Result.failure("load_step_timeline append 后 step entries 应为 2 条"), panel, tree)
+
+	var timeline3 := _build_linear_timeline(3)
+	var bad_tail_steps: Array = timeline3.get("steps", [])
+	bad_tail_steps[1] = Dictionary(bad_tail_steps[1]).duplicate(true)
+	bad_tail_steps[1]["action_id"] = "rollback_diverged"
+	timeline3["steps"] = bad_tail_steps
+	var entries3 := _build_linear_entries(3)
+	panel.call("load_step_timeline", timeline3, entries3)
+	await tree.process_frame
+
+	if panel.call("get_last_step_timeline_update_mode") != "rebuild":
+		return await _finish_with_panel(Result.failure("load_step_timeline 旧 tail 不一致时应 fallback rebuild"), panel, tree)
+	var fallback_entries = panel.call("get_step_timeline_entries")
+	if not (fallback_entries is Array) or fallback_entries.size() != entries3.size():
+		return await _finish_with_panel(Result.failure("load_step_timeline fallback rebuild 后 step entries 应为 3 条"), panel, tree)
+
+	return await _finish_with_panel(Result.success({}), panel, tree)
 
 static func _build_linear_timeline(step_count: int) -> Dictionary:
 	var steps: Array[Dictionary] = []
@@ -259,3 +447,9 @@ static func _count_message_occurrences(log_container: Node, expected_message: St
 static func _cleanup(panel: Node) -> void:
 	if panel != null and is_instance_valid(panel):
 		panel.free()
+
+static func _finish_with_panel(result: Result, panel: Node, tree: SceneTree) -> Result:
+	if panel != null and is_instance_valid(panel):
+		panel.queue_free()
+		await tree.process_frame
+	return result

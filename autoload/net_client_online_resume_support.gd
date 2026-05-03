@@ -209,7 +209,7 @@ func _refresh_full_history_step_timeline_cache(engine: GameEngine, allow_increme
 		"full_history_command_count": int(engine.command_history.size()),
 	})
 	if bool(allow_incremental_append) and not previous_timeline.is_empty():
-		var append_r: Result = StepTimelineBuildClass.append_from_existing(engine, previous_timeline)
+		var append_r: Result = StepTimelineBuildClass.append_tail_delta_owned(engine, previous_timeline)
 		if append_r.ok and append_r.value is Dictionary:
 			var append_info: Dictionary = Dictionary(append_r.value)
 			var append_timeline_val = append_info.get("timeline", null)

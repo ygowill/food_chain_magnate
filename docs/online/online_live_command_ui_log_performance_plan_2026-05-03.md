@@ -273,6 +273,11 @@
   - 记录 append、UI sync、settled 时间。
 - 输出机器可读日志，便于回归比较。
 
+2026-05-03 增量更新：
+
+- 新增独立 headless perf 场景 `res://ui/scenes/tests/online_live_command_log_perf_test.tscn`，构造 200 / 500 / 1000 条 synthetic log history，打开真实 `GameLogPanel`，追加 1 条普通 action entry，并用 `[OnlineLiveCommandLogPerf] CASE {...}` 输出机器可读 JSON。
+- 推荐命令：`tools/run_headless_test.sh res://ui/scenes/tests/online_live_command_log_perf_test.tscn OnlineLiveCommandLogPerfTest 180`。
+
 验收：
 
 - 能复现“历史越长 append 越慢”的趋势。
@@ -300,6 +305,16 @@
 - 大量 feedback 场景中 burst/effect 节点数量有硬上限。
 
 ### 阶段 2：StepTimeline append 改成真正 O(delta)
+
+状态：**已完成当前计划项**。
+
+2026-05-03 增量更新：
+
+- 新增 `StepTimelineBuild.append_tail_delta_owned(engine, owned_timeline)`，供明确拥有 timeline 的 live/cache 热路径原地追加尾部 delta。
+- 保留 `append_from_existing(engine, existing_timeline)` 的非变异契约，避免影响共享/只读调用方。
+- live history refresh 与 full-history timeline cache refresh 已改用 owned append 路径，append 成功时不再复制旧 `steps/events`。
+- 补充 `StepTimelineIncrementalAppendTest` 覆盖 owned append 成功原地更新、旧 API 不变异、以及 malformed event append 失败后回滚旧 timeline。
+- `append_from_existing()` / `append_tail_delta_owned()` 在 `processed_command_count == total_command_count` 的 no-op append 中只校验数组类型，不再 deep copy 旧 `steps/events`；测试覆盖 no-op 返回复用历史数组且不修改输入 timeline。
 
 目标：
 
@@ -378,10 +393,30 @@ StepTimelineBuild.append_from_existing_mutating(engine, owned_timeline) -> Resul
 
 ### 阶段 3：GameLogPanel append 校验从 prefix scan 改成 signature
 
+状态：**已完成当前计划项**。
+
+2026-05-03 增量更新：
+
+- `GameLogPanel` 在提交 step timeline 状态时保存轻量 timeline/entries signature。
+- `_can_append_step_timeline()` 已从逐项比较旧 `steps`/`entries` prefix，改为 O(1) 校验 initial hash、旧尾部 step/entry hash、counts、processed command count 与新增 entry sequence 起点。
+- 补充 `GameLogPanelStepTimelineAppendTest` 覆盖正常 signature append，以及 initial state、旧 tail step、旧 tail entry、entry sequence 不一致时拒绝 append。
+- append 显示成功后的状态提交改为直接追加新增 timeline entries；不再复制已有 `_timeline_entries` 后整体提交。后台 append job 也复用同一增量提交路径。
+- append 新增控件由 builder 创建时应用当前 timeline cursor/head；同步 append 和后台分片 append 收尾不再对已有 `_log_items` 做全量 timeline state 刷新。`GameLogPanelStepTimelineAppendTest` 增加 spy 覆盖，防止 append 收尾重新扫描旧 item。
+- append display 改为从 `GameLogPanel` 维护的 phase header 索引读取尾部 header，并在直接 append 时增量索引新增控件；builder 不再需要反向扫描旧 `_log_items` 来寻找 phase header。测试增加 stray phase header，防止回退到旧扫描路径。
+- `load_step_timeline()` 的 append 预检改为浅层读取 incoming timeline；只有 fallback rebuild 才 deep duplicate 整条 timeline。`GameLogPanelStepTimelineAppendTest` 增加通过 `load_step_timeline()` 触发 append 的回归覆盖。
+- `append_step_timeline()` 后台阈值改为按本次新增 step/entry 数判断，不再因为总历史超过阈值就把 1 条 live append 转成后台 descriptor job。`GameLogPanelStepTimelineAppendTest` 覆盖 119 -> 120 的后期小 delta 同步 append。
+- entry 边界签名改为投影非 `id` 字段后 hash，避免为了忽略 UI 分配的 `id` 而 deep copy 整条 entry；测试覆盖旧 entry `id` 差异不影响 append 校验。
+- `GameLogPanelStepTimelineAppendTest` 补充 processed command count 未增长时拒绝 append，以及 `load_step_timeline()` 遇到旧 tail 不一致时 fallback rebuild 的回归覆盖。
+
 目标：
 
 - 面板 append 前不再遍历旧 `steps/entries`。
 - 正常 live append 只校验 O(1) metadata。
+- append 成功收尾不再为了 timeline state 扫描完整日志控件列表。
+- append UI 构建不再为了续接 phase header 反向扫描旧 `_log_items`。
+- append 预检不应为了只读签名校验 deep copy 旧 `steps/events`。
+- 后期小 delta append 不应仅因总历史长度超过阈值而进入后台。
+- entry boundary signature 不应为了忽略 `id` deep copy entry 的嵌套 `details`。
 
 建议新增或完善 timeline signature：
 
@@ -450,8 +485,26 @@ append 时只检查：
 
 - `_can_append_step_timeline()` 或其替代实现不再 O(history)。
 - late-game append 不再因为 prefix 校验随历史长度线性增长。
+- append 成功后 timeline state 应只随新增控件数量增长，旧日志项不被全量重刷。
+- 同阶段长日志 append 不应因为查找最后一个 phase header 扫描旧 item。
+- entry boundary signature 不再依赖 `entry.duplicate(true)`。
+- `load_step_timeline()` 的 append 分支不再在校验前复制完整 timeline。
+- 100+ steps 后追加 1 条 command 应仍走同步 delta append，不启动 descriptor commit。
 
 ### 阶段 4：UI 同步从 full update 改为 dirty sync
+
+状态：**已完成当前计划项**。
+
+2026-05-03 增量更新：
+
+- `GameLogPanel.load_step_timeline()` 在面板不可见时只提交 timeline/entry 状态并清空旧显示，不再启动 descriptor/background UI 构建；重新显示时复用现有 `ensure_display_ready()` 补建 UI。
+- `_rebuild_display()` 对隐藏态增加短路，避免隐藏日志面板仍创建完整控件树；隐藏态 `_update_entry_count()` 不再触发完整 visible count 计算。
+- 补充 `GameLogHiddenTimelineStateSkipTest` 覆盖隐藏态加载大时间线不构建 UI、不启动 descriptor commit，且显示后可补建。
+- `GameUiSyncController` 新增 dirty flags 常量与 `sync_dirty(dirty_flags, context, do_profile)` 入口；未知或暂未覆盖的 dirty 组合保持 full fallback，不改变现有 UI 同步语义。
+- `sync_dirty()` 已支持 `TOP_STATUS | TIMELINE_CURSOR | DEBUG_PANEL` 的局部同步；该路径不触发 `map_view.set_game_state`、`panel_controller.sync` 或 overlay sync。其他 dirty 组合继续 full fallback。
+- `sync_dirty()` 继续扩展 `MAP_VIEW`、`OVERLAYS`、`ACTION_CONTROLS` 局部同步；`LOG_APPEND` 作为已由 timeline refresh 单独处理的 no-op dirty，不再迫使 full sync。`PANEL_STATE` 仍 full fallback。
+- `GamePanelController.sync_action_state()` 提供 action-state 级别同步：更新 UI component binder、action panel context/flow 和 guided action 收敛，跳过 working/marketing/placement/end panels 的整包 sync；`sync_dirty(PANEL_STATE)` 优先走该路径，缺失时才 full fallback。
+- `GameOnlineResyncController` 的 live command 延迟刷新接入 dirty sync：普通不跨 phase 的 command 使用局部 dirty，跨 phase 或强制 log apply 继续 `DIRTY_FULL`，保留安全 fallback。
 
 目标：
 
@@ -490,7 +543,7 @@ live command 后根据 action/event 标记 dirty：
 实现路径：
 
 - `GameUiSyncController.update_ui()` 保留作为 full sync。
-- 新增 `sync_dirty(state, dirty_flags, context)`。
+- 新增 `sync_dirty(dirty_flags, context, do_profile)`，内部从当前 engine 读取 state；未覆盖的 dirty 组合保持 full sync fallback。
 - `GameOnlineResyncController` 的 delayed refresh 改为传 dirty context。
 - 先支持最常见 live action，再逐步扩展。
 - 未识别 action 默认 full sync，保证正确性优先。
@@ -518,6 +571,28 @@ live command 后根据 action/event 标记 dirty：
 - UI 状态与 engine state 一致。
 
 ### 阶段 5：日志面板虚拟化 / 窗口化
+
+状态：**已完成当前计划项；2026-05-04 已补齐任意长日志自由滚动虚拟化**。
+
+2026-05-03 增量更新：
+
+- `GameLogPanel` 新增 timeline 显示窗口状态与 `get_step_timeline_display_window()` / `get_display_item_count()` 观测接口。
+- 大历史 step timeline 首次加载时，如果达到窗口阈值，不再进入完整 descriptor commit，而是只构建当前窗口范围的日志 Control；默认窗口锚点为 live tail。
+- 大历史尾部 append 改走 `append_window`：完整 timeline/entries 状态仍保留，只重建尾部窗口内的 Control，避免已有 Control 数量随完整历史线性增长。
+- tail 窗口普通 append 优先走增量窗口滑动：先追加新增 step 控件，再裁掉窗口前沿旧 step 控件；只有无法安全滑动时才重建整窗。
+- replay/seek 到历史中间时，显示窗口会围绕 cursor 重建，保证当前 cursor step 附近仍有可见日志项。
+- `GameLogUnifiedTimelineBuilder.build_window()` 支持按 step 范围构建，并复用 `GameLogPanel` 维护的 step -> entries 索引，窗口重建不需要把完整 entries 全部重新分组。
+- 新增 `GameLogTimelineWindowingTest` 覆盖大历史 tail 窗口、append 后窗口移动、seek 后围绕 cursor 重建，以及完整 timeline entries 不被裁剪。
+- `OnlineLiveCommandLogPerfTest` 已接受 `append_window` 作为大历史 append 模式，并对窗口化后的 Control 数量设置上限；当前本机样例中 1000 条 history 追加 1 条后约 266 个 Control、append 约 5ms。
+
+2026-05-04 增量更新：
+
+- `GameLogPanel` 的大历史显示从固定 step tail 窗口推进为 descriptor 虚拟列表：完整 descriptor 保留在内存中，`LogContainer` 只挂载当前可见 descriptor 切片和上下两个 spacer。
+- 自由滚动通过 `ScrollContainer` 的纵向滚动值映射到 descriptor 起点；滚动到头部、中段、尾部都只重建固定大小的可见切片，Control 数不随完整日志长度增长。
+- 大历史尾部 append 改走 `append_virtual`：只追加新增 descriptor 到 descriptor 列表，尾部可见切片保持固定数量 Control，完整 timeline entries 状态仍不裁剪。
+- `get_step_timeline_display_window()` 增加 `virtualized`、`descriptor_count`、`descriptor_start_index`、`descriptor_end_exclusive`、`log_child_count`，用于测试和性能观测。
+- `GameLogTimelineWindowingTest` 已改为覆盖虚拟日志头部/中段自由滚动、append 后 tail 包含新增 step、seek 后围绕 cursor 显示，并断言 `LogContainer` 子节点只允许多出两个 spacer。
+- `OnlineLiveCommandLogPerfTest` 已接受 `append_virtual`；当前本机样例中 1000 条 history 追加 1 条后 `log_control_count=98`（96 个日志 item + 2 个 spacer），`display_window.virtualized=true`。
 
 目标：
 
@@ -556,6 +631,16 @@ live command 后根据 action/event 标记 dirty：
 - append、scroll、seek 都不会因完整日志长度线性变慢到秒级。
 
 ### 阶段 6：resync / rollback / load 的重任务显式化
+
+状态：**已完成当前计划项**。
+
+2026-05-03 增量更新：
+
+- 普通 full resync request 会立即显示 blocking loading，避免用户把后续 snapshot/delta/load 重任务误认为普通 live action 卡死。
+- rewind / rollback last command request 会显示回滚 loading；只在收到回灌并完成强制 UI refresh 后关闭。
+- ResyncArchive / DeltaResync / RollbackMeta 成功后把 loading 关闭延后到下一次强制 UI refresh 完成，避免重日志/重 UI 刷新期间出现“遮罩提前消失但界面还不可交互”。
+- request rejected / delta failed / archive load failed 等失败路径会显式隐藏 loading，并刷新 UI 状态；重连流程保留原有独立 loading，不被普通 resync hide 抢占。
+- 新增 `GameOnlineResyncLoadingStateTest` 覆盖 full resync request 显示 loading、resync rejected 后隐藏 loading 并刷新 UI。
 
 目标：
 

@@ -190,6 +190,10 @@ static func build_tests(_host) -> Array[Dictionary]:
 				"fn": func() -> Result: return await TestRefs.GameLogHiddenTimelineStateSkipTestClass.run(),
 			},
 			{
+				"name": "GameLogTimelineWindowingTest",
+				"fn": func() -> Result: return await TestRefs.GameLogTimelineWindowingTestClass.run(),
+			},
+			{
 				"name": "LiveLogRefreshDebounceTest",
 				"fn": func() -> Result: return await TestRefs.LiveLogRefreshDebounceTestClass.run(),
 			},

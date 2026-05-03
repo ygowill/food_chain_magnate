@@ -182,6 +182,10 @@ static func build_tests(_host) -> Array[Dictionary]:
 			"fn": func() -> Result: return await TestRefs.GameOnlineResyncReconnectFlowTestClass.run(),
 		},
 		{
+			"name": "GameOnlineResyncLoadingStateTest",
+			"fn": func() -> Result: return TestRefs.GameOnlineResyncLoadingStateTestClass.run(),
+		},
+		{
 			"name": "GameOnlineResumeProgressSyncTest",
 			"fn": func() -> Result: return await TestRefs.GameOnlineResumeProgressSyncTestClass.run(),
 		},

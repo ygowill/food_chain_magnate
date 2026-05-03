@@ -46,6 +46,10 @@ static func build_tests(_host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.UiSyncFirstHave20PopupTestClass.run(),
 			},
 			{
+				"name": "UiSyncDirtyFallbackTest",
+				"fn": func() -> Result: return TestRefs.UiSyncDirtyFallbackTestClass.run(),
+			},
+			{
 				"name": "TimelineUiStateSupportBatchUpdateTest",
 				"fn": func() -> Result: return TestRefs.TimelineUiStateSupportBatchUpdateTestClass.run(),
 			},
