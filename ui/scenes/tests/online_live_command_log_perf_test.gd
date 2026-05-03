@@ -76,7 +76,7 @@ static func _run_case(tree: SceneTree, history_size: int) -> Result:
 	, tree, 240)
 	var append_ms := _elapsed_ms(append_start_usec)
 	if not appended:
-		return await _finish_with_panel(Result.failure("perf case %d: 追加 1 条 command 未走 append/append_window" % history_size), panel, tree)
+		return await _finish_with_panel(Result.failure("perf case %d: 追加 1 条 command 未走 append/append_window/append_virtual" % history_size), panel, tree)
 
 	var display_window = panel.call("get_step_timeline_display_window")
 	var display_window_dict: Dictionary = display_window if (display_window is Dictionary) else {}
@@ -90,8 +90,8 @@ static func _run_case(tree: SceneTree, history_size: int) -> Result:
 		"update_mode": str(panel.call("get_last_step_timeline_update_mode")),
 		"display_window": display_window_dict,
 	}
-	if str(row.get("update_mode", "")) == "append_window" and int(row.get("log_control_count", 0)) > 320:
-		return await _finish_with_panel(Result.failure("perf case %d: append_window 后 Control 数量过高: %d" % [history_size, int(row.get("log_control_count", 0))]), panel, tree)
+	if (str(row.get("update_mode", "")) == "append_window" or str(row.get("update_mode", "")) == "append_virtual") and int(row.get("log_control_count", 0)) > 320:
+		return await _finish_with_panel(Result.failure("perf case %d: %s 后 Control 数量过高: %d" % [history_size, str(row.get("update_mode", "")), int(row.get("log_control_count", 0))]), panel, tree)
 	print("%s CASE %s" % [PREFIX, JSON.stringify(row)])
 	return await _finish_with_panel(Result.success(row), panel, tree)
 
@@ -145,7 +145,7 @@ static func _elapsed_ms(start_usec: int) -> float:
 
 static func _is_append_update_mode(mode: String) -> bool:
 	var m := str(mode).strip_edges()
-	return m == "append" or m == "append_window"
+	return m == "append" or m == "append_window" or m == "append_virtual"
 
 static func _finish_with_panel(result: Result, panel: Node, tree: SceneTree) -> Result:
 	if panel != null and is_instance_valid(panel):

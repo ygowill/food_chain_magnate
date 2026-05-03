@@ -19,6 +19,13 @@ static func run() -> Result:
 
 	panel.set("_timeline_window_min_steps", 16)
 	panel.set("_timeline_window_step_count", 8)
+	panel.set("_virtual_descriptor_window_item_count", 10)
+	panel.set("_virtual_descriptor_buffer_items", 2)
+	panel.set("_virtual_item_estimated_height", 24.0)
+
+	var scroll_container = panel.get_node_or_null("MarginContainer/VBoxContainer/ScrollContainer")
+	if scroll_container == null or not is_instance_valid(scroll_container):
+		return await _finish(Result.failure("未找到 ScrollContainer"), panel, st)
 
 	var log_container = panel.get_node_or_null("MarginContainer/VBoxContainer/ScrollContainer/LogContainer")
 	if log_container == null or not is_instance_valid(log_container):
@@ -32,40 +39,71 @@ static func run() -> Result:
 	var window = panel.call("get_step_timeline_display_window")
 	if not (window is Dictionary) or not bool(window.get("windowed", false)):
 		return await _finish(Result.failure("大时间线应启用窗口化显示"), panel, st)
-	if int(window.get("start_step_index", -1)) != 32 or int(window.get("end_step_index", -1)) != 39:
-		return await _finish(Result.failure("tail 窗口范围错误: %s" % str(window)), panel, st)
-	if panel.call("get_last_step_timeline_update_mode") != "rebuild_window":
-		return await _finish(Result.failure("首次大时间线加载应标记 rebuild_window，实际=%s" % str(panel.call("get_last_step_timeline_update_mode"))), panel, st)
-	if int(panel.call("get_display_item_count")) > 14:
-		return await _finish(Result.failure("窗口化后 Control 数量应保持窗口级别，实际=%d" % int(panel.call("get_display_item_count"))), panel, st)
-	if log_container.get_child_count() != int(panel.call("get_display_item_count")):
-		return await _finish(Result.failure("LogContainer 子节点数应等于显示 item 数"), panel, st)
+	if not bool(window.get("virtualized", false)):
+		return await _finish(Result.failure("大时间线应启用虚拟化显示: %s" % str(window)), panel, st)
+	if int(window.get("descriptor_count", 0)) <= int(window.get("display_item_count", 0)):
+		return await _finish(Result.failure("虚拟化应保留全量 descriptor 且只渲染可见切片: %s" % str(window)), panel, st)
+	if panel.call("get_last_step_timeline_update_mode") != "rebuild_virtual":
+		return await _finish(Result.failure("首次大时间线加载应标记 rebuild_virtual，实际=%s" % str(panel.call("get_last_step_timeline_update_mode"))), panel, st)
+	if int(panel.call("get_display_item_count")) > 10:
+		return await _finish(Result.failure("虚拟化后 Control 数量应保持固定切片，实际=%d" % int(panel.call("get_display_item_count"))), panel, st)
+	if log_container.get_child_count() > int(panel.call("get_display_item_count")) + 2:
+		return await _finish(Result.failure("LogContainer 子节点数只能额外包含上下 spacer，实际=%d display=%d" % [log_container.get_child_count(), int(panel.call("get_display_item_count"))]), panel, st)
 	var loaded_entries = panel.call("get_step_timeline_entries")
 	if not (loaded_entries is Array) or loaded_entries.size() != entries.size():
 		return await _finish(Result.failure("窗口化不应裁剪 timeline entries 状态"), panel, st)
+	var first_items: Dictionary = panel.get("_timeline_first_item_by_index")
+	if not first_items.has(39):
+		return await _finish(Result.failure("初始虚拟窗口应定位到 live tail"), panel, st)
 
+	panel.set("_auto_scroll", false)
+	panel.set("_scroll_to_bottom_requested", false)
+	scroll_container.scroll_vertical = 0
+	await st.process_frame
+
+	panel.call("_render_virtual_descriptor_window", 0, true)
+	await st.process_frame
+	window = panel.call("get_step_timeline_display_window")
+	if int(window.get("descriptor_start_index", -1)) != 0:
+		return await _finish(Result.failure("虚拟日志应能自由滚动到头部 descriptor，实际=%s" % str(window)), panel, st)
+	if int(panel.call("get_display_item_count")) > 10 or log_container.get_child_count() > int(panel.call("get_display_item_count")) + 2:
+		return await _finish(Result.failure("滚动到头部后 Control 数应保持固定，display=%d children=%d" % [int(panel.call("get_display_item_count")), log_container.get_child_count()]), panel, st)
+
+	panel.call("_render_virtual_descriptor_window", 20, true)
+	await st.process_frame
+	window = panel.call("get_step_timeline_display_window")
+	if int(window.get("descriptor_start_index", -1)) != 20:
+		return await _finish(Result.failure("虚拟日志应能自由滚动到中段 descriptor，实际=%s" % str(window)), panel, st)
+	if int(panel.call("get_display_item_count")) > 10 or log_container.get_child_count() > int(panel.call("get_display_item_count")) + 2:
+		return await _finish(Result.failure("滚动到中段后 Control 数应保持固定，display=%d children=%d" % [int(panel.call("get_display_item_count")), log_container.get_child_count()]), panel, st)
+
+	panel.set("_auto_scroll", true)
+	panel.set("_scroll_to_bottom_requested", false)
 	var timeline_appended := _build_linear_timeline(41)
 	var entries_appended := _build_linear_entries(41)
 	panel.call("load_step_timeline", timeline_appended, entries_appended)
 	await st.process_frame
 	window = panel.call("get_step_timeline_display_window")
-	if panel.call("get_last_step_timeline_update_mode") != "append_window":
-		return await _finish(Result.failure("大时间线尾部追加应走 append_window，实际=%s" % str(panel.call("get_last_step_timeline_update_mode"))), panel, st)
-	if int(window.get("start_step_index", -1)) != 33 or int(window.get("end_step_index", -1)) != 40:
-		return await _finish(Result.failure("append 后 tail 窗口范围错误: %s" % str(window)), panel, st)
-	if int(panel.call("get_display_item_count")) > 14:
-		return await _finish(Result.failure("append_window 后 Control 数量应保持窗口级别，实际=%d" % int(panel.call("get_display_item_count"))), panel, st)
+	if panel.call("get_last_step_timeline_update_mode") != "append_virtual":
+		return await _finish(Result.failure("大时间线尾部追加应走 append_virtual，实际=%s" % str(panel.call("get_last_step_timeline_update_mode"))), panel, st)
+	if not bool(window.get("virtualized", false)):
+		return await _finish(Result.failure("append 后应保持虚拟化显示: %s" % str(window)), panel, st)
+	first_items = panel.get("_timeline_first_item_by_index")
+	if not first_items.has(40):
+		return await _finish(Result.failure("append_virtual 后 tail 窗口应包含新增 step，实际=%s" % str(window)), panel, st)
+	if int(panel.call("get_display_item_count")) > 10:
+		return await _finish(Result.failure("append_virtual 后 Control 数量应保持固定切片，实际=%d" % int(panel.call("get_display_item_count"))), panel, st)
 
 	panel.call("set_timeline_head_cursor", 40, 5, true)
 	await st.process_frame
 	window = panel.call("get_step_timeline_display_window")
-	if int(window.get("start_step_index", -1)) != 1 or int(window.get("end_step_index", -1)) != 8:
-		return await _finish(Result.failure("seek 历史 cursor 后窗口应围绕 cursor 重建，实际=%s" % str(window)), panel, st)
-	var first_items: Dictionary = panel.get("_timeline_first_item_by_index")
+	if not bool(window.get("virtualized", false)):
+		return await _finish(Result.failure("seek 后仍应保持虚拟化显示: %s" % str(window)), panel, st)
+	first_items = panel.get("_timeline_first_item_by_index")
 	if not first_items.has(5):
 		return await _finish(Result.failure("seek 后窗口应包含 cursor step 的可见 item"), panel, st)
-	if int(panel.call("get_display_item_count")) > 14:
-		return await _finish(Result.failure("seek 窗口重建后 Control 数量应保持窗口级别，实际=%d" % int(panel.call("get_display_item_count"))), panel, st)
+	if int(panel.call("get_display_item_count")) > 10:
+		return await _finish(Result.failure("seek 窗口重建后 Control 数量应保持固定切片，实际=%d" % int(panel.call("get_display_item_count"))), panel, st)
 
 	return await _finish(Result.success({}), panel, st)
 

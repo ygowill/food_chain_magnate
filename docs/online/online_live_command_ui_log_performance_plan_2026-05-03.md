@@ -572,7 +572,7 @@ live command 后根据 action/event 标记 dirty：
 
 ### 阶段 5：日志面板虚拟化 / 窗口化
 
-状态：**已完成当前计划项**。
+状态：**已完成当前计划项；2026-05-04 已补齐任意长日志自由滚动虚拟化**。
 
 2026-05-03 增量更新：
 
@@ -584,6 +584,15 @@ live command 后根据 action/event 标记 dirty：
 - `GameLogUnifiedTimelineBuilder.build_window()` 支持按 step 范围构建，并复用 `GameLogPanel` 维护的 step -> entries 索引，窗口重建不需要把完整 entries 全部重新分组。
 - 新增 `GameLogTimelineWindowingTest` 覆盖大历史 tail 窗口、append 后窗口移动、seek 后围绕 cursor 重建，以及完整 timeline entries 不被裁剪。
 - `OnlineLiveCommandLogPerfTest` 已接受 `append_window` 作为大历史 append 模式，并对窗口化后的 Control 数量设置上限；当前本机样例中 1000 条 history 追加 1 条后约 266 个 Control、append 约 5ms。
+
+2026-05-04 增量更新：
+
+- `GameLogPanel` 的大历史显示从固定 step tail 窗口推进为 descriptor 虚拟列表：完整 descriptor 保留在内存中，`LogContainer` 只挂载当前可见 descriptor 切片和上下两个 spacer。
+- 自由滚动通过 `ScrollContainer` 的纵向滚动值映射到 descriptor 起点；滚动到头部、中段、尾部都只重建固定大小的可见切片，Control 数不随完整日志长度增长。
+- 大历史尾部 append 改走 `append_virtual`：只追加新增 descriptor 到 descriptor 列表，尾部可见切片保持固定数量 Control，完整 timeline entries 状态仍不裁剪。
+- `get_step_timeline_display_window()` 增加 `virtualized`、`descriptor_count`、`descriptor_start_index`、`descriptor_end_exclusive`、`log_child_count`，用于测试和性能观测。
+- `GameLogTimelineWindowingTest` 已改为覆盖虚拟日志头部/中段自由滚动、append 后 tail 包含新增 step、seek 后围绕 cursor 显示，并断言 `LogContainer` 子节点只允许多出两个 spacer。
+- `OnlineLiveCommandLogPerfTest` 已接受 `append_virtual`；当前本机样例中 1000 条 history 追加 1 条后 `log_control_count=98`（96 个日志 item + 2 个 spacer），`display_window.virtualized=true`。
 
 目标：
 
