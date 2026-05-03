@@ -1311,9 +1311,11 @@ func _build_timeline_entries_signature(entries: Array) -> Dictionary:
 func _entry_signature_hash(entry: Dictionary) -> int:
 	if entry == null or not (entry is Dictionary):
 		return 0
-	var d := entry.duplicate(true)
-	if d.has("id"):
-		d.erase("id")
+	var d := {}
+	for key in entry.keys():
+		if str(key) == "id":
+			continue
+		d[key] = entry.get(key)
 	return hash(d)
 
 func _read_entry_event_sequence(entry: Dictionary) -> int:

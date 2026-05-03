@@ -145,6 +145,13 @@ static func run() -> Result:
 	if not bool(panel.call("_can_append_step_timeline", timeline2, entries2, false)):
 		_cleanup(panel)
 		return Result.failure("signature append 校验应接受正常尾部追加")
+	var id_changed_entries: Array[Dictionary] = []
+	id_changed_entries.append(entries1[0].duplicate(true))
+	id_changed_entries[0]["id"] = 9999
+	id_changed_entries.append(appended_entries[0].duplicate(true))
+	if not bool(panel.call("_can_append_step_timeline", timeline2, id_changed_entries, false)):
+		_cleanup(panel)
+		return Result.failure("signature append 校验应忽略旧 entry id 差异")
 	var bad_initial_timeline := timeline2.duplicate(true)
 	bad_initial_timeline["initial_state_dict"] = {
 		"round_number": 0,
