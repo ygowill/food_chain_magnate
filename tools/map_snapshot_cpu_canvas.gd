@@ -8,6 +8,8 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
+const GameEngineClass = preload("res://core/engine/game_engine.gd")
+const ModuleUiMetadataBootstrapClass = preload("res://gameplay/module_ui_metadata_bootstrap.gd")
 
 const PROJECT_FALLBACK_FONT_PATH := "res://assets/fonts/NotoSansSC-Regular.otf"
 const BASE_CELL_SIZE := 40
@@ -59,6 +61,9 @@ const _INTRO_VOID_CELL := {"tile_origin": Vector2i(-1, -1), "blocked": false}
 func render_state_png(state, options: Dictionary = {}) -> Result:
 	if state == null or not (state.map is Dictionary):
 		return Result.failure("map snapshot: state.map 缺失")
+	var metadata_r := _ensure_module_ui_metadata_for_state(state)
+	if not metadata_r.ok:
+		return metadata_r
 	_install_project_fallback_font()
 	set_game_state(state)
 	if _grid_size == Vector2i.ZERO:
@@ -271,6 +276,31 @@ func _ensure_skin(modules: Array[String]) -> void:
 		return
 	_skin_modules_key = key
 	_skin = UiSkinCacheClass.get_skin_for_modules(_resolve_modules_base_dir(), modules, BASE_CELL_SIZE)
+
+func _ensure_module_ui_metadata_for_state(state) -> Result:
+	var modules: Array[String] = Array(state.modules, TYPE_STRING, "", null)
+	var modules_base_dir := _resolve_modules_base_dir()
+
+	if modules.is_empty():
+		ModuleUiMetadataBootstrapClass.reset()
+		return Result.success()
+
+	var player_count := 1
+	if state.players is Array:
+		player_count = maxi(1, state.players.size())
+
+	var engine := GameEngineClass.new()
+	var init_r: Result = engine.initialize(player_count, int(state.seed), modules, modules_base_dir)
+	if not init_r.ok:
+		engine.dispose()
+		return Result.failure("map snapshot: module UI metadata 初始化失败: %s" % init_r.error)
+
+	var apply_r: Result = ModuleUiMetadataBootstrapClass.apply(engine)
+	engine.dispose()
+	if not apply_r.ok:
+		return Result.failure("map snapshot: module UI metadata 装配失败: %s" % apply_r.error)
+
+	return Result.success()
 
 func _resolve_modules_base_dir() -> String:
 	var fallback := str(GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR).strip_edges()

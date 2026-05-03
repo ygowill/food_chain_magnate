@@ -41,8 +41,23 @@ static func _get_house_id_label_texture(text: String) -> Texture2D:
 	if tex is Texture2D:
 		_house_id_label_textures[key] = tex
 		return tex
+	tex = _load_raw_house_id_label_texture(str(HOUSE_ID_LABEL_TEXTURE_PATHS[key]))
+	if tex is Texture2D:
+		_house_id_label_textures[key] = tex
+		return tex
 	_house_id_label_textures[key] = null
 	return null
+
+static func _load_raw_house_id_label_texture(path: String) -> Texture2D:
+	var p := str(path).strip_edges()
+	if p.is_empty():
+		return null
+	if not FileAccess.file_exists(p):
+		return null
+	var img := Image.load_from_file(p)
+	if img == null or img.is_empty():
+		return null
+	return ImageTexture.create_from_image(img)
 
 static func _read_color_hint(hints: Dictionary, key: String, fallback: Color) -> Color:
 	if hints == null or hints.is_empty():
