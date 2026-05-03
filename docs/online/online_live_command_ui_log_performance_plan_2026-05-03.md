@@ -500,7 +500,8 @@ append 时只检查：
 - `GameLogPanel.load_step_timeline()` 在面板不可见时只提交 timeline/entry 状态并清空旧显示，不再启动 descriptor/background UI 构建；重新显示时复用现有 `ensure_display_ready()` 补建 UI。
 - `_rebuild_display()` 对隐藏态增加短路，避免隐藏日志面板仍创建完整控件树；隐藏态 `_update_entry_count()` 不再触发完整 visible count 计算。
 - 补充 `GameLogHiddenTimelineStateSkipTest` 覆盖隐藏态加载大时间线不构建 UI、不启动 descriptor commit，且显示后可补建。
-- `GameUiSyncController` 新增 dirty flags 常量与 `sync_dirty(dirty_flags, context, do_profile)` 入口；当前先统一 full fallback，不改变现有 UI 同步语义。`UiSyncDirtyFallbackTest` 覆盖 `DIRTY_FULL`、已知局部 dirty、未知 dirty 都仍走完整同步。
+- `GameUiSyncController` 新增 dirty flags 常量与 `sync_dirty(dirty_flags, context, do_profile)` 入口；未知或暂未覆盖的 dirty 组合保持 full fallback，不改变现有 UI 同步语义。
+- `sync_dirty()` 已支持 `TOP_STATUS | TIMELINE_CURSOR | DEBUG_PANEL` 的局部同步；该路径不触发 `map_view.set_game_state`、`panel_controller.sync` 或 overlay sync。其他 dirty 组合继续 full fallback。
 
 目标：
 
