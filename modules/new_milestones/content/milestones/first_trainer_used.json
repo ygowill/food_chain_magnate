@@ -17,7 +17,7 @@
     }
   ],
   "exclusive_type": "first_trainer_used",
-  "expires_at": null,
+  "expires_at": 2,
   "pool": {
     "enabled": true
   }

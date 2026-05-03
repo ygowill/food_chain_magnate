@@ -217,8 +217,8 @@ static func initialize_new_game(
 		return removed_total_read
 	engine.set_initial_total_cash_for_invariants(int(total_cash_read.value) - int(reserve_added_total_read.value) + int(removed_total_read.value))
 
-	var span_emp_totals := PerfTraceClass.begin_span("init:Invariants.compute_employee_totals")
-	var employee_totals_read := InvariantsClass.compute_employee_totals(state)
+	var span_emp_totals := PerfTraceClass.begin_span("init:Invariants.compute_employee_base_totals_for_invariants")
+	var employee_totals_read := InvariantsClass.compute_employee_base_totals_for_invariants(state)
 	PerfTraceClass.end_span(span_emp_totals)
 	if not employee_totals_read.ok:
 		return Result.failure("初始化失败：无法计算初始员工总量: %s" % employee_totals_read.error)

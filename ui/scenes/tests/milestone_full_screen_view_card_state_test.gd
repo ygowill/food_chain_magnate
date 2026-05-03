@@ -13,10 +13,15 @@ static func run() -> Result:
 	if host == null or not is_instance_valid(host):
 		return Result.failure("current_scene 为空（无法挂载视图）")
 
-	var card = ViewClass.MilestoneCard.new()
+	var card = ViewClass._create_milestone_card_for_test()
 	if card == null or not is_instance_valid(card):
 		return Result.failure("无法创建 MilestoneCard")
 	card.milestone_id = "test_milestone"
+	var def := MilestoneDef.new()
+	def.id = "test_milestone"
+	def.name = "测试里程碑"
+	def.expires_at = 2
+	card.milestone_def = def
 	card.effect_text = "测试效果描述"
 	card.accent_color = Color(0.59, 0.77, 0.82, 1.0)
 	host.add_child(card)
@@ -31,6 +36,10 @@ static func run() -> Result:
 	if not (icons_row_val is HBoxContainer):
 		return _finish(Result.failure("MilestoneCard 缺少 OwnerLogoRow"), card)
 	var icons_row: HBoxContainer = icons_row_val
+	var expires_label_val = card.get("_expires_label")
+	if not (expires_label_val is Label):
+		return _finish(Result.failure("MilestoneCard 缺少 ExpiresLabel"), card)
+	var expires_label: Label = expires_label_val
 
 	if status_label.get_parent() != icons_row.get_parent():
 		return _finish(Result.failure("状态文案与餐厅 logo 应位于同一行"), card)
@@ -44,7 +53,8 @@ static func run() -> Result:
 	if status_label.get_theme_constant("outline_size") < 1:
 		return _finish(Result.failure("状态文案缺少加粗描边"), card)
 
-	card.set_state([0], 0, 1, 1)
+	var other_owner: Array[int] = [0]
+	card.set_state(other_owner, 0, 1, 1)
 	await st.process_frame
 	if str(status_label.text) != "他人已获得":
 		return _finish(Result.failure("他人已获得且不可获得时文案错误: %s" % str(status_label.text)), card)
@@ -53,19 +63,30 @@ static func run() -> Result:
 	if icons_row.get_child_count() < 1:
 		return _finish(Result.failure("他人已获得时应展示获得者餐厅 logo"), card)
 
-	card.set_state([1], 0, 1, 1)
+	var viewer_owner: Array[int] = [1]
+	card.set_state(viewer_owner, 0, 1, 1)
 	await st.process_frame
 	if str(status_label.text) != "已获得":
 		return _finish(Result.failure("当前玩家已获得时文案错误: %s" % str(status_label.text)), card)
 	if card.modulate.a < 0.99:
 		return _finish(Result.failure("当前玩家已获得时卡片不应灰化: alpha=%.2f" % card.modulate.a), card)
 
-	card.set_state([], 1, 1, 1)
+	var no_owners: Array[int] = []
+	card.set_state(no_owners, 1, 1, 1)
 	await st.process_frame
 	if str(status_label.text) != "可获得":
 		return _finish(Result.failure("当前玩家可获得时文案错误: %s" % str(status_label.text)), card)
 	if card.modulate.a < 0.99:
 		return _finish(Result.failure("当前玩家可获得时卡片不应灰化: alpha=%.2f" % card.modulate.a), card)
+	if str(expires_label.text).find("剩余 2 回合") < 0:
+		return _finish(Result.failure("过期里程碑卡片应显示剩余回合，实际: %s" % str(expires_label.text)), card)
+
+	card.set_state(no_owners, 1, 3, 1)
+	await st.process_frame
+	if str(status_label.text) != "不可获得":
+		return _finish(Result.failure("过期后状态文案错误: %s" % str(status_label.text)), card)
+	if str(expires_label.text) != "已过期":
+		return _finish(Result.failure("过期后应显示已过期，实际: %s" % str(expires_label.text)), card)
 
 	return _finish(Result.success({}), card)
 

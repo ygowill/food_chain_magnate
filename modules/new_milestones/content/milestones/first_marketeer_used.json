@@ -17,9 +17,8 @@
     "new_milestones:dinnertime:distance_delta:first_marketeer_used"
   ],
   "exclusive_type": "first_marketeer_used",
-  "expires_at": null,
+  "expires_at": 2,
   "pool": {
     "enabled": true
   }
 }
-

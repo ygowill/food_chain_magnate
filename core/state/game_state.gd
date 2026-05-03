@@ -48,6 +48,7 @@ var _road_graph = null  # RoadGraph instance
 
 # === 供应池 ===
 var employee_pool: Dictionary = {}  # employee_id -> count
+var employee_box_added_totals: Dictionary = {}  # employee_id -> count，规则允许“从盒中取”时新增的员工卡
 var milestone_pool: Array[String] = []  # 可获取的里程碑
 
 # === 营销实例 ===
@@ -84,6 +85,7 @@ func duplicate_state() -> GameState:
 	copy.players = Array(_deep_copy_array(players), TYPE_DICTIONARY, "", null)
 	copy.map = map.duplicate(true)
 	copy.employee_pool = employee_pool.duplicate()
+	copy.employee_box_added_totals = employee_box_added_totals.duplicate()
 	copy.milestone_pool = Array(milestone_pool, TYPE_STRING, "", null)
 	copy.marketing_instances = Array(_deep_copy_array(marketing_instances), TYPE_DICTIONARY, "", null)
 	copy.next_staff_id = next_staff_id

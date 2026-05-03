@@ -10,7 +10,8 @@
   "effects": [
     {
       "type": "gain_card",
-      "value": "executive_vice_president"
+      "value": "executive_vice_president",
+      "from_box_when_empty": true
     },
     {
       "type": "employee_no_salary",
@@ -18,7 +19,7 @@
     }
   ],
   "exclusive_type": "first_recruiting_girl_used",
-  "expires_at": null,
+  "expires_at": 2,
   "pool": {
     "enabled": true
   }

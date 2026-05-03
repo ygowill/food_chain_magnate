@@ -235,7 +235,7 @@ func _update_states() -> void:
 func _on_close_pressed() -> void:
 	cancelled.emit()
 
-func _format_milestone_effect_text(def: MilestoneDef) -> String:
+func _format_milestone_effect_text(def: MilestoneDef, include_expiry_hint: bool = true) -> String:
 	if def == null:
 		return ""
 
@@ -264,6 +264,10 @@ func _format_milestone_effect_text(def: MilestoneDef) -> String:
 
 	# 某些里程碑的行为由模块规则通过“是否拥有该里程碑”判断实现（effects 可能为 noop）
 	lines.append_array(_describe_milestone_id(def.id))
+	if include_expiry_hint:
+		var expiry_line := _describe_expiry(def)
+		if not expiry_line.is_empty():
+			lines.append(expiry_line)
 
 	# 去重（保序）
 	var seen := {}
@@ -278,6 +282,14 @@ func _format_milestone_effect_text(def: MilestoneDef) -> String:
 		out.append(s)
 
 	return "\n".join(out)
+
+func _describe_expiry(def: MilestoneDef) -> String:
+	if def == null or def.expires_at == null:
+		return ""
+	var exp_round := int(def.expires_at)
+	if exp_round <= 0:
+		return ""
+	return "第 %d 回合清理后若未获得则移除" % exp_round
 
 func _describe_milestone_id(milestone_id: String) -> Array[String]:
 	match milestone_id:
@@ -311,7 +323,10 @@ func _describe_effect_dict(effect_type: String, effect: Dictionary) -> String:
 			var v := str(effect.get("value", "")).strip_edges()
 			if v.is_empty():
 				return "获得员工卡"
-			return "获得员工卡：%s（手牌）" % _get_employee_name(v)
+			var suffix := ""
+			if bool(effect.get("from_box_when_empty", false)):
+				suffix = "；若员工池已空则从盒中取"
+			return "获得员工卡：%s（手牌%s）" % [_get_employee_name(v), suffix]
 		"gain_cards":
 			var list_val = effect.get("value", null)
 			if not (list_val is Array):
@@ -593,10 +608,11 @@ class MilestoneItem extends PanelContainer:
 				if not _claimed_by_players.is_empty():
 					_claimed_by_players.sort()
 					var names: Array[String] = []
+					var globals := get_node_or_null("/root/Globals")
 					for pid in _claimed_by_players:
 						var n := ""
-						if Globals != null and Globals.has_method("get_player_name"):
-							n = str(Globals.get_player_name(pid))
+						if globals != null and globals.has_method("get_player_name"):
+							n = str(globals.call("get_player_name", pid))
 						if n.is_empty():
 							n = "玩家%d" % (pid + 1)
 						names.append(n)

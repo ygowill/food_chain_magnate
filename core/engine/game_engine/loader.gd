@@ -148,7 +148,7 @@ static func load_from_archive(engine: GameEngine, archive: Dictionary, progress_
 		return removed_total_read
 	# _initial_total_cash 语义：不包含“后续注入/移除”的 delta（以便 invariant 使用 base + delta 计算）。
 	engine.set_initial_total_cash_for_invariants(int(total_cash_read.value) - int(reserve_added_total_read.value) + int(removed_total_read.value))
-	var employee_totals_read := InvariantsClass.compute_employee_totals(engine.state)
+	var employee_totals_read := InvariantsClass.compute_employee_base_totals_for_invariants(engine.state)
 	if not employee_totals_read.ok:
 		OnlinePerfTraceClass.end_span(load_span, {"ok": false, "error": str(employee_totals_read.error)})
 		return Result.failure("无效的 initial_state：无法计算初始员工总量: %s" % employee_totals_read.error)

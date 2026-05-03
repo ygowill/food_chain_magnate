@@ -276,8 +276,9 @@ func _ensure_formatter() -> void:
 func _resolve_viewer_player_id(state: GameState, requested_viewer_player_id: int = -1) -> int:
 	if state == null:
 		return -1
-	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
-		var pid := int(NetContext.local_player_id)
+	var net_context := get_node_or_null("/root/NetContext")
+	if net_context != null and int(net_context.get("mode")) == 1:
+		var pid := int(net_context.get("local_player_id"))
 		if pid >= 0 and pid < state.players.size():
 			return pid
 		return -1
@@ -341,7 +342,7 @@ func _run_background_rebuild(milestone_ids: Array[String], claimed_by: Dictionar
 
 		var effect_text := ms_id
 		if def != null and def is MilestoneDef and _formatter != null:
-			effect_text = _formatter._format_milestone_effect_text(def)
+			effect_text = _formatter._format_milestone_effect_text(def, false)
 
 		var owners: Array[int] = []
 		if claimed_by.has(ms_id):
@@ -445,7 +446,7 @@ func _rebuild_from_state(state: GameState) -> void:
 
 		var effect_text := ms_id
 		if def != null and def is MilestoneDef and _formatter != null:
-			effect_text = _formatter._format_milestone_effect_text(def)
+			effect_text = _formatter._format_milestone_effect_text(def, false)
 
 		var owners: Array[int] = []
 		if claimed_by.has(ms_id):
@@ -626,6 +627,8 @@ func _get_milestone_accent_color(milestone_id: String, def) -> Color:
 		return Color(MILESTONE_CATEGORY_COLORS[cat])
 	return PALETTE_GRAY
 
+static func _create_milestone_card_for_test() -> PanelContainer:
+	return MilestoneCard.new()
 
 # === 内部类：里程碑卡片 ===
 class MilestoneCard extends PanelContainer:
@@ -654,6 +657,18 @@ class MilestoneCard extends PanelContainer:
 	var _status_label: Label
 	var _expires_label: Label
 	var _icons_row: HBoxContainer
+
+	func _scaled_font_size(base_size: int) -> int:
+		var globals := get_node_or_null("/root/Globals") if is_inside_tree() else null
+		if globals != null and globals.has_method("get_scaled_font_size"):
+			return int(globals.call("get_scaled_font_size", base_size))
+		return int(base_size)
+
+	func _player_name(player_id: int) -> String:
+		var globals := get_node_or_null("/root/Globals") if is_inside_tree() else null
+		if globals != null and globals.has_method("get_player_name"):
+			return str(globals.call("get_player_name", player_id))
+		return "玩家%d" % (player_id + 1)
 
 	func _ready() -> void:
 		_build_ui()
@@ -738,7 +753,7 @@ class MilestoneCard extends PanelContainer:
 		_name_label = Label.new()
 		_name_label.name = "NameLabel"
 		_name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_name_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(16) if Globals != null else 16)
+		_name_label.add_theme_font_size_override("font_size", _scaled_font_size(16))
 		_name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		_name_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		# 头部文字颜色在 _update_header_text_color 中根据亮度设置
@@ -761,7 +776,7 @@ class MilestoneCard extends PanelContainer:
 		_desc_label = Label.new()
 		_desc_label.name = "DescLabel"
 		_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_desc_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(14) if Globals != null else 14)
+		_desc_label.add_theme_font_size_override("font_size", _scaled_font_size(14))
 		_desc_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1.0))
 		_desc_label.max_lines_visible = 5
 		_desc_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -781,7 +796,7 @@ class MilestoneCard extends PanelContainer:
 		_status_label = Label.new()
 		_status_label.name = "StatusLabel"
 		_status_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-		_status_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(16) if Globals != null else 16)
+		_status_label.add_theme_font_size_override("font_size", _scaled_font_size(16))
 		_status_label.add_theme_constant_override("outline_size", 1)
 		_status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_status_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -797,7 +812,7 @@ class MilestoneCard extends PanelContainer:
 		_expires_label = Label.new()
 		_expires_label.name = "ExpiresLabel"
 		_expires_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_expires_label.add_theme_font_size_override("font_size", Globals.get_scaled_font_size(12) if Globals != null else 12)
+		_expires_label.add_theme_font_size_override("font_size", _scaled_font_size(12))
 		_expires_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 1.0))
 		footer_vbox.add_child(_expires_label)
 
@@ -905,7 +920,7 @@ class MilestoneCard extends PanelContainer:
 				icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 				icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 				icon.texture = tex
-				icon.tooltip_text = Globals.get_player_name(pid) if Globals != null else ("玩家%d" % (pid + 1))
+				icon.tooltip_text = _player_name(pid)
 				_icons_row.add_child(icon)
 			_icons_row.visible = not _owners.is_empty()
 

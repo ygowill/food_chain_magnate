@@ -75,7 +75,7 @@ func _milestone_effect_gain_card(state: GameState, player_id: int, milestone_id:
 	var employee_id: String = str(value_val)
 	if employee_id.is_empty():
 		return Result.failure("MilestoneEffect.gain_card: %s.value 不能为空" % milestone_id)
-	return _grant_employee_cards_to_reserve(state, player_id, milestone_id, [employee_id])
+	return _grant_employee_cards_to_reserve(state, player_id, milestone_id, [employee_id], _allows_box_fallback(effect))
 
 func _milestone_effect_gain_cards(state: GameState, player_id: int, milestone_id: String, effect: Dictionary) -> Result:
 	var value_val = effect.get("value", null)
@@ -93,7 +93,7 @@ func _milestone_effect_gain_cards(state: GameState, player_id: int, milestone_id
 		if employee_id.is_empty():
 			return Result.failure("MilestoneEffect.gain_cards: %s.value[%d] 不能为空" % [milestone_id, i])
 		ids.append(employee_id)
-	return _grant_employee_cards_to_reserve(state, player_id, milestone_id, ids)
+	return _grant_employee_cards_to_reserve(state, player_id, milestone_id, ids, _allows_box_fallback(effect))
 
 func _milestone_effect_peek_reserve_cards(state: GameState, player_id: int, _milestone_id: String, _effect: Dictionary) -> Result:
 	if state == null:
@@ -200,13 +200,15 @@ func _remove_all_from_array(player: Dictionary, key: String, item) -> int:
 		removed += 1
 	return removed
 
-func _grant_employee_cards_to_reserve(state: GameState, player_id: int, milestone_id: String, employee_ids: Array[String]) -> Result:
+func _grant_employee_cards_to_reserve(state: GameState, player_id: int, milestone_id: String, employee_ids: Array[String], allow_from_box_when_empty: bool = false) -> Result:
 	if state == null:
 		return Result.failure("MilestoneEffect.gain_cards: state 为空")
 	if not (state.players is Array):
 		return Result.failure("MilestoneEffect.gain_cards: state.players 类型错误（期望 Array）")
 	if not (state.employee_pool is Dictionary):
 		return Result.failure("MilestoneEffect.gain_cards: state.employee_pool 类型错误（期望 Dictionary）")
+	if not (state.employee_box_added_totals is Dictionary):
+		return Result.failure("MilestoneEffect.gain_cards: state.employee_box_added_totals 类型错误（期望 Dictionary）")
 	if player_id < 0 or player_id >= state.players.size():
 		return Result.failure("MilestoneEffect.gain_cards: player_id 越界: %d" % player_id)
 	if employee_ids.is_empty():
@@ -242,13 +244,47 @@ func _grant_employee_cards_to_reserve(state: GameState, player_id: int, mileston
 			if owned > 0:
 				return Result.failure("MilestoneEffect.gain_cards: unique 员工已存在，不能重复获得: %s" % employee_id)
 
-		var take := StateUpdaterClass.take_from_pool(state, employee_id, 1)
-		if not take.ok:
-			return Result.failure("MilestoneEffect.gain_cards: 从员工池取出失败（不应缺货）: %s: %s" % [employee_id, take.error])
+		var available_val = state.employee_pool.get(employee_id, null)
+		if not (available_val is int):
+			return Result.failure("MilestoneEffect.gain_cards: employee_pool[%s] 类型错误（期望 int）" % employee_id)
+		var available := int(available_val)
+		if available > 0:
+			var take := StateUpdaterClass.take_from_pool(state, employee_id, 1)
+			if not take.ok:
+				return Result.failure("MilestoneEffect.gain_cards: 从员工池取出失败（不应缺货）: %s: %s" % [employee_id, take.error])
+		elif allow_from_box_when_empty:
+			var record_box := _record_employee_card_from_box(state, employee_id, 1)
+			if not record_box.ok:
+				return record_box
+		else:
+			return Result.failure("MilestoneEffect.gain_cards: 从员工池取出失败（不应缺货）: %s: 员工池不足: %s 需要 1, 只有 %d" % [employee_id, employee_id, available])
 		StateUpdaterClass.append_to_array(player, "reserve_employees", employee_id)
 
 	state.players[player_id] = player
 	return Result.success({"count": employee_ids.size()})
+
+func _allows_box_fallback(effect: Dictionary) -> bool:
+	var v = effect.get("from_box_when_empty", false)
+	if v is bool:
+		return bool(v)
+	return false
+
+func _record_employee_card_from_box(state: GameState, employee_id: String, count: int) -> Result:
+	if state == null:
+		return Result.failure("MilestoneEffect.gain_cards: state 为空")
+	if employee_id.is_empty():
+		return Result.failure("MilestoneEffect.gain_cards: employee_id 不能为空")
+	if count <= 0:
+		return Result.failure("MilestoneEffect.gain_cards: count 必须 > 0，实际: %d" % count)
+	if not (state.employee_box_added_totals is Dictionary):
+		return Result.failure("MilestoneEffect.gain_cards: state.employee_box_added_totals 类型错误（期望 Dictionary）")
+	var totals: Dictionary = state.employee_box_added_totals
+	var current_val = totals.get(employee_id, 0)
+	if not (current_val is int):
+		return Result.failure("MilestoneEffect.gain_cards: employee_box_added_totals[%s] 类型错误（期望 int）" % employee_id)
+	totals[employee_id] = int(current_val) + count
+	state.employee_box_added_totals = totals
+	return Result.success({"employee_id": employee_id, "from_box": count})
 
 func _count_employee_in_player(player: Dictionary, employee_id: String) -> int:
 	var total := 0
@@ -259,4 +295,3 @@ func _count_employee_in_player(player: Dictionary, employee_id: String) -> int:
 			if list[i] is String and str(list[i]) == employee_id:
 				total += 1
 	return total
-

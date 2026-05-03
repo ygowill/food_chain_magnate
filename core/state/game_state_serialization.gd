@@ -24,6 +24,7 @@ static func to_dict(state, schema_version: int) -> Dictionary:
 		"players": state.players,
 		"map": _to_json_safe(state.map),
 		"employee_pool": state.employee_pool,
+		"employee_box_added_totals": state.employee_box_added_totals,
 		"milestone_pool": state.milestone_pool,
 		"marketing_instances": state.marketing_instances,
 		"next_staff_id": state.next_staff_id,
@@ -170,6 +171,14 @@ static func apply_from_dict(state, data: Dictionary, expected_schema_version: in
 	if not pool_read.ok:
 		return pool_read
 	state.employee_pool = pool_read.value
+
+	var employee_box_added_val = data.get("employee_box_added_totals", {})
+	if not (employee_box_added_val is Dictionary):
+		return Result.failure("GameState.employee_box_added_totals 类型错误（期望 Dictionary）")
+	var employee_box_added_read := ParseHelpers.parse_non_negative_int_dict(employee_box_added_val, "GameState.employee_box_added_totals")
+	if not employee_box_added_read.ok:
+		return employee_box_added_read
+	state.employee_box_added_totals = employee_box_added_read.value
 
 	var milestone_read := ParseHelpers.parse_string_array(data.get("milestone_pool", null), "GameState.milestone_pool", false)
 	if not milestone_read.ok:

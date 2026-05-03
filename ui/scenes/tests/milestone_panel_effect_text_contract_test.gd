@@ -1,6 +1,9 @@
 class_name MilestonePanelEffectTextContractTest
 extends RefCounted
 
+const MilestonePanelClass = preload("res://ui/components/milestone_panel/milestone_panel.gd")
+const MilestoneDefClass = preload("res://core/data/milestone_def.gd")
+
 const _PATH := "res://ui/components/milestone_panel/milestone_panel.gd"
 const _PATTERNS := [
 	"rural_marketeers:",
@@ -20,6 +23,27 @@ static func run() -> Result:
 		if idx >= 0:
 			var line_no := _find_line_number(text, idx)
 			return Result.failure("MilestonePanel 不应硬编码 optional 模块 effect_id/effect_type: %s:%d (%s)" % [_PATH, line_no, str(pat)])
+
+	var expiry_r := _test_expiry_hint_is_generic()
+	if not expiry_r.ok:
+		return expiry_r
+
+	return Result.success()
+
+static func _test_expiry_hint_is_generic() -> Result:
+	var formatter := MilestonePanelClass.new()
+	var def := MilestoneDefClass.new()
+	def.id = "test_expiring_milestone"
+	def.name = "测试过期里程碑"
+	def.expires_at = 3
+
+	var text := str(formatter._format_milestone_effect_text(def))
+	if text.find("第 3 回合清理后若未获得则移除") < 0:
+		return Result.failure("MilestonePanel 应对任意 expires_at 里程碑追加过期提示，实际: %s" % text)
+
+	var without_hint := str(formatter._format_milestone_effect_text(def, false))
+	if without_hint.find("第 3 回合清理后若未获得则移除") >= 0:
+		return Result.failure("include_expiry_hint=false 时不应追加过期提示，实际: %s" % without_hint)
 
 	return Result.success()
 

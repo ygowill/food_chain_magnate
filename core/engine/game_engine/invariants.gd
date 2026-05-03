@@ -114,6 +114,16 @@ static func check_invariants(
 				emp_type, n
 			])
 
+	var box_added_read := _require_employee_box_added_totals(state)
+	if not box_added_read.ok:
+		return box_added_read
+	var box_added_totals: Dictionary = box_added_read.value
+	for emp_type in box_added_totals.keys():
+		if not initial_employee_totals.has(emp_type):
+			return Result.failure("employee_box_added_totals 包含初始员工池外的员工类型: %s" % str(emp_type))
+		if not state.employee_pool.has(emp_type):
+			return Result.failure("employee_box_added_totals 包含当前员工池外的员工类型: %s" % str(emp_type))
+
 	# 5. 员工供应池守恒（仅校验初始员工池内存在的类型）
 	for emp_type in initial_employee_totals:
 		if not (emp_type is String):
@@ -134,6 +144,7 @@ static func check_invariants(
 		if not players_count_read.ok:
 			return players_count_read
 		var current: int = pool_count + int(players_count_read.value)
+		expected += int(box_added_totals.get(str(emp_type), 0))
 		if current != expected:
 			return Result.failure("员工数量守恒失败: %s 期望 %d, 实际 %d" % [emp_type, expected, current])
 
@@ -183,6 +194,49 @@ static func compute_employee_totals(game_state: GameState) -> Result:
 			return count_read
 		totals[str(emp_type)] = pool_count + int(count_read.value)
 
+	return Result.success(totals)
+
+static func compute_employee_base_totals_for_invariants(game_state: GameState) -> Result:
+	var totals_read := compute_employee_totals(game_state)
+	if not totals_read.ok:
+		return totals_read
+	var totals: Dictionary = totals_read.value
+	var box_added_read := _require_employee_box_added_totals(game_state)
+	if not box_added_read.ok:
+		return box_added_read
+	var box_added_totals: Dictionary = box_added_read.value
+
+	for emp_type_val in box_added_totals.keys():
+		var emp_type := str(emp_type_val)
+		if emp_type.is_empty():
+			return Result.failure("employee_box_added_totals key 不能为空")
+		if not totals.has(emp_type):
+			return Result.failure("employee_box_added_totals 包含当前员工池外的员工类型: %s" % emp_type)
+		var base_total := int(totals.get(emp_type, 0)) - int(box_added_totals.get(emp_type, 0))
+		if base_total < 0:
+			return Result.failure("employee_box_added_totals 超过员工总量: %s" % emp_type)
+		totals[emp_type] = base_total
+
+	return Result.success(totals)
+
+static func _require_employee_box_added_totals(game_state: GameState) -> Result:
+	if game_state == null:
+		return Result.failure("GameState 为空")
+	if not (game_state.employee_box_added_totals is Dictionary):
+		return Result.failure("GameState.employee_box_added_totals 类型错误（期望 Dictionary）")
+	var totals: Dictionary = game_state.employee_box_added_totals
+	for emp_type in totals.keys():
+		if not (emp_type is String):
+			return Result.failure("GameState.employee_box_added_totals key 类型错误（期望 String）")
+		var emp_id := str(emp_type)
+		if emp_id.is_empty():
+			return Result.failure("GameState.employee_box_added_totals key 不能为空")
+		var v = totals.get(emp_type, null)
+		if not (v is int):
+			return Result.failure("GameState.employee_box_added_totals[%s] 类型错误（期望 int）" % emp_id)
+		var count := int(v)
+		if count < 0:
+			return Result.failure("GameState.employee_box_added_totals[%s] 不能为负数: %d" % [emp_id, count])
 	return Result.success(totals)
 
 static func _count_employees_in_players(game_state: GameState, employee_type: String) -> Result:

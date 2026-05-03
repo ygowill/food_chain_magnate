@@ -7,6 +7,9 @@ extends RefCounted
 
 const MarketingSettlementClass = preload("res://modules/base_rules/rules/phase/marketing_settlement.gd")
 const DinnertimeSettlementClass = preload("res://modules/base_rules/rules/phase/dinnertime_settlement.gd")
+const CleanupSettlementClass = preload("res://modules/base_rules/rules/phase/cleanup_settlement.gd")
+const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
+const MilestoneDefClass = preload("res://core/data/milestone_def.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
@@ -15,6 +18,10 @@ const MILESTONE_ID := "first_marketeer_used"
 static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if player_count != 2:
 		return Result.failure("本测试固定为 2 人局（实际: %d）" % player_count)
+
+	var expiry_r := _test_starting_milestones_expire_after_round_2(player_count, seed_val + 31)
+	if not expiry_r.ok:
+		return expiry_r
 
 	var engine := GameEngine.new()
 	var enabled_modules: Array[String] = [
@@ -75,6 +82,48 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	var ds := DinnertimeSettlementClass.apply(state, engine.phase_manager)
 	if not ds.ok:
 		return Result.failure("DinnertimeSettlement 失败（应允许负距离）：%s" % ds.error)
+
+	return Result.success()
+
+static func _test_starting_milestones_expire_after_round_2(player_count: int, seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var enabled_modules: Array[String] = [
+		"base_rules",
+		"base_products",
+		"base_pieces",
+		"base_tiles",
+		"base_maps",
+		"base_employees",
+		"base_marketing",
+		"new_milestones",
+	]
+	var init := engine.initialize(player_count, seed_val, enabled_modules)
+	if not init.ok:
+		return Result.failure("初始化失败(过期里程碑): %s" % init.error)
+	var state := engine.get_state()
+
+	var expiring_ids := [
+		"first_marketeer_used",
+		"first_trainer_used",
+		"first_recruiting_girl_used",
+	]
+	for mid in expiring_ids:
+		var def_val = MilestoneRegistryClass.get_def(str(mid))
+		if def_val == null or not (def_val is MilestoneDefClass):
+			return Result.failure("缺少新里程碑定义: %s" % str(mid))
+		var def: MilestoneDef = def_val
+		if def.expires_at == null or int(def.expires_at) != 2:
+			return Result.failure("%s 应在第2回合清理后过期，实际: %s" % [str(mid), str(def.expires_at)])
+		if not state.milestone_pool.has(str(mid)):
+			return Result.failure("测试前 milestone_pool 缺少: %s" % str(mid))
+
+	state.round_number = 2
+	var cleanup := CleanupSettlementClass.apply(state)
+	if not cleanup.ok:
+		return Result.failure("Cleanup(2) 失败: %s" % cleanup.error)
+	for mid2 in expiring_ids:
+		if state.milestone_pool.has(str(mid2)):
+			return Result.failure("第2回合 Cleanup 后应移除: %s" % str(mid2))
 
 	return Result.success()
 
