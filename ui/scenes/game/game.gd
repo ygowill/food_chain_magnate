@@ -628,7 +628,8 @@ func _ensure_online_resync_controller() -> void:
 		Callable(self, "_connect_online_resume_url"),
 		Callable(self, "_shutdown_online_net"),
 		Callable(self, "_request_online_resync_from_net"),
-		Callable(self, "_ensure_platform_session_for_startup_resume")
+		Callable(self, "_ensure_platform_session_for_startup_resume"),
+		Callable(self, "_update_ui_dirty")
 	)
 	_online_resync_controller.initialize()
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("set_online_resync_controller"):
@@ -695,6 +696,20 @@ func _update_ui() -> void:
 	if _ui_sync_controller != null and _ui_sync_controller.has_method("update_ui"):
 		_ui_sync_controller.update_ui(do_profile)
 	# 同步后再收敛一次，保证最终显示状态稳定。
+	_sync_online_waiting_log_auto_switch()
+	if start_intro:
+		_run_startup_intro()
+	if _tutorials_controller != null and _tutorials_controller.has_method("on_ui_updated"):
+		_tutorials_controller.on_ui_updated()
+
+func _update_ui_dirty(dirty_flags: int, context: Dictionary = {}) -> void:
+	_sync_online_waiting_log_auto_switch()
+	var do_profile := PerfTraceClass.enabled() and not _startup_profile_reported
+	var start_intro := _prepare_startup_intro_before_ui_sync()
+	if _ui_sync_controller != null and _ui_sync_controller.has_method("sync_dirty"):
+		_ui_sync_controller.sync_dirty(int(dirty_flags), context, do_profile)
+	elif _ui_sync_controller != null and _ui_sync_controller.has_method("update_ui"):
+		_ui_sync_controller.update_ui(do_profile)
 	_sync_online_waiting_log_auto_switch()
 	if start_intro:
 		_run_startup_intro()

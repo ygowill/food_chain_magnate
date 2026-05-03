@@ -198,6 +198,10 @@ func sync_dirty(dirty_flags: int, context: Dictionary = {}, do_profile: bool = f
 	if bool(flags & DIRTY_DEBUG_PANEL):
 		_sync_debug_panel(state)
 
+	_maybe_show_online_turn_toast(head_index, cursor_index, state)
+	_maybe_show_phase_change_toast(head_index, cursor_index, state)
+	_maybe_open_first_have_20_overview(game_engine, state)
+
 	OnlinePerfTraceClass.end_span(online_span_dirty, {
 		"dirty_flags": int(flags),
 		"mode": "partial",
