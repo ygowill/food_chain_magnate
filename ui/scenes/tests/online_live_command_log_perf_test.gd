@@ -68,15 +68,18 @@ static func _run_case(tree: SceneTree, history_size: int) -> Result:
 	panel.call("load_step_timeline", next_timeline, next_entries)
 	var appended := await _wait_until(func() -> bool:
 		var current_entries = panel.call("get_step_timeline_entries")
+		var update_mode := str(panel.call("get_last_step_timeline_update_mode"))
 		return current_entries is Array \
 			and current_entries.size() == history_size + 1 \
 			and not bool(panel.call("has_pending_descriptor_commit")) \
-			and str(panel.call("get_last_step_timeline_update_mode")) == "append"
+			and _is_append_update_mode(update_mode)
 	, tree, 240)
 	var append_ms := _elapsed_ms(append_start_usec)
 	if not appended:
-		return await _finish_with_panel(Result.failure("perf case %d: 追加 1 条 command 未走 append" % history_size), panel, tree)
+		return await _finish_with_panel(Result.failure("perf case %d: 追加 1 条 command 未走 append/append_window" % history_size), panel, tree)
 
+	var display_window = panel.call("get_step_timeline_display_window")
+	var display_window_dict: Dictionary = display_window if (display_window is Dictionary) else {}
 	var row := {
 		"history_size": int(history_size),
 		"loaded_entries": int(history_size),
@@ -85,7 +88,10 @@ static func _run_case(tree: SceneTree, history_size: int) -> Result:
 		"append_ms": append_ms,
 		"log_control_count": int(log_container.get_child_count()),
 		"update_mode": str(panel.call("get_last_step_timeline_update_mode")),
+		"display_window": display_window_dict,
 	}
+	if str(row.get("update_mode", "")) == "append_window" and int(row.get("log_control_count", 0)) > 320:
+		return await _finish_with_panel(Result.failure("perf case %d: append_window 后 Control 数量过高: %d" % [history_size, int(row.get("log_control_count", 0))]), panel, tree)
 	print("%s CASE %s" % [PREFIX, JSON.stringify(row)])
 	return await _finish_with_panel(Result.success(row), panel, tree)
 
@@ -136,6 +142,10 @@ static func _wait_until(predicate: Callable, tree: SceneTree, max_frames: int) -
 
 static func _elapsed_ms(start_usec: int) -> float:
 	return float(maxi(0, Time.get_ticks_usec() - int(start_usec))) / 1000.0
+
+static func _is_append_update_mode(mode: String) -> bool:
+	var m := str(mode).strip_edges()
+	return m == "append" or m == "append_window"
 
 static func _finish_with_panel(result: Result, panel: Node, tree: SceneTree) -> Result:
 	if panel != null and is_instance_valid(panel):

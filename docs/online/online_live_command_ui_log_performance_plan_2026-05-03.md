@@ -306,7 +306,7 @@
 
 ### 阶段 2：StepTimeline append 改成真正 O(delta)
 
-状态：**进行中**。
+状态：**已完成当前计划项**。
 
 2026-05-03 增量更新：
 
@@ -393,7 +393,7 @@ StepTimelineBuild.append_from_existing_mutating(engine, owned_timeline) -> Resul
 
 ### 阶段 3：GameLogPanel append 校验从 prefix scan 改成 signature
 
-状态：**进行中**。
+状态：**已完成当前计划项**。
 
 2026-05-03 增量更新：
 
@@ -493,7 +493,7 @@ append 时只检查：
 
 ### 阶段 4：UI 同步从 full update 改为 dirty sync
 
-状态：**进行中**。
+状态：**已完成当前计划项**。
 
 2026-05-03 增量更新：
 
@@ -571,6 +571,19 @@ live command 后根据 action/event 标记 dirty：
 - UI 状态与 engine state 一致。
 
 ### 阶段 5：日志面板虚拟化 / 窗口化
+
+状态：**进行中**。
+
+2026-05-03 增量更新：
+
+- `GameLogPanel` 新增 timeline 显示窗口状态与 `get_step_timeline_display_window()` / `get_display_item_count()` 观测接口。
+- 大历史 step timeline 首次加载时，如果达到窗口阈值，不再进入完整 descriptor commit，而是只构建当前窗口范围的日志 Control；默认窗口锚点为 live tail。
+- 大历史尾部 append 改走 `append_window`：完整 timeline/entries 状态仍保留，只重建尾部窗口内的 Control，避免已有 Control 数量随完整历史线性增长。
+- tail 窗口普通 append 优先走增量窗口滑动：先追加新增 step 控件，再裁掉窗口前沿旧 step 控件；只有无法安全滑动时才重建整窗。
+- replay/seek 到历史中间时，显示窗口会围绕 cursor 重建，保证当前 cursor step 附近仍有可见日志项。
+- `GameLogUnifiedTimelineBuilder.build_window()` 支持按 step 范围构建，并复用 `GameLogPanel` 维护的 step -> entries 索引，窗口重建不需要把完整 entries 全部重新分组。
+- 新增 `GameLogTimelineWindowingTest` 覆盖大历史 tail 窗口、append 后窗口移动、seek 后围绕 cursor 重建，以及完整 timeline entries 不被裁剪。
+- `OnlineLiveCommandLogPerfTest` 已接受 `append_window` 作为大历史 append 模式，并对窗口化后的 Control 数量设置上限；当前本机样例中 1000 条 history 追加 1 条后约 266 个 Control、append 约 5ms。
 
 目标：
 

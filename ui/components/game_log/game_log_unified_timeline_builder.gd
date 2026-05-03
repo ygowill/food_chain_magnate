@@ -167,6 +167,190 @@ static func build(
 		"visible_entry_count": int(visible_entry_count),
 	}
 
+static func build_window(
+	log_container: VBoxContainer,
+	step_timeline: Dictionary,
+	window_entries: Array[Dictionary],
+	start_step_index: int,
+	end_step_exclusive: int,
+	show_phase_events: bool,
+	fold_details_enabled: bool,
+	is_action_group_expanded: Callable,
+	timeline_cursor_index: int,
+	timeline_head_index: int,
+	on_timeline_header_clicked: Callable,
+	on_entry_clicked: Callable,
+	on_entry_double_clicked: Callable,
+	on_action_group_fold_toggled: Callable,
+	initial_round_number: int,
+	initial_phase_segment: String,
+	acquire_item: Callable = Callable()
+) -> Dictionary:
+	var items: Array[Control] = []
+	var visible_entry_count := 0
+	if log_container == null or not is_instance_valid(log_container):
+		return {
+			"items": items,
+			"visible_entry_count": int(visible_entry_count),
+			"start_step_index": 0,
+			"end_step_index": -1,
+		}
+
+	var steps_val = step_timeline.get("steps", null)
+	if not (steps_val is Array):
+		return {
+			"items": items,
+			"visible_entry_count": int(visible_entry_count),
+			"start_step_index": 0,
+			"end_step_index": -1,
+		}
+	var steps: Array = steps_val
+	if steps.is_empty():
+		return {
+			"items": items,
+			"visible_entry_count": int(visible_entry_count),
+			"start_step_index": 0,
+			"end_step_index": -1,
+		}
+
+	var start_idx := clampi(int(start_step_index), 0, steps.size())
+	var end_idx := clampi(int(end_step_exclusive), start_idx, steps.size())
+	if start_idx >= end_idx:
+		return {
+			"items": items,
+			"visible_entry_count": int(visible_entry_count),
+			"start_step_index": int(start_idx),
+			"end_step_index": int(end_idx) - 1,
+		}
+
+	var entries_by_step := _build_entries_by_step(window_entries)
+	var prev_round := int(initial_round_number)
+	var prev_phase := str(initial_phase_segment)
+	if prev_phase.is_empty():
+		prev_phase = "?"
+	var phase_header = null
+
+	if start_idx <= 0:
+		if prev_round >= 1:
+			_add_round_header_item(items, log_container, prev_round, -1, timeline_cursor_index, timeline_head_index, on_timeline_header_clicked, acquire_item)
+
+		phase_header = _add_phase_header_item(items, log_container, prev_phase, -1, timeline_cursor_index, timeline_head_index, on_timeline_header_clicked, acquire_item)
+		var init_entries: Array = entries_by_step.get(-1, [])
+		var init_header := _build_action_group_header_data(-1, {}, init_entries, show_phase_events)
+		var init_primary_id := int(init_header.get("primary_entry_id", -1))
+		var init_primary_entry_val = init_header.get("primary_entry", {})
+		var init_primary_entry: Dictionary = init_primary_entry_val if (init_primary_entry_val is Dictionary) else {}
+		var init_child_count := _count_event_items_for_action_group(init_entries, init_primary_id, show_phase_events)
+		var init_expanded := _is_expanded(is_action_group_expanded, -1)
+		if init_primary_id >= 0:
+			visible_entry_count += 1
+		_add_action_group_header_item(
+			items,
+			log_container,
+			-1,
+			str(init_header.get("summary", "")),
+			init_primary_id,
+			init_primary_entry,
+			fold_details_enabled,
+			init_expanded,
+			init_child_count,
+			timeline_cursor_index,
+			timeline_head_index,
+			on_entry_clicked,
+			on_timeline_header_clicked,
+			on_entry_double_clicked,
+			on_action_group_fold_toggled,
+			acquire_item
+		)
+		if init_expanded:
+			_add_event_items_for_step(items, log_container, -1, entries_by_step, show_phase_events, 2, init_primary_id, timeline_cursor_index, timeline_head_index, on_entry_clicked, on_entry_double_clicked, acquire_item)
+			visible_entry_count += init_child_count
+	else:
+		var first_step_val = steps[start_idx]
+		if first_step_val is Dictionary:
+			var first_step: Dictionary = first_step_val
+			prev_round = int(first_step.get("round", prev_round))
+			prev_phase = str(first_step.get("phase", prev_phase)).strip_edges()
+			if prev_phase.is_empty():
+				prev_phase = "?"
+		if prev_round >= 1:
+			_add_round_header_item(items, log_container, prev_round, start_idx, timeline_cursor_index, timeline_head_index, on_timeline_header_clicked, acquire_item)
+		phase_header = _add_phase_header_item(items, log_container, prev_phase, start_idx, timeline_cursor_index, timeline_head_index, on_timeline_header_clicked, acquire_item)
+
+	for idx in range(start_idx, end_idx):
+		var step_val = steps[idx]
+		if not (step_val is Dictionary):
+			continue
+		var step: Dictionary = step_val
+		var round_num := int(step.get("round", -1))
+		var phase_seg := str(step.get("phase", "")).strip_edges()
+		if phase_seg.is_empty():
+			phase_seg = "?"
+		var action_id := str(step.get("action_id", "")).strip_edges()
+
+		var round_changed := (round_num != prev_round)
+		if round_changed and round_num >= 1:
+			_add_round_header_item(items, log_container, round_num, idx, timeline_cursor_index, timeline_head_index, on_timeline_header_clicked, acquire_item)
+
+		if round_changed or phase_seg != prev_phase:
+			if phase_header != null and is_instance_valid(phase_header):
+				phase_header.end_step_index = idx - 1
+			phase_header = _add_phase_header_item(items, log_container, phase_seg, idx, timeline_cursor_index, timeline_head_index, on_timeline_header_clicked, acquire_item)
+
+		var kind := str(step.get("kind", "")).strip_edges()
+		if kind == "phase":
+			_add_event_items_for_step(items, log_container, idx, entries_by_step, show_phase_events, 1, -1, timeline_cursor_index, timeline_head_index, on_entry_clicked, on_entry_double_clicked, acquire_item)
+			visible_entry_count += _count_event_items_for_action_group(entries_by_step.get(idx, []), -1, show_phase_events)
+		elif _is_hidden_restructuring_noise_action(action_id):
+			continue
+		elif _is_flow_command_action_id(str(step.get("action_id", "")).strip_edges()):
+			_add_event_items_for_step(items, log_container, idx, entries_by_step, show_phase_events, 1, -1, timeline_cursor_index, timeline_head_index, on_entry_clicked, on_entry_double_clicked, acquire_item)
+			visible_entry_count += _count_event_items_for_action_group(entries_by_step.get(idx, []), -1, show_phase_events)
+		else:
+			var step_entries: Array = entries_by_step.get(idx, [])
+			var header := _build_action_group_header_data(idx, step, step_entries, show_phase_events)
+			var primary_id := int(header.get("primary_entry_id", -1))
+			var primary_entry_val = header.get("primary_entry", {})
+			var primary_entry: Dictionary = primary_entry_val if (primary_entry_val is Dictionary) else {}
+			var child_count := _count_event_items_for_action_group(step_entries, primary_id, show_phase_events)
+			var expanded := _is_expanded(is_action_group_expanded, idx)
+			if primary_id >= 0:
+				visible_entry_count += 1
+			_add_action_group_header_item(
+				items,
+				log_container,
+				idx,
+				str(header.get("summary", "")),
+				primary_id,
+				primary_entry,
+				fold_details_enabled,
+				expanded,
+				child_count,
+				timeline_cursor_index,
+				timeline_head_index,
+				on_entry_clicked,
+				on_timeline_header_clicked,
+				on_entry_double_clicked,
+				on_action_group_fold_toggled,
+				acquire_item
+			)
+			if expanded:
+				_add_event_items_for_step(items, log_container, idx, entries_by_step, show_phase_events, 2, primary_id, timeline_cursor_index, timeline_head_index, on_entry_clicked, on_entry_double_clicked, acquire_item)
+				visible_entry_count += child_count
+
+		prev_round = round_num
+		prev_phase = phase_seg
+
+	if phase_header != null and is_instance_valid(phase_header):
+		phase_header.end_step_index = end_idx - 1
+
+	return {
+		"items": items,
+		"visible_entry_count": int(visible_entry_count),
+		"start_step_index": int(start_idx),
+		"end_step_index": int(end_idx) - 1,
+	}
+
 static func append_step_range(
 	existing_items: Array[Control],
 	log_container: VBoxContainer,

@@ -282,6 +282,7 @@ const GameLogPanelStepTimelineAppendTestClass = preload("res://ui/scenes/tests/g
 const GameLogAutoScrollBehaviorTestClass = preload("res://ui/scenes/tests/game_log_auto_scroll_behavior_test.gd")
 const GameLogDescriptorCommitChunkingTestClass = preload("res://ui/scenes/tests/game_log_descriptor_commit_chunking_test.gd")
 const GameLogHiddenTimelineStateSkipTestClass = preload("res://ui/scenes/tests/game_log_hidden_timeline_state_skip_test.gd")
+const GameLogTimelineWindowingTestClass = preload("res://ui/scenes/tests/game_log_timeline_windowing_test.gd")
 const LiveLogRefreshDebounceTestClass = preload("res://ui/scenes/tests/live_log_refresh_debounce_test.gd")
 const GameLogTimelineLocalStateDeltaTestClass = preload("res://ui/scenes/tests/game_log_timeline_local_state_delta_test.gd")
 const GameLogTimelineRuntimeEventSourceTestClass = preload("res://ui/scenes/tests/game_log_timeline_runtime_event_source_test.gd")
