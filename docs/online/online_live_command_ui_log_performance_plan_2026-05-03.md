@@ -273,6 +273,11 @@
   - 记录 append、UI sync、settled 时间。
 - 输出机器可读日志，便于回归比较。
 
+2026-05-03 增量更新：
+
+- 新增独立 headless perf 场景 `res://ui/scenes/tests/online_live_command_log_perf_test.tscn`，构造 200 / 500 / 1000 条 synthetic log history，打开真实 `GameLogPanel`，追加 1 条普通 action entry，并用 `[OnlineLiveCommandLogPerf] CASE {...}` 输出机器可读 JSON。
+- 推荐命令：`tools/run_headless_test.sh res://ui/scenes/tests/online_live_command_log_perf_test.tscn OnlineLiveCommandLogPerfTest 180`。
+
 验收：
 
 - 能复现“历史越长 append 越慢”的趋势。
