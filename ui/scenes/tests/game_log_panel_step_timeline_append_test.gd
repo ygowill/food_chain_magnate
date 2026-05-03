@@ -2,6 +2,14 @@ extends RefCounted
 
 const GameLogPanelScene: PackedScene = preload("res://ui/components/game_log/game_log_panel.tscn")
 
+class _TimelineStateApplySpy:
+	extends Control
+
+	var apply_calls: int = 0
+
+	func apply_timeline_state(_cursor_index: int, _head_index: int) -> void:
+		apply_calls += 1
+
 static func run() -> Result:
 	var tree_val = Engine.get_main_loop()
 	var tree: SceneTree = tree_val if tree_val is SceneTree else null
@@ -71,6 +79,12 @@ static func run() -> Result:
 	if last_phase_header == null:
 		_cleanup(panel)
 		return Result.failure("首次加载后未找到 phase header")
+	var sync_apply_spy := _TimelineStateApplySpy.new()
+	sync_apply_spy.visible = false
+	panel.add_child(sync_apply_spy)
+	var direct_log_items: Array = panel.get("_log_items")
+	direct_log_items.append(sync_apply_spy)
+	panel.set("_log_items", direct_log_items)
 
 	var timeline2 := {
 		"initial_state_dict": {
@@ -176,6 +190,9 @@ static func run() -> Result:
 	if str(entry_count_label.text) != "显示 2 / 2":
 		_cleanup(panel)
 		return Result.failure("append 后可见条目数错误，实际=%s" % str(entry_count_label.text))
+	if sync_apply_spy.apply_calls != 0:
+		_cleanup(panel)
+		return Result.failure("直接 append 后不应全量刷新已有 log item timeline state，实际 apply_calls=%d" % sync_apply_spy.apply_calls)
 
 	var async_timeline1 := _build_linear_timeline(119)
 	var async_entries1 := _build_linear_entries(119)
@@ -200,6 +217,12 @@ static func run() -> Result:
 	if async_last_phase_header == null:
 		_cleanup(panel)
 		return Result.failure("大时间线加载后未找到 phase header")
+	var async_sync_apply_spy := _TimelineStateApplySpy.new()
+	async_sync_apply_spy.visible = false
+	panel.add_child(async_sync_apply_spy)
+	var async_log_items: Array = panel.get("_log_items")
+	async_log_items.append(async_sync_apply_spy)
+	panel.set("_log_items", async_log_items)
 
 	var async_timeline2 := _build_linear_timeline(120)
 	var async_entries2 := _build_linear_entries(120)
@@ -226,6 +249,9 @@ static func run() -> Result:
 	if str(entry_count_label.text) != "显示 120 / 120":
 		_cleanup(panel)
 		return Result.failure("后台 append 后可见条目数错误，实际=%s" % str(entry_count_label.text))
+	if async_sync_apply_spy.apply_calls != 0:
+		_cleanup(panel)
+		return Result.failure("后台 append 收尾不应全量刷新已有 log item timeline state，实际 apply_calls=%d" % async_sync_apply_spy.apply_calls)
 
 	_cleanup(panel)
 	return Result.success()

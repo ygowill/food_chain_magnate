@@ -710,7 +710,10 @@ func _finish_descriptor_commit() -> void:
 	if fold_details_check != null:
 		fold_details_check.button_pressed = _fold_details_enabled
 	_last_step_timeline_update_mode = mode if not mode.is_empty() else "rebuild"
-	_apply_timeline_state_to_items()
+	var timeline_state_update_mode := "append_items_initialized"
+	if mode != "append":
+		timeline_state_update_mode = "full"
+		_apply_timeline_state_to_items()
 	_request_scroll_to_bottom()
 	_update_entry_count()
 	_update_process_state()
@@ -720,6 +723,7 @@ func _finish_descriptor_commit() -> void:
 		"log_item_count": int(_log_items.size()),
 		"slice_count": int(slice_count),
 		"chunked": true,
+		"timeline_state_update_mode": str(timeline_state_update_mode),
 	}
 	if mode == "append":
 		span_fields["added_item_count"] = int(added_item_count)
@@ -922,13 +926,13 @@ func append_step_timeline(timeline: Dictionary, appended_entries: Array[Dictiona
 	if fold_details_check != null:
 		fold_details_check.button_pressed = _fold_details_enabled
 	_last_step_timeline_update_mode = "append"
-	_apply_timeline_state_to_items()
 	_request_scroll_to_bottom()
 	_update_entry_count()
 	OnlinePerfTraceClass.end_span(span, {
 		"ok": true,
 		"entry_count": int(_entries_all.size()),
 		"timeline_step_count": int(_get_step_count(_step_timeline)),
+		"timeline_state_update_mode": "append_items_initialized",
 	})
 	return true
 
