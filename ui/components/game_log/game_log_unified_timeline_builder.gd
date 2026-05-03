@@ -184,7 +184,8 @@ static func append_step_range(
 	on_action_group_fold_toggled: Callable,
 	initial_round_number: int,
 	initial_phase_segment: String,
-	acquire_item: Callable = Callable()
+	acquire_item: Callable = Callable(),
+	append_phase_header = null
 ) -> Dictionary:
 	var items: Array[Control] = []
 	var visible_entry_count := 0
@@ -209,7 +210,14 @@ static func append_step_range(
 		}
 
 	var entries_by_step := _build_entries_by_step(entries_all)
-	var context := _resolve_append_context(existing_items, step_timeline, start_idx, initial_round_number, initial_phase_segment)
+	var context := _resolve_append_context(
+		existing_items,
+		step_timeline,
+		start_idx,
+		initial_round_number,
+		initial_phase_segment,
+		append_phase_header
+	)
 	var prev_round := int(context.get("prev_round", initial_round_number))
 	var prev_phase := str(context.get("prev_phase", initial_phase_segment)).strip_edges()
 	if prev_phase.is_empty():
@@ -768,7 +776,8 @@ static func _resolve_append_context(
 	step_timeline: Dictionary,
 	start_step_index: int,
 	initial_round_number: int,
-	initial_phase_segment: String
+	initial_phase_segment: String,
+	append_phase_header = null
 ) -> Dictionary:
 	var prev_round := int(initial_round_number)
 	var prev_phase := str(initial_phase_segment).strip_edges()
@@ -788,10 +797,16 @@ static func _resolve_append_context(
 				if prev_phase.is_empty():
 					prev_phase = "?"
 
+	var phase_header = null
+	if append_phase_header is Control and is_instance_valid(append_phase_header):
+		phase_header = append_phase_header
+	else:
+		phase_header = _find_last_phase_header_item(existing_items)
+
 	return {
 		"prev_round": prev_round,
 		"prev_phase": prev_phase,
-		"phase_header": _find_last_phase_header_item(existing_items),
+		"phase_header": phase_header,
 	}
 
 static func _find_last_phase_header_item(existing_items: Array[Control]):

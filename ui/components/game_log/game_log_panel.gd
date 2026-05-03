@@ -744,6 +744,12 @@ func _update_process_state() -> void:
 	set_process(_timeline_background_thread != null or _descriptor_commit_active)
 
 func _patch_last_phase_header_end_step_index(end_step_index: int) -> void:
+	var item := _get_last_timeline_phase_header_item()
+	if item == null:
+		return
+	item.end_step_index = int(end_step_index)
+
+func _get_last_timeline_phase_header_item() -> Control:
 	for idx in range(_timeline_phase_header_items.size() - 1, -1, -1):
 		var item_val = _timeline_phase_header_items[idx]
 		if not (item_val is Control):
@@ -751,8 +757,8 @@ func _patch_last_phase_header_end_step_index(end_step_index: int) -> void:
 		var item: Control = item_val
 		if not is_instance_valid(item):
 			continue
-		item.end_step_index = int(end_step_index)
-		return
+		return item
+	return null
 
 func _shutdown_background_timeline_worker() -> void:
 	_timeline_background_pending_job.clear()
@@ -1402,7 +1408,8 @@ func _append_step_timeline_display(next_timeline: Dictionary, appended_entries: 
 		Callable(self, "_on_action_group_fold_toggled"),
 		_get_initial_round_number(),
 		_get_initial_phase_segment(),
-		Callable(self, "_acquire_log_item")
+		Callable(self, "_acquire_log_item"),
+		_get_last_timeline_phase_header_item()
 	)
 	if not (append_info_val is Dictionary):
 		OnlinePerfTraceClass.end_span(span, {
@@ -1424,6 +1431,7 @@ func _append_step_timeline_display(next_timeline: Dictionary, appended_entries: 
 			continue
 		var ctrl: Control = item
 		_log_items.append(ctrl)
+		_index_log_item(ctrl)
 		_connect_item_hover_signals(ctrl)
 	var visible_entry_count_delta := int(append_info.get("visible_entry_count", -1))
 	if visible_entry_count_delta >= 0 and _visible_entry_count_cached >= 0:

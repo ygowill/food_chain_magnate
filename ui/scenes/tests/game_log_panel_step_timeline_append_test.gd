@@ -10,6 +10,18 @@ class _TimelineStateApplySpy:
 	func apply_timeline_state(_cursor_index: int, _head_index: int) -> void:
 		apply_calls += 1
 
+class _PhaseHeaderTailSpy:
+	extends Control
+
+	var start_step_index: int = -1
+	var end_step_index: int = -1
+
+	func get_timeline_index() -> int:
+		return int(start_step_index)
+
+	func apply_timeline_state(_cursor_index: int, _head_index: int) -> void:
+		pass
+
 static func run() -> Result:
 	var tree_val = Engine.get_main_loop()
 	var tree: SceneTree = tree_val if tree_val is SceneTree else null
@@ -82,8 +94,13 @@ static func run() -> Result:
 	var sync_apply_spy := _TimelineStateApplySpy.new()
 	sync_apply_spy.visible = false
 	panel.add_child(sync_apply_spy)
+	var stale_phase_header_spy := _PhaseHeaderTailSpy.new()
+	stale_phase_header_spy.visible = false
+	stale_phase_header_spy.set_meta("_log_pool_kind", "phase_header")
+	panel.add_child(stale_phase_header_spy)
 	var direct_log_items: Array = panel.get("_log_items")
 	direct_log_items.append(sync_apply_spy)
+	direct_log_items.append(stale_phase_header_spy)
 	panel.set("_log_items", direct_log_items)
 
 	var timeline2 := {
@@ -187,12 +204,26 @@ static func run() -> Result:
 	if int(last_phase_header.end_step_index) != 1:
 		_cleanup(panel)
 		return Result.failure("append 后最后一个 phase header.end_step_index 应扩展到 1，实际=%d" % int(last_phase_header.end_step_index))
+	if stale_phase_header_spy.end_step_index != -1:
+		_cleanup(panel)
+		return Result.failure("append 不应通过扫描 _log_items 命中尾部 stray phase header，实际=%d" % stale_phase_header_spy.end_step_index)
+	var exact_index_after_append: Dictionary = panel.get("_timeline_exact_items_by_index")
+	var step_one_items_val = exact_index_after_append.get(1, [])
+	if not (step_one_items_val is Array) or (step_one_items_val as Array).is_empty():
+		_cleanup(panel)
+		return Result.failure("直接 append 新增 action header 应增量写入 timeline exact index")
 	if str(entry_count_label.text) != "显示 2 / 2":
 		_cleanup(panel)
 		return Result.failure("append 后可见条目数错误，实际=%s" % str(entry_count_label.text))
 	if sync_apply_spy.apply_calls != 0:
 		_cleanup(panel)
 		return Result.failure("直接 append 后不应全量刷新已有 log item timeline state，实际 apply_calls=%d" % sync_apply_spy.apply_calls)
+	var direct_log_items_after_checks: Array = panel.get("_log_items")
+	direct_log_items_after_checks.erase(sync_apply_spy)
+	direct_log_items_after_checks.erase(stale_phase_header_spy)
+	panel.set("_log_items", direct_log_items_after_checks)
+	sync_apply_spy.queue_free()
+	stale_phase_header_spy.queue_free()
 
 	var async_timeline1 := _build_linear_timeline(119)
 	var async_entries1 := _build_linear_entries(119)

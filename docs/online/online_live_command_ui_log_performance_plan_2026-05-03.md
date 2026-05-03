@@ -396,12 +396,14 @@ StepTimelineBuild.append_from_existing_mutating(engine, owned_timeline) -> Resul
 - 补充 `GameLogPanelStepTimelineAppendTest` 覆盖正常 signature append，以及 initial state、旧 tail step、旧 tail entry、entry sequence 不一致时拒绝 append。
 - append 显示成功后的状态提交改为直接追加新增 timeline entries；不再复制已有 `_timeline_entries` 后整体提交。后台 append job 也复用同一增量提交路径。
 - append 新增控件由 builder 创建时应用当前 timeline cursor/head；同步 append 和后台分片 append 收尾不再对已有 `_log_items` 做全量 timeline state 刷新。`GameLogPanelStepTimelineAppendTest` 增加 spy 覆盖，防止 append 收尾重新扫描旧 item。
+- append display 改为从 `GameLogPanel` 维护的 phase header 索引读取尾部 header，并在直接 append 时增量索引新增控件；builder 不再需要反向扫描旧 `_log_items` 来寻找 phase header。测试增加 stray phase header，防止回退到旧扫描路径。
 
 目标：
 
 - 面板 append 前不再遍历旧 `steps/entries`。
 - 正常 live append 只校验 O(1) metadata。
 - append 成功收尾不再为了 timeline state 扫描完整日志控件列表。
+- append UI 构建不再为了续接 phase header 反向扫描旧 `_log_items`。
 
 建议新增或完善 timeline signature：
 
@@ -471,6 +473,7 @@ append 时只检查：
 - `_can_append_step_timeline()` 或其替代实现不再 O(history)。
 - late-game append 不再因为 prefix 校验随历史长度线性增长。
 - append 成功后 timeline state 应只随新增控件数量增长，旧日志项不被全量重刷。
+- 同阶段长日志 append 不应因为查找最后一个 phase header 扫描旧 item。
 
 ### 阶段 4：UI 同步从 full update 改为 dirty sync
 
