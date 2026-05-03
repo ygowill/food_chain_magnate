@@ -93,10 +93,10 @@ class RealAssetMapPreview:
 	func _draw() -> void:
 		_draw_cells()
 		_draw_tile_boundary()
-		_draw_option_overlays()
 		_draw_houses()
 		_draw_restaurants()
 		_draw_structure_preview()
+		_draw_option_overlays()
 
 	func _draw_cells() -> void:
 		for y in range(GRID_SIZE.y):
@@ -294,8 +294,9 @@ class RealAssetMapPreview:
 		var info: Dictionary = anchor_val if (anchor_val is Dictionary) else {}
 		var anchor_val2 = info.get("anchor", anchor_val)
 		var anchor: Vector2i = anchor_val2 if anchor_val2 is Vector2i else Vector2i.ZERO
-		var house_cells := _structure_cells_for_info(info, anchor)
-		var garden_cells := _get_garden_cells(info, anchor)
+		var house_cells := _house_body_cells_for_info(info, anchor)
+		var structure_cells := _structure_cells_for_info(info, anchor)
+		var garden_cells := _get_garden_cells(info, anchor, house_cells, structure_cells)
 		var all_cells: Array[Vector2i] = []
 		all_cells.append_array(house_cells)
 		all_cells.append_array(garden_cells)
@@ -329,14 +330,81 @@ class RealAssetMapPreview:
 		_draw_board_piece_surface_lines(structure_rect, 1.0)
 		_draw_house_id(house_rect, _format_house_display_label(info))
 
-	func _structure_cells_for_info(info: Dictionary, anchor: Vector2i) -> Array[Vector2i]:
+	func _house_body_cells_for_info(info: Dictionary, anchor: Vector2i) -> Array[Vector2i]:
 		if str(info.get("piece_id", "")).strip_edges() == "apartment":
 			var cells: Array[Vector2i] = []
 			for y in range(3):
 				for x in range(3):
 					cells.append(anchor + Vector2i(x, y))
 			return cells
+		if str(info.get("piece_id", "")).strip_edges() == "house_with_garden":
+			return _footprint_cells(anchor, Vector2i(2, 2), int(info.get("rotation", 0)))
 		return _restaurant_cells(anchor)
+
+	func _structure_cells_for_info(info: Dictionary, anchor: Vector2i) -> Array[Vector2i]:
+		var piece_id := str(info.get("piece_id", "")).strip_edges()
+		var house_cells := _house_body_cells_for_info(info, anchor)
+		if piece_id != "house_with_garden":
+			return house_cells
+
+		var min_read := _try_vector2i(info.get("min", null))
+		var max_read := _try_vector2i(info.get("max", null))
+		if bool(min_read.get("ok", false)) and bool(max_read.get("ok", false)):
+			var min_pos: Vector2i = min_read["value"]
+			var max_pos: Vector2i = max_read["value"]
+			return _cells_in_rect(min_pos, max_pos)
+
+		var garden_cells := _get_raw_garden_cells(info)
+		if garden_cells.is_empty():
+			if info.has("garden_dir"):
+				garden_cells = _garden_cells_for_direction(anchor, str(info.get("garden_dir", "E")).strip_edges())
+			else:
+				return _footprint_cells(anchor, Vector2i(3, 2), int(info.get("rotation", 0)))
+		var all_cells: Array[Vector2i] = []
+		all_cells.append_array(house_cells)
+		all_cells.append_array(garden_cells)
+		return all_cells
+
+	func _footprint_cells(anchor: Vector2i, size: Vector2i, rotation: int) -> Array[Vector2i]:
+		var cells: Array[Vector2i] = []
+		for y in range(size.y):
+			for x in range(size.x):
+				cells.append(anchor + _rotate_offset(Vector2i(x, y), rotation))
+		return cells
+
+	func _rotate_offset(offset: Vector2i, rotation: int) -> Vector2i:
+		match rotation:
+			90:
+				return Vector2i(-offset.y, offset.x)
+			180:
+				return Vector2i(-offset.x, -offset.y)
+			270:
+				return Vector2i(offset.y, -offset.x)
+			_:
+				return offset
+
+	func _try_vector2i(value) -> Dictionary:
+		if value is Vector2i:
+			return {"ok": true, "value": value}
+		if value is Vector2:
+			var vec: Vector2 = value
+			return {"ok": true, "value": Vector2i(int(vec.x), int(vec.y))}
+		if value is Array:
+			var arr: Array = value
+			if arr.size() >= 2:
+				return {"ok": true, "value": Vector2i(int(arr[0]), int(arr[1]))}
+		return {"ok": false, "value": Vector2i.ZERO}
+
+	func _cells_in_rect(min_pos: Vector2i, max_pos: Vector2i) -> Array[Vector2i]:
+		var cells: Array[Vector2i] = []
+		var x0 := mini(min_pos.x, max_pos.x)
+		var x1 := maxi(min_pos.x, max_pos.x)
+		var y0 := mini(min_pos.y, max_pos.y)
+		var y1 := maxi(min_pos.y, max_pos.y)
+		for y in range(y0, y1 + 1):
+			for x in range(x0, x1 + 1):
+				cells.append(Vector2i(x, y))
+		return cells
 
 	func _restaurant_cells(anchor: Vector2i) -> Array[Vector2i]:
 		return [
@@ -346,27 +414,49 @@ class RealAssetMapPreview:
 			anchor + Vector2i(1, 1),
 		]
 
-	func _get_garden_cells(info: Dictionary, anchor: Vector2i) -> Array[Vector2i]:
+	func _get_raw_garden_cells(info: Dictionary) -> Array[Vector2i]:
 		var raw_cells = info.get("garden_cells", [])
 		var out: Array[Vector2i] = []
 		if raw_cells is Array:
 			for cell_val in raw_cells:
 				if cell_val is Vector2i:
 					out.append(cell_val)
-			if not out.is_empty():
-				return out
+				else:
+					var read := _try_vector2i(cell_val)
+					if bool(read.get("ok", false)):
+						out.append(read["value"])
+		return out
+
+	func _get_garden_cells(info: Dictionary, anchor: Vector2i, house_cells: Array[Vector2i], structure_cells: Array[Vector2i]) -> Array[Vector2i]:
+		var raw_cells := _get_raw_garden_cells(info)
+		if not raw_cells.is_empty():
+			return raw_cells
 		if str(info.get("piece_id", "house")) != "house_with_garden":
 			return []
-		var dir := str(info.get("garden_dir", "E")).strip_edges()
+
+		if not house_cells.is_empty() and not structure_cells.is_empty():
+			var house_set := {}
+			for house_cell in house_cells:
+				house_set[house_cell] = true
+			var garden_from_structure: Array[Vector2i] = []
+			for structure_cell in structure_cells:
+				if not house_set.has(structure_cell):
+					garden_from_structure.append(structure_cell)
+			if not garden_from_structure.is_empty():
+				return garden_from_structure
+
+		return _garden_cells_for_direction(anchor, str(info.get("garden_dir", "E")).strip_edges())
+
+	func _garden_cells_for_direction(anchor: Vector2i, dir: String) -> Array[Vector2i]:
 		match dir:
 			"W":
-				return [anchor + Vector2i(-2, 0), anchor + Vector2i(-1, 0)]
+				return [anchor + Vector2i(-1, 0), anchor + Vector2i(-1, 1)]
 			"N":
 				return [anchor + Vector2i(0, -1), anchor + Vector2i(1, -1)]
 			"S":
 				return [anchor + Vector2i(0, 2), anchor + Vector2i(1, 2)]
 			_:
-				return [anchor + Vector2i(2, 0), anchor + Vector2i(3, 0)]
+				return [anchor + Vector2i(2, 0), anchor + Vector2i(2, 1)]
 
 	func _rect_for_cells(cells: Array[Vector2i]) -> Rect2:
 		if cells.is_empty():
@@ -788,6 +878,7 @@ var _selected_lesson: int = 0
 var _selected_reserve_index: int = 1
 var _placement_case: String = "no_road"
 var _distance_case: String = "same_board"
+var _marketing_case: String = "billboard"
 
 func _ready() -> void:
 	GameLog.info("TutorialCampaign", "游戏介绍已加载")
@@ -1129,12 +1220,17 @@ func _render_housing_lesson() -> void:
 	_content_body.add_child(placement)
 
 func _render_marketing_lesson() -> void:
-	var ranges := _make_section("四种基础营销覆盖")
-	ranges.add_child(_build_real_map_preview(_build_marketing_preview_state(), _build_marketing_preview_options()))
-	ranges.add_child(_make_rich_text(
-		"广告牌：影响与营销板件占地正交相邻的房屋。\n邮箱：影响同一个街区里的房屋。这里的街区不是地图板块，而是道路图切出来的一片连续非道路区域；道路会把街区隔开。\n电波：影响营销板件所在地图板块周围 3×3 板块范围内的房屋。\n飞机：放在地图边缘外，影响飞过的一整条横向或纵向带状区域。",
-		190
-	))
+	var controls := _make_segmented_row([
+		{"id": "billboard", "label": "广告牌"},
+		{"id": "mailbox", "label": "邮箱"},
+		{"id": "radio", "label": "电波"},
+		{"id": "airplane", "label": "飞机"},
+	], _marketing_case, Callable(self, "_on_marketing_case_selected"))
+	_content_body.add_child(controls)
+
+	var ranges := _make_section(_get_marketing_case_title(_marketing_case))
+	ranges.add_child(_build_real_map_preview(_build_marketing_preview_state(_marketing_case), _build_marketing_preview_options(_marketing_case)))
+	ranges.add_child(_make_rich_text(_get_marketing_case_text(_marketing_case), 190))
 	_content_body.add_child(ranges)
 
 	var settlement := _make_section("广告何时生效")
@@ -1143,6 +1239,28 @@ func _render_marketing_lesson() -> void:
 		210
 	))
 	_content_body.add_child(settlement)
+
+func _get_marketing_case_title(case_id: String) -> String:
+	match case_id:
+		"mailbox":
+			return "邮箱：同一街区"
+		"radio":
+			return "电波：周围 3×3 板块"
+		"airplane":
+			return "飞机：整条行或列"
+		_:
+			return "广告牌：正交相邻"
+
+func _get_marketing_case_text(case_id: String) -> String:
+	match case_id:
+		"mailbox":
+			return "邮箱影响同一个街区里的房屋。这里的街区不是地图板块，而是道路图切出来的一片连续非道路区域；道路会把街区隔开。\n\n图中蓝色区域表示同一街区，红色格表示邮箱板件位置，绿色房屋会被这次广告覆盖。邮箱常用于给一片被道路围起来的房屋同时放需求。"
+		"radio":
+			return "电波按地图板块计算范围：取营销板件所在板块，再向周围扩展成 3×3 板块范围。教程预览只有两块板，所以图中蓝色显示的是这个范围在当前可见地图里的切片。\n\n电波本身通常是 1×1 板件，但覆盖范围很大；首个进行电波营销的里程碑还会强化电波放置需求的数量。"
+		"airplane":
+			return "飞机放在地图边缘外，不占用棋盘内部格子。它的长度决定飞过多少行或列；被飞过的行/列会横跨整张地图。\n\n图中蓝色横带表示飞机飞过的区域，绿色房屋会被覆盖。飞机不是看街区，也不是看道路，只看这条横向或纵向带状区域。"
+		_:
+			return "广告牌只影响与营销板件占地正交相邻的房屋。斜角接触不算，隔着道路或空格不算；营销板件越大，可能接触到的房屋边也越多。\n\n图中红色格表示广告牌占地，绿色房屋与它贴边，因此会被这次广告覆盖。"
 
 func _render_employees_lesson() -> void:
 	var structure := _make_section("公司结构先决定谁能工作")
@@ -1534,7 +1652,8 @@ func _build_housing_preview_state() -> Dictionary:
 				"anchor": Vector2i(3, 0),
 				"house_id": "5",
 				"house_number": 5,
-				"garden_cells": [Vector2i(5, 0), Vector2i(6, 0)],
+				"garden_dir": "E",
+				"garden_cells": [Vector2i(5, 0), Vector2i(5, 1)],
 			},
 			{
 				"piece_id": "apartment",
@@ -1554,7 +1673,7 @@ func _build_housing_preview_options() -> Dictionary:
 		"overlays": [
 			{
 				"id": "garden_house",
-				"cells": [Vector2i(3, 0), Vector2i(4, 0), Vector2i(3, 1), Vector2i(4, 1), Vector2i(5, 0), Vector2i(6, 0)],
+				"cells": [Vector2i(3, 0), Vector2i(4, 0), Vector2i(3, 1), Vector2i(4, 1), Vector2i(5, 0), Vector2i(5, 1)],
 				"style": {
 					"fill": MAP_VALID_FILL,
 					"border": MAP_VALID_BORDER,
@@ -1573,35 +1692,49 @@ func _build_housing_preview_options() -> Dictionary:
 		],
 	}
 
-func _build_marketing_preview_state() -> Dictionary:
+func _build_marketing_preview_state(_case_id: String = "billboard") -> Dictionary:
 	return _build_preview_map_state()
 
-func _build_marketing_preview_options() -> Dictionary:
-	var left_block: Array[Vector2i] = []
-	for y in range(5):
-		for x in range(5):
-			left_block.append(Vector2i(x, y))
+func _build_marketing_preview_options(case_id: String = "billboard") -> Dictionary:
+	var overlays: Array[Dictionary] = []
+	match case_id:
+		"mailbox":
+			var left_block: Array[Vector2i] = []
+			for y in range(5):
+				for x in range(5):
+					left_block.append(Vector2i(x, y))
+			overlays.append(_make_map_overlay("mailbox_block", left_block, Color(0.29, 0.55, 0.90, 0.16), Color(0.16, 0.31, 0.62, 0.86), 2))
+			overlays.append(_make_map_overlay("mailbox_piece", [Vector2i(2, 2)], MAP_SELECTED_FILL, MAP_SELECTED_BORDER, 3))
+			overlays.append(_make_map_overlay("mailbox_affected_house", [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)], MAP_VALID_FILL, MAP_VALID_BORDER, 2))
+		"radio":
+			var visible_radio_range: Array[Vector2i] = []
+			for y2 in range(5):
+				for x2 in range(10):
+					visible_radio_range.append(Vector2i(x2, y2))
+			overlays.append(_make_map_overlay("radio_visible_range", visible_radio_range, Color(0.29, 0.55, 0.90, 0.14), Color(0.16, 0.31, 0.62, 0.72), 2))
+			overlays.append(_make_map_overlay("radio_piece", [Vector2i(6, 2)], MAP_SELECTED_FILL, MAP_SELECTED_BORDER, 3))
+			overlays.append(_make_map_overlay("radio_affected_houses", [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(6, 0), Vector2i(7, 0), Vector2i(6, 1), Vector2i(7, 1)], MAP_VALID_FILL, MAP_VALID_BORDER, 2))
+		"airplane":
+			var stripe: Array[Vector2i] = []
+			for x3 in range(10):
+				stripe.append(Vector2i(x3, 0))
+				stripe.append(Vector2i(x3, 1))
+			overlays.append(_make_map_overlay("airplane_stripe", stripe, Color(0.29, 0.55, 0.90, 0.16), Color(0.16, 0.31, 0.62, 0.86), 2))
+			overlays.append(_make_map_overlay("airplane_affected_houses", [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(6, 0), Vector2i(7, 0), Vector2i(6, 1), Vector2i(7, 1)], MAP_VALID_FILL, MAP_VALID_BORDER, 2))
+		_:
+			overlays.append(_make_map_overlay("billboard_piece", [Vector2i(2, 0), Vector2i(2, 1), Vector2i(3, 0), Vector2i(3, 1)], MAP_SELECTED_FILL, MAP_SELECTED_BORDER, 3))
+			overlays.append(_make_map_overlay("billboard_affected_house", [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)], MAP_VALID_FILL, MAP_VALID_BORDER, 2))
+	return {"overlays": overlays}
+
+func _make_map_overlay(id: String, cells: Array, fill: Color, border: Color, border_width: int = 2) -> Dictionary:
 	return {
-		"overlays": [
-			{
-				"id": "mailbox_block",
-				"cells": left_block,
-				"style": {
-					"fill": Color(0.29, 0.55, 0.90, 0.16),
-					"border": Color(0.16, 0.31, 0.62, 0.86),
-					"border_width": 2,
-				},
-			},
-			{
-				"id": "billboard_adjacent",
-				"cells": [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)],
-				"style": {
-					"fill": MAP_VALID_FILL,
-					"border": MAP_VALID_BORDER,
-					"border_width": 2,
-				},
-			},
-		],
+		"id": id,
+		"cells": cells,
+		"style": {
+			"fill": fill,
+			"border": border,
+			"border_width": border_width,
+		},
 	}
 
 func _build_drive_thru_preview_state() -> Dictionary:
@@ -1845,6 +1978,10 @@ func _on_placement_case_selected(case_id: String) -> void:
 
 func _on_distance_case_selected(case_id: String) -> void:
 	_distance_case = case_id
+	_render_lesson()
+
+func _on_marketing_case_selected(case_id: String) -> void:
+	_marketing_case = case_id
 	_render_lesson()
 
 func _on_prev_pressed() -> void:
