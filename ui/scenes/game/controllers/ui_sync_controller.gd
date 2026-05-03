@@ -183,6 +183,16 @@ func sync_dirty(dirty_flags: int, context: Dictionary = {}, do_profile: bool = f
 		_sync_map_view(state, bool(do_profile))
 	if bool(flags & DIRTY_OVERLAYS):
 		_sync_overlays(state, head_index, cursor_index, bool(do_profile))
+	if bool(flags & DIRTY_PANEL_STATE):
+		if not _sync_panel_action_state(state):
+			update_ui(bool(do_profile))
+			OnlinePerfTraceClass.end_span(online_span_dirty, {
+				"dirty_flags": int(flags),
+				"mode": "full_fallback",
+				"reason": "panel_action_state_unavailable",
+				"full_fallback": true,
+			})
+			return
 	if bool(flags & DIRTY_ACTION_CONTROLS) or bool(flags & DIRTY_OVERLAYS):
 		_sync_action_flow_controls()
 	if bool(flags & DIRTY_DEBUG_PANEL):
@@ -206,6 +216,7 @@ func _dirty_requires_full_fallback(flags: int) -> bool:
 		| DIRTY_TIMELINE_CURSOR \
 		| DIRTY_LOG_APPEND \
 		| DIRTY_MAP_VIEW \
+		| DIRTY_PANEL_STATE \
 		| DIRTY_ACTION_CONTROLS \
 		| DIRTY_OVERLAYS \
 		| DIRTY_DEBUG_PANEL
@@ -292,6 +303,33 @@ func _sync_overlays(state: GameState, head_index: int, cursor_index: int, do_pro
 func _sync_action_flow_controls() -> void:
 	if is_instance_valid(_panel_controller) and _panel_controller.has_method("sync_action_flow_controls"):
 		_panel_controller.call("sync_action_flow_controls")
+
+func _sync_panel_action_state(state: GameState) -> bool:
+	if state == null:
+		return false
+	if not is_instance_valid(_panel_controller):
+		return false
+	if not _panel_controller.has_method("sync_action_state"):
+		return false
+	var force_refresh := false
+	if is_instance_valid(_timeline_controller) and _timeline_controller.has_method("consume_force_full_panel_sync_next_update"):
+		force_refresh = bool(_timeline_controller.call("consume_force_full_panel_sync_next_update"))
+	var online_span_panels := OnlinePerfTraceClass.begin_span("ui.online_sync.panel_controller", {
+		"phase": str(state.phase),
+		"round": int(state.round_number),
+		"force_refresh": bool(force_refresh),
+		"mode": "action_state",
+	})
+	_panel_controller.call("sync_action_state", state, force_refresh)
+	if _sync_right_panel_docked_view.is_valid():
+		_sync_right_panel_docked_view.call()
+	OnlinePerfTraceClass.end_span(online_span_panels, {
+		"phase": str(state.phase),
+		"round": int(state.round_number),
+		"force_refresh": bool(force_refresh),
+		"mode": "action_state",
+	})
+	return true
 
 func _sync_debug_panel(state: GameState) -> void:
 	if state == null:

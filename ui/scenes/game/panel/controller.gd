@@ -387,6 +387,15 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 	_hide_open_guided_action_panels_if_not_initiatable(state)
 	_auto_open_guided_action_ui(state)
 
+func sync_action_state(state: GameState, force_full_refresh: bool = false) -> void:
+	_update_ui_components(state)
+	_sync_reserve_cards_overview_access(state)
+	_sync_modal_reopen_action(state)
+	_sync_action_panel_context(force_full_refresh)
+	_sync_action_flow_controls()
+	_hide_open_guided_action_panels_if_not_initiatable(state)
+	_auto_open_guided_action_ui(state)
+
 func sync_action_flow_controls() -> void:
 	_sync_action_flow_controls()
 

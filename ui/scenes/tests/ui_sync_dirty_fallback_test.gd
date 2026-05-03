@@ -15,10 +15,14 @@ class FakePanelController:
 	extends RefCounted
 
 	var sync_calls: int = 0
+	var action_state_calls: int = 0
 	var action_flow_calls: int = 0
 
 	func sync(_state: GameState, _force_refresh: bool = false) -> void:
 		sync_calls += 1
+
+	func sync_action_state(_state: GameState, _force_refresh: bool = false) -> void:
+		action_state_calls += 1
 
 	func sync_action_flow_controls() -> void:
 		action_flow_calls += 1
@@ -115,18 +119,18 @@ static func run(seed_val: int = 12345) -> Result:
 	if not log_append_r.ok:
 		return _finish(log_append_r, ctrl, engine, map_view)
 
+	ctrl.sync_dirty(GameUiSyncControllerClass.DIRTY_PANEL_STATE, {"source": "test_panel_partial"}, false)
+	var panel_partial_r := _assert_panel_partial_counts(map_view, panel, overlay, timeline)
+	if not panel_partial_r.ok:
+		return _finish(panel_partial_r, ctrl, engine, map_view)
+
 	ctrl.sync_dirty(GameUiSyncControllerClass.DIRTY_FULL, {"source": "test_full"}, false)
-	var full_r := _assert_full_sync_counts(map_view, panel, overlay, timeline, 2, 1, 2, 2, "DIRTY_FULL")
+	var full_r := _assert_full_sync_counts(map_view, panel, overlay, timeline, 2, 1, 1, 2, 2, "DIRTY_FULL")
 	if not full_r.ok:
 		return _finish(full_r, ctrl, engine, map_view)
 
-	ctrl.sync_dirty(GameUiSyncControllerClass.DIRTY_PANEL_STATE, {"source": "test_panel_fallback"}, false)
-	var partial_r := _assert_full_sync_counts(map_view, panel, overlay, timeline, 3, 2, 3, 3, "DIRTY_PANEL_STATE fallback")
-	if not partial_r.ok:
-		return _finish(partial_r, ctrl, engine, map_view)
-
 	ctrl.sync_dirty(1 << 29, {"source": "test_unknown"}, false)
-	var unknown_r := _assert_full_sync_counts(map_view, panel, overlay, timeline, 4, 3, 4, 4, "unknown dirty fallback")
+	var unknown_r := _assert_full_sync_counts(map_view, panel, overlay, timeline, 3, 2, 1, 3, 3, "unknown dirty fallback")
 	if not unknown_r.ok:
 		return _finish(unknown_r, ctrl, engine, map_view)
 
@@ -166,11 +170,36 @@ static func _assert_surface_partial_counts(
 		return Result.failure("surface partial dirty 应同步 map_view，实际=%d" % map_view.set_game_state_calls)
 	if panel.sync_calls != 0:
 		return Result.failure("surface partial dirty 不应 full sync panel_controller，实际=%d" % panel.sync_calls)
+	if panel.action_state_calls != 0:
+		return Result.failure("surface partial dirty 不应同步 panel action state，实际=%d" % panel.action_state_calls)
 	if panel.action_flow_calls != 1:
 		return Result.failure("surface partial dirty 应同步 action flow controls，实际=%d" % panel.action_flow_calls)
 	if overlay.demand_calls != 1 or overlay.dinnertime_calls != 1 or overlay.marketing_calls != 1:
 		return Result.failure(
 			"surface partial dirty 应同步 overlays，实际 demand=%d dinner=%d marketing=%d"
+				% [overlay.demand_calls, overlay.dinnertime_calls, overlay.marketing_calls]
+		)
+	return Result.success({})
+
+static func _assert_panel_partial_counts(
+	map_view: FakeMapView,
+	panel: FakePanelController,
+	overlay: FakeOverlayController,
+	timeline: FakeTimelineController
+) -> Result:
+	if timeline.sync_calls != 1:
+		return Result.failure("panel partial dirty 不应同步 timeline，实际=%d" % timeline.sync_calls)
+	if map_view.set_game_state_calls != 1:
+		return Result.failure("panel partial dirty 不应同步 map_view，实际=%d" % map_view.set_game_state_calls)
+	if panel.sync_calls != 0:
+		return Result.failure("panel partial dirty 不应 full sync panel_controller，实际=%d" % panel.sync_calls)
+	if panel.action_state_calls != 1:
+		return Result.failure("panel partial dirty 应同步 panel action state，实际=%d" % panel.action_state_calls)
+	if panel.action_flow_calls != 1:
+		return Result.failure("panel partial dirty 不应额外同步 action flow controls，实际=%d" % panel.action_flow_calls)
+	if overlay.demand_calls != 1 or overlay.dinnertime_calls != 1 or overlay.marketing_calls != 1:
+		return Result.failure(
+			"panel partial dirty 不应同步 overlays，实际 demand=%d dinner=%d marketing=%d"
 				% [overlay.demand_calls, overlay.dinnertime_calls, overlay.marketing_calls]
 		)
 	return Result.success({})
@@ -182,6 +211,7 @@ static func _assert_full_sync_counts(
 	timeline: FakeTimelineController,
 	expected: int,
 	expected_panel: int,
+	expected_action_state: int,
 	expected_timeline: int,
 	expected_action_flow: int,
 	label: String
@@ -192,6 +222,8 @@ static func _assert_full_sync_counts(
 		return Result.failure("%s 应同步 map_view，实际=%d 期望=%d" % [label, map_view.set_game_state_calls, expected])
 	if panel.sync_calls != expected_panel:
 		return Result.failure("%s 应同步 panel_controller，实际=%d 期望=%d" % [label, panel.sync_calls, expected_panel])
+	if panel.action_state_calls != expected_action_state:
+		return Result.failure("%s panel action state 计数错误，实际=%d 期望=%d" % [label, panel.action_state_calls, expected_action_state])
 	if panel.action_flow_calls != expected_action_flow:
 		return Result.failure("%s 应同步 action flow controls，实际=%d 期望=%d" % [label, panel.action_flow_calls, expected_action_flow])
 	if overlay.demand_calls != expected or overlay.dinnertime_calls != expected or overlay.marketing_calls != expected:

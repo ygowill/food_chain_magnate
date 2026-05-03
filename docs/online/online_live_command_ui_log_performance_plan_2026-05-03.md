@@ -503,6 +503,7 @@ append 时只检查：
 - `GameUiSyncController` 新增 dirty flags 常量与 `sync_dirty(dirty_flags, context, do_profile)` 入口；未知或暂未覆盖的 dirty 组合保持 full fallback，不改变现有 UI 同步语义。
 - `sync_dirty()` 已支持 `TOP_STATUS | TIMELINE_CURSOR | DEBUG_PANEL` 的局部同步；该路径不触发 `map_view.set_game_state`、`panel_controller.sync` 或 overlay sync。其他 dirty 组合继续 full fallback。
 - `sync_dirty()` 继续扩展 `MAP_VIEW`、`OVERLAYS`、`ACTION_CONTROLS` 局部同步；`LOG_APPEND` 作为已由 timeline refresh 单独处理的 no-op dirty，不再迫使 full sync。`PANEL_STATE` 仍 full fallback。
+- `GamePanelController.sync_action_state()` 提供 action-state 级别同步：更新 UI component binder、action panel context/flow 和 guided action 收敛，跳过 working/marketing/placement/end panels 的整包 sync；`sync_dirty(PANEL_STATE)` 优先走该路径，缺失时才 full fallback。
 
 目标：
 
