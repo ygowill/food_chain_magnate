@@ -16,13 +16,14 @@ static func build_step_timeline(
 
 	if bool(allow_incremental_append) and previous_timeline is Dictionary and not previous_timeline.is_empty():
 		var previous_processed_count := StepTimelineHelpersClass.read_processed_command_count(previous_timeline)
+		var previous_step_count := int(Array(previous_timeline.get("steps", [])).size())
 		if OnlinePerfTraceClass.enabled():
 			OnlinePerfTraceClass.emit_event("resume_cache.live_append.start", {
 				"engine_command_count": int(engine.command_history.size()),
 				"previous_processed_command_count": int(previous_processed_count),
-				"previous_step_count": int(Array(previous_timeline.get("steps", [])).size()),
+				"previous_step_count": int(previous_step_count),
 			})
-		var append_r: Result = StepTimelineBuildClass.append_from_existing(engine, previous_timeline)
+		var append_r: Result = StepTimelineBuildClass.append_tail_delta_owned(engine, previous_timeline)
 		if append_r.ok and append_r.value is Dictionary:
 			var append_info: Dictionary = Dictionary(append_r.value)
 			if bool(append_info.get("append_applied", false)):
@@ -38,7 +39,7 @@ static func build_step_timeline(
 						"engine_command_count": int(engine.command_history.size()),
 						"previous_processed_command_count": int(previous_processed_count),
 						"appended_event_count": int(appended_events.size()),
-						"appended_step_count": int(append_steps.size()) - int(Array(previous_timeline.get("steps", [])).size()),
+						"appended_step_count": int(append_steps.size()) - int(previous_step_count),
 						"timeline_processed_command_count": int(
 							StepTimelineHelpersClass.read_processed_command_count(append_timeline)
 						),

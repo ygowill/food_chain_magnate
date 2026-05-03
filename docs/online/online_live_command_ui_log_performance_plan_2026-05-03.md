@@ -301,6 +301,15 @@
 
 ### 阶段 2：StepTimeline append 改成真正 O(delta)
 
+状态：**进行中**。
+
+2026-05-03 增量更新：
+
+- 新增 `StepTimelineBuild.append_tail_delta_owned(engine, owned_timeline)`，供明确拥有 timeline 的 live/cache 热路径原地追加尾部 delta。
+- 保留 `append_from_existing(engine, existing_timeline)` 的非变异契约，避免影响共享/只读调用方。
+- live history refresh 与 full-history timeline cache refresh 已改用 owned append 路径，append 成功时不再复制旧 `steps/events`。
+- 补充 `StepTimelineIncrementalAppendTest` 覆盖 owned append 成功原地更新、旧 API 不变异、以及 malformed event append 失败后回滚旧 timeline。
+
 目标：
 
 - live append 不再复制整条 `steps/events`。
