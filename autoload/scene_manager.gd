@@ -11,6 +11,7 @@ const SCENE_MAIN_MENU := "res://ui/scenes/main_menu.tscn"
 const SCENE_ONLINE_LOBBY := "res://ui/scenes/online/online_lobby.tscn"
 const SCENE_GAME_SETUP := "res://ui/scenes/setup/game_setup.tscn"
 const SCENE_GAME := "res://ui/scenes/game/game.tscn"
+const SCENE_TUTORIAL_CAMPAIGN := "res://ui/scenes/tutorial_campaign/tutorial_campaign.tscn"
 const SCENE_TILE_EDITOR := "res://ui/scenes/tools/tile_editor.tscn"
 const SCENE_REPLAY_TEST := "res://ui/scenes/tests/replay_test.tscn"
 
@@ -115,6 +116,9 @@ func goto_game_setup() -> void:
 
 func goto_game() -> void:
 	goto_scene(SCENE_GAME)
+
+func goto_tutorial_campaign() -> void:
+	goto_scene(SCENE_TUTORIAL_CAMPAIGN)
 
 func goto_tile_editor() -> void:
 	goto_scene(SCENE_TILE_EDITOR)

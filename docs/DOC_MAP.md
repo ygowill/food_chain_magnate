@@ -27,6 +27,7 @@
 ### 想看设计方案
 
 - 总体技术设计：`docs/design.md`
+- 教学战役：`docs/design/tutorial_campaign_design_2026-05-03.md`
 - 员工 `staff_id` / usage track / 动作面板统一：`docs/design/staff_id_usage_tracks_and_action_panel_unification_2026-04-18.md`
 - UI 重构：`docs/design/ui_redesign.md`
 - UI 视觉升级：`docs/design/ui_visual_upgrade_design.md`

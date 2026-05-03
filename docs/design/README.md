@@ -4,6 +4,7 @@
 
 ## 当前优先阅读
 
+- `docs/design/tutorial_campaign_design_2026-05-03.md`
 - `docs/design/staff_id_usage_tracks_and_action_panel_unification_2026-04-18.md`
 - `docs/design/ui_redesign.md`
 - `docs/design/ui_visual_upgrade_design.md`

@@ -28,6 +28,7 @@ var _mute_icon_load_warned: bool = false
 @onready var decorative_line: ColorRect = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/DecorativeLine
 @onready var new_game_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/NewGameButton
 @onready var rules_tutorial_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/RulesTutorialButton
+@onready var tutorial_campaign_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/TutorialCampaignButton
 @onready var online_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/OnlineButton
 @onready var rules_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/RulesButton
 @onready var load_game_button: Button = $CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/LoadGameButton
@@ -72,6 +73,7 @@ func _ready() -> void:
 	# 按钮样式
 	UiStylesClass.apply_button_secondary(new_game_button)
 	UiStylesClass.apply_button_secondary(rules_tutorial_button)
+	UiStylesClass.apply_button_secondary(tutorial_campaign_button)
 	UiStylesClass.apply_button_primary(online_button)
 	UiStylesClass.apply_button_secondary(rules_button)
 	UiStylesClass.apply_button_secondary(load_game_button)
@@ -132,6 +134,12 @@ func _on_rules_tutorial_pressed() -> void:
 	if Globals != null and Globals.has_method("request_rules_tutorial"):
 		Globals.request_rules_tutorial()
 	SceneManager.goto_game_setup()
+
+func _on_tutorial_campaign_pressed() -> void:
+	GameLog.info("MainMenu", "点击教学战役")
+	if Globals != null and Globals.has_method("clear_tutorial_runtime_flags"):
+		Globals.clear_tutorial_runtime_flags()
+	SceneManager.goto_tutorial_campaign()
 
 func _on_online_pressed() -> void:
 	GameLog.info("MainMenu", "点击联机游戏")
