@@ -3,7 +3,6 @@ extends Control
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 
-const BANK_BREAK_PANEL_SCENE_PATH := "res://ui/components/bank_break/bank_break_panel.tscn"
 const RESERVE_CARD_ART_SIZE := Vector2(140, 218)
 const MAP_PREVIEW_SIZE := Vector2(680, 380)
 const MAP_SELECTED_FILL := Color(0.95, 0.25, 0.18, 0.22)
@@ -708,30 +707,8 @@ func _build_bank_break_preview(count: int, bank_before: int, bank_after: int, ev
 	frame.custom_minimum_size = Vector2(560, 360)
 	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	frame.add_theme_stylebox_override("panel", _make_style(Color(0.10, 0.08, 0.06, 0.18), Color(0.17, 0.13, 0.09, 0.20), 1, 6))
-
-	var scene = load(BANK_BREAK_PANEL_SCENE_PATH)
-	if scene is PackedScene:
-		var preview := (scene as PackedScene).instantiate()
-		preview.name = "BankBreakPanelPreview"
-		preview.custom_minimum_size = Vector2(560, 360)
-		preview.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		frame.add_child(preview)
-		call_deferred("_configure_bank_break_preview", preview, count, bank_before, bank_after, event_data)
-	else:
-		frame.add_child(_build_bank_break_fallback(count, bank_before, bank_after, event_data))
+	frame.add_child(_build_bank_break_fallback(count, bank_before, bank_after, event_data))
 	return frame
-
-func _configure_bank_break_preview(panel: Control, count: int, bank_before: int, bank_after: int, event_data: Dictionary) -> void:
-	if not is_instance_valid(panel):
-		return
-	if panel.has_method("set_bankruptcy_info"):
-		panel.call("set_bankruptcy_info", count, bank_before, bank_after, event_data)
-	panel.visible = true
-	var continue_btn := panel.get_node_or_null("CenterContainer/Panel/MarginContainer/VBoxContainer/ContinueButton") as Button
-	if continue_btn != null:
-		continue_btn.disabled = true
-		continue_btn.text = "教学预览"
 
 func _build_bank_break_fallback(count: int, bank_before: int, bank_after: int, event_data: Dictionary) -> Control:
 	var margin := MarginContainer.new()
