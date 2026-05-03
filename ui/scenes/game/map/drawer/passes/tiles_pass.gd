@@ -18,14 +18,12 @@ static func draw_tile_borders(canvas, cell_size: int) -> void:
 	if tile_size <= 0:
 		return
 
-	# 外边缘：降低线宽，避免过度抢占视觉（尤其在小结构件贴图上）。
-	var thickness := maxf(1.0, float(cell_size) * 0.035)
-	thickness = minf(thickness, float(cell_size))
+	# 外边缘：使用整数屏幕像素，避免缩放后半像素采样导致忽粗忽细。
+	var thickness := _tile_border_thickness(cell_size)
 	var col := Color(0, 0, 0, 0.9)
 
-	# tile 内部细分网格线（细线）：黑色 alpha≈0.25，线宽随 zoom 缩放为 max(1, cell_size*0.02)
-	var inner_thickness := maxf(1.0, float(cell_size) * 0.02)
-	inner_thickness = minf(inner_thickness, float(cell_size))
+	# tile 内部细分网格线（细线）：黑色 alpha≈0.25，整数屏幕像素宽度。
+	var inner_thickness := _tile_inner_grid_thickness(cell_size)
 	var inner_col := Color(0, 0, 0, 0.25)
 
 	for tp_val in tps:
@@ -48,16 +46,34 @@ static func draw_tile_borders(canvas, cell_size: int) -> void:
 
 		# 内部细线先画，外边缘粗线后画（避免细线盖住外边缘）
 		for i in range(1, tile_size):
-			var x := rect.position.x + float(i * cell_size) - inner_thickness * 0.5
-			canvas.draw_rect(Rect2(Vector2(x, rect.position.y), Vector2(inner_thickness, rect.size.y)), inner_col, true)
-			var y := rect.position.y + float(i * cell_size) - inner_thickness * 0.5
-			canvas.draw_rect(Rect2(Vector2(rect.position.x, y), Vector2(rect.size.x, inner_thickness)), inner_col, true)
+			var x := _snap_centered_line_start(rect.position.x + float(i * cell_size), inner_thickness)
+			canvas.draw_rect(Rect2(Vector2(x, _snap_px(rect.position.y)), Vector2(inner_thickness, _snap_px(rect.size.y))), inner_col, true)
+			var y := _snap_centered_line_start(rect.position.y + float(i * cell_size), inner_thickness)
+			canvas.draw_rect(Rect2(Vector2(_snap_px(rect.position.x), y), Vector2(_snap_px(rect.size.x), inner_thickness)), inner_col, true)
 
 		# 向内黑边框（不应盖住上层 piece）
-		canvas.draw_rect(Rect2(rect.position, Vector2(rect.size.x, thickness)), col, true)
-		canvas.draw_rect(Rect2(rect.position + Vector2(0, rect.size.y - thickness), Vector2(rect.size.x, thickness)), col, true)
-		canvas.draw_rect(Rect2(rect.position, Vector2(thickness, rect.size.y)), col, true)
-		canvas.draw_rect(Rect2(rect.position + Vector2(rect.size.x - thickness, 0), Vector2(thickness, rect.size.y)), col, true)
+		var left := _snap_px(rect.position.x)
+		var top := _snap_px(rect.position.y)
+		var right := _snap_px(rect.position.x + rect.size.x)
+		var bottom := _snap_px(rect.position.y + rect.size.y)
+		var w := maxf(0.0, right - left)
+		var h := maxf(0.0, bottom - top)
+		canvas.draw_rect(Rect2(Vector2(left, top), Vector2(w, thickness)), col, true)
+		canvas.draw_rect(Rect2(Vector2(left, bottom - thickness), Vector2(w, thickness)), col, true)
+		canvas.draw_rect(Rect2(Vector2(left, top), Vector2(thickness, h)), col, true)
+		canvas.draw_rect(Rect2(Vector2(right - thickness, top), Vector2(thickness, h)), col, true)
+
+static func _tile_inner_grid_thickness(cell_size: int) -> float:
+	return float(clampi(int(round(float(cell_size) * 0.02)), 1, 2))
+
+static func _tile_border_thickness(cell_size: int) -> float:
+	return float(clampi(int(round(float(cell_size) * 0.05)), 1, 3))
+
+static func _snap_px(value: float) -> float:
+	return float(round(value))
+
+static func _snap_centered_line_start(center: float, thickness: float) -> float:
+	return float(round(center) - floor(thickness * 0.5))
 
 static func draw_tile_id_labels(canvas, cell_size: int) -> void:
 	if canvas._map_data.is_empty():
