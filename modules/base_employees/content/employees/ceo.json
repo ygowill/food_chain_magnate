@@ -1,7 +1,7 @@
 {
   "id": "ceo",
   "name": "CEO",
-  "description": "CEO就是你！",
+  "description": "CEO就是你！\n招聘一名员工",
   "salary": false,
   "unique": true,
   "role": "manager",
