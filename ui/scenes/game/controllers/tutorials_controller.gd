@@ -1,6 +1,6 @@
 # Game scene：教学/引导控制器
 # 负责：
-# - 规则教学模式下的主界面导览
+# - 教学模式下的主界面导览
 # - 重组 / 顺位 / 餐厅放置等上下文导览
 # - 首局流程提示卡
 class_name GameTutorialsController

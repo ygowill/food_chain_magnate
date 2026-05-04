@@ -1,6 +1,6 @@
 # Onboarding / 教学系统架构（`ui/tutorial` + `ui/scenes/*/controllers/tutorials_controller.gd`）
 
-本文档只描述**当前已落地**的规则教学系统结构，不讨论未来更完整的互动式教学剧本。
+本文档只描述**当前已落地**的教学/引导系统结构，不讨论未来更完整的互动式教学剧本。
 
 ## 目标
 
@@ -8,13 +8,11 @@
 
 1. **通用导览组件**
 	- 管理 spotlight overlay / step 切换 / 跳过
-2. **主菜单入口编排**
-	- 显式进入“规则教学”模式
-3. **场景级教学 controller**
+2. **场景级教学 controller**
 	- 决定什么时候开始导览、什么时候发流程提示
 	- 决定是否切换到“教学局模式”文案
-4. **规则教学运行时标记**
-	- 只在主菜单规则教学入口触发后串联 Setup / Game 教学流程
+3. **教学运行时标记**
+	- 串联 Setup / Game 教学流程
 	- 不保存“是否启用教学”或“哪些提示已经看过”
 
 这样可以避免把教学流程直接塞进 `game.gd`、`game_setup.gd` 这类主场景脚本里。
@@ -23,8 +21,7 @@
 
 ```mermaid
 flowchart TB
-  Globals["autoload/globals.gd\n规则教学运行时标记"]
-  MainMenu["ui/scenes/menus/main_menu.gd\n规则教学入口"]
+  Globals["autoload/globals.gd\n教学运行时标记"]
   TutorialCore["ui/tutorial/tutorial_controller.gd\n通用导览入口"]
   Spotlight["ui/components/tutorial/tutorial_spotlight_overlay.*\nSpotlight UI"]
   FlowHint["ui/components/tutorial/tutorial_flow_hint_card.*\n阶段提示卡"]
@@ -40,11 +37,9 @@ flowchart TB
   SetupScene["ui/scenes/setup/game_setup.gd"]
   GameScene["ui/scenes/game/game.gd"]
 
-  Globals --> MainMenu
   Globals --> SetupCtrl
   Globals --> GameCtrl
 
-  MainMenu --> SetupScene
   SetupScene --> SetupCtrl
   GameScene --> GameCtrl
 
@@ -90,7 +85,7 @@ flowchart TB
 职责：
 
 - `tutorials_controller.gd`
-	- 响应主菜单传入的规则教学请求
+	- 响应待启动 setup 导览标记
 	- 同步 start flags
 	- 触发教学局预设应用
 - `tutorial_content.gd`
@@ -154,10 +149,9 @@ flowchart TB
 
 当前还提供：
 
-- `request_rules_tutorial()`
 - `is_tutorial_runtime_enabled()`
 
-教学入口不再持久化“已看过”进度；规则教学按钮每次都会显式设置运行时标记并触发教学。上下文导览/流程提示的去重只存在于 `GameTutorialsController` 当前实例中，避免普通模式、回放和载入路径通过历史设置误触发教学。
+教学入口不再持久化“已看过”进度；主菜单不再提供教学入口。上下文导览/流程提示的去重只存在于 `GameTutorialsController` 当前实例中，避免普通模式、回放和载入路径通过历史设置误触发教学。
 
 ## 设置页与帮助提示的关系
 
@@ -205,7 +199,7 @@ flowchart TB
 3. **通用 UI 与业务策略分离**
 	- `ui/tutorial/tutorial_controller.gd` 只做通用 tour 容器
 	- 具体“什么时候出现什么步骤”交给场景级 controller
-4. **Globals 只保存规则教学运行时标记，不渲染 UI**
+4. **Globals 只保存教学运行时标记，不渲染 UI**
 	- 它不持久化教学进度或教学偏好，也不负责任何弹窗或 overlay
 
 ## 当前自动化防线
@@ -219,4 +213,4 @@ flowchart TB
 - `ui/scenes/tests/tutorial_scene_boundary_contract_test.gd`
 	- 检查 `game.gd` / `game_setup.gd` 没有重新混入 `start_tour(...)` 等教学细节
 - `ui/scenes/tests/tutorial_runtime_scope_test.gd`
-	- 检查只有规则教学运行标记才会启用教学，普通模式、回放和加载路径不会通过历史设置误触发教学
+	- 检查只有教学运行标记才会启用教学，普通模式、回放和加载路径不会通过历史设置误触发教学

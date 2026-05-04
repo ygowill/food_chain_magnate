@@ -103,12 +103,6 @@ layout_mode = 2
 size_flags_horizontal = 4
 text = "本地游戏"
 
-[node name="RulesTutorialButton" type="Button" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
-custom_minimum_size = Vector2(420, 56)
-layout_mode = 2
-size_flags_horizontal = 4
-text = "规则教学"
-
 [node name="TutorialCampaignButton" type="Button" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
 custom_minimum_size = Vector2(420, 56)
 layout_mode = 2
@@ -130,7 +124,7 @@ layout_mode = 2
 custom_minimum_size = Vector2(420, 56)
 layout_mode = 2
 size_flags_horizontal = 4
-text = "规则"
+text = "规则详情"
 
 [node name="SystemGroupGap" type="Control" parent="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer"]
 custom_minimum_size = Vector2(0, 18)
@@ -183,7 +177,6 @@ text = "v0.1.0"
 horizontal_alignment = 2
 
 [connection signal="pressed" from="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/NewGameButton" to="." method="_on_new_game_pressed"]
-[connection signal="pressed" from="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/RulesTutorialButton" to="." method="_on_rules_tutorial_pressed"]
 [connection signal="pressed" from="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/TutorialCampaignButton" to="." method="_on_tutorial_campaign_pressed"]
 [connection signal="pressed" from="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/OnlineButton" to="." method="_on_online_pressed"]
 [connection signal="pressed" from="CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/RulesButton" to="." method="_on_rules_pressed"]
