@@ -7,6 +7,8 @@ const RoundStatePlayerBoolFlagsClass = preload("res://core/utils/round_state_pla
 const RoundStateSubPhasePassedClass = preload("res://core/utils/round_state_sub_phase_passed.gd")
 const KIND_CONFIRM_DINNERTIME := "confirm_dinnertime"
 const KIND_CONFIRM_MARKETING := "confirm_marketing"
+const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
+const ONLINE_MARKETING_CONFIRM_KEY := "online_require_marketing_confirm"
 
 static func is_online_mode() -> bool:
 	if NetContext == null:
@@ -16,7 +18,9 @@ static func is_online_mode() -> bool:
 static func is_online_parallel_payday(state: GameState) -> bool:
 	if state == null:
 		return false
-	return is_online_mode() and str(state.phase) == DefsClass.PHASE_PAYDAY
+	if str(state.phase) != DefsClass.PHASE_PAYDAY:
+		return false
+	return is_online_mode() or _has_online_settlement_confirm_markers(state)
 
 static func is_online_parallel_phase(state: GameState) -> bool:
 	if state == null:
@@ -167,6 +171,34 @@ static func _read_marketing_pending_list(state: GameState) -> Array:
 	if not (list_val is Array):
 		return []
 	return Array(list_val)
+
+static func _has_online_settlement_confirm_markers(state: GameState) -> bool:
+	return _read_online_confirm_marker(state, ONLINE_DINNERTIME_CONFIRM_KEY) \
+		and _read_online_confirm_marker(state, ONLINE_MARKETING_CONFIRM_KEY)
+
+static func _read_online_confirm_marker(state: GameState, key: String) -> bool:
+	if state == null:
+		return false
+	if state.rules is Dictionary:
+		var rules: Dictionary = state.rules
+		if rules.has(key):
+			return _is_truthy_marker(rules.get(key, null))
+	if state.round_state is Dictionary:
+		var rs: Dictionary = state.round_state
+		if rs.has(key):
+			return _is_truthy_marker(rs.get(key, null))
+	return false
+
+static func _is_truthy_marker(value) -> bool:
+	if value is bool:
+		return bool(value)
+	if value is int:
+		return int(value) > 0
+	if value is float:
+		var f: float = float(value)
+		if f == floor(f):
+			return int(f) > 0
+	return false
 
 static func _is_legacy_confirm_dinnertime_pending(list: Array) -> bool:
 	return list.size() == 1 and (list[0] is String) and str(list[0]) == KIND_CONFIRM_DINNERTIME

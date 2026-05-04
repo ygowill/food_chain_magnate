@@ -7,6 +7,7 @@ const GameEngineClass = preload("res://core/engine/game_engine.gd")
 const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const RoomManagerClass = preload("res://server/room_manager.gd")
+const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
@@ -21,6 +22,9 @@ static func run() -> Result:
 	var validate_no_mutate_r := _run_validate_resume_point_does_not_mutate_source_case()
 	if not validate_no_mutate_r.ok:
 		return validate_no_mutate_r
+	var online_payday_replay_r := _run_online_payday_parallel_history_loads_offline_case()
+	if not online_payday_replay_r.ok:
+		return online_payday_replay_r
 	var missing_marker_resume_r := _run_online_resume_rejects_missing_marketing_marker_case()
 	if not missing_marker_resume_r.ok:
 		return missing_marker_resume_r
@@ -93,6 +97,73 @@ static func _run_validate_resume_point_does_not_mutate_source_case() -> Result:
 		return Result.failure("validate_resume_point 不应修改 initial checkpoint 的晚餐 marker")
 	if int(initial_rules.get(ONLINE_MARKETING_CONFIRM_KEY, 0)) != 0:
 		return Result.failure("validate_resume_point 不应修改 initial checkpoint 的营销 marker")
+	return Result.success()
+
+static func _run_online_payday_parallel_history_loads_offline_case() -> Result:
+	if NetContext == null:
+		return Result.failure("NetContext autoload missing")
+	var prev_mode = NetContext.mode
+	var prev_local_player_id := int(NetContext.local_player_id)
+
+	var engine := GameEngineClass.new()
+	var init_r: Result = engine.initialize(2, 22334, [], GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR)
+	if not init_r.ok:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("初始化在线 Payday 回放测试失败: %s" % init_r.error)
+	var prepare_r: Result = OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
+	if not prepare_r.ok:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("准备在线 Payday 回放测试 marker 失败: %s" % prepare_r.error)
+
+	var to_working_r: Result = TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 200)
+	if not to_working_r.ok:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("推进到 Working 失败: %s" % to_working_r.error)
+	var complete_working_r: Result = TestPhaseUtilsClass.complete_working_phase(engine, 200)
+	if not complete_working_r.ok:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("结束 Working 失败: %s" % complete_working_r.error)
+	if str(engine.get_state().phase) != DefsClass.PHASE_DINNERTIME:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("在线 marker 下 Working 后应停留在 Dinnertime 等待确认，实际: %s" % str(engine.get_state().phase))
+
+	for pid in range(engine.get_state().players.size()):
+		var confirm_r: Result = engine.execute_command(Command.create("confirm_dinnertime", pid, {}))
+		if not confirm_r.ok:
+			_restore_net_context(prev_mode, prev_local_player_id)
+			return Result.failure("confirm_dinnertime(%d) 失败: %s" % [pid, confirm_r.error])
+	if str(engine.get_state().phase) != DefsClass.PHASE_PAYDAY:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("Dinnertime 全员确认后应进入 Payday，实际: %s" % str(engine.get_state().phase))
+
+	var state = engine.get_state()
+	if state.bank is Dictionary:
+		state.bank["broke_count"] = maxi(2, int(state.bank.get("broke_count", 0)))
+	for pid2 in range(state.players.size()):
+		var give_r: Result = StateUpdaterClass.player_receive_from_bank(state, pid2, 1000)
+		if not give_r.ok:
+			_restore_net_context(prev_mode, prev_local_player_id)
+			return Result.failure("为玩家 %d 注入 Payday 测试现金失败: %s" % [pid2, give_r.error])
+
+	NetContext.mode = NetContext.Mode.ONLINE_SERVER
+	NetContext.local_player_id = -1
+	var current_actor := int(state.get_current_player_id())
+	var other_actor := 1 if current_actor == 0 else 0
+	var skip_other_r: Result = engine.execute_command(Command.create(ActionIdsClass.SKIP, other_actor))
+	if not skip_other_r.ok:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("在线 Payday 非当前玩家 skip 应成功，实际失败: %s" % skip_other_r.error)
+
+	var archive_r: Result = engine.create_archive()
+	if not archive_r.ok:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("创建在线 Payday 回放测试存档失败: %s" % archive_r.error)
+	var archive: Dictionary = Dictionary(archive_r.value).duplicate(true)
+
+	_restore_net_context(prev_mode, prev_local_player_id)
+	var load_r: Result = ArchiveRecoveryClass.load_for_online_resume(archive)
+	if not load_r.ok:
+		return Result.failure("离线上下文应能加载在线 Payday 并行历史: %s" % load_r.error)
 	return Result.success()
 
 static func _run_online_resume_rejects_missing_marketing_marker_case() -> Result:
@@ -367,3 +438,9 @@ static func _run_resume_room_rejects_bad_tail_archive_case() -> Result:
 	if rm.rooms.has(room_code):
 		return Result.failure("恢复房创建失败后不应留下房间: %s" % room_code)
 	return Result.success()
+
+static func _restore_net_context(prev_mode, prev_local_player_id: int) -> void:
+	if NetContext == null:
+		return
+	NetContext.mode = prev_mode
+	NetContext.local_player_id = prev_local_player_id
