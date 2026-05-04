@@ -237,6 +237,7 @@ const TimelineUiStateSupportBatchUpdateTestClass = preload("res://ui/scenes/test
 const UiComponentsBinderBatchContextTestClass = preload("res://ui/scenes/tests/ui_components_binder_batch_context_test.gd")
 const ReplayBarSupportNoopTestClass = preload("res://ui/scenes/tests/replay_bar_support_noop_test.gd")
 const TurnOrderSelectionModalOnlineVisibilityTestClass = preload("res://ui/scenes/tests/turn_order_selection_modal_online_visibility_test.gd")
+const GamePanelControllerPartialModalSyncTestClass = preload("res://ui/scenes/tests/game_panel_controller_partial_modal_sync_test.gd")
 const TurnOrderMenuAccessTestClass = preload("res://ui/scenes/tests/turn_order_menu_access_test.gd")
 const GameOverOnlineReturnContractTestClass = preload("res://ui/scenes/tests/game_over_online_return_contract_test.gd")
 const GameOverPanelReturnButtonTextTestClass = preload("res://ui/scenes/tests/game_over_panel_return_button_text_test.gd")

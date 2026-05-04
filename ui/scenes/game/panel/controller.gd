@@ -390,6 +390,9 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 func sync_action_state(state: GameState, force_full_refresh: bool = false) -> void:
 	_update_ui_components(state)
 	_sync_reserve_cards_overview_access(state)
+	# 联机 CommandApplied 的 partial sync 也必须刷新阶段模态进度。
+	# 例如 OrderOfBusiness 中其他玩家选择顺位后，阶段未变化但 picks 已更新。
+	_sync_modals(state)
 	_sync_modal_reopen_action(state)
 	_sync_action_panel_context(force_full_refresh)
 	_sync_action_flow_controls()

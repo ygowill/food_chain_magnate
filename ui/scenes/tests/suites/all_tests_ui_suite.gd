@@ -66,6 +66,10 @@ static func build_tests(_host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.TurnOrderSelectionModalOnlineVisibilityTestClass.run(),
 			},
 			{
+				"name": "GamePanelControllerPartialModalSyncTest",
+				"fn": func() -> Result: return TestRefs.GamePanelControllerPartialModalSyncTestClass.run(),
+			},
+			{
 				"name": "TurnOrderMenuAccessTest",
 				"fn": func() -> Result: return TestRefs.TurnOrderMenuAccessTestClass.run(),
 			},
