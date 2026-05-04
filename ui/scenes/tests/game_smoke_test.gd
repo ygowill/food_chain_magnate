@@ -83,12 +83,15 @@ func _run_test() -> int:
 	]
 	if _find_first_existing_node(menu, new_game_paths) == null:
 		return await _fail("main_menu.tscn 缺少 NewGameButton 节点（节点路径漂移）")
-	var rules_tutorial_paths: PackedStringArray = [
-		"CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/RulesTutorialButton",
-		"CenterContainer/Card/Margin/VBoxContainer/RulesTutorialButton",
+	var rules_paths: PackedStringArray = [
+		"CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/RulesButton",
+		"CenterContainer/Card/Margin/VBoxContainer/RulesButton",
 	]
-	if _find_first_existing_node(menu, rules_tutorial_paths) == null:
-		return await _fail("main_menu.tscn 缺少 RulesTutorialButton 节点（节点路径漂移）")
+	var rules_button = _find_first_existing_node(menu, rules_paths)
+	if rules_button == null:
+		return await _fail("main_menu.tscn 缺少 RulesButton 节点（节点路径漂移）")
+	if rules_button is Button and (rules_button as Button).text != "规则详情":
+		return await _fail("main_menu.tscn RulesButton 文案应为“规则详情”")
 	var online_paths: PackedStringArray = [
 		"CenterContainer/Card/OuterMargin/InnerBorder/InnerMargin/VBoxContainer/OnlineButton",
 		"CenterContainer/Card/Margin/VBoxContainer/OnlineButton",

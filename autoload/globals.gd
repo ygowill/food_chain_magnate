@@ -282,10 +282,6 @@ func is_tutorial_runtime_enabled() -> bool:
 		or tutorial_match_enabled
 	)
 
-func request_rules_tutorial() -> void:
-	clear_tutorial_runtime_flags()
-	tutorial_pending_setup_tour = true
-
 func clear_tutorial_runtime_flags() -> void:
 	tutorial_pending_setup_tour = false
 	tutorial_pending_game_ui_tour = false

@@ -1,8 +1,10 @@
-# 规则教学模式 / 新手引导设计（MVP）
+# 教学/引导设计（MVP）
+
+状态：主菜单独立教学入口已移除；本文只保留导览系统和教学局运行时设计，不再把主菜单作为触发来源。
 
 ## 目标
 
-- 在主菜单提供独立的**规则教学**入口，与普通“本地游戏”分离。
+- 教学导览与普通“本地游戏”分离，普通入口不自动弹出教学内容。
 - 优先解决两个问题：
 	1. 玩家**不知道界面各区域/按钮是做什么的**。
 	2. 玩家**不知道当前阶段接下来应该做什么**。
@@ -19,19 +21,13 @@
 
 ## 分层方案
 
-### 1. 主菜单独立入口
+### 1. 主菜单入口（已移除）
 
-触发时机：
+当前状态：
 
-- 玩家在主菜单点击“规则教学”
-- 入口位置：位于“本地游戏”按钮下方
-
-能力：
-
-- 直接进入 `res://ui/scenes/setup/game_setup.tscn`
-- 自动应用教学局预设
-- 自动开始 Setup Tour
-- 普通“本地游戏”入口不再自动弹出教学相关内容
+- 主菜单不再提供独立教学入口。
+- 普通“本地游戏”入口会清理教学运行时标记，不自动弹出教学相关内容。
+- Setup / Game 导览仍由运行时标记驱动，供测试和后续显式教学流程复用。
 
 ### 2. 设置页导览（Setup Tour）
 
@@ -45,7 +41,7 @@
 目标：
 
 - 让玩家理解：
-	- 当前已进入规则教学模式
+	- 当前已进入教学模式
 	- 教学局会自动应用固定配置
 	- 设置完成后从哪里开始游戏
 
@@ -53,7 +49,7 @@
 
 触发时机：
 
-- 玩家从主菜单进入“规则教学”，并在 Setup 中点击“开始游戏”
+- 教学运行时标记开启后，玩家在 Setup 中点击“开始游戏”
 - 进入 `res://ui/scenes/game/game.tscn`
 - 首个本地新局的 startup intro 结束后
 
@@ -161,7 +157,7 @@
 - 第一轮结束、第二轮开始时，会给一张总结卡，明确告诉玩家已经掌握哪些基础概念
 这让首局体验更接近“边玩边学”，而不是一开始塞给玩家大量静态说明。
 
-更完整的“教学战役”方案见 `docs/design/tutorial_campaign_design_2026-05-03.md`；该方案把当前轻量规则教学作为基础导览层，在其上新增固定关卡、目标判定、营销范围实验室和结算复盘。
+更完整的“教学战役”方案见 `docs/design/tutorial_campaign_design_2026-05-03.md`；该方案把当前轻量导览作为基础层，在其上新增固定关卡、目标判定、营销范围实验室和结算复盘。
 
 ### 4.3 当前版本新增补充
 
@@ -222,17 +218,13 @@
 - Flow hint UI
 	- `ui/components/tutorial/tutorial_flow_hint_card.tscn`
 	- `ui/components/tutorial/tutorial_flow_hint_card.gd`
-- 主菜单入口
-	- `ui/scenes/main_menu.tscn`
-	- `ui/scenes/menus/main_menu.gd`
-
 更详细的职责边界见：
 
 - `docs/architecture/22-ui-onboarding-tutorials.md`
 
 ## 运行时字段
 
-教学不再向 `user://settings.cfg` 写入进度字段；规则教学入口每次主动设置运行时标记，上下文导览/流程提示只在当前 `GameTutorialsController` 实例内做一次性去重。
+教学不再向 `user://settings.cfg` 写入进度字段；教学运行时标记只存在于当前运行期，上下文导览/流程提示只在当前 `GameTutorialsController` 实例内做一次性去重。
 
 - `tutorial_pending_setup_tour`
 - `tutorial_pending_game_ui_tour`
@@ -244,12 +236,11 @@
 本次先实现：
 
 1. 文档落盘到 `docs/`
-2. 主菜单独立规则教学入口
-3. Setup Tour
-4. Game UI Tour
-5. 轻量流程提示卡（首轮关键阶段）
-6. 教学局预设 + 分阶段教学内容切换
-7. 设置页完全不再包含教学设置，不读取、不写入、不清理任何教学配置键
+2. Setup Tour
+3. Game UI Tour
+4. 轻量流程提示卡（首轮关键阶段）
+5. 教学局预设 + 分阶段教学内容切换
+6. 设置页完全不再包含教学设置，不读取、不写入、不清理任何教学配置键
 
 暂不实现：
 
@@ -281,8 +272,6 @@
 ### 修改
 
 - `autoload/globals.gd`
-- `ui/scenes/main_menu.tscn`
-- `ui/scenes/menus/main_menu.gd`
 - `ui/scenes/setup/game_setup.gd`
 - `ui/components/module_selector/module_selector.gd`
 - `ui/scenes/game/game.gd`
@@ -296,4 +285,4 @@
 - **可跳过、可关闭、可重置**：不强制灌输。
 - **一次只讲一个焦点**：避免大段文字。
 - **优先复用现有系统**：帮助提示、guided action、设置持久化。
-- **不影响联机 / 回放 / 恢复局**：只针对主菜单显式进入的规则教学模式。
+- **不影响联机 / 回放 / 恢复局**：只针对显式教学运行时标记开启的模式。

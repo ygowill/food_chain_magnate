@@ -1,6 +1,5 @@
-# GameSetup scene：规则教学入口控制器
+# GameSetup scene：教学导览控制器
 # 负责：
-# - 响应主菜单“规则教学”入口
 # - 开局设置页导览
 # - 将教学局启动标记同步到 Globals
 class_name GameSetupTutorialsController
