@@ -4,6 +4,7 @@ extends Control
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const PhaseTrackStripClass = preload("res://ui/components/phase_track/phase_track_strip.gd")
+const PiecePreviewLayoutClass = preload("res://ui/utils/piece_preview_layout.gd")
 
 const RESERVE_CARD_ART_SIZE := Vector2(140, 218)
 const MAP_PREVIEW_SIZE := Vector2(680, 380)
@@ -42,6 +43,78 @@ const MILESTONE_CONTENT_PATH_TEMPLATES := [
 	"res://modules/new_milestones/content/milestones/%s.json",
 	"res://modules/rural_marketeers/content/milestones/%s.json",
 ]
+const MILESTONE_PALETTE_PURPLE := Color(0.69, 0.57, 0.77, 1.0)
+const MILESTONE_PALETTE_GRAY := Color(0.76, 0.75, 0.74, 1.0)
+const MILESTONE_PALETTE_MARKETING_BLUE := Color(0.59, 0.77, 0.82, 1.0)
+const MILESTONE_PALETTE_PRODUCE_GREEN := Color(0.60, 0.71, 0.35, 1.0)
+const MILESTONE_PALETTE_PROCURE_GREEN := Color(0.70, 0.81, 0.58, 1.0)
+const MILESTONE_PALETTE_PRICE_ORANGE := Color(0.92, 0.66, 0.56, 1.0)
+const MILESTONE_PALETTE_COFFEE_MINT := Color(0.60, 0.80, 0.72, 1.0)
+const MILESTONE_PALETTE_KETCHUP_DARK := Color(0.15, 0.11, 0.10, 1.0)
+const MILESTONE_COLOR_BY_ID := {
+	"first_hire_3": MILESTONE_PALETTE_PURPLE,
+	"first_throw_away": MILESTONE_PALETTE_PURPLE,
+	"first_waitress": MILESTONE_PALETTE_PURPLE,
+	"first_have_20": MILESTONE_PALETTE_PURPLE,
+	"first_have_100": MILESTONE_PALETTE_PURPLE,
+	"first_train": MILESTONE_PALETTE_GRAY,
+	"first_billboard": MILESTONE_PALETTE_MARKETING_BLUE,
+	"first_burger_marketed": MILESTONE_PALETTE_MARKETING_BLUE,
+	"first_pizza_marketed": MILESTONE_PALETTE_MARKETING_BLUE,
+	"first_drink_marketed": MILESTONE_PALETTE_MARKETING_BLUE,
+	"first_airplane": MILESTONE_PALETTE_MARKETING_BLUE,
+	"first_radio": MILESTONE_PALETTE_MARKETING_BLUE,
+	"first_burger_produced": MILESTONE_PALETTE_PRODUCE_GREEN,
+	"first_pizza_produced": MILESTONE_PALETTE_PRODUCE_GREEN,
+	"first_errand_boy": MILESTONE_PALETTE_PROCURE_GREEN,
+	"first_cart_operator": MILESTONE_PALETTE_PROCURE_GREEN,
+	"first_lower_prices": MILESTONE_PALETTE_PRICE_ORANGE,
+	"first_rural_marketeer_used": MILESTONE_PALETTE_MARKETING_BLUE,
+	"first_lobbyist_used": MILESTONE_PALETTE_PURPLE,
+	"first_coffee_sold": MILESTONE_PALETTE_COFFEE_MINT,
+	"ketchup_sold_your_demand": MILESTONE_PALETTE_KETCHUP_DARK,
+	"first_marketeer_used": MILESTONE_PALETTE_MARKETING_BLUE,
+	"first_marketing_trainee_used": MILESTONE_PALETTE_MARKETING_BLUE,
+	"first_campaign_manager_used": MILESTONE_PALETTE_MARKETING_BLUE,
+	"first_brand_manager_used": MILESTONE_PALETTE_MARKETING_BLUE,
+	"first_brand_director_used": MILESTONE_PALETTE_MARKETING_BLUE,
+	"first_new_restaurant": MILESTONE_PALETTE_MARKETING_BLUE,
+	"first_burger_sold": MILESTONE_PALETTE_PRODUCE_GREEN,
+	"first_pizza_sold": MILESTONE_PALETTE_PRODUCE_GREEN,
+	"first_beer_sold": MILESTONE_PALETTE_PROCURE_GREEN,
+	"first_coke_sold": MILESTONE_PALETTE_PROCURE_GREEN,
+	"first_lemonade_sold": MILESTONE_PALETTE_PROCURE_GREEN,
+	"first_recruiting_girl_used": MILESTONE_PALETTE_PURPLE,
+	"first_waitress_used": MILESTONE_PALETTE_PURPLE,
+	"first_trainer_used": MILESTONE_PALETTE_GRAY,
+	"first_house_built": MILESTONE_PALETTE_GRAY,
+	"first_discount_manager_used": MILESTONE_PALETTE_PRICE_ORANGE,
+	"first_cart_operator_used": MILESTONE_PALETTE_PROCURE_GREEN,
+}
+const MILESTONE_EFFECT_CATEGORY := {
+	"gain_card": "employee",
+	"gain_cards": "employee",
+	"ban_card": "employee",
+	"multi_trainer_on_one": "employee",
+	"peek_reserve_cards": "finance",
+	"base_price_delta": "finance",
+	"sell_bonus": "finance",
+	"salary_total_delta": "finance",
+	"marketing_no_salary": "marketing",
+	"marketing_permanent": "marketing",
+	"extra_marketing": "marketing",
+	"procure_plus_one": "ops",
+	"drinks_per_source_delta": "ops",
+	"distance_plus_one": "ops",
+	"gain_fridge": "ops",
+}
+const MILESTONE_CATEGORY_COLORS := {
+	"employee": MILESTONE_PALETTE_PURPLE,
+	"marketing": MILESTONE_PALETTE_MARKETING_BLUE,
+	"finance": MILESTONE_PALETTE_PURPLE,
+	"ops": MILESTONE_PALETTE_PRODUCE_GREEN,
+	"general": MILESTONE_PALETTE_GRAY,
+}
 
 const FALLBACK_RESERVE_CARDS := [
 	{"cash": 50, "ceo_slots": 2},
@@ -355,6 +428,8 @@ class RealAssetMapPreview:
 				cells = _footprint_cells(anchor_read["value"], size, int(piece.get("rotation", 0)))
 			if cells.is_empty():
 				continue
+			if _draw_special_map_piece(piece_id, cells, piece):
+				continue
 			var rect := _rect_for_cells(cells)
 			var tex: Texture2D = textures.get("piece_%s" % piece_id, null)
 			var marker_only := bool(piece.get("marker", false))
@@ -371,6 +446,224 @@ class RealAssetMapPreview:
 			if not marker_only:
 				_draw_board_piece_surface_lines(rect, 1.0)
 
+	func _draw_special_map_piece(piece_id: String, cells: Array[Vector2i], piece: Dictionary) -> bool:
+		if piece_id.begins_with("lobbyists_road_"):
+			_draw_lobbyists_road_piece(piece_id, cells, piece)
+			return true
+		if piece_id == "lobbyists_park_line" or piece_id == "lobbyists_park_t" or piece_id == "lobbyists_park_l":
+			_draw_lobbyists_park_piece(piece_id, cells)
+			return true
+		if piece_id == "highway_offramp":
+			_draw_highway_offramp_piece(cells)
+			return true
+		return false
+
+	func _draw_lobbyists_road_piece(piece_id: String, cells: Array[Vector2i], piece: Dictionary) -> void:
+		var rotation := int(piece.get("rotation", 0))
+		var segments := _lobbyists_road_overlay_segments(piece_id, cells, rotation)
+		for seg_val in segments:
+			if not (seg_val is Dictionary):
+				continue
+			var seg: Dictionary = seg_val
+			var cell_val = seg.get("cell", null)
+			var dirs_val = seg.get("dirs", [])
+			if not (cell_val is Vector2i) or not (dirs_val is Array):
+				continue
+			var rect := _cell_rect(cell_val)
+			var shape_info := _compute_road_shape_info(dirs_val)
+			var shape := str(shape_info.get("shape", "straight"))
+			var tex: Texture2D = textures.get("road_%s" % shape, null)
+			if tex == null and shape == "end":
+				tex = textures.get("road_straight", null)
+			if tex != null:
+				var center := rect.position + rect.size * 0.5
+				draw_set_transform(center, deg_to_rad(float(shape_info.get("rotation_deg", 0))), Vector2.ONE)
+				draw_texture_rect(tex, Rect2(-rect.size * 0.5, rect.size), false, Color(1, 1, 1, 0.92))
+				draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			else:
+				draw_rect(rect.grow(-6), Color(0.42, 0.40, 0.35, 0.92), true)
+
+		_draw_piece_cells_fill(cells, Color(0, 0, 0, 0.08), Color(0, 0, 0, 0.24), 1.2)
+		_draw_roadwork_marker(cells)
+
+		for arrow_val in _lobbyists_road_overlay_arrows(piece_id, cells, rotation):
+			if not (arrow_val is Dictionary):
+				continue
+			var arrow: Dictionary = arrow_val
+			var cell_val = arrow.get("cell", null)
+			var dir := str(arrow.get("dir", "")).strip_edges()
+			if cell_val is Vector2i and not dir.is_empty():
+				_draw_dir_arrow(_cell_rect(cell_val), dir, Color(0.10, 0.08, 0.06, 0.82))
+
+	func _draw_lobbyists_park_piece(_piece_id: String, cells: Array[Vector2i]) -> void:
+		_draw_piece_cells_fill(cells, Color("#587a51"), Color("#344c2f"), 1.4)
+		var tex: Texture2D = textures.get("piece_park", null)
+		if tex == null:
+			tex = textures.get("piece_lobbyists_park_line", null)
+		if tex == null:
+			return
+
+		var bounds := PiecePreviewLayoutClass.get_bounds(cells)
+		var min_pos: Vector2i = bounds.get("min", Vector2i.ZERO)
+		var local_cells := PiecePreviewLayoutClass.normalize_cells(cells)
+		var texture_cells: Array[Vector2i] = PiecePreviewLayoutClass.get_park_texture_cells(local_cells)
+		if texture_cells.is_empty():
+			return
+		var origin := _board_origin_px() + Vector2(float(min_pos.x * cell_size), float(min_pos.y * cell_size))
+		var rect := PiecePreviewLayoutClass.get_rect_for_cells(texture_cells, origin, float(cell_size))
+		rect = rect.grow(-maxf(2.0, float(cell_size) * 0.08))
+		if PiecePreviewLayoutClass.should_rotate_texture_for_cells(texture_cells):
+			_draw_texture_aspect_fit_rotated(tex, rect, 90.0, Color(1, 1, 1, 0.86))
+		else:
+			_draw_texture_aspect_fit(tex, rect, Color(1, 1, 1, 0.86))
+
+	func _draw_highway_offramp_piece(cells: Array[Vector2i]) -> void:
+		var rect := _rect_for_cells(cells)
+		_draw_piece_cells_fill(cells, Color("#d6d0c1"), Color(0.17, 0.13, 0.09, 0.34), 1.2)
+		var tex: Texture2D = textures.get("piece_highway_offramp", null)
+		if tex == null:
+			return
+		var draw_rect := rect.grow(-maxf(2.0, float(cell_size) * 0.05))
+		if rect.size.y > rect.size.x:
+			_draw_texture_aspect_fit_rotated(tex, draw_rect, 90.0, Color(1, 1, 1, 0.94))
+		else:
+			_draw_texture_aspect_fit(tex, draw_rect, Color(1, 1, 1, 0.94))
+
+	func _draw_piece_cells_fill(cells: Array[Vector2i], fill: Color, border: Color, border_width: float) -> void:
+		for cell_pos in cells:
+			draw_rect(_cell_rect(cell_pos), fill, true)
+		_draw_overlay_outline(cells, border, border_width)
+
+	func _draw_roadwork_marker(cells: Array[Vector2i]) -> void:
+		var tex: Texture2D = textures.get("piece_lobbyists_roadworks_marker", null)
+		if tex == null:
+			return
+		var bounds := PiecePreviewLayoutClass.get_bounds(cells)
+		var min_pos: Vector2i = bounds.get("min", Vector2i.ZERO)
+		var local_cells := PiecePreviewLayoutClass.normalize_cells(cells)
+		var center := PiecePreviewLayoutClass.get_road_icon_center(local_cells)
+		var origin := _board_origin_px() + Vector2(float(min_pos.x * cell_size), float(min_pos.y * cell_size))
+		var rect := PiecePreviewLayoutClass.get_centered_rect(center, origin, float(cell_size), 0.90)
+		_draw_texture_aspect_fit(tex, rect.grow(-maxf(2.0, float(cell_size) * 0.06)), Color(1, 1, 1, 0.90))
+
+	func _lobbyists_road_overlay_segments(piece_id: String, cells: Array[Vector2i], rotation: int) -> Array:
+		return _lobbyists_road_overlay_entries(piece_id, cells, rotation, "segments")
+
+	func _lobbyists_road_overlay_arrows(piece_id: String, cells: Array[Vector2i], rotation: int) -> Array:
+		return _lobbyists_road_overlay_entries(piece_id, cells, rotation, "arrows")
+
+	func _lobbyists_road_overlay_entries(piece_id: String, cells: Array[Vector2i], rotation: int, entry_key: String) -> Array:
+		var bounds := PiecePreviewLayoutClass.get_bounds(cells)
+		var min_pos: Vector2i = bounds.get("min", Vector2i.ZERO)
+		var entries := _lobbyists_road_overlay_template(piece_id, entry_key)
+		var out: Array = []
+		for entry_val in entries:
+			if not (entry_val is Dictionary):
+				continue
+			var entry: Dictionary = entry_val
+			var offset: Vector2i = entry.get("offset", Vector2i.ZERO)
+			var cell := min_pos + _rotate_offset(offset, rotation)
+			if not cells.has(cell):
+				continue
+			if entry_key == "arrows":
+				out.append({
+					"cell": cell,
+					"dir": _rotate_dir(str(entry.get("dir", "")), rotation),
+				})
+			else:
+				out.append({
+					"cell": cell,
+					"dirs": _rotate_dirs(Array(entry.get("dirs", [])), rotation),
+				})
+		return out
+
+	func _lobbyists_road_overlay_template(piece_id: String, entry_key: String) -> Array:
+		var segments: Array = []
+		var arrows: Array = []
+		match piece_id:
+			"lobbyists_road_straight":
+				segments = [
+					{"offset": Vector2i(0, 0), "dirs": ["E", "W"]},
+					{"offset": Vector2i(1, 0), "dirs": ["E", "W"]},
+				]
+				arrows = [
+					{"offset": Vector2i(0, 0), "dir": "W"},
+					{"offset": Vector2i(1, 0), "dir": "E"},
+				]
+			"lobbyists_road_long":
+				segments = [
+					{"offset": Vector2i(0, 0), "dirs": ["E", "W"]},
+					{"offset": Vector2i(1, 0), "dirs": ["E", "W"]},
+					{"offset": Vector2i(2, 0), "dirs": ["E", "W"]},
+				]
+				arrows = [
+					{"offset": Vector2i(0, 0), "dir": "W"},
+					{"offset": Vector2i(2, 0), "dir": "E"},
+				]
+			"lobbyists_road_l":
+				segments = [
+					{"offset": Vector2i(0, 0), "dirs": ["N", "S"]},
+					{"offset": Vector2i(0, 1), "dirs": ["N", "E"]},
+					{"offset": Vector2i(1, 1), "dirs": ["W", "E"]},
+				]
+				arrows = [
+					{"offset": Vector2i(0, 0), "dir": "N"},
+					{"offset": Vector2i(1, 1), "dir": "E"},
+				]
+		return arrows if entry_key == "arrows" else segments
+
+	func _rotate_dirs(dirs: Array, rotation: int) -> Array:
+		var out: Array[String] = []
+		for dir_val in dirs:
+			var rotated := _rotate_dir(str(dir_val), rotation)
+			if not rotated.is_empty():
+				out.append(rotated)
+		return out
+
+	func _rotate_dir(dir: String, rotation: int) -> String:
+		var normalized := ((rotation % 360) + 360) % 360
+		var order := ["N", "E", "S", "W"]
+		var index := order.find(dir)
+		if index < 0:
+			return ""
+		var steps := int(normalized / 90)
+		return str(order[(index + steps) % order.size()])
+
+	func _draw_dir_arrow(rect: Rect2, dir: String, col: Color) -> void:
+		var center := rect.position + rect.size * 0.5
+		var pad := rect.size.x * 0.19
+		var head := rect.size.x * 0.24
+		var tail := rect.size.x * 0.16
+		match dir:
+			"N":
+				draw_line(center + Vector2(0, tail), center + Vector2(0, -pad), col, 2.0)
+				draw_colored_polygon(PackedVector2Array([
+					center + Vector2(0, -pad - head),
+					center + Vector2(-head * 0.55, -pad),
+					center + Vector2(head * 0.55, -pad),
+				]), col)
+			"S":
+				draw_line(center + Vector2(0, -tail), center + Vector2(0, pad), col, 2.0)
+				draw_colored_polygon(PackedVector2Array([
+					center + Vector2(0, pad + head),
+					center + Vector2(-head * 0.55, pad),
+					center + Vector2(head * 0.55, pad),
+				]), col)
+			"E":
+				draw_line(center + Vector2(-tail, 0), center + Vector2(pad, 0), col, 2.0)
+				draw_colored_polygon(PackedVector2Array([
+					center + Vector2(pad + head, 0),
+					center + Vector2(pad, -head * 0.55),
+					center + Vector2(pad, head * 0.55),
+				]), col)
+			"W":
+				draw_line(center + Vector2(tail, 0), center + Vector2(-pad, 0), col, 2.0)
+				draw_colored_polygon(PackedVector2Array([
+					center + Vector2(-pad - head, 0),
+					center + Vector2(-pad, -head * 0.55),
+					center + Vector2(-pad, head * 0.55),
+				]), col)
+
 	func _default_piece_size(piece_id: String) -> Vector2i:
 		match piece_id:
 			"highway_offramp":
@@ -381,9 +674,13 @@ class RealAssetMapPreview:
 				return Vector2i.ONE
 			"lobbyists_road_straight":
 				return Vector2i(2, 1)
-			"lobbyists_road_long", "lobbyists_park_line":
+			"lobbyists_road_long":
 				return Vector2i(3, 1)
-			"lobbyists_road_l", "lobbyists_park_t", "lobbyists_park_l":
+			"lobbyists_park_line":
+				return Vector2i(4, 1)
+			"lobbyists_road_l":
+				return Vector2i(2, 2)
+			"lobbyists_park_t", "lobbyists_park_l":
 				return Vector2i(3, 2)
 			"lobbyists_park_tile_z", "park":
 				return Vector2i(2, 2)
@@ -1146,6 +1443,224 @@ class RealAssetMapPreview:
 			return clampi(int(round(float(value))), 24, 64)
 		return fallback
 
+class RuralAreaPanelPreview:
+	extends Control
+
+	const CELL_SIZE := 48
+	const PANEL_CELLS := 8
+	const TILE_CELLS := 4
+	const BILLBOARD_CELLS := 1
+	const RURAL_AREA_TEXTURE_PATH := "res://modules/rural_marketeers/assets/map/pieces/ruralArea.jpg"
+	const RURAL_BILLBOARD_TEXTURE_PATH := "res://modules/rural_marketeers/assets/map/icons/rural_billboard.png"
+	const PRODUCT_ICON_PATHS := {
+		"burger": "res://modules/base_products/assets/map/icons/burger.png",
+		"pizza": "res://modules/base_products/assets/map/icons/pizza.png",
+		"soda": "res://modules/base_products/assets/map/icons/soda.png",
+		"beer": "res://modules/base_products/assets/map/icons/beer.png",
+	}
+
+	var textures: Dictionary = {}
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(PANEL_CELLS * CELL_SIZE, PANEL_CELLS * CELL_SIZE)
+		size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		textures["rural_area"] = RealAssetMapPreview._load_texture_raw(RURAL_AREA_TEXTURE_PATH)
+		textures["rural_billboard"] = RealAssetMapPreview._load_texture_raw(RURAL_BILLBOARD_TEXTURE_PATH)
+		for key in PRODUCT_ICON_PATHS.keys():
+			textures["product_%s" % key] = RealAssetMapPreview._load_texture_raw(str(PRODUCT_ICON_PATHS[key]))
+		queue_redraw()
+
+	func _draw() -> void:
+		var panel_rect := Rect2(Vector2.ZERO, custom_minimum_size)
+		draw_rect(panel_rect, Color("#f4edd1"), true)
+		draw_rect(panel_rect, Color(0.17, 0.13, 0.09, 0.22), false, 2.0)
+
+		var board_origin := Vector2(CELL_SIZE, CELL_SIZE)
+		var content_rect := Rect2(board_origin, Vector2((TILE_CELLS + BILLBOARD_CELLS * 2) * CELL_SIZE, (TILE_CELLS + BILLBOARD_CELLS * 2) * CELL_SIZE))
+		var billboard_size := float(CELL_SIZE * BILLBOARD_CELLS)
+		var tile_rect := Rect2(content_rect.position + Vector2(billboard_size, billboard_size), Vector2(TILE_CELLS * CELL_SIZE, TILE_CELLS * CELL_SIZE))
+
+		_draw_rural_tile(tile_rect)
+		_draw_billboard_side("N", Rect2(tile_rect.position + Vector2(0, -billboard_size), Vector2(tile_rect.size.x, billboard_size)), "burger")
+		_draw_billboard_side("E", Rect2(tile_rect.position + Vector2(tile_rect.size.x, 0), Vector2(billboard_size, tile_rect.size.y)), "soda")
+		_draw_billboard_side("S", Rect2(tile_rect.position + Vector2(0, tile_rect.size.y), Vector2(tile_rect.size.x, billboard_size)), "pizza")
+		_draw_billboard_side("W", Rect2(tile_rect.position + Vector2(-billboard_size, 0), Vector2(billboard_size, tile_rect.size.y)), "beer")
+
+	func _draw_rural_tile(tile_rect: Rect2) -> void:
+		var tex: Texture2D = textures.get("rural_area", null)
+		var rect := tile_rect.grow(-maxf(1.0, tile_rect.size.x * 0.02))
+		if tex != null:
+			_draw_texture_aspect_fill(tex, rect, Color(1, 1, 1, 0.93))
+		else:
+			draw_rect(rect, Color("#a2b06a"), true)
+		draw_rect(tile_rect, Color(0.17, 0.13, 0.09, 0.24), false, 1.2)
+
+	func _draw_billboard_side(side: String, rect: Rect2, product_id: String) -> void:
+		draw_rect(rect, Color(0.08, 0.07, 0.06, 0.08), true)
+		draw_rect(rect, Color(0.17, 0.13, 0.09, 0.28), false, 1.0)
+		var tex: Texture2D = textures.get("rural_billboard", null)
+		var dst := rect.grow(-maxf(1.0, minf(rect.size.x, rect.size.y) * 0.08))
+		if tex != null:
+			if side == "E" or side == "W":
+				_draw_texture_aspect_fit_rotated(tex, dst, 90.0, Color(1, 1, 1, 0.64))
+			else:
+				_draw_texture_aspect_fit(tex, dst, Color(1, 1, 1, 0.64))
+		_draw_product_icon(rect, product_id)
+
+	func _draw_product_icon(rect: Rect2, product_id: String) -> void:
+		var tex: Texture2D = textures.get("product_%s" % product_id, null)
+		if tex == null:
+			return
+		var side := minf(rect.size.x, rect.size.y) * 0.74
+		var icon_rect := Rect2(rect.position + (rect.size - Vector2(side, side)) * 0.5, Vector2(side, side))
+		_draw_texture_aspect_fit(tex, icon_rect, Color(1, 1, 1, 0.96))
+
+	func _draw_texture_aspect_fill(texture: Texture2D, rect: Rect2, modulate: Color) -> void:
+		if texture == null or rect.size.x <= 0.0 or rect.size.y <= 0.0:
+			return
+		var tex_size := texture.get_size()
+		if tex_size.x <= 0.0 or tex_size.y <= 0.0:
+			return
+		var scale := maxf(rect.size.x / tex_size.x, rect.size.y / tex_size.y)
+		var size := tex_size * scale
+		var src_pos := (size - rect.size) * 0.5 / scale
+		var src_size := rect.size / scale
+		draw_texture_rect_region(texture, rect, Rect2(src_pos, src_size), modulate)
+
+	func _draw_texture_aspect_fit(texture: Texture2D, rect: Rect2, modulate: Color) -> void:
+		if texture == null or rect.size.x <= 0.0 or rect.size.y <= 0.0:
+			return
+		var tex_size := texture.get_size()
+		if tex_size.x <= 0.0 or tex_size.y <= 0.0:
+			return
+		var scale := minf(rect.size.x / tex_size.x, rect.size.y / tex_size.y)
+		var size := tex_size * scale
+		var pos := rect.position + (rect.size - size) * 0.5
+		draw_texture_rect(texture, Rect2(pos, size), false, modulate)
+
+	func _draw_texture_aspect_fit_rotated(texture: Texture2D, rect: Rect2, rotation_degrees: float, modulate: Color) -> void:
+		if texture == null or rect.size.x <= 0.0 or rect.size.y <= 0.0:
+			return
+		var tex_size := texture.get_size()
+		if tex_size.x <= 0.0 or tex_size.y <= 0.0:
+			return
+		var effective_size := Vector2(tex_size.y, tex_size.x)
+		var scale := minf(rect.size.x / effective_size.x, rect.size.y / effective_size.y)
+		var size := tex_size * scale
+		var center := rect.position + rect.size * 0.5
+		draw_set_transform(center, deg_to_rad(rotation_degrees), Vector2.ONE)
+		draw_texture_rect(texture, Rect2(-size * 0.5, size), false, modulate)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+class TutorialMilestoneCard:
+	extends PanelContainer
+
+	var title: String = ""
+	var effect_text: String = ""
+	var accent_color: Color = MILESTONE_PALETTE_GRAY
+	var pool_count: int = 1
+
+	var _header_panel: Panel = null
+	var _header_style: StyleBoxFlat = null
+	var _name_label: Label = null
+	var _desc_label: Label = null
+	var _status_label: Label = null
+
+	func setup(card_title: String, effect: String, accent: Color, available_count: int) -> void:
+		title = str(card_title).strip_edges()
+		effect_text = str(effect).strip_edges()
+		accent_color = accent
+		pool_count = maxi(0, int(available_count))
+		if is_inside_tree():
+			_update_display()
+
+	func _ready() -> void:
+		_build_ui()
+		_update_display()
+
+	func _build_ui() -> void:
+		custom_minimum_size = Vector2(300, 210)
+		var panel_style := StyleBoxFlat.new()
+		panel_style.bg_color = Color(0.95, 0.91, 0.82, 0.98)
+		panel_style.border_color = accent_color.darkened(0.18)
+		panel_style.set_border_width_all(1)
+		panel_style.set_corner_radius_all(4)
+		add_theme_stylebox_override("panel", panel_style)
+
+		var outer_vbox := VBoxContainer.new()
+		outer_vbox.add_theme_constant_override("separation", 0)
+		outer_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		add_child(outer_vbox)
+
+		_header_panel = Panel.new()
+		_header_panel.custom_minimum_size = Vector2(0, 38)
+		_header_style = StyleBoxFlat.new()
+		_header_style.bg_color = accent_color
+		_header_style.corner_radius_top_left = 4
+		_header_style.corner_radius_top_right = 4
+		_header_panel.add_theme_stylebox_override("panel", _header_style)
+		outer_vbox.add_child(_header_panel)
+
+		var header_margin := MarginContainer.new()
+		header_margin.add_theme_constant_override("margin_left", 12)
+		header_margin.add_theme_constant_override("margin_right", 12)
+		header_margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_header_panel.add_child(header_margin)
+
+		_name_label = Label.new()
+		_name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_name_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		_name_label.add_theme_font_size_override("font_size", 16)
+		header_margin.add_child(_name_label)
+
+		var body_margin := MarginContainer.new()
+		body_margin.add_theme_constant_override("margin_left", 14)
+		body_margin.add_theme_constant_override("margin_top", 12)
+		body_margin.add_theme_constant_override("margin_right", 14)
+		body_margin.add_theme_constant_override("margin_bottom", 12)
+		body_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		outer_vbox.add_child(body_margin)
+
+		var body_vbox := VBoxContainer.new()
+		body_vbox.add_theme_constant_override("separation", 8)
+		body_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		body_margin.add_child(body_vbox)
+
+		_desc_label = Label.new()
+		_desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_desc_label.add_theme_font_size_override("font_size", 14)
+		_desc_label.add_theme_color_override("font_color", Color(0.50, 0.45, 0.35, 1.0))
+		_desc_label.max_lines_visible = 5
+		_desc_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		_desc_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		body_vbox.add_child(_desc_label)
+
+		_status_label = Label.new()
+		_status_label.add_theme_font_size_override("font_size", 16)
+		_status_label.add_theme_constant_override("outline_size", 1)
+		body_vbox.add_child(_status_label)
+
+	func _update_display() -> void:
+		if _header_style != null:
+			_header_style.bg_color = accent_color
+		if _name_label != null:
+			_name_label.text = title
+			var lum := accent_color.r * 0.299 + accent_color.g * 0.587 + accent_color.b * 0.114
+			_name_label.add_theme_color_override("font_color", Color(0.17, 0.13, 0.09, 1.0) if lum > 0.65 else Color(1, 1, 1, 1))
+		if _desc_label != null:
+			_desc_label.text = effect_text
+		if _status_label != null:
+			var available := pool_count > 0
+			_status_label.text = "可获得" if available else "不可获得"
+			var color := Color(0.83, 0.63, 0.23, 1.0) if available else Color(0.5, 0.45, 0.35, 1.0)
+			_status_label.add_theme_color_override("font_color", color)
+			_status_label.add_theme_color_override("font_outline_color", color)
+
 const LESSONS := [
 	{
 		"id": "overview",
@@ -1874,8 +2389,16 @@ func _render_milestones_lesson() -> void:
 
 	var effects := _make_section("基础里程碑给什么")
 	effects.add_child(_build_employee_card_row(["burger_cook", "pizza_cook", "cfo", "waitress"], 0.84))
+	effects.add_child(_build_milestone_reference([
+		"first_burger_produced",
+		"first_pizza_produced",
+		"first_billboard",
+		"first_radio",
+		"first_have_20",
+		"first_have_100",
+	]))
 	effects.add_child(_make_rich_text(
-		"生产类：首个生产汉堡/披萨会给对应厨师卡。\n营销类：首个营销汉堡/披萨/饮料会给对应商品销售奖金；首个广告牌让营销免薪并可永久；首个电波强化电波需求；首个飞机给商业秩序空槽位加成。\n经营类：首个拥有 $20 可查看所有储备卡；首个拥有 $100 让 CEO 从下一回合起获得首席财务官收入能力，并禁用首席财务官卡；首个降价让基础价格再 -1；首个服务员提高服务员小费。",
+		"上面用的是游戏里的里程碑卡片样式。生产、营销、采购、定价、服务和现金门槛都会触发不同奖励；新手不用背完整池子，但要养成动作后看里程碑面板的习惯。\n\n同一回合内已经获得的里程碑会先记录在各玩家身上，等清理阶段再从公共池移除。",
 		230
 	))
 	_content_body.add_child(effects)
@@ -1941,10 +2464,18 @@ func _render_new_districts_lesson() -> void:
 	)
 
 func _render_lobbyists_lesson() -> void:
-	var preview := _make_section("建设中道路会先影响本回合")
+	var pieces := _make_section("道路与公园板件一览")
+	pieces.add_child(_build_real_map_preview(_build_lobbyists_piece_gallery_state(), _build_lobbyists_piece_gallery_options()))
+	pieces.add_child(_make_rich_text(
+		"上排展示三种建设中道路：短直线、长直线和转角。下排展示三种可放公园：长条、T 形和 L 形。图示按真实占用格绘制，不再用外接矩形替代。\n\n建设中道路使用道路纹理和施工标记；公园使用公园素材，并只覆盖实际占用的格子。",
+		160
+	))
+	_content_body.add_child(pieces)
+
+	var preview := _make_section("额外地图板块会带来双公园")
 	preview.add_child(_build_real_map_preview(_build_lobbyists_preview_state(), _build_lobbyists_preview_options()))
 	preview.add_child(_make_rich_text(
-		"说客增加建设中道路和公园。建设中道路不是普通永久道路：它会先参与当前回合晚餐路线判断，清理阶段后才并入正式路网。\n\n公园看相邻房屋成交后的额外收入，不改变房屋选择餐厅时的分数。首次使用说客后，还可能立即扩展地图板块。",
+		"说客还会加入额外地图板块。示例板块上的双公园是印在板块上的结构；它和工作时间放置的公园板件不同，但都会用于公园相邻收入判断。\n\n建设中道路不是普通永久道路：它会先参与当前回合晚餐路线判断，清理阶段后才并入正式路网。公园看相邻房屋成交后的额外收入，不改变房屋选择餐厅时的分数。",
 		185
 	))
 	_content_body.add_child(preview)
@@ -1962,10 +2493,18 @@ func _render_lobbyists_lesson() -> void:
 	)
 
 func _render_rural_marketeers_lesson() -> void:
-	var preview := _make_section("乡村地区在棋盘外")
+	var rural_panel := _make_section("乡村地区与巨型广告牌")
+	rural_panel.add_child(_build_rural_area_panel_preview())
+	rural_panel.add_child(_make_rich_text(
+		"乡村地区不是地图上的普通房屋，而是棋盘外的专用面板。巨型广告牌贴在乡村地区边缘，使用专属广告牌素材；它们给乡村地区累积需求，而不是覆盖普通街区或普通房屋。",
+		135
+	))
+	_content_body.add_child(rural_panel)
+
+	var preview := _make_section("高速公路出口连接棋盘")
 	preview.add_child(_build_real_map_preview(_build_rural_marketeers_preview_state(), _build_rural_marketeers_preview_options()))
 	preview.add_child(_make_rich_text(
-		"乡村营销员操作的是乡村地区，不是普通棋盘里的一栋房屋。乡村地区可以持续累积需求，并且晚餐结算总是排在普通房屋之后。\n\n巨型广告牌会持续给乡村地区制造需求；首次使用乡村营销员后，还会解锁高速公路出口。高速出口放在棋盘边缘外，必须和道路相连，并会改变到乡村地区的路径判断。",
+		"高速公路出口放在棋盘边缘外，必须和道路相连。图中出口使用真实 freeway 素材横接到左侧道路，黄色路线表示乡村顾客进入棋盘后的路径。\n\n乡村地区可以持续累积需求，并且晚餐结算总是排在普通房屋之后。没有出口时，乡村需求不会像普通房屋那样直接从棋盘内找路。",
 		215
 	))
 	_content_body.add_child(preview)
@@ -2211,36 +2750,148 @@ func _add_milestone_reference_section(title: String, milestone_ids: Array, body:
 	_content_body.add_child(section)
 
 func _build_milestone_reference(milestone_ids: Array) -> Control:
-	var box := VBoxContainer.new()
-	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	box.add_theme_constant_override("separation", 6)
+	var grid := GridContainer.new()
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 12)
 	for milestone_id_val in milestone_ids:
 		var milestone_id := str(milestone_id_val).strip_edges()
 		if milestone_id.is_empty():
 			continue
-		var row := HBoxContainer.new()
-		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_theme_constant_override("separation", 8)
+		grid.add_child(_build_tutorial_milestone_card(milestone_id))
+	return grid
 
-		var dot := _make_label("•", 15, UiStylesClass.COLOR_TEXT_HINT)
-		dot.custom_minimum_size = Vector2(16, 0)
-		dot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		row.add_child(dot)
+func _build_tutorial_milestone_card(milestone_id: String) -> Control:
+	var data := _load_milestone_data(milestone_id)
+	var card := TutorialMilestoneCard.new()
+	card.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	card.setup(
+		_load_milestone_name(milestone_id),
+		_tutorial_milestone_effect_text(milestone_id, data),
+		_tutorial_milestone_accent_color(milestone_id, data),
+		_tutorial_milestone_pool_count(data)
+	)
+	return card
 
-		var name := _make_label(_load_milestone_name(milestone_id), 15, UiStylesClass.COLOR_TEXT_PRIMARY)
-		name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(name)
-		box.add_child(row)
-	return box
-
-func _load_milestone_name(milestone_id: String) -> String:
+func _load_milestone_data(milestone_id: String) -> Dictionary:
 	for path_template in MILESTONE_CONTENT_PATH_TEMPLATES:
 		var data := _load_json_dict(str(path_template) % milestone_id)
-		if data.is_empty():
-			continue
-		var name := str(data.get("name", "")).strip_edges()
-		if not name.is_empty():
-			return name
+		if not data.is_empty():
+			return data
+	return {}
+
+func _tutorial_milestone_pool_count(data: Dictionary) -> int:
+	var pool_val = data.get("pool", {})
+	if not (pool_val is Dictionary):
+		return 1
+	var pool: Dictionary = pool_val
+	if bool(pool.get("enabled", true)) == false:
+		return 0
+	return maxi(1, int(pool.get("count", 1)))
+
+func _tutorial_milestone_accent_color(milestone_id: String, data: Dictionary) -> Color:
+	if MILESTONE_COLOR_BY_ID.has(milestone_id):
+		return Color(MILESTONE_COLOR_BY_ID[milestone_id])
+	var effects_val = data.get("effects", [])
+	if effects_val is Array:
+		for effect_val in effects_val:
+			if not (effect_val is Dictionary):
+				continue
+			var effect: Dictionary = effect_val
+			var effect_type := str(effect.get("type", "")).strip_edges()
+			if MILESTONE_EFFECT_CATEGORY.has(effect_type):
+				var category := str(MILESTONE_EFFECT_CATEGORY[effect_type])
+				if MILESTONE_CATEGORY_COLORS.has(category):
+					return Color(MILESTONE_CATEGORY_COLORS[category])
+	return Color(0.76, 0.75, 0.74, 1.0)
+
+func _tutorial_milestone_effect_text(milestone_id: String, data: Dictionary) -> String:
+	match milestone_id:
+		"first_burger_produced":
+			return "首次生产汉堡后，获得汉堡厨师，下一轮更容易稳定供应汉堡。"
+		"first_pizza_produced":
+			return "首次生产披萨后，获得披萨厨师，披萨线会更快成型。"
+		"first_burger_marketed":
+			return "首次营销汉堡后，之后卖出汉堡会获得额外收益。"
+		"first_pizza_marketed":
+			return "首次营销披萨后，之后卖出披萨会获得额外收益。"
+		"first_drink_marketed":
+			return "首次营销饮料后，之后卖出饮料会获得额外收益。"
+		"first_billboard":
+			return "首次放置广告牌后，营销线获得长期加成。"
+		"first_radio":
+			return "首次进行电波营销后，电波广告会制造更多需求。"
+		"first_airplane":
+			return "首次进行飞机营销后，商业秩序会获得额外优势。"
+		"first_have_20":
+			return "首次现金达到这一档后，可以查看全部储备卡。"
+		"first_have_100":
+			return "首次现金达到更高档位后，CEO 获得财务能力，并移除对应员工卡。"
+		"first_lower_prices":
+			return "首次主动降价后，之后的基础单价会进一步降低。"
+		"first_waitress":
+			return "首次使用服务员后，服务员在晚餐阶段提供更高收益。"
+		"first_throw_away":
+			return "首次清理丢弃食物或饮料后，获得可保留库存的冰箱。"
+		"first_train":
+			return "首次培训员工后，之后的发薪压力会降低。"
+		"first_hire_3":
+			return "首次一回合招聘多人后，获得额外员工卡。"
+		"first_cart_operator", "first_cart_operator_used":
+			return "首次使用手推车操作员后，采购饮料路线能力获得强化。"
+		"first_errand_boy":
+			return "首次使用跑腿伙计后，采购饮料数量获得强化。"
+		"first_lobbyist_used":
+			return "首次使用说客后，解锁说客相关地图扩展处理。"
+		"first_rural_marketeer_used":
+			return "首次使用乡村营销员后，解锁高速公路出口相关处理。"
+		"ketchup_sold_your_demand":
+			return "别人卖掉你制造的需求后，后续晚餐选店会发生有利修正。"
+		"first_coffee_sold":
+			return "首次卖出咖啡后，咖啡路线相关效果开始发挥作用。"
+		"first_marketeer_used":
+			return "首次使用营销员后，获得营销相关长期变化。"
+		"first_marketing_trainee_used":
+			return "首次使用营销实习生后，营销奖励池开始发挥作用。"
+		"first_campaign_manager_used":
+			return "首次使用营销经理后，本回合可能产生额外营销放置。"
+		"first_brand_manager_used":
+			return "首次使用品牌经理后，飞机营销可以携带更多信息。"
+		"first_brand_director_used":
+			return "首次使用品牌总监后，电波营销会获得长期强化。"
+		"first_burger_sold":
+			return "首次卖出汉堡后，公司结构会得到永久强化。"
+		"first_pizza_sold":
+			return "首次卖出披萨后，后续买披萨的房屋会触发额外营销处理。"
+		"first_coke_sold":
+			return "首次卖出可乐后，饮料线获得对应奖励。"
+		"first_beer_sold":
+			return "首次卖出啤酒后，饮料线获得对应奖励。"
+		"first_lemonade_sold":
+			return "首次卖出柠檬水后，饮料线获得对应奖励。"
+		"first_new_restaurant":
+			return "首次新餐厅开业后，会解锁额外营销放置处理。"
+		"first_house_built":
+			return "首次建造房屋后，地图扩张相关奖励开始生效。"
+		"first_recruiting_girl_used":
+			return "首次使用人力资源专员后，招聘线获得对应奖励。"
+		"first_trainer_used":
+			return "首次使用培训讲师后，培训线获得对应奖励。"
+		"first_waitress_used":
+			return "首次使用服务员后，晚餐平局和收入相关奖励开始生效。"
+		"first_discount_manager_used":
+			return "首次使用折扣经理后，定价和银行相关效果开始生效。"
+	var name := str(data.get("name", milestone_id)).strip_edges()
+	if name.is_empty():
+		name = milestone_id
+	return "%s触发后，按当前里程碑面板处理奖励。" % name
+
+func _load_milestone_name(milestone_id: String) -> String:
+	var data := _load_milestone_data(milestone_id)
+	var name := str(data.get("name", "")).strip_edges()
+	if not name.is_empty():
+		return name
 	return milestone_id
 
 func _build_phase_track_preview() -> Control:
@@ -3123,21 +3774,49 @@ func _build_new_districts_preview_options() -> Dictionary:
 		],
 	}
 
+func _build_lobbyists_piece_gallery_state() -> Dictionary:
+	return {
+		"road_segments": {},
+		"houses": [],
+		"restaurants": [],
+		"drink_sources": [],
+		"map_pieces": [
+			{
+				"piece_id": "lobbyists_road_straight",
+				"cells": [Vector2i(0, 1), Vector2i(1, 1)],
+			},
+			{
+				"piece_id": "lobbyists_road_long",
+				"cells": [Vector2i(3, 1), Vector2i(4, 1), Vector2i(5, 1)],
+			},
+			{
+				"piece_id": "lobbyists_road_l",
+				"cells": [Vector2i(7, 0), Vector2i(7, 1), Vector2i(8, 1)],
+			},
+			{
+				"piece_id": "lobbyists_park_line",
+				"cells": [Vector2i(0, 4), Vector2i(1, 4), Vector2i(2, 4), Vector2i(3, 4)],
+			},
+			{
+				"piece_id": "lobbyists_park_t",
+				"cells": [Vector2i(5, 3), Vector2i(6, 3), Vector2i(7, 3), Vector2i(6, 4)],
+			},
+			{
+				"piece_id": "lobbyists_park_l",
+				"cells": [Vector2i(9, 3), Vector2i(10, 3), Vector2i(11, 3), Vector2i(9, 4)],
+			},
+		],
+	}
+
+func _build_lobbyists_piece_gallery_options() -> Dictionary:
+	return {
+		"grid_size": Vector2i(12, 6),
+		"cell_size": 44,
+		"overlays": [],
+	}
+
 func _build_lobbyists_preview_state() -> Dictionary:
-	var state := _build_preview_map_state(["tile_z"])
-	var map_pieces: Array = state.get("map_pieces", [])
-	map_pieces.append({
-		"piece_id": "lobbyists_road_straight",
-		"cells": [Vector2i(1, 2), Vector2i(2, 2)],
-		"marker": true,
-	})
-	map_pieces.append({
-		"piece_id": "lobbyists_road_l",
-		"cells": [Vector2i(2, 2), Vector2i(2, 3), Vector2i(3, 3)],
-		"marker": true,
-	})
-	state["map_pieces"] = map_pieces
-	return state
+	return _build_preview_map_state(["tile_z"])
 
 func _build_lobbyists_preview_options() -> Dictionary:
 	return {
@@ -3145,9 +3824,24 @@ func _build_lobbyists_preview_options() -> Dictionary:
 		"overlays": [
 			_make_map_overlay("lobbyist_park_left", _cells_in_rect(Vector2i(0, 0), Vector2i(1, 1)), MAP_DISTANCE_FILL, MAP_DISTANCE_BORDER, 2),
 			_make_map_overlay("lobbyist_park_right", _cells_in_rect(Vector2i(3, 3), Vector2i(4, 4)), MAP_DISTANCE_FILL, MAP_DISTANCE_BORDER, 2),
-			_make_map_overlay("lobbyist_roadworks", [Vector2i(1, 2), Vector2i(2, 2), Vector2i(2, 3), Vector2i(3, 3)], MAP_VALID_FILL, MAP_VALID_BORDER, 2),
 		],
 	}
+
+func _build_rural_area_panel_preview() -> Control:
+	var frame := PanelContainer.new()
+	frame.name = "RuralAreaPanelPreviewFrame"
+	frame.custom_minimum_size = Vector2(460, 430)
+	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	frame.add_theme_stylebox_override("panel", _make_style(MAP_GROUND_COLOR, Color(0.17, 0.13, 0.09, 0.24), 1, 6))
+
+	var center := CenterContainer.new()
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	frame.add_child(center)
+
+	var preview := RuralAreaPanelPreview.new()
+	center.add_child(preview)
+	return frame
 
 func _build_rural_marketeers_preview_state() -> Dictionary:
 	var road_map: Dictionary = {}
@@ -3158,6 +3852,7 @@ func _build_rural_marketeers_preview_state() -> Dictionary:
 		if x < 6:
 			dirs.append("E")
 		road_map[Vector2i(x, 2)] = [_make_road_segment(dirs)]
+	road_map[Vector2i(0, 2)] = [_make_road_segment(["W", "E"])]
 	return {
 		"road_segments": road_map,
 		"houses": [
@@ -3167,16 +3862,14 @@ func _build_rural_marketeers_preview_state() -> Dictionary:
 			{"restaurant_id": "rest_rural_demo", "owner": 0, "anchor": Vector2i(5, 3)},
 		],
 		"map_pieces": [
-			{"piece_id": "rural_area", "anchor": Vector2i(-2, 0)},
-			{"piece_id": "highway_offramp", "anchor": Vector2i(-1, 1)},
-			{"piece_id": "rural_billboard", "anchor": Vector2i(-1, 4), "marker": true},
+			{"piece_id": "highway_offramp", "cells": [Vector2i(-2, 2), Vector2i(-1, 2)]},
 		],
 	}
 
 func _build_rural_marketeers_preview_options() -> Dictionary:
 	return {
 		"grid_size": Vector2i(7, 5),
-		"margin_cells": {"left": 1, "right": 0, "top": 0, "bottom": 0},
+		"margin_cells": {"left": 2, "right": 0, "top": 0, "bottom": 0},
 		"overlays": [
 			_make_map_overlay("rural_route", [Vector2i(0, 2), Vector2i(1, 2), Vector2i(2, 2), Vector2i(3, 2), Vector2i(4, 2), Vector2i(5, 2), Vector2i(6, 2)], MAP_DISTANCE_FILL, MAP_DISTANCE_BORDER, 2),
 		],
