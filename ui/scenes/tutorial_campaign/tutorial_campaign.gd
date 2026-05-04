@@ -41,6 +41,18 @@ class RealAssetMapPreview:
 	const HOUSE_TEXTURE_PATH := "res://modules/base_pieces/assets/map/pieces/house.png"
 	const GARDEN_TEXTURE_PATH := "res://modules/base_pieces/assets/map/pieces/garden_large.png"
 	const APARTMENT_TEXTURE_PATH := "res://modules/new_districts/assets/map/pieces/apartment.png"
+	const MARKETING_ICON_PATHS := {
+		"default": "res://modules/base_marketing/assets/map/icons/marketing.png",
+		"billboard": "res://modules/base_marketing/assets/map/icons/billboard.png",
+		"mailbox": "res://modules/base_marketing/assets/map/icons/mailbox.png",
+		"radio": "res://modules/base_marketing/assets/map/icons/radio.png",
+		"airplane": "res://modules/base_marketing/assets/map/icons/airplane.png",
+	}
+	const PRODUCT_ICON_PATHS := {
+		"burger": "res://modules/base_products/assets/map/icons/burger.png",
+		"pizza": "res://modules/base_products/assets/map/icons/pizza.png",
+		"soda": "res://modules/base_products/assets/map/icons/soda.png",
+	}
 	const RESTAURANT_LOGOS := [
 		"res://modules/base_pieces/assets/map/logos/fried_geese_donkey.png",
 		"res://modules/base_pieces/assets/map/logos/gluttony_inc_burgers.png",
@@ -50,6 +62,7 @@ class RealAssetMapPreview:
 	const HOUSE_BG_COLOR := Color("#733651")
 	const GARDEN_BG_COLOR := Color("#699055")
 	const RESTAURANT_BG_COLOR := Color("#f4edd1")
+	const MARKETING_BG_COLOR := Color("#98a295")
 	const BOARD_EDGE_COLOR := Color("#2f261f")
 	const BOARD_SHADOW_COLOR := Color(0, 0, 0, 0.22)
 
@@ -62,7 +75,15 @@ class RealAssetMapPreview:
 	func setup(state_data: Dictionary, options: Dictionary) -> void:
 		preview_state = state_data.duplicate(true)
 		preview_options = options.duplicate(true)
-		custom_minimum_size = Vector2(GRID_SIZE.x * CELL_SIZE, GRID_SIZE.y * CELL_SIZE)
+		var margin := _preview_margin_cells()
+		var margin_left := int(margin.get("left", 0))
+		var margin_right := int(margin.get("right", 0))
+		var margin_top := int(margin.get("top", 0))
+		var margin_bottom := int(margin.get("bottom", 0))
+		custom_minimum_size = Vector2(
+			(GRID_SIZE.x + margin_left + margin_right) * CELL_SIZE,
+			(GRID_SIZE.y + margin_top + margin_bottom) * CELL_SIZE
+		)
 		size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		_load_textures()
@@ -80,6 +101,10 @@ class RealAssetMapPreview:
 		textures["house"] = _load_texture_raw(HOUSE_TEXTURE_PATH)
 		textures["garden_large"] = _load_texture_raw(GARDEN_TEXTURE_PATH)
 		textures["apartment"] = _load_texture_raw(APARTMENT_TEXTURE_PATH)
+		for key in MARKETING_ICON_PATHS.keys():
+			textures["marketing_%s" % str(key)] = _load_texture_raw(str(MARKETING_ICON_PATHS[key]))
+		for key2 in PRODUCT_ICON_PATHS.keys():
+			textures["product_%s" % str(key2)] = _load_texture_raw(str(PRODUCT_ICON_PATHS[key2]))
 		for i in range(RESTAURANT_LOGOS.size()):
 			textures["logo_%d" % i] = _load_texture_raw(str(RESTAURANT_LOGOS[i]))
 
@@ -97,6 +122,7 @@ class RealAssetMapPreview:
 		_draw_restaurants()
 		_draw_structure_preview()
 		_draw_option_overlays()
+		_draw_marketing()
 
 	func _draw_cells() -> void:
 		for y in range(GRID_SIZE.y):
@@ -213,8 +239,9 @@ class RealAssetMapPreview:
 		return {"shape": "cross", "rotation_deg": 0}
 
 	func _draw_tile_boundary() -> void:
-		var x := float(5 * CELL_SIZE)
-		draw_line(Vector2(x, 0), Vector2(x, GRID_SIZE.y * CELL_SIZE), Color(0.17, 0.13, 0.09, 0.75), 4.0)
+		var origin := _board_origin_px()
+		var x := origin.x + float(5 * CELL_SIZE)
+		draw_line(Vector2(x, origin.y), Vector2(x, origin.y + GRID_SIZE.y * CELL_SIZE), Color(0.17, 0.13, 0.09, 0.75), 4.0)
 
 	func _draw_option_overlays() -> void:
 		var overlays_val = preview_options.get("overlays", [])
@@ -253,6 +280,123 @@ class RealAssetMapPreview:
 				true,
 				restaurant
 			)
+
+	func _draw_marketing() -> void:
+		var placements_val = preview_state.get("marketing_placements", [])
+		if not (placements_val is Array):
+			return
+		for placement_val in placements_val:
+			if not (placement_val is Dictionary):
+				continue
+			var placement: Dictionary = placement_val
+			_draw_marketing_placement(placement)
+
+	func _draw_marketing_placement(placement: Dictionary) -> void:
+		var type_id := str(placement.get("type", "default")).strip_edges()
+		if type_id.is_empty():
+			type_id = "default"
+		var anchor_read := _try_vector2i(placement.get("world_pos", placement.get("anchor", null)))
+		if not bool(anchor_read.get("ok", false)):
+			return
+		var anchor: Vector2i = anchor_read["value"]
+		var base_size := _read_positive_size(placement.get("footprint_size", Vector2i.ONE), Vector2i.ONE)
+		var rotation := int(placement.get("rotation", 0))
+		var rect := _marketing_rect(anchor, type_id, base_size, rotation, str(placement.get("axis", "")).strip_edges())
+		if rect.size.x <= 1.0 or rect.size.y <= 1.0:
+			return
+
+		_draw_board_piece_background(rect, MARKETING_BG_COLOR, 1.0)
+		var tex: Texture2D = textures.get("marketing_%s" % type_id, textures.get("marketing_default", null))
+		var icon_rect := rect.grow(-maxf(2.0, float(CELL_SIZE) * 0.08))
+		if tex != null:
+			if type_id == "airplane" and icon_rect.size.y > icon_rect.size.x:
+				_draw_texture_aspect_fit_rotated(tex, icon_rect, 90.0, Color(1, 1, 1, 0.45))
+			else:
+				_draw_texture_aspect_fit(tex, icon_rect, Color(1, 1, 1, 0.45))
+		_draw_board_piece_surface_lines(rect, 1.0)
+
+		var board_number := int(placement.get("board_number", 0))
+		if board_number > 0:
+			_draw_marketing_board_number_badge(rect, board_number)
+		var product_id := str(placement.get("product", "")).strip_edges()
+		if not product_id.is_empty():
+			_draw_marketing_product_icon(rect, product_id, int(placement.get("remaining_duration", 0)))
+
+	func _marketing_rect(anchor: Vector2i, type_id: String, base_size: Vector2i, rotation: int, axis: String) -> Rect2:
+		var size := base_size
+		if type_id == "airplane":
+			var length := 0
+			var thickness := 2
+			if base_size.x == 2 and base_size.y != 2:
+				length = base_size.y
+			elif base_size.y == 2 and base_size.x != 2:
+				length = base_size.x
+			else:
+				thickness = mini(base_size.x, base_size.y)
+				length = maxi(base_size.x, base_size.y)
+			if axis == "row":
+				size = Vector2i(maxi(1, thickness), maxi(1, length))
+			else:
+				size = Vector2i(maxi(1, length), maxi(1, thickness))
+			var board_origin := _board_origin_px()
+			var rect := Rect2(board_origin + Vector2(anchor.x * CELL_SIZE, anchor.y * CELL_SIZE), Vector2(size.x * CELL_SIZE, size.y * CELL_SIZE))
+			if axis == "row":
+				if anchor.x <= 0:
+					rect.position.x = board_origin.x - rect.size.x
+				else:
+					rect.position.x = board_origin.x + GRID_SIZE.x * CELL_SIZE
+			else:
+				if anchor.y <= 0:
+					rect.position.y = board_origin.y - rect.size.y
+				else:
+					rect.position.y = board_origin.y + GRID_SIZE.y * CELL_SIZE
+			return rect
+
+		if rotation == 90 or rotation == 270:
+			size = Vector2i(base_size.y, base_size.x)
+		var cells := _cells_in_rect(anchor, anchor + size - Vector2i.ONE)
+		return _rect_for_cells(cells)
+
+	func _read_positive_size(value, fallback: Vector2i) -> Vector2i:
+		var read := _try_vector2i(value)
+		if bool(read.get("ok", false)):
+			var size: Vector2i = read["value"]
+			if size.x > 0 and size.y > 0:
+				return size
+		return fallback
+
+	func _draw_marketing_board_number_badge(rect: Rect2, board_number: int) -> void:
+		var badge_size := maxf(18.0, float(CELL_SIZE) * 0.46)
+		var pad := maxf(2.0, float(CELL_SIZE) * 0.06)
+		var badge_rect := Rect2(rect.position + Vector2(rect.size.x - badge_size - pad, pad), Vector2(badge_size, badge_size))
+		draw_circle(badge_rect.position + badge_rect.size * 0.5, badge_size * 0.5, Color(1, 1, 1, 0.92))
+		draw_arc(badge_rect.position + badge_rect.size * 0.5, badge_size * 0.5, 0.0, TAU, 36, Color(0.12, 0.10, 0.08, 0.85), 1.5)
+		var font: Font = ThemeDB.fallback_font
+		var text := str(board_number)
+		var font_size := maxi(10, int(round(badge_size * 0.54)))
+		if text.length() >= 2:
+			font_size = int(round(float(font_size) * 0.86))
+		var baseline := badge_rect.position + Vector2(0.0, badge_rect.size.y * 0.69)
+		draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_CENTER, badge_rect.size.x, font_size, Color(0.08, 0.07, 0.06, 1.0))
+
+	func _draw_marketing_product_icon(rect: Rect2, product_id: String, remaining_duration: int) -> void:
+		var key := "soda" if product_id == "cola" else product_id
+		var tex: Texture2D = textures.get("product_%s" % key, null)
+		if tex == null:
+			return
+		var pad := maxf(4.0, float(CELL_SIZE) * 0.12)
+		var avail := rect.size - Vector2(pad * 2.0, pad * 2.0)
+		var size := minf(avail.x, avail.y) * 0.72
+		var icon_rect := Rect2(rect.position + (rect.size - Vector2(size, size)) * 0.5, Vector2(size, size))
+		_draw_texture_aspect_fit(tex, icon_rect, Color(1, 1, 1, 0.95))
+		if remaining_duration == 0:
+			return
+		var text := "无限" if remaining_duration < 0 else str(remaining_duration)
+		var font: Font = ThemeDB.fallback_font
+		var font_size := maxi(10, int(round(size * 0.48)))
+		var baseline := icon_rect.position + Vector2(0.0, icon_rect.size.y * 0.60)
+		draw_string(font, baseline + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_CENTER, icon_rect.size.x, font_size, Color(0, 0, 0, 0.85))
+		draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_CENTER, icon_rect.size.x, font_size, Color(1, 1, 1, 1.0))
 
 	func _draw_houses() -> void:
 		var houses_val = preview_state.get("houses", [])
@@ -469,7 +613,7 @@ class RealAssetMapPreview:
 			max_pos.x = maxi(max_pos.x, cell_pos.x)
 			max_pos.y = maxi(max_pos.y, cell_pos.y)
 		var size_cells := (max_pos - min_pos) + Vector2i.ONE
-		return Rect2(Vector2(min_pos.x * CELL_SIZE, min_pos.y * CELL_SIZE), Vector2(size_cells.x * CELL_SIZE, size_cells.y * CELL_SIZE))
+		return Rect2(_board_origin_px() + Vector2(min_pos.x * CELL_SIZE, min_pos.y * CELL_SIZE), Vector2(size_cells.x * CELL_SIZE, size_cells.y * CELL_SIZE))
 
 	func _draw_board_piece_shadow(rect: Rect2, alpha: float) -> void:
 		if rect.size.x <= 1.0 or rect.size.y <= 1.0:
@@ -788,7 +932,27 @@ class RealAssetMapPreview:
 			draw_rect(Rect2(rect.position + Vector2(rect.size.x - pad - thickness, rect.size.y - pad - length), Vector2(thickness, length)), col, true)
 
 	func _cell_rect(pos: Vector2i) -> Rect2:
-		return Rect2(Vector2(pos.x * CELL_SIZE, pos.y * CELL_SIZE), Vector2(CELL_SIZE, CELL_SIZE))
+		return Rect2(_board_origin_px() + Vector2(pos.x * CELL_SIZE, pos.y * CELL_SIZE), Vector2(CELL_SIZE, CELL_SIZE))
+
+	func _board_origin_px() -> Vector2:
+		var margin := _preview_margin_cells()
+		return Vector2(int(margin.get("left", 0)) * CELL_SIZE, int(margin.get("top", 0)) * CELL_SIZE)
+
+	func _preview_margin_cells() -> Dictionary:
+		var result := {"left": 0, "right": 0, "top": 0, "bottom": 0}
+		var margin_val = preview_options.get("margin_cells", {})
+		if not (margin_val is Dictionary):
+			return result
+		var margin: Dictionary = margin_val
+		for key in result.keys():
+			var raw_val = margin.get(key, 0)
+			if raw_val is int:
+				result[key] = maxi(0, int(raw_val))
+			elif raw_val is float:
+				var f: float = float(raw_val)
+				if f == floor(f):
+					result[key] = maxi(0, int(f))
+		return result
 
 const LESSONS := [
 	{
@@ -800,7 +964,7 @@ const LESSONS := [
 	{
 		"id": "reserve_bank",
 		"title": "2. 储备卡与银行",
-		"kicker": "开局 Setup",
+		"kicker": "开局设置",
 		"summary": "储备卡是开局暗选的银行保险，不是玩家收入。基础规则下，第一次破产会揭示所有玩家已选储备卡，按卡面向银行注资，并用已选卡决定之后的 CEO 直属槽位。",
 	},
 	{
@@ -829,9 +993,9 @@ const LESSONS := [
 	},
 	{
 		"id": "marketing",
-		"title": "7. 营销板块与街区",
+		"title": "7. 营销板件与街区",
 		"kicker": "广告如何生效",
-		"summary": "营销板块在 Marketing 阶段按编号结算并向覆盖房屋添加需求。广告牌看邻接，邮箱看街区，电波看周围板块，飞机看整条行或列。",
+		"summary": "营销板件在营销结算阶段按编号结算并向覆盖房屋添加需求。广告牌看邻接，邮箱看街区，电波看周围板块，飞机看整条行或列。",
 	},
 	{
 		"id": "employees",
@@ -843,25 +1007,25 @@ const LESSONS := [
 		"id": "round_flow",
 		"title": "9. 一轮如何推进",
 		"kicker": "阶段顺序",
-		"summary": "每轮不是所有行动混在一起做，而是先重组公司，再决定商业秩序，然后依次进入 Working 的各个子阶段，最后由晚餐、发薪、营销和清理收尾。",
+		"summary": "每轮不是所有行动混在一起做，而是先重组公司，再决定商业秩序，然后依次进入工作时间的各个子阶段，最后由晚餐、发薪、营销和清理收尾。",
 	},
 	{
 		"id": "recruit_train_payday",
 		"title": "10. 招聘、培训与薪水",
 		"kicker": "员工成长",
-		"summary": "招聘只能直接拿入门员工，高级员工通常靠培训链升级。带薪员工会在 Payday 产生薪水压力，招聘经理和人力资源总监未用掉的招聘次数会转化为薪水折扣。",
+		"summary": "招聘只能直接拿入门员工，高级员工通常靠培训链升级。带薪员工会在发薪日产生薪水压力，招聘经理和人力资源总监未用掉的招聘次数会转化为薪水折扣。",
 	},
 	{
 		"id": "inventory",
 		"title": "11. 生产、采购与库存",
 		"kicker": "供应链",
-		"summary": "晚餐销售必须先有库存。厨师生产汉堡或披萨，采购员工取得饮料；库存保留到晚餐后，Cleanup 默认会清空没有冰箱保护的食物和饮料。",
+		"summary": "晚餐销售必须先有库存。厨师生产汉堡或披萨，采购员工取得饮料；库存保留到晚餐后，清理阶段默认会清空没有冰箱保护的食物和饮料。",
 	},
 	{
 		"id": "milestones",
 		"title": "12. 里程碑与终局",
 		"kicker": "长期加成",
-		"summary": "里程碑由事件触发，提供员工、价格、收入、冰箱、顺序等长期效果。同回合获得的里程碑会在 Cleanup 从公共池移除；第二次银行破产会结束游戏并按现金排名。",
+		"summary": "里程碑由游戏中的关键事件触发，提供员工、价格、收入、冰箱、顺序等长期效果。同回合获得的里程碑会在清理阶段从公共池移除；第二次银行破产会结束游戏并按现金排名。",
 	},
 ]
 
@@ -1110,14 +1274,14 @@ func _render_overview_lesson() -> void:
 
 	var win := _make_section("胜利目标")
 	win.add_child(_make_rich_text(
-		"游戏结束时，未弃权玩家按现金从高到低排名，现金最多者获胜；现金相同则玩家编号靠前者排名靠前。\n\n最常见的终局来自银行破产：默认两次破产规则下，第一次破产后游戏继续；第二次破产会完成当前晚餐结算，然后跳过 Payday 进入最终排名。",
+		"游戏结束时，未弃权玩家按现金从高到低排名，现金最多者获胜；现金相同则玩家编号靠前者排名靠前。\n\n最常见的终局来自银行破产：默认两次破产规则下，第一次破产后游戏继续；第二次破产会完成当前晚餐结算，然后跳过发薪日进入最终排名。",
 		145
 	))
 	_content_body.add_child(win)
 
 	var phases := _make_section("一轮大致做什么")
 	phases.add_child(_make_rich_text(
-		"重组结构：决定哪些员工上班、哪些留在储备区。\n商业秩序：确定玩家行动顺序。\n工作时间：招聘、培训、生产、开店、定价、投放营销等。\n晚餐时间：房屋按需求、价格、距离等规则选择餐厅并购买。\nPayday / 营销 / 清理：支付薪水、结算广告持续时间、清理库存并进入下一轮。",
+		"重组结构：决定哪些员工上班、哪些留在储备区。\n商业秩序：确定玩家行动顺序。\n工作时间：招聘、培训、生产、开店、定价、投放营销等。\n晚餐时间：房屋按需求、价格、距离等规则选择餐厅并购买。\n发薪日、营销结算和清理阶段：支付薪水、结算广告持续时间、清理库存并进入下一轮。",
 		170
 	))
 	_content_body.add_child(phases)
@@ -1126,7 +1290,7 @@ func _render_reserve_lesson() -> void:
 	var card := _make_section("开局暗选")
 
 	card.add_child(_make_rich_text(
-		"银行是游戏的公共现金池，不属于任何玩家。晚餐销售收入、部分奖金等从银行付给玩家；Payday 发薪等玩家支出则会回到银行。储备卡只在银行破产时影响银行和公司结构，不会在开局直接变成玩家现金。",
+		"银行是游戏的公共现金池，不属于任何玩家。晚餐销售收入、部分奖金等从银行付给玩家；发薪日等玩家支出则会回到银行。储备卡只在银行破产时影响银行和公司结构，不会在开局直接变成玩家现金。",
 		105
 	))
 
@@ -1142,7 +1306,7 @@ func _render_reserve_lesson() -> void:
 
 	var selected_details := _describe_reserve_card(_selected_reserve_index)
 	card.add_child(_make_label(
-		"示例选择：%s。每位玩家在 Setup 的储备卡阶段秘密选择 1 张；确认后不可更改。选择结果在第一次破产前对其他玩家隐藏。" % str(selected_details.get("summary", "")),
+		"示例选择：%s。每位玩家在开局设置的储备卡阶段秘密选择 1 张；确认后不可更改。选择结果在第一次破产前对其他玩家隐藏。" % str(selected_details.get("summary", "")),
 		15,
 		UiStylesClass.COLOR_TEXT_PRIMARY
 	))
@@ -1198,7 +1362,7 @@ func _render_dinnertime_lesson() -> void:
 
 	var payout := _make_section("卖出后发生什么")
 	payout.add_child(_make_rich_text(
-		"获胜餐厅会扣除对应库存，房屋需求被清空。基础收入 = 单价 × 商品数量；花园只让这部分收入翻倍，不会让“单价 + 距离”的选店分数翻倍，也不会翻倍额外奖金。\n\n之后会叠加销售奖金、服务员收入、CFO 收入加成等效果。所有这些从银行付给玩家，因此晚餐阶段也是最常触发银行第一次或第二次破产的阶段。",
+		"获胜餐厅会扣除对应库存，房屋需求被清空。基础收入 = 单价 × 商品数量；花园只让这部分收入翻倍，不会让“单价 + 距离”的选店分数翻倍，也不会翻倍额外奖金。\n\n之后会叠加销售奖金、服务员收入、首席财务官收入加成等效果。所有这些从银行付给玩家，因此晚餐阶段也是最常触发银行第一次或第二次破产的阶段。",
 		165
 	))
 	_content_body.add_child(payout)
@@ -1207,7 +1371,7 @@ func _render_housing_lesson() -> void:
 	var preview := _make_section("普通房屋、花园房屋、公寓")
 	preview.add_child(_build_real_map_preview(_build_housing_preview_state(), _build_housing_preview_options()))
 	preview.add_child(_make_rich_text(
-		"普通房屋是 2×2 结构，默认最多容纳 3 个需求。\n\n带花园房屋仍然只有房屋主体承载编号，但 `has_garden=true`：默认需求上限提高到 5，并且晚餐售卖时“单价 × 数量”这部分收入翻倍。玩家口头说的豪宅效果，本实现里对应的就是带花园房屋的规则效果。\n\n公寓来自 New Districts / 新区域扩展，使用 3×3 公寓素材。它设置了 `is_apartment=true`、`no_demand_cap=true` 和 `marketing_demand_multiplier=2`：营销每次给它添加 2 个需求，而且没有普通需求上限。",
+		"普通房屋是 2×2 结构，默认最多容纳 3 个需求。\n\n带花园房屋仍然只有房屋主体承载编号：默认需求上限提高到 5，并且晚餐售卖时“单价 × 数量”这部分收入翻倍。玩家口头说的豪宅效果，对应的就是带花园房屋的规则效果。\n\n公寓来自新区域扩展，使用 3×3 公寓素材。广告影响公寓时，每次会放入更多需求，而且不受普通需求上限限制。",
 		210
 	))
 	_content_body.add_child(preview)
@@ -1235,7 +1399,7 @@ func _render_marketing_lesson() -> void:
 
 	var settlement := _make_section("广告何时生效")
 	settlement.add_child(_make_rich_text(
-		"营销员在 Working 阶段发起广告，通常选择 1 种商品和持续时间。基础员工的上限不同：营销实习生只能放广告牌，最多 2 回合；营销经理可放邮箱或广告牌，最多 3 回合；品牌经理可放飞机或以下广告，最多 4 回合；品牌总监可放电波或以下广告，最多 5 回合。\n\nMarketing 阶段按营销板块编号从小到大结算。每次结算会向覆盖房屋添加需求，受普通房屋/花园房屋上限影响；公寓因为扩展规则会翻倍添加且没有上限。结算后持续时间 -1，到 0 的广告会移除，对应忙碌营销员才释放。",
+		"营销员在工作时间发起广告，通常选择 1 种商品和持续时间。基础员工的上限不同：营销实习生只能放广告牌，最多 2 回合；营销经理可放邮箱或广告牌，最多 3 回合；品牌经理可放飞机或以下广告，最多 4 回合；品牌总监可放电波或以下广告，最多 5 回合。\n\n营销结算阶段按营销板件编号从小到大结算。每次结算会向覆盖房屋添加需求，受普通房屋和花园房屋的需求上限影响；公寓会获得更多需求，且不受普通需求上限限制。广告持续时间用完后会移除，对应忙碌营销员才释放。",
 		210
 	))
 	_content_body.add_child(settlement)
@@ -1254,13 +1418,13 @@ func _get_marketing_case_title(case_id: String) -> String:
 func _get_marketing_case_text(case_id: String) -> String:
 	match case_id:
 		"mailbox":
-			return "邮箱影响同一个街区里的房屋。这里的街区不是地图板块，而是道路图切出来的一片连续非道路区域；道路会把街区隔开。\n\n图中蓝色区域表示同一街区，红色格表示邮箱板件位置，绿色房屋会被这次广告覆盖。邮箱常用于给一片被道路围起来的房屋同时放需求。"
+			return "邮箱影响同一个街区里的房屋。这里的街区不是地图板块，而是道路图切出来的一片连续非道路区域；道路会把街区隔开。\n\n图中蓝色区域表示同一街区，灰色营销板件是邮箱位置，绿色房屋会被这次广告覆盖。邮箱常用于给一片被道路围起来的房屋同时放需求。"
 		"radio":
-			return "电波按地图板块计算范围：取营销板件所在板块，再向周围扩展成 3×3 板块范围。教程预览只有两块板，所以图中蓝色显示的是这个范围在当前可见地图里的切片。\n\n电波本身通常是 1×1 板件，但覆盖范围很大；首个进行电波营销的里程碑还会强化电波放置需求的数量。"
+			return "电波按地图板块计算范围：取营销板件所在板块，再向周围扩展成 3×3 板块范围。教程预览只有两块板，所以图中蓝色显示的是这个范围在当前可见地图里的切片。\n\n电波本身通常是小板件，但覆盖范围很大；首个进行电波营销的里程碑还会强化电波放置需求的数量。"
 		"airplane":
 			return "飞机放在地图边缘外，不占用棋盘内部格子。它的长度决定飞过多少行或列；被飞过的行/列会横跨整张地图。\n\n图中蓝色横带表示飞机飞过的区域，绿色房屋会被覆盖。飞机不是看街区，也不是看道路，只看这条横向或纵向带状区域。"
 		_:
-			return "广告牌只影响与营销板件占地正交相邻的房屋。斜角接触不算，隔着道路或空格不算；营销板件越大，可能接触到的房屋边也越多。\n\n图中红色格表示广告牌占地，绿色房屋与它贴边，因此会被这次广告覆盖。"
+			return "广告牌只影响与营销板件占地正交相邻的房屋。斜角接触不算，隔着道路或空格不算；营销板件越大，可能接触到的房屋边也越多。\n\n图中灰色营销板件是广告牌占地，绿色房屋与它贴边，因此会被这次广告覆盖。"
 
 func _render_employees_lesson() -> void:
 	var structure := _make_section("公司结构先决定谁能工作")
@@ -1272,7 +1436,7 @@ func _render_employees_lesson() -> void:
 
 	var roles := _make_section("基础员工怎么分工")
 	roles.add_child(_make_rich_text(
-		"招聘/培训：人力资源专员、招聘经理、人力资源总监负责拿员工或减少薪水；培训讲师、培训指导员、培训专家负责升级员工。\n生产：见习厨师、汉堡厨师/主厨、披萨厨师/主厨生产食物。\n采购：跑腿伙计拿 1 瓶饮料；手推车操作员和货车驾驶员沿道路从进货点拿饮料；飞艇驾驶员无视道路。\n定价：定价经理 -1，折扣经理 -3，奢侈品经理 +10；这些是强制动作。\n营销：营销实习生、营销经理、品牌经理、品牌总监决定能放哪类广告和持续多久。\n开店/地图：区域经理放置即将开业餐厅；大区经理可放置立即开业餐厅或移动现有餐厅；新业务拓展经理放房屋或花园。\n结算辅助：服务员提供收入并赢平局；CFO 让本回合收入增加 50%。",
+		"招聘/培训：人力资源专员、人力资源经理、人力资源总监负责拿员工或减少薪水；培训讲师、培训指导员、培训专家负责升级员工。\n生产：见习厨师、汉堡厨师/主厨、披萨厨师/主厨生产食物。\n采购：跑腿伙计拿 1 瓶饮料；手推车操作员和货车驾驶员沿道路从进货点拿饮料；飞艇驾驶员无视道路。\n定价：定价经理 -1，折扣经理 -3，奢侈品经理 +10；这些是强制动作。\n营销：营销实习生、营销经理、品牌经理、品牌总监决定能放哪类广告和持续多久。\n开店/地图：区域经理放置即将开业餐厅；大区经理可放置立即开业餐厅或移动现有餐厅；新业务拓展经理放房屋或花园。\n结算辅助：服务员提供收入并赢平局；首席财务官让本回合收入增加 50%。",
 		260
 	))
 	_content_body.add_child(roles)
@@ -1280,7 +1444,7 @@ func _render_employees_lesson() -> void:
 	var drive_thru := _make_section("区域经理、大区经理与免下车")
 	drive_thru.add_child(_build_real_map_preview(_build_drive_thru_preview_state(), _build_drive_thru_preview_options()))
 	drive_thru.add_child(_make_rich_text(
-		"只要你本回合在岗员工里有 `drivethrough` 标签，你的所有餐厅都会获得免下车服务。当前基础员工里，区域经理和大区经理都有这个标签。\n\n免下车的含义是：晚餐距离计算时，餐厅四个角都可以视为入口/出口，而不是只有原本放置时的那个入口角。这会让某些房屋到你餐厅的距离变短，也会让地图上的入口标记从一个角扩展到四个角。",
+		"只要你本回合有区域经理或大区经理在岗，你的所有餐厅都会获得免下车服务。\n\n免下车的含义是：晚餐距离计算时，餐厅四个角都可以视为入口/出口，而不是只有原本放置时的那个入口角。这会让某些房屋到你餐厅的距离变短，也会让地图上的入口标记从一个角扩展到四个角。",
 		160
 	))
 	_content_body.add_child(drive_thru)
@@ -1288,21 +1452,21 @@ func _render_employees_lesson() -> void:
 func _render_round_flow_lesson() -> void:
 	var full_round := _make_section("完整阶段顺序")
 	full_round.add_child(_make_rich_text(
-		"Setup 只在开局出现：选择储备卡并放起始餐厅。\n\n正常回合按这个顺序推进：Restructuring 重组公司结构；OrderOfBusiness 选择本轮行动顺序；Working 执行员工行动；Dinnertime 自动结算房屋购买；Payday 支付薪水；Marketing 结算广告；Cleanup 清理库存、打开即将开业餐厅，并处理里程碑池。",
+		"开局设置只在开局出现：选择储备卡并放起始餐厅。\n\n正常回合按这个顺序推进：重组结构，商业秩序，工作时间，晚餐时间，发薪日，营销结算，清理阶段。清理阶段会清理库存、打开即将开业餐厅，并处理里程碑池。",
 		180
 	))
 	_content_body.add_child(full_round)
 
 	var order := _make_section("商业秩序怎么选")
 	order.add_child(_make_rich_text(
-		"进入 OrderOfBusiness 时，系统先计算每位玩家公司结构里的空槽位。空槽位越多，越早选择自己在本轮行动顺序中的位置；空槽位相同则按上一轮顺序靠前者先选。\n\n最终选出来的 turn_order 会影响 Working 中谁先行动，也会参与晚餐阶段的平局决胜。",
+		"进入商业秩序时，系统先计算每位玩家公司结构里的空槽位。空槽位越多，越早选择自己在本轮行动顺序中的位置；空槽位相同则按上一轮顺序靠前者先选。\n\n最终选出来的行动顺序会影响工作时间中谁先行动，也会参与晚餐阶段的平局决胜。",
 		145
 	))
 	_content_body.add_child(order)
 
-	var working := _make_section("Working 的子阶段")
+	var working := _make_section("工作时间的子阶段")
 	working.add_child(_make_rich_text(
-		"Working 不是一个自由行动池，而是固定子阶段依次处理：Recruit 招聘、Train 培训、Marketing 发起广告、GetFood 生产食物、GetDrinks 采购饮料、PlaceHouses 放房屋/花园、PlaceRestaurants 放置或移动餐厅。\n\n每个子阶段内按本轮行动顺序轮流执行。某个阶段没有可用动作时可以跳过；强制定价类动作属于 Working 强制动作，可以在 Working 的任意子阶段处理。",
+		"工作时间不是一个自由行动池，而是固定子阶段依次处理：招聘、培训、营销、生产食物、采购饮料、放置房屋/花园、放置或移动餐厅。\n\n每个子阶段内按本轮行动顺序轮流执行。某个子阶段没有可用动作时可以跳过；强制定价类动作属于工作时间强制动作，可以在工作时间的任意子阶段处理。",
 		165
 	))
 	_content_body.add_child(working)
@@ -1322,9 +1486,9 @@ func _render_recruit_train_payday_lesson() -> void:
 	))
 	_content_body.add_child(train)
 
-	var payday := _make_section("Payday 会把扩张压力算回来")
+	var payday := _make_section("发薪日会把扩张压力算回来")
 	payday.add_child(_make_rich_text(
-		"员工定义里 `salary=true` 的员工需要发薪，基础薪水是每人 $5。Payday 从玩家现金付给银行；如果现金不够且没有允许欠薪的效果，本阶段会要求先处理薪水问题。\n\n人力资源经理和人力资源总监带有薪水折扣效果：本回合未用掉的招聘次数会按每次 $5 抵扣薪水。首个培训员工的里程碑还会让总薪水永久 -$15，最低应付不会低于 $0。",
+		"需要发薪的员工会在发薪日产生薪水，基础薪水是每人 $5。薪水从玩家现金付给银行；如果现金不够且没有允许欠薪的效果，本阶段会要求先处理薪水问题。\n\n人力资源经理和人力资源总监带有薪水折扣效果：本回合未用掉的招聘次数会按每次 $5 抵扣薪水。首个培训员工的里程碑还会让总薪水永久 -$15，最低应付不会低于 $0。",
 		175
 	))
 	_content_body.add_child(payday)
@@ -1332,21 +1496,21 @@ func _render_recruit_train_payday_lesson() -> void:
 func _render_inventory_lesson() -> void:
 	var food := _make_section("食物先进入玩家库存")
 	food.add_child(_make_rich_text(
-		"生产食物发生在 Working 的 GetFood 子阶段。见习厨师可以选择生产 1 个汉堡或 1 个披萨；汉堡厨师/披萨厨师各生产 3 个对应食物；汉堡主厨/披萨主厨各生产 8 个。\n\n这些食物先进入玩家库存，不会自动分配给某一家餐厅。晚餐阶段检查的是玩家餐厅是否能用该玩家库存完整满足房屋需求。",
+		"生产食物发生在工作时间的生产食物子阶段。见习厨师可以选择生产 1 个汉堡或 1 个披萨；汉堡厨师/披萨厨师各生产 3 个对应食物；汉堡主厨/披萨主厨各生产 8 个。\n\n这些食物先进入玩家库存，不会自动分配给某一家餐厅。晚餐阶段检查的是玩家餐厅是否能用该玩家库存完整满足房屋需求。",
 		165
 	))
 	_content_body.add_child(food)
 
 	var drinks := _make_section("饮料来自采购")
 	drinks.add_child(_make_rich_text(
-		"采购饮料发生在 GetDrinks 子阶段，而且玩家必须已经有餐厅。跑腿伙计直接获得 1 瓶指定饮料；手推车操作员和货车驾驶员需要沿道路从路线经过的进货点拿饮料；飞艇驾驶员可以无视道路。\n\n基础路线采购每个饮料源提供 2 瓶。首个使用跑腿伙计的里程碑会让采购每个来源 +1；首个使用手推车操作员的里程碑会让手推车、货车、飞艇的采购距离能力提高。",
+		"采购饮料发生在工作时间的采购饮料子阶段，而且玩家必须已经有餐厅。跑腿伙计直接获得 1 瓶指定饮料；手推车操作员和货车驾驶员需要沿道路从路线经过的进货点拿饮料；飞艇驾驶员可以无视道路。\n\n基础路线采购每个饮料源提供 2 瓶。首个使用跑腿伙计的里程碑会让采购每个来源 +1；首个使用手推车操作员的里程碑会让手推车、货车、飞艇的采购距离能力提高。",
 		185
 	))
 	_content_body.add_child(drinks)
 
-	var cleanup := _make_section("Cleanup 为什么会丢库存")
+	var cleanup := _make_section("清理阶段为什么会丢库存")
 	cleanup.add_child(_make_rich_text(
-		"晚餐后没卖掉的食物和饮料仍在库存里。Cleanup 阶段默认会清空没有冰箱保护的食物/饮料；因此早期过量生产可能只是在浪费银行前的行动机会。\n\n首次在 Cleanup 丢弃食物或饮料会触发“首个丢弃食物/饮品”里程碑，获得容量 10 的冰箱。之后如果食物/饮料总量超过冰箱容量，Cleanup 会要求玩家选择保留哪些库存。",
+		"晚餐后没卖掉的食物和饮料仍在库存里。清理阶段默认会清空没有冰箱保护的食物/饮料；因此早期过量生产可能只是在浪费银行前的行动机会。\n\n首次在清理阶段丢弃食物或饮料会触发“首个丢弃食物/饮品”里程碑，获得容量 10 的冰箱。之后如果食物/饮料总量超过冰箱容量，清理阶段会要求玩家选择保留哪些库存。",
 		170
 	))
 	_content_body.add_child(cleanup)
@@ -1354,21 +1518,21 @@ func _render_inventory_lesson() -> void:
 func _render_milestones_lesson() -> void:
 	var trigger := _make_section("里程碑由事件触发")
 	trigger.add_child(_make_rich_text(
-		"里程碑不是手动购买，而是在动作或结算产生事件时自动检查。例：生产汉堡触发 Produce/burger；发起广告触发 InitiateMarketing；房屋被广告添加需求触发 DemandMarked；晚餐收入让现金达到 $20 或 $100 时触发 CashReached。\n\n同一回合内，多名玩家可能先后获得同一种里程碑；Cleanup 会根据本回合领取记录，从公共里程碑池移除对应数量。",
+		"里程碑不是手动购买，而是在动作或结算产生关键结果时自动检查。例：首次生产汉堡、首次发起某类广告、首次让房屋被广告添加需求，或晚餐收入让现金达到特定门槛，都可能触发对应里程碑。\n\n同一回合内，多名玩家可能先后获得同一种里程碑；清理阶段会根据本回合领取记录，从公共里程碑池移除对应数量。",
 		175
 	))
 	_content_body.add_child(trigger)
 
 	var effects := _make_section("基础里程碑给什么")
 	effects.add_child(_make_rich_text(
-		"生产类：首个生产汉堡/披萨会给对应厨师卡。\n营销类：首个营销汉堡/披萨/饮料会给对应商品销售奖金；首个广告牌让营销免薪并可永久；首个电波强化电波需求；首个飞机给商业秩序空槽位加成。\n经营类：首个拥有 $20 可查看所有储备卡；首个拥有 $100 让 CEO 从下一回合起获得 CFO 收入能力，并禁用 CFO 卡；首个降价让基础价格再 -1；首个服务员提高服务员小费。",
+		"生产类：首个生产汉堡/披萨会给对应厨师卡。\n营销类：首个营销汉堡/披萨/饮料会给对应商品销售奖金；首个广告牌让营销免薪并可永久；首个电波强化电波需求；首个飞机给商业秩序空槽位加成。\n经营类：首个拥有 $20 可查看所有储备卡；首个拥有 $100 让 CEO 从下一回合起获得首席财务官收入能力，并禁用首席财务官卡；首个降价让基础价格再 -1；首个服务员提高服务员小费。",
 		230
 	))
 	_content_body.add_child(effects)
 
 	var endgame := _make_section("终局和排名")
 	endgame.add_child(_make_rich_text(
-		"默认银行最多破产两次。第一次破产会处理储备卡或相关扩展规则，然后游戏继续；第二次破产会标记本局在当前 Dinnertime 结束后进入 GameOver，后续 Payday 不再结算。\n\nGameOver 排名只看现金：未弃权玩家排在弃权玩家前面；现金高者胜；现金相同则玩家编号靠前者排前。",
+		"默认银行最多破产两次。第一次破产会处理储备卡或相关扩展规则，然后游戏继续；第二次破产会让本局在当前晚餐时间结束后进入游戏结束，后续发薪日不再结算。\n\n游戏结束排名只看现金：未弃权玩家排在弃权玩家前面；现金高者胜；现金相同则玩家编号靠前者排前。",
 		150
 	))
 	_content_body.add_child(endgame)
@@ -1529,7 +1693,7 @@ func _build_reserve_prices_variant_card() -> Control:
 	var title := _make_label("储备价格扩展：规则会替换", 20, UiStylesClass.COLOR_TEXT_PRIMARY)
 	vbox.add_child(title)
 
-	var details := "如果房间启用了 Reserve Prices / 储备价格扩展，第一次破产规则不是上面的基础规则：\n"
+	var details := "如果房间启用了储备价格扩展，第一次破产规则不是上面的基础规则：\n"
 	details += "1. 开局储备卡改为 5 / 10 / 20 三种基础单价候选。\n"
 	details += "2. 第一次破产时，银行固定注资 $200 × 玩家人数，不再按卡面现金相加。\n"
 	details += "3. 这些卡不再改变 CEO 槽位；第一次破产不会因为储备卡投票去重设公司结构槽位。\n"
@@ -1660,9 +1824,6 @@ func _build_housing_preview_state() -> Dictionary:
 				"anchor": Vector2i(7, 1),
 				"house_id": "π",
 				"house_number": 3.14,
-				"is_apartment": true,
-				"no_demand_cap": true,
-				"marketing_demand_multiplier": 2,
 			},
 		],
 		"restaurants": [],
@@ -1692,39 +1853,130 @@ func _build_housing_preview_options() -> Dictionary:
 		],
 	}
 
-func _build_marketing_preview_state(_case_id: String = "billboard") -> Dictionary:
-	return _build_preview_map_state()
+func _build_marketing_preview_state(case_id: String = "billboard") -> Dictionary:
+	var state := _build_marketing_demo_base_state()
+	var placements: Array[Dictionary] = []
+	match case_id:
+		"mailbox":
+			placements.append(_make_marketing_placement("mailbox", 9, Vector2i(3, 1), Vector2i(1, 1)))
+		"radio":
+			placements.append(_make_marketing_placement("radio", 1, Vector2i(3, 1), Vector2i(1, 1)))
+		"airplane":
+			placements.append(_make_marketing_placement("airplane", 5, Vector2i(0, 0), Vector2i(3, 2), "row"))
+		_:
+			placements.append(_make_marketing_placement("billboard", 14, Vector2i(2, 1), Vector2i(2, 1)))
+	state["marketing_placements"] = placements
+	return state
 
 func _build_marketing_preview_options(case_id: String = "billboard") -> Dictionary:
 	var overlays: Array[Dictionary] = []
+	var state := _build_marketing_preview_state(case_id)
 	match case_id:
 		"mailbox":
-			var left_block: Array[Vector2i] = []
-			for y in range(5):
-				for x in range(5):
-					left_block.append(Vector2i(x, y))
-			overlays.append(_make_map_overlay("mailbox_block", left_block, Color(0.29, 0.55, 0.90, 0.16), Color(0.16, 0.31, 0.62, 0.86), 2))
-			overlays.append(_make_map_overlay("mailbox_piece", [Vector2i(2, 2)], MAP_SELECTED_FILL, MAP_SELECTED_BORDER, 3))
-			overlays.append(_make_map_overlay("mailbox_affected_house", [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)], MAP_VALID_FILL, MAP_VALID_BORDER, 2))
+			overlays.append(_make_map_overlay("mailbox_block", _compute_preview_block_cells(state, Vector2i(3, 1)), Color(0.29, 0.55, 0.90, 0.14), Color(0.16, 0.31, 0.62, 0.80), 2))
+			overlays.append(_make_map_overlay("mailbox_affected_houses", _marketing_demo_house_cells(["2", "5"]), MAP_VALID_FILL, MAP_VALID_BORDER, 2))
 		"radio":
 			var visible_radio_range: Array[Vector2i] = []
 			for y2 in range(5):
 				for x2 in range(10):
 					visible_radio_range.append(Vector2i(x2, y2))
-			overlays.append(_make_map_overlay("radio_visible_range", visible_radio_range, Color(0.29, 0.55, 0.90, 0.14), Color(0.16, 0.31, 0.62, 0.72), 2))
-			overlays.append(_make_map_overlay("radio_piece", [Vector2i(6, 2)], MAP_SELECTED_FILL, MAP_SELECTED_BORDER, 3))
-			overlays.append(_make_map_overlay("radio_affected_houses", [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(6, 0), Vector2i(7, 0), Vector2i(6, 1), Vector2i(7, 1)], MAP_VALID_FILL, MAP_VALID_BORDER, 2))
+			overlays.append(_make_map_overlay("radio_visible_range", visible_radio_range, Color(0.29, 0.55, 0.90, 0.12), Color(0.16, 0.31, 0.62, 0.62), 2))
+			overlays.append(_make_map_overlay("radio_affected_houses", _marketing_demo_house_cells(["2", "4", "5", "7"]), MAP_VALID_FILL, MAP_VALID_BORDER, 2))
 		"airplane":
 			var stripe: Array[Vector2i] = []
 			for x3 in range(10):
 				stripe.append(Vector2i(x3, 0))
 				stripe.append(Vector2i(x3, 1))
-			overlays.append(_make_map_overlay("airplane_stripe", stripe, Color(0.29, 0.55, 0.90, 0.16), Color(0.16, 0.31, 0.62, 0.86), 2))
-			overlays.append(_make_map_overlay("airplane_affected_houses", [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(6, 0), Vector2i(7, 0), Vector2i(6, 1), Vector2i(7, 1)], MAP_VALID_FILL, MAP_VALID_BORDER, 2))
+				stripe.append(Vector2i(x3, 2))
+			overlays.append(_make_map_overlay("airplane_stripe", stripe, Color(0.29, 0.55, 0.90, 0.14), Color(0.16, 0.31, 0.62, 0.78), 2))
+			overlays.append(_make_map_overlay("airplane_affected_houses", _marketing_demo_house_cells(["2", "4"]), MAP_VALID_FILL, MAP_VALID_BORDER, 2))
 		_:
-			overlays.append(_make_map_overlay("billboard_piece", [Vector2i(2, 0), Vector2i(2, 1), Vector2i(3, 0), Vector2i(3, 1)], MAP_SELECTED_FILL, MAP_SELECTED_BORDER, 3))
-			overlays.append(_make_map_overlay("billboard_affected_house", [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)], MAP_VALID_FILL, MAP_VALID_BORDER, 2))
-	return {"overlays": overlays}
+			overlays.append(_make_map_overlay("billboard_affected_house", _marketing_demo_house_cells(["2"]), MAP_VALID_FILL, MAP_VALID_BORDER, 2))
+	var options := {"overlays": overlays}
+	if case_id == "airplane":
+		options["margin_cells"] = {"left": 2, "right": 0, "top": 0, "bottom": 0}
+	return options
+
+func _build_marketing_demo_base_state() -> Dictionary:
+	var road_map: Dictionary = {}
+	for y in range(5):
+		road_map[Vector2i(4, y)] = [_make_vertical_road_segment(y)]
+	return {
+		"road_segments": road_map,
+		"houses": [
+			{"piece_id": "house", "anchor": Vector2i(0, 0), "house_id": "2", "house_number": 2},
+			{"piece_id": "house", "anchor": Vector2i(6, 0), "house_id": "4", "house_number": 4},
+			{"piece_id": "house", "anchor": Vector2i(0, 3), "house_id": "5", "house_number": 5},
+			{"piece_id": "house", "anchor": Vector2i(6, 3), "house_id": "7", "house_number": 7},
+		],
+		"restaurants": [],
+	}
+
+func _make_vertical_road_segment(y: int) -> Dictionary:
+	var dirs: Array[String] = []
+	if y > 0:
+		dirs.append("N")
+	if y < 4:
+		dirs.append("S")
+	return {"dirs": dirs, "bridge": false}
+
+func _make_marketing_placement(type_id: String, board_number: int, world_pos: Vector2i, footprint_size: Vector2i, axis: String = "") -> Dictionary:
+	var placement := {
+		"type": type_id,
+		"board_number": board_number,
+		"world_pos": world_pos,
+		"footprint_size": footprint_size,
+		"rotation": 0,
+		"product": "burger",
+		"remaining_duration": 2,
+	}
+	if not axis.is_empty():
+		placement["axis"] = axis
+	return placement
+
+func _marketing_demo_house_cells(house_ids: Array[String]) -> Array[Vector2i]:
+	var anchors := {
+		"2": Vector2i(0, 0),
+		"4": Vector2i(6, 0),
+		"5": Vector2i(0, 3),
+		"7": Vector2i(6, 3),
+	}
+	var out: Array[Vector2i] = []
+	for house_id in house_ids:
+		if not anchors.has(house_id):
+			continue
+		out.append_array(_restaurant_cells_for_anchor(anchors[house_id], 0))
+	return out
+
+func _compute_preview_block_cells(state: Dictionary, start: Vector2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if _has_preview_road_at(state, start):
+		return out
+	var visited := {}
+	var queue: Array[Vector2i] = [start]
+	while not queue.is_empty():
+		var pos: Vector2i = queue.pop_front()
+		if visited.has(pos):
+			continue
+		visited[pos] = true
+		if pos.x < 0 or pos.y < 0 or pos.x >= 10 or pos.y >= 5:
+			continue
+		if _has_preview_road_at(state, pos):
+			continue
+		out.append(pos)
+		queue.append(pos + Vector2i(1, 0))
+		queue.append(pos + Vector2i(-1, 0))
+		queue.append(pos + Vector2i(0, 1))
+		queue.append(pos + Vector2i(0, -1))
+	return out
+
+func _has_preview_road_at(state: Dictionary, pos: Vector2i) -> bool:
+	var road_map_val = state.get("road_segments", {})
+	if not (road_map_val is Dictionary):
+		return false
+	var road_map: Dictionary = road_map_val
+	var segments_val = road_map.get(pos, [])
+	return segments_val is Array and not (segments_val as Array).is_empty()
 
 func _make_map_overlay(id: String, cells: Array, fill: Color, border: Color, border_width: int = 2) -> Dictionary:
 	return {
