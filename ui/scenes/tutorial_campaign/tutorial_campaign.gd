@@ -44,8 +44,8 @@ const FALLBACK_RESERVE_CARDS := [
 class RealAssetMapPreview:
 	extends Control
 
-	const CELL_SIZE := 54
-	const GRID_SIZE := Vector2i(10, 5)
+	const DEFAULT_CELL_SIZE := 54
+	const DEFAULT_GRID_SIZE := Vector2i(10, 5)
 	const GROUND_COLOR := Color("#faf4da")
 	const HOUSE_ID_FONT_PATH := "res://assets/fonts/NotoSansSC-Regular.otf"
 	const HOUSE_ID_LABEL_TEXTURE_PATHS := {
@@ -114,18 +114,22 @@ class RealAssetMapPreview:
 	var textures: Dictionary = {}
 	var house_id_label_textures: Dictionary = {}
 	var house_id_font: Font = null
+	var visible_grid_size := DEFAULT_GRID_SIZE
+	var cell_size := DEFAULT_CELL_SIZE
 
 	func setup(state_data: Dictionary, options: Dictionary) -> void:
 		preview_state = state_data.duplicate(true)
 		preview_options = options.duplicate(true)
+		visible_grid_size = _read_grid_size(preview_options.get("grid_size", DEFAULT_GRID_SIZE), DEFAULT_GRID_SIZE)
+		cell_size = _read_cell_size(preview_options.get("cell_size", DEFAULT_CELL_SIZE), DEFAULT_CELL_SIZE)
 		var margin := _preview_margin_cells()
 		var margin_left := int(margin.get("left", 0))
 		var margin_right := int(margin.get("right", 0))
 		var margin_top := int(margin.get("top", 0))
 		var margin_bottom := int(margin.get("bottom", 0))
 		custom_minimum_size = Vector2(
-			(GRID_SIZE.x + margin_left + margin_right) * CELL_SIZE,
-			(GRID_SIZE.y + margin_top + margin_bottom) * CELL_SIZE
+			(visible_grid_size.x + margin_left + margin_right) * cell_size,
+			(visible_grid_size.y + margin_top + margin_bottom) * cell_size
 		)
 		size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -174,8 +178,8 @@ class RealAssetMapPreview:
 		_draw_marketing()
 
 	func _draw_cells() -> void:
-		for y in range(GRID_SIZE.y):
-			for x in range(GRID_SIZE.x):
+		for y in range(visible_grid_size.y):
+			for x in range(visible_grid_size.x):
 				var rect := _cell_rect(Vector2i(x, y))
 				draw_rect(rect, GROUND_COLOR, true)
 				_draw_road_segments(Vector2i(x, y), rect, _get_road_segments(Vector2i(x, y)))
@@ -346,9 +350,9 @@ class RealAssetMapPreview:
 				_draw_board_piece_background(rect, fill, 1.0)
 			if tex != null:
 				if marker_only:
-					_draw_texture_aspect_fit(tex, rect.grow(-maxf(2.0, float(CELL_SIZE) * 0.10)), Color(1, 1, 1, 0.95))
+					_draw_texture_aspect_fit(tex, rect.grow(-maxf(2.0, float(cell_size) * 0.10)), Color(1, 1, 1, 0.95))
 				else:
-					_draw_texture_aspect_fit(tex, rect.grow(-maxf(2.0, float(CELL_SIZE) * 0.08)), Color(1, 1, 1, 0.92))
+					_draw_texture_aspect_fit(tex, rect.grow(-maxf(2.0, float(cell_size) * 0.08)), Color(1, 1, 1, 0.92))
 			if not marker_only:
 				_draw_board_piece_surface_lines(rect, 1.0)
 
@@ -365,8 +369,13 @@ class RealAssetMapPreview:
 
 	func _draw_tile_boundary() -> void:
 		var origin := _board_origin_px()
-		var x := origin.x + float(5 * CELL_SIZE)
-		draw_line(Vector2(x, origin.y), Vector2(x, origin.y + GRID_SIZE.y * CELL_SIZE), Color(0.17, 0.13, 0.09, 0.75), 4.0)
+		var boundary_color := Color(0.17, 0.13, 0.09, 0.75)
+		for x_cell in range(TILE_SIZE, visible_grid_size.x, TILE_SIZE):
+			var x := origin.x + float(x_cell * cell_size)
+			draw_line(Vector2(x, origin.y), Vector2(x, origin.y + visible_grid_size.y * cell_size), boundary_color, 4.0)
+		for y_cell in range(TILE_SIZE, visible_grid_size.y, TILE_SIZE):
+			var y := origin.y + float(y_cell * cell_size)
+			draw_line(Vector2(origin.x, y), Vector2(origin.x + visible_grid_size.x * cell_size, y), boundary_color, 4.0)
 
 	func _draw_option_overlays() -> void:
 		var overlays_val = preview_options.get("overlays", [])
@@ -383,12 +392,32 @@ class RealAssetMapPreview:
 			var cells_val = overlay.get("cells", [])
 			if not (cells_val is Array):
 				continue
+			var cells: Array[Vector2i] = []
 			for cell_val in cells_val:
 				if cell_val is Vector2i:
 					var cell_pos: Vector2i = cell_val
-					var rect := _cell_rect(cell_pos)
-					draw_rect(rect, fill, true)
-					draw_rect(rect, border, false, border_width)
+					if cell_pos.x < 0 or cell_pos.y < 0 or cell_pos.x >= visible_grid_size.x or cell_pos.y >= visible_grid_size.y:
+						continue
+					cells.append(cell_pos)
+					draw_rect(_cell_rect(cell_pos), fill, true)
+			_draw_overlay_outline(cells, border, border_width)
+
+	func _draw_overlay_outline(cells: Array[Vector2i], border: Color, border_width: float) -> void:
+		if cells.is_empty() or border.a <= 0.0 or border_width <= 0.0:
+			return
+		var cell_set := {}
+		for cell_pos in cells:
+			cell_set[cell_pos] = true
+		for cell_pos in cells:
+			var rect := _cell_rect(cell_pos)
+			if not cell_set.has(cell_pos + Vector2i(0, -1)):
+				draw_line(rect.position, rect.position + Vector2(rect.size.x, 0.0), border, border_width)
+			if not cell_set.has(cell_pos + Vector2i(1, 0)):
+				draw_line(rect.position + Vector2(rect.size.x, 0.0), rect.position + rect.size, border, border_width)
+			if not cell_set.has(cell_pos + Vector2i(0, 1)):
+				draw_line(rect.position + Vector2(0.0, rect.size.y), rect.position + rect.size, border, border_width)
+			if not cell_set.has(cell_pos + Vector2i(-1, 0)):
+				draw_line(rect.position, rect.position + Vector2(0.0, rect.size.y), border, border_width)
 
 	func _draw_restaurants() -> void:
 		var restaurants_val = preview_state.get("restaurants", [])
@@ -432,7 +461,7 @@ class RealAssetMapPreview:
 
 		_draw_board_piece_background(rect, MARKETING_BG_COLOR, 1.0)
 		var tex: Texture2D = textures.get("marketing_%s" % type_id, textures.get("marketing_default", null))
-		var icon_rect := rect.grow(-maxf(2.0, float(CELL_SIZE) * 0.08))
+		var icon_rect := rect.grow(-maxf(2.0, float(cell_size) * 0.08))
 		if tex != null:
 			if type_id == "airplane" and icon_rect.size.y > icon_rect.size.x:
 				_draw_texture_aspect_fit_rotated(tex, icon_rect, 90.0, Color(1, 1, 1, 0.45))
@@ -464,17 +493,17 @@ class RealAssetMapPreview:
 			else:
 				size = Vector2i(maxi(1, length), maxi(1, thickness))
 			var board_origin := _board_origin_px()
-			var rect := Rect2(board_origin + Vector2(anchor.x * CELL_SIZE, anchor.y * CELL_SIZE), Vector2(size.x * CELL_SIZE, size.y * CELL_SIZE))
+			var rect := Rect2(board_origin + Vector2(anchor.x * cell_size, anchor.y * cell_size), Vector2(size.x * cell_size, size.y * cell_size))
 			if axis == "row":
 				if anchor.x <= 0:
 					rect.position.x = board_origin.x - rect.size.x
 				else:
-					rect.position.x = board_origin.x + GRID_SIZE.x * CELL_SIZE
+					rect.position.x = board_origin.x + visible_grid_size.x * cell_size
 			else:
 				if anchor.y <= 0:
 					rect.position.y = board_origin.y - rect.size.y
 				else:
-					rect.position.y = board_origin.y + GRID_SIZE.y * CELL_SIZE
+					rect.position.y = board_origin.y + visible_grid_size.y * cell_size
 			return rect
 
 		if rotation == 90 or rotation == 270:
@@ -491,8 +520,8 @@ class RealAssetMapPreview:
 		return fallback
 
 	func _draw_marketing_board_number_badge(rect: Rect2, board_number: int) -> void:
-		var badge_size := maxf(18.0, float(CELL_SIZE) * 0.46)
-		var pad := maxf(2.0, float(CELL_SIZE) * 0.06)
+		var badge_size := maxf(18.0, float(cell_size) * 0.46)
+		var pad := maxf(2.0, float(cell_size) * 0.06)
 		var badge_rect := Rect2(rect.position + Vector2(rect.size.x - badge_size - pad, pad), Vector2(badge_size, badge_size))
 		draw_circle(badge_rect.position + badge_rect.size * 0.5, badge_size * 0.5, Color(1, 1, 1, 0.92))
 		draw_arc(badge_rect.position + badge_rect.size * 0.5, badge_size * 0.5, 0.0, TAU, 36, Color(0.12, 0.10, 0.08, 0.85), 1.5)
@@ -509,7 +538,7 @@ class RealAssetMapPreview:
 		var tex: Texture2D = textures.get("product_%s" % key, null)
 		if tex == null:
 			return
-		var pad := maxf(4.0, float(CELL_SIZE) * 0.12)
+		var pad := maxf(4.0, float(cell_size) * 0.12)
 		var avail := rect.size - Vector2(pad * 2.0, pad * 2.0)
 		var size := minf(avail.x, avail.y) * 0.72
 		var icon_rect := Rect2(rect.position + (rect.size - Vector2(size, size)) * 0.5, Vector2(size, size))
@@ -551,7 +580,7 @@ class RealAssetMapPreview:
 		_draw_board_piece_background(rect, RESTAURANT_BG_COLOR, modulate.a)
 		var logo: Texture2D = textures.get("logo_%d" % abs(owner % RESTAURANT_LOGOS.size()), null)
 		if logo != null:
-			_draw_texture_aspect_fit(logo, rect.grow(-maxf(2.0, float(CELL_SIZE) * 0.10)), Color(1, 1, 1, 0.98 * modulate.a))
+			_draw_texture_aspect_fit(logo, rect.grow(-maxf(2.0, float(cell_size) * 0.10)), Color(1, 1, 1, 0.98 * modulate.a))
 		_draw_board_piece_surface_lines(rect, modulate.a)
 		var drive_thru := bool(info.get("drive_thru", false))
 		_draw_restaurant_entrance_marker(anchor, cells, modulate.a, drive_thru)
@@ -581,8 +610,8 @@ class RealAssetMapPreview:
 		var piece_id := str(info.get("piece_id", "house")).strip_edges()
 		var house_tex: Texture2D = textures.get("apartment", null) if piece_id == "apartment" else textures.get("house", null)
 		if house_tex != null:
-			var bottom_gap := maxf(2.0, float(CELL_SIZE) * 0.10)
-			var house_pad := maxf(2.0, float(CELL_SIZE) * 0.08)
+			var bottom_gap := maxf(2.0, float(cell_size) * 0.10)
+			var house_pad := maxf(2.0, float(cell_size) * 0.08)
 			var house_tex_rect := house_rect.grow(-house_pad)
 			house_tex_rect.size.y = maxf(0.0, house_tex_rect.size.y - bottom_gap)
 			_draw_texture_aspect_fit(house_tex, house_tex_rect, Color(1, 1, 1, 0.9), "bottom")
@@ -590,7 +619,7 @@ class RealAssetMapPreview:
 			draw_rect(house_rect.grow(-5), Color(0.78, 0.23, 0.18, 1.0), true)
 		if not garden_cells.is_empty():
 			var garden_tex: Texture2D = textures.get("garden_large", null)
-			var garden_rect := _rect_for_cells(garden_cells).grow(-maxf(2.0, float(CELL_SIZE) * 0.08))
+			var garden_rect := _rect_for_cells(garden_cells).grow(-maxf(2.0, float(cell_size) * 0.08))
 			if garden_tex != null:
 				if garden_rect.size.y > garden_rect.size.x:
 					_draw_texture_aspect_fit_rotated(garden_tex, garden_rect, 90.0, Color(1, 1, 1, 0.9))
@@ -738,12 +767,12 @@ class RealAssetMapPreview:
 			max_pos.x = maxi(max_pos.x, cell_pos.x)
 			max_pos.y = maxi(max_pos.y, cell_pos.y)
 		var size_cells := (max_pos - min_pos) + Vector2i.ONE
-		return Rect2(_board_origin_px() + Vector2(min_pos.x * CELL_SIZE, min_pos.y * CELL_SIZE), Vector2(size_cells.x * CELL_SIZE, size_cells.y * CELL_SIZE))
+		return Rect2(_board_origin_px() + Vector2(min_pos.x * cell_size, min_pos.y * cell_size), Vector2(size_cells.x * cell_size, size_cells.y * cell_size))
 
 	func _draw_board_piece_shadow(rect: Rect2, alpha: float) -> void:
 		if rect.size.x <= 1.0 or rect.size.y <= 1.0:
 			return
-		var offset := maxf(1.0, minf(6.0, float(CELL_SIZE) * 0.08))
+		var offset := maxf(1.0, minf(6.0, float(cell_size) * 0.08))
 		var shadow := BOARD_SHADOW_COLOR
 		shadow.a *= clampf(alpha, 0.0, 1.0)
 		draw_rect(Rect2(rect.position + Vector2(offset, offset), rect.size), shadow, true)
@@ -759,7 +788,7 @@ class RealAssetMapPreview:
 		if rect.size.x <= 1.0 or rect.size.y <= 1.0:
 			return
 		var a := clampf(alpha, 0.0, 1.0)
-		var edge := maxf(1.0, minf(5.0, float(CELL_SIZE) * 0.07))
+		var edge := maxf(1.0, minf(5.0, float(cell_size) * 0.07))
 		var highlight := fill_color.lightened(0.26)
 		highlight.a = 0.48 * a
 		var shade := Color("#4b3828")
@@ -779,7 +808,7 @@ class RealAssetMapPreview:
 			return
 		var border := BOARD_EDGE_COLOR
 		border.a = 0.82 * clampf(alpha, 0.0, 1.0)
-		draw_rect(rect, border, false, maxf(1.0, minf(3.0, float(CELL_SIZE) * 0.045)))
+		draw_rect(rect, border, false, maxf(1.0, minf(3.0, float(cell_size) * 0.045)))
 
 	func _draw_texture_aspect_fit(texture: Texture2D, rect: Rect2, modulate: Color = Color(1, 1, 1, 1), v_align: String = "center") -> void:
 		if texture == null or rect.size.x <= 0.0 or rect.size.y <= 0.0:
@@ -885,8 +914,8 @@ class RealAssetMapPreview:
 		return null
 
 	func _compute_house_id_rect(structure_rect: Rect2) -> Rect2:
-		var pad := maxf(3.0, float(CELL_SIZE) * 0.10)
-		var bg_size := Vector2(float(CELL_SIZE) * 0.90, float(CELL_SIZE) * 0.58)
+		var pad := maxf(3.0, float(cell_size) * 0.10)
+		var bg_size := Vector2(float(cell_size) * 0.90, float(cell_size) * 0.58)
 		var pos := structure_rect.position + Vector2(structure_rect.size.x - bg_size.x - pad, pad)
 		return Rect2(pos, bg_size)
 
@@ -905,14 +934,14 @@ class RealAssetMapPreview:
 		var text := str(display_label).strip_edges()
 		if text.is_empty():
 			return
-		var pad := maxf(3.0, float(CELL_SIZE) * 0.12)
+		var pad := maxf(3.0, float(cell_size) * 0.12)
 		var label_rect := _compute_house_id_rect(house_rect)
 		var house_id_font := _get_house_id_font()
 		var font: Font = house_id_font if house_id_font != null else ThemeDB.fallback_font
 		if _draw_special_house_id_label(label_rect, text, font):
 			return
-		var base_font_size := maxi(11, int(round(float(CELL_SIZE) * 0.34)))
-		var min_font_size := maxi(8, int(round(float(CELL_SIZE) * 0.22)))
+		var base_font_size := maxi(11, int(round(float(cell_size) * 0.34)))
+		var min_font_size := maxi(8, int(round(float(cell_size) * 0.22)))
 		var font_size := _fit_house_id_font_size(font, text, maxf(1.0, label_rect.size.x - 2.0), base_font_size, min_font_size)
 		var baseline := label_rect.position + Vector2(0.0, label_rect.size.y - pad)
 		draw_string(font, baseline + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_RIGHT, label_rect.size.x, font_size, Color(0, 0, 0, 0.85))
@@ -1036,9 +1065,9 @@ class RealAssetMapPreview:
 			max_pos.y = maxi(max_pos.y, cell_pos.y)
 		var rect := _cell_rect(entrance_view)
 		var col := Color(0, 0, 0, 0.88 * alpha)
-		var pad := maxf(2.0, float(CELL_SIZE) * 0.12)
-		var thickness := maxf(1.0, float(CELL_SIZE) * 0.06)
-		var length := float(CELL_SIZE) * 0.32
+		var pad := maxf(2.0, float(cell_size) * 0.12)
+		var thickness := maxf(1.0, float(cell_size) * 0.06)
+		var length := float(cell_size) * 0.32
 		var is_left := entrance_view.x <= min_pos.x
 		var is_right := entrance_view.x >= max_pos.x
 		var is_top := entrance_view.y <= min_pos.y
@@ -1057,11 +1086,11 @@ class RealAssetMapPreview:
 			draw_rect(Rect2(rect.position + Vector2(rect.size.x - pad - thickness, rect.size.y - pad - length), Vector2(thickness, length)), col, true)
 
 	func _cell_rect(pos: Vector2i) -> Rect2:
-		return Rect2(_board_origin_px() + Vector2(pos.x * CELL_SIZE, pos.y * CELL_SIZE), Vector2(CELL_SIZE, CELL_SIZE))
+		return Rect2(_board_origin_px() + Vector2(pos.x * cell_size, pos.y * cell_size), Vector2(cell_size, cell_size))
 
 	func _board_origin_px() -> Vector2:
 		var margin := _preview_margin_cells()
-		return Vector2(int(margin.get("left", 0)) * CELL_SIZE, int(margin.get("top", 0)) * CELL_SIZE)
+		return Vector2(int(margin.get("left", 0)) * cell_size, int(margin.get("top", 0)) * cell_size)
 
 	func _preview_margin_cells() -> Dictionary:
 		var result := {"left": 0, "right": 0, "top": 0, "bottom": 0}
@@ -1078,6 +1107,21 @@ class RealAssetMapPreview:
 				if f == floor(f):
 					result[key] = maxi(0, int(f))
 		return result
+
+	func _read_grid_size(value, fallback: Vector2i) -> Vector2i:
+		var read := _try_vector2i(value)
+		if bool(read.get("ok", false)):
+			var size: Vector2i = read["value"]
+			if size.x > 0 and size.y > 0:
+				return size
+		return fallback
+
+	func _read_cell_size(value, fallback: int) -> int:
+		if value is int:
+			return clampi(int(value), 24, 64)
+		if value is float:
+			return clampi(int(round(float(value))), 24, 64)
+		return fallback
 
 const LESSONS := [
 	{
@@ -1552,8 +1596,8 @@ func _render_marketing_lesson() -> void:
 	var controls := _make_segmented_row([
 		{"id": "billboard", "label": "广告牌"},
 		{"id": "mailbox", "label": "邮箱"},
-		{"id": "radio", "label": "电波"},
 		{"id": "airplane", "label": "飞机"},
+		{"id": "radio", "label": "电波"},
 	], _marketing_case, Callable(self, "_on_marketing_case_selected"))
 	_content_body.add_child(controls)
 
@@ -1585,7 +1629,7 @@ func _get_marketing_case_text(case_id: String) -> String:
 		"mailbox":
 			return "邮箱影响同一个街区里的房屋。这里的街区不是地图板块，而是道路图切出来的一片连续非道路区域；道路会把街区隔开。\n\n图中蓝色区域表示同一街区，灰色营销板件是邮箱位置，绿色房屋会被这次广告覆盖。邮箱常用于给一片被道路围起来的房屋同时放需求。"
 		"radio":
-			return "电波按地图板块计算范围：取营销板件所在板块，再向周围扩展成 3×3 板块范围。教程预览只有两块板，所以图中蓝色显示的是这个范围在当前可见地图里的切片。\n\n电波本身通常是小板件，但覆盖范围很大；首个进行电波营销的里程碑还会强化电波放置需求的数量。"
+			return "电波按地图板块计算范围：取营销板件所在板块，再向周围扩展成 3×3 板块范围。图中每条粗边界都是板块边界，蓝色区域展示的是完整 3×3 板块覆盖面。\n\n电波本身通常是小板件，但覆盖范围很大；首个进行电波营销的里程碑还会强化电波放置需求的数量。"
 		"airplane":
 			return "飞机放在地图边缘外，不占用棋盘内部格子。它的长度决定飞过多少行或列；被飞过的行/列会横跨整张地图。\n\n图中蓝色横带表示飞机飞过的区域，绿色房屋会被覆盖。飞机不是看街区，也不是看道路，只看这条横向或纵向带状区域。"
 		_:
@@ -1834,26 +1878,57 @@ func _build_phase_track_preview() -> Control:
 	return frame
 
 func _build_process_chip_row(labels: Array) -> Control:
+	var frame := PanelContainer.new()
+	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	frame.add_theme_stylebox_override("panel", _make_style(Color(0.95, 0.90, 0.78, 0.58), Color(0.17, 0.13, 0.09, 0.18), 1, 6))
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_top", 9)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_bottom", 9)
+	frame.add_child(margin)
+
 	var row := HBoxContainer.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", 8)
-	for label_text in labels:
-		row.add_child(_build_process_chip(str(label_text)))
-	return row
+	row.add_theme_constant_override("separation", 10)
+	margin.add_child(row)
 
-func _build_process_chip(text: String) -> Control:
-	var chip := PanelContainer.new()
-	chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	chip.add_theme_stylebox_override("panel", _make_style(Color(0.96, 0.92, 0.82, 0.82), Color(0.17, 0.13, 0.09, 0.22), 1, 5))
+	for i in range(labels.size()):
+		row.add_child(_build_process_chip(str(labels[i]), i + 1))
+		if i < labels.size() - 1:
+			row.add_child(_build_process_separator())
+	return frame
+
+func _build_process_chip(text: String, index: int) -> Control:
+	var item := HBoxContainer.new()
+	item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	item.alignment = BoxContainer.ALIGNMENT_CENTER
+	item.add_theme_constant_override("separation", 7)
+
+	var index_label := Label.new()
+	index_label.text = "%02d" % index
+	index_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	index_label.add_theme_font_size_override("font_size", 12)
+	index_label.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_HINT)
+	item.add_child(index_label)
 
 	var label := Label.new()
 	label.text = text
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_font_size_override("font_size", 13)
+	label.add_theme_font_size_override("font_size", 14)
 	label.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_PRIMARY)
-	chip.add_child(label)
-	return chip
+	item.add_child(label)
+	return item
+
+func _build_process_separator() -> Control:
+	var separator := ColorRect.new()
+	separator.color = Color(0.17, 0.13, 0.09, 0.20)
+	separator.custom_minimum_size = Vector2(1, 30)
+	separator.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return separator
 
 func _build_employee_card_row(employee_ids: Array, scale: float = 0.84) -> Control:
 	var row := GridContainer.new()
@@ -1861,7 +1936,7 @@ func _build_employee_card_row(employee_ids: Array, scale: float = 0.84) -> Contr
 	row.columns = mini(4, maxi(1, employee_ids.size()))
 	row.add_theme_constant_override("h_separation", 10)
 	row.add_theme_constant_override("v_separation", 10)
-	var display_scale := maxf(scale, 1.0)
+	var display_scale := maxf(scale, 1.25)
 	for employee_id in employee_ids:
 		row.add_child(_build_employee_card(str(employee_id), display_scale))
 	return row
@@ -1872,7 +1947,7 @@ func _build_employee_card(employee_id: String, scale: float) -> Control:
 	card.variant = EmployeeCardClass.CardVariant.COMPACT
 	card.draggable = false
 	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	card.set_display_scale(maxf(scale, 0.92))
+	card.set_display_scale(maxf(scale, 1.08))
 	card.setup(def)
 	return card
 
@@ -2340,13 +2415,13 @@ func _build_housing_preview_options() -> Dictionary:
 	}
 
 func _build_marketing_preview_state(case_id: String = "billboard") -> Dictionary:
-	var state := _build_marketing_demo_base_state()
+	var state := _build_marketing_radio_demo_state() if case_id == "radio" else _build_marketing_demo_base_state()
 	var placements: Array[Dictionary] = []
 	match case_id:
 		"mailbox":
 			placements.append(_make_marketing_placement("mailbox", 9, Vector2i(3, 1), Vector2i(1, 1)))
 		"radio":
-			placements.append(_make_marketing_placement("radio", 1, Vector2i(3, 1), Vector2i(1, 1)))
+			placements.append(_make_marketing_placement("radio", 1, Vector2i(6, 6), Vector2i(1, 1)))
 		"airplane":
 			placements.append(_make_marketing_placement("airplane", 5, Vector2i(0, 0), Vector2i(3, 2), "row"))
 		_:
@@ -2363,11 +2438,12 @@ func _build_marketing_preview_options(case_id: String = "billboard") -> Dictiona
 			overlays.append(_make_map_overlay("mailbox_affected_houses", _marketing_demo_house_cells(["2", "5"]), MAP_VALID_FILL, MAP_VALID_BORDER, 2))
 		"radio":
 			var visible_radio_range: Array[Vector2i] = []
-			for y2 in range(5):
-				for x2 in range(10):
+			var radio_grid_size := _preview_state_grid_size(state)
+			for y2 in range(radio_grid_size.y):
+				for x2 in range(radio_grid_size.x):
 					visible_radio_range.append(Vector2i(x2, y2))
 			overlays.append(_make_map_overlay("radio_visible_range", visible_radio_range, Color(0.29, 0.55, 0.90, 0.12), Color(0.16, 0.31, 0.62, 0.62), 2))
-			overlays.append(_make_map_overlay("radio_affected_houses", _marketing_demo_house_cells(["2", "4", "5", "7"]), MAP_VALID_FILL, MAP_VALID_BORDER, 2))
+			overlays.append(_make_map_overlay("radio_affected_houses", _marketing_radio_house_cells(["2", "4", "5", "7", "8", "9", "10", "11"]), MAP_VALID_FILL, MAP_VALID_BORDER, 2))
 		"airplane":
 			var stripe: Array[Vector2i] = []
 			for x3 in range(10):
@@ -2381,12 +2457,17 @@ func _build_marketing_preview_options(case_id: String = "billboard") -> Dictiona
 	var options := {"overlays": overlays}
 	if case_id == "airplane":
 		options["margin_cells"] = {"left": 2, "right": 0, "top": 0, "bottom": 0}
+	elif case_id == "radio":
+		options["grid_size"] = Vector2i(15, 15)
+		options["cell_size"] = 34
 	return options
 
 func _build_marketing_demo_base_state() -> Dictionary:
 	var road_map: Dictionary = {}
 	for y in range(5):
 		road_map[Vector2i(4, y)] = [_make_vertical_road_segment(y)]
+	road_map[Vector2i(0, 2)] = [_make_road_segment(["E"])]
+	road_map[Vector2i(1, 2)] = [_make_road_segment(["W"])]
 	return {
 		"road_segments": road_map,
 		"houses": [
@@ -2394,6 +2475,44 @@ func _build_marketing_demo_base_state() -> Dictionary:
 			{"piece_id": "house", "anchor": Vector2i(6, 0), "house_id": "4", "house_number": 4},
 			{"piece_id": "house", "anchor": Vector2i(0, 3), "house_id": "5", "house_number": 5},
 			{"piece_id": "house", "anchor": Vector2i(6, 3), "house_id": "7", "house_number": 7},
+		],
+		"restaurants": [],
+	}
+
+func _build_marketing_radio_demo_state() -> Dictionary:
+	var road_map: Dictionary = {}
+	for y in range(15):
+		var dirs: Array[String] = []
+		if y > 0:
+			dirs.append("N")
+		if y < 14:
+			dirs.append("S")
+		if y == 7:
+			dirs.append("E")
+			dirs.append("W")
+		road_map[Vector2i(7, y)] = [_make_road_segment(dirs)]
+	for x in range(15):
+		var dirs2: Array[String] = []
+		if x > 0:
+			dirs2.append("W")
+		if x < 14:
+			dirs2.append("E")
+		if x == 7:
+			dirs2.append("N")
+			dirs2.append("S")
+		road_map[Vector2i(x, 7)] = [_make_road_segment(dirs2)]
+	return {
+		"grid_size": Vector2i(15, 15),
+		"road_segments": road_map,
+		"houses": [
+			{"piece_id": "house", "anchor": Vector2i(0, 0), "house_id": "2", "house_number": 2},
+			{"piece_id": "house", "anchor": Vector2i(5, 0), "house_id": "4", "house_number": 4},
+			{"piece_id": "house", "anchor": Vector2i(10, 0), "house_id": "5", "house_number": 5},
+			{"piece_id": "house", "anchor": Vector2i(0, 5), "house_id": "7", "house_number": 7},
+			{"piece_id": "house", "anchor": Vector2i(10, 5), "house_id": "8", "house_number": 8},
+			{"piece_id": "house", "anchor": Vector2i(0, 10), "house_id": "9", "house_number": 9},
+			{"piece_id": "house", "anchor": Vector2i(5, 10), "house_id": "10", "house_number": 10},
+			{"piece_id": "house", "anchor": Vector2i(10, 10), "house_id": "11", "house_number": 11},
 		],
 		"restaurants": [],
 	}
@@ -2437,10 +2556,29 @@ func _marketing_demo_house_cells(house_ids: Array[String]) -> Array[Vector2i]:
 		out.append_array(_restaurant_cells_for_anchor(anchors[house_id], 0))
 	return out
 
+func _marketing_radio_house_cells(house_ids: Array[String]) -> Array[Vector2i]:
+	var anchors := {
+		"2": Vector2i(0, 0),
+		"4": Vector2i(5, 0),
+		"5": Vector2i(10, 0),
+		"7": Vector2i(0, 5),
+		"8": Vector2i(10, 5),
+		"9": Vector2i(0, 10),
+		"10": Vector2i(5, 10),
+		"11": Vector2i(10, 10),
+	}
+	var out: Array[Vector2i] = []
+	for house_id in house_ids:
+		if not anchors.has(house_id):
+			continue
+		out.append_array(_restaurant_cells_for_anchor(anchors[house_id], 0))
+	return out
+
 func _compute_preview_block_cells(state: Dictionary, start: Vector2i) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	if _has_preview_road_at(state, start):
 		return out
+	var grid_size := _preview_state_grid_size(state)
 	var visited := {}
 	var queue: Array[Vector2i] = [start]
 	while not queue.is_empty():
@@ -2448,7 +2586,7 @@ func _compute_preview_block_cells(state: Dictionary, start: Vector2i) -> Array[V
 		if visited.has(pos):
 			continue
 		visited[pos] = true
-		if pos.x < 0 or pos.y < 0 or pos.x >= 10 or pos.y >= 5:
+		if pos.x < 0 or pos.y < 0 or pos.x >= grid_size.x or pos.y >= grid_size.y:
 			continue
 		if _has_preview_road_at(state, pos):
 			continue
@@ -2458,6 +2596,24 @@ func _compute_preview_block_cells(state: Dictionary, start: Vector2i) -> Array[V
 		queue.append(pos + Vector2i(0, 1))
 		queue.append(pos + Vector2i(0, -1))
 	return out
+
+func _preview_state_grid_size(state: Dictionary) -> Vector2i:
+	var value = state.get("grid_size", Vector2i(10, 5))
+	if value is Vector2i:
+		var vec: Vector2i = value
+		if vec.x > 0 and vec.y > 0:
+			return vec
+	if value is Vector2:
+		var vec2: Vector2 = value
+		if vec2.x > 0 and vec2.y > 0:
+			return Vector2i(int(vec2.x), int(vec2.y))
+	if value is Array:
+		var arr: Array = value
+		if arr.size() >= 2:
+			var out := Vector2i(int(arr[0]), int(arr[1]))
+			if out.x > 0 and out.y > 0:
+				return out
+	return Vector2i(10, 5)
 
 func _has_preview_road_at(state: Dictionary, pos: Vector2i) -> bool:
 	var road_map_val = state.get("road_segments", {})
@@ -2813,19 +2969,47 @@ func _get_placement_explanation(case_id: String) -> String:
 			return "合法原因：你的入口落在右侧板块，并且入口邻接道路；对手入口在左侧板块，所以起始入口板块不冲突。\n\n起始限制只看入口所在板块，不看整张地图是否已有其他餐厅。"
 
 func _make_segmented_row(options: Array, active_id: String, callback: Callable) -> Control:
+	var frame := PanelContainer.new()
+	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	frame.add_theme_stylebox_override("panel", _make_style(Color(0.94, 0.89, 0.77, 0.68), Color(0.17, 0.13, 0.09, 0.20), 1, 6))
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 3)
+	margin.add_theme_constant_override("margin_top", 3)
+	margin.add_theme_constant_override("margin_right", 3)
+	margin.add_theme_constant_override("margin_bottom", 3)
+	frame.add_child(margin)
+
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 2)
+	margin.add_child(row)
 	for opt_val in options:
 		var opt: Dictionary = opt_val
 		var btn := Button.new()
 		btn.text = str(opt.get("label", ""))
-		btn.custom_minimum_size = Vector2(170, 42)
+		btn.custom_minimum_size = Vector2(136, 40)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.toggle_mode = true
 		var id := str(opt.get("id", ""))
-		btn.disabled = id == active_id
+		btn.button_pressed = id == active_id
 		btn.pressed.connect(callback.bind(id))
-		UiStylesClass.apply_button_secondary(btn)
+		_apply_tutorial_tab_button_style(btn)
 		row.add_child(btn)
-	return row
+	return frame
+
+func _apply_tutorial_tab_button_style(button: Button) -> void:
+	if button == null:
+		return
+	button.add_theme_stylebox_override("normal", _make_style(Color(0, 0, 0, 0), Color(0, 0, 0, 0), 0, 0))
+	button.add_theme_stylebox_override("hover", _make_style(Color(1.0, 0.97, 0.88, 0.56), Color(0, 0, 0, 0), 0, 0))
+	button.add_theme_stylebox_override("pressed", _make_style(Color(0.73, 0.23, 0.18, 0.18), Color(0, 0, 0, 0), 0, 0))
+	button.add_theme_stylebox_override("focus", _make_style(Color(0.73, 0.23, 0.18, 0.10), Color(0.73, 0.23, 0.18, 0.40), 1, 0))
+	button.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_PRIMARY)
+	button.add_theme_color_override("font_hover_color", Color(0.12, 0.09, 0.06))
+	button.add_theme_color_override("font_pressed_color", Color(0.73, 0.23, 0.18, 1.0))
+	button.add_theme_color_override("font_focus_color", Color(0.73, 0.23, 0.18, 1.0))
+	button.add_theme_font_size_override("font_size", 14)
 
 func _make_section(title: String) -> VBoxContainer:
 	var section := VBoxContainer.new()
