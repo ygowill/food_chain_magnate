@@ -205,27 +205,26 @@ func _load_texture_or_placeholder(path: String, kind: String, warnings: Array[St
 		return mipmapped_tex
 
 	var exists := ResourceLoader.exists(path)
-	var can_load_raw := path.begins_with("res://") or path.begins_with("user://")
-	var raw_file_exists := can_load_raw and FileAccess.file_exists(path)
-	if raw_file_exists and (not exists or _is_import_target_missing(path)):
-		var raw_tex := _load_raw_image_texture(path)
-		if raw_tex != null:
-			PerfTraceClass.counter_add("skin:texture_load_raw_ok", 1)
-			warnings.append("MapSkin: 导入贴图不可用，已从原始图片加载: %s (%s)" % [label, path])
-			return raw_tex
+	if exists:
+		PerfTraceClass.counter_add("skin:texture_load_attempt", 1)
+		var res = ResourceLoader.load(path, "Texture2D", ResourceLoader.CACHE_MODE_IGNORE)
+		if res is Texture2D:
+			PerfTraceClass.counter_add("skin:texture_load_ok", 1)
+			return res
+
+	var raw_tex := _load_raw_image_texture(path)
+	if raw_tex != null:
+		PerfTraceClass.counter_add("skin:texture_load_raw_ok", 1)
+		warnings.append("MapSkin: ResourceLoader 贴图不可用，已从原始图片加载: %s (%s)" % [label, path])
+		return raw_tex
 
 	if not exists:
 		PerfTraceClass.counter_add("skin:texture_missing", 1)
 		warnings.append("MapSkin: 贴图不存在，使用占位: %s (%s)" % [label, path])
 		return _get_placeholder(kind)
-	PerfTraceClass.counter_add("skin:texture_load_attempt", 1)
-	var res = ResourceLoader.load(path, "Texture2D", ResourceLoader.CACHE_MODE_IGNORE)
-	if res is Texture2D:
-		PerfTraceClass.counter_add("skin:texture_load_ok", 1)
-		return res
 
 	PerfTraceClass.counter_add("skin:texture_load_bad_type", 1)
-	warnings.append("MapSkin: 贴图类型错误，使用占位: %s (%s)" % [label, path])
+	warnings.append("MapSkin: 贴图无法通过 ResourceLoader 加载，使用占位: %s (%s)" % [label, path])
 	return _get_placeholder(kind)
 
 static func _is_import_target_missing(path: String) -> bool:

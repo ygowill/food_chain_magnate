@@ -34,6 +34,10 @@ static func build_tests(_host) -> Array[Dictionary]:
 				"fn": func() -> Result: return TestRefs.MapSkinRawImageFallbackTestClass.run(),
 			},
 			{
+				"name": "TutorialCampaignAssetsLoadedTest",
+				"fn": func() -> Result: return TestRefs.TutorialCampaignAssetsLoadedTestClass.run(),
+			},
+			{
 				"name": "MapSnapshotApartmentUiHintsTest",
 				"fn": func() -> Result: return TestRefs.MapSnapshotApartmentUiHintsTestClass.run(),
 			},

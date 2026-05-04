@@ -211,11 +211,7 @@ class RealAssetMapPreview:
 		return null
 
 	static func _load_texture_raw(path: String) -> Texture2D:
-		var raw_path := ProjectSettings.globalize_path(path) if path.begins_with("res://") else path
-		var img := Image.load_from_file(raw_path)
-		if img == null or img.is_empty():
-			return null
-		return ImageTexture.create_from_image(img)
+		return TutorialCampaignScene._load_texture2d_from_path(path)
 
 	func _draw() -> void:
 		_draw_cells()
@@ -1852,6 +1848,22 @@ static func _get_tutorial_skin(cell_size_px: int = 54):
 		maxi(1, int(cell_size_px))
 	)
 
+static func _load_texture2d_from_path(path: String) -> Texture2D:
+	var p := str(path).strip_edges()
+	if p.is_empty():
+		return null
+	if p.begins_with("res://") or p.begins_with("user://"):
+		if ResourceLoader.exists(p):
+			var res = ResourceLoader.load(p, "Texture2D", ResourceLoader.CACHE_MODE_IGNORE)
+			if res is Texture2D:
+				return res
+		if not FileAccess.file_exists(p):
+			return null
+	var img := Image.load_from_file(p)
+	if img == null or img.is_empty():
+		return null
+	return ImageTexture.create_from_image(img)
+
 static func _get_tutorial_content_catalog_static():
 	if _tutorial_content_catalog_cache != null:
 		return _tutorial_content_catalog_cache
@@ -3334,10 +3346,9 @@ func _build_reserve_card_art(image_path: String) -> Control:
 	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	image.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var raw_path := ProjectSettings.globalize_path(image_path) if image_path.begins_with("res://") else image_path
-	var raw_image := Image.load_from_file(raw_path)
-	if raw_image != null and not raw_image.is_empty():
-		image.texture = ImageTexture.create_from_image(raw_image)
+	var tex := TutorialCampaignScene._load_texture2d_from_path(image_path)
+	if tex != null:
+		image.texture = tex
 	else:
 		image.modulate = Color(1, 1, 1, 0.35)
 	frame.add_child(image)

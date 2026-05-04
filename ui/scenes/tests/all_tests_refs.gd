@@ -43,6 +43,7 @@ const UiProductNameMappingContractTestClass = preload("res://ui/scenes/tests/ui_
 const UiFryChefEmployeeIdContractTestClass = preload("res://ui/scenes/tests/ui_fry_chef_employee_id_contract_test.gd")
 const ModuleUiMetadataBootstrapTestClass = preload("res://ui/scenes/tests/module_ui_metadata_bootstrap_test.gd")
 const MapSkinRawImageFallbackTestClass = preload("res://ui/scenes/tests/map_skin_raw_image_fallback_test.gd")
+const TutorialCampaignAssetsLoadedTestClass = preload("res://ui/scenes/tests/tutorial_campaign_assets_loaded_test.gd")
 const MapSnapshotApartmentUiHintsTestClass = preload("res://ui/scenes/tests/map_snapshot_apartment_ui_hints_test.gd")
 const HouseLabelRawImageFallbackTestClass = preload("res://ui/scenes/tests/house_label_raw_image_fallback_test.gd")
 const EmployeeTreeLayoutBottomTagTestClass = preload("res://ui/scenes/tests/employee_tree_layout_bottom_tag_test.gd")
