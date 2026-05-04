@@ -15,7 +15,11 @@ const MAP_DISTANCE_FILL := Color(0.97, 0.73, 0.18, 0.42)
 const MAP_DISTANCE_BORDER := Color(0.65, 0.38, 0.05, 0.95)
 const MAP_GROUND_COLOR := Color("#faf4da")
 const TILE_SIZE := 5
-const TILE_CONTENT_PATH_TEMPLATE := "res://modules/base_tiles/content/tiles/%s.json"
+const TILE_CONTENT_PATH_TEMPLATES := [
+	"res://modules/base_tiles/content/tiles/%s.json",
+	"res://modules/new_districts/content/tiles/%s.json",
+	"res://modules/lobbyists/content/tiles/%s.json",
+]
 const EMPLOYEE_CONTENT_PATH_TEMPLATES := [
 	"res://modules/base_employees/content/employees/%s.json",
 	"res://modules/coffee/content/employees/%s.json",
@@ -65,6 +69,7 @@ class RealAssetMapPreview:
 		"rural_billboard": "res://modules/rural_marketeers/assets/map/icons/rural_billboard.png",
 		"gourmet_guide": "res://modules/gourmet_food_critics/assets/map/icons/gourmet_guide.png",
 		"coffee": "res://modules/coffee/assets/map/icons/coffee.png",
+		"coffee_shop": "res://modules/coffee/assets/map/icons/coffee.png",
 	}
 	const MARKETING_ICON_PATHS := {
 		"default": "res://modules/base_marketing/assets/map/icons/marketing.png",
@@ -351,7 +356,7 @@ class RealAssetMapPreview:
 		match piece_id:
 			"highway_offramp":
 				return Vector2i(1, 2)
-			"rural_billboard", "gourmet_guide", "coffee", "lobbyists_roadworks_marker":
+			"rural_billboard", "gourmet_guide", "coffee", "coffee_shop", "lobbyists_roadworks_marker":
 				return Vector2i.ONE
 			"lobbyists_park_tile_z", "park":
 				return Vector2i(2, 2)
@@ -1732,7 +1737,7 @@ func _render_map_extensions_lesson() -> void:
 	var preview := _make_section("新区域、说客、乡村都在改地图")
 	preview.add_child(_build_real_map_preview(_build_map_extensions_preview_state(), _build_map_extensions_preview_options()))
 	preview.add_child(_make_rich_text(
-		"新区域会加入额外地图板块和公寓。公寓是房屋，广告命中时会放入更多需求，而且不受普通房屋需求上限限制；它不会自动获得花园收入翻倍。\n\n说客能放建设中道路或公园。建设中道路本回合会作为道路施工影响晚餐路线，清理阶段后才并入正式路网；公园相邻房屋成交时给额外收入，但不改变房屋选店分数。\n\n乡村营销员会在乡村地区放巨型广告牌。乡村地区最后结算、需求可持续堆积；首次使用乡村营销员后，还会解锁高速公路出口相关放置。",
+		"左侧是真实的新区域板块：公寓是房屋，广告命中时会放入更多需求，而且不受普通房屋需求上限限制；它不会自动获得花园收入翻倍。\n\n右侧是真实的说客双公园板块。公园相邻房屋成交时给额外收入，但不改变房屋选店分数。说客放出的道路施工不是普通建筑，清理阶段后才并入正式路网。\n\n乡村营销员会在乡村地区放巨型广告牌。乡村地区不是普通地图板块内的一格建筑，结算顺序也独立；首次使用乡村营销员后，还会解锁高速公路出口相关放置。",
 		260
 	))
 	_content_body.add_child(preview)
@@ -1749,7 +1754,7 @@ func _render_marketing_extensions_lesson() -> void:
 	var preview := _make_section("营销扩展先看结算对象")
 	preview.add_child(_build_real_map_preview(_build_marketing_extensions_preview_state(), _build_marketing_extensions_preview_options()))
 	preview.add_child(_make_rich_text(
-		"大众营销员改变的是营销阶段的结算次数：同一批已经在地图上的广告会在本阶段多结算，从而更快制造需求，也更快消耗持续时间。\n\n美食评论家使用美食指南，只影响带花园房屋；普通房屋不会因为美食指南而获得需求。图中美食指南旁边同时有普通房屋和带花园房屋，只有带花园房屋被标为有效覆盖。\n\n番茄酱不是主动放置的广告。如果你制造的需求被别人卖掉，晚餐后会获得对应效果；它影响之后的晚餐选店比较，不会倒回改变刚刚结算过的房屋。",
+		"大众营销员改变的是营销阶段的结算次数：同一批已经在地图上的广告会在本阶段多结算，从而更快制造需求，也更快消耗持续时间。\n\n美食评论家使用美食指南。它必须作为一块完整营销板件放在地图内，并贴着道路；覆盖对象不是附近房屋，而是所有带花园房屋。图中绿色标出的花园房屋会被影响，普通房屋不会因为美食指南获得需求。\n\n番茄酱不是主动放置的广告。如果你制造的需求被别人卖掉，晚餐后会获得对应效果；它影响之后的晚餐选店比较，不会倒回改变刚刚结算过的房屋。",
 		245
 	))
 	_content_body.add_child(preview)
@@ -1783,7 +1788,7 @@ func _render_food_extensions_lesson() -> void:
 	var coffee_route := _make_section("咖啡是路上购买")
 	coffee_route.add_child(_build_real_map_preview(_build_coffee_preview_state(), _build_coffee_preview_options()))
 	coffee_route.add_child(_make_rich_text(
-		"咖啡结算发生在目标餐厅已经确定之后。顾客沿最短路线去目标餐厅时，可能经过餐厅或咖啡店并购买咖啡；如果路线无法确定共同经过的购买点，就不会强行拆分成多条不同购买结果。\n\n所以咖啡要用路线理解：先选主餐店，再看路上有没有可购买咖啡的位置。",
+		"咖啡结算发生在目标餐厅已经确定之后。顾客沿最短路线去目标餐厅时，可能经过餐厅或咖啡店旁边的道路并购买咖啡；如果路线无法确定共同经过的购买点，就不会强行拆分成多条不同购买结果。\n\n所以咖啡要用路线理解：先选主餐店，再看路上有没有可购买咖啡的位置。",
 		155
 	))
 	_content_body.add_child(coffee_route)
@@ -1851,11 +1856,14 @@ func _build_process_chip(text: String) -> Control:
 	return chip
 
 func _build_employee_card_row(employee_ids: Array, scale: float = 0.84) -> Control:
-	var row := HBoxContainer.new()
+	var row := GridContainer.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", 10)
+	row.columns = mini(4, maxi(1, employee_ids.size()))
+	row.add_theme_constant_override("h_separation", 10)
+	row.add_theme_constant_override("v_separation", 10)
+	var display_scale := maxf(scale, 1.0)
 	for employee_id in employee_ids:
-		row.add_child(_build_employee_card(str(employee_id), scale))
+		row.add_child(_build_employee_card(str(employee_id), display_scale))
 	return row
 
 func _build_employee_card(employee_id: String, scale: float) -> Control:
@@ -1864,7 +1872,7 @@ func _build_employee_card(employee_id: String, scale: float) -> Control:
 	card.variant = EmployeeCardClass.CardVariant.COMPACT
 	card.draggable = false
 	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	card.set_display_scale(scale)
+	card.set_display_scale(maxf(scale, 0.92))
 	card.setup(def)
 	return card
 
@@ -2164,13 +2172,15 @@ func _build_preview_map_state(tile_ids: Array = []) -> Dictionary:
 		"road_segments": {},
 		"houses": [],
 		"restaurants": [],
+		"map_pieces": [],
+		"drink_sources": [],
 	}
 	for i in range(ids.size()):
 		_apply_preview_tile(state, str(ids[i]), Vector2i(i * TILE_SIZE, 0))
 	return state
 
 func _apply_preview_tile(state: Dictionary, tile_id: String, origin: Vector2i) -> void:
-	var tile_data := _load_json_dict(TILE_CONTENT_PATH_TEMPLATE % tile_id)
+	var tile_data := _load_tile_json_dict(tile_id)
 	if tile_data.is_empty():
 		return
 
@@ -2194,6 +2204,7 @@ func _apply_preview_tile(state: Dictionary, tile_id: String, origin: Vector2i) -
 	state["road_segments"] = road_map
 
 	var houses: Array = state.get("houses", [])
+	var map_pieces: Array = state.get("map_pieces", [])
 	var structures_val = tile_data.get("printed_structures", [])
 	if structures_val is Array:
 		for structure_val in structures_val:
@@ -2201,16 +2212,37 @@ func _apply_preview_tile(state: Dictionary, tile_id: String, origin: Vector2i) -
 				continue
 			var structure: Dictionary = (structure_val as Dictionary).duplicate(true)
 			var piece_id := str(structure.get("piece_id", "")).strip_edges()
-			if piece_id != "house" and piece_id != "house_with_garden" and piece_id != "apartment":
-				continue
 			var local_anchor := _variant_to_vector2i(structure.get("anchor", [0, 0]))
 			structure["anchor"] = origin + local_anchor
-			var props_val = structure.get("house_props", {})
-			if props_val is Dictionary:
-				for prop_key in (props_val as Dictionary).keys():
-					structure[prop_key] = (props_val as Dictionary)[prop_key]
-			houses.append(structure)
+			if piece_id == "house" or piece_id == "house_with_garden" or piece_id == "apartment":
+				var props_val = structure.get("house_props", {})
+				if props_val is Dictionary:
+					for prop_key in (props_val as Dictionary).keys():
+						structure[prop_key] = (props_val as Dictionary)[prop_key]
+				houses.append(structure)
+			else:
+				map_pieces.append(structure)
 	state["houses"] = houses
+	state["map_pieces"] = map_pieces
+
+	var drink_sources: Array = state.get("drink_sources", [])
+	var sources_val = tile_data.get("drink_sources", [])
+	if sources_val is Array:
+		for source_val in sources_val:
+			if not (source_val is Dictionary):
+				continue
+			var source: Dictionary = (source_val as Dictionary).duplicate(true)
+			var local_pos := _variant_to_vector2i(source.get("pos", source.get("world_pos", [0, 0])))
+			source["world_pos"] = origin + local_pos
+			drink_sources.append(source)
+	state["drink_sources"] = drink_sources
+
+func _load_tile_json_dict(tile_id: String) -> Dictionary:
+	for path_template in TILE_CONTENT_PATH_TEMPLATES:
+		var data := _load_json_dict(str(path_template) % tile_id)
+		if not data.is_empty():
+			return data
+	return {}
 
 func _load_json_dict(path: String) -> Dictionary:
 	var file := FileAccess.open(path, FileAccess.READ)
@@ -2542,56 +2574,14 @@ func _build_inventory_preview_options() -> Dictionary:
 	}
 
 func _build_map_extensions_preview_state() -> Dictionary:
-	var road_map: Dictionary = {}
-	for y in range(5):
-		var dirs: Array[String] = []
-		if y > 0:
-			dirs.append("N")
-		if y < 4:
-			dirs.append("S")
-		if y == 3:
-			dirs.append("E")
-			dirs.append("W")
-		road_map[Vector2i(3, y)] = [_make_road_segment(dirs)]
-	for x in range(10):
-		var dirs2: Array[String] = []
-		if x > 0:
-			dirs2.append("W")
-		if x < 9:
-			dirs2.append("E")
-		if x == 3:
-			dirs2.append("N")
-			dirs2.append("S")
-		road_map[Vector2i(x, 3)] = [_make_road_segment(dirs2)]
-	return {
-		"road_segments": road_map,
-		"houses": [
-			{"piece_id": "apartment", "anchor": Vector2i(0, 0), "house_id": "A", "house_number": 1},
-			{
-				"piece_id": "house_with_garden",
-				"anchor": Vector2i(5, 0),
-				"house_id": "G",
-				"house_number": 2,
-				"garden_cells": [Vector2i(5, 2), Vector2i(6, 2)],
-				"min": Vector2i(5, 0),
-				"max": Vector2i(6, 2),
-			},
-		],
-		"restaurants": [],
-		"map_pieces": [
-			{"piece_id": "park", "anchor": Vector2i(8, 0), "size": Vector2i(2, 2)},
-			{"piece_id": "lobbyists_roadworks_marker", "anchor": Vector2i(4, 3), "marker": true},
-			{"piece_id": "rural_billboard", "anchor": Vector2i(8, 2), "marker": true},
-			{"piece_id": "highway_offramp", "anchor": Vector2i(10, 2), "size": Vector2i(1, 2)},
-		],
-	}
+	return _build_preview_map_state(["tile_x", "tile_z"])
 
 func _build_map_extensions_preview_options() -> Dictionary:
 	return {
-		"margin_cells": {"left": 0, "right": 1, "top": 0, "bottom": 0},
 		"overlays": [
-			_make_map_overlay("apartment_area", _cells_in_rect(Vector2i(0, 0), Vector2i(2, 2)), MAP_VALID_FILL, MAP_VALID_BORDER, 2),
-			_make_map_overlay("roadworks", [Vector2i(4, 3)], MAP_DISTANCE_FILL, MAP_DISTANCE_BORDER, 2),
+			_make_map_overlay("apartment_area", _cells_in_rect(Vector2i(1, 1), Vector2i(3, 3)), MAP_VALID_FILL, MAP_VALID_BORDER, 2),
+			_make_map_overlay("lobbyist_park_left", _cells_in_rect(Vector2i(5, 0), Vector2i(6, 1)), MAP_DISTANCE_FILL, MAP_DISTANCE_BORDER, 2),
+			_make_map_overlay("lobbyist_park_right", _cells_in_rect(Vector2i(8, 3), Vector2i(9, 4)), MAP_DISTANCE_FILL, MAP_DISTANCE_BORDER, 2),
 		],
 	}
 
@@ -2599,7 +2589,7 @@ func _build_marketing_extensions_preview_state() -> Dictionary:
 	var road_map: Dictionary = {}
 	for y in range(5):
 		road_map[Vector2i(4, y)] = [_make_vertical_road_segment(y)]
-	var guide := _make_marketing_placement("gourmet_guide", 1, Vector2i(4, 2), Vector2i(1, 1))
+	var guide := _make_marketing_placement("gourmet_guide", 17, Vector2i(5, 3), Vector2i(2, 2))
 	guide.erase("product")
 	return {
 		"road_segments": road_map,
@@ -2650,7 +2640,7 @@ func _build_coffee_preview_state() -> Dictionary:
 			{"restaurant_id": "rest_coffee_target", "owner": 0, "anchor": Vector2i(7, 3)},
 		],
 		"map_pieces": [
-			{"piece_id": "coffee", "anchor": Vector2i(4, 1), "marker": true},
+			{"piece_id": "coffee_shop", "anchor": Vector2i(5, 1)},
 		],
 	}
 
@@ -2658,7 +2648,7 @@ func _build_coffee_preview_options() -> Dictionary:
 	return {
 		"overlays": [
 			_make_map_overlay("coffee_route", [Vector2i(1, 2), Vector2i(2, 2), Vector2i(3, 2), Vector2i(4, 2), Vector2i(5, 2), Vector2i(6, 2), Vector2i(7, 2)], MAP_DISTANCE_FILL, MAP_DISTANCE_BORDER, 2),
-			_make_map_overlay("coffee_stop", [Vector2i(4, 1)], MAP_VALID_FILL, MAP_VALID_BORDER, 2),
+			_make_map_overlay("coffee_stop", [Vector2i(5, 1)], MAP_VALID_FILL, MAP_VALID_BORDER, 2),
 		],
 	}
 
