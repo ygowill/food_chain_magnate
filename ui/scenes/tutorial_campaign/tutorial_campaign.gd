@@ -16,6 +16,20 @@ const MAP_DISTANCE_BORDER := Color(0.65, 0.38, 0.05, 0.95)
 const MAP_GROUND_COLOR := Color("#faf4da")
 const TILE_SIZE := 5
 const TILE_CONTENT_PATH_TEMPLATE := "res://modules/base_tiles/content/tiles/%s.json"
+const EMPLOYEE_CONTENT_PATH_TEMPLATES := [
+	"res://modules/base_employees/content/employees/%s.json",
+	"res://modules/coffee/content/employees/%s.json",
+	"res://modules/fry_chefs/content/employees/%s.json",
+	"res://modules/gourmet_food_critics/content/employees/%s.json",
+	"res://modules/kimchi/content/employees/%s.json",
+	"res://modules/lobbyists/content/employees/%s.json",
+	"res://modules/mass_marketeers/content/employees/%s.json",
+	"res://modules/movie_stars/content/employees/%s.json",
+	"res://modules/night_shift_managers/content/employees/%s.json",
+	"res://modules/noodles/content/employees/%s.json",
+	"res://modules/rural_marketeers/content/employees/%s.json",
+	"res://modules/sushi/content/employees/%s.json",
+]
 
 const FALLBACK_RESERVE_CARDS := [
 	{"cash": 50, "ceo_slots": 2},
@@ -43,12 +57,23 @@ class RealAssetMapPreview:
 	const HOUSE_TEXTURE_PATH := "res://modules/base_pieces/assets/map/pieces/house.png"
 	const GARDEN_TEXTURE_PATH := "res://modules/base_pieces/assets/map/pieces/garden_large.png"
 	const APARTMENT_TEXTURE_PATH := "res://modules/new_districts/assets/map/pieces/apartment.png"
+	const EXTRA_PIECE_TEXTURE_PATHS := {
+		"park": "res://modules/base_pieces/assets/map/pieces/park.png",
+		"lobbyists_park_tile_z": "res://modules/lobbyists/assets/map/pieces/park_tile_z.png",
+		"lobbyists_roadworks_marker": "res://modules/lobbyists/assets/map/icons/under_construction.png",
+		"highway_offramp": "res://modules/rural_marketeers/assets/map/pieces/freeway.png",
+		"rural_billboard": "res://modules/rural_marketeers/assets/map/icons/rural_billboard.png",
+		"gourmet_guide": "res://modules/gourmet_food_critics/assets/map/icons/gourmet_guide.png",
+		"coffee": "res://modules/coffee/assets/map/icons/coffee.png",
+	}
 	const MARKETING_ICON_PATHS := {
 		"default": "res://modules/base_marketing/assets/map/icons/marketing.png",
 		"billboard": "res://modules/base_marketing/assets/map/icons/billboard.png",
 		"mailbox": "res://modules/base_marketing/assets/map/icons/mailbox.png",
 		"radio": "res://modules/base_marketing/assets/map/icons/radio.png",
 		"airplane": "res://modules/base_marketing/assets/map/icons/airplane.png",
+		"gourmet_guide": "res://modules/gourmet_food_critics/assets/map/icons/gourmet_guide.png",
+		"rural_billboard": "res://modules/rural_marketeers/assets/map/icons/rural_billboard.png",
 	}
 	const PRODUCT_ICON_PATHS := {
 		"burger": "res://modules/base_products/assets/map/icons/burger.png",
@@ -56,6 +81,10 @@ class RealAssetMapPreview:
 		"soda": "res://modules/base_products/assets/map/icons/soda.png",
 		"beer": "res://modules/base_products/assets/map/icons/beer.png",
 		"lemonade": "res://modules/base_products/assets/map/icons/lemonade.png",
+		"coffee": "res://modules/coffee/assets/map/icons/coffee.png",
+		"noodles": "res://modules/noodles/assets/map/icons/noodles.png",
+		"sushi": "res://modules/sushi/assets/map/icons/sushi.png",
+		"kimchi": "res://modules/kimchi/assets/map/icons/kimchi.png",
 	}
 	const DRINK_SOURCE_ICON_PATHS := {
 		"soda": "res://modules/base_products/assets/map/drink_sources/soda.png",
@@ -110,6 +139,8 @@ class RealAssetMapPreview:
 		textures["house"] = _load_texture_raw(HOUSE_TEXTURE_PATH)
 		textures["garden_large"] = _load_texture_raw(GARDEN_TEXTURE_PATH)
 		textures["apartment"] = _load_texture_raw(APARTMENT_TEXTURE_PATH)
+		for piece_key in EXTRA_PIECE_TEXTURE_PATHS.keys():
+			textures["piece_%s" % str(piece_key)] = _load_texture_raw(str(EXTRA_PIECE_TEXTURE_PATHS[piece_key]))
 		for key in MARKETING_ICON_PATHS.keys():
 			textures["marketing_%s" % str(key)] = _load_texture_raw(str(MARKETING_ICON_PATHS[key]))
 		for key2 in PRODUCT_ICON_PATHS.keys():
@@ -130,6 +161,7 @@ class RealAssetMapPreview:
 		_draw_cells()
 		_draw_tile_boundary()
 		_draw_drink_sources()
+		_draw_map_pieces()
 		_draw_houses()
 		_draw_restaurants()
 		_draw_structure_preview()
@@ -272,6 +304,59 @@ class RealAssetMapPreview:
 				_draw_texture_aspect_fit(tex, rect, Color(1, 1, 1, 0.95))
 			else:
 				draw_rect(rect.grow(-6), Color(0.35, 0.55, 0.88, 0.82), true)
+
+	func _draw_map_pieces() -> void:
+		var pieces_val = preview_state.get("map_pieces", [])
+		if not (pieces_val is Array):
+			return
+		for piece_val in pieces_val:
+			if not (piece_val is Dictionary):
+				continue
+			var piece: Dictionary = piece_val
+			var piece_id := str(piece.get("piece_id", piece.get("id", ""))).strip_edges()
+			if piece_id.is_empty():
+				continue
+			var cells: Array[Vector2i] = []
+			var cells_val = piece.get("cells", [])
+			if cells_val is Array and not cells_val.is_empty():
+				for cell_val in cells_val:
+					var read_cell := _try_vector2i(cell_val)
+					if bool(read_cell.get("ok", false)):
+						cells.append(read_cell["value"])
+			else:
+				var anchor_read := _try_vector2i(piece.get("anchor", piece.get("world_pos", null)))
+				if not bool(anchor_read.get("ok", false)):
+					continue
+				var size := _read_positive_size(piece.get("size", _default_piece_size(piece_id)), _default_piece_size(piece_id))
+				cells = _footprint_cells(anchor_read["value"], size, int(piece.get("rotation", 0)))
+			if cells.is_empty():
+				continue
+			var rect := _rect_for_cells(cells)
+			var tex: Texture2D = textures.get("piece_%s" % piece_id, null)
+			var marker_only := bool(piece.get("marker", false))
+			if not marker_only:
+				var fill := Color("#78a869") if piece_id.find("park") >= 0 else Color("#f4edd1")
+				if piece_id == "highway_offramp":
+					fill = Color("#d6d0c1")
+				_draw_board_piece_background(rect, fill, 1.0)
+			if tex != null:
+				if marker_only:
+					_draw_texture_aspect_fit(tex, rect.grow(-maxf(2.0, float(CELL_SIZE) * 0.10)), Color(1, 1, 1, 0.95))
+				else:
+					_draw_texture_aspect_fit(tex, rect.grow(-maxf(2.0, float(CELL_SIZE) * 0.08)), Color(1, 1, 1, 0.92))
+			if not marker_only:
+				_draw_board_piece_surface_lines(rect, 1.0)
+
+	func _default_piece_size(piece_id: String) -> Vector2i:
+		match piece_id:
+			"highway_offramp":
+				return Vector2i(1, 2)
+			"rural_billboard", "gourmet_guide", "coffee", "lobbyists_roadworks_marker":
+				return Vector2i.ONE
+			"lobbyists_park_tile_z", "park":
+				return Vector2i(2, 2)
+			_:
+				return Vector2i.ONE
 
 	func _draw_tile_boundary() -> void:
 		var origin := _board_origin_px()
@@ -1062,6 +1147,36 @@ const LESSONS := [
 		"kicker": "长期加成",
 		"summary": "里程碑由游戏中的关键事件触发，提供员工、价格、收入、冰箱、顺序等长期效果。同回合获得的里程碑会在清理阶段从公共池移除；第二次银行破产会结束游戏并按现金排名。",
 	},
+	{
+		"id": "expansion_overview",
+		"title": "13. 扩展模块怎么看",
+		"kicker": "先看改了哪条链路",
+		"summary": "扩展不是额外背诵一堆例外，而是分别改动地图、营销、员工、晚餐需求方案、经济结算等链路。先判断它改的是哪条链路，再看具体卡面或板件。",
+	},
+	{
+		"id": "map_extensions",
+		"title": "14. 地图扩展",
+		"kicker": "新区域、说客、乡村",
+		"summary": "地图类扩展会改变棋盘本身：公寓提供不同的房屋规则，说客提供建设中道路和公园，乡村营销员会把乡村地区和高速公路出口纳入晚餐路线。",
+	},
+	{
+		"id": "marketing_extensions",
+		"title": "15. 营销扩展",
+		"kicker": "更多结算轮与特殊覆盖",
+		"summary": "营销类扩展主要改变广告结算方式：大众营销员让营销阶段多结算，美食评论家只盯带花园房屋，番茄酱来自别人卖掉你制造的需求。",
+	},
+	{
+		"id": "food_extensions",
+		"title": "16. 食品扩展",
+		"kicker": "替代需求与额外购买",
+		"summary": "面条、寿司、泡菜、咖啡和薯条主厨都会进入晚餐结算，但它们不是简单的新广告商品；多数是替代方案、路上加购或成功售卖后的额外收入。",
+	},
+	{
+		"id": "employee_economy_extensions",
+		"title": "17. 员工与经济扩展",
+		"kicker": "顺序、夜班与规则替换",
+		"summary": "电影明星、夜班经理、储备价格、全新里程碑和艰难抉择会改变行动顺序、员工使用次数、第一次破产后的经济规则或里程碑池，需要在启用模块前单独确认。",
+	},
 ]
 
 var _sidebar: VBoxContainer = null
@@ -1293,6 +1408,16 @@ func _render_lesson() -> void:
 			_render_inventory_lesson()
 		"milestones":
 			_render_milestones_lesson()
+		"expansion_overview":
+			_render_expansion_overview_lesson()
+		"map_extensions":
+			_render_map_extensions_lesson()
+		"marketing_extensions":
+			_render_marketing_extensions_lesson()
+		"food_extensions":
+			_render_food_extensions_lesson()
+		"employee_economy_extensions":
+			_render_employee_economy_extensions_lesson()
 
 func _clear_content_body() -> void:
 	for child in _content_body.get_children():
@@ -1550,7 +1675,7 @@ func _render_inventory_lesson() -> void:
 	drinks.add_child(_build_real_map_preview(_build_inventory_preview_state(), _build_inventory_preview_options()))
 	drinks.add_child(_build_employee_card_row(["errand_boy", "cart_operator", "truck_driver", "zeppelin_pilot"], 0.82))
 	drinks.add_child(_make_rich_text(
-		"采购饮料发生在工作时间的采购饮料子阶段，而且玩家必须已经有餐厅。跑腿伙计直接获得 1 瓶指定饮料；手推车操作员和货车驾驶员需要沿道路从路线经过的进货点拿饮料；飞艇驾驶员可以无视道路。\n\n基础路线采购每个饮料源提供 2 瓶。首个使用跑腿伙计的里程碑会让采购每个来源 +1；首个使用手推车操作员的里程碑会让手推车、货车、飞艇的采购距离能力提高。",
+		"采购饮料发生在工作时间的采购饮料子阶段，而且玩家必须已经有餐厅。跑腿伙计直接获得 1 瓶指定饮料；手推车操作员和货车驾驶员要从餐厅入口相邻道路出发，沿道路画出路线，路线经过进货点旁边的道路时拿到饮料；飞艇驾驶员可以无视道路。\n\n图中黄色路线只走道路格，汽水和柠檬水进货点在道路旁边。基础路线采购每个饮料源提供 2 瓶；相关里程碑会让采购数量或采购距离能力提高。",
 		185
 	))
 	_content_body.add_child(drinks)
@@ -1585,6 +1710,101 @@ func _render_milestones_lesson() -> void:
 		150
 	))
 	_content_body.add_child(endgame)
+
+func _render_expansion_overview_lesson() -> void:
+	var classify := _make_section("先判断扩展改哪条链路")
+	classify.add_child(_build_process_chip_row(["地图结构", "营销结算", "晚餐需求", "员工使用", "经济与里程碑"]))
+	classify.add_child(_make_rich_text(
+		"启用扩展后，不要把它们当成独立小游戏。先问一个问题：这个扩展改的是地图、营销、晚餐需求、员工使用，还是银行/里程碑？\n\n地图扩展改变房屋、道路、公园、乡村或咖啡店等位置；营销扩展改变广告覆盖或结算轮次；食品扩展通常改变晚餐阶段可满足需求的方案；员工扩展改变谁能工作、工作几次、怎样赢平局；经济扩展会替换储备卡或里程碑池。",
+		190
+	))
+	_content_body.add_child(classify)
+
+	var read_cards := _make_section("先看当前模块给出的卡面")
+	read_cards.add_child(_build_employee_card_row(["lobbyist", "rural_marketeer", "mass_marketeer", "night_shift_manager"], 0.82))
+	read_cards.add_child(_make_rich_text(
+		"教程只介绍规则链路，真正开局时仍然以当前启用模块里的员工卡、营销板件和里程碑面板为准。某些模块会替换基础规则，例如储备价格会替换第一次破产后的储备卡处理，全新里程碑会替换基础里程碑池。\n\n如果一个模块没有启用，对应员工、建筑、商品或后续动作就不会出现在本局里。",
+		170
+	))
+	_content_body.add_child(read_cards)
+
+func _render_map_extensions_lesson() -> void:
+	var preview := _make_section("新区域、说客、乡村都在改地图")
+	preview.add_child(_build_real_map_preview(_build_map_extensions_preview_state(), _build_map_extensions_preview_options()))
+	preview.add_child(_make_rich_text(
+		"新区域会加入额外地图板块和公寓。公寓是房屋，广告命中时会放入更多需求，而且不受普通房屋需求上限限制；它不会自动获得花园收入翻倍。\n\n说客能放建设中道路或公园。建设中道路本回合会作为道路施工影响晚餐路线，清理阶段后才并入正式路网；公园相邻房屋成交时给额外收入，但不改变房屋选店分数。\n\n乡村营销员会在乡村地区放巨型广告牌。乡村地区最后结算、需求可持续堆积；首次使用乡村营销员后，还会解锁高速公路出口相关放置。",
+		260
+	))
+	_content_body.add_child(preview)
+
+	var employees := _make_section("对应员工")
+	employees.add_child(_build_employee_card_row(["new_business_developer", "lobbyist", "rural_marketeer"], 0.88))
+	employees.add_child(_make_rich_text(
+		"新业务拓展经理处理基础房屋/花园；说客处理道路施工和公园；乡村营销员处理乡村地区广告。它们的共同点是：效果最终都会回到地图与晚餐路径上，而不是直接给玩家现金。",
+		115
+	))
+	_content_body.add_child(employees)
+
+func _render_marketing_extensions_lesson() -> void:
+	var preview := _make_section("营销扩展先看结算对象")
+	preview.add_child(_build_real_map_preview(_build_marketing_extensions_preview_state(), _build_marketing_extensions_preview_options()))
+	preview.add_child(_make_rich_text(
+		"大众营销员改变的是营销阶段的结算次数：同一批已经在地图上的广告会在本阶段多结算，从而更快制造需求，也更快消耗持续时间。\n\n美食评论家使用美食指南，只影响带花园房屋；普通房屋不会因为美食指南而获得需求。图中美食指南旁边同时有普通房屋和带花园房屋，只有带花园房屋被标为有效覆盖。\n\n番茄酱不是主动放置的广告。如果你制造的需求被别人卖掉，晚餐后会获得对应效果；它影响之后的晚餐选店比较，不会倒回改变刚刚结算过的房屋。",
+		245
+	))
+	_content_body.add_child(preview)
+
+	var employees := _make_section("对应员工")
+	employees.add_child(_build_employee_card_row(["mass_marketeer", "gourmet_food_critic", "marketing_trainee"], 0.86))
+	employees.add_child(_make_rich_text(
+		"大众营销员在岗时影响整个营销结算阶段；美食评论家来自营销员工线，使用专用营销板件；基础营销员仍负责广告牌、邮箱、飞机和电波。判断覆盖范围时，优先看当前板件类型，而不是员工名字。",
+		130
+	))
+	_content_body.add_child(employees)
+
+func _render_food_extensions_lesson() -> void:
+	var products := _make_section("这些商品不是普通广告商品")
+	products.add_child(_build_product_icon_row(["noodles", "sushi", "kimchi", "coffee"], ["面条", "寿司", "泡菜", "咖啡"]))
+	products.add_child(_make_rich_text(
+		"面条、寿司、泡菜和咖啡都进入晚餐结算，但多数不能像汉堡、披萨、饮料那样直接被基础营销板件制造需求。\n\n面条通常在原需求无法完整满足时作为完整替代；寿司特别关注带花园房屋；泡菜会参与清理阶段后的储存选择，并在晚餐中形成额外方案；咖啡是在顾客去目标餐厅的路上购买，而不是改变目标餐厅本身。",
+		190
+	))
+	_content_body.add_child(products)
+
+	var employees := _make_section("生产线和收入线")
+	employees.add_child(_build_employee_card_row(["noodle_cook", "sushi_cook", "kimchi_master", "fry_chef"], 0.84))
+	employees.add_child(_build_employee_card_row(["barista_trainee", "barista", "lead_barista"], 0.86))
+	employees.add_child(_make_rich_text(
+		"面条厨师、寿司厨师和咖啡师都走生产线；泡菜大师在清理阶段和丢弃库存互动；薯条主厨不制造新的需求，而是在你成功向房屋售卖后增加额外收入。判断这些扩展时，先确认“房屋原需求是否已满足”，再看是否存在替代或额外购买方案。",
+		155
+	))
+	_content_body.add_child(employees)
+
+	var coffee_route := _make_section("咖啡是路上购买")
+	coffee_route.add_child(_build_real_map_preview(_build_coffee_preview_state(), _build_coffee_preview_options()))
+	coffee_route.add_child(_make_rich_text(
+		"咖啡结算发生在目标餐厅已经确定之后。顾客沿最短路线去目标餐厅时，可能经过餐厅或咖啡店并购买咖啡；如果路线无法确定共同经过的购买点，就不会强行拆分成多条不同购买结果。\n\n所以咖啡要用路线理解：先选主餐店，再看路上有没有可购买咖啡的位置。",
+		155
+	))
+	_content_body.add_child(coffee_route)
+
+func _render_employee_economy_extensions_lesson() -> void:
+	var employees := _make_section("员工扩展改变顺序和使用次数")
+	employees.add_child(_build_employee_card_row(["waitress", "movie_star_b", "movie_star_c", "movie_star_d"], 0.76))
+	employees.add_child(_build_employee_card_row(["night_shift_manager", "kitchen_trainee", "marketing_trainee"], 0.84))
+	employees.add_child(_make_rich_text(
+		"电影明星来自服务员线，会影响商业秩序选择和平局判断；玩家最多拥有一个电影明星。夜班经理让不需要发薪的员工可以在本回合工作两次，但 CEO 不参与夜班，多个夜班经理也不会重复叠加。\n\n这些效果都要求员工在公司结构中实际在岗。留在储备区、忙碌未归或被薪水问题卡住的员工，不会提供对应能力。",
+		185
+	))
+	_content_body.add_child(employees)
+
+	var economy := _make_section("经济模块会替换基础处理")
+	economy.add_child(_build_process_chip_row(["储备价格", "全新里程碑", "艰难抉择"]))
+	economy.add_child(_make_rich_text(
+		"储备价格会替换基础储备卡：第一次破产后不再用储备卡决定 CEO 直属槽位，而是按该模块规则改变之后的基础单价。\n\n全新里程碑会替换基础里程碑池，很多效果会直接改变营销、晚餐或地图放置；艰难抉择则让部分基础里程碑在指定时机过期。启用这些模块时，不能同时按基础里程碑记忆去推断后续效果，必须看当前里程碑面板。",
+		185
+	))
+	_content_body.add_child(economy)
 
 func _build_phase_track_preview() -> Control:
 	var frame := PanelContainer.new()
@@ -1649,8 +1869,12 @@ func _build_employee_card(employee_id: String, scale: float) -> Control:
 	return card
 
 func _load_employee_card_data(employee_id: String) -> Dictionary:
-	var path := "res://modules/base_employees/content/employees/%s.json" % employee_id
-	var data := _load_json_dict(path)
+	var data := {}
+	for path_template in EMPLOYEE_CONTENT_PATH_TEMPLATES:
+		var path := str(path_template) % employee_id
+		data = _load_json_dict(path)
+		if not data.is_empty():
+			break
 	if data.is_empty():
 		return {
 			"id": employee_id,
@@ -1749,6 +1973,15 @@ func _build_product_icon_chip(product_id: String, label_text: String) -> Control
 
 func _product_icon_path(product_id: String) -> String:
 	var normalized := "soda" if product_id == "cola" else product_id
+	match normalized:
+		"coffee":
+			return "res://modules/coffee/assets/map/icons/coffee.png"
+		"noodles":
+			return "res://modules/noodles/assets/map/icons/noodles.png"
+		"sushi":
+			return "res://modules/sushi/assets/map/icons/sushi.png"
+		"kimchi":
+			return "res://modules/kimchi/assets/map/icons/kimchi.png"
 	return "res://modules/base_products/assets/map/icons/%s.png" % normalized
 
 func _load_texture_from_res_path(path: String) -> Texture2D:
@@ -2288,8 +2521,8 @@ func _build_inventory_preview_state() -> Dictionary:
 			{"restaurant_id": "rest_inventory", "owner": 0, "anchor": Vector2i(2, 3)},
 		],
 		"drink_sources": [
-			{"world_pos": Vector2i(5, 2), "type": "soda"},
-			{"world_pos": Vector2i(7, 2), "type": "lemonade"},
+			{"world_pos": Vector2i(5, 1), "type": "soda"},
+			{"world_pos": Vector2i(7, 1), "type": "lemonade"},
 		],
 	}
 
@@ -2305,6 +2538,127 @@ func _build_inventory_preview_options() -> Dictionary:
 					"border_width": 2,
 				},
 			},
+		],
+	}
+
+func _build_map_extensions_preview_state() -> Dictionary:
+	var road_map: Dictionary = {}
+	for y in range(5):
+		var dirs: Array[String] = []
+		if y > 0:
+			dirs.append("N")
+		if y < 4:
+			dirs.append("S")
+		if y == 3:
+			dirs.append("E")
+			dirs.append("W")
+		road_map[Vector2i(3, y)] = [_make_road_segment(dirs)]
+	for x in range(10):
+		var dirs2: Array[String] = []
+		if x > 0:
+			dirs2.append("W")
+		if x < 9:
+			dirs2.append("E")
+		if x == 3:
+			dirs2.append("N")
+			dirs2.append("S")
+		road_map[Vector2i(x, 3)] = [_make_road_segment(dirs2)]
+	return {
+		"road_segments": road_map,
+		"houses": [
+			{"piece_id": "apartment", "anchor": Vector2i(0, 0), "house_id": "A", "house_number": 1},
+			{
+				"piece_id": "house_with_garden",
+				"anchor": Vector2i(5, 0),
+				"house_id": "G",
+				"house_number": 2,
+				"garden_cells": [Vector2i(5, 2), Vector2i(6, 2)],
+				"min": Vector2i(5, 0),
+				"max": Vector2i(6, 2),
+			},
+		],
+		"restaurants": [],
+		"map_pieces": [
+			{"piece_id": "park", "anchor": Vector2i(8, 0), "size": Vector2i(2, 2)},
+			{"piece_id": "lobbyists_roadworks_marker", "anchor": Vector2i(4, 3), "marker": true},
+			{"piece_id": "rural_billboard", "anchor": Vector2i(8, 2), "marker": true},
+			{"piece_id": "highway_offramp", "anchor": Vector2i(10, 2), "size": Vector2i(1, 2)},
+		],
+	}
+
+func _build_map_extensions_preview_options() -> Dictionary:
+	return {
+		"margin_cells": {"left": 0, "right": 1, "top": 0, "bottom": 0},
+		"overlays": [
+			_make_map_overlay("apartment_area", _cells_in_rect(Vector2i(0, 0), Vector2i(2, 2)), MAP_VALID_FILL, MAP_VALID_BORDER, 2),
+			_make_map_overlay("roadworks", [Vector2i(4, 3)], MAP_DISTANCE_FILL, MAP_DISTANCE_BORDER, 2),
+		],
+	}
+
+func _build_marketing_extensions_preview_state() -> Dictionary:
+	var road_map: Dictionary = {}
+	for y in range(5):
+		road_map[Vector2i(4, y)] = [_make_vertical_road_segment(y)]
+	var guide := _make_marketing_placement("gourmet_guide", 1, Vector2i(4, 2), Vector2i(1, 1))
+	guide.erase("product")
+	return {
+		"road_segments": road_map,
+		"houses": [
+			{"piece_id": "house", "anchor": Vector2i(0, 0), "house_id": "2", "house_number": 2},
+			{
+				"piece_id": "house_with_garden",
+				"anchor": Vector2i(6, 0),
+				"house_id": "4",
+				"house_number": 4,
+				"garden_cells": [Vector2i(8, 0), Vector2i(8, 1)],
+				"min": Vector2i(6, 0),
+				"max": Vector2i(8, 1),
+			},
+			{"piece_id": "house", "anchor": Vector2i(0, 3), "house_id": "5", "house_number": 5},
+		],
+		"restaurants": [],
+		"marketing_placements": [
+			guide,
+		],
+	}
+
+func _build_marketing_extensions_preview_options() -> Dictionary:
+	return {
+		"overlays": [
+			_make_map_overlay("gourmet_guide_targets", [Vector2i(6, 0), Vector2i(7, 0), Vector2i(6, 1), Vector2i(7, 1), Vector2i(8, 0), Vector2i(8, 1)], MAP_VALID_FILL, MAP_VALID_BORDER, 2),
+		],
+	}
+
+func _build_coffee_preview_state() -> Dictionary:
+	var road_map: Dictionary = {}
+	for x in range(1, 8):
+		var dirs: Array[String] = []
+		if x > 1:
+			dirs.append("W")
+		if x < 7:
+			dirs.append("E")
+		if x == 7:
+			dirs.append("S")
+		road_map[Vector2i(x, 2)] = [_make_road_segment(dirs)]
+	road_map[Vector2i(7, 3)] = [_make_road_segment(["N"])]
+	return {
+		"road_segments": road_map,
+		"houses": [
+			{"piece_id": "house", "anchor": Vector2i(0, 0), "house_id": "2", "house_number": 2},
+		],
+		"restaurants": [
+			{"restaurant_id": "rest_coffee_target", "owner": 0, "anchor": Vector2i(7, 3)},
+		],
+		"map_pieces": [
+			{"piece_id": "coffee", "anchor": Vector2i(4, 1), "marker": true},
+		],
+	}
+
+func _build_coffee_preview_options() -> Dictionary:
+	return {
+		"overlays": [
+			_make_map_overlay("coffee_route", [Vector2i(1, 2), Vector2i(2, 2), Vector2i(3, 2), Vector2i(4, 2), Vector2i(5, 2), Vector2i(6, 2), Vector2i(7, 2)], MAP_DISTANCE_FILL, MAP_DISTANCE_BORDER, 2),
+			_make_map_overlay("coffee_stop", [Vector2i(4, 1)], MAP_VALID_FILL, MAP_VALID_BORDER, 2),
 		],
 	}
 
@@ -2399,6 +2753,17 @@ func _build_distance_preview_options(case_id: String) -> Dictionary:
 			},
 		],
 	}
+
+func _cells_in_rect(min_pos: Vector2i, max_pos: Vector2i) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	var x0 := mini(min_pos.x, max_pos.x)
+	var x1 := maxi(min_pos.x, max_pos.x)
+	var y0 := mini(min_pos.y, max_pos.y)
+	var y1 := maxi(min_pos.y, max_pos.y)
+	for y in range(y0, y1 + 1):
+		for x in range(x0, x1 + 1):
+			cells.append(Vector2i(x, y))
+	return cells
 
 func _restaurant_cells_for_anchor(anchor: Vector2i, rotation: int) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
