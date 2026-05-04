@@ -1764,70 +1764,96 @@ func _render_expansion_overview_lesson() -> void:
 	var classify := _make_section("先判断扩展改哪条链路")
 	classify.add_child(_build_process_chip_row(["地图结构", "营销结算", "晚餐需求", "员工使用", "经济与里程碑"]))
 	classify.add_child(_make_rich_text(
-		"启用扩展后，不要把它们当成独立小游戏。先问一个问题：这个扩展改的是地图、营销、晚餐需求、员工使用，还是银行/里程碑？\n\n地图扩展改变房屋、道路、公园、乡村或咖啡店等位置；营销扩展改变广告覆盖或结算轮次；食品扩展通常改变晚餐阶段可满足需求的方案；员工扩展改变谁能工作、工作几次、怎样赢平局；经济扩展会替换储备卡或里程碑池。",
+		"启用扩展后，不要把它们当成独立小游戏。先问一个问题：这个扩展改的是地图、营销、晚餐需求、员工使用，还是银行/里程碑？\n\n后面的章节会按模块拆开讲。新手阅读时可以先跳到当前房间启用的模块，只看它新增了什么组件、在哪个阶段触发、会不会改晚餐选店或收入。",
 		190
 	))
 	_content_body.add_child(classify)
 
-	var read_cards := _make_section("先看当前模块给出的卡面")
-	read_cards.add_child(_build_employee_card_row(["lobbyist", "rural_marketeer", "mass_marketeer", "night_shift_manager"], 0.82))
-	read_cards.add_child(_make_rich_text(
-		"教程只介绍规则链路，真正开局时仍然以当前启用模块里的员工卡、营销板件和里程碑面板为准。某些模块会替换基础规则，例如储备价格会替换第一次破产后的储备卡处理，全新里程碑会替换基础里程碑池。\n\n如果一个模块没有启用，对应员工、建筑、商品或后续动作就不会出现在本局里。",
-		170
-	))
-	_content_body.add_child(read_cards)
+	_add_extension_module_section(
+		"读取扩展的顺序",
+		"先看房间启用列表，再看新增卡面、板件和里程碑面板。没有启用的模块，对应员工、商品、建筑或后续动作都不会出现。\n\n如果一个扩展会替换基础规则，界面里的当前面板优先于记忆里的基础规则。例如储备价格会替换第一次破产后的储备卡处理，全新里程碑会替换基础里程碑池。"
+	)
 
 func _render_map_extensions_lesson() -> void:
-	var preview := _make_section("新区域、说客、乡村都在改地图")
+	var preview := _make_section("地图扩展的共同点")
 	preview.add_child(_build_real_map_preview(_build_map_extensions_preview_state(), _build_map_extensions_preview_options()))
 	preview.add_child(_make_rich_text(
-		"左侧是真实的新区域板块：公寓是房屋，广告命中时会放入更多需求，而且不受普通房屋需求上限限制；它不会自动获得花园收入翻倍。\n\n右侧是真实的说客双公园板块。公园相邻房屋成交时给额外收入，但不改变房屋选店分数。说客放出的道路施工不是普通建筑，清理阶段后才并入正式路网。\n\n乡村营销员会在乡村地区放巨型广告牌。乡村地区不是普通地图板块内的一格建筑，结算顺序也独立；首次使用乡村营销员后，还会解锁高速公路出口相关放置。",
-		260
+		"地图扩展会改变“哪里有房屋、哪里能走、哪里能放置”。不要只记新增员工，要把新增板块、建筑和道路效果一起看。\n\n上图左侧是真实的新区域公寓板块，右侧是真实的说客双公园板块；乡村地区和高速出口不是普通地图板块内的一格建筑，需要单独按乡村规则理解。",
+		170
 	))
 	_content_body.add_child(preview)
 
-	var employees := _make_section("对应员工")
-	employees.add_child(_build_employee_card_row(["new_business_developer", "lobbyist", "rural_marketeer"], 0.88))
-	employees.add_child(_make_rich_text(
-		"新业务拓展经理处理基础房屋/花园；说客处理道路施工和公园；乡村营销员处理乡村地区广告。它们的共同点是：效果最终都会回到地图与晚餐路径上，而不是直接给玩家现金。",
-		115
-	))
-	_content_body.add_child(employees)
+	_add_extension_module_section(
+		"平衡地图生成",
+		"这个模块只影响开局地图生成，不新增工作时间动作。它会在开局生成多个候选地图并选择更均衡的一张。\n\n新手需要知道的是：地图看起来仍然是普通地图，但道路、房屋、饮料源和起始位置的分布会更稳定；游戏开始后没有额外按钮需要处理。"
+	)
+	_add_extension_module_section(
+		"新区域",
+		"新区域会加入额外地图板块，其中最重要的是公寓。公寓是房屋的一种：广告命中时会放入更多需求，而且不受普通房屋需求上限限制。\n\n公寓不会自动获得花园收入翻倍；看到公寓时，先把它当作“更容易堆出大量需求的房屋”理解。",
+		["new_business_developer"]
+	)
+	_add_extension_module_section(
+		"说客",
+		"说客在工作时间增加一类地图操作：可以放建设中道路，也可以放公园。建设中道路会先影响本回合晚餐路线，清理阶段后才并入正式路网。\n\n公园看的是相邻房屋成交后的额外收入，不改变房屋选择餐厅时的分数。首次使用说客后，还可能立即扩展地图板块。",
+		["lobbyist"]
+	)
+	_add_extension_module_section(
+		"乡村营销员",
+		"乡村营销员操作的是乡村地区，不是普通棋盘里的一栋房屋。乡村地区可以持续累积需求，并且晚餐结算总是排在普通房屋之后。\n\n巨型广告牌会持续给乡村地区制造需求；首次使用乡村营销员后，还会解锁高速公路出口。高速出口放在棋盘边缘外，必须和道路相连，并会改变到乡村地区的路径判断。",
+		["rural_marketeer"]
+	)
 
 func _render_marketing_extensions_lesson() -> void:
 	var preview := _make_section("营销扩展先看结算对象")
 	preview.add_child(_build_real_map_preview(_build_marketing_extensions_preview_state(), _build_marketing_extensions_preview_options()))
 	preview.add_child(_make_rich_text(
-		"大众营销员改变的是营销阶段的结算次数：同一批已经在地图上的广告会在本阶段多结算，从而更快制造需求，也更快消耗持续时间。\n\n美食评论家使用美食指南。它必须作为一块完整营销板件放在地图内，并贴着道路；覆盖对象不是附近房屋，而是所有带花园房屋。图中绿色标出的花园房屋会被影响，普通房屋不会因为美食指南获得需求。\n\n番茄酱不是主动放置的广告。如果你制造的需求被别人卖掉，晚餐后会获得对应效果；它影响之后的晚餐选店比较，不会倒回改变刚刚结算过的房屋。",
-		245
+		"营销扩展最容易混淆：有的改变营销阶段结算次数，有的新增营销板件，有的根本不是主动广告，而是在别人卖掉你的需求后触发。\n\n上图展示美食指南的核心：它作为完整营销板件放在地图上，但覆盖对象是所有带花园房屋，不是附近房屋。",
+		175
 	))
 	_content_body.add_child(preview)
 
-	var employees := _make_section("对应员工")
-	employees.add_child(_build_employee_card_row(["mass_marketeer", "gourmet_food_critic", "marketing_trainee"], 0.86))
-	employees.add_child(_make_rich_text(
-		"大众营销员在岗时影响整个营销结算阶段；美食评论家来自营销员工线，使用专用营销板件；基础营销员仍负责广告牌、邮箱、飞机和电波。判断覆盖范围时，优先看当前板件类型，而不是员工名字。",
-		130
-	))
-	_content_body.add_child(employees)
+	_add_extension_module_section(
+		"大众营销员",
+		"大众营销员在岗时影响整个营销结算阶段：已经放在地图上的广告会在该阶段多结算，从而更快制造需求，也更快消耗持续时间。\n\n它不是新广告形状，也不是指定某栋房屋；判断时先看本回合有几名大众营销员在岗，再看当前地图上的所有广告会被结算几次。",
+		["mass_marketeer"]
+	)
+	_add_extension_module_section(
+		"美食评论家",
+		"美食评论家来自营销员工线，会使用专用的美食指南。美食指南必须放在地图内的空地上，并整体贴着道路。\n\n它的目标非常特殊：只给带花园房屋添加需求，普通房屋不会被影响。放置位置用于合法性判断，覆盖对象则看“是否有花园”。",
+		["gourmet_food_critic", "marketing_trainee"]
+	)
+	_add_extension_module_section(
+		"番茄酱机制",
+		"番茄酱不是主动放置的广告。它关注的是：你通过营销制造的需求，最后被其他玩家的餐厅卖掉。\n\n触发后，效果从之后的晚餐选择开始生效，让你的餐厅在选店比较中更有利。它不会倒回改变刚刚已经结算完的房屋。"
+	)
 
 func _render_food_extensions_lesson() -> void:
 	var products := _make_section("这些商品不是普通广告商品")
 	products.add_child(_build_product_icon_row(["noodles", "sushi", "kimchi", "coffee"], ["面条", "寿司", "泡菜", "咖啡"]))
 	products.add_child(_make_rich_text(
-		"面条、寿司、泡菜和咖啡都进入晚餐结算，但多数不能像汉堡、披萨、饮料那样直接被基础营销板件制造需求。\n\n面条通常在原需求无法完整满足时作为完整替代；寿司特别关注带花园房屋；泡菜会参与清理阶段后的储存选择，并在晚餐中形成额外方案；咖啡是在顾客去目标餐厅的路上购买，而不是改变目标餐厅本身。",
-		190
+		"食品扩展的关键不是“多了一个库存图标”，而是晚餐阶段多了新的满足需求方式。有的替代原需求，有的叠加到原需求，有的在顾客路线中额外购买。\n\n这些商品大多不能像汉堡、披萨、饮料那样被基础广告直接制造需求。",
+		170
 	))
 	_content_body.add_child(products)
 
-	var employees := _make_section("生产线和收入线")
-	employees.add_child(_build_employee_card_row(["noodle_cook", "sushi_cook", "kimchi_master", "fry_chef"], 0.84))
-	employees.add_child(_build_employee_card_row(["barista_trainee", "barista", "lead_barista"], 0.86))
-	employees.add_child(_make_rich_text(
-		"面条厨师、寿司厨师和咖啡师都走生产线；泡菜大师在清理阶段和丢弃库存互动；薯条主厨不制造新的需求，而是在你成功向房屋售卖后增加额外收入。判断这些扩展时，先确认“房屋原需求是否已满足”，再看是否存在替代或额外购买方案。",
-		155
-	))
-	_content_body.add_child(employees)
+	_add_extension_module_section(
+		"面条",
+		"面条通常在房屋原需求没有任何餐厅能完整满足时才会登场。它不是和汉堡披萨混着卖，而是尝试用面条完整替代这张需求清单。\n\n判断顺序：先看有没有餐厅能正常满足原需求；如果没有，再看谁有足够面条。",
+		["noodle_cook"],
+		["noodles"], ["面条"]
+	)
+	_add_extension_module_section(
+		"寿司",
+		"寿司只关注带花园房屋。对花园房屋，晚餐会优先尝试用寿司完整替代全部需求。\n\n普通房屋不会因为寿司模块而变成寿司订单；所以看到寿司时，先找花园房屋，再判断是否能完整替代。",
+		["sushi_cook"],
+		["sushi"], ["寿司"]
+	)
+	_add_extension_module_section(
+		"泡菜",
+		"泡菜会在晚餐需求方案里追加到原订单或替代订单旁边，因此它更像“套餐附加品”。如果订单里包含咖啡，则不会被泡菜方案替代。\n\n泡菜大师还会在清理阶段与库存丢弃互动。清理时玩家可能需要选择是否保存泡菜；保存泡菜会影响其它食物和饮料的保留。",
+		["kimchi_master"],
+		["kimchi"], ["泡菜"]
+	)
 
 	var coffee_route := _make_section("咖啡是路上购买")
 	coffee_route.add_child(_build_real_map_preview(_build_coffee_preview_state(), _build_coffee_preview_options()))
@@ -1836,24 +1862,60 @@ func _render_food_extensions_lesson() -> void:
 		155
 	))
 	_content_body.add_child(coffee_route)
+	_add_extension_module_section(
+		"咖啡",
+		"咖啡师生产咖啡，咖啡店通过培训或相关奖励放到地图上。咖啡店必须贴着道路；通过培训放置时，还需要离自己的餐厅足够近。\n\n晚餐时先选主餐店，再看顾客最短路线经过哪里。如果路线经过可以买咖啡的位置，并且卖家有库存，才会产生咖啡购买。",
+		["barista_trainee", "barista", "lead_barista"],
+		["coffee"], ["咖啡"]
+	)
+	_add_extension_module_section(
+		"薯条主厨",
+		"薯条主厨不制造新的需求，也不改变房屋选择哪家餐厅。它是在你已经成功向某个房屋售卖后，为这次房屋结算增加额外收入。\n\n判断时只看结果：这栋房屋是否由你卖出，以及你的公司结构里是否有在岗薯条主厨。",
+		["fry_chef"]
+	)
 
 func _render_employee_economy_extensions_lesson() -> void:
-	var employees := _make_section("员工扩展改变顺序和使用次数")
-	employees.add_child(_build_employee_card_row(["waitress", "movie_star_b", "movie_star_c", "movie_star_d"], 0.76))
-	employees.add_child(_build_employee_card_row(["night_shift_manager", "kitchen_trainee", "marketing_trainee"], 0.84))
-	employees.add_child(_make_rich_text(
-		"电影明星来自服务员线，会影响商业秩序选择和平局判断；玩家最多拥有一个电影明星。夜班经理让不需要发薪的员工可以在本回合工作两次，但 CEO 不参与夜班，多个夜班经理也不会重复叠加。\n\n这些效果都要求员工在公司结构中实际在岗。留在储备区、忙碌未归或被薪水问题卡住的员工，不会提供对应能力。",
-		185
-	))
-	_content_body.add_child(employees)
+	_add_extension_module_section(
+		"电影明星",
+		"电影明星从服务员线培训而来，每位玩家最多拥有一名。它会影响商业秩序选择，也会在晚餐平局判断中提供更高优先级。\n\n它不是普通服务员数量的简单叠加；看到电影明星时，要把它当作顺序和平局规则的一部分。",
+		["waitress", "movie_star_b", "movie_star_c", "movie_star_d"]
+	)
+	_add_extension_module_section(
+		"夜班经理",
+		"夜班经理让不需要发薪的在岗员工可以在本回合工作两次。CEO 不参与夜班，多名夜班经理也不会继续叠加。\n\n判断时只看在岗员工：留在储备区、忙碌未归、或因为薪水问题不能工作的员工，不会获得第二次工作机会。",
+		["night_shift_manager", "kitchen_trainee", "marketing_trainee"]
+	)
+	_add_extension_module_section(
+		"储备价格",
+		"储备价格会替换基础储备卡。第一次破产后，不再用储备卡决定 CEO 直属槽位，而是按该模块规则改变之后的基础单价。\n\n新手只需要记住：启用这个模块时，第一次破产后的核心变化是价格规则，不是公司结构槽位。",
+		[],
+		[], []
+	)
+	_add_extension_module_section(
+		"全新里程碑",
+		"全新里程碑会替换基础里程碑池。许多效果会直接改变营销、晚餐距离、餐厅放置或后续奖励。\n\n启用它时，不要再按基础里程碑记忆推断效果；每次只看当前里程碑面板，并在触发后立刻检查是否出现新的待处理动作。",
+		["marketing_trainee", "brand_manager", "brand_director"]
+	)
+	_add_extension_module_section(
+		"艰难抉择",
+		"艰难抉择不会给你新员工或新商品，它改变的是基础里程碑的节奏：部分基础里程碑如果太晚没有被拿走，会在指定时机过期。\n\n启用它时，早期行动的机会成本会更高。不要只问“这个里程碑以后能不能拿”，还要看它是否已经错过窗口。",
+		[],
+		[], []
+	)
 
-	var economy := _make_section("经济模块会替换基础处理")
-	economy.add_child(_build_process_chip_row(["储备价格", "全新里程碑", "艰难抉择"]))
-	economy.add_child(_make_rich_text(
-		"储备价格会替换基础储备卡：第一次破产后不再用储备卡决定 CEO 直属槽位，而是按该模块规则改变之后的基础单价。\n\n全新里程碑会替换基础里程碑池，很多效果会直接改变营销、晚餐或地图放置；艰难抉择则让部分基础里程碑在指定时机过期。启用这些模块时，不能同时按基础里程碑记忆去推断后续效果，必须看当前里程碑面板。",
-		185
-	))
-	_content_body.add_child(economy)
+func _add_extension_module_section(title: String, body: String, employee_ids: Array = [], product_ids: Array = [], product_labels: Array = []) -> void:
+	var section := _make_section(title)
+	if not product_ids.is_empty() and product_ids.size() == product_labels.size():
+		section.add_child(_build_product_icon_row(product_ids, product_labels))
+	if not employee_ids.is_empty():
+		section.add_child(_build_employee_card_row(employee_ids, 0.86))
+	var min_height := 135
+	if body.length() > 150:
+		min_height = 170
+	if body.length() > 230:
+		min_height = 205
+	section.add_child(_make_rich_text(body, min_height))
+	_content_body.add_child(section)
 
 func _build_phase_track_preview() -> Control:
 	var frame := PanelContainer.new()
