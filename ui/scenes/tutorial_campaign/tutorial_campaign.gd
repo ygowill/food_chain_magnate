@@ -1878,33 +1878,32 @@ func _build_phase_track_preview() -> Control:
 	return frame
 
 func _build_process_chip_row(labels: Array) -> Control:
-	var frame := PanelContainer.new()
-	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	frame.add_theme_stylebox_override("panel", _make_style(Color(0.95, 0.90, 0.78, 0.58), Color(0.17, 0.13, 0.09, 0.18), 1, 6))
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_top", 9)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_bottom", 9)
-	frame.add_child(margin)
-
-	var row := HBoxContainer.new()
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", 10)
-	margin.add_child(row)
-
+	var grid := GridContainer.new()
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	grid.columns = mini(4, maxi(1, labels.size()))
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
 	for i in range(labels.size()):
-		row.add_child(_build_process_chip(str(labels[i]), i + 1))
-		if i < labels.size() - 1:
-			row.add_child(_build_process_separator())
-	return frame
+		grid.add_child(_build_process_chip(str(labels[i]), i + 1))
+	return grid
 
 func _build_process_chip(text: String, index: int) -> Control:
+	var chip := PanelContainer.new()
+	chip.custom_minimum_size = Vector2(188, 42)
+	chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	chip.add_theme_stylebox_override("panel", _make_style(Color(0.95, 0.90, 0.78, 0.72), Color(0.17, 0.13, 0.09, 0.18), 1, 5))
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 6)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 6)
+	chip.add_child(margin)
+
 	var item := HBoxContainer.new()
-	item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	item.alignment = BoxContainer.ALIGNMENT_CENTER
-	item.add_theme_constant_override("separation", 7)
+	item.alignment = BoxContainer.ALIGNMENT_BEGIN
+	item.add_theme_constant_override("separation", 8)
+	margin.add_child(item)
 
 	var index_label := Label.new()
 	index_label.text = "%02d" % index
@@ -1917,18 +1916,11 @@ func _build_process_chip(text: String, index: int) -> Control:
 	label.text = text
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	label.add_theme_font_size_override("font_size", 14)
 	label.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_PRIMARY)
 	item.add_child(label)
-	return item
-
-func _build_process_separator() -> Control:
-	var separator := ColorRect.new()
-	separator.color = Color(0.17, 0.13, 0.09, 0.20)
-	separator.custom_minimum_size = Vector2(1, 30)
-	separator.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	return separator
+	return chip
 
 func _build_employee_card_row(employee_ids: Array, scale: float = 0.84) -> Control:
 	var row := GridContainer.new()
@@ -2969,43 +2961,34 @@ func _get_placement_explanation(case_id: String) -> String:
 			return "合法原因：你的入口落在右侧板块，并且入口邻接道路；对手入口在左侧板块，所以起始入口板块不冲突。\n\n起始限制只看入口所在板块，不看整张地图是否已有其他餐厅。"
 
 func _make_segmented_row(options: Array, active_id: String, callback: Callable) -> Control:
-	var frame := PanelContainer.new()
-	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	frame.add_theme_stylebox_override("panel", _make_style(Color(0.94, 0.89, 0.77, 0.68), Color(0.17, 0.13, 0.09, 0.20), 1, 6))
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 3)
-	margin.add_theme_constant_override("margin_top", 3)
-	margin.add_theme_constant_override("margin_right", 3)
-	margin.add_theme_constant_override("margin_bottom", 3)
-	frame.add_child(margin)
-
 	var row := HBoxContainer.new()
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", 2)
-	margin.add_child(row)
+	row.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	row.add_theme_constant_override("separation", 8)
 	for opt_val in options:
 		var opt: Dictionary = opt_val
 		var btn := Button.new()
 		btn.text = str(opt.get("label", ""))
-		btn.custom_minimum_size = Vector2(136, 40)
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.custom_minimum_size = Vector2(126, 36)
+		btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		btn.toggle_mode = true
 		var id := str(opt.get("id", ""))
 		btn.button_pressed = id == active_id
 		btn.pressed.connect(callback.bind(id))
-		_apply_tutorial_tab_button_style(btn)
+		_apply_tutorial_tab_button_style(btn, id == active_id)
 		row.add_child(btn)
-	return frame
+	return row
 
-func _apply_tutorial_tab_button_style(button: Button) -> void:
+func _apply_tutorial_tab_button_style(button: Button, active: bool) -> void:
 	if button == null:
 		return
-	button.add_theme_stylebox_override("normal", _make_style(Color(0, 0, 0, 0), Color(0, 0, 0, 0), 0, 0))
-	button.add_theme_stylebox_override("hover", _make_style(Color(1.0, 0.97, 0.88, 0.56), Color(0, 0, 0, 0), 0, 0))
-	button.add_theme_stylebox_override("pressed", _make_style(Color(0.73, 0.23, 0.18, 0.18), Color(0, 0, 0, 0), 0, 0))
-	button.add_theme_stylebox_override("focus", _make_style(Color(0.73, 0.23, 0.18, 0.10), Color(0.73, 0.23, 0.18, 0.40), 1, 0))
-	button.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_PRIMARY)
+	var active_bg := Color(0.73, 0.23, 0.18, 0.16)
+	var normal_bg := Color(0.96, 0.92, 0.82, 0.66)
+	var border := Color(0.17, 0.13, 0.09, 0.20)
+	button.add_theme_stylebox_override("normal", _make_style(active_bg if active else normal_bg, border, 1, 5))
+	button.add_theme_stylebox_override("hover", _make_style(Color(1.0, 0.96, 0.84, 0.82), Color(0.17, 0.13, 0.09, 0.28), 1, 5))
+	button.add_theme_stylebox_override("pressed", _make_style(active_bg, Color(0.73, 0.23, 0.18, 0.42), 1, 5))
+	button.add_theme_stylebox_override("focus", _make_style(active_bg, Color(0.73, 0.23, 0.18, 0.42), 1, 5))
+	button.add_theme_color_override("font_color", Color(0.73, 0.23, 0.18, 1.0) if active else UiStylesClass.COLOR_TEXT_PRIMARY)
 	button.add_theme_color_override("font_hover_color", Color(0.12, 0.09, 0.06))
 	button.add_theme_color_override("font_pressed_color", Color(0.73, 0.23, 0.18, 1.0))
 	button.add_theme_color_override("font_focus_color", Color(0.73, 0.23, 0.18, 1.0))
