@@ -43,6 +43,27 @@ const MILESTONE_CONTENT_PATH_TEMPLATES := [
 	"res://modules/new_milestones/content/milestones/%s.json",
 	"res://modules/rural_marketeers/content/milestones/%s.json",
 ]
+const BASE_MILESTONE_CONTENT_DIR := "res://modules/base_milestones/content/milestones"
+const BASE_MILESTONE_IDS_FALLBACK := [
+	"first_airplane",
+	"first_billboard",
+	"first_burger_marketed",
+	"first_burger_produced",
+	"first_cart_operator",
+	"first_drink_marketed",
+	"first_errand_boy",
+	"first_have_100",
+	"first_have_20",
+	"first_hire_3",
+	"first_lower_prices",
+	"first_pay_20_salaries",
+	"first_pizza_marketed",
+	"first_pizza_produced",
+	"first_radio",
+	"first_throw_away",
+	"first_train",
+	"first_waitress",
+]
 const MILESTONE_PALETTE_PURPLE := Color(0.69, 0.57, 0.77, 1.0)
 const MILESTONE_PALETTE_GRAY := Color(0.76, 0.75, 0.74, 1.0)
 const MILESTONE_PALETTE_MARKETING_BLUE := Color(0.59, 0.77, 0.82, 1.0)
@@ -1661,6 +1682,36 @@ class TutorialMilestoneCard:
 			_status_label.add_theme_color_override("font_color", color)
 			_status_label.add_theme_color_override("font_outline_color", color)
 
+class ResponsiveMilestoneGrid:
+	extends GridContainer
+
+	const CARD_MIN_WIDTH := 300
+	const MAX_COLUMNS := 5
+
+	func _ready() -> void:
+		size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		columns = 3
+		call_deferred("_update_columns")
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED:
+			_update_columns()
+
+	func _update_columns() -> void:
+		var available := size.x
+		if available <= 0.0:
+			var parent := get_parent_control()
+			if parent != null:
+				available = parent.size.x
+		var sep := int(get_theme_constant("h_separation"))
+		var denom := float(CARD_MIN_WIDTH + sep)
+		if available <= 0.0 or denom <= 0.0:
+			return
+		var fit := int(floor((available + float(sep)) / denom))
+		var next_columns := clampi(fit, 1, MAX_COLUMNS)
+		if columns != next_columns:
+			columns = next_columns
+
 const LESSONS := [
 	{
 		"id": "overview",
@@ -2387,18 +2438,10 @@ func _render_milestones_lesson() -> void:
 	))
 	_content_body.add_child(trigger)
 
-	var effects := _make_section("基础里程碑给什么")
-	effects.add_child(_build_employee_card_row(["burger_cook", "pizza_cook", "cfo", "waitress"], 0.84))
-	effects.add_child(_build_milestone_reference([
-		"first_burger_produced",
-		"first_pizza_produced",
-		"first_billboard",
-		"first_radio",
-		"first_have_20",
-		"first_have_100",
-	]))
+	var effects := _make_section("基础里程碑池")
+	effects.add_child(_build_milestone_reference(_load_base_milestone_ids()))
 	effects.add_child(_make_rich_text(
-		"上面用的是游戏里的里程碑卡片样式。生产、营销、采购、定价、服务和现金门槛都会触发不同奖励；新手不用背完整池子，但要养成动作后看里程碑面板的习惯。\n\n同一回合内已经获得的里程碑会先记录在各玩家身上，等清理阶段再从公共池移除。",
+		"这里展示的是当前项目实际加载的基础里程碑池，不混入员工卡。生产、营销、采购、定价、服务和现金门槛都会触发不同奖励；新手不用背完整池子，但要养成动作后看里程碑面板的习惯。\n\n同一回合内已经获得的里程碑会先记录在各玩家身上，等清理阶段再从公共池移除。",
 		230
 	))
 	_content_body.add_child(effects)
@@ -2750,9 +2793,7 @@ func _add_milestone_reference_section(title: String, milestone_ids: Array, body:
 	_content_body.add_child(section)
 
 func _build_milestone_reference(milestone_ids: Array) -> Control:
-	var grid := GridContainer.new()
-	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	grid.columns = 2
+	var grid := ResponsiveMilestoneGrid.new()
 	grid.add_theme_constant_override("h_separation", 12)
 	grid.add_theme_constant_override("v_separation", 12)
 	for milestone_id_val in milestone_ids:
@@ -2762,10 +2803,27 @@ func _build_milestone_reference(milestone_ids: Array) -> Control:
 		grid.add_child(_build_tutorial_milestone_card(milestone_id))
 	return grid
 
+func _load_base_milestone_ids() -> Array[String]:
+	var ids: Array[String] = []
+	var dir := DirAccess.open(BASE_MILESTONE_CONTENT_DIR)
+	if dir != null:
+		dir.list_dir_begin()
+		var file_name := dir.get_next()
+		while not file_name.is_empty():
+			if not dir.current_is_dir() and file_name.ends_with(".json"):
+				ids.append(file_name.get_basename())
+			file_name = dir.get_next()
+		dir.list_dir_end()
+	if ids.is_empty():
+		for id_val in BASE_MILESTONE_IDS_FALLBACK:
+			ids.append(str(id_val))
+	ids.sort()
+	return ids
+
 func _build_tutorial_milestone_card(milestone_id: String) -> Control:
 	var data := _load_milestone_data(milestone_id)
 	var card := TutorialMilestoneCard.new()
-	card.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card.setup(
 		_load_milestone_name(milestone_id),
 		_tutorial_milestone_effect_text(milestone_id, data),
@@ -2830,6 +2888,8 @@ func _tutorial_milestone_effect_text(milestone_id: String, data: Dictionary) -> 
 			return "首次现金达到更高档位后，CEO 获得财务能力，并移除对应员工卡。"
 		"first_lower_prices":
 			return "首次主动降价后，之后的基础单价会进一步降低。"
+		"first_pay_20_salaries":
+			return "首次支付较高薪水后，培训线会获得更灵活的连续培训能力。"
 		"first_waitress":
 			return "首次使用服务员后，服务员在晚餐阶段提供更高收益。"
 		"first_throw_away":
