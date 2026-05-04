@@ -2,6 +2,8 @@ class_name TutorialCampaignScene
 extends Control
 
 const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
+const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
+const PhaseTrackStripClass = preload("res://ui/components/phase_track/phase_track_strip.gd")
 
 const RESERVE_CARD_ART_SIZE := Vector2(140, 218)
 const MAP_PREVIEW_SIZE := Vector2(680, 380)
@@ -52,6 +54,13 @@ class RealAssetMapPreview:
 		"burger": "res://modules/base_products/assets/map/icons/burger.png",
 		"pizza": "res://modules/base_products/assets/map/icons/pizza.png",
 		"soda": "res://modules/base_products/assets/map/icons/soda.png",
+		"beer": "res://modules/base_products/assets/map/icons/beer.png",
+		"lemonade": "res://modules/base_products/assets/map/icons/lemonade.png",
+	}
+	const DRINK_SOURCE_ICON_PATHS := {
+		"soda": "res://modules/base_products/assets/map/drink_sources/soda.png",
+		"beer": "res://modules/base_products/assets/map/drink_sources/beer.png",
+		"lemonade": "res://modules/base_products/assets/map/drink_sources/lemonade.png",
 	}
 	const RESTAURANT_LOGOS := [
 		"res://modules/base_pieces/assets/map/logos/fried_geese_donkey.png",
@@ -105,6 +114,8 @@ class RealAssetMapPreview:
 			textures["marketing_%s" % str(key)] = _load_texture_raw(str(MARKETING_ICON_PATHS[key]))
 		for key2 in PRODUCT_ICON_PATHS.keys():
 			textures["product_%s" % str(key2)] = _load_texture_raw(str(PRODUCT_ICON_PATHS[key2]))
+		for key3 in DRINK_SOURCE_ICON_PATHS.keys():
+			textures["drink_source_%s" % str(key3)] = _load_texture_raw(str(DRINK_SOURCE_ICON_PATHS[key3]))
 		for i in range(RESTAURANT_LOGOS.size()):
 			textures["logo_%d" % i] = _load_texture_raw(str(RESTAURANT_LOGOS[i]))
 
@@ -118,6 +129,7 @@ class RealAssetMapPreview:
 	func _draw() -> void:
 		_draw_cells()
 		_draw_tile_boundary()
+		_draw_drink_sources()
 		_draw_houses()
 		_draw_restaurants()
 		_draw_structure_preview()
@@ -237,6 +249,29 @@ class RealAssetMapPreview:
 				return {"shape": "tee", "rotation_deg": 270}
 			return {"shape": "tee", "rotation_deg": 0}
 		return {"shape": "cross", "rotation_deg": 0}
+
+	func _draw_drink_sources() -> void:
+		var sources_val = preview_state.get("drink_sources", [])
+		if not (sources_val is Array):
+			return
+		for source_val in sources_val:
+			if not (source_val is Dictionary):
+				continue
+			var source: Dictionary = source_val
+			var pos_read := _try_vector2i(source.get("world_pos", source.get("pos", null)))
+			if not bool(pos_read.get("ok", false)):
+				continue
+			var product_id := str(source.get("type", source.get("product", ""))).strip_edges()
+			if product_id == "cola":
+				product_id = "soda"
+			if product_id.is_empty():
+				continue
+			var rect := _cell_rect(pos_read["value"])
+			var tex: Texture2D = textures.get("drink_source_%s" % product_id, null)
+			if tex != null:
+				_draw_texture_aspect_fit(tex, rect, Color(1, 1, 1, 0.95))
+			else:
+				draw_rect(rect.grow(-6), Color(0.35, 0.55, 0.88, 0.82), true)
 
 	func _draw_tile_boundary() -> void:
 		var origin := _board_origin_px()
@@ -968,58 +1003,58 @@ const LESSONS := [
 		"summary": "储备卡是开局暗选的银行保险，不是玩家收入。基础规则下，第一次破产会揭示所有玩家已选储备卡，按卡面向银行注资，并用已选卡决定之后的 CEO 直属槽位。",
 	},
 	{
-		"id": "initial_restaurant",
-		"title": "3. 起始餐厅放置",
-		"kicker": "入口与板块",
-		"summary": "起始餐厅必须入口邻接道路；起始放置阶段还要求每个地图板块最多只有一个餐厅入口。这个限制看入口所在板块，不看整个餐厅占地。",
-	},
-	{
-		"id": "distance",
-		"title": "4. 距离不是格子数",
-		"kicker": "地图距离",
-		"summary": "游戏里的道路距离以跨越地图板块边界的次数为主。道路步数只是辅助信息，不等于晚餐选店里使用的距离。",
-	},
-	{
-		"id": "dinnertime",
-		"title": "5. 晚餐阶段如何选店",
-		"kicker": "结算核心",
-		"summary": "已经有需求的房屋会按房屋编号顺序结算。每个房屋只考虑能完整供应它全部需求的餐厅，然后比较“决策单价 + 距离”，数值最小的餐厅获得这笔销售。",
-	},
-	{
-		"id": "housing",
-		"title": "6. 房屋、花园与公寓",
-		"kicker": "需求容量与收入",
-		"summary": "普通房屋默认最多容纳 3 个需求；带花园房屋默认最多 5 个需求，晚餐售卖时单价部分翻倍；公寓来自新区域扩展，营销放置需求会翻倍且没有需求上限。",
-	},
-	{
-		"id": "marketing",
-		"title": "7. 营销板件与街区",
-		"kicker": "广告如何生效",
-		"summary": "营销板件在营销结算阶段按编号结算并向覆盖房屋添加需求。广告牌看邻接，邮箱看街区，电波看周围板块，飞机看整条行或列。",
-	},
-	{
-		"id": "employees",
-		"title": "8. 员工与经理体系",
-		"kicker": "谁负责什么",
-		"summary": "员工的作用由公司结构、员工标签和阶段共同决定。经理负责扩展槽位；厨师生产食物；采购员拿饮料；营销员投广告；区域经理和大区经理负责开店，并会让你的餐厅获得免下车服务。",
-	},
-	{
 		"id": "round_flow",
-		"title": "9. 一轮如何推进",
+		"title": "3. 一轮如何推进",
 		"kicker": "阶段顺序",
 		"summary": "每轮不是所有行动混在一起做，而是先重组公司，再决定商业秩序，然后依次进入工作时间的各个子阶段，最后由晚餐、发薪、营销和清理收尾。",
 	},
 	{
+		"id": "employees",
+		"title": "4. 员工与经理体系",
+		"kicker": "谁负责什么",
+		"summary": "员工的作用由公司结构、员工卡和阶段共同决定。经理负责扩展槽位；厨师生产食物；采购员拿饮料；营销员投广告；区域经理和大区经理负责开店，并会让你的餐厅获得免下车服务。",
+	},
+	{
 		"id": "recruit_train_payday",
-		"title": "10. 招聘、培训与薪水",
+		"title": "5. 招聘、培训与薪水",
 		"kicker": "员工成长",
 		"summary": "招聘只能直接拿入门员工，高级员工通常靠培训链升级。带薪员工会在发薪日产生薪水压力，招聘经理和人力资源总监未用掉的招聘次数会转化为薪水折扣。",
 	},
 	{
 		"id": "inventory",
-		"title": "11. 生产、采购与库存",
+		"title": "6. 生产、采购与库存",
 		"kicker": "供应链",
 		"summary": "晚餐销售必须先有库存。厨师生产汉堡或披萨，采购员工取得饮料；库存保留到晚餐后，清理阶段默认会清空没有冰箱保护的食物和饮料。",
+	},
+	{
+		"id": "initial_restaurant",
+		"title": "7. 起始餐厅放置",
+		"kicker": "入口与板块",
+		"summary": "起始餐厅必须入口邻接道路；起始放置阶段还要求每个地图板块最多只有一个餐厅入口。这个限制看入口所在板块，不看整个餐厅占地。",
+	},
+	{
+		"id": "distance",
+		"title": "8. 距离不是格子数",
+		"kicker": "地图距离",
+		"summary": "游戏里的道路距离以跨越地图板块边界的次数为主。道路步数只是辅助信息，不等于晚餐选店里使用的距离。",
+	},
+	{
+		"id": "dinnertime",
+		"title": "9. 晚餐阶段如何选店",
+		"kicker": "结算核心",
+		"summary": "已经有需求的房屋会按房屋编号顺序结算。每个房屋只考虑能完整供应它全部需求的餐厅，然后比较“决策单价 + 距离”，数值最小的餐厅获得这笔销售。",
+	},
+	{
+		"id": "housing",
+		"title": "10. 房屋、花园与公寓",
+		"kicker": "需求容量与收入",
+		"summary": "普通房屋默认最多容纳 3 个需求；带花园房屋默认最多 5 个需求，晚餐售卖时单价部分翻倍；公寓来自新区域扩展，营销放置需求会翻倍且没有需求上限。",
+	},
+	{
+		"id": "marketing",
+		"title": "11. 营销板件与街区",
+		"kicker": "广告如何生效",
+		"summary": "营销板件在营销结算阶段按编号结算并向覆盖房屋添加需求。广告牌看邻接，邮箱看街区，电波看周围板块，飞机看整条行或列。",
 	},
 	{
 		"id": "milestones",
@@ -1428,6 +1463,7 @@ func _get_marketing_case_text(case_id: String) -> String:
 
 func _render_employees_lesson() -> void:
 	var structure := _make_section("公司结构先决定谁能工作")
+	structure.add_child(_build_employee_card_row(["ceo", "management_trainee", "trainer", "kitchen_trainee"], 0.82))
 	structure.add_child(_make_rich_text(
 		"CEO 默认有 3 个直属槽位，第一次破产后基础储备卡规则可能把这个值改成 2 / 3 / 4。CEO 下面可以直接放普通员工或经理；经理只能向 CEO 汇报，不能放在另一个经理下面；经理下面只能放普通员工。\n\n员工放不进结构就留在储备区，本回合不会执行在岗效果。忙碌中的营销员不占结构槽位，直到广告到期才回来。",
 		165
@@ -1435,6 +1471,7 @@ func _render_employees_lesson() -> void:
 	_content_body.add_child(structure)
 
 	var roles := _make_section("基础员工怎么分工")
+	roles.add_child(_build_employee_card_row(["kitchen_trainee", "errand_boy", "pricing_manager", "marketing_trainee", "local_manager"], 0.80))
 	roles.add_child(_make_rich_text(
 		"招聘/培训：人力资源专员、人力资源经理、人力资源总监负责拿员工或减少薪水；培训讲师、培训指导员、培训专家负责升级员工。\n生产：见习厨师、汉堡厨师/主厨、披萨厨师/主厨生产食物。\n采购：跑腿伙计拿 1 瓶饮料；手推车操作员和货车驾驶员沿道路从进货点拿饮料；飞艇驾驶员无视道路。\n定价：定价经理 -1，折扣经理 -3，奢侈品经理 +10；这些是强制动作。\n营销：营销实习生、营销经理、品牌经理、品牌总监决定能放哪类广告和持续多久。\n开店/地图：区域经理放置即将开业餐厅；大区经理可放置立即开业餐厅或移动现有餐厅；新业务拓展经理放房屋或花园。\n结算辅助：服务员提供收入并赢平局；首席财务官让本回合收入增加 50%。",
 		260
@@ -1442,15 +1479,17 @@ func _render_employees_lesson() -> void:
 	_content_body.add_child(roles)
 
 	var drive_thru := _make_section("区域经理、大区经理与免下车")
+	drive_thru.add_child(_build_employee_card_row(["local_manager", "regional_manager"], 0.88))
 	drive_thru.add_child(_build_real_map_preview(_build_drive_thru_preview_state(), _build_drive_thru_preview_options()))
 	drive_thru.add_child(_make_rich_text(
-		"只要你本回合有区域经理或大区经理在岗，你的所有餐厅都会获得免下车服务。\n\n免下车的含义是：晚餐距离计算时，餐厅四个角都可以视为入口/出口，而不是只有原本放置时的那个入口角。这会让某些房屋到你餐厅的距离变短，也会让地图上的入口标记从一个角扩展到四个角。",
-		160
+		"只要你本回合有区域经理或大区经理在岗，你的所有餐厅都会获得免下车服务。\n\n图中餐厅横跨左右两个板块。没有免下车时，只能从原入口角进店，右侧房屋要沿橙色路线跨过板块边界；启用免下车后，四个角都可以作为入口/出口，右侧房屋可沿绿色路线留在同一板块内进店。价格相近时，这种距离变化会直接影响晚餐选店。",
+		185
 	))
 	_content_body.add_child(drive_thru)
 
 func _render_round_flow_lesson() -> void:
 	var full_round := _make_section("完整阶段顺序")
+	full_round.add_child(_build_phase_track_preview())
 	full_round.add_child(_make_rich_text(
 		"开局设置只在开局出现：选择储备卡并放起始餐厅。\n\n正常回合按这个顺序推进：重组结构，商业秩序，工作时间，晚餐时间，发薪日，营销结算，清理阶段。清理阶段会清理库存、打开即将开业餐厅，并处理里程碑池。",
 		180
@@ -1465,6 +1504,7 @@ func _render_round_flow_lesson() -> void:
 	_content_body.add_child(order)
 
 	var working := _make_section("工作时间的子阶段")
+	working.add_child(_build_process_chip_row(["招聘", "培训", "营销", "生产食物", "采购饮料", "放置房屋/花园", "放置或移动餐厅"]))
 	working.add_child(_make_rich_text(
 		"工作时间不是一个自由行动池，而是固定子阶段依次处理：招聘、培训、营销、生产食物、采购饮料、放置房屋/花园、放置或移动餐厅。\n\n每个子阶段内按本轮行动顺序轮流执行。某个子阶段没有可用动作时可以跳过；强制定价类动作属于工作时间强制动作，可以在工作时间的任意子阶段处理。",
 		165
@@ -1473,6 +1513,7 @@ func _render_round_flow_lesson() -> void:
 
 func _render_recruit_train_payday_lesson() -> void:
 	var recruit := _make_section("招聘只拿入门员工")
+	recruit.add_child(_build_employee_card_row(["ceo", "recruiting_girl", "trainer", "kitchen_trainee", "errand_boy"], 0.80))
 	recruit.add_child(_make_rich_text(
 		"基础规则里，直接招聘的目标必须是入门员工：管理培训生、见习厨师、跑腿伙计、人力资源专员、培训讲师、定价经理、营销实习生、服务员等。\n\nCEO 自带 1 次招聘能力；人力资源专员 1 次，人力资源经理 2 次，人力资源总监 4 次。招聘来的员工进入储备区，是否能立刻上班取决于下一次重组时公司结构有没有位置。",
 		175
@@ -1480,6 +1521,7 @@ func _render_recruit_train_payday_lesson() -> void:
 	_content_body.add_child(recruit)
 
 	var train := _make_section("培训沿着升级链走")
+	train.add_child(_build_training_chain_preview())
 	train.add_child(_make_rich_text(
 		"培训必须沿员工定义里的升级链逐步进行。例：见习厨师可以升汉堡厨师或披萨厨师，再升对应主厨；跑腿伙计可以升手推车操作员、货车驾驶员、飞艇驾驶员；营销实习生可以升营销经理、品牌经理、品牌总监。\n\n培训讲师提供 1 次培训，培训指导员 2 次，培训专家 3 次。默认同一名员工不能随意换不同培训员连续培训；获得“首个支付 $20+ 薪水”里程碑后，可以让多个培训员集中培训同一名员工。",
 		205
@@ -1487,6 +1529,7 @@ func _render_recruit_train_payday_lesson() -> void:
 	_content_body.add_child(train)
 
 	var payday := _make_section("发薪日会把扩张压力算回来")
+	payday.add_child(_build_employee_card_row(["recruiting_manager", "hr_director", "burger_cook", "waitress"], 0.86))
 	payday.add_child(_make_rich_text(
 		"需要发薪的员工会在发薪日产生薪水，基础薪水是每人 $5。薪水从玩家现金付给银行；如果现金不够且没有允许欠薪的效果，本阶段会要求先处理薪水问题。\n\n人力资源经理和人力资源总监带有薪水折扣效果：本回合未用掉的招聘次数会按每次 $5 抵扣薪水。首个培训员工的里程碑还会让总薪水永久 -$15，最低应付不会低于 $0。",
 		175
@@ -1495,6 +1538,8 @@ func _render_recruit_train_payday_lesson() -> void:
 
 func _render_inventory_lesson() -> void:
 	var food := _make_section("食物先进入玩家库存")
+	food.add_child(_build_product_icon_row(["burger", "pizza"], ["汉堡", "披萨"]))
+	food.add_child(_build_employee_card_row(["kitchen_trainee", "burger_cook", "pizza_cook", "burger_chef", "pizza_chef"], 0.78))
 	food.add_child(_make_rich_text(
 		"生产食物发生在工作时间的生产食物子阶段。见习厨师可以选择生产 1 个汉堡或 1 个披萨；汉堡厨师/披萨厨师各生产 3 个对应食物；汉堡主厨/披萨主厨各生产 8 个。\n\n这些食物先进入玩家库存，不会自动分配给某一家餐厅。晚餐阶段检查的是玩家餐厅是否能用该玩家库存完整满足房屋需求。",
 		165
@@ -1502,6 +1547,8 @@ func _render_inventory_lesson() -> void:
 	_content_body.add_child(food)
 
 	var drinks := _make_section("饮料来自采购")
+	drinks.add_child(_build_real_map_preview(_build_inventory_preview_state(), _build_inventory_preview_options()))
+	drinks.add_child(_build_employee_card_row(["errand_boy", "cart_operator", "truck_driver", "zeppelin_pilot"], 0.82))
 	drinks.add_child(_make_rich_text(
 		"采购饮料发生在工作时间的采购饮料子阶段，而且玩家必须已经有餐厅。跑腿伙计直接获得 1 瓶指定饮料；手推车操作员和货车驾驶员需要沿道路从路线经过的进货点拿饮料；飞艇驾驶员可以无视道路。\n\n基础路线采购每个饮料源提供 2 瓶。首个使用跑腿伙计的里程碑会让采购每个来源 +1；首个使用手推车操作员的里程碑会让手推车、货车、飞艇的采购距离能力提高。",
 		185
@@ -1517,6 +1564,7 @@ func _render_inventory_lesson() -> void:
 
 func _render_milestones_lesson() -> void:
 	var trigger := _make_section("里程碑由事件触发")
+	trigger.add_child(_build_product_icon_row(["burger", "pizza", "soda"], ["生产/售出", "营销商品", "饮料销售"]))
 	trigger.add_child(_make_rich_text(
 		"里程碑不是手动购买，而是在动作或结算产生关键结果时自动检查。例：首次生产汉堡、首次发起某类广告、首次让房屋被广告添加需求，或晚餐收入让现金达到特定门槛，都可能触发对应里程碑。\n\n同一回合内，多名玩家可能先后获得同一种里程碑；清理阶段会根据本回合领取记录，从公共里程碑池移除对应数量。",
 		175
@@ -1524,6 +1572,7 @@ func _render_milestones_lesson() -> void:
 	_content_body.add_child(trigger)
 
 	var effects := _make_section("基础里程碑给什么")
+	effects.add_child(_build_employee_card_row(["burger_cook", "pizza_cook", "cfo", "waitress"], 0.84))
 	effects.add_child(_make_rich_text(
 		"生产类：首个生产汉堡/披萨会给对应厨师卡。\n营销类：首个营销汉堡/披萨/饮料会给对应商品销售奖金；首个广告牌让营销免薪并可永久；首个电波强化电波需求；首个飞机给商业秩序空槽位加成。\n经营类：首个拥有 $20 可查看所有储备卡；首个拥有 $100 让 CEO 从下一回合起获得首席财务官收入能力，并禁用首席财务官卡；首个降价让基础价格再 -1；首个服务员提高服务员小费。",
 		230
@@ -1536,6 +1585,178 @@ func _render_milestones_lesson() -> void:
 		150
 	))
 	_content_body.add_child(endgame)
+
+func _build_phase_track_preview() -> Control:
+	var frame := PanelContainer.new()
+	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	frame.add_theme_stylebox_override("panel", _make_style(Color(0.96, 0.92, 0.82, 0.82), Color(0.17, 0.13, 0.09, 0.20), 1, 6))
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	frame.add_child(margin)
+
+	var center := CenterContainer.new()
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margin.add_child(center)
+
+	var strip := PhaseTrackStripClass.new()
+	strip.set_font_size(14)
+	strip.set_current_phase("Working")
+	center.add_child(strip)
+	return frame
+
+func _build_process_chip_row(labels: Array) -> Control:
+	var row := HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 8)
+	for label_text in labels:
+		row.add_child(_build_process_chip(str(label_text)))
+	return row
+
+func _build_process_chip(text: String) -> Control:
+	var chip := PanelContainer.new()
+	chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	chip.add_theme_stylebox_override("panel", _make_style(Color(0.96, 0.92, 0.82, 0.82), Color(0.17, 0.13, 0.09, 0.22), 1, 5))
+
+	var label := Label.new()
+	label.text = text
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.add_theme_font_size_override("font_size", 13)
+	label.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_PRIMARY)
+	chip.add_child(label)
+	return chip
+
+func _build_employee_card_row(employee_ids: Array, scale: float = 0.84) -> Control:
+	var row := HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 10)
+	for employee_id in employee_ids:
+		row.add_child(_build_employee_card(str(employee_id), scale))
+	return row
+
+func _build_employee_card(employee_id: String, scale: float) -> Control:
+	var def := _load_employee_card_data(employee_id)
+	var card := EmployeeCardClass.new()
+	card.variant = EmployeeCardClass.CardVariant.COMPACT
+	card.draggable = false
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.set_display_scale(scale)
+	card.setup(def)
+	return card
+
+func _load_employee_card_data(employee_id: String) -> Dictionary:
+	var path := "res://modules/base_employees/content/employees/%s.json" % employee_id
+	var data := _load_json_dict(path)
+	if data.is_empty():
+		return {
+			"id": employee_id,
+			"name": employee_id,
+			"description": "",
+			"salary": false,
+			"role": "special",
+			"manager_slots": 0,
+			"range": {"type": null, "value": 0},
+			"train_to": [],
+			"tags": [],
+			"pool": {"type": "none"},
+		}
+	var produces_val = data.get("produces", {})
+	if produces_val is Dictionary:
+		var produces: Dictionary = produces_val
+		data["produces_food_type"] = str(produces.get("food_type", "")).strip_edges()
+		data["produces_amount"] = int(produces.get("amount", 0))
+	data["salary"] = false
+	data["range"] = {"type": null, "value": 0}
+	data["tags"] = []
+	data["pool"] = {"type": "none"}
+	return data
+
+func _build_training_chain_preview() -> Control:
+	var box := VBoxContainer.new()
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_theme_constant_override("separation", 10)
+	box.add_child(_build_employee_chain(["kitchen_trainee", "burger_cook", "burger_chef"], 0.78))
+	box.add_child(_build_employee_chain(["errand_boy", "cart_operator", "truck_driver", "zeppelin_pilot"], 0.74))
+	box.add_child(_build_employee_chain(["marketing_trainee", "campaign_manager", "brand_manager", "brand_director"], 0.74))
+	return box
+
+func _build_employee_chain(employee_ids: Array, scale: float) -> Control:
+	var row := HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 8)
+	for i in range(employee_ids.size()):
+		if i > 0:
+			row.add_child(_build_arrow_label())
+		row.add_child(_build_employee_card(str(employee_ids[i]), scale))
+	return row
+
+func _build_arrow_label() -> Control:
+	var label := Label.new()
+	label.text = "→"
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.custom_minimum_size = Vector2(24, 80)
+	label.add_theme_font_size_override("font_size", 22)
+	label.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_MUTED)
+	return label
+
+func _build_product_icon_row(product_ids: Array, labels: Array) -> Control:
+	var row := HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 10)
+	for i in range(product_ids.size()):
+		var product_id := str(product_ids[i])
+		var label_text := product_id
+		if i < labels.size():
+			label_text = str(labels[i])
+		row.add_child(_build_product_icon_chip(product_id, label_text))
+	return row
+
+func _build_product_icon_chip(product_id: String, label_text: String) -> Control:
+	var chip := PanelContainer.new()
+	chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	chip.add_theme_stylebox_override("panel", _make_style(Color(0.96, 0.92, 0.82, 0.82), Color(0.17, 0.13, 0.09, 0.18), 1, 6))
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 8)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 8)
+	chip.add_child(margin)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	margin.add_child(row)
+
+	var tex_rect := TextureRect.new()
+	tex_rect.custom_minimum_size = Vector2(34, 34)
+	tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tex_rect.texture = _load_texture_from_res_path(_product_icon_path(product_id))
+	row.add_child(tex_rect)
+
+	var label := Label.new()
+	label.text = label_text
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_color_override("font_color", UiStylesClass.COLOR_TEXT_PRIMARY)
+	row.add_child(label)
+	return chip
+
+func _product_icon_path(product_id: String) -> String:
+	var normalized := "soda" if product_id == "cola" else product_id
+	return "res://modules/base_products/assets/map/icons/%s.png" % normalized
+
+func _load_texture_from_res_path(path: String) -> Texture2D:
+	var raw_path := ProjectSettings.globalize_path(path) if path.begins_with("res://") else path
+	var raw_image := Image.load_from_file(raw_path)
+	if raw_image == null or raw_image.is_empty():
+		return null
+	return ImageTexture.create_from_image(raw_image)
 
 func _get_reserve_cards() -> Array[Dictionary]:
 	var fallback: Array[Dictionary] = []
@@ -1920,6 +2141,9 @@ func _make_vertical_road_segment(y: int) -> Dictionary:
 		dirs.append("S")
 	return {"dirs": dirs, "bridge": false}
 
+func _make_road_segment(dirs: Array[String]) -> Dictionary:
+	return {"dirs": dirs, "bridge": false}
+
 func _make_marketing_placement(type_id: String, board_number: int, world_pos: Vector2i, footprint_size: Vector2i, axis: String = "") -> Dictionary:
 	var placement := {
 		"type": type_id,
@@ -1990,12 +2214,27 @@ func _make_map_overlay(id: String, cells: Array, fill: Color, border: Color, bor
 	}
 
 func _build_drive_thru_preview_state() -> Dictionary:
-	var state := _build_preview_map_state()
+	var road_map: Dictionary = {}
+	road_map[Vector2i(7, 0)] = [_make_road_segment(["W"])]
+	road_map[Vector2i(6, 0)] = [_make_road_segment(["E", "S"])]
+	road_map[Vector2i(6, 1)] = [_make_road_segment(["N", "S", "W"])]
+	road_map[Vector2i(6, 2)] = [_make_road_segment(["N", "S"])]
+	road_map[Vector2i(6, 3)] = [_make_road_segment(["N", "W"])]
+	road_map[Vector2i(5, 1)] = [_make_road_segment(["E", "W"])]
+	road_map[Vector2i(4, 1)] = [_make_road_segment(["E", "S"])]
+
+	var state := {
+		"road_segments": road_map,
+		"houses": [
+			{"piece_id": "house", "anchor": Vector2i(8, 0), "house_id": "2", "house_number": 2},
+		],
+		"restaurants": [],
+	}
 	state["restaurants"] = [
 		{
 			"restaurant_id": "rest_drive_thru",
 			"owner": 0,
-			"anchor": Vector2i(3, 3),
+			"anchor": Vector2i(4, 2),
 			"drive_thru": true,
 		},
 	]
@@ -2005,11 +2244,64 @@ func _build_drive_thru_preview_options() -> Dictionary:
 	return {
 		"overlays": [
 			{
-				"id": "drive_thru_restaurant",
-				"cells": _restaurant_cells_for_anchor(Vector2i(3, 3), 0),
+				"id": "before_drive_thru_route",
+				"cells": [Vector2i(7, 0), Vector2i(6, 0), Vector2i(6, 1), Vector2i(5, 1), Vector2i(4, 1)],
+				"style": {
+					"fill": Color(0.97, 0.54, 0.15, 0.25),
+					"border": Color(0.75, 0.32, 0.05, 0.85),
+					"border_width": 2,
+				},
+			},
+			{
+				"id": "after_drive_thru_route",
+				"cells": [Vector2i(7, 0), Vector2i(6, 0), Vector2i(6, 1), Vector2i(6, 2), Vector2i(6, 3)],
+				"style": {
+					"fill": Color(0.20, 0.75, 0.36, 0.22),
+					"border": Color(0.12, 0.52, 0.22, 0.90),
+					"border_width": 2,
+				},
+			},
+			{
+				"id": "drive_thru_house",
+				"cells": _restaurant_cells_for_anchor(Vector2i(8, 0), 0),
 				"style": {
 					"fill": MAP_VALID_FILL,
 					"border": MAP_VALID_BORDER,
+					"border_width": 2,
+				},
+			},
+		],
+	}
+
+func _build_inventory_preview_state() -> Dictionary:
+	var road_map: Dictionary = {}
+	road_map[Vector2i(2, 2)] = [_make_road_segment(["E", "S"])]
+	road_map[Vector2i(3, 2)] = [_make_road_segment(["E", "W"])]
+	road_map[Vector2i(4, 2)] = [_make_road_segment(["E", "W"])]
+	road_map[Vector2i(5, 2)] = [_make_road_segment(["E", "W"])]
+	road_map[Vector2i(6, 2)] = [_make_road_segment(["E", "W"])]
+	road_map[Vector2i(7, 2)] = [_make_road_segment(["W"])]
+	return {
+		"road_segments": road_map,
+		"houses": [],
+		"restaurants": [
+			{"restaurant_id": "rest_inventory", "owner": 0, "anchor": Vector2i(2, 3)},
+		],
+		"drink_sources": [
+			{"world_pos": Vector2i(5, 2), "type": "soda"},
+			{"world_pos": Vector2i(7, 2), "type": "lemonade"},
+		],
+	}
+
+func _build_inventory_preview_options() -> Dictionary:
+	return {
+		"overlays": [
+			{
+				"id": "drink_route",
+				"cells": [Vector2i(2, 2), Vector2i(3, 2), Vector2i(4, 2), Vector2i(5, 2), Vector2i(6, 2), Vector2i(7, 2)],
+				"style": {
+					"fill": MAP_DISTANCE_FILL,
+					"border": MAP_DISTANCE_BORDER,
 					"border_width": 2,
 				},
 			},
