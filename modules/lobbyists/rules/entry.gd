@@ -73,6 +73,7 @@ func register(registrar) -> Result:
 
 	# UI hints: keep piece classification and overlay definitions out of core UI code.
 	var overlays: Dictionary = LobbyistsRoadOverlaysClass.ROAD_OVERLAYS
+	var gallery_order := 10
 	for pid_val in LobbyistsRoadOverlaysClass.ROAD_PIECES:
 		var pid := str(pid_val).strip_edges()
 		if pid.is_empty():
@@ -80,17 +81,30 @@ func register(registrar) -> Result:
 		var overlay_val = overlays.get(pid, null)
 		if not (overlay_val is Dictionary):
 			return Result.failure("%s: ROAD_OVERLAYS 缺失: %s" % [MODULE_ID, pid])
-		var r_hint: Result = registrar.register_piece_ui_hint(pid, {"kind": "road", "road_overlay": overlay_val}, 100)
+		var r_hint: Result = registrar.register_piece_ui_hint(pid, {
+			"kind": "road",
+			"road_overlay": overlay_val,
+			"roadwork_marker_piece_id": "lobbyists_roadworks_marker",
+			"tutorial_gallery": true,
+			"tutorial_gallery_order": gallery_order,
+		}, 100)
 		if not r_hint.ok:
 			return r_hint
+		gallery_order += 10
 
+	gallery_order = 100
 	for pid_val in PARK_SUPPLY_BY_PIECE_ID.keys():
 		var pid2 := str(pid_val).strip_edges()
 		if pid2.is_empty():
 			continue
-		var r_hint2: Result = registrar.register_piece_ui_hint(pid2, {"kind": "park"}, 100)
+		var r_hint2: Result = registrar.register_piece_ui_hint(pid2, {
+			"kind": "park",
+			"tutorial_gallery": true,
+			"tutorial_gallery_order": gallery_order,
+		}, 100)
 		if not r_hint2.ok:
 			return r_hint2
+		gallery_order += 10
 	var r_hint3: Result = registrar.register_piece_ui_hint("lobbyists_park_tile_z", {"kind": "park"}, 100)
 	if not r_hint3.ok:
 		return r_hint3

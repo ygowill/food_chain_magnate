@@ -5,6 +5,13 @@ const UiStylesClass = preload("res://ui/utils/ui_styles.gd")
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const PhaseTrackStripClass = preload("res://ui/components/phase_track/phase_track_strip.gd")
 const PiecePreviewLayoutClass = preload("res://ui/utils/piece_preview_layout.gd")
+const ModulesBaseDirClass = preload("res://ui/utils/modules_base_dir.gd")
+const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
+const ContentCatalogLoaderClass = preload("res://core/modules/v2/content_catalog_loader.gd")
+const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
+const ModulePackageLoaderClass = preload("res://core/modules/v2/module_package_loader.gd")
+const PieceUiHintsRegistryClass = preload("res://core/rules/piece_ui_hints_registry.gd")
+const ModuleUiMetadataBootstrapClass = preload("res://gameplay/module_ui_metadata_bootstrap.gd")
 
 const RESERVE_CARD_ART_SIZE := Vector2(140, 218)
 const MAP_PREVIEW_SIZE := Vector2(680, 380)
@@ -16,34 +23,9 @@ const MAP_DISTANCE_FILL := Color(0.97, 0.73, 0.18, 0.42)
 const MAP_DISTANCE_BORDER := Color(0.65, 0.38, 0.05, 0.95)
 const MAP_GROUND_COLOR := Color("#faf4da")
 const TILE_SIZE := 5
-const TILE_CONTENT_PATH_TEMPLATES := [
-	"res://modules/base_tiles/content/tiles/%s.json",
-	"res://modules/new_districts/content/tiles/%s.json",
-	"res://modules/lobbyists/content/tiles/%s.json",
-]
-const EMPLOYEE_CONTENT_PATH_TEMPLATES := [
-	"res://modules/base_employees/content/employees/%s.json",
-	"res://modules/coffee/content/employees/%s.json",
-	"res://modules/fry_chefs/content/employees/%s.json",
-	"res://modules/gourmet_food_critics/content/employees/%s.json",
-	"res://modules/kimchi/content/employees/%s.json",
-	"res://modules/lobbyists/content/employees/%s.json",
-	"res://modules/mass_marketeers/content/employees/%s.json",
-	"res://modules/movie_stars/content/employees/%s.json",
-	"res://modules/night_shift_managers/content/employees/%s.json",
-	"res://modules/noodles/content/employees/%s.json",
-	"res://modules/rural_marketeers/content/employees/%s.json",
-	"res://modules/sushi/content/employees/%s.json",
-]
-const MILESTONE_CONTENT_PATH_TEMPLATES := [
-	"res://modules/base_milestones/content/milestones/%s.json",
-	"res://modules/coffee/content/milestones/%s.json",
-	"res://modules/ketchup_mechanism/content/milestones/%s.json",
-	"res://modules/lobbyists/content/milestones/%s.json",
-	"res://modules/new_milestones/content/milestones/%s.json",
-	"res://modules/rural_marketeers/content/milestones/%s.json",
-]
-const BASE_MILESTONE_CONTENT_DIR := "res://modules/base_milestones/content/milestones"
+const BASE_MILESTONES_MODULE_ID := "base_milestones"
+const LOBBYISTS_MODULE_ID := "lobbyists"
+const FRY_CHEFS_MODULE_ID := "fry_chefs"
 const BASE_MILESTONE_IDS_FALLBACK := [
 	"first_airplane",
 	"first_billboard",
@@ -155,62 +137,6 @@ class RealAssetMapPreview:
 		"9¾": "res://assets/images/house_labels/nine_three_quarters.png",
 		"√2": "res://assets/images/house_labels/sqrt2.png",
 	}
-	const ROAD_STRAIGHT_TEXTURE_PATH := "res://modules/base_tiles/assets/map/roads/road_straight_new.png"
-	const ROAD_CORNER_TEXTURE_PATH := "res://modules/base_tiles/assets/map/roads/road_corner_new.png"
-	const ROAD_TEE_TEXTURE_PATH := "res://modules/base_tiles/assets/map/roads/road_tee_new.png"
-	const ROAD_CROSS_TEXTURE_PATH := "res://modules/base_tiles/assets/map/roads/road_cross_new.png"
-	const ROAD_BRIDGE_TEXTURE_PATH := "res://modules/base_tiles/assets/map/roads/bridge_default_new.png"
-	const HOUSE_TEXTURE_PATH := "res://modules/base_pieces/assets/map/pieces/house.png"
-	const GARDEN_TEXTURE_PATH := "res://modules/base_pieces/assets/map/pieces/garden_large.png"
-	const APARTMENT_TEXTURE_PATH := "res://modules/new_districts/assets/map/pieces/apartment.png"
-	const EXTRA_PIECE_TEXTURE_PATHS := {
-		"park": "res://modules/base_pieces/assets/map/pieces/park.png",
-		"lobbyists_road_straight": "res://modules/lobbyists/assets/map/icons/under_construction.png",
-		"lobbyists_road_long": "res://modules/lobbyists/assets/map/icons/under_construction.png",
-		"lobbyists_road_l": "res://modules/lobbyists/assets/map/icons/under_construction.png",
-		"lobbyists_park_line": "res://modules/base_pieces/assets/map/pieces/park.png",
-		"lobbyists_park_t": "res://modules/base_pieces/assets/map/pieces/park.png",
-		"lobbyists_park_l": "res://modules/base_pieces/assets/map/pieces/park.png",
-		"lobbyists_park_tile_z": "res://modules/lobbyists/assets/map/pieces/park_tile_z.png",
-		"lobbyists_roadworks_marker": "res://modules/lobbyists/assets/map/icons/under_construction.png",
-		"highway_offramp": "res://modules/rural_marketeers/assets/map/pieces/freeway.png",
-		"rural_area": "res://modules/rural_marketeers/assets/map/pieces/ruralArea.jpg",
-		"rural_billboard": "res://modules/rural_marketeers/assets/map/icons/rural_billboard.png",
-		"gourmet_guide": "res://modules/gourmet_food_critics/assets/map/icons/gourmet_guide.png",
-		"coffee": "res://modules/coffee/assets/map/icons/coffee.png",
-		"coffee_shop": "res://modules/coffee/assets/map/icons/coffee.png",
-	}
-	const MARKETING_ICON_PATHS := {
-		"default": "res://modules/base_marketing/assets/map/icons/marketing.png",
-		"billboard": "res://modules/base_marketing/assets/map/icons/billboard.png",
-		"mailbox": "res://modules/base_marketing/assets/map/icons/mailbox.png",
-		"radio": "res://modules/base_marketing/assets/map/icons/radio.png",
-		"airplane": "res://modules/base_marketing/assets/map/icons/airplane.png",
-		"gourmet_guide": "res://modules/gourmet_food_critics/assets/map/icons/gourmet_guide.png",
-		"rural_billboard": "res://modules/rural_marketeers/assets/map/icons/rural_billboard.png",
-	}
-	const PRODUCT_ICON_PATHS := {
-		"burger": "res://modules/base_products/assets/map/icons/burger.png",
-		"pizza": "res://modules/base_products/assets/map/icons/pizza.png",
-		"soda": "res://modules/base_products/assets/map/icons/soda.png",
-		"beer": "res://modules/base_products/assets/map/icons/beer.png",
-		"lemonade": "res://modules/base_products/assets/map/icons/lemonade.png",
-		"coffee": "res://modules/coffee/assets/map/icons/coffee.png",
-		"noodles": "res://modules/noodles/assets/map/icons/noodles.png",
-		"sushi": "res://modules/sushi/assets/map/icons/sushi.png",
-		"kimchi": "res://modules/kimchi/assets/map/icons/kimchi.png",
-	}
-	const DRINK_SOURCE_ICON_PATHS := {
-		"soda": "res://modules/base_products/assets/map/drink_sources/soda.png",
-		"beer": "res://modules/base_products/assets/map/drink_sources/beer.png",
-		"lemonade": "res://modules/base_products/assets/map/drink_sources/lemonade.png",
-	}
-	const RESTAURANT_LOGOS := [
-		"res://modules/base_pieces/assets/map/logos/fried_geese_donkey.png",
-		"res://modules/base_pieces/assets/map/logos/gluttony_inc_burgers.png",
-		"res://modules/base_pieces/assets/map/logos/golden_duck_diner.png",
-		"res://modules/base_pieces/assets/map/logos/santa_maria_pizza.png",
-	]
 	const HOUSE_BG_COLOR := Color("#733651")
 	const GARDEN_BG_COLOR := Color("#699055")
 	const RESTAURANT_BG_COLOR := Color("#f4edd1")
@@ -221,6 +147,7 @@ class RealAssetMapPreview:
 	var preview_state: Dictionary = {}
 	var preview_options: Dictionary = {}
 	var textures: Dictionary = {}
+	var skin = null
 	var house_id_label_textures: Dictionary = {}
 	var house_id_font: Font = null
 	var visible_grid_size := DEFAULT_GRID_SIZE
@@ -249,24 +176,39 @@ class RealAssetMapPreview:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	func _load_textures() -> void:
-		textures["road_straight"] = _load_texture_raw(ROAD_STRAIGHT_TEXTURE_PATH)
-		textures["road_corner"] = _load_texture_raw(ROAD_CORNER_TEXTURE_PATH)
-		textures["road_tee"] = _load_texture_raw(ROAD_TEE_TEXTURE_PATH)
-		textures["road_cross"] = _load_texture_raw(ROAD_CROSS_TEXTURE_PATH)
-		textures["road_bridge"] = _load_texture_raw(ROAD_BRIDGE_TEXTURE_PATH)
-		textures["house"] = _load_texture_raw(HOUSE_TEXTURE_PATH)
-		textures["garden_large"] = _load_texture_raw(GARDEN_TEXTURE_PATH)
-		textures["apartment"] = _load_texture_raw(APARTMENT_TEXTURE_PATH)
-		for piece_key in EXTRA_PIECE_TEXTURE_PATHS.keys():
-			textures["piece_%s" % str(piece_key)] = _load_texture_raw(str(EXTRA_PIECE_TEXTURE_PATHS[piece_key]))
-		for key in MARKETING_ICON_PATHS.keys():
-			textures["marketing_%s" % str(key)] = _load_texture_raw(str(MARKETING_ICON_PATHS[key]))
-		for key2 in PRODUCT_ICON_PATHS.keys():
-			textures["product_%s" % str(key2)] = _load_texture_raw(str(PRODUCT_ICON_PATHS[key2]))
-		for key3 in DRINK_SOURCE_ICON_PATHS.keys():
-			textures["drink_source_%s" % str(key3)] = _load_texture_raw(str(DRINK_SOURCE_ICON_PATHS[key3]))
-		for i in range(RESTAURANT_LOGOS.size()):
-			textures["logo_%d" % i] = _load_texture_raw(str(RESTAURANT_LOGOS[i]))
+		textures.clear()
+		skin = TutorialCampaignScene._get_tutorial_skin(cell_size)
+
+	func _get_road_texture(key: String) -> Texture2D:
+		if skin != null and skin.has_method("get_road_texture"):
+			return skin.get_road_texture(key)
+		return null
+
+	func _get_piece_texture(piece_id: String) -> Texture2D:
+		if skin != null and skin.has_method("get_piece_texture"):
+			return skin.get_piece_texture(piece_id)
+		return null
+
+	func _get_product_icon_texture(product_id: String) -> Texture2D:
+		if skin != null and skin.has_method("get_product_icon_texture"):
+			return skin.get_product_icon_texture(product_id)
+		return null
+
+	func _get_marketing_texture(type_id: String) -> Texture2D:
+		if skin != null and skin.has_method("get_marketing_texture"):
+			return skin.get_marketing_texture(type_id)
+		return null
+
+	func _get_restaurant_logo_count() -> int:
+		if skin == null or not skin.has_method("get_restaurant_logo_piece_ids"):
+			return 0
+		var ids_val = skin.get_restaurant_logo_piece_ids()
+		return ids_val.size() if (ids_val is Array) else 0
+
+	func _get_restaurant_logo_texture(logo_id: int) -> Texture2D:
+		if skin != null and skin.has_method("get_restaurant_logo_texture_by_id"):
+			return skin.get_restaurant_logo_texture_by_id(logo_id)
+		return null
 
 	static func _load_texture_raw(path: String) -> Texture2D:
 		var raw_path := ProjectSettings.globalize_path(path) if path.begins_with("res://") else path
@@ -331,10 +273,10 @@ class RealAssetMapPreview:
 			if shape_info.is_empty():
 				continue
 			var shape := str(shape_info.get("shape", "straight"))
-			var tex_key := "road_bridge" if bool(seg.get("bridge", false)) else "road_%s" % shape
-			var tex: Texture2D = textures.get(tex_key, null)
+			var road_key := "road_bridge" if bool(seg.get("bridge", false)) else shape
+			var tex: Texture2D = _get_road_texture(road_key)
 			if tex == null and shape == "end":
-				tex = textures.get("road_straight", null)
+				tex = _get_road_texture("straight")
 			var margin := 0.0 if seg_index == 0 else 1.0
 			var size := rect.size - Vector2(margin * 2.0, margin * 2.0)
 			var offset := Vector2.ZERO if seg_index == 0 else Vector2(0.8, 0.8) * float(seg_index)
@@ -417,7 +359,7 @@ class RealAssetMapPreview:
 			if product_id.is_empty():
 				continue
 			var rect := _cell_rect(pos_read["value"])
-			var tex: Texture2D = textures.get("drink_source_%s" % product_id, null)
+			var tex: Texture2D = _get_product_icon_texture(product_id)
 			if tex != null:
 				_draw_texture_aspect_fit(tex, rect, Color(1, 1, 1, 0.95))
 			else:
@@ -452,10 +394,10 @@ class RealAssetMapPreview:
 			if _draw_special_map_piece(piece_id, cells, piece):
 				continue
 			var rect := _rect_for_cells(cells)
-			var tex: Texture2D = textures.get("piece_%s" % piece_id, null)
+			var tex: Texture2D = _get_piece_texture(piece_id)
 			var marker_only := bool(piece.get("marker", false))
 			if not marker_only:
-				var fill := Color("#78a869") if piece_id.find("park") >= 0 else Color("#f4edd1")
+				var fill := Color("#78a869") if TutorialCampaignScene._get_tutorial_piece_kind(piece_id) == "park" else Color("#f4edd1")
 				if piece_id == "highway_offramp":
 					fill = Color("#d6d0c1")
 				_draw_board_piece_background(rect, fill, 1.0)
@@ -468,20 +410,21 @@ class RealAssetMapPreview:
 				_draw_board_piece_surface_lines(rect, 1.0)
 
 	func _draw_special_map_piece(piece_id: String, cells: Array[Vector2i], piece: Dictionary) -> bool:
-		if piece_id.begins_with("lobbyists_road_"):
-			_draw_lobbyists_road_piece(piece_id, cells, piece)
+		var road_overlay := TutorialCampaignScene._get_tutorial_road_overlay(piece_id)
+		if not road_overlay.is_empty():
+			_draw_module_road_piece(cells, piece, road_overlay)
 			return true
-		if piece_id == "lobbyists_park_line" or piece_id == "lobbyists_park_t" or piece_id == "lobbyists_park_l":
-			_draw_lobbyists_park_piece(piece_id, cells)
+		if TutorialCampaignScene._get_tutorial_piece_kind(piece_id) == "park":
+			_draw_module_park_piece(piece_id, cells)
 			return true
 		if piece_id == "highway_offramp":
 			_draw_highway_offramp_piece(cells)
 			return true
 		return false
 
-	func _draw_lobbyists_road_piece(piece_id: String, cells: Array[Vector2i], piece: Dictionary) -> void:
+	func _draw_module_road_piece(cells: Array[Vector2i], piece: Dictionary, road_overlay: Dictionary) -> void:
 		var rotation := int(piece.get("rotation", 0))
-		var segments := _lobbyists_road_overlay_segments(piece_id, cells, rotation)
+		var segments := _module_road_overlay_entries(cells, rotation, road_overlay, "segments")
 		for seg_val in segments:
 			if not (seg_val is Dictionary):
 				continue
@@ -493,9 +436,9 @@ class RealAssetMapPreview:
 			var rect := _cell_rect(cell_val)
 			var shape_info := _compute_road_shape_info(dirs_val)
 			var shape := str(shape_info.get("shape", "straight"))
-			var tex: Texture2D = textures.get("road_%s" % shape, null)
+			var tex: Texture2D = _get_road_texture(shape)
 			if tex == null and shape == "end":
-				tex = textures.get("road_straight", null)
+				tex = _get_road_texture("straight")
 			if tex != null:
 				var center := rect.position + rect.size * 0.5
 				draw_set_transform(center, deg_to_rad(float(shape_info.get("rotation_deg", 0))), Vector2.ONE)
@@ -505,9 +448,9 @@ class RealAssetMapPreview:
 				draw_rect(rect.grow(-6), Color(0.42, 0.40, 0.35, 0.92), true)
 
 		_draw_piece_cells_fill(cells, Color(0, 0, 0, 0.08), Color(0, 0, 0, 0.24), 1.2)
-		_draw_roadwork_marker(cells)
+		_draw_roadwork_marker(cells, str(piece.get("piece_id", piece.get("id", ""))))
 
-		for arrow_val in _lobbyists_road_overlay_arrows(piece_id, cells, rotation):
+		for arrow_val in _module_road_overlay_entries(cells, rotation, road_overlay, "arrows"):
 			if not (arrow_val is Dictionary):
 				continue
 			var arrow: Dictionary = arrow_val
@@ -516,11 +459,11 @@ class RealAssetMapPreview:
 			if cell_val is Vector2i and not dir.is_empty():
 				_draw_dir_arrow(_cell_rect(cell_val), dir, Color(0.10, 0.08, 0.06, 0.82))
 
-	func _draw_lobbyists_park_piece(_piece_id: String, cells: Array[Vector2i]) -> void:
+	func _draw_module_park_piece(piece_id: String, cells: Array[Vector2i]) -> void:
 		_draw_piece_cells_fill(cells, Color("#587a51"), Color("#344c2f"), 1.4)
-		var tex: Texture2D = textures.get("piece_park", null)
+		var tex: Texture2D = _get_piece_texture("park")
 		if tex == null:
-			tex = textures.get("piece_lobbyists_park_line", null)
+			tex = _get_piece_texture(piece_id)
 		if tex == null:
 			return
 
@@ -541,7 +484,7 @@ class RealAssetMapPreview:
 	func _draw_highway_offramp_piece(cells: Array[Vector2i]) -> void:
 		var rect := _rect_for_cells(cells)
 		_draw_piece_cells_fill(cells, Color("#d6d0c1"), Color(0.17, 0.13, 0.09, 0.34), 1.2)
-		var tex: Texture2D = textures.get("piece_highway_offramp", null)
+		var tex: Texture2D = _get_piece_texture("highway_offramp")
 		if tex == null:
 			return
 		var draw_rect := rect.grow(-maxf(2.0, float(cell_size) * 0.05))
@@ -555,8 +498,11 @@ class RealAssetMapPreview:
 			draw_rect(_cell_rect(cell_pos), fill, true)
 		_draw_overlay_outline(cells, border, border_width)
 
-	func _draw_roadwork_marker(cells: Array[Vector2i]) -> void:
-		var tex: Texture2D = textures.get("piece_lobbyists_roadworks_marker", null)
+	func _draw_roadwork_marker(cells: Array[Vector2i], piece_id: String) -> void:
+		var marker_piece_id := TutorialCampaignScene._get_tutorial_roadwork_marker_piece_id(piece_id)
+		if marker_piece_id.is_empty():
+			return
+		var tex: Texture2D = _get_piece_texture(marker_piece_id)
 		if tex == null:
 			return
 		var bounds := PiecePreviewLayoutClass.get_bounds(cells)
@@ -567,16 +513,11 @@ class RealAssetMapPreview:
 		var rect := PiecePreviewLayoutClass.get_centered_rect(center, origin, float(cell_size), 0.90)
 		_draw_texture_aspect_fit(tex, rect.grow(-maxf(2.0, float(cell_size) * 0.06)), Color(1, 1, 1, 0.90))
 
-	func _lobbyists_road_overlay_segments(piece_id: String, cells: Array[Vector2i], rotation: int) -> Array:
-		return _lobbyists_road_overlay_entries(piece_id, cells, rotation, "segments")
-
-	func _lobbyists_road_overlay_arrows(piece_id: String, cells: Array[Vector2i], rotation: int) -> Array:
-		return _lobbyists_road_overlay_entries(piece_id, cells, rotation, "arrows")
-
-	func _lobbyists_road_overlay_entries(piece_id: String, cells: Array[Vector2i], rotation: int, entry_key: String) -> Array:
+	func _module_road_overlay_entries(cells: Array[Vector2i], rotation: int, road_overlay: Dictionary, entry_key: String) -> Array:
 		var bounds := PiecePreviewLayoutClass.get_bounds(cells)
 		var min_pos: Vector2i = bounds.get("min", Vector2i.ZERO)
-		var entries := _lobbyists_road_overlay_template(piece_id, entry_key)
+		var entries_val = road_overlay.get(entry_key, [])
+		var entries: Array = entries_val if (entries_val is Array) else []
 		var out: Array = []
 		for entry_val in entries:
 			if not (entry_val is Dictionary):
@@ -597,41 +538,6 @@ class RealAssetMapPreview:
 					"dirs": _rotate_dirs(Array(entry.get("dirs", [])), rotation),
 				})
 		return out
-
-	func _lobbyists_road_overlay_template(piece_id: String, entry_key: String) -> Array:
-		var segments: Array = []
-		var arrows: Array = []
-		match piece_id:
-			"lobbyists_road_straight":
-				segments = [
-					{"offset": Vector2i(0, 0), "dirs": ["E", "W"]},
-					{"offset": Vector2i(1, 0), "dirs": ["E", "W"]},
-				]
-				arrows = [
-					{"offset": Vector2i(0, 0), "dir": "W"},
-					{"offset": Vector2i(1, 0), "dir": "E"},
-				]
-			"lobbyists_road_long":
-				segments = [
-					{"offset": Vector2i(0, 0), "dirs": ["E", "W"]},
-					{"offset": Vector2i(1, 0), "dirs": ["E", "W"]},
-					{"offset": Vector2i(2, 0), "dirs": ["E", "W"]},
-				]
-				arrows = [
-					{"offset": Vector2i(0, 0), "dir": "W"},
-					{"offset": Vector2i(2, 0), "dir": "E"},
-				]
-			"lobbyists_road_l":
-				segments = [
-					{"offset": Vector2i(0, 0), "dirs": ["N", "S"]},
-					{"offset": Vector2i(0, 1), "dirs": ["N", "E"]},
-					{"offset": Vector2i(1, 1), "dirs": ["W", "E"]},
-				]
-				arrows = [
-					{"offset": Vector2i(0, 0), "dir": "N"},
-					{"offset": Vector2i(1, 1), "dir": "E"},
-				]
-		return arrows if entry_key == "arrows" else segments
 
 	func _rotate_dirs(dirs: Array, rotation: int) -> Array:
 		var out: Array[String] = []
@@ -686,24 +592,17 @@ class RealAssetMapPreview:
 				]), col)
 
 	func _default_piece_size(piece_id: String) -> Vector2i:
+		var module_size := TutorialCampaignScene._get_tutorial_piece_default_size(piece_id)
+		if module_size.x > 0 and module_size.y > 0:
+			return module_size
 		match piece_id:
 			"highway_offramp":
 				return Vector2i(1, 2)
 			"rural_area":
 				return Vector2i(2, 2)
-			"rural_billboard", "gourmet_guide", "coffee", "coffee_shop", "lobbyists_roadworks_marker":
+			"rural_billboard", "gourmet_guide", "coffee", "coffee_shop":
 				return Vector2i.ONE
-			"lobbyists_road_straight":
-				return Vector2i(2, 1)
-			"lobbyists_road_long":
-				return Vector2i(3, 1)
-			"lobbyists_park_line":
-				return Vector2i(4, 1)
-			"lobbyists_road_l":
-				return Vector2i(2, 2)
-			"lobbyists_park_t", "lobbyists_park_l":
-				return Vector2i(3, 2)
-			"lobbyists_park_tile_z", "park":
+			"park":
 				return Vector2i(2, 2)
 			_:
 				return Vector2i.ONE
@@ -801,7 +700,9 @@ class RealAssetMapPreview:
 			return
 
 		_draw_board_piece_background(rect, MARKETING_BG_COLOR, 1.0)
-		var tex: Texture2D = textures.get("marketing_%s" % type_id, textures.get("marketing_default", null))
+		var tex: Texture2D = _get_marketing_texture(type_id)
+		if tex == null:
+			tex = _get_marketing_texture("default")
 		var icon_rect := rect.grow(-maxf(2.0, float(cell_size) * 0.08))
 		if tex != null:
 			if type_id == "airplane" and icon_rect.size.y > icon_rect.size.x:
@@ -876,7 +777,7 @@ class RealAssetMapPreview:
 
 	func _draw_marketing_product_icon(rect: Rect2, product_id: String, remaining_duration: int) -> void:
 		var key := "soda" if product_id == "cola" else product_id
-		var tex: Texture2D = textures.get("product_%s" % key, null)
+		var tex: Texture2D = _get_product_icon_texture(key)
 		if tex == null:
 			return
 		var pad := maxf(4.0, float(cell_size) * 0.12)
@@ -919,7 +820,11 @@ class RealAssetMapPreview:
 		var cells := _restaurant_cells(anchor)
 		var rect := _rect_for_cells(cells)
 		_draw_board_piece_background(rect, RESTAURANT_BG_COLOR, modulate.a)
-		var logo: Texture2D = textures.get("logo_%d" % abs(owner % RESTAURANT_LOGOS.size()), null)
+		var logo_count := _get_restaurant_logo_count()
+		var logo_id := 0
+		if logo_count > 0:
+			logo_id = abs(owner % logo_count)
+		var logo: Texture2D = _get_restaurant_logo_texture(logo_id)
 		if logo != null:
 			_draw_texture_aspect_fit(logo, rect.grow(-maxf(2.0, float(cell_size) * 0.10)), Color(1, 1, 1, 0.98 * modulate.a))
 		_draw_board_piece_surface_lines(rect, modulate.a)
@@ -949,7 +854,7 @@ class RealAssetMapPreview:
 		_draw_board_piece_bevel(structure_rect, HOUSE_BG_COLOR, 1.0)
 
 		var piece_id := str(info.get("piece_id", "house")).strip_edges()
-		var house_tex: Texture2D = textures.get("apartment", null) if piece_id == "apartment" else textures.get("house", null)
+		var house_tex: Texture2D = _get_piece_texture("apartment") if piece_id == "apartment" else _get_piece_texture("house")
 		if house_tex != null:
 			var bottom_gap := maxf(2.0, float(cell_size) * 0.10)
 			var house_pad := maxf(2.0, float(cell_size) * 0.08)
@@ -959,7 +864,7 @@ class RealAssetMapPreview:
 		else:
 			draw_rect(house_rect.grow(-5), Color(0.78, 0.23, 0.18, 1.0), true)
 		if not garden_cells.is_empty():
-			var garden_tex: Texture2D = textures.get("garden_large", null)
+			var garden_tex: Texture2D = _get_piece_texture("garden_large")
 			var garden_rect := _rect_for_cells(garden_cells).grow(-maxf(2.0, float(cell_size) * 0.08))
 			if garden_tex != null:
 				if garden_rect.size.y > garden_rect.size.x:
@@ -1471,16 +1376,8 @@ class RuralAreaPanelPreview:
 	const PANEL_CELLS := 8
 	const TILE_CELLS := 4
 	const BILLBOARD_CELLS := 1
-	const RURAL_AREA_TEXTURE_PATH := "res://modules/rural_marketeers/assets/map/pieces/ruralArea.jpg"
-	const RURAL_BILLBOARD_TEXTURE_PATH := "res://modules/rural_marketeers/assets/map/icons/rural_billboard.png"
-	const PRODUCT_ICON_PATHS := {
-		"burger": "res://modules/base_products/assets/map/icons/burger.png",
-		"pizza": "res://modules/base_products/assets/map/icons/pizza.png",
-		"soda": "res://modules/base_products/assets/map/icons/soda.png",
-		"beer": "res://modules/base_products/assets/map/icons/beer.png",
-	}
 
-	var textures: Dictionary = {}
+	var skin = null
 
 	func _init() -> void:
 		custom_minimum_size = Vector2(PANEL_CELLS * CELL_SIZE, PANEL_CELLS * CELL_SIZE)
@@ -1489,11 +1386,18 @@ class RuralAreaPanelPreview:
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
-		textures["rural_area"] = RealAssetMapPreview._load_texture_raw(RURAL_AREA_TEXTURE_PATH)
-		textures["rural_billboard"] = RealAssetMapPreview._load_texture_raw(RURAL_BILLBOARD_TEXTURE_PATH)
-		for key in PRODUCT_ICON_PATHS.keys():
-			textures["product_%s" % key] = RealAssetMapPreview._load_texture_raw(str(PRODUCT_ICON_PATHS[key]))
+		skin = TutorialCampaignScene._get_tutorial_skin(CELL_SIZE)
 		queue_redraw()
+
+	func _get_piece_texture(piece_id: String) -> Texture2D:
+		if skin != null and skin.has_method("get_piece_texture"):
+			return skin.get_piece_texture(piece_id)
+		return null
+
+	func _get_product_icon_texture(product_id: String) -> Texture2D:
+		if skin != null and skin.has_method("get_product_icon_texture"):
+			return skin.get_product_icon_texture(product_id)
+		return null
 
 	func _draw() -> void:
 		var panel_rect := Rect2(Vector2.ZERO, custom_minimum_size)
@@ -1512,7 +1416,7 @@ class RuralAreaPanelPreview:
 		_draw_billboard_side("W", Rect2(tile_rect.position + Vector2(-billboard_size, 0), Vector2(billboard_size, tile_rect.size.y)), "beer")
 
 	func _draw_rural_tile(tile_rect: Rect2) -> void:
-		var tex: Texture2D = textures.get("rural_area", null)
+		var tex: Texture2D = _get_piece_texture("rural_area")
 		var rect := tile_rect.grow(-maxf(1.0, tile_rect.size.x * 0.02))
 		if tex != null:
 			_draw_texture_aspect_fill(tex, rect, Color(1, 1, 1, 0.93))
@@ -1523,7 +1427,7 @@ class RuralAreaPanelPreview:
 	func _draw_billboard_side(side: String, rect: Rect2, product_id: String) -> void:
 		draw_rect(rect, Color(0.08, 0.07, 0.06, 0.08), true)
 		draw_rect(rect, Color(0.17, 0.13, 0.09, 0.28), false, 1.0)
-		var tex: Texture2D = textures.get("rural_billboard", null)
+		var tex: Texture2D = _get_piece_texture("rural_billboard")
 		var dst := rect.grow(-maxf(1.0, minf(rect.size.x, rect.size.y) * 0.08))
 		if tex != null:
 			if side == "E" or side == "W":
@@ -1533,7 +1437,7 @@ class RuralAreaPanelPreview:
 		_draw_product_icon(rect, product_id)
 
 	func _draw_product_icon(rect: Rect2, product_id: String) -> void:
-		var tex: Texture2D = textures.get("product_%s" % product_id, null)
+		var tex: Texture2D = _get_product_icon_texture(product_id)
 		if tex == null:
 			return
 		var side := minf(rect.size.x, rect.size.y) * 0.74
@@ -1909,6 +1813,177 @@ var _selected_reserve_index: int = 1
 var _placement_case: String = "no_road"
 var _distance_case: String = "same_board"
 var _marketing_case: String = "billboard"
+var _tutorial_content_catalog = null
+
+static var _tutorial_module_ids_cache: Array[String] = []
+static var _tutorial_content_catalog_cache = null
+static var _tutorial_piece_hints_attempted := false
+
+static func _get_tutorial_module_ids() -> Array[String]:
+	if not _tutorial_module_ids_cache.is_empty():
+		return _tutorial_module_ids_cache.duplicate()
+
+	var base_dir := ModulesBaseDirClass.get_base_dir()
+	var manifests_read := ModulePackageLoaderClass.load_all(base_dir)
+	if manifests_read.ok and manifests_read.value is Dictionary:
+		var ids: Array[String] = []
+		var manifests: Dictionary = manifests_read.value
+		for id_val in manifests.keys():
+			var module_id := str(id_val).strip_edges()
+			if not module_id.is_empty():
+				ids.append(module_id)
+		ids.sort()
+		_tutorial_module_ids_cache = ids
+
+	if _tutorial_module_ids_cache.is_empty():
+		_tutorial_module_ids_cache = GameDefaultsClass.build_default_enabled_modules_v2()
+	return _tutorial_module_ids_cache.duplicate()
+
+static func _get_tutorial_ui_metadata_module_ids() -> Array[String]:
+	var ids := GameDefaultsClass.build_default_enabled_modules_v2()
+	if not ids.has(LOBBYISTS_MODULE_ID):
+		ids.append(LOBBYISTS_MODULE_ID)
+	return ids
+
+static func _get_tutorial_skin(cell_size_px: int = 54):
+	return UiSkinCacheClass.get_skin_for_modules(
+		ModulesBaseDirClass.get_base_dir(),
+		_get_tutorial_module_ids(),
+		maxi(1, int(cell_size_px))
+	)
+
+static func _get_tutorial_content_catalog_static():
+	if _tutorial_content_catalog_cache != null:
+		return _tutorial_content_catalog_cache
+	var read := ContentCatalogLoaderClass.load_for_modules(
+		ModulesBaseDirClass.get_base_dir(),
+		_get_tutorial_module_ids()
+	)
+	if read.ok:
+		_tutorial_content_catalog_cache = read.value
+	else:
+		push_warning("TutorialCampaign: 内容目录加载失败，将使用占位数据: %s" % str(read.error))
+	return _tutorial_content_catalog_cache
+
+func _get_tutorial_content_catalog():
+	if _tutorial_content_catalog != null:
+		return _tutorial_content_catalog
+	_tutorial_content_catalog = _get_tutorial_content_catalog_static()
+	return _tutorial_content_catalog
+
+static func _ensure_tutorial_piece_hints() -> void:
+	if _tutorial_piece_hints_attempted:
+		return
+	_tutorial_piece_hints_attempted = true
+
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, 12345, _get_tutorial_ui_metadata_module_ids())
+	if not init.ok:
+		push_warning("TutorialCampaign: UI 元数据初始化失败，将使用通用预览: %s" % str(init.error))
+		return
+	var apply_r := ModuleUiMetadataBootstrapClass.apply(engine)
+	if not apply_r.ok:
+		push_warning("TutorialCampaign: UI 元数据装配失败，将使用通用预览: %s" % str(apply_r.error))
+
+static func _get_tutorial_piece_hints(piece_id: String) -> Dictionary:
+	_ensure_tutorial_piece_hints()
+	return PieceUiHintsRegistryClass.get_hints(piece_id)
+
+static func _get_tutorial_piece_kind(piece_id: String) -> String:
+	var hints := _get_tutorial_piece_hints(piece_id)
+	var kind_val = hints.get("kind", "")
+	return str(kind_val).strip_edges() if (kind_val is String) else ""
+
+static func _get_tutorial_road_overlay(piece_id: String) -> Dictionary:
+	var hints := _get_tutorial_piece_hints(piece_id)
+	var overlay_val = hints.get("road_overlay", null)
+	return overlay_val if (overlay_val is Dictionary) else {}
+
+static func _get_tutorial_roadwork_marker_piece_id(piece_id: String) -> String:
+	var hints := _get_tutorial_piece_hints(piece_id)
+	var marker_val = hints.get("roadwork_marker_piece_id", "")
+	return str(marker_val).strip_edges() if (marker_val is String) else ""
+
+static func _get_tutorial_piece_default_size(piece_id: String) -> Vector2i:
+	var pid := str(piece_id).strip_edges()
+	if pid.is_empty():
+		return Vector2i.ZERO
+	var catalog = _get_tutorial_content_catalog_static()
+	if catalog == null or not catalog.has_method("get_piece_def"):
+		return Vector2i.ZERO
+	var def = catalog.get_piece_def(pid)
+	if def == null or not def.has_method("get_size"):
+		return Vector2i.ZERO
+	var size: Vector2i = def.get_size()
+	return size if size.x > 0 and size.y > 0 else Vector2i.ZERO
+
+static func _get_tutorial_piece_footprint_cells(piece_id: String, anchor: Vector2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var pid := str(piece_id).strip_edges()
+	if pid.is_empty():
+		return out
+	var catalog = _get_tutorial_content_catalog_static()
+	if catalog == null or not catalog.has_method("get_piece_def"):
+		return out
+	var def = catalog.get_piece_def(pid)
+	if def == null or not (def is Object):
+		return out
+	var mask_val = def.get("footprint_mask")
+	if not (mask_val is Array):
+		return out
+	var mask: Array = mask_val
+	for y in range(mask.size()):
+		var row_val = mask[y]
+		if not (row_val is Array):
+			continue
+		var row: Array = row_val
+		for x in range(row.size()):
+			if int(row[x]) == 0:
+				continue
+			out.append(anchor + Vector2i(x, y))
+	return out
+
+static func _get_tutorial_gallery_piece_ids(module_id: String, kind: String) -> Array[String]:
+	_ensure_tutorial_piece_hints()
+	var catalog = _get_tutorial_content_catalog_static()
+	if catalog == null or not (catalog is Object):
+		return []
+	var pieces_val = catalog.get("pieces")
+	var sources_val = catalog.get("piece_sources")
+	if not (pieces_val is Dictionary) or not (sources_val is Dictionary):
+		return []
+
+	var entries: Array[Dictionary] = []
+	var pieces: Dictionary = pieces_val
+	var sources: Dictionary = sources_val
+	for piece_id_val in pieces.keys():
+		var piece_id := str(piece_id_val).strip_edges()
+		if piece_id.is_empty():
+			continue
+		if str(sources.get(piece_id, "")).strip_edges() != module_id:
+			continue
+		var hints := PieceUiHintsRegistryClass.get_hints(piece_id)
+		if str(hints.get("kind", "")).strip_edges() != kind:
+			continue
+		if not bool(hints.get("tutorial_gallery", false)):
+			continue
+		entries.append({
+			"piece_id": piece_id,
+			"order": int(hints.get("tutorial_gallery_order", 1000)),
+		})
+
+	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var ao := int(a.get("order", 1000))
+		var bo := int(b.get("order", 1000))
+		if ao == bo:
+			return str(a.get("piece_id", "")) < str(b.get("piece_id", ""))
+		return ao < bo
+	)
+
+	var out: Array[String] = []
+	for entry in entries:
+		out.append(str(entry.get("piece_id", "")))
+	return out
 
 func _ready() -> void:
 	GameLog.info("TutorialCampaign", "游戏介绍已加载")
@@ -2669,7 +2744,7 @@ func _render_fry_chefs_lesson() -> void:
 	_add_extension_module_section(
 		"它只看你是否已经卖成",
 		"薯条主厨不制造新的需求，也不改变房屋选择哪家餐厅。它是在你已经成功向某个房屋售卖后，为这次房屋结算增加额外收入。\n\n判断时只看结果：这栋房屋是否由你卖出，以及你的公司结构里是否有在岗薯条主厨。没卖成的房屋不会因为薯条主厨给你补收入。",
-		["fry_chef"]
+		_get_module_employee_ids(FRY_CHEFS_MODULE_ID)
 	)
 
 func _render_movie_stars_lesson() -> void:
@@ -2792,6 +2867,19 @@ func _add_milestone_reference_section(title: String, milestone_ids: Array, body:
 	section.add_child(_make_rich_text(body, 120))
 	_content_body.add_child(section)
 
+func _get_module_employee_ids(module_id: String) -> Array[String]:
+	var out: Array[String] = []
+	var catalog = _get_tutorial_content_catalog()
+	if catalog != null:
+		for employee_id_val in catalog.employees.keys():
+			var employee_id := str(employee_id_val).strip_edges()
+			if employee_id.is_empty():
+				continue
+			if str(catalog.employee_sources.get(employee_id, "")) == module_id:
+				out.append(employee_id)
+	out.sort()
+	return out
+
 func _build_milestone_reference(milestone_ids: Array) -> Control:
 	var grid := ResponsiveMilestoneGrid.new()
 	grid.add_theme_constant_override("h_separation", 12)
@@ -2805,15 +2893,14 @@ func _build_milestone_reference(milestone_ids: Array) -> Control:
 
 func _load_base_milestone_ids() -> Array[String]:
 	var ids: Array[String] = []
-	var dir := DirAccess.open(BASE_MILESTONE_CONTENT_DIR)
-	if dir != null:
-		dir.list_dir_begin()
-		var file_name := dir.get_next()
-		while not file_name.is_empty():
-			if not dir.current_is_dir() and file_name.ends_with(".json"):
-				ids.append(file_name.get_basename())
-			file_name = dir.get_next()
-		dir.list_dir_end()
+	var catalog = _get_tutorial_content_catalog()
+	if catalog != null:
+		for milestone_id_val in catalog.milestones.keys():
+			var milestone_id := str(milestone_id_val).strip_edges()
+			if milestone_id.is_empty():
+				continue
+			if str(catalog.milestone_sources.get(milestone_id, "")) == BASE_MILESTONES_MODULE_ID:
+				ids.append(milestone_id)
 	if ids.is_empty():
 		for id_val in BASE_MILESTONE_IDS_FALLBACK:
 			ids.append(str(id_val))
@@ -2833,10 +2920,11 @@ func _build_tutorial_milestone_card(milestone_id: String) -> Control:
 	return card
 
 func _load_milestone_data(milestone_id: String) -> Dictionary:
-	for path_template in MILESTONE_CONTENT_PATH_TEMPLATES:
-		var data := _load_json_dict(str(path_template) % milestone_id)
-		if not data.is_empty():
-			return data
+	var catalog = _get_tutorial_content_catalog()
+	if catalog != null and catalog.has_method("get_milestone_def"):
+		var def = catalog.get_milestone_def(milestone_id)
+		if def != null and def.has_method("to_dict"):
+			return def.to_dict()
 	return {}
 
 func _tutorial_milestone_pool_count(data: Dictionary) -> int:
@@ -3047,11 +3135,11 @@ func _build_employee_card(employee_id: String, scale: float) -> Control:
 
 func _load_employee_card_data(employee_id: String) -> Dictionary:
 	var data := {}
-	for path_template in EMPLOYEE_CONTENT_PATH_TEMPLATES:
-		var path := str(path_template) % employee_id
-		data = _load_json_dict(path)
-		if not data.is_empty():
-			break
+	var catalog = _get_tutorial_content_catalog()
+	if catalog != null and catalog.has_method("get_employee_def"):
+		var def = catalog.get_employee_def(employee_id)
+		if def != null and def.has_method("to_dict"):
+			data = def.to_dict()
 	if data.is_empty():
 		return {
 			"id": employee_id,
@@ -3137,7 +3225,7 @@ func _build_product_icon_chip(product_id: String, label_text: String) -> Control
 	tex_rect.custom_minimum_size = Vector2(34, 34)
 	tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	tex_rect.texture = _load_texture_from_res_path(_product_icon_path(product_id))
+	tex_rect.texture = _get_product_icon_texture(product_id)
 	row.add_child(tex_rect)
 
 	var label := Label.new()
@@ -3148,25 +3236,12 @@ func _build_product_icon_chip(product_id: String, label_text: String) -> Control
 	row.add_child(label)
 	return chip
 
-func _product_icon_path(product_id: String) -> String:
+func _get_product_icon_texture(product_id: String) -> Texture2D:
 	var normalized := "soda" if product_id == "cola" else product_id
-	match normalized:
-		"coffee":
-			return "res://modules/coffee/assets/map/icons/coffee.png"
-		"noodles":
-			return "res://modules/noodles/assets/map/icons/noodles.png"
-		"sushi":
-			return "res://modules/sushi/assets/map/icons/sushi.png"
-		"kimchi":
-			return "res://modules/kimchi/assets/map/icons/kimchi.png"
-	return "res://modules/base_products/assets/map/icons/%s.png" % normalized
-
-func _load_texture_from_res_path(path: String) -> Texture2D:
-	var raw_path := ProjectSettings.globalize_path(path) if path.begins_with("res://") else path
-	var raw_image := Image.load_from_file(raw_path)
-	if raw_image == null or raw_image.is_empty():
-		return null
-	return ImageTexture.create_from_image(raw_image)
+	var skin = _get_tutorial_skin(48)
+	if skin != null and skin.has_method("get_product_icon_texture"):
+		return skin.get_product_icon_texture(normalized)
+	return null
 
 func _get_reserve_cards() -> Array[Dictionary]:
 	var fallback: Array[Dictionary] = []
@@ -3407,19 +3482,12 @@ func _apply_preview_tile(state: Dictionary, tile_id: String, origin: Vector2i) -
 	state["drink_sources"] = drink_sources
 
 func _load_tile_json_dict(tile_id: String) -> Dictionary:
-	for path_template in TILE_CONTENT_PATH_TEMPLATES:
-		var data := _load_json_dict(str(path_template) % tile_id)
-		if not data.is_empty():
-			return data
+	var catalog = _get_tutorial_content_catalog()
+	if catalog != null and catalog.has_method("get_tile_def"):
+		var def = catalog.get_tile_def(tile_id)
+		if def != null and def.has_method("to_dict"):
+			return def.to_dict()
 	return {}
-
-func _load_json_dict(path: String) -> Dictionary:
-	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null:
-		return {}
-	var parsed = JSON.parse_string(file.get_as_text())
-	file.close()
-	return parsed if parsed is Dictionary else {}
 
 func _variant_to_vector2i(value) -> Vector2i:
 	if value is Vector2i:
@@ -3835,38 +3903,33 @@ func _build_new_districts_preview_options() -> Dictionary:
 	}
 
 func _build_lobbyists_piece_gallery_state() -> Dictionary:
+	var map_pieces: Array = []
+	_append_gallery_pieces_row(map_pieces, TutorialCampaignScene._get_tutorial_gallery_piece_ids(LOBBYISTS_MODULE_ID, "road"), 1)
+	_append_gallery_pieces_row(map_pieces, TutorialCampaignScene._get_tutorial_gallery_piece_ids(LOBBYISTS_MODULE_ID, "park"), 4)
 	return {
 		"road_segments": {},
 		"houses": [],
 		"restaurants": [],
 		"drink_sources": [],
-		"map_pieces": [
-			{
-				"piece_id": "lobbyists_road_straight",
-				"cells": [Vector2i(0, 1), Vector2i(1, 1)],
-			},
-			{
-				"piece_id": "lobbyists_road_long",
-				"cells": [Vector2i(3, 1), Vector2i(4, 1), Vector2i(5, 1)],
-			},
-			{
-				"piece_id": "lobbyists_road_l",
-				"cells": [Vector2i(7, 0), Vector2i(7, 1), Vector2i(8, 1)],
-			},
-			{
-				"piece_id": "lobbyists_park_line",
-				"cells": [Vector2i(0, 4), Vector2i(1, 4), Vector2i(2, 4), Vector2i(3, 4)],
-			},
-			{
-				"piece_id": "lobbyists_park_t",
-				"cells": [Vector2i(5, 3), Vector2i(6, 3), Vector2i(7, 3), Vector2i(6, 4)],
-			},
-			{
-				"piece_id": "lobbyists_park_l",
-				"cells": [Vector2i(9, 3), Vector2i(10, 3), Vector2i(11, 3), Vector2i(9, 4)],
-			},
-		],
+		"map_pieces": map_pieces,
 	}
+
+func _append_gallery_pieces_row(out: Array, piece_ids: Array[String], y: int) -> void:
+	var x := 0
+	for piece_id in piece_ids:
+		var cells := TutorialCampaignScene._get_tutorial_piece_footprint_cells(piece_id, Vector2i(x, y))
+		if cells.is_empty():
+			var size := TutorialCampaignScene._get_tutorial_piece_default_size(piece_id)
+			if size.x <= 0 or size.y <= 0:
+				size = Vector2i.ONE
+			cells = _cells_in_rect(Vector2i(x, y), Vector2i(x + size.x - 1, y + size.y - 1))
+		out.append({
+			"piece_id": piece_id,
+			"cells": cells,
+		})
+		var bounds := PiecePreviewLayoutClass.get_bounds(cells)
+		var max_pos: Vector2i = bounds.get("max", Vector2i(x, y))
+		x = max_pos.x + 2
 
 func _build_lobbyists_piece_gallery_options() -> Dictionary:
 	return {
