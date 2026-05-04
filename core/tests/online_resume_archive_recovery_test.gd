@@ -22,6 +22,9 @@ static func run() -> Result:
 	var validate_no_mutate_r := _run_validate_resume_point_does_not_mutate_source_case()
 	if not validate_no_mutate_r.ok:
 		return validate_no_mutate_r
+	var online_restructuring_replay_r := _run_online_restructuring_reopen_history_loads_offline_case()
+	if not online_restructuring_replay_r.ok:
+		return online_restructuring_replay_r
 	var online_payday_replay_r := _run_online_payday_parallel_history_loads_offline_case()
 	if not online_payday_replay_r.ok:
 		return online_payday_replay_r
@@ -97,6 +100,89 @@ static func _run_validate_resume_point_does_not_mutate_source_case() -> Result:
 		return Result.failure("validate_resume_point 不应修改 initial checkpoint 的晚餐 marker")
 	if int(initial_rules.get(ONLINE_MARKETING_CONFIRM_KEY, 0)) != 0:
 		return Result.failure("validate_resume_point 不应修改 initial checkpoint 的营销 marker")
+	return Result.success()
+
+static func _run_online_restructuring_reopen_history_loads_offline_case() -> Result:
+	if NetContext == null:
+		return Result.failure("NetContext autoload missing")
+	var prev_mode = NetContext.mode
+	var prev_local_player_id := int(NetContext.local_player_id)
+
+	var engine := GameEngineClass.new()
+	var init_r: Result = engine.initialize(2, 33445, [], GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR)
+	if not init_r.ok:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("初始化在线重组重开回放测试失败: %s" % init_r.error)
+	var prepare_r: Result = OnlineResumePointValidatorClass.prepare_engine_for_online_resume(engine)
+	if not prepare_r.ok:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("准备在线重组重开回放测试 marker 失败: %s" % prepare_r.error)
+
+	var state = engine.get_state()
+	if state == null:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("在线重组重开回放测试 state 为空")
+	state.phase = DefsClass.PHASE_RESTRUCTURING
+	state.sub_phase = ""
+	state.round_number = 2
+	state.turn_order.clear()
+	state.turn_order.append(0)
+	state.turn_order.append(1)
+	state.current_player_index = 0
+	state.round_state["restructuring"] = {
+		"submitted": {0: false, 1: false},
+		"finalized": false,
+	}
+	state.round_state["pending_phase_actions"] = {
+		DefsClass.PHASE_RESTRUCTURING: [0, 1],
+	}
+	var take_r: Result = StateUpdaterClass.take_from_pool(state, "trainer", 1)
+	if not take_r.ok:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("取出重组测试员工失败: %s" % take_r.error)
+	var add_r: Result = StateUpdaterClass.add_employee(state, 0, "trainer", false)
+	if not add_r.ok:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("添加重组测试员工失败: %s" % add_r.error)
+	var player0: Dictionary = state.players[0]
+	var cs: Dictionary = Dictionary(player0.get("company_structure", {})) if player0.get("company_structure", null) is Dictionary else {}
+	cs["ceo_slots"] = 1
+	cs["structure"] = [{
+		"employee_id": "trainer",
+		"reports": [],
+	}]
+	player0["company_structure"] = cs
+	state.players[0] = player0
+
+	var persist_r := _persist_current_state_to_initial_checkpoint(engine)
+	if not persist_r.ok:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return persist_r
+
+	NetContext.mode = NetContext.Mode.ONLINE_SERVER
+	NetContext.local_player_id = -1
+	var submit_r: Result = engine.execute_command(Command.create("submit_restructuring", 0, {}))
+	if not submit_r.ok:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("在线重组测试 submit_restructuring(0) 失败: %s" % submit_r.error)
+	var move_after_submit_r: Result = engine.execute_command(Command.create("restructure_employee", 0, {
+		"employee_id": "trainer",
+		"to_reserve": true,
+	}))
+	if not move_after_submit_r.ok:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("在线重组已提交后再次调整员工应成功，实际失败: %s" % move_after_submit_r.error)
+
+	var archive_r: Result = engine.create_archive()
+	if not archive_r.ok:
+		_restore_net_context(prev_mode, prev_local_player_id)
+		return Result.failure("创建在线重组重开回放测试存档失败: %s" % archive_r.error)
+	var archive: Dictionary = Dictionary(archive_r.value).duplicate(true)
+
+	_restore_net_context(prev_mode, prev_local_player_id)
+	var load_r: Result = ArchiveRecoveryClass.load_for_online_resume(archive)
+	if not load_r.ok:
+		return Result.failure("离线上下文应能加载在线重组重开历史: %s" % load_r.error)
 	return Result.success()
 
 static func _run_online_payday_parallel_history_loads_offline_case() -> Result:
@@ -437,6 +523,21 @@ static func _run_resume_room_rejects_bad_tail_archive_case() -> Result:
 		return Result.failure("普通恢复房不应接受可截断坏尾部存档")
 	if rm.rooms.has(room_code):
 		return Result.failure("恢复房创建失败后不应留下房间: %s" % room_code)
+	return Result.success()
+
+static func _persist_current_state_to_initial_checkpoint(engine: GameEngine) -> Result:
+	if engine == null:
+		return Result.failure("测试内部错误：engine 为空")
+	if engine.checkpoints.is_empty() or not (engine.checkpoints[0] is Dictionary):
+		return Result.failure("测试内部错误：缺少 checkpoint0")
+	var state = engine.get_state()
+	if state == null:
+		return Result.failure("测试内部错误：state 为空")
+	var checkpoint0: Dictionary = Dictionary(engine.checkpoints[0]).duplicate(true)
+	checkpoint0["state_dict"] = state.to_dict().duplicate(true)
+	checkpoint0["hash"] = state.compute_hash()
+	checkpoint0["rng_calls"] = int(engine.random_manager.get_call_count()) if engine.random_manager != null else 0
+	engine.checkpoints[0] = checkpoint0
 	return Result.success()
 
 static func _restore_net_context(prev_mode, prev_local_player_id: int) -> void:

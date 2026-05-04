@@ -266,7 +266,7 @@ static func _read_integral_player_id(value) -> int:
 static func can_player_reopen_online_restructuring(state: GameState, player_id: int) -> bool:
 	if state == null:
 		return false
-	if not is_online_mode():
+	if not is_online_mode() and not _has_online_settlement_confirm_markers(state):
 		return false
 	if str(state.phase) != DefsClass.PHASE_RESTRUCTURING:
 		return false
