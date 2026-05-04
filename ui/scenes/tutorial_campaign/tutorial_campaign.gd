@@ -34,6 +34,14 @@ const EMPLOYEE_CONTENT_PATH_TEMPLATES := [
 	"res://modules/rural_marketeers/content/employees/%s.json",
 	"res://modules/sushi/content/employees/%s.json",
 ]
+const MILESTONE_CONTENT_PATH_TEMPLATES := [
+	"res://modules/base_milestones/content/milestones/%s.json",
+	"res://modules/coffee/content/milestones/%s.json",
+	"res://modules/ketchup_mechanism/content/milestones/%s.json",
+	"res://modules/lobbyists/content/milestones/%s.json",
+	"res://modules/new_milestones/content/milestones/%s.json",
+	"res://modules/rural_marketeers/content/milestones/%s.json",
+]
 
 const FALLBACK_RESERVE_CARDS := [
 	{"cash": 50, "ceo_slots": 2},
@@ -63,9 +71,16 @@ class RealAssetMapPreview:
 	const APARTMENT_TEXTURE_PATH := "res://modules/new_districts/assets/map/pieces/apartment.png"
 	const EXTRA_PIECE_TEXTURE_PATHS := {
 		"park": "res://modules/base_pieces/assets/map/pieces/park.png",
+		"lobbyists_road_straight": "res://modules/lobbyists/assets/map/icons/under_construction.png",
+		"lobbyists_road_long": "res://modules/lobbyists/assets/map/icons/under_construction.png",
+		"lobbyists_road_l": "res://modules/lobbyists/assets/map/icons/under_construction.png",
+		"lobbyists_park_line": "res://modules/base_pieces/assets/map/pieces/park.png",
+		"lobbyists_park_t": "res://modules/base_pieces/assets/map/pieces/park.png",
+		"lobbyists_park_l": "res://modules/base_pieces/assets/map/pieces/park.png",
 		"lobbyists_park_tile_z": "res://modules/lobbyists/assets/map/pieces/park_tile_z.png",
 		"lobbyists_roadworks_marker": "res://modules/lobbyists/assets/map/icons/under_construction.png",
 		"highway_offramp": "res://modules/rural_marketeers/assets/map/pieces/freeway.png",
+		"rural_area": "res://modules/rural_marketeers/assets/map/pieces/ruralArea.jpg",
 		"rural_billboard": "res://modules/rural_marketeers/assets/map/icons/rural_billboard.png",
 		"gourmet_guide": "res://modules/gourmet_food_critics/assets/map/icons/gourmet_guide.png",
 		"coffee": "res://modules/coffee/assets/map/icons/coffee.png",
@@ -360,8 +375,16 @@ class RealAssetMapPreview:
 		match piece_id:
 			"highway_offramp":
 				return Vector2i(1, 2)
+			"rural_area":
+				return Vector2i(2, 2)
 			"rural_billboard", "gourmet_guide", "coffee", "coffee_shop", "lobbyists_roadworks_marker":
 				return Vector2i.ONE
+			"lobbyists_road_straight":
+				return Vector2i(2, 1)
+			"lobbyists_road_long", "lobbyists_park_line":
+				return Vector2i(3, 1)
+			"lobbyists_road_l", "lobbyists_park_t", "lobbyists_park_l":
+				return Vector2i(3, 2)
 			"lobbyists_park_tile_z", "park":
 				return Vector2i(2, 2)
 			_:
@@ -1884,6 +1907,11 @@ func _render_balanced_maps_lesson() -> void:
 		"平衡地图生成发生在开局设置前。系统会从候选地图中选择分布更稳定的一张，让道路、房屋、饮料源和起始位置不至于过度偏向某一侧。\n\n它不会新增员工、商品、建筑或工作时间动作。开局地图确定后，你仍按普通距离、起始餐厅和晚餐规则游玩。"
 	)
 
+	_add_extension_module_section(
+		"不会出现新的卡或板件",
+		"这个模块没有员工卡、营销板件、商品图标或地图组件需要展示。它的效果已经被消化在开局地图里。\n\n因此阅读房间启用列表时，如果只看到平衡地图生成，不需要寻找额外动作；继续按基础地图、起始餐厅和晚餐路线规则处理即可。"
+	)
+
 	var flow := _make_section("新手需要记住的顺序")
 	flow.add_child(_build_process_chip_row(["生成地图", "放起始餐厅", "正常回合"]))
 	flow.add_child(_make_rich_text(
@@ -1907,6 +1935,11 @@ func _render_new_districts_lesson() -> void:
 		["new_business_developer"]
 	)
 
+	_add_extension_module_section(
+		"和普通房屋、花园的关系",
+		"公寓会被晚餐阶段当作房屋处理：有编号、有需求，也会选择能够完整供应需求的餐厅。它和带花园房屋的区别在于，公寓强调营销后可累积更多需求；带花园房屋强调容量更高和成交收入规则不同。\n\n所以新手看到公寓时，不要把它理解成“更大的花园房屋”。它是一种独立房屋类型。"
+	)
+
 func _render_lobbyists_lesson() -> void:
 	var preview := _make_section("建设中道路会先影响本回合")
 	preview.add_child(_build_real_map_preview(_build_lobbyists_preview_state(), _build_lobbyists_preview_options()))
@@ -1920,6 +1953,12 @@ func _render_lobbyists_lesson() -> void:
 		"对应员工",
 		"说客的重点是改变地图连接和房屋周边价值。阅读这张卡时，不要只看“能放什么”，还要看放置后是在晚餐前临时生效，还是清理后成为正式地图。",
 		["lobbyist"]
+	)
+
+	_add_milestone_reference_section(
+		"相关里程碑",
+		["first_lobbyist_used"],
+		"首次使用说客会打开额外地图板块相关的后续处理。新手在这一刻最容易漏掉待处理动作：如果界面提示继续放置板块，应先完成这一步，再推进后续阶段。"
 	)
 
 func _render_rural_marketeers_lesson() -> void:
@@ -1937,6 +1976,12 @@ func _render_rural_marketeers_lesson() -> void:
 		["rural_marketeer"]
 	)
 
+	_add_milestone_reference_section(
+		"相关组件与里程碑",
+		["first_rural_marketeer_used"],
+		"本章图示展示了三个真实组件：乡村地区、高速公路出口和巨型广告牌。首次使用乡村营销员后，会解锁高速出口放置；没有出口时，乡村需求不会像普通房屋那样直接从棋盘内找路。"
+	)
+
 func _render_mass_marketeers_lesson() -> void:
 	_add_extension_module_section(
 		"它改变营销阶段，不改变广告形状",
@@ -1944,10 +1989,11 @@ func _render_mass_marketeers_lesson() -> void:
 		["mass_marketeer"]
 	)
 
-	var timing := _make_section("最容易误读的地方")
+	var timing := _make_section("它复用基础广告板件")
+	timing.add_child(_build_real_map_preview(_build_marketing_preview_state("billboard"), _build_marketing_preview_options("billboard")))
 	timing.add_child(_make_rich_text(
-		"大众营销员不会让你在工作时间额外放广告。它影响的是后面的营销结算阶段，所以本回合已经存在的广告越多，效果越明显。",
-		105
+		"大众营销员不会让你在工作时间额外放广告，也不会提供专属营销板件。它复用已经放在地图上的基础广告：广告牌、邮箱、飞机、电波都可能因为它在营销阶段多次结算。\n\n所以判断它时要先看地图上已有广告，再看营销阶段进入时是否有大众营销员在岗。",
+		165
 	))
 	_content_body.add_child(timing)
 
@@ -1966,6 +2012,11 @@ func _render_gourmet_food_critics_lesson() -> void:
 		["gourmet_food_critic", "marketing_trainee"]
 	)
 
+	_add_extension_module_section(
+		"专属营销板件",
+		"美食指南是这个模块新增的营销板件。它不是广告牌、邮箱、飞机或电波的变体，因此不能用基础广告的邻接、街区、行列或板块范围去推断。\n\n放置时看板件本身是否合法；结算时看全图哪些房屋带花园。"
+	)
+
 func _render_ketchup_mechanism_lesson() -> void:
 	_add_extension_module_section(
 		"番茄酱不是主动广告",
@@ -1980,26 +2031,32 @@ func _render_ketchup_mechanism_lesson() -> void:
 	))
 	_content_body.add_child(flow)
 
+	_add_milestone_reference_section(
+		"相关里程碑",
+		["ketchup_sold_your_demand"],
+		"番茄酱通过里程碑状态体现，不会给你一块可以手动放置的广告板。它的阅读顺序是：先确认需求来源，再确认售卖者，最后看后续晚餐选店是否获得修正。"
+	)
+
 func _render_noodles_lesson() -> void:
 	_add_extension_module_section(
 		"面条是完整替代",
-		"面条通常在房屋原需求没有任何餐厅能完整满足时才会登场。它不是和汉堡披萨混着卖，而是尝试用面条完整替代这张需求清单。\n\n判断顺序：先看有没有餐厅能正常满足原需求；如果没有，再看谁有足够面条。",
-		["noodle_cook"],
+		"面条通常在房屋原需求没有任何餐厅能完整满足时才会登场。它不是和汉堡披萨混着卖，而是尝试用面条完整替代这张需求清单。\n\n判断顺序：先看有没有餐厅能正常满足原需求；如果没有，再看谁有足够面条。面条商品不会被基础营销板件直接制造需求。",
+		["noodle_cook", "noodle_chef"],
 		["noodles"], ["面条"]
 	)
 
 func _render_sushi_lesson() -> void:
 	_add_extension_module_section(
 		"寿司只关注花园房屋",
-		"寿司只关注带花园房屋。对花园房屋，晚餐会优先尝试用寿司完整替代全部需求。\n\n普通房屋不会因为寿司模块而变成寿司订单；所以看到寿司时，先找带花园房屋，再判断是否能完整替代。",
-		["sushi_cook"],
+		"寿司只关注带花园房屋。对花园房屋，晚餐会优先尝试用寿司完整替代全部需求。\n\n普通房屋不会因为寿司模块而变成寿司订单；所以看到寿司时，先找带花园房屋，再判断是否能完整替代。寿司商品也不会被基础营销板件直接制造需求。",
+		["sushi_cook", "sushi_chef"],
 		["sushi"], ["寿司"]
 	)
 
 func _render_kimchi_lesson() -> void:
 	_add_extension_module_section(
 		"泡菜像套餐附加品",
-		"泡菜会在晚餐需求方案里追加到原订单或替代订单旁边，因此它更像“套餐附加品”。如果订单里包含咖啡，则不会被泡菜方案替代。\n\n泡菜大师还会在清理阶段与库存丢弃互动。清理时玩家可能需要选择是否保存泡菜；保存泡菜会影响其它食物和饮料的保留。",
+		"泡菜会在晚餐需求方案里追加到原订单或替代订单旁边，因此它更像“套餐附加品”。如果订单里包含咖啡，则不会被泡菜方案替代。\n\n泡菜大师不是工作时间生产线员工；它会在清理阶段与库存丢弃互动。清理时玩家可能需要选择是否保存泡菜；保存泡菜会影响其它食物和饮料的保留。",
 		["kimchi_master"],
 		["kimchi"], ["泡菜"]
 	)
@@ -2020,10 +2077,16 @@ func _render_coffee_lesson() -> void:
 		["coffee"], ["咖啡"]
 	)
 
+	_add_milestone_reference_section(
+		"相关组件与里程碑",
+		["first_coffee_sold"],
+		"本章图示里的咖啡店使用模块真实组件。咖啡店不是餐厅，不能替代主餐店；它只在顾客去目标餐厅的路线中提供额外购买机会。首次卖出咖啡也有对应里程碑状态。"
+	)
+
 func _render_fry_chefs_lesson() -> void:
 	_add_extension_module_section(
 		"它只看你是否已经卖成",
-		"薯条主厨不制造新的需求，也不改变房屋选择哪家餐厅。它是在你已经成功向某个房屋售卖后，为这次房屋结算增加额外收入。\n\n判断时只看结果：这栋房屋是否由你卖出，以及你的公司结构里是否有在岗薯条主厨。",
+		"薯条主厨不制造新的需求，也不改变房屋选择哪家餐厅。它是在你已经成功向某个房屋售卖后，为这次房屋结算增加额外收入。\n\n判断时只看结果：这栋房屋是否由你卖出，以及你的公司结构里是否有在岗薯条主厨。没卖成的房屋不会因为薯条主厨给你补收入。",
 		["fry_chef"]
 	)
 
@@ -2059,12 +2122,54 @@ func _render_new_milestones_lesson() -> void:
 	))
 	_content_body.add_child(replace)
 
+	var marketing := _make_section("它还会加入特殊营销板件")
+	marketing.add_child(_build_real_map_preview(_build_new_milestones_preview_state(), _build_new_milestones_preview_options()))
+	marketing.add_child(_make_rich_text(
+		"全新里程碑里的部分营销奖励会产生后续放置动作。营销经理相关奖励会让你在同回合额外放同类型板件；品牌经理相关奖励会让飞机广告携带第二种商品；品牌总监相关奖励会改变电波广告的持续状态。\n\n图中展示的是该模块真实注册的特殊飞机营销板件。看到待处理动作时，先完成它，再继续阶段推进。",
+		205
+	))
+	_content_body.add_child(marketing)
+
 	var groups := _make_section("新手先按触发类型阅读")
+	groups.add_child(_build_product_icon_row(["burger", "pizza", "soda", "beer", "lemonade"], ["汉堡", "披萨", "可乐", "啤酒", "柠檬水"]))
 	groups.add_child(_make_rich_text(
 		"员工使用类：营销实习生、营销经理、品牌经理、品牌总监等触发后，通常会改变营销放置或给出后续动作。\n\n销售类：卖出汉堡、披萨或饮料后，可能改变公司结构、库存保护或追加营销板件。\n\n经营类：招聘、培训、放置新餐厅、建造房屋或定价相关触发，会改变后续发展节奏。不要背参数，实际游玩时以当前里程碑卡面和界面提示为准。",
 		205
 	))
 	_content_body.add_child(groups)
+
+	var trigger_cards := _make_section("常见员工触发来源")
+	trigger_cards.add_child(_build_employee_card_row(["recruiting_girl", "trainer", "waitress", "discount_manager"], 0.86))
+	trigger_cards.add_child(_build_employee_card_row(["cart_operator", "marketing_trainee", "campaign_manager", "brand_manager", "brand_director"], 0.86))
+	trigger_cards.add_child(_make_rich_text(
+		"全新里程碑不只盯营销线。招聘、培训、服务、定价、采购和营销员工都可能成为触发来源。看到这些员工首次发挥作用时，应留意里程碑面板是否出现新奖励或待处理动作。",
+		130
+	))
+	_content_body.add_child(trigger_cards)
+
+	_add_milestone_reference_section(
+		"这一套里程碑池包含",
+		[
+			"first_marketeer_used",
+			"first_marketing_trainee_used",
+			"first_campaign_manager_used",
+			"first_brand_manager_used",
+			"first_brand_director_used",
+			"first_burger_sold",
+			"first_pizza_sold",
+			"first_coke_sold",
+			"first_beer_sold",
+			"first_lemonade_sold",
+			"first_new_restaurant",
+			"first_house_built",
+			"first_cart_operator_used",
+			"first_recruiting_girl_used",
+			"first_trainer_used",
+			"first_waitress_used",
+			"first_discount_manager_used",
+		],
+		"这里列的是当前项目实际加载的全新里程碑名称。游玩时不需要提前背完整效果，但需要知道它们覆盖了营销、销售、招聘、培训、放置和定价等多条链路。"
+	)
 
 	var conflict := _make_section("与其它里程碑模块的关系")
 	conflict.add_child(_make_rich_text(
@@ -2077,6 +2182,12 @@ func _render_hard_choices_lesson() -> void:
 	_add_extension_module_section(
 		"它只改变基础里程碑的时机压力",
 		"艰难抉择不会给你新员工或新商品，它改变的是基础里程碑的节奏：部分基础里程碑如果太晚没有被拿走，会在指定时机过期。\n\n启用它时，早期行动的机会成本会更高。不要只问“这个里程碑以后能不能拿”，还要看它是否已经错过窗口。"
+	)
+
+	_add_milestone_reference_section(
+		"会被加上过期窗口的基础里程碑",
+		["first_burger_marketed", "first_pizza_marketed", "first_drink_marketed", "first_train", "first_hire_3"],
+		"这些仍然是基础里程碑，只是启用艰难抉择后会变得有时机压力。它和全新里程碑不能按同一套记忆理解：看到艰难抉择时，先回到基础里程碑池，再关注哪些奖励可能错过。"
 	)
 
 func _add_extension_module_section(title: String, body: String, employee_ids: Array = [], product_ids: Array = [], product_labels: Array = []) -> void:
@@ -2092,6 +2203,45 @@ func _add_extension_module_section(title: String, body: String, employee_ids: Ar
 		min_height = 205
 	section.add_child(_make_rich_text(body, min_height))
 	_content_body.add_child(section)
+
+func _add_milestone_reference_section(title: String, milestone_ids: Array, body: String) -> void:
+	var section := _make_section(title)
+	section.add_child(_build_milestone_reference(milestone_ids))
+	section.add_child(_make_rich_text(body, 120))
+	_content_body.add_child(section)
+
+func _build_milestone_reference(milestone_ids: Array) -> Control:
+	var box := VBoxContainer.new()
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_theme_constant_override("separation", 6)
+	for milestone_id_val in milestone_ids:
+		var milestone_id := str(milestone_id_val).strip_edges()
+		if milestone_id.is_empty():
+			continue
+		var row := HBoxContainer.new()
+		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_theme_constant_override("separation", 8)
+
+		var dot := _make_label("•", 15, UiStylesClass.COLOR_TEXT_HINT)
+		dot.custom_minimum_size = Vector2(16, 0)
+		dot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		row.add_child(dot)
+
+		var name := _make_label(_load_milestone_name(milestone_id), 15, UiStylesClass.COLOR_TEXT_PRIMARY)
+		name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(name)
+		box.add_child(row)
+	return box
+
+func _load_milestone_name(milestone_id: String) -> String:
+	for path_template in MILESTONE_CONTENT_PATH_TEMPLATES:
+		var data := _load_json_dict(str(path_template) % milestone_id)
+		if data.is_empty():
+			continue
+		var name := str(data.get("name", "")).strip_edges()
+		if not name.is_empty():
+			return name
+	return milestone_id
 
 func _build_phase_track_preview() -> Control:
 	var frame := PanelContainer.new()
@@ -2977,8 +3127,13 @@ func _build_lobbyists_preview_state() -> Dictionary:
 	var state := _build_preview_map_state(["tile_z"])
 	var map_pieces: Array = state.get("map_pieces", [])
 	map_pieces.append({
-		"piece_id": "lobbyists_roadworks_marker",
-		"anchor": Vector2i(2, 2),
+		"piece_id": "lobbyists_road_straight",
+		"cells": [Vector2i(1, 2), Vector2i(2, 2)],
+		"marker": true,
+	})
+	map_pieces.append({
+		"piece_id": "lobbyists_road_l",
+		"cells": [Vector2i(2, 2), Vector2i(2, 3), Vector2i(3, 3)],
 		"marker": true,
 	})
 	state["map_pieces"] = map_pieces
@@ -2990,7 +3145,7 @@ func _build_lobbyists_preview_options() -> Dictionary:
 		"overlays": [
 			_make_map_overlay("lobbyist_park_left", _cells_in_rect(Vector2i(0, 0), Vector2i(1, 1)), MAP_DISTANCE_FILL, MAP_DISTANCE_BORDER, 2),
 			_make_map_overlay("lobbyist_park_right", _cells_in_rect(Vector2i(3, 3), Vector2i(4, 4)), MAP_DISTANCE_FILL, MAP_DISTANCE_BORDER, 2),
-			_make_map_overlay("lobbyist_roadworks", [Vector2i(2, 2)], MAP_VALID_FILL, MAP_VALID_BORDER, 2),
+			_make_map_overlay("lobbyist_roadworks", [Vector2i(1, 2), Vector2i(2, 2), Vector2i(2, 3), Vector2i(3, 3)], MAP_VALID_FILL, MAP_VALID_BORDER, 2),
 		],
 	}
 
@@ -3012,6 +3167,7 @@ func _build_rural_marketeers_preview_state() -> Dictionary:
 			{"restaurant_id": "rest_rural_demo", "owner": 0, "anchor": Vector2i(5, 3)},
 		],
 		"map_pieces": [
+			{"piece_id": "rural_area", "anchor": Vector2i(-2, 0)},
 			{"piece_id": "highway_offramp", "anchor": Vector2i(-1, 1)},
 			{"piece_id": "rural_billboard", "anchor": Vector2i(-1, 4), "marker": true},
 		],
@@ -3057,6 +3213,27 @@ func _build_marketing_extensions_preview_options() -> Dictionary:
 	return {
 		"overlays": [
 			_make_map_overlay("gourmet_guide_targets", [Vector2i(6, 0), Vector2i(7, 0), Vector2i(6, 1), Vector2i(7, 1), Vector2i(8, 0), Vector2i(8, 1)], MAP_VALID_FILL, MAP_VALID_BORDER, 2),
+		],
+	}
+
+func _build_new_milestones_preview_state() -> Dictionary:
+	var state := _build_marketing_demo_base_state()
+	var placement := _make_marketing_placement("airplane", 5101, Vector2i(0, 0), Vector2i(3, 2), "row")
+	placement["product"] = "pizza"
+	state["marketing_placements"] = [placement]
+	return state
+
+func _build_new_milestones_preview_options() -> Dictionary:
+	var stripe: Array[Vector2i] = []
+	for x in range(10):
+		stripe.append(Vector2i(x, 0))
+		stripe.append(Vector2i(x, 1))
+		stripe.append(Vector2i(x, 2))
+	return {
+		"margin_cells": {"left": 2, "right": 0, "top": 0, "bottom": 0},
+		"overlays": [
+			_make_map_overlay("new_milestones_airplane_stripe", stripe, Color(0.29, 0.55, 0.90, 0.14), Color(0.16, 0.31, 0.62, 0.78), 2),
+			_make_map_overlay("new_milestones_airplane_targets", _marketing_demo_house_cells(["2", "4"]), MAP_VALID_FILL, MAP_VALID_BORDER, 2),
 		],
 	}
 
