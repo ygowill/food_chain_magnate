@@ -1903,6 +1903,7 @@ func _build_process_chip(text: String, index: int) -> Control:
 	var item := HBoxContainer.new()
 	item.alignment = BoxContainer.ALIGNMENT_BEGIN
 	item.add_theme_constant_override("separation", 8)
+	item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.add_child(item)
 
 	var index_label := Label.new()
@@ -1914,6 +1915,8 @@ func _build_process_chip(text: String, index: int) -> Control:
 
 	var label := Label.new()
 	label.text = text
+	label.custom_minimum_size = Vector2(130, 0)
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
