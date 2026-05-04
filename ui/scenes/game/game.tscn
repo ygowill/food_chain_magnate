@@ -230,6 +230,7 @@ mouse_filter = 2
 
 [node name="Canvas" type="Control" parent="UIRoot/MainContent/CenterSplit/GameArea/MapView/Content"]
 layout_mode = 2
+texture_filter = 4
 script = ExtResource("3_map_canvas")
 
 [node name="MapModeBar" parent="UIRoot/MainContent/CenterSplit/GameArea" instance=ExtResource("11_map_mode_bar")]

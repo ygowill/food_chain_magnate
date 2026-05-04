@@ -7,6 +7,13 @@ extends RefCounted
 
 const PerfTraceClass = preload("res://core/debug/perf_trace.gd")
 
+const RUNTIME_MIPMAP_PIECE_IDS := {
+	"house": true,
+	"house_with_garden": true,
+	"garden_large": true,
+	"apartment": true,
+}
+
 var cell_size_px: int = 40
 
 var cell_textures: Dictionary = {}         # key -> Texture2D
@@ -192,6 +199,11 @@ func _load_texture_or_placeholder(path: String, kind: String, warnings: Array[St
 	if path.is_empty():
 		return _get_placeholder(kind)
 
+	var mipmapped_tex := _load_runtime_mipmap_texture(path, kind, label)
+	if mipmapped_tex != null:
+		PerfTraceClass.counter_add("skin:texture_load_runtime_mipmap_ok", 1)
+		return mipmapped_tex
+
 	var exists := ResourceLoader.exists(path)
 	var can_load_raw := path.begins_with("res://") or path.begins_with("user://")
 	var raw_file_exists := can_load_raw and FileAccess.file_exists(path)
@@ -237,7 +249,19 @@ static func _is_import_target_missing(path: String) -> bool:
 		return import_target.begins_with("res://") and not FileAccess.file_exists(import_target)
 	return false
 
-static func _load_raw_image_texture(path: String) -> Texture2D:
+static func _load_runtime_mipmap_texture(path: String, kind: String, label: String) -> Texture2D:
+	if str(kind) != "piece":
+		return null
+	var prefix := "piece:"
+	var l := str(label)
+	if not l.begins_with(prefix):
+		return null
+	var piece_id := l.substr(prefix.length()).strip_edges()
+	if not RUNTIME_MIPMAP_PIECE_IDS.has(piece_id):
+		return null
+	return _load_raw_image_texture(path, true)
+
+static func _load_raw_image_texture(path: String, generate_mipmaps: bool = false) -> Texture2D:
 	var p := str(path).strip_edges()
 	if p.is_empty():
 		return null
@@ -248,6 +272,10 @@ static func _load_raw_image_texture(path: String) -> Texture2D:
 	var img := Image.load_from_file(p)
 	if img == null or img.is_empty():
 		return null
+	if generate_mipmaps:
+		var err := img.generate_mipmaps()
+		if err != OK:
+			push_warning("MapSkin: runtime mipmap generation failed for %s err=%d" % [p, int(err)])
 	return ImageTexture.create_from_image(img)
 
 func _maybe_make_transparent_logo_texture(piece_id: String, base_tex: Texture2D, warnings: Array[String]) -> Texture2D:
