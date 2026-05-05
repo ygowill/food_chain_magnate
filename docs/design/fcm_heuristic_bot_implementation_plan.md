@@ -954,9 +954,11 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 - `core/ai/strategy/strategy_income_analyzer.gd`
 - `core/ai/strategy/strategy_scorer.gd`
 - `core/tests/ai/strategy_bot_test.gd`
+- `data/bots/base_revenue_v1.json`
 
 当前 StrategyBot 已在评分前增加策略层候选过滤：
 
+- `StrategyProfile.configure_base_revenue()` 优先读取 `data/bots/base_revenue_v1.json`，解析失败时回落到内置默认值，便于后续按难度/模块扩展配置。
 - `CandidateGenerator` 在有 `source_state` 时复用 `MarketingRangeCalculator` 过滤影响不到房屋的营销候选。
 - `StrategyCandidateFilter` 作为后置防线，在 `macro.debug.affected_house_ids` 明确为空时丢弃营销候选，并把原因写入 trace。
 - `StrategyIncomeAnalyzer` 从 `ObservationState` 提取产品需求、可服务需求、库存缺口、供给能力和员工对收入链的贡献。

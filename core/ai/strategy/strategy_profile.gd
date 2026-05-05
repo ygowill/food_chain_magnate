@@ -1,6 +1,10 @@
 class_name StrategyProfile
 extends RefCounted
 
+const DataParseHelpersClass = preload("res://core/data/parse_helpers.gd")
+
+const DEFAULT_BASE_REVENUE_PATH := "res://data/bots/base_revenue_v1.json"
+
 var id: String = "base_revenue_v1"
 var max_valid_per_action: int = 12
 var strict_marketing_must_affect_houses: bool = true
@@ -9,6 +13,55 @@ var employee_priorities: Dictionary = {}
 var product_priorities: Dictionary = {}
 
 func configure_base_revenue() -> void:
+	var loaded := load_from_file(DEFAULT_BASE_REVENUE_PATH)
+	if loaded.ok:
+		return
+	_configure_base_revenue_fallback()
+
+func load_from_file(path: String) -> Result:
+	if path.is_empty():
+		return Result.failure("StrategyProfile.load_from_file: path 不能为空")
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return Result.failure("StrategyProfile.load_from_file: 无法打开文件: %s" % path)
+	var json := file.get_as_text()
+	file.close()
+	var parsed = JSON.parse_string(json)
+	if not (parsed is Dictionary):
+		return Result.failure("StrategyProfile.load_from_file: JSON 解析失败或根节点不是 Dictionary: %s" % path)
+	return configure_from_dict(Dictionary(parsed))
+
+func configure_from_dict(data: Dictionary) -> Result:
+	var id_read := DataParseHelpersClass.parse_string(data.get("id", null), "StrategyProfile.id", false)
+	if not id_read.ok:
+		return id_read
+	var max_read := DataParseHelpersClass.parse_non_negative_int(data.get("max_valid_per_action", null), "StrategyProfile.max_valid_per_action")
+	if not max_read.ok:
+		return max_read
+	if int(max_read.value) <= 0:
+		return Result.failure("StrategyProfile.max_valid_per_action 必须 > 0")
+	var strict_read := DataParseHelpersClass.parse_bool(data.get("strict_marketing_must_affect_houses", null), "StrategyProfile.strict_marketing_must_affect_houses")
+	if not strict_read.ok:
+		return strict_read
+	var action_read := _parse_float_dictionary(data.get("action_weights", null), "StrategyProfile.action_weights")
+	if not action_read.ok:
+		return action_read
+	var employee_read := _parse_float_dictionary(data.get("employee_priorities", null), "StrategyProfile.employee_priorities")
+	if not employee_read.ok:
+		return employee_read
+	var product_read := _parse_float_dictionary(data.get("product_priorities", null), "StrategyProfile.product_priorities")
+	if not product_read.ok:
+		return product_read
+
+	id = str(id_read.value)
+	max_valid_per_action = int(max_read.value)
+	strict_marketing_must_affect_houses = bool(strict_read.value)
+	action_weights = Dictionary(action_read.value)
+	employee_priorities = Dictionary(employee_read.value)
+	product_priorities = Dictionary(product_read.value)
+	return Result.success()
+
+func _configure_base_revenue_fallback() -> void:
 	id = "base_revenue_v1"
 	max_valid_per_action = 12
 	strict_marketing_must_affect_houses = true
@@ -66,3 +119,18 @@ func employee_priority(employee_id: String) -> float:
 
 func product_priority(product_id: String) -> float:
 	return float(product_priorities.get(product_id, 1.0))
+
+static func _parse_float_dictionary(value, path: String) -> Result:
+	if not (value is Dictionary):
+		return Result.failure("%s 类型错误（期望 Dictionary）" % path)
+	var out := {}
+	for key_val in Dictionary(value).keys():
+		var key := str(key_val).strip_edges()
+		if key.is_empty():
+			return Result.failure("%s 包含空 key" % path)
+		var item = Dictionary(value).get(key_val, null)
+		if item is int or item is float:
+			out[key] = float(item)
+			continue
+		return Result.failure("%s.%s 类型错误（期望 number）" % [path, key])
+	return Result.success(out)

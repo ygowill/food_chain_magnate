@@ -22,6 +22,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 		return Result.failure("StrategyBot should be deterministic for same seed")
 	if not bool(first.value.get("saw_strategy_trace", false)):
 		return Result.failure("StrategyBot should emit strategy trace metadata")
+	var profile_load := _test_strategy_profile_loads_data_config()
+	if not profile_load.ok:
+		return profile_load
 	var filter_case := _test_marketing_filter_discards_no_house_candidate()
 	if not filter_case.ok:
 		return filter_case
@@ -100,6 +103,27 @@ static func _saw_strategy_trace(trace: Array[Dictionary]) -> bool:
 		if str(decision_trace.get("bot", "")) == "StrategyBot" and not str(decision_trace.get("strategy_profile", "")).is_empty():
 			return true
 	return false
+
+static func _test_strategy_profile_loads_data_config() -> Result:
+	var loaded = StrategyProfileClass.new()
+	var load_read := loaded.load_from_file(StrategyProfileClass.DEFAULT_BASE_REVENUE_PATH)
+	if not load_read.ok:
+		return Result.failure("StrategyProfile should load default JSON config: %s" % load_read.error)
+	if str(loaded.id) != "base_revenue_v1":
+		return Result.failure("StrategyProfile loaded wrong id: %s" % loaded.id)
+	if int(loaded.max_valid_per_action) != 12:
+		return Result.failure("StrategyProfile loaded wrong max_valid_per_action: %d" % int(loaded.max_valid_per_action))
+	if not bool(loaded.strict_marketing_must_affect_houses):
+		return Result.failure("StrategyProfile loaded wrong strict marketing flag")
+	if not is_equal_approx(float(loaded.action_weight("fire")), 25.0):
+		return Result.failure("StrategyProfile loaded wrong fire action weight: %s" % str(loaded.action_weights))
+	if not is_equal_approx(float(loaded.product_priority("burger")), 5.0):
+		return Result.failure("StrategyProfile loaded wrong burger priority: %s" % str(loaded.product_priorities))
+	var configured = StrategyProfileClass.new()
+	configured.configure_base_revenue()
+	if not is_equal_approx(float(configured.action_weight("choose_fridge_keep")), 120.0):
+		return Result.failure("StrategyProfile.configure_base_revenue should use data config when available")
+	return Result.success()
 
 static func _test_marketing_filter_discards_no_house_candidate() -> Result:
 	var profile = StrategyProfileClass.new()
