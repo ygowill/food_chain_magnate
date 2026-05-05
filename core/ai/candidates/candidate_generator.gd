@@ -6,6 +6,7 @@ const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const DrinkRouteAnalyzerClass = preload("res://core/ai/analysis/drink_route_analyzer.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 
@@ -798,6 +799,9 @@ static func _generate_fire_candidates(
 	if not EmployeeRegistryClass.is_loaded():
 		discarded.append("fire: EmployeeRegistry is not loaded")
 		return
+	if not _has_estimated_payday_salary_shortfall(observation):
+		discarded.append("fire: no estimated payday salary shortfall")
+		return
 	for zone_info in [
 		{"key": "employees", "location": "active"},
 		{"key": "reserve_employees", "location": "reserve"},
@@ -807,6 +811,8 @@ static func _generate_fire_candidates(
 		var location := str(zone_info.get("location", ""))
 		for employee_id in _sorted_unique_strings(observation.own_player.get(key, [])):
 			if not _can_employee_be_fired(employee_id):
+				continue
+			if not EmployeeRulesClass.requires_salary(employee_id, observation.own_player):
 				continue
 			_append_valid_command(
 				out,
@@ -1075,6 +1081,27 @@ static func _can_employee_be_fired(employee_id: String) -> bool:
 		return false
 	var def: EmployeeDef = def_val
 	return bool(def.can_be_fired)
+
+static func _has_estimated_payday_salary_shortfall(observation: ObservationState) -> bool:
+	if observation == null:
+		return false
+	var player := observation.own_player
+	var paid_count := EmployeeRulesClass.count_paid_employees(player)
+	if paid_count <= 0:
+		return false
+	var salary_cost := _read_non_negative_int(player.get("salary_cost_override", observation.rules_public.get("salary_cost", 5)), 5)
+	var due := paid_count * salary_cost
+	var cash := _read_non_negative_int(player.get("cash", 0), 0)
+	return cash < due
+
+static func _read_non_negative_int(value, fallback: int) -> int:
+	if value is int:
+		return maxi(0, int(value))
+	if value is float:
+		var f: float = float(value)
+		if f == floor(f):
+			return maxi(0, int(f))
+	return maxi(0, int(fallback))
 
 static func _empty_direct_slots(structure: Array, ceo_slots: int) -> Array[int]:
 	var out: Array[int] = []

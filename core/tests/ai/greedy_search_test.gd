@@ -6,6 +6,9 @@ const GreedyBotClass = preload("res://core/ai/bot/greedy_bot.gd")
 const ObservationAdapterClass = preload("res://core/ai/observation/observation_adapter.gd")
 const AiDecisionPointClass = preload("res://core/ai/bot/ai_decision_point.gd")
 const LegalActionServiceClass = preload("res://core/ai/bot/legal_action_service.gd")
+const EvaluatorClass = preload("res://core/ai/evaluation/evaluator.gd")
+const CandidateGeneratorClass = preload("res://core/ai/candidates/candidate_generator.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var reserve := _test_choose_reserve_without_mutating_source(seed_val)
@@ -14,7 +17,13 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var fallback := _test_greedy_bot_expired_budget_uses_legal_fallback(seed_val)
 	if not fallback.ok:
 		return fallback
-	return Result.success({"cases": 2})
+	var eval := _test_evaluator_prefers_useful_no_salary_entry_employee(seed_val)
+	if not eval.ok:
+		return eval
+	var payday := _test_payday_fire_candidates_require_salary_shortfall(seed_val)
+	if not payday.ok:
+		return payday
+	return Result.success({"cases": 4})
 
 static func _test_choose_reserve_without_mutating_source(seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -88,6 +97,116 @@ static func _test_greedy_bot_expired_budget_uses_legal_fallback(seed_val: int) -
 	if not bool(decision.trace.get("fallback_after_budget_expired", false)):
 		return Result.failure("GreedyBot fallback trace should mark expired budget: %s" % str(decision.trace))
 	return Result.success()
+
+static func _test_evaluator_prefers_useful_no_salary_entry_employee(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var pid := engine.get_state().get_current_player_id()
+	var salaried := _score_minimal_player(pid, ["brand_director"], [])
+	if not salaried.ok:
+		return salaried
+	var entry := _score_minimal_player(pid, ["marketing_trainee"], [])
+	if not entry.ok:
+		return entry
+	if float(entry.value.get("score", 0.0)) <= float(salaried.value.get("score", 0.0)):
+		return Result.failure("Evaluator should prefer no-salary entry marketing employee over salaried director: entry=%s salaried=%s" % [str(entry.value), str(salaried.value)])
+	var no_marketing := _score_minimal_player(pid, [], [])
+	if not no_marketing.ok:
+		return no_marketing
+	var with_marketing := _score_minimal_player(pid, [], [{"owner": pid}])
+	if not with_marketing.ok:
+		return with_marketing
+	if float(with_marketing.value.get("score", 0.0)) <= float(no_marketing.value.get("score", 0.0)):
+		return Result.failure("Evaluator should reward own marketing pipeline: with=%s without=%s" % [str(with_marketing.value), str(no_marketing.value)])
+	return Result.success()
+
+static func _score_minimal_player(player_id: int, reserve_employees: Array, marketing_instances: Array) -> Result:
+	var observation := ObservationState.new()
+	observation.viewer_player_id = player_id
+	observation.own_player = {
+		"cash": 0,
+		"inventory": {},
+		"employees": ["ceo"],
+		"reserve_employees": reserve_employees.duplicate(),
+		"busy_marketers": [],
+		"restaurants": [],
+		"milestones": [],
+	}
+	observation.bank_public = {}
+	observation.marketing_instances_public = marketing_instances.duplicate(true)
+	return EvaluatorClass.score_observation(observation, player_id)
+
+static func _test_payday_fire_candidates_require_salary_shortfall(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var context := AiDecisionContext.create(0, DefsClass.PHASE_PAYDAY, "", 1, seed_val, [])
+	var legal: Array[String] = ["fire", "skip"]
+
+	var no_salary := CandidateGeneratorClass.generate(
+		_payday_observation(0, ["errand_boy"], 0),
+		context,
+		legal,
+		Callable(),
+		{"max_valid_per_action": 8}
+	)
+	if not no_salary.ok:
+		return no_salary
+	if _candidate_has_action(no_salary.value, "fire"):
+		return Result.failure("Payday candidates should not fire no-salary errand_boy without salary shortfall: %s" % str(_candidate_ids(no_salary.value)))
+	if not _candidate_has_action(no_salary.value, "skip"):
+		return Result.failure("Payday candidates should keep skip when no fire is needed: %s" % str(_candidate_ids(no_salary.value)))
+
+	var salaried_shortfall := CandidateGeneratorClass.generate(
+		_payday_observation(0, ["burger_cook"], 0),
+		context,
+		legal,
+		Callable(),
+		{"max_valid_per_action": 8}
+	)
+	if not salaried_shortfall.ok:
+		return salaried_shortfall
+	if not _candidate_has_action(salaried_shortfall.value, "fire"):
+		return Result.failure("Payday candidates should fire salaried employees when cash is short: %s" % str(_candidate_ids(salaried_shortfall.value)))
+	return Result.success()
+
+static func _payday_observation(player_id: int, reserve_employees: Array, cash: int) -> ObservationState:
+	var observation := ObservationState.new()
+	observation.viewer_player_id = player_id
+	observation.round_number = 1
+	observation.phase = DefsClass.PHASE_PAYDAY
+	observation.sub_phase = ""
+	observation.rules_public = {"salary_cost": 5}
+	observation.own_player = {
+		"cash": int(cash),
+		"inventory": {},
+		"employees": ["ceo"],
+		"reserve_employees": reserve_employees.duplicate(),
+		"busy_marketers": [],
+		"restaurants": [],
+		"milestones": [],
+	}
+	return observation
+
+static func _candidate_has_action(payload: Dictionary, action_id: String) -> bool:
+	for macro_val in Array(payload.get("candidates", [])):
+		if not (macro_val is MacroAction):
+			continue
+		var macro: MacroAction = macro_val
+		for command in macro.commands:
+			if command != null and str(command.action_id) == action_id:
+				return true
+	return false
+
+static func _candidate_ids(payload: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for macro_val in Array(payload.get("candidates", [])):
+		if macro_val is MacroAction:
+			out.append(str((macro_val as MacroAction).id))
+	return out
 
 static func _build_search_inputs(engine: GameEngine, seed_val: int) -> Result:
 	var state := engine.get_state()

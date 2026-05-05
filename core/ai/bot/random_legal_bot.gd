@@ -4,6 +4,7 @@ extends "res://core/ai/bot/fcm_bot.gd"
 const BasicCandidateHelpersClass = preload("res://core/ai/candidates/basic_candidate_helpers.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 
 const WORKING_MANDATORY_ACTION_IDS := [
 	"set_discount",
@@ -98,7 +99,7 @@ func _choose_payday(
 	legal_action_ids: Array[String],
 	validate_command: Callable
 ) -> BotDecision:
-	if legal_action_ids.has("fire"):
+	if legal_action_ids.has("fire") and _has_estimated_payday_salary_shortfall(observation):
 		var commands: Array[Command] = []
 		for zone_info in [
 			{"key": "employees", "location": "active"},
@@ -113,6 +114,8 @@ func _choose_payday(
 			for employee_val in Array(employees_val):
 				var employee_id := str(employee_val)
 				if employee_id.is_empty() or employee_id == "ceo" or seen.has(employee_id):
+					continue
+				if not EmployeeRulesClass.requires_salary(employee_id, observation.own_player):
 					continue
 				seen[employee_id] = true
 				commands.append(Command.create("fire", context.player_id, {
@@ -141,6 +144,27 @@ func _choose_phase_skip(
 	if legal_action_ids.has(ActionIdsClass.SKIP):
 		return BasicCandidateHelpersClass.simple_command(context, ActionIdsClass.SKIP, {}, validate_command, "phase_skip")
 	return BotDecision.failure("no legal phase action")
+
+func _has_estimated_payday_salary_shortfall(observation: ObservationState) -> bool:
+	if observation == null:
+		return false
+	var player := observation.own_player
+	var paid_count := EmployeeRulesClass.count_paid_employees(player)
+	if paid_count <= 0:
+		return false
+	var salary_cost := _read_non_negative_int(player.get("salary_cost_override", observation.rules_public.get("salary_cost", 5)), 5)
+	var due := paid_count * salary_cost
+	var cash := _read_non_negative_int(player.get("cash", 0), 0)
+	return cash < due
+
+func _read_non_negative_int(value, fallback: int) -> int:
+	if value is int:
+		return maxi(0, int(value))
+	if value is float:
+		var f: float = float(value)
+		if f == floor(f):
+			return maxi(0, int(f))
+	return maxi(0, int(fallback))
 
 func _choose_pending_confirmation(
 	observation: ObservationState,
