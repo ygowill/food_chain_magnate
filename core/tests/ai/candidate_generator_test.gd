@@ -8,6 +8,7 @@ const LegalActionServiceClass = preload("res://core/ai/bot/legal_action_service.
 const BotControllerClass = preload("res://core/ai/bot/bot_controller.gd")
 const RandomLegalBotClass = preload("res://core/ai/bot/random_legal_bot.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const MarketingRangeCalculatorClass = preload("res://core/rules/marketing_range_calculator.gd")
 const AddGardenRulesTestClass = preload("res://core/tests/add_garden_rules_test.gd")
 const ProcureDrinksTestClass = preload("res://core/tests/procure_drinks_test.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
@@ -61,7 +62,10 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var training_layout := _test_restructuring_preserves_trainable_source_for_training(seed_val)
 	if not training_layout.ok:
 		return training_layout
-	return Result.success({"cases": 16})
+	var optional_training := _test_optional_training_does_not_block_revenue_staff(seed_val)
+	if not optional_training.ok:
+		return optional_training
+	return Result.success({"cases": 17})
 
 static func _test_reserve_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
@@ -378,6 +382,13 @@ static func _test_working_marketing_candidates_are_valid(seed_val: int) -> Resul
 		return Result.failure("initiate_marketing candidate failed on execute: %s" % executed.error)
 	if engine.get_state().marketing_instances.size() <= before_count:
 		return Result.failure("initiate_marketing candidate should create a marketing instance")
+	var instance: Dictionary = engine.get_state().marketing_instances[before_count]
+	var affected_read: Result = MarketingRangeCalculatorClass.new().get_affected_house_ids(engine.get_state(), instance)
+	if not affected_read.ok:
+		return affected_read
+	var affected: Array = affected_read.value
+	if affected.is_empty():
+		return Result.failure("initiate_marketing candidate should affect at least one house: %s" % str(command.params))
 	return Result.success()
 
 static func _test_working_route_drink_candidates_are_valid(seed_val: int) -> Result:
@@ -664,6 +675,58 @@ static func _test_restructuring_preserves_trainable_source_for_training(seed_val
 		return Result.failure("management_trainee training should prefer new_business_developer, actual: %s" % str(train_command.params))
 	return Result.success()
 
+static func _test_optional_training_does_not_block_revenue_staff(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.phase = DefsClass.PHASE_RESTRUCTURING
+	state.sub_phase = ""
+	state.turn_order = [0, 1]
+	state.selection_order = [0, 1]
+	state.current_player_index = 0
+	state.round_state["restructuring"] = {
+		"finalized": false,
+		"submitted": {
+			0: false,
+			1: false,
+		},
+	}
+	state.players[0]["company_structure"]["ceo_slots"] = 2
+	state.players[0]["company_structure"]["structure"] = [
+		{"employee_id": "trainer", "reports": []},
+		{"employee_id": "", "reports": []},
+	]
+	state.players[0]["employees"].append("trainer")
+	state.players[0]["reserve_employees"].append("campaign_manager")
+	state.employee_pool["trainer"] = int(state.employee_pool.get("trainer", 0)) - 1
+	state.employee_pool["campaign_manager"] = int(state.employee_pool.get("campaign_manager", 0)) - 1
+
+	var payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	var campaign_direct := _first_command_with_param(candidates, "set_company_structure_direct", "employee_id", "campaign_manager")
+	if campaign_direct == null:
+		return Result.failure("restructuring should activate campaign_manager instead of preserving it for optional training: %s" % str(_macro_debug(candidates)))
+
+	var train_state := engine.get_state()
+	train_state.phase = DefsClass.PHASE_WORKING
+	train_state.sub_phase = DefsClass.SUB_PHASE_TRAIN
+	train_state.turn_order = [0]
+	train_state.current_player_index = 0
+	var train_payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not train_payload_read.ok:
+		return train_payload_read
+	var train_candidates := _read_candidates(train_payload_read.value)
+	var optional_train := _first_command_with_param(train_candidates, "train", "from_employee", "campaign_manager")
+	if optional_train != null:
+		return Result.failure("Working/Train should not generate low-priority campaign_manager -> brand_manager training before revenue use: %s" % str(_macro_debug(train_candidates)))
+	return Result.success()
+
 static func _build_engine(seed_val: int) -> Result:
 	var engine := GameEngine.new()
 	var init := engine.initialize(2, seed_val)
@@ -713,7 +776,9 @@ static func _generate_for_current_player(engine: GameEngine, seed_val: int, opti
 	var legal_action_ids: Array[String] = ids_read.value
 	var validate_fn := func(command: Command) -> Result:
 		return LegalActionServiceClass.validate_command(engine, command, context)
-	return CandidateGeneratorClass.generate(observation, context, legal_action_ids, validate_fn, options)
+	var generator_options := options.duplicate()
+	generator_options["source_state"] = state
+	return CandidateGeneratorClass.generate(observation, context, legal_action_ids, validate_fn, generator_options)
 
 static func _allowed_internal_actions(observation: ObservationState) -> Array[String]:
 	var decision_point := AiDecisionPointClass.from_observation(observation)

@@ -8,10 +8,13 @@ const DrinkRouteAnalyzerClass = preload("res://core/ai/analysis/drink_route_anal
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
+const MarketingRangeCalculatorClass = preload("res://core/rules/marketing_range_calculator.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 
 const DEFAULT_MAX_VALID_PER_ACTION := 12
+const TRAIN_ACTION_MIN_PRIOR := 0.75
+const TRAINING_PRESERVE_MIN_PRIOR := 2.5
 const WORKING_MANDATORY_ACTION_IDS := [
 	"set_discount",
 	"set_luxury_price",
@@ -47,7 +50,7 @@ static func generate(
 		DefsClass.PHASE_ORDER_OF_BUSINESS:
 			_generate_order_of_business(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action)
 		DefsClass.PHASE_WORKING:
-			_generate_working(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action)
+			_generate_working(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action, options)
 		DefsClass.PHASE_PAYDAY:
 			_generate_payday(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action)
 		DefsClass.PHASE_CLEANUP:
@@ -366,7 +369,8 @@ static func _generate_working(
 	context: AiDecisionContext,
 	legal_action_ids: Array[String],
 	validate_command: Callable,
-	max_valid_per_action: int
+	max_valid_per_action: int,
+	options: Dictionary
 ) -> void:
 	_generate_working_mandatory_actions(out, discarded, context, legal_action_ids, validate_command, max_valid_per_action)
 	match str(observation.sub_phase):
@@ -378,7 +382,7 @@ static func _generate_working(
 				_generate_train(out, discarded, observation, context, validate_command, max_valid_per_action)
 		DefsClass.SUB_PHASE_MARKETING:
 			if legal_action_ids.has("initiate_marketing"):
-				_generate_marketing(out, discarded, observation, context, validate_command, max_valid_per_action)
+				_generate_marketing(out, discarded, observation, context, validate_command, max_valid_per_action, options)
 		DefsClass.SUB_PHASE_GET_FOOD:
 			if legal_action_ids.has("produce_food"):
 				_generate_produce_food(out, discarded, observation, context, validate_command, max_valid_per_action)
@@ -432,7 +436,8 @@ static func _generate_marketing(
 	observation: ObservationState,
 	context: AiDecisionContext,
 	validate_command: Callable,
-	max_valid_per_action: int
+	max_valid_per_action: int,
+	options: Dictionary
 ) -> void:
 	if not EmployeeRegistryClass.is_loaded():
 		discarded.append("marketing: EmployeeRegistry is not loaded")
@@ -451,6 +456,8 @@ static func _generate_marketing(
 	if grid_size.x <= 0 or grid_size.y <= 0:
 		discarded.append("marketing: invalid grid_size %s" % str(grid_size))
 		return
+	var source_state := _source_state_from_options(options)
+	var candidate_positions := _marketing_candidate_positions(observation, grid_size)
 	for employee_id in _sorted_unique_strings(observation.own_player.get("employees", [])):
 		var marketing_types := _marketing_types_for_employee(employee_id)
 		if marketing_types.is_empty():
@@ -462,32 +469,35 @@ static func _generate_marketing(
 				continue
 			var marketing_type := str((board_def as MarketingDef).type)
 			for product_id in products:
-				for y in range(grid_size.y):
-					for x in range(grid_size.x):
-						for rotation in _marketing_rotations(marketing_type):
-							if _count_action(out, "initiate_marketing") >= max_valid_per_action:
-								return
-							var params := {
-								"employee_type": employee_id,
-								"board_number": int(board_number),
-								"product": product_id,
-								"position": [x, y],
-								"rotation": int(rotation),
-							}
-							if marketing_type == "airplane":
-								params["axis"] = "row" if x == 0 or x == grid_size.x - 1 else "col"
-							_append_valid_command(
-								out,
-								discarded,
-								context,
-								"initiate_marketing",
-								params,
-								validate_command,
-								"marketing_%s_%d_%s_%d_%d_%d" % [employee_id, int(board_number), product_id, x, y, int(rotation)],
-								["working", "marketing"],
-								_marketing_product_prior(product_id, observation),
-								max_valid_per_action
-							)
+				for pos in candidate_positions:
+					var x := pos.x
+					var y := pos.y
+					for rotation in _marketing_rotations(marketing_type):
+						if _count_action(out, "initiate_marketing") >= max_valid_per_action:
+							return
+						var params := {
+							"employee_type": employee_id,
+							"board_number": int(board_number),
+							"product": product_id,
+							"position": [x, y],
+							"rotation": int(rotation),
+						}
+						if marketing_type == "airplane":
+							params["axis"] = "row" if x == 0 or x == grid_size.x - 1 else "col"
+						_append_valid_marketing_command(
+							out,
+							discarded,
+							context,
+							params,
+							validate_command,
+							"marketing_%s_%d_%s_%d_%d_%d" % [employee_id, int(board_number), product_id, x, y, int(rotation)],
+							["working", "marketing"],
+							_marketing_product_prior(product_id, observation),
+							max_valid_per_action,
+							source_state,
+							board_def as MarketingDef,
+							marketing_type
+						)
 
 static func _generate_house_placements(
 	out: Array[MacroAction],
@@ -662,6 +672,9 @@ static func _generate_train(
 				continue
 			if int(observation.employee_pool_public.get(target, 0)) <= 0:
 				continue
+			var prior := _train_prior(from_employee, target, observation)
+			if prior < TRAIN_ACTION_MIN_PRIOR:
+				continue
 			_append_valid_command(
 				out,
 				discarded,
@@ -674,7 +687,7 @@ static func _generate_train(
 				validate_command,
 				"train_%s_to_%s" % [from_employee, target],
 				["working", "train"],
-				_train_prior(from_employee, target, observation),
+				prior,
 				max_valid_per_action
 			)
 
@@ -925,6 +938,46 @@ static func _append_valid_command(
 		"validation": "passed" if validate_command.is_valid() else "skipped",
 	}))
 
+static func _append_valid_marketing_command(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	context: AiDecisionContext,
+	params: Dictionary,
+	validate_command: Callable,
+	macro_id: String,
+	tags: Array[String],
+	prior_score: float,
+	max_valid_per_action: int,
+	source_state: GameState,
+	board_def: MarketingDef,
+	marketing_type: String
+) -> void:
+	var action_id := "initiate_marketing"
+	if _count_action(out, action_id) >= max_valid_per_action:
+		return
+	var command := Command.create(action_id, context.player_id, params.duplicate(true))
+	var validate := _validate_command(command, validate_command)
+	if not validate.ok:
+		discarded.append("%s: %s" % [macro_id, validate.error])
+		return
+	var affected: Array = []
+	if source_state != null:
+		var affected_read := _marketing_command_affected_house_ids(source_state, context.player_id, command, board_def, marketing_type)
+		if not affected_read.ok:
+			discarded.append("%s: affected house check failed: %s" % [macro_id, affected_read.error])
+			return
+		affected = affected_read.value
+		if affected.is_empty():
+			discarded.append("%s: affects no houses" % macro_id)
+			return
+	var commands: Array[Command] = []
+	commands.append(command)
+	out.append(MacroActionClass.create(macro_id, commands, prior_score, tags, {
+		"action_id": action_id,
+		"validation": "passed" if validate_command.is_valid() else "skipped",
+		"affected_house_ids": affected.duplicate(),
+	}))
+
 static func _validate_command(command: Command, validate_command: Callable) -> Result:
 	if not validate_command.is_valid():
 		return Result.success()
@@ -932,6 +985,44 @@ static func _validate_command(command: Command, validate_command: Callable) -> R
 	if validated is Result:
 		return validated
 	return Result.failure("validator returned non-Result")
+
+static func _marketing_command_affected_house_ids(
+	state: GameState,
+	player_id: int,
+	command: Command,
+	board_def: MarketingDef,
+	marketing_type: String
+) -> Result:
+	if state == null:
+		return Result.failure("source_state is null")
+	if command == null:
+		return Result.failure("command is null")
+	if board_def == null:
+		return Result.failure("board_def is null")
+	var params := command.params
+	var world_pos := _read_vector2i(params.get("position", Vector2i.ZERO))
+	var instance := {
+		"board_number": int(board_def.board_number),
+		"type": marketing_type,
+		"owner": player_id,
+		"employee_type": str(params.get("employee_type", "")),
+		"product": str(params.get("product", "")),
+		"world_pos": world_pos,
+		"rotation": int(params.get("rotation", 0)),
+		"footprint_size": Vector2i(board_def.footprint_size),
+		"remaining_duration": 1,
+		"axis": str(params.get("axis", "")),
+		"tile_index": -1,
+		"created_round": int(state.round_number),
+	}
+	var calculator = MarketingRangeCalculatorClass.new()
+	var affected_read: Result = calculator.get_affected_house_ids(state, instance)
+	if not affected_read.ok:
+		return affected_read
+	if not (affected_read.value is Array):
+		return Result.failure("affected house result is not Array")
+	var affected: Array = affected_read.value
+	return Result.success(affected)
 
 static func _count_action(candidates: Array[MacroAction], action_id: String) -> int:
 	var count := 0
@@ -1031,13 +1122,128 @@ static func _sorted_marketing_board_numbers(marketing_types: Array[String]) -> A
 		if not marketing_types.has(str(def.type)):
 			continue
 		out.append(int(board_number))
-	out.sort()
+	out.sort_custom(func(a: int, b: int) -> bool:
+		var def_a = MarketingRegistryClass.get_def(int(a))
+		var def_b = MarketingRegistryClass.get_def(int(b))
+		var type_a := str((def_a as MarketingDef).type) if def_a is MarketingDef else ""
+		var type_b := str((def_b as MarketingDef).type) if def_b is MarketingDef else ""
+		var priority_a := _marketing_type_search_priority(type_a)
+		var priority_b := _marketing_type_search_priority(type_b)
+		if priority_a != priority_b:
+			return priority_a < priority_b
+		return int(a) < int(b)
+	)
 	return out
 
 static func _marketing_rotations(marketing_type: String) -> Array[int]:
 	if marketing_type == "airplane":
 		return [0]
 	return [0, 90, 180, 270]
+
+static func _marketing_type_search_priority(marketing_type: String) -> int:
+	match marketing_type:
+		"billboard":
+			return 0
+		"mailbox":
+			return 1
+		"radio":
+			return 2
+		"airplane":
+			return 3
+		_:
+			return 10
+
+static func _marketing_candidate_positions(observation: ObservationState, grid_size: Vector2i) -> Array[Vector2i]:
+	var seen := {}
+	var out: Array[Vector2i] = []
+	var houses_val = observation.map_public.get("houses", {})
+	if houses_val is Dictionary:
+		var houses: Dictionary = houses_val
+		var house_ids := _sorted_house_ids_by_restaurant_distance(observation, houses)
+		for house_id in house_ids:
+			var house_val = houses.get(house_id, null)
+			if not (house_val is Dictionary):
+				continue
+			for cell in _house_candidate_cells(house_val):
+				for radius in range(1, 4):
+					for dy in range(-radius, radius + 1):
+						for dx in range(-radius, radius + 1):
+							if maxi(absi(dx), absi(dy)) != radius:
+								continue
+							_append_marketing_position(out, seen, cell + Vector2i(dx, dy), grid_size)
+	for y in range(grid_size.y):
+		for x in range(grid_size.x):
+			_append_marketing_position(out, seen, Vector2i(x, y), grid_size)
+	return out
+
+static func _source_state_from_options(options: Dictionary) -> GameState:
+	var state_val = options.get("source_state", null)
+	if state_val is GameState:
+		return state_val
+	var engine_val = options.get("engine", null)
+	if engine_val is GameEngine:
+		return engine_val.get_state()
+	return null
+
+static func _sorted_house_ids_by_restaurant_distance(observation: ObservationState, houses: Dictionary) -> Array[String]:
+	var out := _sorted_string_keys(houses)
+	var restaurant_anchors := _owned_restaurant_anchors(observation)
+	out.sort_custom(func(a: String, b: String) -> bool:
+		var da := _house_distance_to_anchors(Dictionary(houses.get(a, {})), restaurant_anchors)
+		var db := _house_distance_to_anchors(Dictionary(houses.get(b, {})), restaurant_anchors)
+		if da != db:
+			return da < db
+		return a < b
+	)
+	return out
+
+static func _owned_restaurant_anchors(observation: ObservationState) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var restaurants_val = observation.map_public.get("restaurants", {})
+	if not (restaurants_val is Dictionary):
+		return out
+	var restaurants: Dictionary = restaurants_val
+	for restaurant_id in _sorted_unique_strings(observation.own_player.get("restaurants", [])):
+		var rest_val = restaurants.get(restaurant_id, null)
+		if not (rest_val is Dictionary):
+			continue
+		out.append(_read_vector2i(Dictionary(rest_val).get("anchor_pos", Vector2i.ZERO)))
+	return out
+
+static func _house_distance_to_anchors(house: Dictionary, anchors: Array[Vector2i]) -> int:
+	if anchors.is_empty():
+		return 2147483647
+	var cells := _house_candidate_cells(house)
+	var best := 2147483647
+	for cell in cells:
+		for anchor in anchors:
+			best = mini(best, absi(cell.x - anchor.x) + absi(cell.y - anchor.y))
+	return best
+
+static func _house_candidate_cells(house_val) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if not (house_val is Dictionary):
+		return out
+	var house: Dictionary = house_val
+	var cells_val = house.get("cells", [])
+	if cells_val is Array:
+		for cell_val in Array(cells_val):
+			var cell := _read_vector2i(cell_val)
+			if not out.has(cell):
+				out.append(cell)
+	var anchor := _read_vector2i(house.get("anchor_pos", Vector2i.ZERO))
+	if not out.has(anchor):
+		out.append(anchor)
+	return out
+
+static func _append_marketing_position(out: Array[Vector2i], seen: Dictionary, pos: Vector2i, grid_size: Vector2i) -> void:
+	if pos.x < 0 or pos.y < 0 or pos.x >= grid_size.x or pos.y >= grid_size.y:
+		return
+	var key := "%d,%d" % [pos.x, pos.y]
+	if seen.has(key):
+		return
+	seen[key] = true
+	out.append(pos)
 
 static func _restaurant_place_employee_options(observation: ObservationState) -> Array[String]:
 	if observation == null or str(observation.phase) != DefsClass.PHASE_WORKING:
@@ -1199,7 +1405,7 @@ static func _has_trainable_reserve_employee(observation: ObservationState) -> bo
 		return false
 	for employee_val in Array(reserve_val):
 		var employee_id := str(employee_val)
-		if _is_trainable_source_employee(employee_id, observation):
+		if _best_train_target_prior(employee_id, observation) >= TRAIN_ACTION_MIN_PRIOR:
 			return true
 	return false
 
@@ -1211,7 +1417,7 @@ static func _has_trainable_owned_employee(observation: ObservationState) -> bool
 		if not (employees_val is Array):
 			continue
 		for employee_val in Array(employees_val):
-			if _is_trainable_source_employee(str(employee_val), observation):
+			if _best_train_target_prior(str(employee_val), observation) >= TRAIN_ACTION_MIN_PRIOR:
 				return true
 	return false
 
@@ -1237,7 +1443,7 @@ static func _should_preserve_for_training(employee_id: String, observation: Obse
 		return false
 	if not _has_owned_train_provider(observation):
 		return false
-	return _is_trainable_source_employee(employee_id, observation)
+	return _best_train_target_prior(employee_id, observation) >= TRAINING_PRESERVE_MIN_PRIOR
 
 static func _has_owned_train_provider(observation: ObservationState) -> bool:
 	if observation == null:
@@ -1473,9 +1679,24 @@ static func _has_estimated_payday_salary_shortfall(observation: ObservationState
 	if paid_count <= 0:
 		return false
 	var salary_cost := _read_non_negative_int(player.get("salary_cost_override", observation.rules_public.get("salary_cost", 5)), 5)
-	var due := paid_count * salary_cost
+	var due := maxi(0, paid_count * salary_cost + _salary_total_delta(player))
 	var cash := _read_non_negative_int(player.get("cash", 0), 0)
 	return cash < due
+
+static func _salary_total_delta(player: Dictionary) -> int:
+	var milestones_val = player.get("milestones", [])
+	if not (milestones_val is Array):
+		return 0
+	var milestones: Array = milestones_val
+	var delta_read := MilestoneEffectQueriesClass.sum_int_values(
+		milestones,
+		"salary_total_delta",
+		"CandidateGenerator: ",
+		"own_player.milestones"
+	)
+	if not delta_read.ok:
+		return 0
+	return int(delta_read.value)
 
 static func _read_non_negative_int(value, fallback: int) -> int:
 	if value is int:

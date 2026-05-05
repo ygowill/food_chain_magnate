@@ -6,6 +6,7 @@ const ForwardSimulatorClass = preload("res://core/ai/simulation/forward_simulato
 const ObservationAdapterClass = preload("res://core/ai/observation/observation_adapter.gd")
 const EvaluatorClass = preload("res://core/ai/evaluation/evaluator.gd")
 const DecisionTraceClass = preload("res://core/ai/logging/decision_trace.gd")
+const MarketingRangeCalculatorClass = preload("res://core/rules/marketing_range_calculator.gd")
 
 static func choose_command(
 	engine: GameEngine,
@@ -26,7 +27,9 @@ static func choose_command(
 		return Result.failure("GreedySearch.choose_command: budget expired before search")
 	var start_ms := Time.get_ticks_msec()
 
-	var gen_read := CandidateGeneratorClass.generate(observation, context, legal_action_ids, validate_command, options)
+	var generator_options := options.duplicate()
+	generator_options["source_state"] = engine.get_state()
+	var gen_read := CandidateGeneratorClass.generate(observation, context, legal_action_ids, validate_command, generator_options)
 	if not gen_read.ok:
 		return gen_read
 	var gen_payload: Dictionary = gen_read.value
@@ -74,8 +77,11 @@ static func choose_command(
 			discarded.append("%s: evaluator failed: %s" % [macro.id, score_read.error])
 			continue
 		var score_payload: Dictionary = score_read.value
-		var total_score := float(score_payload.get("score", 0.0)) + float(macro.prior_score)
+		var context_bonus := _macro_context_bonus(sim_engine, context.player_id, macro)
+		var total_score := float(score_payload.get("score", 0.0)) + float(macro.prior_score) + context_bonus
 		var features: Dictionary = Dictionary(score_payload.get("features", {})).duplicate(true)
+		if not is_zero_approx(context_bonus):
+			features["context_bonus"] = context_bonus
 		var first_command: Command = macro.commands[0]
 		evaluated.append({
 			"macro_action_id": macro.id,
@@ -144,6 +150,94 @@ static func _copy_string_array(value) -> Array[String]:
 		for item in Array(value):
 			out.append(str(item))
 	return out
+
+static func _macro_context_bonus(sim_engine: GameEngine, player_id: int, macro: MacroAction) -> float:
+	if sim_engine == null or macro == null or macro.commands.is_empty():
+		return 0.0
+	var command: Command = macro.commands[0]
+	if command == null:
+		return 0.0
+	match str(command.action_id):
+		"initiate_marketing":
+			return _marketing_context_bonus(sim_engine.get_state(), player_id, command)
+		_:
+			return 0.0
+
+static func _marketing_context_bonus(state: GameState, player_id: int, command: Command) -> float:
+	if state == null or command == null:
+		return 0.0
+	var board_number := int(command.params.get("board_number", -1))
+	if board_number <= 0:
+		return 0.0
+	var instance := _find_marketing_instance(state, player_id, board_number)
+	if instance.is_empty():
+		return 0.0
+	var calculator = MarketingRangeCalculatorClass.new()
+	var affected_read: Result = calculator.get_affected_house_ids(state, instance)
+	if not affected_read.ok:
+		return 0.0
+	var affected: Array = affected_read.value
+	if affected.is_empty():
+		return -12.0
+	var bonus := float(affected.size()) * 4.0
+	for house_id_val in affected:
+		var distance := _min_house_distance_to_owned_restaurant(state, str(house_id_val), player_id)
+		if distance >= 0:
+			bonus += maxf(0.0, 10.0 - float(distance) * 0.5)
+	return bonus
+
+static func _find_marketing_instance(state: GameState, player_id: int, board_number: int) -> Dictionary:
+	if state == null:
+		return {}
+	for inst_val in state.marketing_instances:
+		if not (inst_val is Dictionary):
+			continue
+		var inst: Dictionary = inst_val
+		if int(inst.get("owner", -1)) != player_id:
+			continue
+		if int(inst.get("board_number", -1)) != board_number:
+			continue
+		return inst
+	return {}
+
+static func _min_house_distance_to_owned_restaurant(state: GameState, house_id: String, player_id: int) -> int:
+	if state == null or house_id.is_empty():
+		return -1
+	var houses_val = state.map.get("houses", {})
+	if not (houses_val is Dictionary):
+		return -1
+	var houses: Dictionary = houses_val
+	var house_val = houses.get(house_id, null)
+	if not (house_val is Dictionary):
+		return -1
+	var house_anchor := _read_vector2i(Dictionary(house_val).get("anchor_pos", Vector2i.ZERO))
+	var restaurants_val = state.map.get("restaurants", {})
+	if not (restaurants_val is Dictionary):
+		return -1
+	var restaurants: Dictionary = restaurants_val
+	var best := 2147483647
+	for rest_val in restaurants.values():
+		if not (rest_val is Dictionary):
+			continue
+		var rest: Dictionary = rest_val
+		if int(rest.get("owner", -1)) != player_id:
+			continue
+		var rest_anchor := _read_vector2i(rest.get("anchor_pos", Vector2i.ZERO))
+		var distance := absi(house_anchor.x - rest_anchor.x) + absi(house_anchor.y - rest_anchor.y)
+		best = mini(best, distance)
+	return best if best < 2147483647 else -1
+
+static func _read_vector2i(value) -> Vector2i:
+	if value is Vector2i:
+		return Vector2i(value)
+	if value is Vector2:
+		var v2: Vector2 = value
+		return Vector2i(int(v2.x), int(v2.y))
+	if value is Array:
+		var arr: Array = value
+		if arr.size() >= 2:
+			return Vector2i(int(arr[0]), int(arr[1]))
+	return Vector2i.ZERO
 
 static func _build_decision_trace(
 	observation: ObservationState,

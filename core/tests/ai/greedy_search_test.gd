@@ -174,6 +174,18 @@ static func _test_payday_fire_candidates_require_salary_shortfall(seed_val: int)
 		return salaried_shortfall
 	if not _candidate_has_action(salaried_shortfall.value, "fire"):
 		return Result.failure("Payday candidates should fire salaried employees when cash is short: %s" % str(_candidate_ids(salaried_shortfall.value)))
+
+	var salary_delta_covered := CandidateGeneratorClass.generate(
+		_payday_observation(0, ["burger_cook"], 0, ["first_train"]),
+		context,
+		legal,
+		Callable(),
+		{"max_valid_per_action": 8}
+	)
+	if not salary_delta_covered.ok:
+		return salary_delta_covered
+	if _candidate_has_action(salary_delta_covered.value, "fire"):
+		return Result.failure("Payday candidates should not fire when salary_total_delta covers due: %s" % str(_candidate_ids(salary_delta_covered.value)))
 	return Result.success()
 
 static func _test_search_orders_candidates_by_prior_before_simulation() -> Result:
@@ -190,7 +202,7 @@ static func _test_search_orders_candidates_by_prior_before_simulation() -> Resul
 		return Result.failure("GreedySearch should order by prior desc then id: %s" % str(ordered))
 	return Result.success()
 
-static func _payday_observation(player_id: int, reserve_employees: Array, cash: int) -> ObservationState:
+static func _payday_observation(player_id: int, reserve_employees: Array, cash: int, milestones: Array = []) -> ObservationState:
 	var observation := ObservationState.new()
 	observation.viewer_player_id = player_id
 	observation.round_number = 1
@@ -204,7 +216,7 @@ static func _payday_observation(player_id: int, reserve_employees: Array, cash: 
 		"reserve_employees": reserve_employees.duplicate(),
 		"busy_marketers": [],
 		"restaurants": [],
-		"milestones": [],
+		"milestones": milestones.duplicate(),
 	}
 	return observation
 
