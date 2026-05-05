@@ -161,12 +161,46 @@ static func _generate_restructuring(
 	validate_command: Callable,
 	max_valid_per_action: int
 ) -> void:
+	if legal_action_ids.has("restructure_employee"):
+		_generate_training_reserve_moves(out, discarded, observation, context, validate_command, max_valid_per_action)
 	if legal_action_ids.has("set_company_structure_direct"):
 		_generate_direct_structure_assignments(out, discarded, observation, context, validate_command, max_valid_per_action)
 	if legal_action_ids.has("set_company_structure_report"):
 		_generate_report_structure_assignments(out, discarded, observation, context, validate_command, max_valid_per_action)
 	if legal_action_ids.has("submit_restructuring"):
-		_append_valid_command(out, discarded, context, "submit_restructuring", {}, validate_command, "submit_restructuring", ["restructuring"], 0.0, max_valid_per_action)
+		_append_valid_command(out, discarded, context, "submit_restructuring", {}, validate_command, "submit_restructuring", ["restructuring"], _submit_restructuring_prior(observation), max_valid_per_action)
+
+static func _generate_training_reserve_moves(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	if not EmployeeRegistryClass.is_loaded():
+		discarded.append("restructuring: EmployeeRegistry is not loaded")
+		return
+	for employee_id in _sorted_unique_strings(observation.own_player.get("employees", [])):
+		if _is_train_provider_employee(employee_id):
+			continue
+		if not _should_preserve_for_training(employee_id, observation):
+			continue
+		_append_valid_command(
+			out,
+			discarded,
+			context,
+			"restructure_employee",
+			{
+				"employee_id": employee_id,
+				"to_reserve": true,
+			},
+			validate_command,
+			"restructure_to_reserve_%s" % employee_id,
+			["restructuring", "reserve", "train"],
+			_training_reserve_move_prior(employee_id, observation),
+			max_valid_per_action
+		)
 
 static func _generate_direct_structure_assignments(
 	out: Array[MacroAction],
@@ -190,9 +224,12 @@ static func _generate_direct_structure_assignments(
 	var assigned_counts := _count_assigned_employees(structure)
 	var owned_counts := _count_owned_employees(observation.own_player)
 	var employee_ids := _sorted_string_keys(owned_counts)
+	_sort_structure_employee_ids(employee_ids, observation)
 	var empty_slots := _empty_direct_slots(structure, ceo_slots)
 	for employee_id in employee_ids:
 		if employee_id == "ceo":
+			continue
+		if _should_preserve_for_training(employee_id, observation):
 			continue
 		var remaining := int(owned_counts.get(employee_id, 0)) - int(assigned_counts.get(employee_id, 0))
 		if remaining <= 0:
@@ -210,7 +247,7 @@ static func _generate_direct_structure_assignments(
 				validate_command,
 				"restructure_direct_%d_%s" % [int(slot_index), employee_id],
 				["restructuring", "direct"],
-				0.0,
+				_structure_assignment_prior(employee_id, observation),
 				max_valid_per_action
 			)
 
@@ -243,6 +280,7 @@ static func _generate_report_structure_assignments(
 	var assigned_counts := _count_assigned_employees(structure)
 	var owned_counts := _count_owned_employees(observation.own_player)
 	var employee_ids := _sorted_string_keys(owned_counts)
+	_sort_structure_employee_ids(employee_ids, observation)
 	for slot_index in range(mini(ceo_slots, structure.size())):
 		var entry_val = structure[slot_index]
 		if not (entry_val is Dictionary):
@@ -264,6 +302,8 @@ static func _generate_report_structure_assignments(
 		for employee_id in employee_ids:
 			if employee_id == "ceo" or _is_manager_employee(employee_id):
 				continue
+			if _should_preserve_for_training(employee_id, observation):
+				continue
 			var remaining := int(owned_counts.get(employee_id, 0)) - int(assigned_counts.get(employee_id, 0))
 			if remaining <= 0:
 				continue
@@ -279,7 +319,7 @@ static func _generate_report_structure_assignments(
 				validate_command,
 				"restructure_report_%d_%s" % [int(slot_index), employee_id],
 				["restructuring", "report"],
-				0.0,
+				_structure_assignment_prior(employee_id, observation),
 				max_valid_per_action
 			)
 
@@ -940,6 +980,15 @@ static func _sorted_unique_strings(value) -> Array[String]:
 	out.sort()
 	return out
 
+static func _sort_structure_employee_ids(employee_ids: Array[String], observation: ObservationState) -> void:
+	employee_ids.sort_custom(func(a: String, b: String) -> bool:
+		var priority_a := _structure_assignment_prior(a, observation)
+		var priority_b := _structure_assignment_prior(b, observation)
+		if not is_equal_approx(priority_a, priority_b):
+			return priority_a > priority_b
+		return a < b
+	)
+
 static func _sorted_marketable_product_ids() -> Array[String]:
 	var out: Array[String] = []
 	for product_id in ProductRegistryClass.get_all_ids():
@@ -1036,7 +1085,7 @@ static func _recruit_prior(employee_id: String, observation: ObservationState) -
 				return 2.6
 			return 0.2
 		"trainer":
-			if _has_trainable_reserve_employee(observation):
+			if int(owned.get("trainer", 0)) <= 0 and _has_trainable_owned_employee(observation):
 				return 3.2
 			return 0.7 if int(owned.get("trainer", 0)) <= 0 else 0.2
 		"recruiting_girl":
@@ -1045,6 +1094,23 @@ static func _recruit_prior(employee_id: String, observation: ObservationState) -
 			return 2.2 if not _can_supply_any_drink(observation) else 0.2
 		_:
 			return 0.5
+
+static func _structure_assignment_prior(employee_id: String, observation: ObservationState) -> float:
+	if observation == null or employee_id.is_empty():
+		return 0.0
+	if _is_train_provider_employee(employee_id) and _has_trainable_reserve_employee(observation):
+		return 5.0
+	if _should_preserve_for_training(employee_id, observation):
+		return -5.0
+	return 0.0
+
+static func _submit_restructuring_prior(observation: ObservationState) -> float:
+	if _has_active_train_provider(observation) and _has_trainable_reserve_employee(observation):
+		return 5.0
+	return 0.0
+
+static func _training_reserve_move_prior(employee_id: String, observation: ObservationState) -> float:
+	return 6.5 + _best_train_target_prior(employee_id, observation)
 
 static func _train_prior(from_employee: String, target_employee: String, observation: ObservationState) -> float:
 	if target_employee.is_empty():
@@ -1058,6 +1124,23 @@ static func _train_prior(from_employee: String, target_employee: String, observa
 			return 0.8
 		_:
 			return 0.2 if not from_employee.is_empty() else 0.0
+
+static func _best_train_target_prior(from_employee: String, observation: ObservationState) -> float:
+	if observation == null or from_employee.is_empty() or not EmployeeRegistryClass.is_loaded():
+		return 0.0
+	if not EmployeeRegistryClass.has(from_employee):
+		return 0.0
+	var def_val = EmployeeRegistryClass.get_def(from_employee)
+	if not (def_val is EmployeeDef):
+		return 0.0
+	var def: EmployeeDef = def_val
+	var best := 0.0
+	for target_val in def.train_to:
+		var target := str(target_val)
+		if target.is_empty() or int(observation.employee_pool_public.get(target, 0)) <= 0:
+			continue
+		best = maxf(best, _train_prior(from_employee, target, observation))
+	return best
 
 static func _marketing_product_prior(product_id: String, observation: ObservationState) -> float:
 	if product_id.is_empty() or observation == null:
@@ -1116,17 +1199,70 @@ static func _has_trainable_reserve_employee(observation: ObservationState) -> bo
 		return false
 	for employee_val in Array(reserve_val):
 		var employee_id := str(employee_val)
-		if employee_id.is_empty() or not EmployeeRegistryClass.has(employee_id):
+		if _is_trainable_source_employee(employee_id, observation):
+			return true
+	return false
+
+static func _has_trainable_owned_employee(observation: ObservationState) -> bool:
+	if observation == null:
+		return false
+	for key in ["employees", "reserve_employees"]:
+		var employees_val = observation.own_player.get(key, [])
+		if not (employees_val is Array):
 			continue
-		var def_val = EmployeeRegistryClass.get_def(employee_id)
-		if not (def_val is EmployeeDef):
-			continue
-		var def: EmployeeDef = def_val
-		for target_val in def.train_to:
-			var target := str(target_val)
-			if not target.is_empty() and int(observation.employee_pool_public.get(target, 0)) > 0:
+		for employee_val in Array(employees_val):
+			if _is_trainable_source_employee(str(employee_val), observation):
 				return true
 	return false
+
+static func _is_trainable_source_employee(employee_id: String, observation: ObservationState) -> bool:
+	if observation == null or employee_id.is_empty() or not EmployeeRegistryClass.is_loaded():
+		return false
+	if not EmployeeRegistryClass.has(employee_id):
+		return false
+	var def_val = EmployeeRegistryClass.get_def(employee_id)
+	if not (def_val is EmployeeDef):
+		return false
+	var def: EmployeeDef = def_val
+	for target_val in def.train_to:
+		var target := str(target_val)
+		if not target.is_empty() and int(observation.employee_pool_public.get(target, 0)) > 0:
+			return true
+	return false
+
+static func _should_preserve_for_training(employee_id: String, observation: ObservationState) -> bool:
+	if employee_id.is_empty() or employee_id == "ceo":
+		return false
+	if _is_train_provider_employee(employee_id):
+		return false
+	if not _has_owned_train_provider(observation):
+		return false
+	return _is_trainable_source_employee(employee_id, observation)
+
+static func _has_owned_train_provider(observation: ObservationState) -> bool:
+	if observation == null:
+		return false
+	for employee_id in _owned_employee_ids(observation.own_player):
+		if _is_train_provider_employee(employee_id):
+			return true
+	return false
+
+static func _has_active_train_provider(observation: ObservationState) -> bool:
+	if observation == null:
+		return false
+	for employee_id in _sorted_unique_strings(observation.own_player.get("employees", [])):
+		if _is_train_provider_employee(employee_id):
+			return true
+	return false
+
+static func _is_train_provider_employee(employee_id: String) -> bool:
+	if employee_id.is_empty() or not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(employee_id):
+		return false
+	var def_val = EmployeeRegistryClass.get_def(employee_id)
+	if not (def_val is EmployeeDef):
+		return false
+	var def: EmployeeDef = def_val
+	return int(def.train_capacity) > 0 and def.has_usage_tag("use:train")
 
 static func _can_supply_any_drink(observation: ObservationState) -> bool:
 	if observation == null or not ProductRegistryClass.is_loaded():

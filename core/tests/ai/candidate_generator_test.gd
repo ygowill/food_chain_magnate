@@ -58,7 +58,10 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var report := _test_restructuring_report_assignment_candidate(seed_val)
 	if not report.ok:
 		return report
-	return Result.success({"cases": 15})
+	var training_layout := _test_restructuring_preserves_trainable_source_for_training(seed_val)
+	if not training_layout.ok:
+		return training_layout
+	return Result.success({"cases": 16})
 
 static func _test_reserve_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
@@ -580,6 +583,85 @@ static func _test_restructuring_report_assignment_candidate(seed_val: int) -> Re
 		return Result.failure("report assignment should keep manager structure")
 	if not Array(Dictionary(structure[0]).get("reports", [])).has("kitchen_trainee"):
 		return Result.failure("report assignment should add employee under manager")
+	return Result.success()
+
+static func _test_restructuring_preserves_trainable_source_for_training(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.phase = DefsClass.PHASE_RESTRUCTURING
+	state.sub_phase = ""
+	state.turn_order = [0, 1]
+	state.selection_order = [0, 1]
+	state.current_player_index = 0
+	state.round_state["restructuring"] = {
+		"finalized": false,
+		"submitted": {
+			0: false,
+			1: false,
+		},
+	}
+	state.players[0]["company_structure"]["ceo_slots"] = 1
+	state.players[0]["company_structure"]["structure"] = [
+		{"employee_id": "management_trainee", "reports": []},
+	]
+	state.players[0]["employees"].append("management_trainee")
+	state.players[0]["reserve_employees"].append("trainer")
+	state.employee_pool["management_trainee"] = int(state.employee_pool.get("management_trainee", 0)) - 1
+	state.employee_pool["trainer"] = int(state.employee_pool.get("trainer", 0)) - 1
+
+	var payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	var move_command := _first_command_with_param(candidates, "restructure_employee", "employee_id", "management_trainee")
+	if move_command == null:
+		return Result.failure("restructuring should move trainable active source to reserve before training: %s" % str(_macro_debug(candidates)))
+	if not bool(move_command.params.get("to_reserve", false)):
+		return Result.failure("training preservation move should target reserve: %s" % str(move_command.params))
+	var moved := engine.execute_command(move_command)
+	if not moved.ok:
+		return Result.failure("training preservation move failed on execute: %s" % moved.error)
+
+	var trainer_payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not trainer_payload_read.ok:
+		return trainer_payload_read
+	var trainer_candidates := _read_candidates(trainer_payload_read.value)
+	var trainer_direct := _first_command_with_param(trainer_candidates, "set_company_structure_direct", "employee_id", "trainer")
+	if trainer_direct == null:
+		return Result.failure("restructuring should activate trainer after reserving source: %s" % str(_macro_debug(trainer_candidates)))
+	var source_direct := _first_command_with_param(trainer_candidates, "set_company_structure_direct", "employee_id", "management_trainee")
+	if source_direct != null:
+		return Result.failure("trainable source should stay in reserve while trainer can be active: %s" % str(_macro_debug(trainer_candidates)))
+	var trainer_active := engine.execute_command(trainer_direct)
+	if not trainer_active.ok:
+		return Result.failure("trainer direct assignment failed on execute: %s" % trainer_active.error)
+
+	var submit_payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not submit_payload_read.ok:
+		return submit_payload_read
+	var submit_candidates := _read_candidates(submit_payload_read.value)
+	if not _has_action(submit_candidates, "submit_restructuring"):
+		return Result.failure("restructuring should allow submit with active trainer and reserve source: %s" % str(_macro_debug(submit_candidates)))
+
+	var train_state := engine.get_state()
+	train_state.phase = DefsClass.PHASE_WORKING
+	train_state.sub_phase = DefsClass.SUB_PHASE_TRAIN
+	train_state.turn_order = [0]
+	train_state.current_player_index = 0
+	var train_payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not train_payload_read.ok:
+		return train_payload_read
+	var train_candidates := _read_candidates(train_payload_read.value)
+	var train_command := _first_command_with_param(train_candidates, "train", "from_employee", "management_trainee")
+	if train_command == null:
+		return Result.failure("Working/Train should generate training from reserved management_trainee: %s" % str(_macro_debug(train_candidates)))
+	if str(train_command.params.get("to_employee", "")) != "new_business_developer":
+		return Result.failure("management_trainee training should prefer new_business_developer, actual: %s" % str(train_command.params))
 	return Result.success()
 
 static func _build_engine(seed_val: int) -> Result:
