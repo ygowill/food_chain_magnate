@@ -395,10 +395,35 @@ static func _run_errand_boy_any_drink(action: ProcureDrinksAction, player_count:
 		return Result.failure("跑腿伙计采购应成功，但失败: %s" % exec.error)
 	var new_state: GameState = exec.value
 	var after := _sum_drinks(new_state.players[actor].get("inventory", {}))
-	if after != before + 1:
-		return Result.failure("跑腿伙计应获得 1 瓶饮料，实际增量: %d" % (after - before))
-	if int(new_state.players[actor].get("inventory", {}).get("lemonade", 0)) != 1:
-		return Result.failure("跑腿伙计应获得 1 瓶 lemonade，实际: %d" % int(new_state.players[actor].get("inventory", {}).get("lemonade", 0)))
+	if after != before + 2:
+		return Result.failure("首次跑腿伙计应获得 2 瓶饮料，实际增量: %d" % (after - before))
+	if int(new_state.players[actor].get("inventory", {}).get("lemonade", 0)) != 2:
+		return Result.failure("首次跑腿伙计应获得 2 瓶 lemonade，实际: %d" % int(new_state.players[actor].get("inventory", {}).get("lemonade", 0)))
+	if not new_state.players[actor].get("milestones", []).has("first_errand_boy"):
+		return Result.failure("首次跑腿伙计后应立即获得 first_errand_boy")
+
+	var events := action.generate_events(state, new_state, cmd)
+	var found_procured_event := false
+	for e_val in events:
+		if not (e_val is Dictionary):
+			continue
+		var e: Dictionary = e_val
+		if str(e.get("type", "")) != EventBus.EventType.DRINKS_PROCURED:
+			continue
+		var data_val = e.get("data", null)
+		if not (data_val is Dictionary):
+			return Result.failure("跑腿伙计 drinks_procured.data 类型错误（期望 Dictionary）")
+		var data: Dictionary = data_val
+		var drinks_val = data.get("drinks_procured", null)
+		if not (drinks_val is Dictionary):
+			return Result.failure("跑腿伙计事件应包含 drinks_procured，实际: %s" % str(data))
+		var drinks: Dictionary = drinks_val
+		if int(drinks.get("lemonade", 0)) != 2:
+			return Result.failure("跑腿伙计事件应记录 2 瓶 lemonade，实际: %s" % str(drinks))
+		found_procured_event = true
+		break
+	if not found_procured_event:
+		return Result.failure("跑腿伙计应生成 DRINKS_PROCURED 事件")
 
 	# 跑腿伙计：不允许选择非饮品（例如 burger）
 	var cmd2 := Command.create("procure_drinks", actor, {

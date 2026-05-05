@@ -15,6 +15,7 @@ const StaffStateClass = preload("res://core/state/staff_state.gd")
 
 # 每个饮料源提供的饮料数量
 const DRINKS_PER_SOURCE := 2
+const ERRAND_BOY_BASE_DRINKS := 1
 
 func _init() -> void:
 	action_id = "procure_drinks"
@@ -75,6 +76,12 @@ func _read_optional_staff_id(command: Command) -> Result:
 		return Result.failure("staff_id 必须 > 0，实际: %d" % staff_id)
 	return Result.success(staff_id)
 
+func _get_errand_boy_drink_amount(state: GameState, player_id: int) -> Result:
+	var bonus_read := DrinksProcurementClass.get_drinks_per_source_bonus_from_milestones(state, player_id)
+	if not bonus_read.ok:
+		return bonus_read
+	return Result.success(ERRAND_BOY_BASE_DRINKS + int(bonus_read.value))
+
 func _validate_specific(state: GameState, command: Command) -> Result:
 	# 检查必需参数
 	if not command.params.has("employee_type"):
@@ -118,7 +125,7 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 	if restaurant_ids.is_empty():
 		return Result.failure("你没有餐厅，无法采购饮料")
 
-	# 特殊：跑腿伙计（直接获得 1 瓶指定饮料，不走路线/饮料源拾取）
+	# 特殊：跑腿伙计（直接获得指定饮料，不走路线/饮料源拾取）
 	if employee_type == "errand_boy":
 		var drink_type_r := require_string_param(command, "drink_type")
 		if not drink_type_r.ok:
@@ -132,6 +139,14 @@ func _validate_specific(state: GameState, command: Command) -> Result:
 			return Result.failure("ProductRegistry 未初始化，无法校验 drink_type")
 		if not ProductRegistryClass.is_drink(drink_type):
 			return Result.failure("未知或非饮品的 drink_type: %s" % drink_type)
+
+		var preview_state_read := _build_preview_state_with_use_employee(state, command.actor, employee_type)
+		if not preview_state_read.ok:
+			return preview_state_read
+		var preview_state: GameState = preview_state_read.value
+		var amount_check := _get_errand_boy_drink_amount(preview_state, command.actor)
+		if not amount_check.ok:
+			return amount_check
 
 		return Result.success()
 
@@ -202,7 +217,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		return use_employee
 	warnings.append_array(use_employee.warnings)
 
-	# 特殊：跑腿伙计（直接获得 1 瓶指定饮料）
+	# 特殊：跑腿伙计（直接获得指定饮料；first_errand_boy 对刚打出的跑腿伙计也生效）
 	if employee_type == "errand_boy":
 		var drink_type_r := require_string_param(command, "drink_type")
 		if not drink_type_r.ok:
@@ -217,7 +232,12 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 		if not ProductRegistryClass.is_drink(drink_type):
 			return Result.failure("未知或非饮品的 drink_type: %s" % drink_type)
 
-		var add_result := StateUpdater.add_inventory(state, player_id, drink_type, 1)
+		var amount_read := _get_errand_boy_drink_amount(state, player_id)
+		if not amount_read.ok:
+			return amount_read
+		var drink_amount := int(amount_read.value)
+
+		var add_result := StateUpdater.add_inventory(state, player_id, drink_type, drink_amount)
 		if not add_result.ok:
 			return add_result
 
@@ -237,7 +257,7 @@ func _apply_changes(state: GameState, command: Command) -> Result:
 			"procurer_employee_type": procurer_employee_type,
 			"player_id": player_id,
 			"drink_type": drink_type,
-			"drinks_procured": {drink_type: 1},
+			"drinks_procured": {drink_type: drink_amount},
 		}).with_warnings(warnings)
 
 	var plan_result := DrinksProcurementClass.resolve_procurement_plan(state, command, restaurant_ids, emp_def)
@@ -344,7 +364,11 @@ func _generate_specific_events(_old_state: GameState, _new_state: GameState, com
 	if employee_type == "errand_boy":
 		var drink_type_val = command.params.get("drink_type", null)
 		if drink_type_val is String and not str(drink_type_val).strip_edges().is_empty():
-			drinks_procured[str(drink_type_val).strip_edges()] = 1
+			var drink_amount := ERRAND_BOY_BASE_DRINKS
+			var amount_read := _get_errand_boy_drink_amount(_new_state, command.actor)
+			if amount_read.ok:
+				drink_amount = int(amount_read.value)
+			drinks_procured[str(drink_type_val).strip_edges()] = drink_amount
 	else:
 		var emp_def = EmployeeRegistryClass.get_def(employee_type)
 		var restaurant_ids := StructuresClass.get_player_restaurants(_old_state, command.actor)
