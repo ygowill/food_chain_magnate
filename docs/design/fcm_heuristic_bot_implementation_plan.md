@@ -193,6 +193,7 @@ core/
 
     strategy/
       strategy_profile.gd
+      strategy_candidate_filter.gd
       strategy_scorer.gd
       phase_policy_*.gd
 
@@ -946,10 +947,17 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 
 - `core/ai/bot/strategy_bot.gd`
 - `core/ai/strategy/strategy_profile.gd`
+- `core/ai/strategy/strategy_candidate_filter.gd`
 - `core/ai/strategy/strategy_scorer.gd`
 - `core/tests/ai/strategy_bot_test.gd`
 
-这只是策略框架和 smoke 验证，还不是完整强度版本。后续应把 `StrategyProfile` 从硬编码默认值迁移到 `data/bots/*.json`，并把阶段策略拆成更小的可测试组件。
+当前 StrategyBot 已在评分前增加策略层候选过滤：
+
+- `CandidateGenerator` 在有 `source_state` 时复用 `MarketingRangeCalculator` 过滤影响不到房屋的营销候选。
+- `StrategyCandidateFilter` 作为后置防线，在 `macro.debug.affected_house_ids` 明确为空时丢弃营销候选，并把原因写入 trace。
+- `StrategyScorer` 对营销候选记录 `affected_houses`、`marketing_serviceable_houses`、`marketing_inventory_units`、`marketing_can_supply_product` 等特征。营销即使影响房屋，也会因没有己方餐厅、没有库存/生产能力而降权。
+
+这仍只是策略框架和 smoke 验证，还不是完整强度版本。后续应把 `StrategyProfile` 从硬编码默认值迁移到 `data/bots/*.json`，并把阶段策略拆成更小的可测试组件。营销可服务性目前使用 observation 上的己方餐厅与房屋 anchor 的近似距离；进入 DinnerPreview / BoardAnalyzer 阶段后，应复用真实 `DinnertimeDistance` / road graph 做 golden 对齐。
 
 ### 11.5 OSLA / Beam
 
@@ -1089,7 +1097,7 @@ tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
 
 - `core/tests/ai/random_legal_bot_smoke_test.gd`：两个 `RandomLegalBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic。
 - `core/tests/ai/greedy_bot_smoke_test.gd`：保留 GreedyBot 短程 deterministic 校验，并新增单程跑到至少第 3 轮或 GameOver 的 smoke。GreedyBot 不再要求完整打完 2p base 局。
-- `core/tests/ai/strategy_bot_test.gd`：两个 `StrategyBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic 与 strategy trace 元数据。
+- `core/tests/ai/strategy_bot_test.gd`：两个 `StrategyBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic、strategy trace 元数据、营销空覆盖候选过滤、营销可服务房屋评分特征。
 
 ## 15. 开发路线图
 

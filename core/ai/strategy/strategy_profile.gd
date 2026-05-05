@@ -3,6 +3,7 @@ extends RefCounted
 
 var id: String = "base_revenue_v1"
 var max_valid_per_action: int = 12
+var strict_marketing_must_affect_houses: bool = true
 var action_weights: Dictionary = {}
 var employee_priorities: Dictionary = {}
 var product_priorities: Dictionary = {}
@@ -10,6 +11,7 @@ var product_priorities: Dictionary = {}
 func configure_base_revenue() -> void:
 	id = "base_revenue_v1"
 	max_valid_per_action = 12
+	strict_marketing_must_affect_houses = true
 	action_weights = {
 		"confirm_dinnertime": 1000.0,
 		"confirm_marketing": 1000.0,

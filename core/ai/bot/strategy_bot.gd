@@ -3,6 +3,7 @@ extends "res://core/ai/bot/fcm_bot.gd"
 
 const CandidateGeneratorClass = preload("res://core/ai/candidates/candidate_generator.gd")
 const RandomLegalBotClass = preload("res://core/ai/bot/random_legal_bot.gd")
+const StrategyCandidateFilterClass = preload("res://core/ai/strategy/strategy_candidate_filter.gd")
 const StrategyProfileClass = preload("res://core/ai/strategy/strategy_profile.gd")
 const StrategyScorerClass = preload("res://core/ai/strategy/strategy_scorer.gd")
 
@@ -62,6 +63,17 @@ func _choose_command_with_options(
 	var candidates: Array = candidates_val
 	if candidates.is_empty():
 		return _fallback(observation, context, legal_action_ids, validate_command, budget, "CandidateGenerator returned no candidates")
+	var generated_candidate_count := candidates.size()
+	var discarded_reasons := _copy_string_array(payload.get("discarded_reasons", []))
+	var filter_payload: Dictionary = StrategyCandidateFilterClass.filter_candidates(observation, candidates, profile)
+	var filtered_candidates_val = filter_payload.get("candidates", [])
+	if not (filtered_candidates_val is Array):
+		return _fallback(observation, context, legal_action_ids, validate_command, budget, "StrategyCandidateFilter returned invalid candidates")
+	candidates = filtered_candidates_val
+	discarded_reasons.append_array(_copy_string_array(filter_payload.get("discarded_reasons", [])))
+	var filter_stats: Dictionary = Dictionary(filter_payload.get("stats", {})).duplicate(true)
+	if candidates.is_empty():
+		return _fallback(observation, context, legal_action_ids, validate_command, budget, "StrategyCandidateFilter discarded all candidates: %s" % "; ".join(discarded_reasons.slice(0, 8)))
 
 	var best_macro: MacroAction = null
 	var best_score := -INF
@@ -110,6 +122,8 @@ func _choose_command_with_options(
 			"strategy_profile": profile.id,
 			"features": best_features,
 			"candidate_count": candidates.size(),
+			"generated_candidate_count": generated_candidate_count,
+			"filter_stats": filter_stats,
 		},
 		{
 			"bot": "StrategyBot",
@@ -118,8 +132,10 @@ func _choose_command_with_options(
 			"sub_phase": str(observation.sub_phase),
 			"player_id": context.player_id,
 			"candidate_count": candidates.size(),
+			"generated_candidate_count": generated_candidate_count,
+			"filter_stats": filter_stats,
 			"top_candidates": ranked.slice(0, 5),
-			"discarded_reasons": Array(payload.get("discarded_reasons", [])).slice(0, 20) if payload.get("discarded_reasons", []) is Array else [],
+			"discarded_reasons": discarded_reasons.slice(0, 20),
 		}
 	)
 
@@ -137,3 +153,10 @@ func _fallback(
 		fallback.explanation["fallback"] = "random_legal"
 		return fallback
 	return BotDecision.failure("StrategyBot failed: %s" % reason)
+
+static func _copy_string_array(value) -> Array[String]:
+	var out: Array[String] = []
+	if value is Array:
+		for item in Array(value):
+			out.append(str(item))
+	return out

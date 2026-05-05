@@ -37,10 +37,20 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			score += structure_bonus
 		"initiate_marketing":
 			var product_id := str(command.params.get("product", ""))
-			var affected_count := _affected_house_count(macro)
-			var marketing_bonus := float(affected_count) * 12.0 + _product_pipeline_value(observation, product_id, profile)
+			var affected_ids := _affected_house_ids(macro)
+			var affected_count := affected_ids.size()
+			var pipeline_value := _product_pipeline_value(observation, product_id, profile)
+			var service_features := _marketing_service_features(observation, affected_ids, product_id)
+			var marketing_bonus := _marketing_value_from_features(affected_count, pipeline_value, service_features)
 			features["affected_houses"] = affected_count
-			features["product_pipeline_value"] = marketing_bonus
+			features["affected_house_ids"] = affected_ids.duplicate()
+			features["product_pipeline_value"] = pipeline_value
+			features["marketing_serviceable_houses"] = int(service_features.get("serviceable_houses", 0))
+			features["marketing_closest_distance"] = int(service_features.get("closest_distance", -1))
+			features["marketing_inventory_units"] = int(service_features.get("inventory_units", 0))
+			features["marketing_can_supply_product"] = bool(service_features.get("can_supply_product", false))
+			features["marketing_own_restaurants"] = int(service_features.get("own_restaurants", 0))
+			features["marketing_value"] = marketing_bonus
 			score += marketing_bonus
 		"produce_food", "procure_drinks":
 			var product_id2 := str(command.params.get("food_type", command.params.get("drink_type", "")))
@@ -98,13 +108,59 @@ static func _product_pipeline_value(observation: ObservationState, product_id: S
 		value += 2.0
 	return value
 
-static func _affected_house_count(macro: MacroAction) -> int:
+static func _affected_house_ids(macro: MacroAction) -> Array[String]:
+	var out: Array[String] = []
 	if macro == null:
-		return 0
+		return out
 	var affected_val = macro.debug.get("affected_house_ids", [])
 	if affected_val is Array:
-		return Array(affected_val).size()
-	return 0
+		for house_id_val in Array(affected_val):
+			var house_id := str(house_id_val)
+			if not house_id.is_empty() and not out.has(house_id):
+				out.append(house_id)
+	return out
+
+static func _marketing_service_features(observation: ObservationState, affected_house_ids: Array[String], product_id: String) -> Dictionary:
+	var serviceable := 0
+	var closest_distance := 2147483647
+	var total_distance := 0
+	for house_id in affected_house_ids:
+		var distance := _min_house_distance_to_owned_restaurant(observation, house_id)
+		if distance < 0:
+			continue
+		serviceable += 1
+		closest_distance = mini(closest_distance, distance)
+		total_distance += distance
+	var average_distance := -1.0
+	if serviceable > 0:
+		average_distance = float(total_distance) / float(serviceable)
+	return {
+		"serviceable_houses": serviceable,
+		"closest_distance": closest_distance if serviceable > 0 else -1,
+		"average_distance": average_distance,
+		"inventory_units": _inventory_count(observation, product_id),
+		"can_supply_product": _can_supply_product(observation, product_id),
+		"own_restaurants": _own_restaurant_count(observation),
+	}
+
+static func _marketing_value_from_features(affected_count: int, pipeline_value: float, service_features: Dictionary) -> float:
+	if affected_count <= 0:
+		return -500.0
+	var serviceable := int(service_features.get("serviceable_houses", 0))
+	var inventory_units := int(service_features.get("inventory_units", 0))
+	var closest_distance := int(service_features.get("closest_distance", -1))
+	var own_restaurants := int(service_features.get("own_restaurants", 0))
+	var can_supply_product := bool(service_features.get("can_supply_product", false))
+	var value := float(affected_count) * 10.0 + pipeline_value
+	value += float(serviceable) * 7.0
+	value += float(mini(inventory_units, affected_count)) * 4.0
+	if closest_distance >= 0:
+		value += maxf(0.0, 8.0 - float(closest_distance) * 0.5)
+	if own_restaurants <= 0:
+		value -= 16.0
+	if not can_supply_product and inventory_units <= 0:
+		value -= 12.0
+	return value
 
 static func _has_non_skip_alternative(_observation: ObservationState, _macro: MacroAction) -> bool:
 	return true
@@ -204,3 +260,56 @@ static func _own_restaurant_count(observation: ObservationState) -> int:
 	if restaurants_val is Array:
 		return Array(restaurants_val).size()
 	return 0
+
+static func _min_house_distance_to_owned_restaurant(observation: ObservationState, house_id: String) -> int:
+	if observation == null or house_id.is_empty():
+		return -1
+	var houses_val = observation.map_public.get("houses", {})
+	if not (houses_val is Dictionary):
+		return -1
+	var houses: Dictionary = houses_val
+	var house_val = houses.get(house_id, null)
+	if not (house_val is Dictionary):
+		return -1
+	var house_anchor := _read_vector2i(Dictionary(house_val).get("anchor_pos", Vector2i.ZERO))
+	var restaurants_val = observation.map_public.get("restaurants", {})
+	if not (restaurants_val is Dictionary):
+		return -1
+	var restaurants: Dictionary = restaurants_val
+	var own_ids := _sorted_unique_strings(observation.own_player.get("restaurants", []))
+	var best := 2147483647
+	for restaurant_id in own_ids:
+		var rest_val = restaurants.get(restaurant_id, null)
+		if not (rest_val is Dictionary):
+			continue
+		var rest: Dictionary = rest_val
+		var rest_anchor := _read_vector2i(rest.get("anchor_pos", Vector2i.ZERO))
+		var distance := absi(house_anchor.x - rest_anchor.x) + absi(house_anchor.y - rest_anchor.y)
+		best = mini(best, distance)
+	return best if best < 2147483647 else -1
+
+static func _read_vector2i(value) -> Vector2i:
+	if value is Vector2i:
+		return Vector2i(value)
+	if value is Vector2:
+		var v2: Vector2 = value
+		return Vector2i(int(v2.x), int(v2.y))
+	if value is Array:
+		var arr: Array = value
+		if arr.size() >= 2:
+			return Vector2i(int(arr[0]), int(arr[1]))
+	if value is Dictionary:
+		var dict: Dictionary = value
+		if dict.has("x") and dict.has("y"):
+			return Vector2i(int(dict.get("x", 0)), int(dict.get("y", 0)))
+	return Vector2i.ZERO
+
+static func _sorted_unique_strings(value) -> Array[String]:
+	var out: Array[String] = []
+	if value is Array:
+		for item in Array(value):
+			var text := str(item)
+			if not text.is_empty() and not out.has(text):
+				out.append(text)
+	out.sort()
+	return out
