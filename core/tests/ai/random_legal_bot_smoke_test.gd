@@ -20,6 +20,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var mandatory := _test_mandatory_price_action(seed_val)
 	if not mandatory.ok:
 		return mandatory
+	var payday := _test_payday_fire_action(seed_val)
+	if not payday.ok:
+		return payday
 	return Result.success({
 		"steps": int(first.value.get("steps", 0)),
 		"actions": first_actions,
@@ -85,4 +88,28 @@ static func _test_mandatory_price_action(seed_val: int) -> Result:
 	var trace: Dictionary = step.value
 	if str(trace.get("action_id", "")) != "set_price":
 		return Result.failure("RandomLegalBot should choose mandatory set_price, got %s" % str(trace))
+	return Result.success()
+
+static func _test_payday_fire_action(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.phase = DefsClass.PHASE_PAYDAY
+	state.sub_phase = ""
+	state.turn_order = [0, 1]
+	state.current_player_index = 0
+	state.players[0]["reserve_employees"].append("burger_cook")
+	state.employee_pool["burger_cook"] = int(state.employee_pool.get("burger_cook", 0)) - 1
+
+	var controller := BotControllerClass.new()
+	var step := controller.step(engine, 0, RandomLegalBotClass.new(), TimeBudget.start(50))
+	if not step.ok:
+		return step
+	var trace: Dictionary = step.value
+	if str(trace.get("action_id", "")) != "fire":
+		return Result.failure("RandomLegalBot should choose payday fire, got %s" % str(trace))
 	return Result.success()

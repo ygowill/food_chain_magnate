@@ -38,6 +38,8 @@ func choose_command(
 			return _choose_order_of_business(observation, context, legal_action_ids, validate_command)
 		DefsClass.PHASE_WORKING:
 			return _choose_working(context, legal_action_ids, validate_command)
+		DefsClass.PHASE_PAYDAY:
+			return _choose_payday(observation, context, legal_action_ids, validate_command)
 		DefsClass.PHASE_CLEANUP:
 			return _choose_cleanup(context, legal_action_ids, validate_command)
 		_:
@@ -89,6 +91,38 @@ func _choose_working(
 	if legal_action_ids.has(ActionIdsClass.SKIP):
 		return BasicCandidateHelpersClass.simple_command(context, ActionIdsClass.SKIP, {}, validate_command, "working_skip")
 	return BotDecision.failure("no legal working action")
+
+func _choose_payday(
+	observation: ObservationState,
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	validate_command: Callable
+) -> BotDecision:
+	if legal_action_ids.has("fire"):
+		var commands: Array[Command] = []
+		for zone_info in [
+			{"key": "employees", "location": "active"},
+			{"key": "reserve_employees", "location": "reserve"},
+		]:
+			var key := str(zone_info.get("key", ""))
+			var location := str(zone_info.get("location", ""))
+			var seen := {}
+			var employees_val = observation.own_player.get(key, [])
+			if not (employees_val is Array):
+				continue
+			for employee_val in Array(employees_val):
+				var employee_id := str(employee_val)
+				if employee_id.is_empty() or employee_id == "ceo" or seen.has(employee_id):
+					continue
+				seen[employee_id] = true
+				commands.append(Command.create("fire", context.player_id, {
+					"employee_id": employee_id,
+					"location": location,
+				}))
+		var fire := BasicCandidateHelpersClass.first_valid_command(commands, validate_command, "fire")
+		if not fire.is_failure():
+			return fire
+	return _choose_phase_skip(context, legal_action_ids, validate_command)
 
 func _choose_cleanup(
 	context: AiDecisionContext,

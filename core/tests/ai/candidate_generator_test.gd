@@ -28,13 +28,16 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var restaurants := _test_working_place_restaurant_candidates_are_valid(seed_val)
 	if not restaurants.ok:
 		return restaurants
+	var payday := _test_payday_fire_candidates_are_valid(seed_val)
+	if not payday.ok:
+		return payday
 	var restructuring := _test_restructuring_direct_assignment_candidate(seed_val)
 	if not restructuring.ok:
 		return restructuring
 	var report := _test_restructuring_report_assignment_candidate(seed_val)
 	if not report.ok:
 		return report
-	return Result.success({"cases": 8})
+	return Result.success({"cases": 9})
 
 static func _test_reserve_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
@@ -202,6 +205,42 @@ static func _test_working_place_restaurant_candidates_are_valid(seed_val: int) -
 	var after_count := Dictionary(engine.get_state().map.get("restaurants", {})).size()
 	if after_count <= before_count:
 		return Result.failure("place_restaurant candidate should add an open restaurant")
+	return Result.success()
+
+static func _test_payday_fire_candidates_are_valid(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.phase = DefsClass.PHASE_PAYDAY
+	state.sub_phase = ""
+	state.turn_order = [0, 1]
+	state.current_player_index = 0
+	state.players[0]["reserve_employees"].append("burger_cook")
+	state.employee_pool["burger_cook"] = int(state.employee_pool.get("burger_cook", 0)) - 1
+	var pool_before := int(state.employee_pool.get("burger_cook", 0))
+
+	var payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	if not _has_action(candidates, "fire"):
+		return Result.failure("Payday should generate fire candidate: %s" % str(_macro_debug(candidates)))
+	var command := _first_command_with_param(candidates, "fire", "employee_id", "burger_cook")
+	if command == null:
+		return Result.failure("missing fire command for burger_cook")
+	var executed := engine.execute_command(command)
+	if not executed.ok:
+		return Result.failure("fire candidate failed on execute: %s" % executed.error)
+	var player: Dictionary = engine.get_state().players[0]
+	if Array(player.get("reserve_employees", [])).has("burger_cook"):
+		return Result.failure("fire candidate should remove employee from reserve")
+	var pool_after := int(engine.get_state().employee_pool.get("burger_cook", 0))
+	if pool_after != pool_before + 1:
+		return Result.failure("fire candidate should return employee to pool: before=%d after=%d" % [pool_before, pool_after])
 	return Result.success()
 
 static func _test_restructuring_direct_assignment_candidate(seed_val: int) -> Result:

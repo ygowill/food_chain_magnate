@@ -44,6 +44,8 @@ static func generate(
 			_generate_order_of_business(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action)
 		DefsClass.PHASE_WORKING:
 			_generate_working(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action)
+		DefsClass.PHASE_PAYDAY:
+			_generate_payday(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action)
 		DefsClass.PHASE_CLEANUP:
 			_generate_cleanup(out, discarded, context, legal_action_ids, validate_command, max_valid_per_action)
 		_:
@@ -545,6 +547,56 @@ static func _generate_cleanup(
 	else:
 		_generate_phase_skip(out, discarded, context, legal_action_ids, validate_command, max_valid_per_action)
 
+static func _generate_payday(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	if legal_action_ids.has("fire"):
+		_generate_fire_candidates(out, discarded, observation, context, validate_command, max_valid_per_action)
+	_generate_phase_skip(out, discarded, context, legal_action_ids, validate_command, max_valid_per_action)
+
+static func _generate_fire_candidates(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	if not EmployeeRegistryClass.is_loaded():
+		discarded.append("fire: EmployeeRegistry is not loaded")
+		return
+	for zone_info in [
+		{"key": "employees", "location": "active"},
+		{"key": "reserve_employees", "location": "reserve"},
+		{"key": "busy_marketers", "location": "busy"},
+	]:
+		var key := str(zone_info.get("key", ""))
+		var location := str(zone_info.get("location", ""))
+		for employee_id in _sorted_unique_strings(observation.own_player.get(key, [])):
+			if not _can_employee_be_fired(employee_id):
+				continue
+			_append_valid_command(
+				out,
+				discarded,
+				context,
+				"fire",
+				{
+					"employee_id": employee_id,
+					"location": location,
+				},
+				validate_command,
+				"fire_%s_%s" % [location, employee_id],
+				["payday", "fire"],
+				0.0,
+				max_valid_per_action
+			)
+
 static func _generate_phase_skip(
 	out: Array[MacroAction],
 	discarded: Array[String],
@@ -718,6 +770,15 @@ static func _is_manager_employee(employee_id: String) -> bool:
 		return false
 	var def: EmployeeDef = def_val
 	return str(def.role) == "manager" or maxi(0, int(def.manager_slots)) > 0
+
+static func _can_employee_be_fired(employee_id: String) -> bool:
+	if employee_id.is_empty() or not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(employee_id):
+		return false
+	var def_val = EmployeeRegistryClass.get_def(employee_id)
+	if not (def_val is EmployeeDef):
+		return false
+	var def: EmployeeDef = def_val
+	return bool(def.can_be_fired)
 
 static func _empty_direct_slots(structure: Array, ceo_slots: int) -> Array[int]:
 	var out: Array[int] = []
