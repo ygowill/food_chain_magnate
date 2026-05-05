@@ -963,14 +963,14 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 - `StrategyCandidateFilter` 作为后置防线，在 `macro.debug.affected_house_ids` 明确为空时丢弃营销候选，并把原因写入 trace。
 - `StrategyIncomeAnalyzer` 从 `ObservationState` 提取产品需求、可服务需求、库存缺口、供给能力和员工对收入链的贡献。
 - `StrategyBoardAnalyzer` 对餐厅放置/移动做轻量位置评分，优先贴近公开房屋、公开需求和当前尚未服务的需求。
-- `StrategyScorer` 对营销候选记录 `affected_houses`、`marketing_serviceable_houses`、`marketing_inventory_units`、`marketing_can_supply_product` 等特征。营销即使影响房屋，也会因没有己方餐厅、没有库存/生产能力而降权。
+- `StrategyScorer` 对营销候选记录 `affected_houses`、`marketing_serviceable_houses`、`marketing_inventory_units`、`marketing_can_supply_product`、`marketing_distance_source` 等特征。`StrategyBot.choose_command_with_engine()` 会把 source state 传入 scorer，使营销可服务性优先复用 `BoardAnalyzer` / road graph / drive-through 入口点；无 source state 时才回退到 observation anchor 近似。营销即使影响房屋，也会因没有己方餐厅、没有库存/生产能力而降权。
 - `StrategyScorer` 对生产/采购候选记录 `product_public_demand`、`product_serviceable_demand`、`product_inventory_gap`、`product_can_supply`，并用这些特征优先补当前可销售产品缺口。
 - `CandidateGenerator` 在 `choose_fridge_keep` 中复用 `StrategyIncomeAnalyzer.build_fridge_keep()`，按可服务需求、公开需求和可补给性逐单位选择冰箱保留库存，而不是简单保留最大库存堆。
 - `StrategyScorer` 对 `fire` 候选记录发薪现金、估算应付、短缺、解雇后的有效薪资缓解和员工收入价值；发薪短缺时优先解雇收入链价值较低的可付薪员工。
 - `DinnerPreview` 已用 `AiEngineFork` fork 当前 engine，通过真实 `execute_command()` 和 settlement hooks 推进到 Dinnertime，并在返回前恢复 source engine 的 registry bundle。
 - `DinnerPreviewGoldenTest` 已覆盖基础销售、花园收入、drive-through 入口点与 source 不变性/registry 恢复，比较 preview 与真实 Dinnertime report 的关键字段和库存消耗。
 
-这仍只是策略框架和 smoke 验证，还不是完整强度版本。后续应增加更多 `data/bots/*.json` 难度配置，并把阶段策略拆成更小的可测试组件。营销可服务性目前使用 observation 上的己方餐厅与房屋 anchor 的近似距离；后续应把 StrategyScorer / StrategyBoardAnalyzer 的距离特征接到真实 `DinnertimeDistance` / road graph。
+这仍只是策略框架和 smoke 验证，还不是完整强度版本。后续应增加更多 `data/bots/*.json` 难度配置，并把阶段策略拆成更小的可测试组件。餐厅放置/移动的策略特征仍有 anchor 近似；后续应把 StrategyBoardAnalyzer 的候选位置评估接到真实 `DinnertimeDistance` / road graph。
 
 ### 11.5 OSLA / Beam
 

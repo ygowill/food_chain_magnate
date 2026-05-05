@@ -5,10 +5,11 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
+const BoardAnalyzerClass = preload("res://core/ai/analysis/board_analyzer.gd")
 const StrategyBoardAnalyzerClass = preload("res://core/ai/strategy/strategy_board_analyzer.gd")
 const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_income_analyzer.gd")
 
-static func score_macro(observation: ObservationState, macro: MacroAction, profile) -> Dictionary:
+static func score_macro(observation: ObservationState, macro: MacroAction, profile, options: Dictionary = {}) -> Dictionary:
 	if observation == null or macro == null or profile == null or macro.commands.is_empty():
 		return {"score": -INF, "features": {}}
 	var command: Command = macro.commands[0]
@@ -52,7 +53,7 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			var affected_ids := _affected_house_ids(macro)
 			var affected_count := affected_ids.size()
 			var pipeline_value := _product_pipeline_value(product_id, profile, income_analysis, features)
-			var service_features := _marketing_service_features(observation, affected_ids, product_id)
+			var service_features := _marketing_service_features(observation, affected_ids, product_id, options.get("source_state", null))
 			var marketing_bonus := _marketing_value_from_features(affected_count, pipeline_value, service_features)
 			features["affected_houses"] = affected_count
 			features["affected_house_ids"] = affected_ids.duplicate()
@@ -62,6 +63,7 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			features["marketing_inventory_units"] = int(service_features.get("inventory_units", 0))
 			features["marketing_can_supply_product"] = bool(service_features.get("can_supply_product", false))
 			features["marketing_own_restaurants"] = int(service_features.get("own_restaurants", 0))
+			features["marketing_distance_source"] = str(service_features.get("distance_source", "anchor"))
 			features["marketing_value"] = marketing_bonus
 			score += marketing_bonus
 		"produce_food", "procure_drinks":
@@ -226,7 +228,11 @@ static func _affected_house_ids(macro: MacroAction) -> Array[String]:
 				out.append(house_id)
 	return out
 
-static func _marketing_service_features(observation: ObservationState, affected_house_ids: Array[String], product_id: String) -> Dictionary:
+static func _marketing_service_features(observation: ObservationState, affected_house_ids: Array[String], product_id: String, source_state = null) -> Dictionary:
+	if source_state is GameState:
+		var road_payload := _marketing_service_features_from_source(source_state, observation, affected_house_ids, product_id)
+		if not road_payload.is_empty():
+			return road_payload
 	var serviceable := 0
 	var closest_distance := 2147483647
 	var total_distance := 0
@@ -247,6 +253,45 @@ static func _marketing_service_features(observation: ObservationState, affected_
 		"inventory_units": _inventory_count(observation, product_id),
 		"can_supply_product": _can_supply_product(observation, product_id),
 		"own_restaurants": _own_restaurant_count(observation),
+		"distance_source": "anchor",
+	}
+
+static func _marketing_service_features_from_source(source_state: GameState, observation: ObservationState, affected_house_ids: Array[String], product_id: String) -> Dictionary:
+	var analysis_read := BoardAnalyzerClass.analyze_state(source_state)
+	if not analysis_read.ok:
+		return {}
+	var analysis: Dictionary = analysis_read.value
+	if not bool(analysis.get("road_graph_available", false)):
+		return {}
+	var distances: Dictionary = Dictionary(analysis.get("restaurant_house_distances", {}))
+	var own_restaurant_ids := _sorted_unique_strings(observation.own_player.get("restaurants", [])) if observation != null else []
+	var serviceable := 0
+	var closest_distance := 2147483647
+	var total_distance := 0
+	for house_id in affected_house_ids:
+		var best_for_house := 2147483647
+		for restaurant_id in own_restaurant_ids:
+			var per_rest: Dictionary = Dictionary(distances.get(restaurant_id, {}))
+			var info: Dictionary = Dictionary(per_rest.get(house_id, {}))
+			if not info.has("distance"):
+				continue
+			best_for_house = mini(best_for_house, int(info.get("distance", 2147483647)))
+		if best_for_house >= 2147483647:
+			continue
+		serviceable += 1
+		closest_distance = mini(closest_distance, best_for_house)
+		total_distance += best_for_house
+	var average_distance := -1.0
+	if serviceable > 0:
+		average_distance = float(total_distance) / float(serviceable)
+	return {
+		"serviceable_houses": serviceable,
+		"closest_distance": closest_distance if serviceable > 0 else -1,
+		"average_distance": average_distance,
+		"inventory_units": _inventory_count(observation, product_id),
+		"can_supply_product": _can_supply_product(observation, product_id),
+		"own_restaurants": _own_restaurant_count(observation),
+		"distance_source": "road_graph",
 	}
 
 static func _marketing_value_from_features(affected_count: int, pipeline_value: float, service_features: Dictionary) -> float:

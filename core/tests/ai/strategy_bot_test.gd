@@ -2,12 +2,16 @@ class_name StrategyBotTest
 extends RefCounted
 
 const BotControllerClass = preload("res://core/ai/bot/bot_controller.gd")
+const ObservationAdapterClass = preload("res://core/ai/observation/observation_adapter.gd")
 const StrategyBotClass = preload("res://core/ai/bot/strategy_bot.gd")
 const StrategyCandidateFilterClass = preload("res://core/ai/strategy/strategy_candidate_filter.gd")
 const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_income_analyzer.gd")
 const StrategyProfileClass = preload("res://core/ai/strategy/strategy_profile.gd")
 const StrategyScorerClass = preload("res://core/ai/strategy/strategy_scorer.gd")
+const DinnertimeSettlementTestClass = preload("res://core/tests/dinnertime_settlement_test.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
+const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 
 static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var first := _run_to_round_or_game_over(seed_val, 3)
@@ -31,6 +35,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var marketing_score := _test_marketing_score_prefers_affected_serviceable_houses(seed_val)
 	if not marketing_score.ok:
 		return marketing_score
+	var road_graph_marketing := _test_marketing_score_uses_source_road_graph(seed_val)
+	if not road_graph_marketing.ok:
+		return road_graph_marketing
 	var income_gap := _test_income_analyzer_detects_serviceable_inventory_gap(seed_val)
 	if not income_gap.ok:
 		return income_gap
@@ -188,6 +195,40 @@ static func _test_marketing_score_prefers_affected_serviceable_houses(seed_val: 
 		return Result.failure("StrategyScorer should expose marketing_serviceable_houses: %s" % str(features))
 	if int(features.get("marketing_inventory_units", 0)) <= 0:
 		return Result.failure("StrategyScorer should expose marketing inventory support: %s" % str(features))
+	return Result.success()
+
+static func _test_marketing_score_uses_source_road_graph(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var state := engine.get_state()
+	DinnertimeSettlementTestClass._force_turn_order(state)
+	DinnertimeSettlementTestClass._apply_test_map(state)
+	DinnertimeSettlementTestClass._set_house_demands(state, "house_left", [{"product": "burger"}])
+	var drive_setup := _apply_drive_through_source_case(state)
+	if not drive_setup.ok:
+		return drive_setup
+	var observation_read := ObservationAdapterClass.observe_for_player(engine, 0)
+	if not observation_read.ok:
+		return observation_read
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var macro := MacroAction.create(
+		"marketing_drive_through_road_graph",
+		[Command.create("initiate_marketing", 0, {"product": "burger"})],
+		0.0,
+		["working", "marketing"],
+		{"affected_house_ids": ["house_left"]}
+	)
+	var score: Dictionary = StrategyScorerClass.score_macro(observation_read.value, macro, profile, {"source_state": state})
+	var features: Dictionary = Dictionary(score.get("features", {}))
+	if str(features.get("marketing_distance_source", "")) != "road_graph":
+		return Result.failure("StrategyScorer should use source road graph when available: %s" % str(features))
+	if int(features.get("marketing_serviceable_houses", 0)) != 1:
+		return Result.failure("StrategyScorer should find drive-through road-graph serviceable house: %s" % str(features))
+	if int(features.get("marketing_closest_distance", -1)) < 0:
+		return Result.failure("StrategyScorer should expose road-graph marketing distance: %s" % str(features))
 	return Result.success()
 
 static func _test_income_analyzer_detects_serviceable_inventory_gap(seed_val: int) -> Result:
@@ -352,6 +393,25 @@ static func _synthetic_marketing_observation() -> ObservationState:
 		},
 	}
 	return observation
+
+static func _apply_drive_through_source_case(state: GameState) -> Result:
+	if state == null:
+		return Result.failure("drive-through source case missing state")
+	var take := StateUpdaterClass.take_from_pool(state, "local_manager", 1)
+	if not take.ok:
+		return Result.failure("drive-through source case take local_manager failed: %s" % take.error)
+	var add := StateUpdaterClass.add_employee(state, 0, "local_manager", false)
+	if not add.ok:
+		return Result.failure("drive-through source case add local_manager failed: %s" % add.error)
+	var restaurants: Dictionary = state.map.get("restaurants", {})
+	var rest_0: Dictionary = restaurants.get("rest_0", {})
+	if rest_0.is_empty():
+		return Result.failure("drive-through source case missing rest_0")
+	rest_0["entrance_pos"] = Vector2i(1, 4)
+	restaurants["rest_0"] = rest_0
+	state.map["restaurants"] = restaurants
+	RoadGraphCacheClass.invalidate_road_graph(state)
+	return Result.success()
 
 static func _synthetic_income_observation() -> ObservationState:
 	var observation := ObservationState.new()

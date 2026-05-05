@@ -85,7 +85,9 @@ func _choose_command_with_options(
 		if not (macro_val is MacroAction):
 			continue
 		var macro: MacroAction = macro_val
-		var score_payload := StrategyScorerClass.score_macro(observation, macro, profile)
+		var score_payload := StrategyScorerClass.score_macro(observation, macro, profile, {
+			"source_state": generator_options.get("source_state", null),
+		})
 		var score := float(score_payload.get("score", -INF))
 		var features: Dictionary = Dictionary(score_payload.get("features", {})).duplicate(true)
 		var first_command: Command = macro.commands[0] if not macro.commands.is_empty() else null
