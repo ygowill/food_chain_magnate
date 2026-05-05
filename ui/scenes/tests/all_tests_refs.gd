@@ -124,6 +124,7 @@ const ObservationAdapterTestClass = preload("res://core/tests/ai/observation_ada
 const BoardAnalyzerTestClass = preload("res://core/tests/ai/board_analyzer_test.gd")
 const CandidateGeneratorTestClass = preload("res://core/tests/ai/candidate_generator_test.gd")
 const GreedySearchTestClass = preload("res://core/tests/ai/greedy_search_test.gd")
+const GreedyBotSmokeTestClass = preload("res://core/tests/ai/greedy_bot_smoke_test.gd")
 const LegalActionServiceTestClass = preload("res://core/tests/ai/legal_action_service_test.gd")
 const RandomLegalBotSmokeTestClass = preload("res://core/tests/ai/random_legal_bot_smoke_test.gd")
 const AiEngineForkTestClass = preload("res://core/tests/ai/ai_engine_fork_test.gd")

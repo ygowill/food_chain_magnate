@@ -12,7 +12,7 @@ func step(engine: GameEngine, player_id: int, bot, budget: TimeBudget = null) ->
 		return Result.failure("BotController.step: engine is null")
 	if bot == null:
 		return Result.failure("BotController.step: bot is null")
-	if not bot.has_method("choose_command"):
+	if not _is_supported_bot(bot):
 		return Result.failure("BotController.step: bot does not implement choose_command")
 
 	var observation_read := ObservationAdapterClass.observe_for_player(engine, player_id)
@@ -39,7 +39,7 @@ func step(engine: GameEngine, player_id: int, bot, budget: TimeBudget = null) ->
 
 	var phase_before := str(observation.phase)
 	var sub_phase_before := str(observation.sub_phase)
-	var decision: BotDecision = bot.choose_command(observation, context, legal_action_ids, validate_fn, budget)
+	var decision := _choose_command(engine, bot, observation, context, legal_action_ids, validate_fn, budget)
 	if decision == null:
 		return Result.failure("BotController.step: bot returned null decision")
 	if decision.is_failure():
@@ -65,6 +65,9 @@ func step(engine: GameEngine, player_id: int, bot, budget: TimeBudget = null) ->
 		"phase_after": str(state_after.phase) if state_after != null else "",
 		"sub_phase_after": str(state_after.sub_phase) if state_after != null else "",
 		"macro_action_id": decision.macro_action_id,
+		"score": decision.score,
+		"explanation": decision.explanation.duplicate(true),
+		"decision_trace": decision.trace.duplicate(true),
 	}
 	last_trace.append(trace_item)
 	return Result.success(trace_item)
@@ -91,7 +94,7 @@ func run_until(
 		if not bots_by_player.has(player_id):
 			return Result.failure("BotController.run_until: missing bot for player %d" % player_id)
 		var bot = bots_by_player[player_id]
-		if bot == null or not bot.has_method("choose_command"):
+		if not _is_supported_bot(bot):
 			return Result.failure("BotController.run_until: value for player %d is not a bot" % player_id)
 		var step_result := step(engine, player_id, bot, TimeBudget.start(budget_ms))
 		if not step_result.ok:
@@ -164,6 +167,26 @@ static func _make_decision_seed(engine: GameEngine, player_id: int) -> int:
 	if state == null:
 		return player_id
 	return int(state.round_number) * 100000 + int(engine.command_history.size()) * 100 + player_id
+
+static func _is_supported_bot(bot) -> bool:
+	if bot == null:
+		return false
+	return bot.has_method("choose_command") or bot.has_method("choose_command_with_engine")
+
+static func _choose_command(
+	engine: GameEngine,
+	bot,
+	observation: ObservationState,
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	validate_fn: Callable,
+	budget: TimeBudget
+) -> BotDecision:
+	if bot != null and bot.has_method("choose_command_with_engine"):
+		return bot.choose_command_with_engine(engine, observation, context, legal_action_ids, validate_fn, budget)
+	if bot != null and bot.has_method("choose_command"):
+		return bot.choose_command(observation, context, legal_action_ids, validate_fn, budget)
+	return null
 
 func _last_trace_slice(count: int) -> Array[Dictionary]:
 	var start := maxi(0, last_trace.size() - count)
