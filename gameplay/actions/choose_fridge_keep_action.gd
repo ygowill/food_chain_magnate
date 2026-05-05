@@ -287,9 +287,11 @@ static func _get_total_food_drink(inventory: Dictionary) -> int:
 static func _parse_keep_param(command: Command, inventory: Dictionary) -> Result:
 	if command == null:
 		return Result.failure("command 为空")
+	if not command.params.has("keep"):
+		return Result.failure("缺少参数: keep", Result.ErrorCode.MISSING_PARAMS)
 	var keep_val = command.params.get("keep", null)
 	if not (keep_val is Dictionary):
-		return Result.failure("keep 参数缺失或类型错误（期望 Dictionary）")
+		return Result.failure("keep 参数类型错误（期望 Dictionary）")
 	var keep_in: Dictionary = keep_val
 
 	var out: Dictionary = {}

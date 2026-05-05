@@ -9,6 +9,7 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 
 const DEFAULT_MAX_VALID_PER_ACTION := 12
 const WORKING_MANDATORY_ACTION_IDS := [
@@ -50,7 +51,7 @@ static func generate(
 		DefsClass.PHASE_PAYDAY:
 			_generate_payday(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action)
 		DefsClass.PHASE_CLEANUP:
-			_generate_cleanup(out, discarded, context, legal_action_ids, validate_command, max_valid_per_action)
+			_generate_cleanup(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action)
 		_:
 			_generate_phase_skip(out, discarded, context, legal_action_ids, validate_command, max_valid_per_action)
 
@@ -765,13 +766,15 @@ static func _generate_route_drinks(
 static func _generate_cleanup(
 	out: Array[MacroAction],
 	discarded: Array[String],
+	observation: ObservationState,
 	context: AiDecisionContext,
 	legal_action_ids: Array[String],
 	validate_command: Callable,
 	max_valid_per_action: int
 ) -> void:
 	if legal_action_ids.has("choose_fridge_keep"):
-		_append_valid_command(out, discarded, context, "choose_fridge_keep", {"keep": {}}, validate_command, "fridge_keep_none", ["cleanup"], 0.0, max_valid_per_action)
+		var keep := _build_fridge_keep(observation)
+		_append_valid_command(out, discarded, context, "choose_fridge_keep", {"keep": keep}, validate_command, "fridge_keep_inventory", ["cleanup"], 0.0, max_valid_per_action)
 	else:
 		_generate_phase_skip(out, discarded, context, legal_action_ids, validate_command, max_valid_per_action)
 
@@ -1081,6 +1084,78 @@ static func _can_employee_be_fired(employee_id: String) -> bool:
 		return false
 	var def: EmployeeDef = def_val
 	return bool(def.can_be_fired)
+
+static func _build_fridge_keep(observation: ObservationState) -> Dictionary:
+	if observation == null:
+		return {}
+	var inventory_val = observation.own_player.get("inventory", {})
+	if not (inventory_val is Dictionary):
+		return {}
+	var inventory: Dictionary = inventory_val
+	var milestones_val = observation.own_player.get("milestones", [])
+	if not (milestones_val is Array):
+		return {}
+	var fridge := _get_fridge_capacity_from_milestones(Array(milestones_val))
+	if not bool(fridge.get("has_fridge", false)):
+		return {}
+	var remaining := maxi(0, int(fridge.get("capacity", 0)))
+	if remaining <= 0:
+		return {}
+	var product_ids: Array[String] = []
+	for product_key in inventory.keys():
+		var product_id := str(product_key)
+		if product_id.is_empty() or not _is_storable_food_or_drink(product_id):
+			continue
+		if _read_non_negative_int(inventory.get(product_key, 0), 0) <= 0:
+			continue
+		product_ids.append(product_id)
+	product_ids.sort_custom(func(a: String, b: String) -> bool:
+		var amount_a := _read_non_negative_int(inventory.get(a, 0), 0)
+		var amount_b := _read_non_negative_int(inventory.get(b, 0), 0)
+		if amount_a != amount_b:
+			return amount_a > amount_b
+		return a < b
+	)
+	var keep := {}
+	for product_id in product_ids:
+		if remaining <= 0:
+			break
+		var available := _read_non_negative_int(inventory.get(product_id, 0), 0)
+		var amount := mini(available, remaining)
+		if amount <= 0:
+			continue
+		keep[product_id] = amount
+		remaining -= amount
+	return keep
+
+static func _get_fridge_capacity_from_milestones(milestones: Array) -> Dictionary:
+	var best_read := MilestoneEffectQueriesClass.max_non_negative_int_value(
+		milestones,
+		"gain_fridge",
+		"CandidateGenerator: ",
+		"own_player.milestones"
+	)
+	if not best_read.ok or not (best_read.value is Dictionary):
+		return {
+			"has_fridge": false,
+			"capacity": 0,
+		}
+	var best: Dictionary = best_read.value
+	return {
+		"has_fridge": bool(best.get("found", false)),
+		"capacity": int(best.get("value", 0)),
+	}
+
+static func _is_storable_food_or_drink(product_id: String) -> bool:
+	if product_id.is_empty() or not ProductRegistryClass.is_loaded():
+		return false
+	var def_val = ProductRegistryClass.get_def(product_id)
+	if def_val == null or not (def_val is ProductDef):
+		return false
+	var def: ProductDef = def_val
+	if def.has_tag("no_storage"):
+		return false
+	return def.has_tag("food") or def.has_tag("drink")
 
 static func _has_estimated_payday_salary_shortfall(observation: ObservationState) -> bool:
 	if observation == null:

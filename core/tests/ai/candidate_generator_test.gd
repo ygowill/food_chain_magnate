@@ -49,13 +49,16 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var payday := _test_payday_fire_candidates_are_valid(seed_val)
 	if not payday.ok:
 		return payday
+	var cleanup := _test_cleanup_fridge_keep_candidate_is_valid(seed_val)
+	if not cleanup.ok:
+		return cleanup
 	var restructuring := _test_restructuring_direct_assignment_candidate(seed_val)
 	if not restructuring.ok:
 		return restructuring
 	var report := _test_restructuring_report_assignment_candidate(seed_val)
 	if not report.ok:
 		return report
-	return Result.success({"cases": 14})
+	return Result.success({"cases": 15})
 
 static func _test_reserve_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
@@ -451,6 +454,50 @@ static func _test_payday_fire_candidates_are_valid(seed_val: int) -> Result:
 	var pool_after := int(engine.get_state().employee_pool.get("burger_cook", 0))
 	if pool_after != pool_before + 1:
 		return Result.failure("fire candidate should return employee to pool: before=%d after=%d" % [pool_before, pool_after])
+	return Result.success()
+
+static func _test_cleanup_fridge_keep_candidate_is_valid(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.phase = DefsClass.PHASE_CLEANUP
+	state.sub_phase = ""
+	state.turn_order = [0, 1]
+	state.current_player_index = 0
+	state.players[0]["milestones"].append("first_throw_away")
+	state.players[0]["inventory"]["beer"] = 16
+	state.round_state["cleanup"] = {
+		"fridge_choice_pending": true,
+		"pending_choice_kind": "fridge",
+	}
+	state.round_state["pending_phase_actions"] = {
+		DefsClass.PHASE_CLEANUP: [
+			{"kind": "fridge_keep", "player_id": 0},
+		],
+	}
+
+	var payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	if not _has_action(candidates, "choose_fridge_keep"):
+		return Result.failure("Cleanup should generate choose_fridge_keep candidate: %s" % str(_macro_debug(candidates)))
+	var command := _first_command_for_action(candidates, "choose_fridge_keep")
+	if command == null:
+		return Result.failure("missing choose_fridge_keep command")
+	var keep: Dictionary = Dictionary(command.params.get("keep", {}))
+	if int(keep.get("beer", 0)) != 10:
+		return Result.failure("fridge keep candidate should keep beer up to capacity 10, actual: %s" % str(command.params))
+	var executed := engine.execute_command(command)
+	if not executed.ok:
+		return Result.failure("choose_fridge_keep candidate failed on execute: %s" % executed.error)
+	var beer_after := int(engine.get_state().players[0].get("inventory", {}).get("beer", 0))
+	if beer_after != 10:
+		return Result.failure("choose_fridge_keep should preserve 10 beer after execute, actual: %d" % beer_after)
 	return Result.success()
 
 static func _test_restructuring_direct_assignment_candidate(seed_val: int) -> Result:
