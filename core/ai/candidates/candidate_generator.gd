@@ -335,6 +335,8 @@ static func _generate_working(
 		DefsClass.SUB_PHASE_PLACE_RESTAURANTS:
 			if legal_action_ids.has("place_restaurant"):
 				_generate_restaurant_placements(out, discarded, observation, context, validate_command, max_valid_per_action, "working_restaurant")
+			if legal_action_ids.has("move_restaurant"):
+				_generate_restaurant_moves(out, discarded, observation, context, validate_command, max_valid_per_action)
 
 	if legal_action_ids.has(ActionIdsClass.SKIP_SUB_PHASE):
 		_append_valid_command(out, discarded, context, ActionIdsClass.SKIP_SUB_PHASE, {}, validate_command, "working_skip_sub_phase", ["working", "fallback"], -0.1, max_valid_per_action)
@@ -402,8 +404,57 @@ static func _generate_house_placements(
 					"place_house_%d_%d_%d_%d" % [house_number, x, y, int(rotation)],
 					["working", "place_house"],
 					0.0,
-					max_valid_per_action
-				)
+				max_valid_per_action
+			)
+
+static func _generate_restaurant_moves(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	var grid_size := _read_grid_size(observation.map_public)
+	if grid_size.x <= 0 or grid_size.y <= 0:
+		discarded.append("move_restaurant: invalid grid_size %s" % str(grid_size))
+		return
+	var restaurants_val = observation.map_public.get("restaurants", {})
+	if not (restaurants_val is Dictionary):
+		discarded.append("move_restaurant: map_public.restaurants is not Dictionary")
+		return
+	var restaurants: Dictionary = restaurants_val
+	var restaurant_ids := _sorted_owned_restaurant_ids(observation.own_player, restaurants)
+	if restaurant_ids.is_empty():
+		discarded.append("move_restaurant: own player has no restaurants")
+		return
+	var rotations := [0, 90, 180, 270]
+	for restaurant_id in restaurant_ids:
+		var rest: Dictionary = restaurants.get(restaurant_id, {})
+		var current_anchor := _read_vector2i(rest.get("anchor_pos", Vector2i(-9999, -9999)))
+		for y in range(grid_size.y):
+			for x in range(grid_size.x):
+				if Vector2i(x, y) == current_anchor:
+					continue
+				for rotation in rotations:
+					if _count_action(out, "move_restaurant") >= max_valid_per_action:
+						return
+					_append_valid_command(
+						out,
+						discarded,
+						context,
+						"move_restaurant",
+						{
+							"restaurant_id": restaurant_id,
+							"position": [x, y],
+							"rotation": int(rotation),
+						},
+						validate_command,
+						"move_restaurant_%s_%d_%d_%d" % [restaurant_id, x, y, int(rotation)],
+						["working", "move_restaurant"],
+						0.0,
+						max_valid_per_action
+					)
 
 static func _generate_recruit(
 	out: Array[MacroAction],
@@ -792,6 +843,9 @@ static func _empty_direct_slots(structure: Array, ceo_slots: int) -> Array[int]:
 
 static func _read_grid_size(map_public: Dictionary) -> Vector2i:
 	var value = map_public.get("grid_size", Vector2i.ZERO)
+	return _read_vector2i(value)
+
+static func _read_vector2i(value) -> Vector2i:
 	if value is Vector2i:
 		return value
 	if value is Vector2:
@@ -804,6 +858,19 @@ static func _read_grid_size(map_public: Dictionary) -> Vector2i:
 		if arr.size() >= 2:
 			return Vector2i(int(arr[0]), int(arr[1]))
 	return Vector2i.ZERO
+
+static func _sorted_owned_restaurant_ids(player: Dictionary, restaurants: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	var ids_val = player.get("restaurants", [])
+	if not (ids_val is Array):
+		return out
+	for id_val in Array(ids_val):
+		var restaurant_id := str(id_val)
+		if restaurant_id.is_empty() or not restaurants.has(restaurant_id):
+			continue
+		out.append(restaurant_id)
+	out.sort()
+	return out
 
 static func _read_remaining_house_numbers(map_public: Dictionary) -> Array[int]:
 	var value = map_public.get("house_number_supply_remaining", [])

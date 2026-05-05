@@ -28,6 +28,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var restaurants := _test_working_place_restaurant_candidates_are_valid(seed_val)
 	if not restaurants.ok:
 		return restaurants
+	var move_restaurant := _test_working_move_restaurant_candidates_are_valid(seed_val)
+	if not move_restaurant.ok:
+		return move_restaurant
 	var payday := _test_payday_fire_candidates_are_valid(seed_val)
 	if not payday.ok:
 		return payday
@@ -37,7 +40,7 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var report := _test_restructuring_report_assignment_candidate(seed_val)
 	if not report.ok:
 		return report
-	return Result.success({"cases": 9})
+	return Result.success({"cases": 10})
 
 static func _test_reserve_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
@@ -205,6 +208,44 @@ static func _test_working_place_restaurant_candidates_are_valid(seed_val: int) -
 	var after_count := Dictionary(engine.get_state().map.get("restaurants", {})).size()
 	if after_count <= before_count:
 		return Result.failure("place_restaurant candidate should add an open restaurant")
+	return Result.success()
+
+static func _test_working_move_restaurant_candidates_are_valid(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var run_read := _run_random_bots_to_working(engine)
+	if not run_read.ok:
+		return run_read
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.sub_phase = DefsClass.SUB_PHASE_PLACE_RESTAURANTS
+	var actor := state.get_current_player_id()
+	var own_restaurants: Array = state.players[actor].get("restaurants", [])
+	if own_restaurants.is_empty():
+		return Result.failure("move_restaurant test requires an existing restaurant")
+	var restaurant_id := str(own_restaurants[0])
+	var before_anchor := _restaurant_anchor(state, restaurant_id)
+	state.players[actor]["employees"].append("regional_manager")
+	state.employee_pool["regional_manager"] = int(state.employee_pool.get("regional_manager", 0)) - 1
+
+	var payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	if not _has_action(candidates, "move_restaurant"):
+		return Result.failure("PlaceRestaurants should generate move_restaurant candidate: %s" % str(_macro_debug(candidates)))
+	var command := _first_command_for_action(candidates, "move_restaurant")
+	if command == null:
+		return Result.failure("missing move_restaurant command")
+	var executed := engine.execute_command(command)
+	if not executed.ok:
+		return Result.failure("move_restaurant candidate failed on execute: %s" % executed.error)
+	var after_anchor := _restaurant_anchor(engine.get_state(), restaurant_id)
+	if after_anchor == before_anchor:
+		return Result.failure("move_restaurant candidate should change restaurant anchor")
 	return Result.success()
 
 static func _test_payday_fire_candidates_are_valid(seed_val: int) -> Result:
@@ -448,6 +489,26 @@ static func _round_state_player_array(round_state: Dictionary, key: String, play
 	if value is Array:
 		return value
 	return []
+
+static func _restaurant_anchor(state: GameState, restaurant_id: String) -> Vector2i:
+	if state == null:
+		return Vector2i.ZERO
+	var restaurants_val = state.map.get("restaurants", {})
+	if not (restaurants_val is Dictionary):
+		return Vector2i.ZERO
+	var restaurants: Dictionary = restaurants_val
+	var rest_val = restaurants.get(restaurant_id, {})
+	if not (rest_val is Dictionary):
+		return Vector2i.ZERO
+	var value = Dictionary(rest_val).get("anchor_pos", Vector2i.ZERO)
+	if value is Vector2i:
+		return value
+	if value is Vector2:
+		return Vector2i(int(value.x), int(value.y))
+	if value is Array and Array(value).size() >= 2:
+		var arr: Array = value
+		return Vector2i(int(arr[0]), int(arr[1]))
+	return Vector2i.ZERO
 
 static func _count_action(candidates: Array, action_id: String) -> int:
 	var count := 0
