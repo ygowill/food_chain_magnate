@@ -19,13 +19,16 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var working := _test_working_recruit_candidates_are_valid_and_deterministic(seed_val)
 	if not working.ok:
 		return working
+	var mandatory := _test_working_mandatory_price_candidate(seed_val)
+	if not mandatory.ok:
+		return mandatory
 	var restructuring := _test_restructuring_direct_assignment_candidate(seed_val)
 	if not restructuring.ok:
 		return restructuring
 	var report := _test_restructuring_report_assignment_candidate(seed_val)
 	if not report.ok:
 		return report
-	return Result.success({"cases": 5})
+	return Result.success({"cases": 6})
 
 static func _test_reserve_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
@@ -94,6 +97,38 @@ static func _test_working_recruit_candidates_are_valid_and_deterministic(seed_va
 		return Result.failure("Working/Recruit candidates should include at least one recruit command: %s" % str(_macro_debug(first_candidates)))
 	if str(_macro_debug(first_candidates)) != str(_macro_debug(second_candidates)):
 		return Result.failure("candidate generation should be deterministic for same state and seed")
+	return Result.success()
+
+static func _test_working_mandatory_price_candidate(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var run_read := _run_random_bots_to_working(engine)
+	if not run_read.ok:
+		return run_read
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	var actor := state.get_current_player_id()
+	state.players[actor]["employees"].append("pricing_manager")
+	state.employee_pool["pricing_manager"] = int(state.employee_pool.get("pricing_manager", 0)) - 1
+
+	var payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	if not _has_action(candidates, "set_price"):
+		return Result.failure("Working should generate mandatory set_price candidate: %s" % str(_macro_debug(candidates)))
+	var command := _first_command_for_action(candidates, "set_price")
+	if command == null:
+		return Result.failure("missing set_price command")
+	var executed := engine.execute_command(command)
+	if not executed.ok:
+		return Result.failure("mandatory set_price candidate failed on execute: %s" % executed.error)
+	var completed := _round_state_player_array(engine.get_state().round_state, "mandatory_actions_completed", actor)
+	if not completed.has("set_price"):
+		return Result.failure("mandatory set_price should be marked completed, actual: %s" % str(completed))
 	return Result.success()
 
 static func _test_restructuring_direct_assignment_candidate(seed_val: int) -> Result:
@@ -268,6 +303,16 @@ static func _all_macros_single_action(candidates: Array, action_id: String) -> b
 static func _has_action(candidates: Array, action_id: String) -> bool:
 	return _count_action(candidates, action_id) > 0
 
+static func _first_command_for_action(candidates: Array, action_id: String) -> Command:
+	for macro_val in candidates:
+		if not (macro_val is MacroAction):
+			continue
+		var macro: MacroAction = macro_val
+		for command in macro.commands:
+			if command != null and command.action_id == action_id:
+				return command
+	return null
+
 static func _first_command_with_param(candidates: Array, action_id: String, param_key: String, param_value: Variant) -> Command:
 	for macro_val in candidates:
 		if not (macro_val is MacroAction):
@@ -279,6 +324,18 @@ static func _first_command_with_param(candidates: Array, action_id: String, para
 			if command.params.get(param_key, null) == param_value:
 				return command
 	return null
+
+static func _round_state_player_array(round_state: Dictionary, key: String, player_id: int) -> Array:
+	var dict_val = round_state.get(key, {})
+	if not (dict_val is Dictionary):
+		return []
+	var dict: Dictionary = dict_val
+	var value = dict.get(player_id, null)
+	if value == null:
+		value = dict.get(str(player_id), [])
+	if value is Array:
+		return value
+	return []
 
 static func _count_action(candidates: Array, action_id: String) -> int:
 	var count := 0

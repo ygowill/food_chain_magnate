@@ -5,6 +5,12 @@ const BasicCandidateHelpersClass = preload("res://core/ai/candidates/basic_candi
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
+const WORKING_MANDATORY_ACTION_IDS := [
+	"set_discount",
+	"set_luxury_price",
+	"set_price",
+]
+
 func choose_command(
 	observation: ObservationState,
 	context: AiDecisionContext,
@@ -75,6 +81,9 @@ func _choose_working(
 	legal_action_ids: Array[String],
 	validate_command: Callable
 ) -> BotDecision:
+	for action_id in WORKING_MANDATORY_ACTION_IDS:
+		if legal_action_ids.has(action_id):
+			return BasicCandidateHelpersClass.simple_command(context, action_id, {}, validate_command, "mandatory_%s" % action_id)
 	if legal_action_ids.has(ActionIdsClass.SKIP_SUB_PHASE):
 		return BasicCandidateHelpersClass.simple_command(context, ActionIdsClass.SKIP_SUB_PHASE, {}, validate_command, "working_skip_sub_phase")
 	if legal_action_ids.has(ActionIdsClass.SKIP):

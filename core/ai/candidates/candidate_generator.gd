@@ -8,6 +8,11 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 
 const DEFAULT_MAX_VALID_PER_ACTION := 12
+const WORKING_MANDATORY_ACTION_IDS := [
+	"set_discount",
+	"set_luxury_price",
+	"set_price",
+]
 
 static func generate(
 	observation: ObservationState,
@@ -308,6 +313,7 @@ static func _generate_working(
 	validate_command: Callable,
 	max_valid_per_action: int
 ) -> void:
+	_generate_working_mandatory_actions(out, discarded, context, legal_action_ids, validate_command, max_valid_per_action)
 	match str(observation.sub_phase):
 		DefsClass.SUB_PHASE_RECRUIT:
 			if legal_action_ids.has("recruit"):
@@ -326,6 +332,30 @@ static func _generate_working(
 		_append_valid_command(out, discarded, context, ActionIdsClass.SKIP_SUB_PHASE, {}, validate_command, "working_skip_sub_phase", ["working", "fallback"], -0.1, max_valid_per_action)
 	if legal_action_ids.has(ActionIdsClass.SKIP):
 		_append_valid_command(out, discarded, context, ActionIdsClass.SKIP, {}, validate_command, "working_skip", ["working", "fallback"], -0.1, max_valid_per_action)
+
+static func _generate_working_mandatory_actions(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	for action_id in WORKING_MANDATORY_ACTION_IDS:
+		if not legal_action_ids.has(action_id):
+			continue
+		_append_valid_command(
+			out,
+			discarded,
+			context,
+			action_id,
+			{},
+			validate_command,
+			"mandatory_%s" % action_id,
+			["working", "mandatory"],
+			0.0,
+			max_valid_per_action
+		)
 
 static func _generate_recruit(
 	out: Array[MacroAction],
