@@ -17,4 +17,12 @@ static func build_tests(_host) -> Array[Dictionary]:
 			"name": "RandomLegalBotSmokeTest",
 			"fn": func() -> Result: return TestRefs.RandomLegalBotSmokeTestClass.run(2, 12345),
 		},
+		{
+			"name": "AiEngineForkTest",
+			"fn": func() -> Result: return TestRefs.AiEngineForkTestClass.run(2, 12345),
+		},
+		{
+			"name": "ForwardSimulatorTest",
+			"fn": func() -> Result: return TestRefs.ForwardSimulatorTestClass.run(2, 12345),
+		},
 	]
