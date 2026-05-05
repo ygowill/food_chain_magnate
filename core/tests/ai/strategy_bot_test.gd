@@ -57,6 +57,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var product_gap_score := _test_strategy_scoring_targets_current_product_gap(seed_val)
 	if not product_gap_score.ok:
 		return product_gap_score
+	var product_amount_score := _test_strategy_scoring_values_supply_amount(seed_val)
+	if not product_amount_score.ok:
+		return product_amount_score
 	var product_overstock := _test_strategy_scoring_penalizes_product_overstock(seed_val)
 	if not product_overstock.ok:
 		return product_overstock
@@ -477,6 +480,51 @@ static func _test_strategy_scoring_targets_current_product_gap(seed_val: int) ->
 		return Result.failure("StrategyScorer should expose product_inventory_gap: %s" % str(features))
 	if int(features.get("product_serviceable_demand", 0)) != 2:
 		return Result.failure("StrategyScorer should expose product_serviceable_demand: %s" % str(features))
+	return Result.success()
+
+static func _test_strategy_scoring_values_supply_amount(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_income_observation()
+	var houses: Dictionary = Dictionary(observation.map_public.get("houses", {}))
+	var house_near: Dictionary = Dictionary(houses.get("house_near", {}))
+	house_near["demands"] = [
+		{"product": "burger"},
+		{"product": "burger"},
+		{"product": "burger"},
+		{"product": "burger"},
+		{"product": "burger"},
+		{"product": "burger"},
+	]
+	houses["house_near"] = house_near
+	observation.map_public["houses"] = houses
+	var cook_macro := MacroAction.create(
+		"produce_burger_cook",
+		[Command.create("produce_food", 0, {"employee_type": "burger_cook", "food_type": "burger"})],
+		0.0,
+		["working", "produce_food"],
+		{}
+	)
+	var chef_macro := MacroAction.create(
+		"produce_burger_chef",
+		[Command.create("produce_food", 0, {"employee_type": "burger_chef", "food_type": "burger"})],
+		0.0,
+		["working", "produce_food"],
+		{}
+	)
+	var cook_score: Dictionary = StrategyScorerClass.score_macro(observation, cook_macro, profile)
+	var chef_score: Dictionary = StrategyScorerClass.score_macro(observation, chef_macro, profile)
+	if float(chef_score.get("score", 0.0)) <= float(cook_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should value higher production amount when inventory gap is large: chef=%s cook=%s" % [str(chef_score), str(cook_score)])
+	var chef_features: Dictionary = Dictionary(chef_score.get("features", {}))
+	if int(chef_features.get("product_supply_expected_units", 0)) != 8:
+		return Result.failure("burger_chef should expose expected production amount 8: %s" % str(chef_features))
+	if int(chef_features.get("product_supply_covered_units", 0)) != 6:
+		return Result.failure("burger_chef should cap covered units by current gap: %s" % str(chef_features))
 	return Result.success()
 
 static func _test_strategy_scoring_penalizes_product_overstock(seed_val: int) -> Result:

@@ -75,7 +75,9 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			score += marketing_bonus
 		"produce_food", "procure_drinks":
 			var product_id2 := str(command.params.get("food_type", command.params.get("drink_type", "")))
-			var supply_bonus := _product_supply_action_value(product_id2, profile, income_analysis, features)
+			var expected_units := _expected_supply_units(observation, command)
+			var supply_bonus := _product_supply_action_value(product_id2, profile, income_analysis, features, expected_units)
+			features["product_supply_expected_units"] = expected_units
 			features["product_supply_action_value"] = supply_bonus
 			score += supply_bonus
 		"place_restaurant", "move_restaurant":
@@ -201,7 +203,7 @@ static func _product_pipeline_value(product_id: String, profile, income_analysis
 	features["product_can_supply"] = bool(product_payload.get("can_supply", false))
 	return float(product_payload.get("score", 0.0))
 
-static func _product_supply_action_value(product_id: String, profile, income_analysis: Dictionary, features: Dictionary) -> float:
+static func _product_supply_action_value(product_id: String, profile, income_analysis: Dictionary, features: Dictionary, expected_units: int = 1) -> float:
 	if product_id.is_empty():
 		return 0.0
 	var product_payload := StrategyIncomeAnalyzerClass.product_value(product_id, profile, income_analysis)
@@ -210,20 +212,55 @@ static func _product_supply_action_value(product_id: String, profile, income_ana
 	var inventory_units := int(product_payload.get("inventory_units", 0))
 	var inventory_gap := int(product_payload.get("inventory_gap", 0))
 	var can_supply := bool(product_payload.get("can_supply", false))
+	var supply_units := maxi(1, expected_units)
 	features["product_public_demand"] = public_demand
 	features["product_serviceable_demand"] = serviceable_demand
 	features["product_inventory_units"] = inventory_units
 	features["product_inventory_gap"] = inventory_gap
 	features["product_can_supply"] = can_supply
 	if inventory_gap > 0:
-		return float(inventory_gap) * 12.0 + float(serviceable_demand) * 3.0 + float(public_demand) + float(profile.product_priority(product_id)) * 0.5
+		var covered_units := mini(inventory_gap, supply_units)
+		var excess_units := maxi(0, supply_units - inventory_gap)
+		features["product_supply_covered_units"] = covered_units
+		features["product_supply_excess_units"] = excess_units
+		return float(covered_units) * 14.0 + float(serviceable_demand) * 3.0 + float(public_demand) + float(profile.product_priority(product_id)) * 0.5 - float(excess_units) * 3.0
 	if public_demand <= 0 and inventory_units <= 0:
 		return float(profile.product_priority(product_id)) * 0.6
 	var desired_buffer := public_demand + 1
 	if public_demand > 0 and inventory_units < desired_buffer:
-		return 4.0 + float(profile.product_priority(product_id)) * 0.25
+		var buffer_units := mini(supply_units, maxi(0, desired_buffer - inventory_units))
+		features["product_supply_buffer_units"] = buffer_units
+		return 4.0 + float(buffer_units) * 2.0 + float(profile.product_priority(product_id)) * 0.25
 	features["product_overstock_penalty"] = true
-	return -100.0 - float(maxi(0, inventory_units - desired_buffer)) * 8.0
+	return -100.0 - float(maxi(0, inventory_units + supply_units - desired_buffer)) * 8.0
+
+static func _expected_supply_units(observation: ObservationState, command: Command) -> int:
+	if command == null:
+		return 1
+	var action_id := str(command.action_id)
+	if action_id == "produce_food":
+		return _expected_food_units(str(command.params.get("employee_type", "")))
+	if action_id == "procure_drinks":
+		return _expected_drink_units(observation, command)
+	return 1
+
+static func _expected_food_units(employee_id: String) -> int:
+	if employee_id.is_empty() or not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(employee_id):
+		return 1
+	var def_val = EmployeeRegistryClass.get_def(employee_id)
+	if not (def_val is EmployeeDef):
+		return 1
+	var def: EmployeeDef = def_val
+	return maxi(1, int(def.produces_amount)) if not str(def.produces_food_type).is_empty() else 1
+
+static func _expected_drink_units(observation: ObservationState, command: Command) -> int:
+	var employee_id := str(command.params.get("employee_type", ""))
+	if employee_id == "errand_boy":
+		return 2 if _own_milestones(observation).has("first_errand_boy") else 1
+	var selected_val = command.params.get("selected_sources", [])
+	if selected_val is Array:
+		return maxi(1, Array(selected_val).size() * 2)
+	return 1
 
 static func _append_employee_income_features(features: Dictionary, observation: ObservationState, employee_id: String, income_analysis: Dictionary, profile, prefix: String) -> void:
 	var payload := StrategyIncomeAnalyzerClass.employee_value(observation, employee_id, profile, income_analysis)
@@ -554,6 +591,11 @@ static func _own_restaurant_count(observation: ObservationState) -> int:
 	if restaurants_val is Array:
 		return Array(restaurants_val).size()
 	return 0
+
+static func _own_milestones(observation: ObservationState) -> Array[String]:
+	if observation == null:
+		return []
+	return _sorted_unique_strings(observation.own_player.get("milestones", []))
 
 static func _min_house_distance_to_owned_restaurant(observation: ObservationState, house_id: String) -> int:
 	if observation == null or house_id.is_empty():
