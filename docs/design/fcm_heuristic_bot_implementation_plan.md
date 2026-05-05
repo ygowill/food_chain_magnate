@@ -226,6 +226,8 @@ data/
 tools/
   run_bot_selfplay.gd
   run_bot_selfplay.sh
+  run_bot_selfplay_matrix.gd
+  run_bot_selfplay_matrix.sh
 ```
 
 理由：
@@ -971,6 +973,7 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 - `DinnerPreview` 已用 `AiEngineFork` fork 当前 engine，通过真实 `execute_command()` 和 settlement hooks 推进到 Dinnertime，并在返回前恢复 source engine 的 registry bundle。
 - `DinnerPreviewGoldenTest` 已覆盖基础销售、花园收入、drive-through 入口点与 source 不变性/registry 恢复，比较 preview 与真实 Dinnertime report 的关键字段和库存消耗。
 - `tools/run_bot_selfplay.gd` / `tools/run_bot_selfplay.sh` 提供 Bot 自对弈入口，默认运行 StrategyBot，也可用 `--bot=random|greedy|strategy|osla|beam` 运行单一 bot，或用 `--bots=random,strategy` 这类 per-player 配置跑固定 matchup；输出每局终局摘要、action counts、trace tail、`bot_config`、`bot_ids` 与可选 JSONL。
+- `tools/run_bot_selfplay_matrix.gd` / `tools/run_bot_selfplay_matrix.sh` 在同一批 seed 下顺序运行多个 `--config=`（例如 `--config=strategy --config=osla --config=random,strategy`），合并 JSONL 并直接生成 summary，作为后续网格/随机调参的最小矩阵入口。
 - `tools/summarize_bot_selfplay.gd` / `tools/summarize_bot_selfplay.sh` 读取一个或多个 selfplay JSONL，按 bot/matchup 汇总成功率、平均回合/步数/命令数、action totals、每玩家现金/员工/库存/里程碑/餐厅的 avg/min/max，并输出人类可读摘要与 compact JSON，供 Strategy/OSLA/Beam/MCTS 固定 seed 对照使用。
 
 这仍只是策略框架和 smoke 验证，还不是完整强度版本。后续应增加更多 `data/bots/*.json` 难度配置，并把阶段策略拆成更小的可测试组件。餐厅放置/移动在 StrategyBot 的 engine 路径下已经优先使用 road graph，但没有 source state 的离线评分仍会保留 anchor 回退。
@@ -1196,6 +1199,7 @@ Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[f
 ### Phase 6：自对弈调参
 
 - `tools/run_bot_selfplay.gd` / `tools/run_bot_selfplay.sh`
+- `tools/run_bot_selfplay_matrix.gd` / `tools/run_bot_selfplay_matrix.sh`
 - 输出 JSONL match logs。
 - `tools/summarize_bot_selfplay.gd` / `tools/summarize_bot_selfplay.sh`
 - 汇总固定 seed 矩阵的成功率、行动分布、回合/步数/命令数和每玩家资源趋势。

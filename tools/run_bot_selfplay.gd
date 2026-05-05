@@ -422,9 +422,14 @@ static func _parse_args(args: Array[String]) -> Result:
 			var value := arg.trim_prefix("--bots=").strip_edges()
 			if value.is_empty():
 				return Result.failure("--bots cannot be empty")
+			if value.begins_with(",") or value.ends_with(",") or value.contains(",,"):
+				return Result.failure("--bots cannot contain empty bot ids")
 			var bot_ids: Array[String] = []
-			for part in value.split(",", false):
-				bot_ids.append(str(part).strip_edges())
+			for part in value.split(",", true):
+				var bot_id := str(part).strip_edges()
+				if bot_id.is_empty():
+					return Result.failure("--bots cannot contain empty bot ids")
+				bot_ids.append(bot_id)
 			options["bot_ids"] = bot_ids
 			options["explicit_bot_ids"] = true
 		elif arg.begins_with("--output-jsonl="):

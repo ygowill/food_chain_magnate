@@ -35,6 +35,9 @@ static func _test_parse_mixed_bot_args() -> Result:
 	var conflict := SelfplayToolClass._parse_args(["--bot=strategy", "--bots=random,strategy"])
 	if conflict.ok:
 		return Result.failure("--bot and --bots conflict should fail")
+	var empty_bot := SelfplayToolClass._parse_args(["--bots=random,"])
+	if empty_bot.ok:
+		return Result.failure("--bots should reject empty bot ids")
 	return Result.success()
 
 static func _test_run_mixed_bot_config() -> Result:
