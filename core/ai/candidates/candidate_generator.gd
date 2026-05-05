@@ -330,6 +330,9 @@ static func _generate_working(
 		DefsClass.SUB_PHASE_PLACE_HOUSES:
 			if legal_action_ids.has("place_house"):
 				_generate_house_placements(out, discarded, observation, context, validate_command, max_valid_per_action)
+		DefsClass.SUB_PHASE_PLACE_RESTAURANTS:
+			if legal_action_ids.has("place_restaurant"):
+				_generate_restaurant_placements(out, discarded, observation, context, validate_command, max_valid_per_action, "working_restaurant")
 
 	if legal_action_ids.has(ActionIdsClass.SKIP_SUB_PHASE):
 		_append_valid_command(out, discarded, context, ActionIdsClass.SKIP_SUB_PHASE, {}, validate_command, "working_skip_sub_phase", ["working", "fallback"], -0.1, max_valid_per_action)
