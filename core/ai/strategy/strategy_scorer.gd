@@ -3,6 +3,7 @@ extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_income_analyzer.gd")
 
 static func score_macro(observation: ObservationState, macro: MacroAction, profile) -> Dictionary:
 	if observation == null or macro == null or profile == null or macro.commands.is_empty():
@@ -12,34 +13,42 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 		return {"score": -INF, "features": {}}
 
 	var action_id := str(command.action_id)
+	var income_analysis := StrategyIncomeAnalyzerClass.analyze(observation, profile)
 	var features := {
 		"action_weight": profile.action_weight(action_id),
 		"candidate_prior": float(macro.prior_score),
+		"income_total_public_demand": int(income_analysis.get("total_public_demand", 0)),
+		"income_total_inventory_gap": int(income_analysis.get("total_inventory_gap", 0)),
 	}
 	var score := float(features["action_weight"]) + float(macro.prior_score)
 
 	match action_id:
 		"recruit":
 			var employee_id := str(command.params.get("employee_type", ""))
-			var bonus := _employee_strategy_value(observation, employee_id, profile)
+			var bonus := _employee_strategy_value(observation, employee_id, profile, income_analysis)
 			features["employee_value"] = bonus
+			_append_employee_income_features(features, observation, employee_id, income_analysis, profile, "recruit")
 			score += bonus
 		"train":
 			var from_employee := str(command.params.get("from_employee", ""))
 			var to_employee := str(command.params.get("to_employee", ""))
-			var train_bonus: float = float(profile.employee_priority(to_employee)) * 2.0 + maxf(0.0, float(profile.employee_priority(to_employee)) - float(profile.employee_priority(from_employee)))
+			var target_value := StrategyIncomeAnalyzerClass.employee_value(observation, to_employee, profile, income_analysis)
+			var train_bonus: float = float(target_value.get("score", 0.0)) * 1.2 + maxf(0.0, float(profile.employee_priority(to_employee)) - float(profile.employee_priority(from_employee)))
 			features["train_value"] = train_bonus
+			features["train_target_income_value"] = float(target_value.get("score", 0.0))
+			features["train_target_products"] = Array(target_value.get("target_products", [])).duplicate()
 			score += train_bonus
 		"set_company_structure_direct", "set_company_structure_report", "restructure_employee":
 			var employee_id2 := str(command.params.get("employee_id", ""))
-			var structure_bonus := _employee_strategy_value(observation, employee_id2, profile)
+			var structure_bonus := _employee_strategy_value(observation, employee_id2, profile, income_analysis)
 			features["structure_employee_value"] = structure_bonus
+			_append_employee_income_features(features, observation, employee_id2, income_analysis, profile, "structure")
 			score += structure_bonus
 		"initiate_marketing":
 			var product_id := str(command.params.get("product", ""))
 			var affected_ids := _affected_house_ids(macro)
 			var affected_count := affected_ids.size()
-			var pipeline_value := _product_pipeline_value(observation, product_id, profile)
+			var pipeline_value := _product_pipeline_value(product_id, profile, income_analysis, features)
 			var service_features := _marketing_service_features(observation, affected_ids, product_id)
 			var marketing_bonus := _marketing_value_from_features(affected_count, pipeline_value, service_features)
 			features["affected_houses"] = affected_count
@@ -54,7 +63,7 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			score += marketing_bonus
 		"produce_food", "procure_drinks":
 			var product_id2 := str(command.params.get("food_type", command.params.get("drink_type", "")))
-			var pipeline_bonus := _product_pipeline_value(observation, product_id2, profile)
+			var pipeline_bonus := _product_pipeline_value(product_id2, profile, income_analysis, features)
 			features["product_pipeline_value"] = pipeline_bonus
 			score += pipeline_bonus
 		"place_restaurant":
@@ -76,10 +85,11 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 		"features": features,
 	}
 
-static func _employee_strategy_value(observation: ObservationState, employee_id: String, profile) -> float:
+static func _employee_strategy_value(observation: ObservationState, employee_id: String, profile, income_analysis: Dictionary) -> float:
 	if employee_id.is_empty():
 		return 0.0
-	var value: float = float(profile.employee_priority(employee_id))
+	var income_value := StrategyIncomeAnalyzerClass.employee_value(observation, employee_id, profile, income_analysis)
+	var value: float = float(income_value.get("score", profile.employee_priority(employee_id)))
 	var role := _employee_role(employee_id)
 	if role == "produce_food" and not _owns_role(observation, "produce_food"):
 		value += 8.0
@@ -93,20 +103,22 @@ static func _employee_strategy_value(observation: ObservationState, employee_id:
 		value += 3.0
 	return value
 
-static func _product_pipeline_value(observation: ObservationState, product_id: String, profile) -> float:
+static func _product_pipeline_value(product_id: String, profile, income_analysis: Dictionary, features: Dictionary) -> float:
 	if product_id.is_empty():
 		return 0.0
-	var demand := _public_demand_count_for_product(observation, product_id)
-	var inventory := _inventory_count(observation, product_id)
-	var value: float = float(profile.product_priority(product_id))
-	value += float(demand) * 4.0
-	if demand > 0 and inventory < demand:
-		value += float(demand - inventory) * 3.0
-	elif inventory <= 0:
-		value += 1.0
-	if _can_supply_product(observation, product_id):
-		value += 2.0
-	return value
+	var product_payload := StrategyIncomeAnalyzerClass.product_value(product_id, profile, income_analysis)
+	features["product_public_demand"] = int(product_payload.get("public_demand", 0))
+	features["product_serviceable_demand"] = int(product_payload.get("serviceable_demand", 0))
+	features["product_inventory_units"] = int(product_payload.get("inventory_units", 0))
+	features["product_inventory_gap"] = int(product_payload.get("inventory_gap", 0))
+	features["product_can_supply"] = bool(product_payload.get("can_supply", false))
+	return float(product_payload.get("score", 0.0))
+
+static func _append_employee_income_features(features: Dictionary, observation: ObservationState, employee_id: String, income_analysis: Dictionary, profile, prefix: String) -> void:
+	var payload := StrategyIncomeAnalyzerClass.employee_value(observation, employee_id, profile, income_analysis)
+	features["%s_income_employee_value" % prefix] = float(payload.get("score", 0.0))
+	features["%s_income_employee_role" % prefix] = str(payload.get("role", ""))
+	features["%s_target_products" % prefix] = Array(payload.get("target_products", [])).duplicate()
 
 static func _affected_house_ids(macro: MacroAction) -> Array[String]:
 	var out: Array[String] = []

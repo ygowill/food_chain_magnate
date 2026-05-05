@@ -1,0 +1,391 @@
+class_name StrategyIncomeAnalyzer
+extends RefCounted
+
+const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+
+static func analyze(observation: ObservationState, profile) -> Dictionary:
+	var products := {}
+	var total_public_demand := 0
+	var total_serviceable_demand := 0
+	var total_inventory_gap := 0
+	for product_id in _known_product_ids(observation, profile):
+		var demand := _public_demand_count_for_product(observation, product_id)
+		var serviceable := _serviceable_demand_count_for_product(observation, product_id)
+		var inventory := _inventory_count(observation, product_id)
+		var gap := maxi(0, demand - inventory)
+		var can_supply := _can_supply_product(observation, product_id)
+		var value := _product_value_from_parts(product_id, demand, serviceable, inventory, gap, can_supply, profile)
+		products[product_id] = {
+			"public_demand": demand,
+			"serviceable_demand": serviceable,
+			"inventory_units": inventory,
+			"inventory_gap": gap,
+			"can_supply": can_supply,
+			"is_drink": _is_drink(product_id),
+			"value": value,
+		}
+		total_public_demand += demand
+		total_serviceable_demand += serviceable
+		total_inventory_gap += gap
+	return {
+		"products": products,
+		"total_public_demand": total_public_demand,
+		"total_serviceable_demand": total_serviceable_demand,
+		"total_inventory_gap": total_inventory_gap,
+		"own_restaurants": _own_restaurant_count(observation),
+		"has_food_supply": _has_supply_kind(observation, false),
+		"has_drink_supply": _has_supply_kind(observation, true),
+	}
+
+static func product_value(product_id: String, profile, income_analysis: Dictionary) -> Dictionary:
+	var products: Dictionary = Dictionary(income_analysis.get("products", {}))
+	var product_info: Dictionary = Dictionary(products.get(product_id, {}))
+	var priority := _profile_product_priority(profile, product_id)
+	if product_info.is_empty():
+		return {
+			"score": priority,
+			"public_demand": 0,
+			"serviceable_demand": 0,
+			"inventory_units": 0,
+			"inventory_gap": 0,
+			"can_supply": false,
+		}
+	return {
+		"score": float(product_info.get("value", priority)),
+		"public_demand": int(product_info.get("public_demand", 0)),
+		"serviceable_demand": int(product_info.get("serviceable_demand", 0)),
+		"inventory_units": int(product_info.get("inventory_units", 0)),
+		"inventory_gap": int(product_info.get("inventory_gap", 0)),
+		"can_supply": bool(product_info.get("can_supply", false)),
+	}
+
+static func employee_value(observation: ObservationState, employee_id: String, profile, income_analysis: Dictionary) -> Dictionary:
+	if employee_id.is_empty():
+		return {"score": 0.0, "role": "", "target_products": []}
+	if not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(employee_id):
+		return {"score": _profile_employee_priority(profile, employee_id), "role": "", "target_products": []}
+	var def_val = EmployeeRegistryClass.get_def(employee_id)
+	if not (def_val is EmployeeDef):
+		return {"score": _profile_employee_priority(profile, employee_id), "role": "", "target_products": []}
+	var def: EmployeeDef = def_val
+	var role := str(def.role)
+	var score := _profile_employee_priority(profile, employee_id)
+	var target_products: Array[String] = []
+	var products: Dictionary = Dictionary(income_analysis.get("products", {}))
+	match role:
+		"produce_food":
+			for product_id in def.get_production_food_options():
+				var product_score := _employee_product_score(product_id, products, profile)
+				if product_score > 0.0:
+					target_products.append(product_id)
+				score += product_score
+			if not _owns_role(observation, "produce_food"):
+				score += 4.0
+		"procure_drink":
+			for product_id in _drink_product_ids(products):
+				var product_score2 := _employee_product_score(product_id, products, profile)
+				if product_score2 > 0.0:
+					target_products.append(product_id)
+				score += product_score2 * 0.85
+			if not bool(income_analysis.get("has_drink_supply", false)):
+				score += 4.0
+		"marketing":
+			var marketing_supply_value := _best_marketable_product_score(products, profile)
+			score += marketing_supply_value * 0.45
+			if int(income_analysis.get("own_restaurants", 0)) > 0:
+				score += 2.0
+			if not _owns_role(observation, "marketing"):
+				score += 3.0
+		"new_shop":
+			if int(income_analysis.get("own_restaurants", 0)) <= 0:
+				score += 10.0
+			elif int(income_analysis.get("total_public_demand", 0)) > int(income_analysis.get("total_serviceable_demand", 0)):
+				score += 4.0
+		"recruit_train":
+			if _has_trainable_reserve_employee(observation):
+				score += 4.0
+		"price":
+			if int(income_analysis.get("total_serviceable_demand", 0)) > 0:
+				score += 2.0
+	return {
+		"score": score,
+		"role": role,
+		"target_products": target_products,
+	}
+
+static func _product_value_from_parts(product_id: String, demand: int, serviceable: int, inventory: int, gap: int, can_supply: bool, profile) -> float:
+	var value := _profile_product_priority(profile, product_id)
+	value += float(demand) * 3.0
+	value += float(serviceable) * 4.0
+	value += float(gap) * 5.0
+	if inventory > 0:
+		value += float(mini(inventory, demand)) * 2.0
+	if can_supply:
+		value += 2.0
+	return value
+
+static func _employee_product_score(product_id: String, products: Dictionary, profile) -> float:
+	var info: Dictionary = Dictionary(products.get(product_id, {}))
+	var priority := _profile_product_priority(profile, product_id)
+	if info.is_empty():
+		return priority * 0.4
+	var demand := int(info.get("public_demand", 0))
+	var serviceable := int(info.get("serviceable_demand", 0))
+	var gap := int(info.get("inventory_gap", 0))
+	var value := priority * 0.5
+	value += float(gap) * 5.0
+	value += float(serviceable) * 3.0
+	value += float(maxi(0, demand - serviceable)) * 1.5
+	return value
+
+static func _best_marketable_product_score(products: Dictionary, profile) -> float:
+	var best := 0.0
+	for product_id_val in products.keys():
+		var product_id := str(product_id_val)
+		var info: Dictionary = Dictionary(products.get(product_id, {}))
+		var value := _profile_product_priority(profile, product_id)
+		value += float(info.get("inventory_units", 0)) * 1.5
+		if bool(info.get("can_supply", false)):
+			value += 2.0
+		best = maxf(best, value)
+	return best
+
+static func _known_product_ids(observation: ObservationState, profile) -> Array[String]:
+	var out: Array[String] = []
+	if ProductRegistryClass.is_loaded():
+		for product_id in ProductRegistryClass.get_all_ids():
+			_append_unique(out, product_id)
+	if profile != null and profile.product_priorities is Dictionary:
+		for product_id_val in Dictionary(profile.product_priorities).keys():
+			_append_unique(out, str(product_id_val))
+	if observation != null:
+		var inventory_val = observation.own_player.get("inventory", {})
+		if inventory_val is Dictionary:
+			for product_id_val2 in Dictionary(inventory_val).keys():
+				_append_unique(out, str(product_id_val2))
+		var houses_val = observation.map_public.get("houses", {})
+		if houses_val is Dictionary:
+			for house_val in Dictionary(houses_val).values():
+				if not (house_val is Dictionary):
+					continue
+				var demands_val = Dictionary(house_val).get("demands", [])
+				if not (demands_val is Array):
+					continue
+				for demand_val in Array(demands_val):
+					if demand_val is Dictionary:
+						_append_unique(out, str(Dictionary(demand_val).get("product", "")))
+	out.sort()
+	return out
+
+static func _public_demand_count_for_product(observation: ObservationState, product_id: String) -> int:
+	if observation == null or product_id.is_empty():
+		return 0
+	var houses_val = observation.map_public.get("houses", {})
+	if not (houses_val is Dictionary):
+		return 0
+	var count := 0
+	for house_val in Dictionary(houses_val).values():
+		if not (house_val is Dictionary):
+			continue
+		var demands_val = Dictionary(house_val).get("demands", [])
+		if not (demands_val is Array):
+			continue
+		for demand_val in Array(demands_val):
+			if demand_val is Dictionary and str(Dictionary(demand_val).get("product", "")) == product_id:
+				count += 1
+	return count
+
+static func _serviceable_demand_count_for_product(observation: ObservationState, product_id: String) -> int:
+	if observation == null or product_id.is_empty():
+		return 0
+	var houses_val = observation.map_public.get("houses", {})
+	if not (houses_val is Dictionary):
+		return 0
+	var count := 0
+	for house_id_val in Dictionary(houses_val).keys():
+		var house_id := str(house_id_val)
+		if _min_house_distance_to_owned_restaurant(observation, house_id) < 0:
+			continue
+		var house_val = Dictionary(houses_val).get(house_id_val, null)
+		if not (house_val is Dictionary):
+			continue
+		var demands_val = Dictionary(house_val).get("demands", [])
+		if not (demands_val is Array):
+			continue
+		for demand_val in Array(demands_val):
+			if demand_val is Dictionary and str(Dictionary(demand_val).get("product", "")) == product_id:
+				count += 1
+	return count
+
+static func _inventory_count(observation: ObservationState, product_id: String) -> int:
+	if observation == null or product_id.is_empty():
+		return 0
+	var inventory_val = observation.own_player.get("inventory", {})
+	if not (inventory_val is Dictionary):
+		return 0
+	return maxi(0, int(Dictionary(inventory_val).get(product_id, 0)))
+
+static func _can_supply_product(observation: ObservationState, product_id: String) -> bool:
+	if observation == null or product_id.is_empty() or not EmployeeRegistryClass.is_loaded():
+		return false
+	var is_drink := _is_drink(product_id)
+	for employee_id in _owned_employee_ids(observation.own_player):
+		if not EmployeeRegistryClass.has(employee_id):
+			continue
+		var def_val = EmployeeRegistryClass.get_def(employee_id)
+		if not (def_val is EmployeeDef):
+			continue
+		var def: EmployeeDef = def_val
+		if def.can_produce() and def.get_production_food_options().has(product_id):
+			return true
+		if is_drink and (def.can_procure() or employee_id == "errand_boy"):
+			return true
+	return false
+
+static func _has_supply_kind(observation: ObservationState, drink: bool) -> bool:
+	if observation == null or not EmployeeRegistryClass.is_loaded():
+		return false
+	for employee_id in _owned_employee_ids(observation.own_player):
+		if not EmployeeRegistryClass.has(employee_id):
+			continue
+		var def_val = EmployeeRegistryClass.get_def(employee_id)
+		if not (def_val is EmployeeDef):
+			continue
+		var def: EmployeeDef = def_val
+		if drink and def.can_procure():
+			return true
+		if not drink and def.can_produce():
+			return true
+	return false
+
+static func _owned_employee_ids(player: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for key in ["employees", "reserve_employees", "busy_marketers"]:
+		var employees_val = player.get(key, [])
+		if not (employees_val is Array):
+			continue
+		for employee_val in Array(employees_val):
+			var employee_id := str(employee_val)
+			if not employee_id.is_empty() and not out.has(employee_id):
+				out.append(employee_id)
+	return out
+
+static func _owns_role(observation: ObservationState, role: String) -> bool:
+	if observation == null or role.is_empty() or not EmployeeRegistryClass.is_loaded():
+		return false
+	for employee_id in _owned_employee_ids(observation.own_player):
+		if not EmployeeRegistryClass.has(employee_id):
+			continue
+		var def_val = EmployeeRegistryClass.get_def(employee_id)
+		if def_val is EmployeeDef and str((def_val as EmployeeDef).role) == role:
+			return true
+	return false
+
+static func _has_trainable_reserve_employee(observation: ObservationState) -> bool:
+	if observation == null or not EmployeeRegistryClass.is_loaded():
+		return false
+	var reserve_val = observation.own_player.get("reserve_employees", [])
+	if not (reserve_val is Array):
+		return false
+	for employee_val in Array(reserve_val):
+		var employee_id := str(employee_val)
+		if employee_id.is_empty() or not EmployeeRegistryClass.has(employee_id):
+			continue
+		var def_val = EmployeeRegistryClass.get_def(employee_id)
+		if def_val is EmployeeDef and not (def_val as EmployeeDef).train_to.is_empty():
+			return true
+	return false
+
+static func _drink_product_ids(products: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for product_id_val in products.keys():
+		var product_id := str(product_id_val)
+		if _is_drink(product_id):
+			out.append(product_id)
+	out.sort()
+	return out
+
+static func _is_drink(product_id: String) -> bool:
+	if product_id.is_empty():
+		return false
+	if ProductRegistryClass.is_loaded() and ProductRegistryClass.has(product_id):
+		return ProductRegistryClass.is_drink(product_id)
+	return product_id == "beer" or product_id == "soda" or product_id == "lemonade"
+
+static func _own_restaurant_count(observation: ObservationState) -> int:
+	if observation == null:
+		return 0
+	var restaurants_val = observation.own_player.get("restaurants", [])
+	if restaurants_val is Array:
+		return Array(restaurants_val).size()
+	return 0
+
+static func _min_house_distance_to_owned_restaurant(observation: ObservationState, house_id: String) -> int:
+	if observation == null or house_id.is_empty():
+		return -1
+	var houses_val = observation.map_public.get("houses", {})
+	if not (houses_val is Dictionary):
+		return -1
+	var houses: Dictionary = houses_val
+	var house_val = houses.get(house_id, null)
+	if not (house_val is Dictionary):
+		return -1
+	var house_anchor := _read_vector2i(Dictionary(house_val).get("anchor_pos", Vector2i.ZERO))
+	var restaurants_val = observation.map_public.get("restaurants", {})
+	if not (restaurants_val is Dictionary):
+		return -1
+	var restaurants: Dictionary = restaurants_val
+	var own_ids := _sorted_unique_strings(observation.own_player.get("restaurants", []))
+	var best := 2147483647
+	for restaurant_id in own_ids:
+		var rest_val = restaurants.get(restaurant_id, null)
+		if not (rest_val is Dictionary):
+			continue
+		var rest: Dictionary = rest_val
+		var rest_anchor := _read_vector2i(rest.get("anchor_pos", Vector2i.ZERO))
+		var distance := absi(house_anchor.x - rest_anchor.x) + absi(house_anchor.y - rest_anchor.y)
+		best = mini(best, distance)
+	return best if best < 2147483647 else -1
+
+static func _read_vector2i(value) -> Vector2i:
+	if value is Vector2i:
+		return Vector2i(value)
+	if value is Vector2:
+		var v2: Vector2 = value
+		return Vector2i(int(v2.x), int(v2.y))
+	if value is Array:
+		var arr: Array = value
+		if arr.size() >= 2:
+			return Vector2i(int(arr[0]), int(arr[1]))
+	if value is Dictionary:
+		var dict: Dictionary = value
+		if dict.has("x") and dict.has("y"):
+			return Vector2i(int(dict.get("x", 0)), int(dict.get("y", 0)))
+	return Vector2i.ZERO
+
+static func _sorted_unique_strings(value) -> Array[String]:
+	var out: Array[String] = []
+	if value is Array:
+		for item in Array(value):
+			var text := str(item)
+			if not text.is_empty() and not out.has(text):
+				out.append(text)
+	out.sort()
+	return out
+
+static func _append_unique(out: Array[String], value: String) -> void:
+	var text := str(value)
+	if text.is_empty() or out.has(text):
+		return
+	out.append(text)
+
+static func _profile_product_priority(profile, product_id: String) -> float:
+	if profile == null:
+		return 1.0
+	return float(profile.product_priority(product_id))
+
+static func _profile_employee_priority(profile, employee_id: String) -> float:
+	if profile == null:
+		return 1.0
+	return float(profile.employee_priority(employee_id))
