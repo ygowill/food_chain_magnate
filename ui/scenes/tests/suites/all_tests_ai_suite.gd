@@ -9,4 +9,8 @@ static func build_tests(_host) -> Array[Dictionary]:
 			"name": "ObservationAdapterTest",
 			"fn": func() -> Result: return TestRefs.ObservationAdapterTestClass.run(2, 12345),
 		},
+		{
+			"name": "LegalActionServiceTest",
+			"fn": func() -> Result: return TestRefs.LegalActionServiceTestClass.run(2, 12345),
+		},
 	]
