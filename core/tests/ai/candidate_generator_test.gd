@@ -22,7 +22,10 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var restructuring := _test_restructuring_direct_assignment_candidate(seed_val)
 	if not restructuring.ok:
 		return restructuring
-	return Result.success({"cases": 4})
+	var report := _test_restructuring_report_assignment_candidate(seed_val)
+	if not report.ok:
+		return report
+	return Result.success({"cases": 5})
 
 static func _test_reserve_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
@@ -127,6 +130,52 @@ static func _test_restructuring_direct_assignment_candidate(seed_val: int) -> Re
 	var player: Dictionary = engine.get_state().players[0]
 	if not Array(player.get("employees", [])).has("kitchen_trainee"):
 		return Result.failure("direct assignment should move reserve employee to active employees")
+	return Result.success()
+
+static func _test_restructuring_report_assignment_candidate(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.phase = DefsClass.PHASE_RESTRUCTURING
+	state.sub_phase = ""
+	state.turn_order = [0, 1]
+	state.selection_order = [0, 1]
+	state.current_player_index = 0
+	state.round_state["restructuring"] = {
+		"finalized": false,
+	}
+	state.players[0]["employees"].append("management_trainee")
+	state.employee_pool["management_trainee"] = int(state.employee_pool.get("management_trainee", 0)) - 1
+	state.players[0]["reserve_employees"].append("kitchen_trainee")
+	state.employee_pool["kitchen_trainee"] = int(state.employee_pool.get("kitchen_trainee", 0)) - 1
+	state.players[0]["company_structure"]["structure"] = [
+		{"employee_id": "management_trainee", "reports": []},
+	]
+
+	var payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	if not _has_action(candidates, "set_company_structure_report"):
+		return Result.failure("restructuring should generate report assignment: %s" % str(_macro_debug(candidates)))
+	var command := _first_command_with_param(candidates, "set_company_structure_report", "employee_id", "kitchen_trainee")
+	if command == null:
+		return Result.failure("missing set_company_structure_report command for kitchen_trainee: %s" % str(_macro_debug(candidates)))
+	var executed := engine.execute_command(command)
+	if not executed.ok:
+		return Result.failure("report structure candidate failed on execute: %s" % executed.error)
+	var player: Dictionary = engine.get_state().players[0]
+	if not Array(player.get("employees", [])).has("kitchen_trainee"):
+		return Result.failure("report assignment should move reserve employee to active employees")
+	var structure: Array = Dictionary(player.get("company_structure", {})).get("structure", [])
+	if structure.is_empty() or not (structure[0] is Dictionary):
+		return Result.failure("report assignment should keep manager structure")
+	if not Array(Dictionary(structure[0]).get("reports", [])).has("kitchen_trainee"):
+		return Result.failure("report assignment should add employee under manager")
 	return Result.success()
 
 static func _build_engine(seed_val: int) -> Result:

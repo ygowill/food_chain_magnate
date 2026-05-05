@@ -143,6 +143,8 @@ static func _generate_restructuring(
 ) -> void:
 	if legal_action_ids.has("set_company_structure_direct"):
 		_generate_direct_structure_assignments(out, discarded, observation, context, validate_command, max_valid_per_action)
+	if legal_action_ids.has("set_company_structure_report"):
+		_generate_report_structure_assignments(out, discarded, observation, context, validate_command, max_valid_per_action)
 	if legal_action_ids.has("submit_restructuring"):
 		_append_valid_command(out, discarded, context, "submit_restructuring", {}, validate_command, "submit_restructuring", ["restructuring"], 0.0, max_valid_per_action)
 
@@ -188,6 +190,75 @@ static func _generate_direct_structure_assignments(
 				validate_command,
 				"restructure_direct_%d_%s" % [int(slot_index), employee_id],
 				["restructuring", "direct"],
+				0.0,
+				max_valid_per_action
+			)
+
+static func _generate_report_structure_assignments(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	if not EmployeeRegistryClass.is_loaded():
+		discarded.append("restructuring: EmployeeRegistry is not loaded")
+		return
+	var cs_val = observation.own_player.get("company_structure", {})
+	if not (cs_val is Dictionary):
+		discarded.append("restructuring: own_player.company_structure is not Dictionary")
+		return
+	var cs: Dictionary = cs_val
+	var ceo_slots := int(cs.get("ceo_slots", 0))
+	if ceo_slots <= 0:
+		discarded.append("restructuring: ceo_slots is invalid")
+		return
+	var structure_val = cs.get("structure", [])
+	if not (structure_val is Array):
+		discarded.append("restructuring: company_structure.structure is not Array")
+		return
+	var structure: Array = structure_val
+	var active_counts := _count_employees_in_list(observation.own_player.get("employees", []))
+	var assigned_counts := _count_assigned_employees(structure)
+	var owned_counts := _count_owned_employees(observation.own_player)
+	var employee_ids := _sorted_string_keys(owned_counts)
+	for slot_index in range(mini(ceo_slots, structure.size())):
+		var entry_val = structure[slot_index]
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
+		var manager_id := str(entry.get("employee_id", ""))
+		if manager_id.is_empty() or int(active_counts.get(manager_id, 0)) <= 0:
+			continue
+		var manager_def_val = EmployeeRegistryClass.get_def(manager_id)
+		if not (manager_def_val is EmployeeDef):
+			continue
+		var manager_def: EmployeeDef = manager_def_val
+		var capacity := maxi(0, int(manager_def.manager_slots))
+		if capacity <= 0:
+			continue
+		var report_count := _valid_report_count(entry, active_counts)
+		if report_count >= capacity:
+			continue
+		for employee_id in employee_ids:
+			if employee_id == "ceo" or _is_manager_employee(employee_id):
+				continue
+			var remaining := int(owned_counts.get(employee_id, 0)) - int(assigned_counts.get(employee_id, 0))
+			if remaining <= 0:
+				continue
+			_append_valid_command(
+				out,
+				discarded,
+				context,
+				"set_company_structure_report",
+				{
+					"manager_slot_index": int(slot_index),
+					"employee_id": employee_id,
+				},
+				validate_command,
+				"restructure_report_%d_%s" % [int(slot_index), employee_id],
+				["restructuring", "report"],
 				0.0,
 				max_valid_per_action
 			)
@@ -517,6 +588,17 @@ static func _count_owned_employees(player: Dictionary) -> Dictionary:
 			counts[employee_id] = int(counts.get(employee_id, 0)) + 1
 	return counts
 
+static func _count_employees_in_list(value) -> Dictionary:
+	var counts := {}
+	if not (value is Array):
+		return counts
+	for item in Array(value):
+		var employee_id := str(item)
+		if employee_id.is_empty():
+			continue
+		counts[employee_id] = int(counts.get(employee_id, 0)) + 1
+	return counts
+
 static func _count_assigned_employees(structure: Array) -> Dictionary:
 	var counts := {}
 	for entry_val in structure:
@@ -535,6 +617,31 @@ static func _count_assigned_employees(structure: Array) -> Dictionary:
 				continue
 			counts[report_id] = int(counts.get(report_id, 0)) + 1
 	return counts
+
+static func _valid_report_count(entry: Dictionary, active_counts: Dictionary) -> int:
+	var reports_val = entry.get("reports", [])
+	if not (reports_val is Array):
+		return 0
+	var count := 0
+	for report_val in Array(reports_val):
+		var report_id := str(report_val)
+		if report_id.is_empty() or report_id == "ceo":
+			continue
+		if int(active_counts.get(report_id, 0)) <= 0:
+			continue
+		if _is_manager_employee(report_id):
+			continue
+		count += 1
+	return count
+
+static func _is_manager_employee(employee_id: String) -> bool:
+	if employee_id.is_empty() or not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(employee_id):
+		return false
+	var def_val = EmployeeRegistryClass.get_def(employee_id)
+	if not (def_val is EmployeeDef):
+		return false
+	var def: EmployeeDef = def_val
+	return str(def.role) == "manager" or maxi(0, int(def.manager_slots)) > 0
 
 static func _empty_direct_slots(structure: Array, ceo_slots: int) -> Array[int]:
 	var out: Array[int] = []
