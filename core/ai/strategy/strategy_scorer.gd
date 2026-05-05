@@ -72,7 +72,14 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			features["product_pipeline_value"] = pipeline_bonus
 			score += pipeline_bonus
 		"place_restaurant", "move_restaurant":
-			var placement_payload := StrategyBoardAnalyzerClass.restaurant_placement_value(observation, command.params, income_analysis)
+			var placement_payload := StrategyBoardAnalyzerClass.restaurant_placement_value(
+				observation,
+				command.params,
+				income_analysis,
+				options.get("source_state", null),
+				action_id,
+				int(command.actor)
+			)
 			var restaurant_bonus := _restaurant_action_base_value(action_id, observation) + float(placement_payload.get("placement_value", 0.0))
 			features["restaurant_value"] = restaurant_bonus
 			_append_restaurant_placement_features(features, placement_payload)
@@ -154,6 +161,7 @@ static func _append_restaurant_placement_features(features: Dictionary, placemen
 	features["restaurant_total_public_demand"] = int(placement_payload.get("total_public_demand", 0))
 	features["restaurant_unserviceable_demand_covered"] = int(placement_payload.get("unserviceable_demand_covered", 0))
 	features["restaurant_placement_value"] = float(placement_payload.get("placement_value", 0.0))
+	features["restaurant_distance_source"] = str(placement_payload.get("distance_source", "anchor"))
 
 static func _fire_value(observation: ObservationState, employee_id: String, profile, income_analysis: Dictionary) -> Dictionary:
 	var payday := _payday_cash_snapshot(observation)

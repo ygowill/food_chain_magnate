@@ -50,6 +50,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var restaurant_placement := _test_restaurant_placement_prefers_near_public_demand(seed_val)
 	if not restaurant_placement.ok:
 		return restaurant_placement
+	var restaurant_road_graph := _test_restaurant_placement_uses_source_road_graph(seed_val)
+	if not restaurant_road_graph.ok:
+		return restaurant_road_graph
 	var payday_fire := _test_payday_fire_prefers_low_income_employee(seed_val)
 	if not payday_fire.ok:
 		return payday_fire
@@ -326,6 +329,56 @@ static func _test_restaurant_placement_prefers_near_public_demand(seed_val: int)
 		return Result.failure("restaurant placement features should expose nearby demand: %s" % str(features))
 	if int(features.get("restaurant_nearest_house_distance", -1)) > 2:
 		return Result.failure("restaurant placement features should expose near house distance: %s" % str(features))
+	return Result.success()
+
+static func _test_restaurant_placement_uses_source_road_graph(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var state := engine.get_state()
+	DinnertimeSettlementTestClass._force_turn_order(state)
+	DinnertimeSettlementTestClass._apply_test_map(state)
+	DinnertimeSettlementTestClass._set_house_demands(state, "house_left", [{"product": "burger"}])
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_PLACE_RESTAURANTS
+	RoadGraphCacheClass.invalidate_road_graph(state)
+	var observation_read := ObservationAdapterClass.observe_for_player(engine, 0)
+	if not observation_read.ok:
+		return observation_read
+	var observation: ObservationState = observation_read.value
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+
+	var place_macro := MacroAction.create(
+		"place_restaurant_road_graph",
+		[Command.create("place_restaurant", 0, {"position": [3, 3], "rotation": 0})],
+		0.0,
+		["working", "restaurant"],
+		{}
+	)
+	var place_score: Dictionary = StrategyScorerClass.score_macro(observation, place_macro, profile, {"source_state": state})
+	var place_features: Dictionary = Dictionary(place_score.get("features", {}))
+	if str(place_features.get("restaurant_distance_source", "")) != "road_graph":
+		return Result.failure("StrategyScorer should use source road graph for place_restaurant: %s" % str(place_features))
+	if int(place_features.get("restaurant_nearby_demand", 0)) <= 0:
+		return Result.failure("road graph restaurant placement should expose nearby demand: %s" % str(place_features))
+	if int(place_features.get("restaurant_nearest_house_distance", -1)) < 0:
+		return Result.failure("road graph restaurant placement should expose nearest distance: %s" % str(place_features))
+
+	var move_macro := MacroAction.create(
+		"move_restaurant_road_graph",
+		[Command.create("move_restaurant", 0, {"restaurant_id": "rest_0", "position": [3, 3], "rotation": 0})],
+		0.0,
+		["working", "move_restaurant"],
+		{}
+	)
+	var move_score: Dictionary = StrategyScorerClass.score_macro(observation, move_macro, profile, {"source_state": state})
+	var move_features: Dictionary = Dictionary(move_score.get("features", {}))
+	if str(move_features.get("restaurant_distance_source", "")) != "road_graph":
+		return Result.failure("StrategyScorer should use source road graph for move_restaurant: %s" % str(move_features))
+	if int(move_features.get("restaurant_nearby_demand", 0)) <= 0:
+		return Result.failure("road graph restaurant move should expose nearby demand: %s" % str(move_features))
 	return Result.success()
 
 static func _test_payday_fire_prefers_low_income_employee(seed_val: int) -> Result:
