@@ -19,7 +19,10 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var working := _test_working_recruit_candidates_are_valid_and_deterministic(seed_val)
 	if not working.ok:
 		return working
-	return Result.success({"cases": 3})
+	var restructuring := _test_restructuring_direct_assignment_candidate(seed_val)
+	if not restructuring.ok:
+		return restructuring
+	return Result.success({"cases": 4})
 
 static func _test_reserve_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
@@ -88,6 +91,42 @@ static func _test_working_recruit_candidates_are_valid_and_deterministic(seed_va
 		return Result.failure("Working/Recruit candidates should include at least one recruit command: %s" % str(_macro_debug(first_candidates)))
 	if str(_macro_debug(first_candidates)) != str(_macro_debug(second_candidates)):
 		return Result.failure("candidate generation should be deterministic for same state and seed")
+	return Result.success()
+
+static func _test_restructuring_direct_assignment_candidate(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.phase = DefsClass.PHASE_RESTRUCTURING
+	state.sub_phase = ""
+	state.turn_order = [0, 1]
+	state.selection_order = [0, 1]
+	state.current_player_index = 0
+	state.round_state["restructuring"] = {
+		"finalized": false,
+	}
+	state.players[0]["reserve_employees"].append("kitchen_trainee")
+	state.employee_pool["kitchen_trainee"] = int(state.employee_pool.get("kitchen_trainee", 0)) - 1
+
+	var payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	if not _has_action(candidates, "set_company_structure_direct"):
+		return Result.failure("restructuring should generate direct slot assignment: %s" % str(_macro_debug(candidates)))
+	var command := _first_command_with_param(candidates, "set_company_structure_direct", "employee_id", "kitchen_trainee")
+	if command == null:
+		return Result.failure("missing set_company_structure_direct command for kitchen_trainee: %s" % str(_macro_debug(candidates)))
+	var executed := engine.execute_command(command)
+	if not executed.ok:
+		return Result.failure("direct structure candidate failed on execute: %s" % executed.error)
+	var player: Dictionary = engine.get_state().players[0]
+	if not Array(player.get("employees", [])).has("kitchen_trainee"):
+		return Result.failure("direct assignment should move reserve employee to active employees")
 	return Result.success()
 
 static func _build_engine(seed_val: int) -> Result:
@@ -179,6 +218,18 @@ static func _all_macros_single_action(candidates: Array, action_id: String) -> b
 
 static func _has_action(candidates: Array, action_id: String) -> bool:
 	return _count_action(candidates, action_id) > 0
+
+static func _first_command_with_param(candidates: Array, action_id: String, param_key: String, param_value: Variant) -> Command:
+	for macro_val in candidates:
+		if not (macro_val is MacroAction):
+			continue
+		var macro: MacroAction = macro_val
+		for command in macro.commands:
+			if command == null or command.action_id != action_id:
+				continue
+			if command.params.get(param_key, null) == param_value:
+				return command
+	return null
 
 static func _count_action(candidates: Array, action_id: String) -> int:
 	var count := 0

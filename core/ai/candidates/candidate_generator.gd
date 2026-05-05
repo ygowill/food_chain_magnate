@@ -34,7 +34,7 @@ static func generate(
 		DefsClass.PHASE_SETUP:
 			_generate_setup(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action)
 		DefsClass.PHASE_RESTRUCTURING:
-			_generate_restructuring(out, discarded, context, legal_action_ids, validate_command, max_valid_per_action)
+			_generate_restructuring(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action)
 		DefsClass.PHASE_ORDER_OF_BUSINESS:
 			_generate_order_of_business(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action)
 		DefsClass.PHASE_WORKING:
@@ -135,13 +135,62 @@ static func _generate_restaurant_placements(
 static func _generate_restructuring(
 	out: Array[MacroAction],
 	discarded: Array[String],
+	observation: ObservationState,
 	context: AiDecisionContext,
 	legal_action_ids: Array[String],
 	validate_command: Callable,
 	max_valid_per_action: int
 ) -> void:
+	if legal_action_ids.has("set_company_structure_direct"):
+		_generate_direct_structure_assignments(out, discarded, observation, context, validate_command, max_valid_per_action)
 	if legal_action_ids.has("submit_restructuring"):
 		_append_valid_command(out, discarded, context, "submit_restructuring", {}, validate_command, "submit_restructuring", ["restructuring"], 0.0, max_valid_per_action)
+
+static func _generate_direct_structure_assignments(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	var cs_val = observation.own_player.get("company_structure", {})
+	if not (cs_val is Dictionary):
+		discarded.append("restructuring: own_player.company_structure is not Dictionary")
+		return
+	var cs: Dictionary = cs_val
+	var ceo_slots := int(cs.get("ceo_slots", 0))
+	if ceo_slots <= 0:
+		discarded.append("restructuring: ceo_slots is invalid")
+		return
+	var structure_val = cs.get("structure", [])
+	var structure: Array = structure_val if structure_val is Array else []
+	var assigned_counts := _count_assigned_employees(structure)
+	var owned_counts := _count_owned_employees(observation.own_player)
+	var employee_ids := _sorted_string_keys(owned_counts)
+	var empty_slots := _empty_direct_slots(structure, ceo_slots)
+	for employee_id in employee_ids:
+		if employee_id == "ceo":
+			continue
+		var remaining := int(owned_counts.get(employee_id, 0)) - int(assigned_counts.get(employee_id, 0))
+		if remaining <= 0:
+			continue
+		for slot_index in empty_slots:
+			_append_valid_command(
+				out,
+				discarded,
+				context,
+				"set_company_structure_direct",
+				{
+					"slot_index": int(slot_index),
+					"employee_id": employee_id,
+				},
+				validate_command,
+				"restructure_direct_%d_%s" % [int(slot_index), employee_id],
+				["restructuring", "direct"],
+				0.0,
+				max_valid_per_action
+			)
 
 static func _generate_order_of_business(
 	out: Array[MacroAction],
@@ -432,6 +481,14 @@ static func _sorted_positive_pool_ids(pool: Dictionary) -> Array[String]:
 	out.sort()
 	return out
 
+static func _sorted_string_keys(dict: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for key in dict.keys():
+		if key is String:
+			out.append(str(key))
+	out.sort()
+	return out
+
 static func _sorted_unique_strings(value) -> Array[String]:
 	var set := {}
 	if value is Array:
@@ -445,6 +502,48 @@ static func _sorted_unique_strings(value) -> Array[String]:
 		if key is String:
 			out.append(str(key))
 	out.sort()
+	return out
+
+static func _count_owned_employees(player: Dictionary) -> Dictionary:
+	var counts := {}
+	for key in ["employees", "reserve_employees"]:
+		var list_val = player.get(key, [])
+		if not (list_val is Array):
+			continue
+		for item in Array(list_val):
+			var employee_id := str(item)
+			if employee_id.is_empty():
+				continue
+			counts[employee_id] = int(counts.get(employee_id, 0)) + 1
+	return counts
+
+static func _count_assigned_employees(structure: Array) -> Dictionary:
+	var counts := {}
+	for entry_val in structure:
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
+		var direct := str(entry.get("employee_id", ""))
+		if not direct.is_empty():
+			counts[direct] = int(counts.get(direct, 0)) + 1
+		var reports_val = entry.get("reports", [])
+		if not (reports_val is Array):
+			continue
+		for report_val in Array(reports_val):
+			var report_id := str(report_val)
+			if report_id.is_empty():
+				continue
+			counts[report_id] = int(counts.get(report_id, 0)) + 1
+	return counts
+
+static func _empty_direct_slots(structure: Array, ceo_slots: int) -> Array[int]:
+	var out: Array[int] = []
+	for i in range(maxi(0, ceo_slots)):
+		var employee_id := ""
+		if i < structure.size() and structure[i] is Dictionary:
+			employee_id = str(Dictionary(structure[i]).get("employee_id", ""))
+		if employee_id.is_empty():
+			out.append(i)
 	return out
 
 static func _read_grid_size(map_public: Dictionary) -> Vector2i:
