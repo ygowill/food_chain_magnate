@@ -31,16 +31,16 @@ static func _run_to_working(seed_val: int) -> Result:
 	}
 	var stop_condition := func(test_engine: GameEngine) -> bool:
 		var state := test_engine.get_state()
-		return state != null and str(state.phase) == DefsClass.PHASE_WORKING
-	var run_result := controller.run_until(engine, bots, stop_condition, 80, 80)
+		return state != null and int(state.round_number) >= 2 and str(state.phase) == DefsClass.PHASE_WORKING
+	var run_result := controller.run_until(engine, bots, stop_condition, 360, 80)
 	if not run_result.ok:
 		return run_result
 
 	var state := engine.get_state()
 	if state == null:
 		return Result.failure("engine state is null after GreedyBot run")
-	if str(state.phase) != DefsClass.PHASE_WORKING:
-		return Result.failure("expected Working after GreedyBot run, got %s/%s" % [str(state.phase), str(state.sub_phase)])
+	if int(state.round_number) < 2 or str(state.phase) != DefsClass.PHASE_WORKING:
+		return Result.failure("expected round 2 Working after GreedyBot run, got round=%d %s/%s" % [int(state.round_number), str(state.phase), str(state.sub_phase)])
 
 	var actions := []
 	for item in controller.last_trace:
