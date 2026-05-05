@@ -2,6 +2,7 @@ class_name StrategyBotTest
 extends RefCounted
 
 const BotControllerClass = preload("res://core/ai/bot/bot_controller.gd")
+const CandidateGeneratorClass = preload("res://core/ai/candidates/candidate_generator.gd")
 const ObservationAdapterClass = preload("res://core/ai/observation/observation_adapter.gd")
 const StrategyBotClass = preload("res://core/ai/bot/strategy_bot.gd")
 const StrategyCandidateFilterClass = preload("res://core/ai/strategy/strategy_candidate_filter.gd")
@@ -35,6 +36,12 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var marketing_score := _test_marketing_score_prefers_affected_serviceable_houses(seed_val)
 	if not marketing_score.ok:
 		return marketing_score
+	var marketing_generation := _test_marketing_generation_prioritizes_ready_product(seed_val)
+	if not marketing_generation.ok:
+		return marketing_generation
+	var active_supply := _test_marketing_score_uses_active_supply_for_unstocked_product(seed_val)
+	if not active_supply.ok:
+		return active_supply
 	var road_graph_marketing := _test_marketing_score_uses_source_road_graph(seed_val)
 	if not road_graph_marketing.ok:
 		return road_graph_marketing
@@ -198,6 +205,86 @@ static func _test_marketing_score_prefers_affected_serviceable_houses(seed_val: 
 		return Result.failure("StrategyScorer should expose marketing_serviceable_houses: %s" % str(features))
 	if int(features.get("marketing_inventory_units", 0)) <= 0:
 		return Result.failure("StrategyScorer should expose marketing inventory support: %s" % str(features))
+	return Result.success()
+
+static func _test_marketing_generation_prioritizes_ready_product(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var observation := _synthetic_marketing_observation()
+	observation.own_player["reserve_employees"] = ["errand_boy"]
+	var houses: Dictionary = Dictionary(observation.map_public.get("houses", {}))
+	var house_near: Dictionary = Dictionary(houses.get("house_near", {}))
+	house_near["demands"] = [{"product": "burger"}]
+	houses["house_near"] = house_near
+	observation.map_public["houses"] = houses
+	var context := AiDecisionContext.create(
+		0,
+		DefsClass.PHASE_WORKING,
+		DefsClass.SUB_PHASE_MARKETING,
+		1,
+		seed_val,
+		[]
+	)
+	var generated := CandidateGeneratorClass.generate(
+		observation,
+		context,
+		["initiate_marketing"],
+		Callable(),
+		{"max_valid_per_action": 4}
+	)
+	if not generated.ok:
+		return generated
+	var payload: Dictionary = Dictionary(generated.value)
+	var candidates_val = payload.get("candidates", [])
+	if not (candidates_val is Array):
+		return Result.failure("CandidateGenerator should return candidates Array")
+	var candidates: Array = candidates_val
+	if candidates.is_empty():
+		return Result.failure("CandidateGenerator should generate marketing candidates")
+	var first_macro = candidates[0]
+	if not (first_macro is MacroAction):
+		return Result.failure("CandidateGenerator returned non-MacroAction candidate")
+	var first_action: MacroAction = first_macro
+	if first_action.commands.is_empty():
+		return Result.failure("CandidateGenerator returned empty marketing macro")
+	var first_command: Command = first_action.commands[0]
+	var first_product := str(first_command.params.get("product", ""))
+	if first_product != "burger":
+		return Result.failure("marketing generation should prioritize stocked/demanded burger before reserve-only drinks, got product=%s macro=%s" % [first_product, first_action.id])
+	return Result.success()
+
+static func _test_marketing_score_uses_active_supply_for_unstocked_product(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var reserve_observation := _synthetic_marketing_observation()
+	reserve_observation.own_player["inventory"] = {}
+	reserve_observation.own_player["reserve_employees"] = ["errand_boy"]
+	var active_observation := _synthetic_marketing_observation()
+	active_observation.own_player["inventory"] = {}
+	active_observation.own_player["employees"] = ["campaign_manager", "errand_boy"]
+	var beer_macro := MacroAction.create(
+		"marketing_beer",
+		[Command.create("initiate_marketing", 0, {"product": "beer"})],
+		0.0,
+		["working", "marketing"],
+		{"affected_house_ids": ["house_near"]}
+	)
+	var reserve_score: Dictionary = StrategyScorerClass.score_macro(reserve_observation, beer_macro, profile)
+	var active_score: Dictionary = StrategyScorerClass.score_macro(active_observation, beer_macro, profile)
+	var reserve_features: Dictionary = Dictionary(reserve_score.get("features", {}))
+	var active_features: Dictionary = Dictionary(active_score.get("features", {}))
+	if bool(reserve_features.get("marketing_can_supply_product", true)):
+		return Result.failure("reserve employees should not count as immediate marketing supply: %s" % str(reserve_features))
+	if not bool(active_features.get("marketing_can_supply_product", false)):
+		return Result.failure("active employees should count as immediate marketing supply: %s" % str(active_features))
+	if float(active_score.get("score", 0.0)) <= float(reserve_score.get("score", 0.0)):
+		return Result.failure("active supply should score higher than reserve-only supply: active=%s reserve=%s" % [str(active_score), str(reserve_score)])
 	return Result.success()
 
 static func _test_marketing_score_uses_source_road_graph(seed_val: int) -> Result:
@@ -430,6 +517,7 @@ static func _synthetic_marketing_observation() -> ObservationState:
 		"inventory": {"burger": 1},
 	}
 	observation.map_public = {
+		"grid_size": Vector2i(12, 12),
 		"houses": {
 			"house_near": {
 				"house_number": 1,

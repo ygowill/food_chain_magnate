@@ -959,11 +959,11 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 当前 StrategyBot 已在评分前增加策略层候选过滤：
 
 - `StrategyProfile.configure_base_revenue()` 优先读取 `data/bots/base_revenue_v1.json`，解析失败时回落到内置默认值，便于后续按难度/模块扩展配置。
-- `CandidateGenerator` 在有 `source_state` 时复用 `MarketingRangeCalculator` 过滤影响不到房屋的营销候选。
+- `CandidateGenerator` 在有 `source_state` 时复用 `MarketingRangeCalculator` 过滤影响不到房屋的营销候选；营销商品候选按已有库存、公开需求和当前活跃员工可供应性排序，避免 `max_valid_per_action` 被字母序靠前但短期无法兑现的商品占满。
 - `StrategyCandidateFilter` 作为后置防线，在 `macro.debug.affected_house_ids` 明确为空时丢弃营销候选，并把原因写入 trace。
 - `StrategyIncomeAnalyzer` 从 `ObservationState` 提取产品需求、可服务需求、库存缺口、供给能力和员工对收入链的贡献。
 - `StrategyBoardAnalyzer` 对餐厅放置/移动做位置评分，优先贴近公开房屋、公开需求和当前尚未服务的需求。有 `source_state` 时会先在 state 副本上复用现有 `RestaurantPlacement.validate_restaurant_placement()` 构造候选餐厅，再用 `BoardAnalyzer` / road graph 计算真实餐厅到房屋距离；无 source state 或临时放置失败时回退到 observation anchor 近似。
-- `StrategyScorer` 对营销候选记录 `affected_houses`、`marketing_serviceable_houses`、`marketing_inventory_units`、`marketing_can_supply_product`、`marketing_distance_source` 等特征。`StrategyBot.choose_command_with_engine()` 会把 source state 传入 scorer，使营销可服务性优先复用 `BoardAnalyzer` / road graph / drive-through 入口点；无 source state 时才回退到 observation anchor 近似。营销即使影响房屋，也会因没有己方餐厅、没有库存/生产能力而降权。
+- `StrategyScorer` 对营销候选记录 `affected_houses`、`marketing_serviceable_houses`、`marketing_inventory_units`、`marketing_can_supply_product`、`marketing_distance_source` 等特征。`marketing_can_supply_product` 表示当前活跃员工可在本回合后续供应该商品，预备区/忙碌员工不会被当作即时供给；已有库存单独通过 `marketing_inventory_units` 计分。`StrategyBot.choose_command_with_engine()` 会把 source state 传入 scorer，使营销可服务性优先复用 `BoardAnalyzer` / road graph / drive-through 入口点；无 source state 时才回退到 observation anchor 近似。营销即使影响房屋，也会因没有己方餐厅、没有库存/生产能力而降权。
 - `StrategyScorer` 对生产/采购候选记录 `product_public_demand`、`product_serviceable_demand`、`product_inventory_gap`、`product_can_supply`，并用这些特征优先补当前可销售产品缺口。
 - `CandidateGenerator` 在 `choose_fridge_keep` 中复用 `StrategyIncomeAnalyzer.build_fridge_keep()`，按可服务需求、公开需求和可补给性逐单位选择冰箱保留库存，而不是简单保留最大库存堆。
 - `StrategyScorer` 对 `fire` 候选记录发薪现金、估算应付、短缺、解雇后的有效薪资缓解和员工收入价值；发薪短缺时优先解雇收入链价值较低的可付薪员工。
@@ -1111,7 +1111,7 @@ tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
 
 - `core/tests/ai/random_legal_bot_smoke_test.gd`：两个 `RandomLegalBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic。
 - `core/tests/ai/greedy_bot_smoke_test.gd`：保留 GreedyBot 短程 deterministic 校验，并新增单程跑到至少第 3 轮或 GameOver 的 smoke。GreedyBot 不再要求完整打完 2p base 局。
-- `core/tests/ai/strategy_bot_test.gd`：两个 `StrategyBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic、strategy trace 元数据、profile 数据加载、营销空覆盖候选过滤、营销可服务房屋评分、收入缺口、冰箱保留、餐厅位置/road graph 评分、Payday 解雇评分等特征。
+- `core/tests/ai/strategy_bot_test.gd`：两个 `StrategyBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic、strategy trace 元数据、profile 数据加载、营销空覆盖候选过滤、营销商品候选排序、营销可服务房屋/活跃供给评分、收入缺口、冰箱保留、餐厅位置/road graph 评分、Payday 解雇评分等特征。
 - `core/tests/ai/dinner_preview_golden_test.gd`：从同一前置状态分别跑真实 engine 与 `DinnerPreview`，校验基础销售、花园收入、drive-through 入口点、关键 Dinnertime report 字段、库存消耗、source 不变性和 registry 恢复。
 
 ## 15. 开发路线图

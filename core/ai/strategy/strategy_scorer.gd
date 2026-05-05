@@ -259,7 +259,7 @@ static func _marketing_service_features(observation: ObservationState, affected_
 		"closest_distance": closest_distance if serviceable > 0 else -1,
 		"average_distance": average_distance,
 		"inventory_units": _inventory_count(observation, product_id),
-		"can_supply_product": _can_supply_product(observation, product_id),
+		"can_supply_product": _can_actively_supply_product(observation, product_id),
 		"own_restaurants": _own_restaurant_count(observation),
 		"distance_source": "anchor",
 	}
@@ -297,7 +297,7 @@ static func _marketing_service_features_from_source(source_state: GameState, obs
 		"closest_distance": closest_distance if serviceable > 0 else -1,
 		"average_distance": average_distance,
 		"inventory_units": _inventory_count(observation, product_id),
-		"can_supply_product": _can_supply_product(observation, product_id),
+		"can_supply_product": _can_actively_supply_product(observation, product_id),
 		"own_restaurants": _own_restaurant_count(observation),
 		"distance_source": "road_graph",
 	}
@@ -399,6 +399,28 @@ static func _can_supply_product(observation: ObservationState, product_id: Strin
 		if is_drink and (def.can_procure() or employee_id == "errand_boy"):
 			return true
 	return false
+
+static func _can_actively_supply_product(observation: ObservationState, product_id: String) -> bool:
+	if observation == null or product_id.is_empty() or not EmployeeRegistryClass.is_loaded():
+		return false
+	var is_drink := false
+	if ProductRegistryClass.is_loaded() and ProductRegistryClass.has(product_id):
+		is_drink = ProductRegistryClass.is_drink(product_id)
+	for employee_id in _active_employee_ids(observation.own_player):
+		if not EmployeeRegistryClass.has(employee_id):
+			continue
+		var def_val = EmployeeRegistryClass.get_def(employee_id)
+		if not (def_val is EmployeeDef):
+			continue
+		var def: EmployeeDef = def_val
+		if def.can_produce() and def.get_production_food_options().has(product_id):
+			return true
+		if is_drink and (def.can_procure() or employee_id == "errand_boy"):
+			return true
+	return false
+
+static func _active_employee_ids(player: Dictionary) -> Array[String]:
+	return _sorted_unique_strings(player.get("employees", []))
 
 static func _owned_employee_ids(player: Dictionary) -> Array[String]:
 	var out: Array[String] = []

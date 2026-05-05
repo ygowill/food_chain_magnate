@@ -449,7 +449,7 @@ static func _generate_marketing(
 	if not ProductRegistryClass.is_loaded():
 		discarded.append("marketing: ProductRegistry is not loaded")
 		return
-	var products := _sorted_marketable_product_ids()
+	var products := _sorted_marketable_product_ids_for_observation(observation)
 	if products.is_empty():
 		discarded.append("marketing: no marketable products")
 		return
@@ -1094,6 +1094,17 @@ static func _sorted_marketable_product_ids() -> Array[String]:
 	out.sort()
 	return out
 
+static func _sorted_marketable_product_ids_for_observation(observation: ObservationState) -> Array[String]:
+	var out := _sorted_marketable_product_ids()
+	out.sort_custom(func(a: String, b: String) -> bool:
+		var prior_a := _marketing_product_prior(a, observation)
+		var prior_b := _marketing_product_prior(b, observation)
+		if not is_equal_approx(prior_a, prior_b):
+			return prior_a > prior_b
+		return a < b
+	)
+	return out
+
 static func _marketing_types_for_employee(employee_id: String) -> Array[String]:
 	var out: Array[String] = []
 	if employee_id.is_empty() or not EmployeeRegistryClass.has(employee_id):
@@ -1358,7 +1369,7 @@ static func _marketing_product_prior(product_id: String, observation: Observatio
 		var inventory: Dictionary = inventory_val
 		if _read_non_negative_int(inventory.get(product_id, 0), 0) > 0:
 			prior += 0.8
-	if _can_supply_product(product_id, observation):
+	if _can_actively_supply_product(product_id, observation):
 		prior += 0.5
 	prior += float(_public_demand_count_for_product(observation, product_id)) * 0.25
 	return prior
@@ -1499,6 +1510,24 @@ static func _can_supply_product(product_id: String, observation: ObservationStat
 		if def.can_procure() and ProductRegistryClass.is_drink(product_id):
 			return true
 		if employee_id == "errand_boy" and ProductRegistryClass.is_drink(product_id):
+			return true
+	return false
+
+static func _can_actively_supply_product(product_id: String, observation: ObservationState) -> bool:
+	if observation == null or product_id.is_empty():
+		return false
+	if not EmployeeRegistryClass.is_loaded() or not ProductRegistryClass.is_loaded():
+		return false
+	for employee_id in _sorted_unique_strings(observation.own_player.get("employees", [])):
+		if not EmployeeRegistryClass.has(employee_id):
+			continue
+		var def_val = EmployeeRegistryClass.get_def(employee_id)
+		if not (def_val is EmployeeDef):
+			continue
+		var def: EmployeeDef = def_val
+		if def.can_produce() and def.get_production_food_options().has(product_id):
+			return true
+		if ProductRegistryClass.is_drink(product_id) and (def.can_procure() or employee_id == "errand_boy"):
 			return true
 	return false
 
