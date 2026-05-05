@@ -6,6 +6,7 @@ const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const BoardAnalyzerClass = preload("res://core/ai/analysis/board_analyzer.gd")
+const MilestoneRaceAnalyzerClass = preload("res://core/ai/analysis/milestone_race_analyzer.gd")
 const StrategyBoardAnalyzerClass = preload("res://core/ai/strategy/strategy_board_analyzer.gd")
 const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_income_analyzer.gd")
 
@@ -111,6 +112,14 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			var skip_penalty := -10.0 if _has_non_skip_alternative(observation, macro) else 0.0
 			features["skip_penalty"] = skip_penalty
 			score += skip_penalty
+
+	var milestone_payload := MilestoneRaceAnalyzerClass.score_macro(observation, macro, profile)
+	var milestone_score := float(milestone_payload.get("score", 0.0))
+	features["milestone_race_value"] = milestone_score
+	if milestone_score > 0.0:
+		features["milestone_race_ids"] = Array(milestone_payload.get("milestone_ids", [])).duplicate()
+		features["milestone_race_candidates"] = Array(milestone_payload.get("milestones", [])).duplicate(true)
+		score += milestone_score
 
 	return {
 		"score": score,

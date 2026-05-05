@@ -60,6 +60,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var product_overstock := _test_strategy_scoring_penalizes_product_overstock(seed_val)
 	if not product_overstock.ok:
 		return product_overstock
+	var milestone_race := _test_strategy_scoring_values_key_milestone_race(seed_val)
+	if not milestone_race.ok:
+		return milestone_race
 	var restaurant_placement := _test_restaurant_placement_prefers_near_public_demand(seed_val)
 	if not restaurant_placement.ok:
 		return restaurant_placement
@@ -508,6 +511,53 @@ static func _test_strategy_scoring_penalizes_product_overstock(seed_val: int) ->
 		return Result.failure("overstock production should expose zero product_inventory_gap: %s" % str(features))
 	if not bool(features.get("product_overstock_penalty", false)):
 		return Result.failure("overstock production should expose product_overstock_penalty: %s" % str(features))
+	return Result.success()
+
+static func _test_strategy_scoring_values_key_milestone_race(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_income_observation()
+	observation.phase = DefsClass.PHASE_WORKING
+	observation.sub_phase = DefsClass.SUB_PHASE_TRAIN
+	observation.milestone_pool_public = ["first_train", "first_burger_produced"]
+	observation.own_player["milestones"] = []
+	var train_macro := MacroAction.create(
+		"train_management_to_trainer",
+		[Command.create("train", 0, {"from_employee": "management_trainee", "to_employee": "trainer"})],
+		0.0,
+		["working", "train"],
+		{}
+	)
+	var train_score: Dictionary = StrategyScorerClass.score_macro(observation, train_macro, profile)
+	var train_features: Dictionary = Dictionary(train_score.get("features", {}))
+	if float(train_features.get("milestone_race_value", 0.0)) <= 0.0:
+		return Result.failure("train score should value first_train race: %s" % str(train_score))
+	if not Array(train_features.get("milestone_race_ids", [])).has("first_train"):
+		return Result.failure("train score should expose first_train race id: %s" % str(train_features))
+	var claimed_observation := _synthetic_income_observation()
+	claimed_observation.phase = DefsClass.PHASE_WORKING
+	claimed_observation.sub_phase = DefsClass.SUB_PHASE_TRAIN
+	claimed_observation.milestone_pool_public = ["first_train"]
+	claimed_observation.own_player["milestones"] = ["first_train"]
+	var claimed_score: Dictionary = StrategyScorerClass.score_macro(claimed_observation, train_macro, profile)
+	var claimed_features: Dictionary = Dictionary(claimed_score.get("features", {}))
+	if float(claimed_features.get("milestone_race_value", 0.0)) != 0.0:
+		return Result.failure("owned milestone should not score race value: %s" % str(claimed_score))
+	var burger_macro := MacroAction.create(
+		"produce_burger",
+		[Command.create("produce_food", 0, {"employee_type": "burger_cook", "food_type": "burger"})],
+		0.0,
+		["working", "get_food"],
+		{}
+	)
+	var burger_score: Dictionary = StrategyScorerClass.score_macro(observation, burger_macro, profile)
+	var burger_features: Dictionary = Dictionary(burger_score.get("features", {}))
+	if not Array(burger_features.get("milestone_race_ids", [])).has("first_burger_produced"):
+		return Result.failure("burger production should expose first_burger_produced race id: %s" % str(burger_features))
 	return Result.success()
 
 static func _test_restaurant_placement_prefers_near_public_demand(seed_val: int) -> Result:
