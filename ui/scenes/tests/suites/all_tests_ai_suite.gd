@@ -18,6 +18,10 @@ static func build_tests(_host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.CandidateGeneratorTestClass.run(2, 12345),
 		},
 		{
+			"name": "GreedySearchTest",
+			"fn": func() -> Result: return TestRefs.GreedySearchTestClass.run(2, 12345),
+		},
+		{
 			"name": "LegalActionServiceTest",
 			"fn": func() -> Result: return TestRefs.LegalActionServiceTestClass.run(2, 12345),
 		},
