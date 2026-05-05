@@ -1028,11 +1028,19 @@ static func _recruit_prior(employee_id: String, observation: ObservationState) -
 	var owned := _count_owned_employees(observation.own_player)
 	match employee_id:
 		"kitchen_trainee":
-			return 3.0 if not _owns_employee_role(observation.own_player, "produce_food") else 0.25
+			return 3.0 if int(owned.get("kitchen_trainee", 0)) <= 0 and not _owns_employee_role(observation.own_player, "produce_food") else 0.25
 		"marketing_trainee":
-			return 2.8 if not _owns_employee_role(observation.own_player, "marketing") else 0.25
+			return 2.8 if int(owned.get("marketing_trainee", 0)) <= 0 and not _owns_employee_role(observation.own_player, "marketing") else 0.25
 		"management_trainee":
-			return 2.6 if int(owned.get("new_business_developer", 0)) <= 0 else 0.2
+			if int(owned.get("new_business_developer", 0)) <= 0 and int(owned.get("management_trainee", 0)) <= 0:
+				return 2.6
+			return 0.2
+		"trainer":
+			if _has_trainable_reserve_employee(observation):
+				return 3.2
+			return 0.7 if int(owned.get("trainer", 0)) <= 0 else 0.2
+		"recruiting_girl":
+			return 0.9 if int(owned.get("recruiting_girl", 0)) <= 0 else 0.2
 		"errand_boy":
 			return 2.2 if not _can_supply_any_drink(observation) else 0.2
 		_:
@@ -1099,6 +1107,26 @@ static func _public_demand_count_for_product(observation: ObservationState, prod
 			if demand_val is Dictionary and str(Dictionary(demand_val).get("product", "")) == product_id:
 				count += 1
 	return count
+
+static func _has_trainable_reserve_employee(observation: ObservationState) -> bool:
+	if observation == null or not EmployeeRegistryClass.is_loaded():
+		return false
+	var reserve_val = observation.own_player.get("reserve_employees", [])
+	if not (reserve_val is Array):
+		return false
+	for employee_val in Array(reserve_val):
+		var employee_id := str(employee_val)
+		if employee_id.is_empty() or not EmployeeRegistryClass.has(employee_id):
+			continue
+		var def_val = EmployeeRegistryClass.get_def(employee_id)
+		if not (def_val is EmployeeDef):
+			continue
+		var def: EmployeeDef = def_val
+		for target_val in def.train_to:
+			var target := str(target_val)
+			if not target.is_empty() and int(observation.employee_pool_public.get(target, 0)) > 0:
+				return true
+	return false
 
 static func _can_supply_any_drink(observation: ObservationState) -> bool:
 	if observation == null or not ProductRegistryClass.is_loaded():
