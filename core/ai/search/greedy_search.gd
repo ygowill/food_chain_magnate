@@ -5,6 +5,7 @@ const CandidateGeneratorClass = preload("res://core/ai/candidates/candidate_gene
 const ForwardSimulatorClass = preload("res://core/ai/simulation/forward_simulator.gd")
 const ObservationAdapterClass = preload("res://core/ai/observation/observation_adapter.gd")
 const EvaluatorClass = preload("res://core/ai/evaluation/evaluator.gd")
+const DecisionTraceClass = preload("res://core/ai/logging/decision_trace.gd")
 
 static func choose_command(
 	engine: GameEngine,
@@ -23,6 +24,7 @@ static func choose_command(
 		return Result.failure("GreedySearch.choose_command: context is null")
 	if budget != null and budget.expired():
 		return Result.failure("GreedySearch.choose_command: budget expired before search")
+	var start_ms := Time.get_ticks_msec()
 
 	var gen_read := CandidateGeneratorClass.generate(observation, context, legal_action_ids, validate_command, options)
 	if not gen_read.ok:
@@ -71,10 +73,15 @@ static func choose_command(
 		var score_payload: Dictionary = score_read.value
 		var total_score := float(score_payload.get("score", 0.0)) + float(macro.prior_score)
 		var features: Dictionary = Dictionary(score_payload.get("features", {})).duplicate(true)
+		var first_command: Command = macro.commands[0]
 		evaluated.append({
 			"macro_action_id": macro.id,
+			"action_id": str(first_command.action_id),
+			"params": first_command.params.duplicate(true),
 			"score": total_score,
+			"prior_score": float(macro.prior_score),
 			"features": features,
+			"tags": macro.tags.duplicate(),
 		})
 		if best_macro == null or total_score > best_score or (is_equal_approx(total_score, best_score) and macro.id < best_macro.id):
 			best_macro = macro
@@ -90,9 +97,21 @@ static func choose_command(
 			return ascore > bscore
 		return str(a.get("macro_action_id", "")) < str(b.get("macro_action_id", ""))
 	)
+	var chosen_command: Command = best_macro.commands[0]
+	var trace := _build_decision_trace(
+		observation,
+		context.player_id,
+		chosen_command,
+		best_score,
+		candidates.size(),
+		evaluated.size(),
+		evaluated.slice(0, 5),
+		discarded.slice(0, 20),
+		Time.get_ticks_msec() - start_ms
+	)
 
 	return Result.success(BotDecision.create(
-		best_macro.commands[0],
+		chosen_command,
 		best_macro.id,
 		best_score,
 		{
@@ -100,10 +119,7 @@ static func choose_command(
 			"candidate_count": candidates.size(),
 			"valid_candidate_count": evaluated.size(),
 		},
-		{
-			"top_candidates": evaluated.slice(0, 5),
-			"discarded_reasons": discarded.slice(0, 20),
-		}
+		trace.to_dict()
 	))
 
 static func _copy_string_array(value) -> Array[String]:
@@ -112,3 +128,33 @@ static func _copy_string_array(value) -> Array[String]:
 		for item in Array(value):
 			out.append(str(item))
 	return out
+
+static func _build_decision_trace(
+	observation: ObservationState,
+	player_id: int,
+	chosen_command: Command,
+	score: float,
+	candidate_count: int,
+	valid_candidate_count: int,
+	top_candidates: Array,
+	discarded_reasons: Array,
+	time_ms: int
+) -> DecisionTrace:
+	var trace := DecisionTraceClass.new()
+	trace.round_number = int(observation.round_number) if observation != null else 0
+	trace.phase = str(observation.phase) if observation != null else ""
+	trace.sub_phase = str(observation.sub_phase) if observation != null else ""
+	trace.player_id = int(player_id)
+	trace.observation_hash = DecisionTraceClass.compute_observation_hash(observation)
+	trace.candidate_count = int(candidate_count)
+	trace.valid_candidate_count = int(valid_candidate_count)
+	trace.chosen_action_id = str(chosen_command.action_id) if chosen_command != null else ""
+	trace.chosen_params = chosen_command.params.duplicate(true) if chosen_command != null else {}
+	trace.score = float(score)
+	trace.time_ms = maxi(0, int(time_ms))
+	for candidate_val in top_candidates:
+		if candidate_val is Dictionary:
+			trace.add_top_candidate(candidate_val)
+	for reason_val in discarded_reasons:
+		trace.add_discarded_reason(str(reason_val))
+	return trace

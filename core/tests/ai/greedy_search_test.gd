@@ -47,6 +47,9 @@ static func _test_choose_reserve_without_mutating_source(seed_val: int) -> Resul
 		return Result.failure("GreedySearch explanation missing candidate_count")
 	if int(decision.explanation.get("valid_candidate_count", 0)) <= 0:
 		return Result.failure("GreedySearch explanation missing valid_candidate_count")
+	var trace_check := _assert_decision_trace(decision)
+	if not trace_check.ok:
+		return trace_check
 	return Result.success()
 
 static func _build_search_inputs(engine: GameEngine, seed_val: int) -> Result:
@@ -74,6 +77,38 @@ static func _build_search_inputs(engine: GameEngine, seed_val: int) -> Result:
 		"legal_action_ids": legal_action_ids,
 		"validate_fn": validate_fn,
 	})
+
+static func _assert_decision_trace(decision: BotDecision) -> Result:
+	if decision == null:
+		return Result.failure("decision is null")
+	var trace := decision.trace
+	if trace.is_empty():
+		return Result.failure("GreedySearch decision trace is empty")
+	if int(trace.get("candidate_count", 0)) != int(decision.explanation.get("candidate_count", -1)):
+		return Result.failure("trace candidate_count does not match explanation")
+	if int(trace.get("valid_candidate_count", 0)) != int(decision.explanation.get("valid_candidate_count", -1)):
+		return Result.failure("trace valid_candidate_count does not match explanation")
+	if str(trace.get("observation_hash", "")).is_empty():
+		return Result.failure("trace observation_hash is empty")
+	if str(trace.get("chosen_action_id", "")) != str(decision.command.action_id):
+		return Result.failure("trace chosen_action_id mismatch: %s" % str(trace))
+	if Dictionary(trace.get("chosen_params", {})) != decision.command.params:
+		return Result.failure("trace chosen_params mismatch: %s" % str(trace))
+	if not is_equal_approx(float(trace.get("score", 0.0)), float(decision.score)):
+		return Result.failure("trace score mismatch: %s vs %s" % [str(trace.get("score", null)), str(decision.score)])
+	var top_val = trace.get("top_candidates", [])
+	if not (top_val is Array) or Array(top_val).is_empty():
+		return Result.failure("trace top_candidates is empty")
+	var top: Dictionary = Dictionary(Array(top_val)[0])
+	if str(top.get("macro_action_id", "")) != str(decision.macro_action_id):
+		return Result.failure("top candidate should explain chosen macro: %s" % str(top))
+	if str(top.get("action_id", "")) != str(decision.command.action_id):
+		return Result.failure("top candidate action_id mismatch: %s" % str(top))
+	if not (top.get("features", null) is Dictionary):
+		return Result.failure("top candidate missing features: %s" % str(top))
+	if int(trace.get("time_ms", -1)) < 0:
+		return Result.failure("trace time_ms is invalid: %s" % str(trace.get("time_ms", null)))
+	return Result.success()
 
 static func _allowed_internal_actions(observation: ObservationState) -> Array[String]:
 	var decision_point := AiDecisionPointClass.from_observation(observation)

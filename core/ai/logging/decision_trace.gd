@@ -1,6 +1,8 @@
 class_name DecisionTrace
 extends RefCounted
 
+const JsonSafeClass = preload("res://core/state/serialization/json_safe.gd")
+
 var round_number: int = 0
 var phase: String = ""
 var sub_phase: String = ""
@@ -15,6 +17,12 @@ var top_candidates: Array[Dictionary] = []
 var discarded_reasons: Array[String] = []
 var belief_samples_summary: Dictionary = {}
 var time_ms: int = 0
+
+static func compute_observation_hash(observation: ObservationState) -> String:
+	if observation == null:
+		return ""
+	var safe = JsonSafeClass.to_json_safe(observation.to_debug_dict())
+	return JSON.stringify(safe, "", true).md5_text()
 
 func add_top_candidate(candidate: Dictionary) -> void:
 	top_candidates.append(candidate.duplicate(true))
