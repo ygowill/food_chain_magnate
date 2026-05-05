@@ -54,6 +54,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var product_gap_score := _test_strategy_scoring_targets_current_product_gap(seed_val)
 	if not product_gap_score.ok:
 		return product_gap_score
+	var product_overstock := _test_strategy_scoring_penalizes_product_overstock(seed_val)
+	if not product_overstock.ok:
+		return product_overstock
 	var restaurant_placement := _test_restaurant_placement_prefers_near_public_demand(seed_val)
 	if not restaurant_placement.ok:
 		return restaurant_placement
@@ -383,6 +386,40 @@ static func _test_strategy_scoring_targets_current_product_gap(seed_val: int) ->
 		return Result.failure("StrategyScorer should expose product_inventory_gap: %s" % str(features))
 	if int(features.get("product_serviceable_demand", 0)) != 2:
 		return Result.failure("StrategyScorer should expose product_serviceable_demand: %s" % str(features))
+	return Result.success()
+
+static func _test_strategy_scoring_penalizes_product_overstock(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_income_observation()
+	observation.own_player["inventory"] = {"burger": 4}
+	var burger_macro := MacroAction.create(
+		"produce_burger_overstock",
+		[Command.create("produce_food", 0, {"employee_type": "burger_cook", "food_type": "burger"})],
+		0.0,
+		["working", "produce_food"],
+		{}
+	)
+	var skip_macro := MacroAction.create(
+		"skip_get_food",
+		[Command.create("skip_sub_phase", 0, {})],
+		0.0,
+		["working", "fallback"],
+		{}
+	)
+	var burger_score: Dictionary = StrategyScorerClass.score_macro(observation, burger_macro, profile)
+	var skip_score: Dictionary = StrategyScorerClass.score_macro(observation, skip_macro, profile)
+	if float(burger_score.get("score", 0.0)) >= float(skip_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should prefer skipping over overstock production: burger=%s skip=%s" % [str(burger_score), str(skip_score)])
+	var features: Dictionary = Dictionary(burger_score.get("features", {}))
+	if int(features.get("product_inventory_gap", -1)) != 0:
+		return Result.failure("overstock production should expose zero product_inventory_gap: %s" % str(features))
+	if not bool(features.get("product_overstock_penalty", false)):
+		return Result.failure("overstock production should expose product_overstock_penalty: %s" % str(features))
 	return Result.success()
 
 static func _test_restaurant_placement_prefers_near_public_demand(seed_val: int) -> Result:

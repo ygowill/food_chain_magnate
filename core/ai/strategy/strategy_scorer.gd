@@ -68,9 +68,9 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			score += marketing_bonus
 		"produce_food", "procure_drinks":
 			var product_id2 := str(command.params.get("food_type", command.params.get("drink_type", "")))
-			var pipeline_bonus := _product_pipeline_value(product_id2, profile, income_analysis, features)
-			features["product_pipeline_value"] = pipeline_bonus
-			score += pipeline_bonus
+			var supply_bonus := _product_supply_action_value(product_id2, profile, income_analysis, features)
+			features["product_supply_action_value"] = supply_bonus
+			score += supply_bonus
 		"place_restaurant", "move_restaurant":
 			var placement_payload := StrategyBoardAnalyzerClass.restaurant_placement_value(
 				observation,
@@ -139,6 +139,30 @@ static func _product_pipeline_value(product_id: String, profile, income_analysis
 	features["product_inventory_gap"] = int(product_payload.get("inventory_gap", 0))
 	features["product_can_supply"] = bool(product_payload.get("can_supply", false))
 	return float(product_payload.get("score", 0.0))
+
+static func _product_supply_action_value(product_id: String, profile, income_analysis: Dictionary, features: Dictionary) -> float:
+	if product_id.is_empty():
+		return 0.0
+	var product_payload := StrategyIncomeAnalyzerClass.product_value(product_id, profile, income_analysis)
+	var public_demand := int(product_payload.get("public_demand", 0))
+	var serviceable_demand := int(product_payload.get("serviceable_demand", 0))
+	var inventory_units := int(product_payload.get("inventory_units", 0))
+	var inventory_gap := int(product_payload.get("inventory_gap", 0))
+	var can_supply := bool(product_payload.get("can_supply", false))
+	features["product_public_demand"] = public_demand
+	features["product_serviceable_demand"] = serviceable_demand
+	features["product_inventory_units"] = inventory_units
+	features["product_inventory_gap"] = inventory_gap
+	features["product_can_supply"] = can_supply
+	if inventory_gap > 0:
+		return float(inventory_gap) * 12.0 + float(serviceable_demand) * 3.0 + float(public_demand) + float(profile.product_priority(product_id)) * 0.5
+	if public_demand <= 0 and inventory_units <= 0:
+		return float(profile.product_priority(product_id)) * 0.6
+	var desired_buffer := public_demand + 1
+	if public_demand > 0 and inventory_units < desired_buffer:
+		return 4.0 + float(profile.product_priority(product_id)) * 0.25
+	features["product_overstock_penalty"] = true
+	return -100.0 - float(maxi(0, inventory_units - desired_buffer)) * 8.0
 
 static func _append_employee_income_features(features: Dictionary, observation: ObservationState, employee_id: String, income_analysis: Dictionary, profile, prefix: String) -> void:
 	var payload := StrategyIncomeAnalyzerClass.employee_value(observation, employee_id, profile, income_analysis)
