@@ -34,6 +34,10 @@ static func build_tests(_host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.BotSelfplaySummaryTestClass.run(2, 12345),
 		},
 		{
+			"name": "BotSelfplayToolTest",
+			"fn": func() -> Result: return TestRefs.BotSelfplayToolTestClass.run(2, 12345),
+		},
+		{
 			"name": "GreedyBotSmokeTest",
 			"fn": func() -> Result: return TestRefs.GreedyBotSmokeTestClass.run(2, 12345),
 		},

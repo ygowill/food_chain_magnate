@@ -10,7 +10,10 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var formatted := _test_format_summary()
 	if not formatted.ok:
 		return formatted
-	return Result.success({"cases": 2})
+	var matchup := _test_bot_config_groups_mixed_matchups()
+	if not matchup.ok:
+		return matchup
+	return Result.success({"cases": 3})
 
 static func _test_summarize_rows() -> Result:
 	var rows: Array[Dictionary] = [
@@ -116,6 +119,32 @@ static func _test_format_summary() -> Result:
 		return Result.failure("formatted summary should include beam aggregate: %s" % str(lines))
 	if not _has_line_containing(lines, "ACTIONS beam skip=2"):
 		return Result.failure("formatted summary should include action totals: %s" % str(lines))
+	return Result.success()
+
+static func _test_bot_config_groups_mixed_matchups() -> Result:
+	var read := SummaryClass.summarize_rows([
+		{
+			"bot": "mixed",
+			"bot_config": "strategy_vs_beam",
+			"bot_ids": ["strategy", "beam"],
+			"ok": true,
+			"seed": 9,
+			"round": 2,
+			"steps": 5,
+			"command_count": 5,
+			"action_counts": {"skip": 1},
+		},
+	])
+	if not read.ok:
+		return read
+	var bots: Dictionary = Dictionary(read.value.get("bots", {}))
+	if not bots.has("strategy_vs_beam"):
+		return Result.failure("summary should group mixed rows by bot_config: %s" % str(bots))
+	if bots.has("mixed"):
+		return Result.failure("summary should not group mixed rows by bot when bot_config exists: %s" % str(bots))
+	var matchup: Dictionary = bots.get("strategy_vs_beam", {})
+	if int(matchup.get("matches", 0)) != 1 or float(matchup.get("success_rate", 0.0)) != 1.0:
+		return Result.failure("mixed matchup aggregate mismatch: %s" % str(matchup))
 	return Result.success()
 
 static func _has_line_containing(lines: Array, needle: String) -> bool:

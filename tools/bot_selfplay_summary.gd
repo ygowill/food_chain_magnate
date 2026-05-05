@@ -52,7 +52,7 @@ static func summarize_rows(rows: Array[Dictionary]) -> Result:
 	var overall := _new_bucket("all")
 	var by_bot := {}
 	for row in rows:
-		var bot := str(row.get("bot", "unknown")).strip_edges()
+		var bot := _row_group_id(row)
 		if bot.is_empty():
 			bot = "unknown"
 		if not by_bot.has(bot):
@@ -73,6 +73,12 @@ static func summarize_rows(rows: Array[Dictionary]) -> Result:
 		"bots": bots,
 		"overall": overall_summary,
 	})
+
+static func _row_group_id(row: Dictionary) -> String:
+	var config := str(row.get("bot_config", "")).strip_edges()
+	if not config.is_empty():
+		return config
+	return str(row.get("bot", "unknown")).strip_edges()
 
 static func format_summary(summary: Dictionary) -> Array[String]:
 	var lines: Array[String] = []
