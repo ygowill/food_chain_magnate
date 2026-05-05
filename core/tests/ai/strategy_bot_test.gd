@@ -60,6 +60,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var product_amount_score := _test_strategy_scoring_values_supply_amount(seed_val)
 	if not product_amount_score.ok:
 		return product_amount_score
+	var route_drinks_score := _test_strategy_scoring_values_route_drink_products(seed_val)
+	if not route_drinks_score.ok:
+		return route_drinks_score
 	var product_overstock := _test_strategy_scoring_penalizes_product_overstock(seed_val)
 	if not product_overstock.ok:
 		return product_overstock
@@ -530,6 +533,42 @@ static func _test_strategy_scoring_values_supply_amount(seed_val: int) -> Result
 		return Result.failure("burger_chef should cap covered units by current gap: %s" % str(chef_features))
 	return Result.success()
 
+static func _test_strategy_scoring_values_route_drink_products(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_drink_route_observation()
+	var soda_macro := MacroAction.create(
+		"procure_route_soda",
+		[Command.create("procure_drinks", 0, {"employee_type": "truck_driver", "restaurant_id": "rest_near", "route": [[3, 2], [4, 2]], "selected_sources": [[4, 2]]})],
+		0.0,
+		["working", "procure_drinks"],
+		{}
+	)
+	var beer_macro := MacroAction.create(
+		"procure_route_beer",
+		[Command.create("procure_drinks", 0, {"employee_type": "truck_driver", "restaurant_id": "rest_near", "route": [[3, 2], [8, 2]], "selected_sources": [[8, 2]]})],
+		0.0,
+		["working", "procure_drinks"],
+		{}
+	)
+	var soda_score: Dictionary = StrategyScorerClass.score_macro(observation, soda_macro, profile)
+	var beer_score: Dictionary = StrategyScorerClass.score_macro(observation, beer_macro, profile)
+	if float(soda_score.get("score", 0.0)) <= float(beer_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should prefer route drinks matching current demand: soda=%s beer=%s" % [str(soda_score), str(beer_score)])
+	var features: Dictionary = Dictionary(soda_score.get("features", {}))
+	var expected_by_product: Dictionary = Dictionary(features.get("drink_route_expected_units_by_product", {}))
+	if int(expected_by_product.get("soda", 0)) != 2:
+		return Result.failure("route drink scoring should infer soda units from selected source: %s" % str(features))
+	if str(features.get("product_supply_primary_product", "")) != "soda":
+		return Result.failure("route drink scoring should expose primary product: %s" % str(features))
+	if int(features.get("product_supply_covered_units", 0)) != 2:
+		return Result.failure("route drink scoring should count covered drink demand: %s" % str(features))
+	return Result.success()
+
 static func _test_strategy_scoring_penalizes_product_overstock(seed_val: int) -> Result:
 	var engine := GameEngine.new()
 	var init := engine.initialize(2, seed_val)
@@ -849,6 +888,47 @@ static func _synthetic_income_observation() -> ObservationState:
 				"anchor_pos": Vector2i(3, 2),
 			},
 		},
+	}
+	return observation
+
+static func _synthetic_drink_route_observation() -> ObservationState:
+	var observation := ObservationState.new()
+	observation.viewer_player_id = 0
+	observation.round_number = 1
+	observation.phase = DefsClass.PHASE_WORKING
+	observation.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
+	observation.own_player = {
+		"id": 0,
+		"cash": 20,
+		"employees": ["truck_driver"],
+		"reserve_employees": [],
+		"busy_marketers": [],
+		"restaurants": ["rest_near"],
+		"inventory": {},
+		"milestones": [],
+	}
+	observation.map_public = {
+		"houses": {
+			"house_near": {
+				"house_number": 1,
+				"anchor_pos": Vector2i(2, 2),
+				"demands": [
+					{"product": "soda"},
+					{"product": "soda"},
+				],
+			},
+		},
+		"restaurants": {
+			"rest_near": {
+				"restaurant_id": "rest_near",
+				"owner": 0,
+				"anchor_pos": Vector2i(3, 2),
+			},
+		},
+		"drink_sources": [
+			{"world_pos": Vector2i(4, 2), "type": "soda"},
+			{"world_pos": Vector2i(8, 2), "type": "beer"},
+		],
 	}
 	return observation
 

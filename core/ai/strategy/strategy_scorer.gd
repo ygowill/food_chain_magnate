@@ -75,10 +75,7 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			features["marketing_value"] = marketing_bonus
 			score += marketing_bonus
 		"produce_food", "procure_drinks":
-			var product_id2 := str(command.params.get("food_type", command.params.get("drink_type", "")))
-			var expected_units := _expected_supply_units(observation, command)
-			var supply_bonus := _product_supply_action_value(product_id2, profile, income_analysis, features, expected_units)
-			features["product_supply_expected_units"] = expected_units
+			var supply_bonus := _supply_action_value(observation, command, profile, income_analysis, features)
 			features["product_supply_action_value"] = supply_bonus
 			score += supply_bonus
 		"set_price", "set_discount", "set_luxury_price":
@@ -208,6 +205,64 @@ static func _product_pipeline_value(product_id: String, profile, income_analysis
 	features["product_can_supply"] = bool(product_payload.get("can_supply", false))
 	return float(product_payload.get("score", 0.0))
 
+static func _supply_action_value(observation: ObservationState, command: Command, profile, income_analysis: Dictionary, features: Dictionary) -> float:
+	if command == null:
+		return 0.0
+	var action_id := str(command.action_id)
+	var product_id := str(command.params.get("food_type", command.params.get("drink_type", "")))
+	if action_id == "procure_drinks" and product_id.is_empty():
+		return _route_drink_supply_action_value(observation, command, profile, income_analysis, features)
+	var expected_units := _expected_supply_units(observation, command)
+	var supply_bonus := _product_supply_action_value(product_id, profile, income_analysis, features, expected_units)
+	features["product_supply_expected_units"] = expected_units
+	return supply_bonus
+
+static func _route_drink_supply_action_value(observation: ObservationState, command: Command, profile, income_analysis: Dictionary, features: Dictionary) -> float:
+	var expected_by_product := _expected_route_drinks_by_product(observation, command)
+	features["drink_route_expected_units_by_product"] = expected_by_product.duplicate(true)
+	if expected_by_product.is_empty():
+		features["drink_route_missing_source_types"] = true
+		return 0.0
+	var product_ids := _sorted_dictionary_keys(expected_by_product)
+	var product_values := {}
+	var total_value := 0.0
+	var total_expected_units := 0
+	var total_covered_units := 0
+	var total_excess_units := 0
+	var total_buffer_units := 0
+	var best_product := ""
+	var best_product_value := -INF
+	var best_features := {}
+	for product_id in product_ids:
+		var expected_units := maxi(1, int(expected_by_product.get(product_id, 0)))
+		var product_features := {}
+		var product_value := _product_supply_action_value(product_id, profile, income_analysis, product_features, expected_units)
+		product_values[product_id] = product_value
+		total_value += product_value
+		total_expected_units += expected_units
+		total_covered_units += int(product_features.get("product_supply_covered_units", 0))
+		total_excess_units += int(product_features.get("product_supply_excess_units", 0))
+		total_buffer_units += int(product_features.get("product_supply_buffer_units", 0))
+		if best_product.is_empty() or product_value > best_product_value:
+			best_product = product_id
+			best_product_value = product_value
+			best_features = product_features
+	features["drink_route_product_values"] = product_values
+	features["product_supply_products"] = product_ids.duplicate()
+	features["product_supply_expected_units"] = total_expected_units
+	features["product_supply_covered_units"] = total_covered_units
+	features["product_supply_excess_units"] = total_excess_units
+	if total_buffer_units > 0:
+		features["product_supply_buffer_units"] = total_buffer_units
+	if not best_product.is_empty():
+		features["product_supply_primary_product"] = best_product
+		for key in ["product_public_demand", "product_serviceable_demand", "product_inventory_units", "product_inventory_gap", "product_can_supply"]:
+			if best_features.has(key):
+				features[key] = best_features[key]
+		if bool(best_features.get("product_overstock_penalty", false)):
+			features["product_overstock_penalty"] = true
+	return total_value
+
 static func _product_supply_action_value(product_id: String, profile, income_analysis: Dictionary, features: Dictionary, expected_units: int = 1) -> float:
 	if product_id.is_empty():
 		return 0.0
@@ -264,8 +319,95 @@ static func _expected_drink_units(observation: ObservationState, command: Comman
 		return 2 if _own_milestones(observation).has("first_errand_boy") else 1
 	var selected_val = command.params.get("selected_sources", [])
 	if selected_val is Array:
-		return maxi(1, Array(selected_val).size() * 2)
+		return maxi(1, Array(selected_val).size() * _route_drinks_per_source(observation, command))
 	return 1
+
+static func _expected_route_drinks_by_product(observation: ObservationState, command: Command) -> Dictionary:
+	var type_counts := _selected_drink_source_type_counts(observation, command)
+	if type_counts.is_empty():
+		return {}
+	var per_source := _route_drinks_per_source(observation, command)
+	var out := {}
+	for product_id in _sorted_dictionary_keys(type_counts):
+		out[product_id] = maxi(1, int(type_counts.get(product_id, 0))) * per_source
+	return out
+
+static func _selected_drink_source_type_counts(observation: ObservationState, command: Command) -> Dictionary:
+	if observation == null or command == null:
+		return {}
+	var selected_val = command.params.get("selected_sources", [])
+	if not (selected_val is Array):
+		return {}
+	var lookup := _drink_source_types_by_position(observation.map_public)
+	if lookup.is_empty():
+		return {}
+	var counts := {}
+	for selected_pos_val in Array(selected_val):
+		var pos := _read_vector2i(selected_pos_val)
+		var product_id := str(lookup.get(_vector_key(pos), ""))
+		if product_id.is_empty():
+			continue
+		counts[product_id] = int(counts.get(product_id, 0)) + 1
+	return counts
+
+static func _drink_source_types_by_position(map_public: Dictionary) -> Dictionary:
+	var out := {}
+	var sources_val = map_public.get("drink_sources", [])
+	if not (sources_val is Array):
+		return out
+	for source_val in Array(sources_val):
+		if not (source_val is Dictionary):
+			continue
+		var source: Dictionary = source_val
+		var product_id := str(source.get("type", "")).strip_edges()
+		if product_id.is_empty():
+			continue
+		var pos := _read_vector2i(source.get("world_pos", Vector2i.ZERO))
+		out[_vector_key(pos)] = product_id
+	return out
+
+static func _route_drinks_per_source(observation: ObservationState, command: Command) -> int:
+	var employee_id := str(command.params.get("employee_type", "")) if command != null else ""
+	return maxi(1, 2 + _procure_plus_one_bonus(observation) + _drinks_per_source_delta(observation, employee_id))
+
+static func _procure_plus_one_bonus(observation: ObservationState) -> int:
+	var bonus_read := MilestoneEffectQueriesClass.sum_positive_int_values(
+		_own_milestones(observation),
+		"procure_plus_one",
+		"StrategyScorer: ",
+		"own_player.milestones"
+	)
+	if not bonus_read.ok:
+		return 0
+	return int(bonus_read.value)
+
+static func _drinks_per_source_delta(observation: ObservationState, employee_id: String) -> int:
+	if employee_id.is_empty():
+		return 0
+	var entries_read := MilestoneEffectQueriesClass.collect_effect_entries(
+		_own_milestones(observation),
+		"drinks_per_source_delta",
+		"StrategyScorer: ",
+		"own_player.milestones"
+	)
+	if not entries_read.ok:
+		return 0
+	var total := 0
+	for entry_val in Array(entries_read.value):
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
+		var eff_val = entry.get("effect", null)
+		if not (eff_val is Dictionary):
+			continue
+		var eff: Dictionary = eff_val
+		var targets_val = eff.get("targets", [])
+		if not (targets_val is Array):
+			continue
+		if not Array(targets_val).has(employee_id):
+			continue
+		total += _read_int(eff.get("value", 0), 0)
+	return total
 
 static func _price_action_value(observation: ObservationState, command: Command, income_analysis: Dictionary, source_state = null) -> Dictionary:
 	var action_id := str(command.action_id) if command != null else ""
@@ -743,6 +885,18 @@ static func _read_vector2i(value) -> Vector2i:
 		if dict.has("x") and dict.has("y"):
 			return Vector2i(int(dict.get("x", 0)), int(dict.get("y", 0)))
 	return Vector2i.ZERO
+
+static func _vector_key(pos: Vector2i) -> String:
+	return "%d,%d" % [pos.x, pos.y]
+
+static func _sorted_dictionary_keys(dict: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for key in dict.keys():
+		var text := str(key)
+		if not text.is_empty():
+			out.append(text)
+	out.sort()
+	return out
 
 static func _sorted_unique_strings(value) -> Array[String]:
 	var out: Array[String] = []
