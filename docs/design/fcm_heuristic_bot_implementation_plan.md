@@ -194,6 +194,7 @@ core/
     strategy/
       strategy_profile.gd
       strategy_candidate_filter.gd
+      strategy_board_analyzer.gd
       strategy_income_analyzer.gd
       strategy_scorer.gd
       phase_policy_*.gd
@@ -949,6 +950,7 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 - `core/ai/bot/strategy_bot.gd`
 - `core/ai/strategy/strategy_profile.gd`
 - `core/ai/strategy/strategy_candidate_filter.gd`
+- `core/ai/strategy/strategy_board_analyzer.gd`
 - `core/ai/strategy/strategy_income_analyzer.gd`
 - `core/ai/strategy/strategy_scorer.gd`
 - `core/tests/ai/strategy_bot_test.gd`
@@ -958,6 +960,7 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 - `CandidateGenerator` 在有 `source_state` 时复用 `MarketingRangeCalculator` 过滤影响不到房屋的营销候选。
 - `StrategyCandidateFilter` 作为后置防线，在 `macro.debug.affected_house_ids` 明确为空时丢弃营销候选，并把原因写入 trace。
 - `StrategyIncomeAnalyzer` 从 `ObservationState` 提取产品需求、可服务需求、库存缺口、供给能力和员工对收入链的贡献。
+- `StrategyBoardAnalyzer` 对餐厅放置/移动做轻量位置评分，优先贴近公开房屋、公开需求和当前尚未服务的需求。
 - `StrategyScorer` 对营销候选记录 `affected_houses`、`marketing_serviceable_houses`、`marketing_inventory_units`、`marketing_can_supply_product` 等特征。营销即使影响房屋，也会因没有己方餐厅、没有库存/生产能力而降权。
 - `StrategyScorer` 对生产/采购候选记录 `product_public_demand`、`product_serviceable_demand`、`product_inventory_gap`、`product_can_supply`，并用这些特征优先补当前可销售产品缺口。
 

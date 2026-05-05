@@ -34,6 +34,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var product_gap_score := _test_strategy_scoring_targets_current_product_gap(seed_val)
 	if not product_gap_score.ok:
 		return product_gap_score
+	var restaurant_placement := _test_restaurant_placement_prefers_near_public_demand(seed_val)
+	if not restaurant_placement.ok:
+		return restaurant_placement
 	return Result.success({
 		"steps": int(first.value.get("steps", 0)),
 		"round": int(first.value.get("round", 0)),
@@ -208,6 +211,39 @@ static func _test_strategy_scoring_targets_current_product_gap(seed_val: int) ->
 		return Result.failure("StrategyScorer should expose product_serviceable_demand: %s" % str(features))
 	return Result.success()
 
+static func _test_restaurant_placement_prefers_near_public_demand(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_restaurant_observation()
+	var near_macro := MacroAction.create(
+		"place_restaurant_near_demand",
+		[Command.create("place_restaurant", 0, {"position": [3, 2], "rotation": 0})],
+		0.0,
+		["setup", "restaurant"],
+		{}
+	)
+	var far_macro := MacroAction.create(
+		"place_restaurant_far_demand",
+		[Command.create("place_restaurant", 0, {"position": [11, 11], "rotation": 0})],
+		0.0,
+		["setup", "restaurant"],
+		{}
+	)
+	var near_score: Dictionary = StrategyScorerClass.score_macro(observation, near_macro, profile)
+	var far_score: Dictionary = StrategyScorerClass.score_macro(observation, far_macro, profile)
+	if float(near_score.get("score", 0.0)) <= float(far_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should prefer restaurant placement near public demand: near=%s far=%s" % [str(near_score), str(far_score)])
+	var features: Dictionary = Dictionary(near_score.get("features", {}))
+	if int(features.get("restaurant_nearby_demand", 0)) <= 0:
+		return Result.failure("restaurant placement features should expose nearby demand: %s" % str(features))
+	if int(features.get("restaurant_nearest_house_distance", -1)) > 2:
+		return Result.failure("restaurant placement features should expose near house distance: %s" % str(features))
+	return Result.success()
+
 static func _synthetic_marketing_observation() -> ObservationState:
 	var observation := ObservationState.new()
 	observation.viewer_player_id = 0
@@ -274,5 +310,39 @@ static func _synthetic_income_observation() -> ObservationState:
 				"anchor_pos": Vector2i(3, 2),
 			},
 		},
+	}
+	return observation
+
+static func _synthetic_restaurant_observation() -> ObservationState:
+	var observation := ObservationState.new()
+	observation.viewer_player_id = 0
+	observation.round_number = 1
+	observation.phase = DefsClass.PHASE_SETUP
+	observation.sub_phase = ""
+	observation.own_player = {
+		"id": 0,
+		"cash": 20,
+		"employees": [],
+		"reserve_employees": [],
+		"busy_marketers": [],
+		"restaurants": [],
+		"inventory": {},
+	}
+	observation.map_public = {
+		"houses": {
+			"house_near": {
+				"house_number": 1,
+				"anchor_pos": Vector2i(2, 2),
+				"demands": [
+					{"product": "burger"},
+				],
+			},
+			"house_far": {
+				"house_number": 2,
+				"anchor_pos": Vector2i(9, 9),
+				"demands": [],
+			},
+		},
+		"restaurants": {},
 	}
 	return observation

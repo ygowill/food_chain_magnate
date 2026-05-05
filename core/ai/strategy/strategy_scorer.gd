@@ -3,6 +3,7 @@ extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const StrategyBoardAnalyzerClass = preload("res://core/ai/strategy/strategy_board_analyzer.gd")
 const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_income_analyzer.gd")
 
 static func score_macro(observation: ObservationState, macro: MacroAction, profile) -> Dictionary:
@@ -66,9 +67,11 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			var pipeline_bonus := _product_pipeline_value(product_id2, profile, income_analysis, features)
 			features["product_pipeline_value"] = pipeline_bonus
 			score += pipeline_bonus
-		"place_restaurant":
-			var restaurant_bonus := 12.0 if _own_restaurant_count(observation) <= 0 else 4.0
+		"place_restaurant", "move_restaurant":
+			var placement_payload := StrategyBoardAnalyzerClass.restaurant_placement_value(observation, command.params, income_analysis)
+			var restaurant_bonus := _restaurant_action_base_value(action_id, observation) + float(placement_payload.get("placement_value", 0.0))
 			features["restaurant_value"] = restaurant_bonus
+			_append_restaurant_placement_features(features, placement_payload)
 			score += restaurant_bonus
 		"choose_turn_order":
 			var position := int(command.params.get("position", 0))
@@ -119,6 +122,22 @@ static func _append_employee_income_features(features: Dictionary, observation: 
 	features["%s_income_employee_value" % prefix] = float(payload.get("score", 0.0))
 	features["%s_income_employee_role" % prefix] = str(payload.get("role", ""))
 	features["%s_target_products" % prefix] = Array(payload.get("target_products", [])).duplicate()
+
+static func _restaurant_action_base_value(action_id: String, observation: ObservationState) -> float:
+	if action_id == "place_restaurant":
+		return 10.0 if _own_restaurant_count(observation) <= 0 else 2.0
+	if action_id == "move_restaurant":
+		return 1.0
+	return 0.0
+
+static func _append_restaurant_placement_features(features: Dictionary, placement_payload: Dictionary) -> void:
+	features["restaurant_candidate_anchor"] = Array(placement_payload.get("candidate_anchor", [])).duplicate()
+	features["restaurant_nearest_house_distance"] = int(placement_payload.get("nearest_house_distance", -1))
+	features["restaurant_nearby_houses"] = int(placement_payload.get("nearby_houses", 0))
+	features["restaurant_nearby_demand"] = int(placement_payload.get("nearby_demand", 0))
+	features["restaurant_total_public_demand"] = int(placement_payload.get("total_public_demand", 0))
+	features["restaurant_unserviceable_demand_covered"] = int(placement_payload.get("unserviceable_demand_covered", 0))
+	features["restaurant_placement_value"] = float(placement_payload.get("placement_value", 0.0))
 
 static func _affected_house_ids(macro: MacroAction) -> Array[String]:
 	var out: Array[String] = []
