@@ -45,6 +45,16 @@
 - 晚餐模拟不得另写一套会长期漂移的规则。首版以 fork 引擎真实推进为正确性基线，再逐步抽取快速 preview。
 - 所有 AI 逻辑应保持纯逻辑、可 headless 测试，不依赖 UI Node。
 
+### 0.4 GreedyBot 定位
+
+`GreedyBot` 不是目标人机对手，只作为流程探针和回归基线保留：
+
+- 验证 `ObservationAdapter`、`CandidateGenerator`、`ForwardSimulator`、`Evaluator`、`DecisionTrace` 能串起来。
+- 验证核心行动链路不会软锁，并能在短程 smoke 中跑过招聘、培训、营销、生产/采购、销售等关键流程。
+- 保留对明显无效动作的正确性过滤，例如营销影响不到任何房屋时不能浪费候选/搜索预算。
+
+不再把 GreedyBot 调成“会玩”的 Bot，不要求它完整打完 2p base 局，也不继续为长期经济规划、里程碑路线、对手反制等目标堆单步贪心补丁。真正的人机对手从 `StrategyBot` 起步，用长期计划和阶段策略驱动候选选择。
+
 ## 1. 当前代码基线
 
 ### 1.1 核心入口
@@ -181,6 +191,11 @@ core/
       beam_search.gd
       time_budget.gd
 
+    strategy/
+      strategy_profile.gd
+      strategy_scorer.gd
+      phase_policy_*.gd
+
     simulation/
       ai_engine_fork.gd
       forward_simulator.gd
@@ -196,6 +211,7 @@ core/tests/
     dinner_preview_golden_test.gd
     candidate_generator_test.gd
     greedy_bot_smoke_test.gd
+    strategy_bot_test.gd
 
 data/
   bots/
@@ -873,9 +889,10 @@ score =
 
 1. `RandomLegalBot`
 2. `ScriptBot`
-3. `GreedyBot`
-4. `OSLABot`
-5. `BeamSearchBot`
+3. `GreedyBot`（流程探针，不作为主力 AI）
+4. `StrategyBot`
+5. `OSLABot`
+6. `BeamSearchBot`
 
 首版不要直接上 MCTS。当前游戏分支因子高、结算复杂、隐藏信息多，先把候选和 forward simulation 做准更重要。
 
@@ -893,9 +910,9 @@ score =
 - 对需要参数的 action 必须有最小合法参数生成器。
 - 若无真实动作，选择 `skip_sub_phase` 或 `skip`。
 
-### 11.3 GreedyBot
+### 11.3 GreedyBot（流程探针）
 
-流程：
+GreedyBot 的流程仍保留：
 
 1. 识别决策点。
 2. 生成 topN 候选。
@@ -904,7 +921,37 @@ score =
 5. 用 Evaluator 打分。
 6. 选择最高分合法命令。
 
-### 11.4 OSLA / Beam
+但验收范围只到 smoke baseline：
+
+- 固定 seed 下 deterministic。
+- 能跑过关键阶段并暴露候选/模拟/评分链路问题。
+- 不以长期胜率、完整局强度或稳定经济路线作为验收目标。
+
+### 11.4 StrategyBot
+
+StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork 贪心，而是：
+
+1. 读取 `ObservationState`。
+2. 复用 `CandidateGenerator` 产生合法 `MacroAction`。
+3. 用 `StrategyProfile` 定义长期偏好（收入路线、员工路线、商品优先级、风险阈值）。
+4. 用阶段策略评分候选，例如：
+   - Restructuring：优先激活当前计划需要的生产/营销/采购/培训员工。
+   - Recruit/Train：按当前能力缺口和路线目标选人。
+   - Marketing：只考虑能影响房屋的营销，并按受影响房屋、商品供应能力、已有库存评分。
+   - GetFood/GetDrinks：按下一轮需求、库存缺口和供应能力评分。
+   - Payday/Cleanup：优先现金安全与保留可服务需求的库存。
+5. 生成 `DecisionTrace`，输出 profile id、top candidates、features 与 discarded reasons。
+
+当前已落地最小骨架：
+
+- `core/ai/bot/strategy_bot.gd`
+- `core/ai/strategy/strategy_profile.gd`
+- `core/ai/strategy/strategy_scorer.gd`
+- `core/tests/ai/strategy_bot_test.gd`
+
+这只是策略框架和 smoke 验证，还不是完整强度版本。后续应把 `StrategyProfile` 从硬编码默认值迁移到 `data/bots/*.json`，并把阶段策略拆成更小的可测试组件。
+
+### 11.5 OSLA / Beam
 
 OSLA 用一层自己的候选 + 对手简单策略 response。
 
@@ -1041,7 +1088,8 @@ tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
 当前实现状态：
 
 - `core/tests/ai/random_legal_bot_smoke_test.gd`：两个 `RandomLegalBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic。
-- `core/tests/ai/greedy_bot_smoke_test.gd`：保留 GreedyBot 短程 deterministic 校验，并新增单程跑到至少第 3 轮或 GameOver 的 smoke。完整打完 2p base 局仍未完成。
+- `core/tests/ai/greedy_bot_smoke_test.gd`：保留 GreedyBot 短程 deterministic 校验，并新增单程跑到至少第 3 轮或 GameOver 的 smoke。GreedyBot 不再要求完整打完 2p base 局。
+- `core/tests/ai/strategy_bot_test.gd`：两个 `StrategyBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic 与 strategy trace 元数据。
 
 ## 15. 开发路线图
 
@@ -1082,28 +1130,36 @@ Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[f
   - salary/fire
   - cleanup
 
-### Phase 3：GreedyBot MVP
+### Phase 3：GreedyBot 流程基线
 
 - 实现线性 Evaluator。
-- GreedyBot 可完整打完 2p base 局。
+- GreedyBot 能作为候选/模拟/评分链路 smoke baseline。
 - 记录 DecisionTrace。
-- 加入难度 JSON。
+- 明确不再要求 GreedyBot 成为实际可用的人机对手。
 
-### Phase 4：OSLA 与 Beam
+### Phase 4：StrategyBot MVP
+
+- 实现 `StrategyProfile` 与 `StrategyScorer`。
+- StrategyBot 复用候选生成器和 validator，不直接读隐藏状态。
+- StrategyBot 固定 seed 自对弈能到第 3 轮或 GameOver。
+- 将默认 profile 迁移到 `data/bots/*.json`。
+- 拆分阶段策略器并补 targeted tests。
+
+### Phase 5：OSLA 与 Beam
 
 - 实现简单 opponent policy。
 - OSLA 加入一层对手响应。
 - Beam 只枚举 MacroAction topK。
 - 加时间预算与 deterministic seed。
 
-### Phase 5：自对弈调参
+### Phase 6：自对弈调参
 
 - `tools/run_bot_selfplay.gd`
 - 输出 JSONL match logs。
 - 支持固定 bot config 对战。
 - 先做简单网格/随机搜索，再考虑 SPSA。
 
-### Phase 6：产品接入
+### Phase 7：产品接入
 
 - UI/本地游戏可选择 Bot 玩家。
 - 在线/房间配置中 Bot 不泄露隐藏信息。
@@ -1123,7 +1179,9 @@ Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[f
 7. DinnerPreview golden。
 8. Greedy 生产/饮料/营销。
 9. Payday fire 策略。
-10. 自对弈 smoke。
+10. GreedyBot smoke baseline 收口。
+11. StrategyBot 框架与 smoke。
+12. 自对弈工具。
 
 ## 17. 常见失败模式
 
@@ -1160,9 +1218,11 @@ Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[f
 ### 强度
 
 - [x] RandomLegalBot 无 round 3 smoke softlock（完整局仍待自对弈工具覆盖）。
-- [ ] GreedyBot 能完整打完 2p base 局。
+- [x] GreedyBot 作为流程 smoke baseline 能到第 3 轮或 GameOver。
+- [x] StrategyBot 最小骨架能到第 3 轮或 GameOver。
+- [ ] StrategyBot 能形成稳定收入路线并完成 base 关键里程碑规划。
 - [x] 决策 trace 可解释最高分候选。
-- [x] 固定 seed 下 RandomLegalBot selfplay deterministic；GreedyBot 短程 deterministic。
+- [x] 固定 seed 下 RandomLegalBot、GreedyBot、StrategyBot selfplay deterministic。
 - [x] 搜索超时有合法 fallback。
 
 ## 19. 后续模块支持顺序建议
