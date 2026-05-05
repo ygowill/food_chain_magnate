@@ -80,8 +80,6 @@ func _choose_command_with_options(
 	var best_features := {}
 	var ranked: Array[Dictionary] = []
 	for macro_val in candidates:
-		if budget != null and budget.expired() and best_macro != null:
-			break
 		if not (macro_val is MacroAction):
 			continue
 		var macro: MacroAction = macro_val
