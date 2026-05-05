@@ -26,6 +26,10 @@ static func build_tests(_host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.OSLASearchTestClass.run(2, 12345),
 		},
 		{
+			"name": "BeamSearchTest",
+			"fn": func() -> Result: return TestRefs.BeamSearchTestClass.run(2, 12345),
+		},
+		{
 			"name": "GreedyBotSmokeTest",
 			"fn": func() -> Result: return TestRefs.GreedyBotSmokeTestClass.run(2, 12345),
 		},

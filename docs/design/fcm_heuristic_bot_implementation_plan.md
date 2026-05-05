@@ -895,7 +895,7 @@ score =
 3. `GreedyBot`（流程探针，不作为主力 AI）
 4. `StrategyBot`
 5. `OSLABot`
-6. `BeamSearchBot`
+6. `BeamBot`
 
 首版不要直接上 MCTS。当前游戏分支因子高、结算复杂、隐藏信息多，先把候选和 forward simulation 做准更重要。
 
@@ -970,7 +970,7 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 - `StrategyScorer` 对 `fire` 候选记录发薪现金、估算应付、短缺、解雇后的有效薪资缓解和员工收入价值；发薪短缺时优先解雇收入链价值较低的可付薪员工。
 - `DinnerPreview` 已用 `AiEngineFork` fork 当前 engine，通过真实 `execute_command()` 和 settlement hooks 推进到 Dinnertime，并在返回前恢复 source engine 的 registry bundle。
 - `DinnerPreviewGoldenTest` 已覆盖基础销售、花园收入、drive-through 入口点与 source 不变性/registry 恢复，比较 preview 与真实 Dinnertime report 的关键字段和库存消耗。
-- `tools/run_bot_selfplay.gd` / `tools/run_bot_selfplay.sh` 提供 Bot 自对弈入口，默认运行 StrategyBot，也可用 `--bot=osla` 运行 OSLABot；输出每局终局摘要、action counts、trace tail 与可选 JSONL。
+- `tools/run_bot_selfplay.gd` / `tools/run_bot_selfplay.sh` 提供 Bot 自对弈入口，默认运行 StrategyBot，也可用 `--bot=osla` / `--bot=beam` 运行 OSLABot 或 BeamBot；输出每局终局摘要、action counts、trace tail 与可选 JSONL。
 
 这仍只是策略框架和 smoke 验证，还不是完整强度版本。后续应增加更多 `data/bots/*.json` 难度配置，并把阶段策略拆成更小的可测试组件。餐厅放置/移动在 StrategyBot 的 engine 路径下已经优先使用 road graph，但没有 source state 的离线评分仍会保留 anchor 回退。
 
@@ -990,9 +990,16 @@ Beam Search 用 `MacroAction` 而不是裸 action 枚举，并设置：
 当前已落地 OSLA 的最小搜索骨架：
 
 - `core/ai/search/osla_search.gd` 复用 `CandidateGenerator`、`StrategyCandidateFilter`、`StrategyScorer`、`ForwardSimulator` 与 `Evaluator`。流程是先用 StrategyScorer 对当前候选排序，只模拟 topK；每个候选在 fork engine 上执行后，尝试为下一个非己方玩家生成一层简单 response，再从己方视角观察最终 fork state 并用 Evaluator 加权。
-- `core/ai/bot/osla_bot.gd` 是薄包装；有 engine 时走 `OSLASearch`，没有 engine 或搜索失败时回退到 `StrategyBot`。因此 OSLA 目前不会替代默认 `StrategyBot`；`tools/run_bot_selfplay.gd` 默认仍跑 StrategyBot，但可显式传入 `--bot=osla` 做对照。
+- `core/ai/bot/osla_bot.gd` 是薄包装；有 engine 时走 `OSLASearch`，没有 engine 或搜索失败时回退到 `StrategyBot`。因此 OSLA 目前不会替代默认 `StrategyBot`；`tools/run_bot_selfplay.gd` 默认仍跑 StrategyBot，但可显式传入 `--bot=osla` 或 `--bot=beam` 做对照。
 - `OSLASearch` 的 trace 暴露 `osla_strategy_score`、`osla_eval_score`、`osla_opponent_response_*`、top candidates、discarded reasons 与耗时，用于后续比较 StrategyBot 单步评分、OSLA、Beam 和未来 MCTS 的差异。
 - 这一层仍不是 MCTS：没有 rollout、tree policy、visit count 或 backpropagation。它的作用是验证 fork simulation、response policy、隐藏信息观察和 deterministic 排序能在同一接口里稳定工作。
+
+当前已落地 Beam 的最小搜索骨架：
+
+- `core/ai/search/beam_search.gd` 在根节点按 `StrategyScorer` 排序并只模拟 topK `MacroAction`。后续每一层从当前 fork engine 中解析下一位需要决策的玩家，继续复用 `ObservationAdapter`、`LegalActionService`、`CandidateGenerator`、`StrategyCandidateFilter`、`StrategyScorer` 与 `ForwardSimulator` 展开候选。
+- Beam 节点用根玩家视角的 `Evaluator` 评估最终 fork state；己方行动的策略分正向进入路径分，对手行动的策略分按 `opponent_weight` 负向进入路径分。当前默认配置是小宽度/浅深度，用于验证流程和 trace，不用于最终强度。
+- `core/ai/bot/beam_bot.gd` 是薄包装；有 engine 时走 `BeamSearch`，没有 engine 或搜索失败时回退到 `OSLABot`。`tools/run_bot_selfplay.gd` 支持 `--bot=beam` 做固定 seed 对照。
+- `BeamSearch` 的 trace 暴露 `beam_width`、`max_depth`、`deepest_depth`、`attempted_simulations`、`expanded_nodes`、`beam_path`、`beam_eval_score` 与 top nodes。后续调参会优先比较 StrategyBot、OSLA、Beam 在同 seed JSONL 中的行动分布、库存/现金/里程碑趋势。
 
 ## 12. 模块扩展契约
 
@@ -1118,6 +1125,7 @@ tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
 当前实现状态：
 
 - `core/tests/ai/osla_search_test.gd`：验证 OSLASearch 不修改 source engine、返回合法命令、输出 OSLA 评分/response trace、同 seed deterministic，并验证 OSLABot 无 engine 时回退到 StrategyBot。
+- `core/tests/ai/beam_search_test.gd`：验证 BeamSearch 不修改 source engine、返回合法命令、输出 beam path/eval trace、同 seed deterministic，并验证 BeamBot 无 engine 时回退到 OSLABot/StrategyBot 链路。
 - `core/tests/ai/random_legal_bot_smoke_test.gd`：两个 `RandomLegalBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic。
 - `core/tests/ai/greedy_bot_smoke_test.gd`：保留 GreedyBot 短程 deterministic 校验，并新增单程跑到至少第 3 轮或 GameOver 的 smoke。GreedyBot 不再要求完整打完 2p base 局。
 - `core/tests/ai/strategy_bot_test.gd`：两个 `StrategyBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic、strategy trace 元数据、profile 数据加载、营销空覆盖候选过滤、营销商品候选排序、营销可服务房屋/活跃供给评分、招聘 roster 饱和度、收入缺口、生产补缺口/过量库存惩罚、冰箱保留、餐厅位置/road graph 评分、Payday 解雇评分等特征。
@@ -1180,9 +1188,9 @@ Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[f
 ### Phase 5：OSLA 与 Beam
 
 - 已实现 OSLA 最小搜索骨架：候选 topK、fork simulation、简单 opponent response、Evaluator 加权和 deterministic trace。
+- 已实现 Beam 最小搜索骨架：小宽度、多深度、按下一决策玩家展开、根玩家视角评估和 deterministic trace。
 - 后续完善 opponent policy 的强度、预算分配和跨阶段 response horizon。
-- Beam 只枚举 MacroAction topK。
-- 加时间预算与 deterministic seed。
+- 后续完善 Beam 的预算分配、候选裁剪和跨阶段 horizon。
 
 ### Phase 6：自对弈调参
 
@@ -1214,6 +1222,7 @@ Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[f
 10. GreedyBot smoke baseline 收口。
 11. StrategyBot 框架与 smoke。
 12. 自对弈工具。
+13. OSLA / Beam 搜索骨架与对照 smoke。
 
 ## 17. 常见失败模式
 
@@ -1252,9 +1261,10 @@ Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[f
 - [x] RandomLegalBot 无 round 3 smoke softlock（完整局仍待自对弈工具覆盖）。
 - [x] GreedyBot 作为流程 smoke baseline 能到第 3 轮或 GameOver。
 - [x] StrategyBot 最小骨架能到第 3 轮或 GameOver。
+- [x] OSLA / Beam 最小搜索骨架能通过 fixed seed smoke。
 - [ ] StrategyBot 能形成稳定收入路线并完成 base 关键里程碑规划。
 - [x] 决策 trace 可解释最高分候选。
-- [x] 固定 seed 下 RandomLegalBot、GreedyBot、StrategyBot selfplay deterministic。
+- [x] 固定 seed 下 RandomLegalBot、GreedyBot、StrategyBot selfplay deterministic；OSLA / Beam 已有 targeted deterministic test。
 - [x] 搜索超时有合法 fallback。
 
 ## 19. 后续模块支持顺序建议

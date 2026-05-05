@@ -3,6 +3,7 @@ extends SceneTree
 const BotControllerClass = preload("res://core/ai/bot/bot_controller.gd")
 const StrategyBotClass = preload("res://core/ai/bot/strategy_bot.gd")
 const OSLABotClass = preload("res://core/ai/bot/osla_bot.gd")
+const BeamBotClass = preload("res://core/ai/bot/beam_bot.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const NAME := "BotSelfplay"
@@ -56,8 +57,8 @@ static func run(options: Dictionary) -> Result:
 		return Result.failure("--max-steps must be > 0")
 	if budget_ms <= 0:
 		return Result.failure("--budget-ms must be > 0")
-	if not ["strategy", "osla"].has(bot_id):
-		return Result.failure("--bot must be strategy or osla")
+	if not ["strategy", "osla", "beam"].has(bot_id):
+		return Result.failure("--bot must be strategy, osla, or beam")
 
 	var file: FileAccess = null
 	if not output_jsonl.is_empty():
@@ -165,6 +166,8 @@ static func _create_bot(bot_id: String) -> Result:
 			return Result.success(StrategyBotClass.new())
 		"osla":
 			return Result.success(OSLABotClass.new())
+		"beam":
+			return Result.success(BeamBotClass.new())
 		_:
 			return Result.failure("unknown bot: %s" % bot_id)
 
@@ -360,4 +363,4 @@ static func _parse_args(args: Array[String]) -> Result:
 	return Result.success(options)
 
 static func _print_usage() -> void:
-	print("Usage: tools/run_bot_selfplay.sh [--bot=strategy|osla] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--output-jsonl=res://.godot/bot_selfplay.jsonl]")
+	print("Usage: tools/run_bot_selfplay.sh [--bot=strategy|osla|beam] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--output-jsonl=res://.godot/bot_selfplay.jsonl]")
