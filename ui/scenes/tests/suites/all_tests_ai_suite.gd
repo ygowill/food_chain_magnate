@@ -13,4 +13,8 @@ static func build_tests(_host) -> Array[Dictionary]:
 			"name": "LegalActionServiceTest",
 			"fn": func() -> Result: return TestRefs.LegalActionServiceTestClass.run(2, 12345),
 		},
+		{
+			"name": "RandomLegalBotSmokeTest",
+			"fn": func() -> Result: return TestRefs.RandomLegalBotSmokeTestClass.run(2, 12345),
+		},
 	]

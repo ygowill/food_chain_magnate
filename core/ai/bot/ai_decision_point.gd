@@ -55,4 +55,17 @@ static func _has_cleanup_pending(round_state: Dictionary) -> bool:
 
 static func _has_pending_confirmation(round_state: Dictionary) -> bool:
 	var pending_val = round_state.get("pending_phase_actions", null)
-	return pending_val is Array and not Array(pending_val).is_empty()
+	if not (pending_val is Dictionary):
+		return false
+	var pending: Dictionary = pending_val
+	return _phase_has_pending_kind(pending, "Dinnertime", "confirm_dinnertime") \
+		or _phase_has_pending_kind(pending, "Marketing", "confirm_marketing")
+
+static func _phase_has_pending_kind(pending: Dictionary, phase_name: String, kind: String) -> bool:
+	var list_val = pending.get(phase_name, null)
+	if not (list_val is Array):
+		return false
+	for item in Array(list_val):
+		if item is Dictionary and str(Dictionary(item).get("kind", "")) == kind:
+			return true
+	return false

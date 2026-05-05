@@ -4,11 +4,14 @@ extends RefCounted
 const DecisionPointClass = preload("res://core/ai/bot/ai_decision_point.gd")
 
 const INTERNAL_ACTION_DECISION_POINTS := {
+	# Setup/ReserveCards: the UI action is internal because selection is secret.
 	"select_reserve_card": "RESERVE_CARD",
+	# Restructuring: internal drag/drop edits plus explicit submit.
 	"restructure_employee": "RESTRUCTURING",
 	"set_company_structure_direct": "RESTRUCTURING",
 	"set_company_structure_report": "RESTRUCTURING",
 	"submit_restructuring": "RESTRUCTURING",
+	# Cleanup: pending fridge choices are modal/internal, not normal turn actions.
 	"choose_fridge_keep": "CLEANUP_PENDING",
 }
 

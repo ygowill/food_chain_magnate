@@ -122,6 +122,7 @@ const GameOverWinnerRulesTestClass = preload("res://core/tests/game_over_winner_
 const CommandPrivacyTestClass = preload("res://core/tests/command_privacy_test.gd")
 const ObservationAdapterTestClass = preload("res://core/tests/ai/observation_adapter_test.gd")
 const LegalActionServiceTestClass = preload("res://core/tests/ai/legal_action_service_test.gd")
+const RandomLegalBotSmokeTestClass = preload("res://core/tests/ai/random_legal_bot_smoke_test.gd")
 const InitialCompanyTestClass = preload("res://core/tests/initial_company_test.gd")
 const MandatoryActionsTestClass = preload("res://core/tests/mandatory_actions_test.gd")
 const TrainPhaseStartCountsStateAccessTestClass = preload("res://core/tests/train_phase_start_counts_state_access_test.gd")
