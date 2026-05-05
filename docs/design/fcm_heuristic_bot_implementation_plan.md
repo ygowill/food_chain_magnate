@@ -967,8 +967,10 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 - `StrategyScorer` 对生产/采购候选记录 `product_public_demand`、`product_serviceable_demand`、`product_inventory_gap`、`product_can_supply`，并用这些特征优先补当前可销售产品缺口。
 - `CandidateGenerator` 在 `choose_fridge_keep` 中复用 `StrategyIncomeAnalyzer.build_fridge_keep()`，按可服务需求、公开需求和可补给性逐单位选择冰箱保留库存，而不是简单保留最大库存堆。
 - `StrategyScorer` 对 `fire` 候选记录发薪现金、估算应付、短缺、解雇后的有效薪资缓解和员工收入价值；发薪短缺时优先解雇收入链价值较低的可付薪员工。
+- `DinnerPreview` 已用 `AiEngineFork` fork 当前 engine，通过真实 `execute_command()` 和 settlement hooks 推进到 Dinnertime，并在返回前恢复 source engine 的 registry bundle。
+- `DinnerPreviewGoldenTest` 已覆盖基础销售、花园收入、drive-through 入口点与 source 不变性/registry 恢复，比较 preview 与真实 Dinnertime report 的关键字段和库存消耗。
 
-这仍只是策略框架和 smoke 验证，还不是完整强度版本。后续应把 `StrategyProfile` 从硬编码默认值迁移到 `data/bots/*.json`，并把阶段策略拆成更小的可测试组件。营销可服务性目前使用 observation 上的己方餐厅与房屋 anchor 的近似距离；进入 DinnerPreview / BoardAnalyzer 阶段后，应复用真实 `DinnertimeDistance` / road graph 做 golden 对齐。
+这仍只是策略框架和 smoke 验证，还不是完整强度版本。后续应增加更多 `data/bots/*.json` 难度配置，并把阶段策略拆成更小的可测试组件。营销可服务性目前使用 observation 上的己方餐厅与房屋 anchor 的近似距离；后续应把 StrategyScorer / StrategyBoardAnalyzer 的距离特征接到真实 `DinnertimeDistance` / road graph。
 
 ### 11.5 OSLA / Beam
 
@@ -1108,7 +1110,8 @@ tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
 
 - `core/tests/ai/random_legal_bot_smoke_test.gd`：两个 `RandomLegalBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic。
 - `core/tests/ai/greedy_bot_smoke_test.gd`：保留 GreedyBot 短程 deterministic 校验，并新增单程跑到至少第 3 轮或 GameOver 的 smoke。GreedyBot 不再要求完整打完 2p base 局。
-- `core/tests/ai/strategy_bot_test.gd`：两个 `StrategyBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic、strategy trace 元数据、营销空覆盖候选过滤、营销可服务房屋评分特征。
+- `core/tests/ai/strategy_bot_test.gd`：两个 `StrategyBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic、strategy trace 元数据、profile 数据加载、营销空覆盖候选过滤、营销可服务房屋评分、收入缺口、冰箱保留、餐厅位置、Payday 解雇评分等特征。
+- `core/tests/ai/dinner_preview_golden_test.gd`：从同一前置状态分别跑真实 engine 与 `DinnerPreview`，校验基础销售、花园收入、drive-through 入口点、关键 Dinnertime report 字段、库存消耗、source 不变性和 registry 恢复。
 
 ## 15. 开发路线图
 
@@ -1219,19 +1222,19 @@ Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[f
 
 ### 架构
 
-- [ ] AI 核心在 `core/ai/`，不依赖 UI Node。
-- [ ] Bot 只输出 `Command`。
-- [ ] 所有候选命令经当前 validator 校验。
-- [ ] ObservationAdapter 是唯一真实状态入口。
-- [ ] Simulation 复用当前 `GameEngine` 和 settlement hooks。
+- [x] AI 核心在 `core/ai/`，不依赖 UI Node。
+- [x] Bot 只输出 `Command`。
+- [x] 所有候选命令经当前 validator 校验。
+- [x] ObservationAdapter 是 Bot 决策的真实状态入口。
+- [x] Simulation 复用当前 `GameEngine` 和 settlement hooks。
 
 ### 规则
 
 - [x] Errand Boy 规则已按规则书修复并测试。
-- [ ] 初始餐厅 pass 当前禁用但接口保留。
-- [ ] DinnerPreview 与真实 settlement 有 golden test。
+- [x] 初始餐厅 pass 当前禁用但接口保留。
+- [x] DinnerPreview 与真实 settlement 有 golden test。
 - [ ] Pricing 使用 `PricingPipeline` / `round_state.price_modifiers`。
-- [ ] Drive-through 使用 `Structures.get_restaurant_entrance_points()`。
+- [x] Drive-through 使用 `Structures.get_restaurant_entrance_points()`。
 - [ ] Cleanup、Payday、Marketing 均通过真实 settlement 模拟。
 
 ### 强度

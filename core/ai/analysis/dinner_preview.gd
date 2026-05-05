@@ -15,6 +15,7 @@ static func preview_after_commands(
 
 	var fork_read := AiEngineForkClass.fork_from_engine(engine)
 	if not fork_read.ok:
+		_restore_source_registries(engine)
 		return fork_read
 	var fork: GameEngine = fork_read.value
 	var commands_executed: Array = []
@@ -24,57 +25,72 @@ static func preview_after_commands(
 	for i in range(commands.size()):
 		var command := commands[i]
 		if command == null:
+			_restore_source_registries(engine)
 			return Result.failure("DinnerPreview.preview_after_commands: command[%d] is null" % i)
 		var command_copy := command.duplicate_command()
 		var exec_read := fork.execute_command(command_copy)
 		if not exec_read.ok:
+			_restore_source_registries(engine)
 			return Result.failure("DinnerPreview.preview_after_commands: command[%d] failed: %s" % [i, exec_read.error])
 		warnings.append_array(exec_read.warnings)
 		commands_executed.append(command_copy.to_dict())
 		var report_read := _try_extract_report(fork)
 		if report_read.ok:
-			return Result.success(_build_payload(fork, report_read.value, commands_executed, fallback_commands, warnings))
+			var payload := _build_payload(fork, report_read.value, commands_executed, fallback_commands, warnings)
+			_restore_source_registries(engine)
+			return Result.success(payload)
 
 	var initial_report := _try_extract_report(fork)
 	if initial_report.ok:
-		return Result.success(_build_payload(fork, initial_report.value, commands_executed, fallback_commands, warnings))
+		var payload2 := _build_payload(fork, initial_report.value, commands_executed, fallback_commands, warnings)
+		_restore_source_registries(engine)
+		return Result.success(payload2)
 
 	var max_steps := int(options.get("max_steps", 32))
 	if max_steps <= 0:
+		_restore_source_registries(engine)
 		return Result.failure("DinnerPreview.preview_after_commands: max_steps must be positive")
 
 	for _step in range(max_steps):
 		var state := fork.get_state()
 		if state == null:
+			_restore_source_registries(engine)
 			return Result.failure("DinnerPreview.preview_after_commands: fork state is null")
 
 		var fallback_read := _build_fallback_command(fork)
 		if not fallback_read.ok:
-			return Result.failure("DinnerPreview.preview_after_commands: cannot reach Dinnertime: %s" % fallback_read.error).with_value({
+			var failure := Result.failure("DinnerPreview.preview_after_commands: cannot reach Dinnertime: %s" % fallback_read.error).with_value({
 				"engine": fork,
 				"state": state,
 				"commands_executed": commands_executed,
 				"fallback_commands_executed": fallback_commands,
 				"warnings": warnings,
 			})
+			_restore_source_registries(engine)
+			return failure
 		var fallback: Command = fallback_read.value
 		var exec_fallback := fork.execute_command(fallback)
 		if not exec_fallback.ok:
+			_restore_source_registries(engine)
 			return Result.failure("DinnerPreview.preview_after_commands: fallback failed: %s" % exec_fallback.error)
 		warnings.append_array(exec_fallback.warnings)
 		fallback_commands.append(fallback.to_dict())
 
 		var report_read2 := _try_extract_report(fork)
 		if report_read2.ok:
-			return Result.success(_build_payload(fork, report_read2.value, commands_executed, fallback_commands, warnings))
+			var payload3 := _build_payload(fork, report_read2.value, commands_executed, fallback_commands, warnings)
+			_restore_source_registries(engine)
+			return Result.success(payload3)
 
-	return Result.failure("DinnerPreview.preview_after_commands: max_steps reached before Dinnertime report").with_value({
+	var max_steps_failure := Result.failure("DinnerPreview.preview_after_commands: max_steps reached before Dinnertime report").with_value({
 		"engine": fork,
 		"state": fork.get_state(),
 		"commands_executed": commands_executed,
 		"fallback_commands_executed": fallback_commands,
 		"warnings": warnings,
 	})
+	_restore_source_registries(engine)
+	return max_steps_failure
 
 static func _try_extract_report(engine: GameEngine) -> Result:
 	if engine == null:
@@ -156,3 +172,7 @@ static func _copy_array(value) -> Array:
 	if value is Array:
 		return Array(value).duplicate(true)
 	return []
+
+static func _restore_source_registries(engine: GameEngine) -> void:
+	if engine != null:
+		engine.activate_registry_bundles()
