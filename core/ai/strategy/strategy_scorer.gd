@@ -5,6 +5,7 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
+const PricingPipelineClass = preload("res://core/rules/pricing_pipeline.gd")
 const BoardAnalyzerClass = preload("res://core/ai/analysis/board_analyzer.gd")
 const MilestoneRaceAnalyzerClass = preload("res://core/ai/analysis/milestone_race_analyzer.gd")
 const StrategyBoardAnalyzerClass = preload("res://core/ai/strategy/strategy_board_analyzer.gd")
@@ -80,6 +81,10 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			features["product_supply_expected_units"] = expected_units
 			features["product_supply_action_value"] = supply_bonus
 			score += supply_bonus
+		"set_price", "set_discount", "set_luxury_price":
+			var price_payload := _price_action_value(observation, command, income_analysis, options.get("source_state", null))
+			_append_price_features(features, price_payload)
+			score += float(price_payload.get("value", 0.0))
 		"place_restaurant", "move_restaurant":
 			var placement_payload := StrategyBoardAnalyzerClass.restaurant_placement_value(
 				observation,
@@ -261,6 +266,81 @@ static func _expected_drink_units(observation: ObservationState, command: Comman
 	if selected_val is Array:
 		return maxi(1, Array(selected_val).size() * 2)
 	return 1
+
+static func _price_action_value(observation: ObservationState, command: Command, income_analysis: Dictionary, source_state = null) -> Dictionary:
+	var action_id := str(command.action_id) if command != null else ""
+	var player_id := int(command.actor) if command != null else -1
+	var delta := _price_action_delta(action_id)
+	var price_payload := _current_unit_price_payload(observation, source_state, player_id)
+	var current_unit_price := int(price_payload.get("unit_price", 10))
+	var projected_unit_price := current_unit_price + delta
+	var serviceable_units := maxi(0, int(income_analysis.get("total_serviceable_demand", 0)))
+	var inventory_units := _total_inventory_units(observation)
+	var estimated_sale_units := serviceable_units if inventory_units <= 0 else mini(serviceable_units, inventory_units)
+	var revenue_delta := delta * estimated_sale_units
+	var competition_delta := -delta * serviceable_units
+	var value := float(revenue_delta) * 0.35 + float(competition_delta) * 0.65
+	if serviceable_units <= 0:
+		value -= float(absi(delta)) * 0.5
+	return {
+		"value": value,
+		"source": str(price_payload.get("source", "observation")),
+		"current_unit_price": current_unit_price,
+		"action_delta": delta,
+		"projected_unit_price": projected_unit_price,
+		"round_modifier_total": int(price_payload.get("round_modifier_total", 0)),
+		"serviceable_demand": serviceable_units,
+		"inventory_units": inventory_units,
+		"estimated_sale_units": estimated_sale_units,
+		"revenue_delta_estimate": revenue_delta,
+		"competition_delta_estimate": competition_delta,
+	}
+
+static func _append_price_features(features: Dictionary, price_payload: Dictionary) -> void:
+	features["price_source"] = str(price_payload.get("source", "observation"))
+	features["price_current_unit_price"] = int(price_payload.get("current_unit_price", 0))
+	features["price_action_delta"] = int(price_payload.get("action_delta", 0))
+	features["price_projected_unit_price"] = int(price_payload.get("projected_unit_price", 0))
+	features["price_round_modifier_total"] = int(price_payload.get("round_modifier_total", 0))
+	features["price_serviceable_demand"] = int(price_payload.get("serviceable_demand", 0))
+	features["price_inventory_units"] = int(price_payload.get("inventory_units", 0))
+	features["price_estimated_sale_units"] = int(price_payload.get("estimated_sale_units", 0))
+	features["price_revenue_delta_estimate"] = int(price_payload.get("revenue_delta_estimate", 0))
+	features["price_competition_delta_estimate"] = int(price_payload.get("competition_delta_estimate", 0))
+	features["price_action_value"] = float(price_payload.get("value", 0.0))
+
+static func _current_unit_price_payload(observation: ObservationState, source_state, player_id: int) -> Dictionary:
+	if source_state is GameState:
+		var pipeline_read := PricingPipelineClass.calculate_unit_price(source_state, player_id)
+		if pipeline_read.ok:
+			return {
+				"unit_price": int(pipeline_read.value),
+				"source": "pricing_pipeline",
+				"round_modifier_total": _price_modifier_total_from_round_state(source_state.round_state, player_id),
+			}
+	return {
+		"unit_price": _fallback_current_unit_price(observation, player_id),
+		"source": "observation",
+		"round_modifier_total": _price_modifier_total_from_round_state(observation.round_state_public if observation != null else {}, player_id),
+	}
+
+static func _fallback_current_unit_price(observation: ObservationState, player_id: int) -> int:
+	if observation == null:
+		return 10
+	var unit_price := _read_non_negative_int(observation.rules_public.get("base_unit_price", 10), 10)
+	unit_price += _base_price_delta(observation)
+	unit_price += _price_modifier_total_from_round_state(observation.round_state_public, player_id)
+	return unit_price
+
+static func _price_action_delta(action_id: String) -> int:
+	match action_id:
+		"set_price":
+			return -1
+		"set_discount":
+			return -3
+		"set_luxury_price":
+			return 10
+	return 0
 
 static func _append_employee_income_features(features: Dictionary, observation: ObservationState, employee_id: String, income_analysis: Dictionary, profile, prefix: String) -> void:
 	var payload := StrategyIncomeAnalyzerClass.employee_value(observation, employee_id, profile, income_analysis)
@@ -531,6 +611,30 @@ static func _inventory_count(observation: ObservationState, product_id: String) 
 		return 0
 	return maxi(0, int(Dictionary(inventory_val).get(product_id, 0)))
 
+static func _total_inventory_units(observation: ObservationState) -> int:
+	if observation == null:
+		return 0
+	var inventory_val = observation.own_player.get("inventory", {})
+	if not (inventory_val is Dictionary):
+		return 0
+	var total := 0
+	for amount_val in Dictionary(inventory_val).values():
+		total += maxi(0, _read_int(amount_val, 0))
+	return total
+
+static func _price_modifier_total_from_round_state(round_state: Dictionary, player_id: int) -> int:
+	var modifiers_val = round_state.get("price_modifiers", {})
+	if not (modifiers_val is Dictionary):
+		return 0
+	var price_modifiers: Dictionary = modifiers_val
+	var player_modifiers_val = price_modifiers.get(player_id, price_modifiers.get(str(player_id), {}))
+	if not (player_modifiers_val is Dictionary):
+		return 0
+	var total := 0
+	for delta_val in Dictionary(player_modifiers_val).values():
+		total += _read_int(delta_val, 0)
+	return total
+
 static func _can_supply_product(observation: ObservationState, product_id: String) -> bool:
 	if observation == null or product_id.is_empty() or not EmployeeRegistryClass.is_loaded():
 		return false
@@ -664,6 +768,17 @@ static func _salary_total_delta(player: Dictionary) -> int:
 		return 0
 	return int(delta_read.value)
 
+static func _base_price_delta(observation: ObservationState) -> int:
+	var delta_read := MilestoneEffectQueriesClass.sum_int_values(
+		_own_milestones(observation),
+		"base_price_delta",
+		"StrategyScorer: ",
+		"own_player.milestones"
+	)
+	if not delta_read.ok:
+		return 0
+	return int(delta_read.value)
+
 static func _read_non_negative_int(value, fallback: int) -> int:
 	if value is int:
 		return maxi(0, int(value))
@@ -671,4 +786,13 @@ static func _read_non_negative_int(value, fallback: int) -> int:
 		return maxi(0, int(value))
 	if value is String and str(value).is_valid_int():
 		return maxi(0, int(str(value)))
+	return fallback
+
+static func _read_int(value, fallback: int) -> int:
+	if value is int:
+		return int(value)
+	if value is float:
+		return int(value)
+	if value is String and str(value).is_valid_int():
+		return int(str(value))
 	return fallback

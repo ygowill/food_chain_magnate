@@ -63,6 +63,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var product_overstock := _test_strategy_scoring_penalizes_product_overstock(seed_val)
 	if not product_overstock.ok:
 		return product_overstock
+	var pricing_pipeline := _test_strategy_scoring_uses_pricing_pipeline_for_price_actions(seed_val)
+	if not pricing_pipeline.ok:
+		return pricing_pipeline
 	var milestone_race := _test_strategy_scoring_values_key_milestone_race(seed_val)
 	if not milestone_race.ok:
 		return milestone_race
@@ -559,6 +562,42 @@ static func _test_strategy_scoring_penalizes_product_overstock(seed_val: int) ->
 		return Result.failure("overstock production should expose zero product_inventory_gap: %s" % str(features))
 	if not bool(features.get("product_overstock_penalty", false)):
 		return Result.failure("overstock production should expose product_overstock_penalty: %s" % str(features))
+	return Result.success()
+
+static func _test_strategy_scoring_uses_pricing_pipeline_for_price_actions(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var state := engine.get_state()
+	state.round_state["price_modifiers"] = {
+		0: {"existing_discount": -2},
+	}
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_income_observation()
+	observation.own_player["inventory"] = {"burger": 2}
+	var discount_macro := MacroAction.create(
+		"set_discount_with_existing_modifier",
+		[Command.create("set_discount", 0, {})],
+		0.0,
+		["working", "price"],
+		{}
+	)
+	var score: Dictionary = StrategyScorerClass.score_macro(observation, discount_macro, profile, {"source_state": state})
+	var features: Dictionary = Dictionary(score.get("features", {}))
+	if str(features.get("price_source", "")) != "pricing_pipeline":
+		return Result.failure("price action scoring should use PricingPipeline when source_state is available: %s" % str(features))
+	if int(features.get("price_current_unit_price", 0)) != 8:
+		return Result.failure("price action scoring should include existing round_state.price_modifiers via PricingPipeline: %s" % str(features))
+	if int(features.get("price_action_delta", 0)) != -3:
+		return Result.failure("set_discount should expose -3 price delta: %s" % str(features))
+	if int(features.get("price_projected_unit_price", 0)) != 5:
+		return Result.failure("set_discount should project unit price after action delta: %s" % str(features))
+	if int(features.get("price_round_modifier_total", 0)) != -2:
+		return Result.failure("price action scoring should expose current round modifier total: %s" % str(features))
+	if int(features.get("price_estimated_sale_units", 0)) != 2:
+		return Result.failure("price action scoring should estimate sale units from serviceable stocked demand: %s" % str(features))
 	return Result.success()
 
 static func _test_strategy_scoring_values_key_milestone_race(seed_val: int) -> Result:
