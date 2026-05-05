@@ -8,6 +8,8 @@ const LegalActionServiceClass = preload("res://core/ai/bot/legal_action_service.
 const BotControllerClass = preload("res://core/ai/bot/bot_controller.gd")
 const RandomLegalBotClass = preload("res://core/ai/bot/random_legal_bot.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const ProcureDrinksTestClass = preload("res://core/tests/procure_drinks_test.gd")
+const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 
 static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var reserve := _test_reserve_candidates_are_valid(seed_val)
@@ -34,6 +36,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var marketing := _test_working_marketing_candidates_are_valid(seed_val)
 	if not marketing.ok:
 		return marketing
+	var route_drinks := _test_working_route_drink_candidates_are_valid(seed_val)
+	if not route_drinks.ok:
+		return route_drinks
 	var payday := _test_payday_fire_candidates_are_valid(seed_val)
 	if not payday.ok:
 		return payday
@@ -43,7 +48,7 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var report := _test_restructuring_report_assignment_candidate(seed_val)
 	if not report.ok:
 		return report
-	return Result.success({"cases": 11})
+	return Result.success({"cases": 12})
 
 static func _test_reserve_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
@@ -286,6 +291,49 @@ static func _test_working_marketing_candidates_are_valid(seed_val: int) -> Resul
 		return Result.failure("initiate_marketing candidate should create a marketing instance")
 	return Result.success()
 
+static func _test_working_route_drink_candidates_are_valid(seed_val: int) -> Result:
+	var last_error := ""
+	for attempt in range(20):
+		var engine_read := _build_engine(seed_val + attempt)
+		if not engine_read.ok:
+			return engine_read
+		var engine: GameEngine = engine_read.value
+		var run_read := _run_random_bots_to_working(engine)
+		if not run_read.ok:
+			return run_read
+		var state := engine.get_state()
+		if state == null:
+			return Result.failure("engine state is null")
+		state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
+		var actor := ProcureDrinksTestClass._find_player_with_road_reachable_source(state, 3)
+		if actor < 0:
+			last_error = "no road-reachable drink source for seed %d" % (seed_val + attempt)
+			continue
+		state.turn_order = [actor]
+		state.current_player_index = 0
+		state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
+		if int(state.employee_pool.get("truck_driver", 0)) <= 0:
+			return Result.failure("route drink candidate test requires truck_driver in pool")
+		state.players[actor]["employees"].append("truck_driver")
+		state.employee_pool["truck_driver"] = int(state.employee_pool.get("truck_driver", 0)) - 1
+		var before_drinks := _sum_drink_inventory(state.players[actor].get("inventory", {}))
+
+		var payload_read := _generate_for_current_player(engine, seed_val + attempt, {"max_valid_per_action": 8})
+		if not payload_read.ok:
+			return payload_read
+		var candidates := _read_candidates(payload_read.value)
+		var command := _first_procure_route_command(candidates)
+		if command == null:
+			return Result.failure("GetDrinks should generate route procure_drinks candidate: %s" % str(_macro_debug(candidates)))
+		var executed := engine.execute_command(command)
+		if not executed.ok:
+			return Result.failure("route procure_drinks candidate failed on execute: %s" % executed.error)
+		var after_drinks := _sum_drink_inventory(engine.get_state().players[actor].get("inventory", {}))
+		if after_drinks <= before_drinks:
+			return Result.failure("route procure_drinks candidate should increase drink inventory")
+		return Result.success({"seed_used": seed_val + attempt})
+	return Result.failure("route drink candidate test could not find a usable seed: %s" % last_error)
+
 static func _test_payday_fire_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
 	if not engine_read.ok:
@@ -504,6 +552,18 @@ static func _first_command_for_action(candidates: Array, action_id: String) -> C
 				return command
 	return null
 
+static func _first_procure_route_command(candidates: Array) -> Command:
+	for macro_val in candidates:
+		if not (macro_val is MacroAction):
+			continue
+		var macro: MacroAction = macro_val
+		for command in macro.commands:
+			if command == null or command.action_id != "procure_drinks":
+				continue
+			if command.params.has("route") and command.params.has("selected_sources"):
+				return command
+	return null
+
 static func _first_command_with_param(candidates: Array, action_id: String, param_key: String, param_value: Variant) -> Command:
 	for macro_val in candidates:
 		if not (macro_val is MacroAction):
@@ -515,6 +575,20 @@ static func _first_command_with_param(candidates: Array, action_id: String, para
 			if command.params.get(param_key, null) == param_value:
 				return command
 	return null
+
+static func _sum_drink_inventory(inventory_val) -> int:
+	if not (inventory_val is Dictionary):
+		return 0
+	var inventory: Dictionary = inventory_val
+	var total := 0
+	for product_id_val in inventory.keys():
+		var product_id := str(product_id_val)
+		if product_id.is_empty():
+			continue
+		if ProductRegistryClass.is_loaded() and not ProductRegistryClass.is_drink(product_id):
+			continue
+		total += int(inventory.get(product_id, 0))
+	return total
 
 static func _round_state_player_array(round_state: Dictionary, key: String, player_id: int) -> Array:
 	var dict_val = round_state.get(key, {})

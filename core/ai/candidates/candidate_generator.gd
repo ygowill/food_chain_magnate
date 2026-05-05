@@ -4,6 +4,7 @@ extends RefCounted
 const MacroActionClass = preload("res://core/ai/candidates/macro_action.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const DrinkRouteAnalyzerClass = preload("res://core/ai/analysis/drink_route_analyzer.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
@@ -333,6 +334,7 @@ static func _generate_working(
 		DefsClass.SUB_PHASE_GET_DRINKS:
 			if legal_action_ids.has("procure_drinks"):
 				_generate_errand_boy_drinks(out, discarded, observation, context, validate_command, max_valid_per_action)
+				_generate_route_drinks(out, discarded, observation, context, validate_command, max_valid_per_action)
 		DefsClass.SUB_PHASE_PLACE_HOUSES:
 			if legal_action_ids.has("place_house"):
 				_generate_house_placements(out, discarded, observation, context, validate_command, max_valid_per_action)
@@ -651,6 +653,62 @@ static func _generate_errand_boy_drinks(
 			0.0,
 			max_valid_per_action
 		)
+
+static func _generate_route_drinks(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	if not EmployeeRegistryClass.is_loaded():
+		discarded.append("procure_drinks: EmployeeRegistry is not loaded")
+		return
+	var active := _sorted_unique_strings(observation.own_player.get("employees", []))
+	for employee_id in active:
+		if _count_action(out, "procure_drinks") >= max_valid_per_action:
+			return
+		if employee_id == "errand_boy" or not EmployeeRegistryClass.has(employee_id):
+			continue
+		var def_val = EmployeeRegistryClass.get_def(employee_id)
+		if not (def_val is EmployeeDef):
+			continue
+		var def: EmployeeDef = def_val
+		if not def.can_procure():
+			continue
+		var routes_read := DrinkRouteAnalyzerClass.generate_routes(observation, employee_id, max_valid_per_action)
+		if not routes_read.ok:
+			discarded.append("procure_drinks:%s: %s" % [employee_id, routes_read.error])
+			continue
+		var routes: Array = routes_read.value
+		if routes.is_empty():
+			discarded.append("procure_drinks:%s: no route candidates" % employee_id)
+			continue
+		for route_val in routes:
+			if _count_action(out, "procure_drinks") >= max_valid_per_action:
+				return
+			if not (route_val is Dictionary):
+				continue
+			var route: Dictionary = route_val
+			var params_val = route.get("params", null)
+			if not (params_val is Dictionary):
+				continue
+			var range_type := str(route.get("range_type", "route"))
+			var source_count := int(route.get("source_count", 0))
+			var route_index := _count_action(out, "procure_drinks")
+			_append_valid_command(
+				out,
+				discarded,
+				context,
+				"procure_drinks",
+				Dictionary(params_val).duplicate(true),
+				validate_command,
+				"procure_%s_%s_%d_%d" % [employee_id, range_type, source_count, route_index],
+				["working", "procure_drinks", range_type],
+				float(source_count) * 0.05,
+				max_valid_per_action
+			)
 
 static func _generate_cleanup(
 	out: Array[MacroAction],
