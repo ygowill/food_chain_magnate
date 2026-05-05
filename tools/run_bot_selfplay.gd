@@ -2,6 +2,7 @@ extends SceneTree
 
 const BotControllerClass = preload("res://core/ai/bot/bot_controller.gd")
 const StrategyBotClass = preload("res://core/ai/bot/strategy_bot.gd")
+const OSLABotClass = preload("res://core/ai/bot/osla_bot.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const NAME := "BotSelfplay"
@@ -12,6 +13,7 @@ const DEFAULT_TARGET_ROUND := 3
 const DEFAULT_MAX_STEPS := 720
 const DEFAULT_BUDGET_MS := 80
 const DEFAULT_TRACE_TAIL := 8
+const DEFAULT_BOT_ID := "strategy"
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -43,6 +45,7 @@ static func run(options: Dictionary) -> Result:
 	var max_steps := int(options.get("max_steps", DEFAULT_MAX_STEPS))
 	var budget_ms := int(options.get("budget_ms", DEFAULT_BUDGET_MS))
 	var trace_tail := int(options.get("trace_tail", DEFAULT_TRACE_TAIL))
+	var bot_id := str(options.get("bot_id", DEFAULT_BOT_ID)).strip_edges()
 	var output_jsonl := str(options.get("output_jsonl", "")).strip_edges()
 
 	if player_count <= 0:
@@ -53,6 +56,8 @@ static func run(options: Dictionary) -> Result:
 		return Result.failure("--max-steps must be > 0")
 	if budget_ms <= 0:
 		return Result.failure("--budget-ms must be > 0")
+	if not ["strategy", "osla"].has(bot_id):
+		return Result.failure("--bot must be strategy or osla")
 
 	var file: FileAccess = null
 	if not output_jsonl.is_empty():
@@ -63,7 +68,7 @@ static func run(options: Dictionary) -> Result:
 		if file == null:
 			return Result.failure("cannot open --output-jsonl: %s" % output_jsonl)
 
-	print("[%s] START players=%d seed=%d matches=%d target_round=%d max_steps=%d budget_ms=%d" % [
+	print("[%s] START players=%d seed=%d matches=%d target_round=%d max_steps=%d budget_ms=%d bot=%s" % [
 		NAME,
 		player_count,
 		start_seed,
@@ -71,13 +76,14 @@ static func run(options: Dictionary) -> Result:
 		target_round,
 		max_steps,
 		budget_ms,
+		bot_id,
 	])
 
 	var rows: Array[Dictionary] = []
 	var failures := 0
 	for match_index in range(matches):
 		var seed := start_seed + match_index
-		var row := _run_match(match_index, player_count, seed, target_round, max_steps, budget_ms, trace_tail)
+		var row := _run_match(match_index, player_count, seed, target_round, max_steps, budget_ms, trace_tail, bot_id)
 		rows.append(row)
 		if not bool(row.get("ok", false)):
 			failures += 1
@@ -104,7 +110,8 @@ static func _run_match(
 	target_round: int,
 	max_steps: int,
 	budget_ms: int,
-	trace_tail: int
+	trace_tail: int,
+	bot_id: String
 ) -> Dictionary:
 	var engine := GameEngine.new()
 	var init_read := engine.initialize(player_count, seed)
@@ -113,13 +120,24 @@ static func _run_match(
 			"match_index": match_index,
 			"player_count": player_count,
 			"seed": seed,
+			"bot": bot_id,
 			"ok": false,
 			"error": "initialize failed: %s" % init_read.error,
 		}
 
 	var bots := {}
 	for player_id in range(player_count):
-		bots[player_id] = StrategyBotClass.new()
+		var bot_read := _create_bot(bot_id)
+		if not bot_read.ok:
+			return {
+				"match_index": match_index,
+				"player_count": player_count,
+				"seed": seed,
+				"bot": bot_id,
+				"ok": false,
+				"error": bot_read.error,
+			}
+		bots[player_id] = bot_read.value
 
 	var controller := BotControllerClass.new()
 	var stop_condition := func(test_engine: GameEngine) -> bool:
@@ -134,11 +152,21 @@ static func _run_match(
 	var run_read := controller.run_until(engine, bots, stop_condition, max_steps, budget_ms)
 	var state := engine.get_state()
 	var row := _build_match_row(match_index, player_count, seed, state, controller.last_trace, trace_tail)
+	row["bot"] = bot_id
 	row["ok"] = run_read.ok
 	row["steps"] = int(run_read.value.get("steps", controller.last_trace.size())) if run_read.ok and run_read.value is Dictionary else controller.last_trace.size()
 	if not run_read.ok:
 		row["error"] = run_read.error
 	return row
+
+static func _create_bot(bot_id: String) -> Result:
+	match bot_id:
+		"strategy":
+			return Result.success(StrategyBotClass.new())
+		"osla":
+			return Result.success(OSLABotClass.new())
+		_:
+			return Result.failure("unknown bot: %s" % bot_id)
 
 static func _build_match_row(
 	match_index: int,
@@ -281,6 +309,7 @@ static func _parse_args(args: Array[String]) -> Result:
 		"max_steps": DEFAULT_MAX_STEPS,
 		"budget_ms": DEFAULT_BUDGET_MS,
 		"trace_tail": DEFAULT_TRACE_TAIL,
+		"bot_id": DEFAULT_BOT_ID,
 		"output_jsonl": "",
 	}
 	for raw_arg in args:
@@ -322,6 +351,8 @@ static func _parse_args(args: Array[String]) -> Result:
 			if not value.is_valid_int():
 				return Result.failure("--trace-tail must be an integer")
 			options["trace_tail"] = int(value)
+		elif arg.begins_with("--bot="):
+			options["bot_id"] = arg.trim_prefix("--bot=").strip_edges()
 		elif arg.begins_with("--output-jsonl="):
 			options["output_jsonl"] = arg.trim_prefix("--output-jsonl=").strip_edges()
 		else:
@@ -329,4 +360,4 @@ static func _parse_args(args: Array[String]) -> Result:
 	return Result.success(options)
 
 static func _print_usage() -> void:
-	print("Usage: tools/run_bot_selfplay.sh [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--output-jsonl=res://.godot/bot_selfplay.jsonl]")
+	print("Usage: tools/run_bot_selfplay.sh [--bot=strategy|osla] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--output-jsonl=res://.godot/bot_selfplay.jsonl]")
