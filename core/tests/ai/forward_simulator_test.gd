@@ -2,6 +2,7 @@ class_name ForwardSimulatorTest
 extends RefCounted
 
 const ForwardSimulatorClass = preload("res://core/ai/simulation/forward_simulator.gd")
+const MilestoneEffectRegistryClass = preload("res://core/rules/milestone_effect_registry.gd")
 
 static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var engine := GameEngine.new()
@@ -15,6 +16,8 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var sim_read := ForwardSimulatorClass.simulate_command(engine, command)
 	if not sim_read.ok:
 		return sim_read
+	if MilestoneEffectRegistryClass.get_current() != engine.ruleset_v2.milestone_effect_registry:
+		return Result.failure("source milestone effect registry was not restored after simulation")
 	if str(engine.get_state().compute_hash()) != source_hash_before:
 		return Result.failure("source hash changed after simulation")
 	var sim_data: Dictionary = sim_read.value
