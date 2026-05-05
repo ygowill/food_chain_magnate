@@ -125,6 +125,7 @@ const LegalActionServiceTestClass = preload("res://core/tests/ai/legal_action_se
 const RandomLegalBotSmokeTestClass = preload("res://core/tests/ai/random_legal_bot_smoke_test.gd")
 const AiEngineForkTestClass = preload("res://core/tests/ai/ai_engine_fork_test.gd")
 const ForwardSimulatorTestClass = preload("res://core/tests/ai/forward_simulator_test.gd")
+const DinnerPreviewGoldenTestClass = preload("res://core/tests/ai/dinner_preview_golden_test.gd")
 const InitialCompanyTestClass = preload("res://core/tests/initial_company_test.gd")
 const MandatoryActionsTestClass = preload("res://core/tests/mandatory_actions_test.gd")
 const TrainPhaseStartCountsStateAccessTestClass = preload("res://core/tests/train_phase_start_counts_state_access_test.gd")

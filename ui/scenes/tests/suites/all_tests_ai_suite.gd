@@ -25,4 +25,8 @@ static func build_tests(_host) -> Array[Dictionary]:
 			"name": "ForwardSimulatorTest",
 			"fn": func() -> Result: return TestRefs.ForwardSimulatorTestClass.run(2, 12345),
 		},
+		{
+			"name": "DinnerPreviewGoldenTest",
+			"fn": func() -> Result: return TestRefs.DinnerPreviewGoldenTestClass.run(2, 12345),
+		},
 	]
