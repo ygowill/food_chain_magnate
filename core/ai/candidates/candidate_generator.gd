@@ -1,0 +1,483 @@
+class_name CandidateGenerator
+extends RefCounted
+
+const MacroActionClass = preload("res://core/ai/candidates/macro_action.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+
+const DEFAULT_MAX_VALID_PER_ACTION := 12
+
+static func generate(
+	observation: ObservationState,
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	validate_command: Callable = Callable(),
+	options: Dictionary = {}
+) -> Result:
+	if observation == null:
+		return Result.failure("CandidateGenerator.generate: observation is null")
+	if context == null:
+		return Result.failure("CandidateGenerator.generate: context is null")
+	if context.player_id != observation.viewer_player_id:
+		return Result.failure("CandidateGenerator.generate: context player does not match observation")
+	var max_valid_per_action := maxi(1, int(options.get("max_valid_per_action", DEFAULT_MAX_VALID_PER_ACTION)))
+
+	var out: Array[MacroAction] = []
+	var discarded: Array[String] = []
+	_generate_pending_confirmation(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action)
+	if not out.is_empty():
+		return Result.success(_payload(out, discarded))
+
+	match str(observation.phase):
+		DefsClass.PHASE_SETUP:
+			_generate_setup(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action)
+		DefsClass.PHASE_RESTRUCTURING:
+			_generate_restructuring(out, discarded, context, legal_action_ids, validate_command, max_valid_per_action)
+		DefsClass.PHASE_ORDER_OF_BUSINESS:
+			_generate_order_of_business(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action)
+		DefsClass.PHASE_WORKING:
+			_generate_working(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action)
+		DefsClass.PHASE_CLEANUP:
+			_generate_cleanup(out, discarded, context, legal_action_ids, validate_command, max_valid_per_action)
+		_:
+			_generate_phase_skip(out, discarded, context, legal_action_ids, validate_command, max_valid_per_action)
+
+	return Result.success(_payload(out, discarded))
+
+static func _payload(candidates: Array[MacroAction], discarded: Array[String]) -> Dictionary:
+	return {
+		"candidates": candidates,
+		"discarded_reasons": discarded.duplicate(),
+	}
+
+static func _generate_setup(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	if str(observation.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS:
+		if legal_action_ids.has("select_reserve_card"):
+			_generate_reserve_choices(out, discarded, observation, context, validate_command, max_valid_per_action)
+		return
+	if legal_action_ids.has("place_restaurant"):
+		_generate_restaurant_placements(out, discarded, observation, context, validate_command, max_valid_per_action, "initial_restaurant")
+	if legal_action_ids.has(ActionIdsClass.SKIP):
+		_append_valid_command(out, discarded, context, ActionIdsClass.SKIP, {}, validate_command, "setup_skip", ["setup"], 0.0, max_valid_per_action)
+
+static func _generate_reserve_choices(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	var cards_val = observation.own_player.get("reserve_cards", [])
+	if not (cards_val is Array):
+		discarded.append("reserve_card: own_player.reserve_cards is not Array")
+		return
+	var cards: Array = cards_val
+	for i in range(cards.size()):
+		_append_valid_command(
+			out,
+			discarded,
+			context,
+			"select_reserve_card",
+			{"selected_index": i},
+			validate_command,
+			"reserve_card_%d" % i,
+			["setup", "reserve"],
+			0.0,
+			max_valid_per_action
+		)
+
+static func _generate_restaurant_placements(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	validate_command: Callable,
+	max_valid_per_action: int,
+	id_prefix: String
+) -> void:
+	var grid_size := _read_grid_size(observation.map_public)
+	if grid_size.x <= 0 or grid_size.y <= 0:
+		discarded.append("%s: invalid grid_size %s" % [id_prefix, str(grid_size)])
+		return
+	var rotations := [0, 90, 180, 270]
+	for y in range(grid_size.y):
+		for x in range(grid_size.x):
+			for rotation in rotations:
+				if _count_action(out, "place_restaurant") >= max_valid_per_action:
+					return
+				_append_valid_command(
+					out,
+					discarded,
+					context,
+					"place_restaurant",
+					{
+						"position": [x, y],
+						"rotation": int(rotation),
+					},
+					validate_command,
+					"%s_%d_%d_%d" % [id_prefix, x, y, int(rotation)],
+					["setup", "restaurant"],
+					0.0,
+					max_valid_per_action
+				)
+
+static func _generate_restructuring(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	if legal_action_ids.has("submit_restructuring"):
+		_append_valid_command(out, discarded, context, "submit_restructuring", {}, validate_command, "submit_restructuring", ["restructuring"], 0.0, max_valid_per_action)
+
+static func _generate_order_of_business(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	if not legal_action_ids.has("choose_turn_order"):
+		return
+	var oob_val = observation.round_state_public.get("order_of_business", {})
+	if not (oob_val is Dictionary):
+		discarded.append("turn_order: round_state.order_of_business is missing")
+		return
+	var picks_val = Dictionary(oob_val).get("picks", [])
+	if not (picks_val is Array):
+		discarded.append("turn_order: order_of_business.picks is missing")
+		return
+	var picks: Array = picks_val
+	for i in range(picks.size()):
+		if int(picks[i]) != -1:
+			continue
+		_append_valid_command(
+			out,
+			discarded,
+			context,
+			"choose_turn_order",
+			{"position": i},
+			validate_command,
+			"turn_order_%d" % i,
+			["order_of_business"],
+			0.0,
+			max_valid_per_action
+		)
+
+static func _generate_working(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	match str(observation.sub_phase):
+		DefsClass.SUB_PHASE_RECRUIT:
+			if legal_action_ids.has("recruit"):
+				_generate_recruit(out, discarded, observation, context, validate_command, max_valid_per_action)
+		DefsClass.SUB_PHASE_TRAIN:
+			if legal_action_ids.has("train"):
+				_generate_train(out, discarded, observation, context, validate_command, max_valid_per_action)
+		DefsClass.SUB_PHASE_GET_FOOD:
+			if legal_action_ids.has("produce_food"):
+				_generate_produce_food(out, discarded, observation, context, validate_command, max_valid_per_action)
+		DefsClass.SUB_PHASE_GET_DRINKS:
+			if legal_action_ids.has("procure_drinks"):
+				_generate_errand_boy_drinks(out, discarded, observation, context, validate_command, max_valid_per_action)
+
+	if legal_action_ids.has(ActionIdsClass.SKIP_SUB_PHASE):
+		_append_valid_command(out, discarded, context, ActionIdsClass.SKIP_SUB_PHASE, {}, validate_command, "working_skip_sub_phase", ["working", "fallback"], -0.1, max_valid_per_action)
+	if legal_action_ids.has(ActionIdsClass.SKIP):
+		_append_valid_command(out, discarded, context, ActionIdsClass.SKIP, {}, validate_command, "working_skip", ["working", "fallback"], -0.1, max_valid_per_action)
+
+static func _generate_recruit(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	for employee_id in _sorted_positive_pool_ids(observation.employee_pool_public):
+		_append_valid_command(
+			out,
+			discarded,
+			context,
+			"recruit",
+			{"employee_type": employee_id},
+			validate_command,
+			"recruit_%s" % employee_id,
+			["working", "recruit"],
+			0.0,
+			max_valid_per_action
+		)
+
+static func _generate_train(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	if not EmployeeRegistryClass.is_loaded():
+		discarded.append("train: EmployeeRegistry is not loaded")
+		return
+	for from_employee in _sorted_unique_strings(observation.own_player.get("reserve_employees", [])):
+		var def_val = EmployeeRegistryClass.get_def(from_employee)
+		if not (def_val is EmployeeDef):
+			continue
+		var def: EmployeeDef = def_val
+		for to_employee in def.train_to:
+			var target := str(to_employee)
+			if target.is_empty():
+				continue
+			if int(observation.employee_pool_public.get(target, 0)) <= 0:
+				continue
+			_append_valid_command(
+				out,
+				discarded,
+				context,
+				"train",
+				{
+					"from_employee": from_employee,
+					"to_employee": target,
+				},
+				validate_command,
+				"train_%s_to_%s" % [from_employee, target],
+				["working", "train"],
+				0.0,
+				max_valid_per_action
+			)
+
+static func _generate_produce_food(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	if not EmployeeRegistryClass.is_loaded():
+		discarded.append("produce_food: EmployeeRegistry is not loaded")
+		return
+	for employee_id in _sorted_unique_strings(observation.own_player.get("employees", [])):
+		var def_val = EmployeeRegistryClass.get_def(employee_id)
+		if not (def_val is EmployeeDef):
+			continue
+		var def: EmployeeDef = def_val
+		if not def.can_produce():
+			continue
+		var options := def.get_production_food_options()
+		for food_type in options:
+			_append_valid_command(
+				out,
+				discarded,
+				context,
+				"produce_food",
+				{
+					"employee_type": employee_id,
+					"food_type": food_type,
+				},
+				validate_command,
+				"produce_%s_%s" % [employee_id, food_type],
+				["working", "produce_food"],
+				0.0,
+				max_valid_per_action
+			)
+
+static func _generate_errand_boy_drinks(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	var active := _sorted_unique_strings(observation.own_player.get("employees", []))
+	if not active.has("errand_boy"):
+		return
+	if not ProductRegistryClass.is_loaded():
+		discarded.append("procure_drinks: ProductRegistry is not loaded")
+		return
+	for product_id in ProductRegistryClass.get_all_ids():
+		if not ProductRegistryClass.is_drink(product_id):
+			continue
+		_append_valid_command(
+			out,
+			discarded,
+			context,
+			"procure_drinks",
+			{
+				"employee_type": "errand_boy",
+				"drink_type": product_id,
+			},
+			validate_command,
+			"errand_boy_%s" % product_id,
+			["working", "procure_drinks", "errand_boy"],
+			0.0,
+			max_valid_per_action
+		)
+
+static func _generate_cleanup(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	if legal_action_ids.has("choose_fridge_keep"):
+		_append_valid_command(out, discarded, context, "choose_fridge_keep", {"keep": {}}, validate_command, "fridge_keep_none", ["cleanup"], 0.0, max_valid_per_action)
+	else:
+		_generate_phase_skip(out, discarded, context, legal_action_ids, validate_command, max_valid_per_action)
+
+static func _generate_phase_skip(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	if legal_action_ids.has(ActionIdsClass.SKIP):
+		_append_valid_command(out, discarded, context, ActionIdsClass.SKIP, {}, validate_command, "phase_skip", ["fallback"], 0.0, max_valid_per_action)
+
+static func _generate_pending_confirmation(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	if _has_pending_player_action(observation, DefsClass.PHASE_DINNERTIME, context.player_id, "confirm_dinnertime") and legal_action_ids.has("confirm_dinnertime"):
+		_append_valid_command(out, discarded, context, "confirm_dinnertime", {}, validate_command, "confirm_dinnertime", ["confirm"], 0.0, max_valid_per_action)
+	if _has_pending_player_action(observation, DefsClass.PHASE_MARKETING, context.player_id, "confirm_marketing") and legal_action_ids.has("confirm_marketing"):
+		_append_valid_command(out, discarded, context, "confirm_marketing", {}, validate_command, "confirm_marketing", ["confirm"], 0.0, max_valid_per_action)
+
+static func _append_valid_command(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	context: AiDecisionContext,
+	action_id: String,
+	params: Dictionary,
+	validate_command: Callable,
+	macro_id: String,
+	tags: Array[String],
+	prior_score: float,
+	max_valid_per_action: int
+) -> void:
+	if _count_action(out, action_id) >= max_valid_per_action:
+		return
+	var command := Command.create(action_id, context.player_id, params.duplicate(true))
+	var validate := _validate_command(command, validate_command)
+	if not validate.ok:
+		discarded.append("%s: %s" % [macro_id, validate.error])
+		return
+	var commands: Array[Command] = []
+	commands.append(command)
+	out.append(MacroActionClass.create(macro_id, commands, prior_score, tags, {
+		"action_id": action_id,
+		"validation": "passed" if validate_command.is_valid() else "skipped",
+	}))
+
+static func _validate_command(command: Command, validate_command: Callable) -> Result:
+	if not validate_command.is_valid():
+		return Result.success()
+	var validated = validate_command.call(command)
+	if validated is Result:
+		return validated
+	return Result.failure("validator returned non-Result")
+
+static func _count_action(candidates: Array[MacroAction], action_id: String) -> int:
+	var count := 0
+	for macro in candidates:
+		if macro == null:
+			continue
+		for command in macro.commands:
+			if command != null and command.action_id == action_id:
+				count += 1
+	return count
+
+static func _sorted_positive_pool_ids(pool: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for key in pool.keys():
+		if not (key is String):
+			continue
+		var id := str(key)
+		if id.is_empty():
+			continue
+		if int(pool.get(id, 0)) <= 0:
+			continue
+		out.append(id)
+	out.sort()
+	return out
+
+static func _sorted_unique_strings(value) -> Array[String]:
+	var set := {}
+	if value is Array:
+		for item in Array(value):
+			var id := str(item)
+			if id.is_empty():
+				continue
+			set[id] = true
+	var out: Array[String] = []
+	for key in set.keys():
+		if key is String:
+			out.append(str(key))
+	out.sort()
+	return out
+
+static func _read_grid_size(map_public: Dictionary) -> Vector2i:
+	var value = map_public.get("grid_size", Vector2i.ZERO)
+	if value is Vector2i:
+		return value
+	if value is Vector2:
+		return Vector2i(int(value.x), int(value.y))
+	if value is Dictionary:
+		var dict: Dictionary = value
+		return Vector2i(int(dict.get("x", 0)), int(dict.get("y", 0)))
+	if value is Array:
+		var arr: Array = value
+		if arr.size() >= 2:
+			return Vector2i(int(arr[0]), int(arr[1]))
+	return Vector2i.ZERO
+
+static func _has_pending_player_action(
+	observation: ObservationState,
+	phase_name: String,
+	player_id: int,
+	action_id: String
+) -> bool:
+	var ppa_val = observation.round_state_public.get("pending_phase_actions", null)
+	if not (ppa_val is Dictionary):
+		return false
+	var pending_val = Dictionary(ppa_val).get(phase_name, null)
+	if not (pending_val is Array):
+		return false
+	for item in Array(pending_val):
+		if not (item is Dictionary):
+			continue
+		var dict: Dictionary = item
+		if str(dict.get("kind", "")) == action_id and int(dict.get("player_id", -1)) == player_id:
+			return true
+	return false
