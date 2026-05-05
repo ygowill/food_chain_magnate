@@ -36,6 +36,7 @@ static func choose_command(
 	var candidates: Array = candidates_val
 	if candidates.is_empty():
 		return Result.failure("GreedySearch.choose_command: no candidates generated")
+	_sort_candidates_for_search(candidates)
 	var discarded := _copy_string_array(gen_payload.get("discarded_reasons", []))
 
 	var best_macro: MacroAction = null
@@ -121,6 +122,19 @@ static func choose_command(
 		},
 		trace.to_dict()
 	))
+
+static func _sort_candidates_for_search(candidates: Array) -> void:
+	candidates.sort_custom(func(a, b) -> bool:
+		if not (a is MacroAction):
+			return false
+		if not (b is MacroAction):
+			return true
+		var ma: MacroAction = a
+		var mb: MacroAction = b
+		if not is_equal_approx(float(ma.prior_score), float(mb.prior_score)):
+			return float(ma.prior_score) > float(mb.prior_score)
+		return str(ma.id) < str(mb.id)
+	)
 
 static func _copy_string_array(value) -> Array[String]:
 	var out: Array[String] = []

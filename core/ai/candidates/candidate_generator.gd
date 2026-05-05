@@ -445,7 +445,7 @@ static func _generate_marketing(
 								validate_command,
 								"marketing_%s_%d_%s_%d_%d_%d" % [employee_id, int(board_number), product_id, x, y, int(rotation)],
 								["working", "marketing"],
-								0.0,
+								_marketing_product_prior(product_id, observation),
 								max_valid_per_action
 							)
 
@@ -596,7 +596,7 @@ static func _generate_recruit(
 			validate_command,
 			"recruit_%s" % employee_id,
 			["working", "recruit"],
-			0.0,
+			_recruit_prior(employee_id, observation),
 			max_valid_per_action
 		)
 
@@ -634,7 +634,7 @@ static func _generate_train(
 				validate_command,
 				"train_%s_to_%s" % [from_employee, target],
 				["working", "train"],
-				0.0,
+				_train_prior(from_employee, target, observation),
 				max_valid_per_action
 			)
 
@@ -670,7 +670,7 @@ static func _generate_produce_food(
 				validate_command,
 				"produce_%s_%s" % [employee_id, food_type],
 				["working", "produce_food"],
-				0.0,
+				_product_pipeline_prior(str(food_type), observation),
 				max_valid_per_action
 			)
 
@@ -703,7 +703,7 @@ static func _generate_errand_boy_drinks(
 			validate_command,
 			"errand_boy_%s" % product_id,
 			["working", "procure_drinks", "errand_boy"],
-			0.0,
+			_product_pipeline_prior(product_id, observation),
 			max_valid_per_action
 		)
 
@@ -747,6 +747,7 @@ static func _generate_route_drinks(
 			var params_val = route.get("params", null)
 			if not (params_val is Dictionary):
 				continue
+			var params: Dictionary = params_val
 			var range_type := str(route.get("range_type", "route"))
 			var source_count := int(route.get("source_count", 0))
 			var route_index := _count_action(out, "procure_drinks")
@@ -755,11 +756,11 @@ static func _generate_route_drinks(
 				discarded,
 				context,
 				"procure_drinks",
-				Dictionary(params_val).duplicate(true),
+				params.duplicate(true),
 				validate_command,
 				"procure_%s_%s_%d_%d" % [employee_id, range_type, source_count, route_index],
 				["working", "procure_drinks", range_type],
-				float(source_count) * 0.05,
+				float(source_count) * 0.05 + _product_pipeline_prior(str(params.get("drink_type", "")), observation),
 				max_valid_per_action
 			)
 
@@ -1020,6 +1021,149 @@ static func _count_owned_employees(player: Dictionary) -> Dictionary:
 				continue
 			counts[employee_id] = int(counts.get(employee_id, 0)) + 1
 	return counts
+
+static func _recruit_prior(employee_id: String, observation: ObservationState) -> float:
+	if observation == null or employee_id.is_empty():
+		return 0.0
+	var owned := _count_owned_employees(observation.own_player)
+	match employee_id:
+		"kitchen_trainee":
+			return 3.0 if not _owns_employee_role(observation.own_player, "produce_food") else 0.25
+		"marketing_trainee":
+			return 2.8 if not _owns_employee_role(observation.own_player, "marketing") else 0.25
+		"management_trainee":
+			return 2.6 if int(owned.get("new_business_developer", 0)) <= 0 else 0.2
+		"errand_boy":
+			return 2.2 if not _can_supply_any_drink(observation) else 0.2
+		_:
+			return 0.5
+
+static func _train_prior(from_employee: String, target_employee: String, observation: ObservationState) -> float:
+	if target_employee.is_empty():
+		return 0.0
+	match target_employee:
+		"new_business_developer":
+			return 3.0
+		"burger_cook", "pizza_cook":
+			return 1.0 + _product_pipeline_prior(_food_for_cook(target_employee), observation)
+		"campaign_manager":
+			return 0.8
+		_:
+			return 0.2 if not from_employee.is_empty() else 0.0
+
+static func _marketing_product_prior(product_id: String, observation: ObservationState) -> float:
+	if product_id.is_empty() or observation == null:
+		return 0.0
+	var prior := 0.2
+	var inventory_val = observation.own_player.get("inventory", {})
+	if inventory_val is Dictionary:
+		var inventory: Dictionary = inventory_val
+		if _read_non_negative_int(inventory.get(product_id, 0), 0) > 0:
+			prior += 0.8
+	if _can_supply_product(product_id, observation):
+		prior += 0.5
+	prior += float(_public_demand_count_for_product(observation, product_id)) * 0.25
+	return prior
+
+static func _product_pipeline_prior(product_id: String, observation: ObservationState) -> float:
+	if product_id.is_empty() or observation == null:
+		return 0.0
+	var demand := _public_demand_count_for_product(observation, product_id)
+	var prior := float(demand) * 0.6
+	var inventory_val = observation.own_player.get("inventory", {})
+	if inventory_val is Dictionary:
+		var inventory: Dictionary = inventory_val
+		var inventory_count := _read_non_negative_int(inventory.get(product_id, 0), 0)
+		if demand > 0 and inventory_count < demand:
+			prior += 0.5
+		elif inventory_count <= 0:
+			prior += 0.1
+	return prior
+
+static func _public_demand_count_for_product(observation: ObservationState, product_id: String) -> int:
+	if observation == null or product_id.is_empty():
+		return 0
+	var houses_val = observation.map_public.get("houses", {})
+	if not (houses_val is Dictionary):
+		return 0
+	var count := 0
+	var houses: Dictionary = houses_val
+	for house_val in houses.values():
+		if not (house_val is Dictionary):
+			continue
+		var house: Dictionary = house_val
+		var demands_val = house.get("demands", [])
+		if not (demands_val is Array):
+			continue
+		for demand_val in Array(demands_val):
+			if demand_val is Dictionary and str(Dictionary(demand_val).get("product", "")) == product_id:
+				count += 1
+	return count
+
+static func _can_supply_any_drink(observation: ObservationState) -> bool:
+	if observation == null or not ProductRegistryClass.is_loaded():
+		return false
+	for product_id in ProductRegistryClass.get_all_ids():
+		if ProductRegistryClass.is_drink(product_id) and _can_supply_product(product_id, observation):
+			return true
+	return false
+
+static func _can_supply_product(product_id: String, observation: ObservationState) -> bool:
+	if observation == null or product_id.is_empty():
+		return false
+	var inventory_val = observation.own_player.get("inventory", {})
+	if inventory_val is Dictionary and _read_non_negative_int(Dictionary(inventory_val).get(product_id, 0), 0) > 0:
+		return true
+	if not EmployeeRegistryClass.is_loaded() or not ProductRegistryClass.is_loaded():
+		return false
+	for employee_id in _owned_employee_ids(observation.own_player):
+		if not EmployeeRegistryClass.has(employee_id):
+			continue
+		var def_val = EmployeeRegistryClass.get_def(employee_id)
+		if not (def_val is EmployeeDef):
+			continue
+		var def: EmployeeDef = def_val
+		if def.can_produce() and def.get_production_food_options().has(product_id):
+			return true
+		if def.can_procure() and ProductRegistryClass.is_drink(product_id):
+			return true
+		if employee_id == "errand_boy" and ProductRegistryClass.is_drink(product_id):
+			return true
+	return false
+
+static func _owns_employee_role(player: Dictionary, role: String) -> bool:
+	if role.is_empty() or not EmployeeRegistryClass.is_loaded():
+		return false
+	for employee_id in _owned_employee_ids(player):
+		if not EmployeeRegistryClass.has(employee_id):
+			continue
+		var def_val = EmployeeRegistryClass.get_def(employee_id)
+		if def_val is EmployeeDef and str((def_val as EmployeeDef).role) == role:
+			return true
+	return false
+
+static func _owned_employee_ids(player: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	var seen := {}
+	for key in ["employees", "reserve_employees", "busy_marketers"]:
+		var list_val = player.get(key, [])
+		if not (list_val is Array):
+			continue
+		for item in Array(list_val):
+			var employee_id := str(item)
+			if employee_id.is_empty() or seen.has(employee_id):
+				continue
+			seen[employee_id] = true
+			out.append(employee_id)
+	out.sort()
+	return out
+
+static func _food_for_cook(employee_id: String) -> String:
+	if employee_id.find("burger") >= 0:
+		return "burger"
+	if employee_id.find("pizza") >= 0:
+		return "pizza"
+	return ""
 
 static func _count_employees_in_list(value) -> Dictionary:
 	var counts := {}

@@ -23,7 +23,10 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var payday := _test_payday_fire_candidates_require_salary_shortfall(seed_val)
 	if not payday.ok:
 		return payday
-	return Result.success({"cases": 4})
+	var prior_order := _test_search_orders_candidates_by_prior_before_simulation()
+	if not prior_order.ok:
+		return prior_order
+	return Result.success({"cases": 5})
 
 static func _test_choose_reserve_without_mutating_source(seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -171,6 +174,20 @@ static func _test_payday_fire_candidates_require_salary_shortfall(seed_val: int)
 		return salaried_shortfall
 	if not _candidate_has_action(salaried_shortfall.value, "fire"):
 		return Result.failure("Payday candidates should fire salaried employees when cash is short: %s" % str(_candidate_ids(salaried_shortfall.value)))
+	return Result.success()
+
+static func _test_search_orders_candidates_by_prior_before_simulation() -> Result:
+	var low := MacroAction.create("z_low", [], 0.0)
+	var high_b := MacroAction.create("b_high", [], 2.0)
+	var high_a := MacroAction.create("a_high", [], 2.0)
+	var candidates := [low, high_b, high_a]
+	GreedySearchClass._sort_candidates_for_search(candidates)
+	var ordered := []
+	for macro_val in candidates:
+		if macro_val is MacroAction:
+			ordered.append((macro_val as MacroAction).id)
+	if str(ordered) != str(["a_high", "b_high", "z_low"]):
+		return Result.failure("GreedySearch should order by prior desc then id: %s" % str(ordered))
 	return Result.success()
 
 static func _payday_observation(player_id: int, reserve_employees: Array, cash: int) -> ObservationState:
