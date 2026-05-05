@@ -17,6 +17,7 @@ static func _test_parse_configs() -> Result:
 		"--config=random",
 		"--config=random,strategy",
 		"--players=2",
+		"--profile=base_revenue_growth_v1",
 	])
 	if not parsed.ok:
 		return parsed
@@ -25,6 +26,8 @@ static func _test_parse_configs() -> Result:
 		return Result.failure("matrix should parse repeated configs: %s" % str(parsed.value))
 	if str(configs[0]) != str(["random"]) or str(configs[1]) != str(["random", "strategy"]):
 		return Result.failure("matrix config parse mismatch: %s" % str(configs))
+	if str(Dictionary(parsed.value).get("profile", "")) != "base_revenue_growth_v1":
+		return Result.failure("matrix profile parse mismatch: %s" % str(parsed.value))
 	var bad := MatrixToolClass._parse_args(["--config=random,"])
 	if bad.ok:
 		return Result.failure("matrix should reject empty bot id in config")
@@ -40,6 +43,7 @@ static func _test_run_matrix() -> Result:
 		"max_steps": 180,
 		"budget_ms": 80,
 		"trace_tail": 2,
+		"profile": "base_revenue_growth_v1",
 	})
 	if not run_read.ok:
 		return run_read
@@ -47,7 +51,7 @@ static func _test_run_matrix() -> Result:
 		return Result.failure("matrix run counts mismatch: %s" % str(run_read.value))
 	var summary: Dictionary = Dictionary(run_read.value.get("summary", {}))
 	var bots: Dictionary = Dictionary(summary.get("bots", {}))
-	if not bots.has("random") or not bots.has("random_vs_strategy"):
+	if not bots.has("random@base_revenue_growth_v1") or not bots.has("random_vs_strategy@base_revenue_growth_v1"):
 		return Result.failure("matrix summary should group single and mixed configs: %s" % str(summary))
 	if int(summary.get("total_failures", 0)) != 0:
 		return Result.failure("matrix smoke should not fail: %s" % str(summary))

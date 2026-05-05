@@ -14,6 +14,14 @@ func _init() -> void:
 	profile = StrategyProfileClass.new()
 	profile.configure_base_revenue()
 
+func configure_profile(profile_source: String) -> Result:
+	var loaded = StrategyProfileClass.new()
+	var load_read := loaded.configure(profile_source)
+	if not load_read.ok:
+		return load_read
+	profile = loaded
+	return Result.success()
+
 func choose_command(
 	observation: ObservationState,
 	context: AiDecisionContext,

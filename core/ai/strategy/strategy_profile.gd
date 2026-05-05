@@ -3,9 +3,11 @@ extends RefCounted
 
 const DataParseHelpersClass = preload("res://core/data/parse_helpers.gd")
 
+const DEFAULT_PROFILE_ID := "base_revenue_v1"
+const PROFILE_DIR := "res://data/bots"
 const DEFAULT_BASE_REVENUE_PATH := "res://data/bots/base_revenue_v1.json"
 
-var id: String = "base_revenue_v1"
+var id: String = DEFAULT_PROFILE_ID
 var max_valid_per_action: int = 12
 var strict_marketing_must_affect_houses: bool = true
 var action_weights: Dictionary = {}
@@ -13,10 +15,17 @@ var employee_priorities: Dictionary = {}
 var product_priorities: Dictionary = {}
 
 func configure_base_revenue() -> void:
-	var loaded := load_from_file(DEFAULT_BASE_REVENUE_PATH)
-	if loaded.ok:
-		return
-	_configure_base_revenue_fallback()
+	configure(DEFAULT_PROFILE_ID)
+
+func configure(profile_source: String = "") -> Result:
+	var source := profile_source.strip_edges()
+	if source.is_empty() or source == DEFAULT_PROFILE_ID:
+		var loaded := load_from_file(DEFAULT_BASE_REVENUE_PATH)
+		if loaded.ok:
+			return loaded
+		_configure_base_revenue_fallback()
+		return Result.success()
+	return load_from_file(resolve_profile_path(source))
 
 func load_from_file(path: String) -> Result:
 	if path.is_empty():
@@ -30,6 +39,18 @@ func load_from_file(path: String) -> Result:
 	if not (parsed is Dictionary):
 		return Result.failure("StrategyProfile.load_from_file: JSON 解析失败或根节点不是 Dictionary: %s" % path)
 	return configure_from_dict(Dictionary(parsed))
+
+static func resolve_profile_path(profile_source: String) -> String:
+	var source := profile_source.strip_edges()
+	if source.is_empty():
+		source = DEFAULT_PROFILE_ID
+	if source.begins_with("res://") or source.begins_with("user://") or source.begins_with("/"):
+		return source
+	if source.ends_with(".json"):
+		if source.contains("/"):
+			return "res://%s" % source
+		return "%s/%s" % [PROFILE_DIR, source]
+	return "%s/%s.json" % [PROFILE_DIR, source]
 
 func configure_from_dict(data: Dictionary) -> Result:
 	var id_read := DataParseHelpersClass.parse_string(data.get("id", null), "StrategyProfile.id", false)

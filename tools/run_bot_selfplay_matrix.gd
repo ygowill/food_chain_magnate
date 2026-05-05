@@ -44,10 +44,12 @@ static func run(options: Dictionary) -> Result:
 	var trace_tail := int(options.get("trace_tail", SelfplayToolClass.DEFAULT_TRACE_TAIL))
 	var output_jsonl := str(options.get("output_jsonl", "")).strip_edges()
 	var output_json := str(options.get("output_json", "")).strip_edges()
+	var profile_source := str(options.get("profile", "")).strip_edges()
+	var profile_config := SelfplayToolClass._profile_config_id(profile_source)
 
 	var all_rows: Array[Dictionary] = []
 	var failures := 0
-	print("[%s] START configs=%d players=%d seed=%d matches=%d target_round=%d max_steps=%d budget_ms=%d" % [
+	print("[%s] START configs=%d players=%d seed=%d matches=%d target_round=%d max_steps=%d budget_ms=%d profile=%s" % [
 		NAME,
 		configs.size(),
 		player_count,
@@ -56,10 +58,11 @@ static func run(options: Dictionary) -> Result:
 		target_round,
 		max_steps,
 		budget_ms,
+		profile_config if not profile_config.is_empty() else "default",
 	])
 	for config_index in range(configs.size()):
 		var config := _string_config(configs[config_index])
-		var run_options_read := _build_selfplay_options(config, config_index, player_count, start_seed, matches, target_round, max_steps, budget_ms, trace_tail)
+		var run_options_read := _build_selfplay_options(config, config_index, player_count, start_seed, matches, target_round, max_steps, budget_ms, trace_tail, profile_source)
 		if not run_options_read.ok:
 			return run_options_read
 		var run_options: Dictionary = run_options_read.value
@@ -86,7 +89,9 @@ static func run(options: Dictionary) -> Result:
 	if not summary_read.ok:
 		return summary_read
 	var summary: Dictionary = summary_read.value
-	summary["matrix_configs"] = _configs_to_strings(configs)
+	summary["matrix_configs"] = _configs_to_strings(configs, profile_source)
+	if not profile_config.is_empty():
+		summary["matrix_profile"] = profile_config
 	for line in SummaryClass.format_summary(summary):
 		print(line)
 
@@ -114,7 +119,8 @@ static func _build_selfplay_options(
 	target_round: int,
 	max_steps: int,
 	budget_ms: int,
-	trace_tail: int
+	trace_tail: int,
+	profile_source: String
 ) -> Result:
 	if config.is_empty():
 		return Result.failure("--config cannot be empty")
@@ -137,6 +143,8 @@ static func _build_selfplay_options(
 		options["bot_id"] = str(config[0])
 	else:
 		options["bot_ids"] = _string_config(config)
+	if not profile_source.strip_edges().is_empty():
+		options["profile"] = profile_source.strip_edges()
 	return Result.success(options)
 
 static func _write_jsonl(path: String, rows: Array[Dictionary]) -> Result:
@@ -185,6 +193,7 @@ static func _parse_args(args: Array[String]) -> Result:
 		"max_steps": SelfplayToolClass.DEFAULT_MAX_STEPS,
 		"budget_ms": SelfplayToolClass.DEFAULT_BUDGET_MS,
 		"trace_tail": SelfplayToolClass.DEFAULT_TRACE_TAIL,
+		"profile": "",
 		"output_jsonl": "",
 		"output_json": "",
 	}
@@ -232,6 +241,11 @@ static func _parse_args(args: Array[String]) -> Result:
 			if not value.is_valid_int():
 				return Result.failure("--trace-tail must be an integer")
 			options["trace_tail"] = int(value)
+		elif arg.begins_with("--profile="):
+			var value := arg.trim_prefix("--profile=").strip_edges()
+			if value.is_empty():
+				return Result.failure("--profile cannot be empty")
+			options["profile"] = value
 		elif arg.begins_with("--output-jsonl="):
 			options["output_jsonl"] = arg.trim_prefix("--output-jsonl=").strip_edges()
 		elif arg.begins_with("--output-json="):
@@ -262,10 +276,14 @@ static func _config_array(value) -> Array:
 				out.append(_string_config(item))
 	return out
 
-static func _configs_to_strings(configs: Array) -> Array[String]:
+static func _configs_to_strings(configs: Array, profile_source: String = "") -> Array[String]:
 	var out: Array[String] = []
+	var profile_config := SelfplayToolClass._profile_config_id(profile_source)
 	for config in configs:
-		out.append(_config_id(config))
+		var config_id := _config_id(config)
+		if not profile_config.is_empty():
+			config_id = "%s@%s" % [config_id, profile_config]
+		out.append(config_id)
 	return out
 
 static func _config_id(config: Array) -> String:
@@ -278,4 +296,4 @@ static func _string_config(config: Array) -> Array[String]:
 	return out
 
 static func _print_usage() -> void:
-	print("Usage: tools/run_bot_selfplay_matrix.sh [--config=strategy] [--config=random,strategy] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--output-jsonl=res://.godot/bot_selfplay_matrix.jsonl] [--output-json=res://.godot/bot_selfplay_matrix_summary.json]")
+	print("Usage: tools/run_bot_selfplay_matrix.sh [--config=strategy] [--config=random,strategy] [--profile=base_revenue_v1] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--output-jsonl=res://.godot/bot_selfplay_matrix.jsonl] [--output-json=res://.godot/bot_selfplay_matrix_summary.json]")

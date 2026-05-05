@@ -7,6 +7,7 @@ const StrategyBotClass = preload("res://core/ai/bot/strategy_bot.gd")
 const OSLABotClass = preload("res://core/ai/bot/osla_bot.gd")
 const BeamBotClass = preload("res://core/ai/bot/beam_bot.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const StrategyProfileClass = preload("res://core/ai/strategy/strategy_profile.gd")
 
 const NAME := "BotSelfplay"
 const DEFAULT_PLAYER_COUNT := 2
@@ -56,6 +57,10 @@ static func run(options: Dictionary) -> Result:
 		return bot_ids_read
 	var bot_ids: Array[String] = bot_ids_read.value
 	var bot_config := _bot_config_id(bot_ids)
+	var profile_source := str(options.get("profile", "")).strip_edges()
+	var profile_config := _profile_config_id(profile_source)
+	if not profile_config.is_empty():
+		bot_config = "%s@%s" % [bot_config, profile_config]
 
 	if player_count <= 0:
 		return Result.failure("--players must be > 0")
@@ -77,7 +82,7 @@ static func run(options: Dictionary) -> Result:
 		if file == null:
 			return Result.failure("cannot open --output-jsonl: %s" % output_jsonl)
 
-	print("[%s] START players=%d seed=%d matches=%d target_round=%d max_steps=%d budget_ms=%d bot_config=%s bots=%s" % [
+	print("[%s] START players=%d seed=%d matches=%d target_round=%d max_steps=%d budget_ms=%d bot_config=%s bots=%s profile=%s" % [
 		NAME,
 		player_count,
 		start_seed,
@@ -87,13 +92,14 @@ static func run(options: Dictionary) -> Result:
 		budget_ms,
 		bot_config,
 		str(bot_ids),
+		profile_config if not profile_config.is_empty() else StrategyProfileClass.DEFAULT_PROFILE_ID,
 	])
 
 	var rows: Array[Dictionary] = []
 	var failures := 0
 	for match_index in range(matches):
 		var seed := start_seed + match_index
-		var row := _run_match(match_index, player_count, seed, target_round, max_steps, budget_ms, trace_tail, bot_ids, bot_config)
+		var row := _run_match(match_index, player_count, seed, target_round, max_steps, budget_ms, trace_tail, bot_ids, bot_config, profile_source, profile_config)
 		rows.append(row)
 		if not bool(row.get("ok", false)):
 			failures += 1
@@ -122,7 +128,9 @@ static func _run_match(
 	budget_ms: int,
 	trace_tail: int,
 	bot_ids: Array[String],
-	bot_config: String
+	bot_config: String,
+	profile_source: String,
+	profile_config: String
 ) -> Dictionary:
 	var engine := GameEngine.new()
 	var init_read := engine.initialize(player_count, seed)
@@ -141,7 +149,7 @@ static func _run_match(
 	var bots := {}
 	for player_id in range(player_count):
 		var bot_id := bot_ids[player_id]
-		var bot_read := _create_bot(bot_id)
+		var bot_read := _create_bot(bot_id, profile_source)
 		if not bot_read.ok:
 			return {
 				"match_index": match_index,
@@ -171,26 +179,36 @@ static func _run_match(
 	row["bot"] = bot_config
 	row["bot_config"] = bot_config
 	row["bot_ids"] = bot_ids.duplicate()
+	if not profile_config.is_empty():
+		row["bot_profile"] = profile_config
+		row["profile_source"] = profile_source
 	row["ok"] = run_read.ok
 	row["steps"] = int(run_read.value.get("steps", controller.last_trace.size())) if run_read.ok and run_read.value is Dictionary else controller.last_trace.size()
 	if not run_read.ok:
 		row["error"] = run_read.error
 	return row
 
-static func _create_bot(bot_id: String) -> Result:
+static func _create_bot(bot_id: String, profile_source: String = "") -> Result:
+	var bot = null
 	match bot_id:
 		"random":
-			return Result.success(RandomLegalBotClass.new())
+			bot = RandomLegalBotClass.new()
 		"greedy":
-			return Result.success(GreedyBotClass.new())
+			bot = GreedyBotClass.new()
 		"strategy":
-			return Result.success(StrategyBotClass.new())
+			bot = StrategyBotClass.new()
 		"osla":
-			return Result.success(OSLABotClass.new())
+			bot = OSLABotClass.new()
 		"beam":
-			return Result.success(BeamBotClass.new())
+			bot = BeamBotClass.new()
 		_:
 			return Result.failure("unknown bot: %s" % bot_id)
+	var profile := profile_source.strip_edges()
+	if not profile.is_empty() and bot != null and bot.has_method("configure_profile"):
+		var profile_read: Result = bot.configure_profile(profile)
+		if not profile_read.ok:
+			return profile_read
+	return Result.success(bot)
 
 static func _resolve_bot_ids(options: Dictionary, player_count: int) -> Result:
 	var explicit_bots_val = options.get("bot_ids", [])
@@ -227,6 +245,15 @@ static func _bot_config_id(bot_ids: Array[String]) -> String:
 	if all_same:
 		return first
 	return "_vs_".join(bot_ids)
+
+static func _profile_config_id(profile_source: String) -> String:
+	var source := profile_source.strip_edges()
+	if source.is_empty():
+		return ""
+	var file_name := source.get_file()
+	if file_name.ends_with(".json"):
+		return file_name.get_basename()
+	return source.replace("res://", "").replace("user://", "").replace("/", "_").replace(":", "_")
 
 static func _build_match_row(
 	match_index: int,
@@ -370,6 +397,7 @@ static func _parse_args(args: Array[String]) -> Result:
 		"budget_ms": DEFAULT_BUDGET_MS,
 		"trace_tail": DEFAULT_TRACE_TAIL,
 		"bot_id": DEFAULT_BOT_ID,
+		"profile": "",
 		"output_jsonl": "",
 	}
 	for raw_arg in args:
@@ -432,6 +460,11 @@ static func _parse_args(args: Array[String]) -> Result:
 				bot_ids.append(bot_id)
 			options["bot_ids"] = bot_ids
 			options["explicit_bot_ids"] = true
+		elif arg.begins_with("--profile="):
+			var value := arg.trim_prefix("--profile=").strip_edges()
+			if value.is_empty():
+				return Result.failure("--profile cannot be empty")
+			options["profile"] = value
 		elif arg.begins_with("--output-jsonl="):
 			options["output_jsonl"] = arg.trim_prefix("--output-jsonl=").strip_edges()
 		else:
@@ -439,4 +472,4 @@ static func _parse_args(args: Array[String]) -> Result:
 	return Result.success(options)
 
 static func _print_usage() -> void:
-	print("Usage: tools/run_bot_selfplay.sh [--bot=random|greedy|strategy|osla|beam] [--bots=strategy,beam] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--output-jsonl=res://.godot/bot_selfplay.jsonl]")
+	print("Usage: tools/run_bot_selfplay.sh [--bot=random|greedy|strategy|osla|beam] [--bots=strategy,beam] [--profile=base_revenue_v1] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--output-jsonl=res://.godot/bot_selfplay.jsonl]")

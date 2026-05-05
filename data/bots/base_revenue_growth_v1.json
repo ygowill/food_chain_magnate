@@ -1,0 +1,50 @@
+{
+  "id": "base_revenue_growth_v1",
+  "max_valid_per_action": 16,
+  "strict_marketing_must_affect_houses": true,
+  "action_weights": {
+    "confirm_dinnertime": 1000.0,
+    "confirm_marketing": 1000.0,
+    "set_price": 900.0,
+    "set_discount": 900.0,
+    "set_luxury_price": 900.0,
+    "choose_fridge_keep": 120.0,
+    "submit_restructuring": 90.0,
+    "set_company_structure_direct": 86.0,
+    "set_company_structure_report": 84.0,
+    "restructure_employee": 82.0,
+    "place_restaurant": 82.0,
+    "recruit": 76.0,
+    "train": 72.0,
+    "initiate_marketing": 70.0,
+    "produce_food": 70.0,
+    "procure_drinks": 68.0,
+    "place_house": 40.0,
+    "add_garden": 34.0,
+    "move_restaurant": 36.0,
+    "fire": 20.0,
+    "choose_turn_order": 20.0,
+    "select_reserve_card": 10.0,
+    "skip_sub_phase": -24.0,
+    "skip": -30.0
+  },
+  "employee_priorities": {
+    "burger_cook": 9.5,
+    "pizza_cook": 9.0,
+    "kitchen_trainee": 7.6,
+    "campaign_manager": 8.5,
+    "marketing_trainee": 7.2,
+    "errand_boy": 7.8,
+    "trainer": 6.4,
+    "management_trainee": 6.0,
+    "new_business_developer": 6.2,
+    "recruiting_girl": 4.8
+  },
+  "product_priorities": {
+    "burger": 5.0,
+    "pizza": 4.8,
+    "beer": 4.2,
+    "soda": 3.6,
+    "lemonade": 3.1
+  }
+}

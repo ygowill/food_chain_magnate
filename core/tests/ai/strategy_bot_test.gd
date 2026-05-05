@@ -146,6 +146,25 @@ static func _test_strategy_profile_loads_data_config() -> Result:
 	configured.configure_base_revenue()
 	if not is_equal_approx(float(configured.action_weight("choose_fridge_keep")), 120.0):
 		return Result.failure("StrategyProfile.configure_base_revenue should use data config when available")
+	var growth_path := StrategyProfileClass.resolve_profile_path("base_revenue_growth_v1")
+	if growth_path != "res://data/bots/base_revenue_growth_v1.json":
+		return Result.failure("StrategyProfile should resolve profile ids to data/bots JSON: %s" % growth_path)
+	var growth = StrategyProfileClass.new()
+	var growth_read := growth.configure("base_revenue_growth_v1")
+	if not growth_read.ok:
+		return Result.failure("StrategyProfile should load growth profile id: %s" % growth_read.error)
+	if str(growth.id) != "base_revenue_growth_v1":
+		return Result.failure("StrategyProfile loaded wrong growth id: %s" % growth.id)
+	if int(growth.max_valid_per_action) != 16:
+		return Result.failure("StrategyProfile loaded wrong growth max_valid_per_action: %d" % int(growth.max_valid_per_action))
+	if not is_equal_approx(float(growth.action_weight("place_restaurant")), 82.0):
+		return Result.failure("StrategyProfile loaded wrong growth place_restaurant weight: %s" % str(growth.action_weights))
+	var bot = StrategyBotClass.new()
+	var bot_read := bot.configure_profile("base_revenue_growth_v1")
+	if not bot_read.ok:
+		return Result.failure("StrategyBot should configure named profile: %s" % bot_read.error)
+	if str(bot.profile.id) != "base_revenue_growth_v1":
+		return Result.failure("StrategyBot configured wrong profile: %s" % str(bot.profile.id))
 	return Result.success()
 
 static func _test_marketing_filter_discards_no_house_candidate() -> Result:

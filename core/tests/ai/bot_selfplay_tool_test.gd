@@ -16,6 +16,7 @@ static func _test_parse_mixed_bot_args() -> Result:
 	var parsed := SelfplayToolClass._parse_args([
 		"--players=2",
 		"--bots=random,strategy",
+		"--profile=base_revenue_growth_v1",
 		"--matches=1",
 	])
 	if not parsed.ok:
@@ -24,6 +25,8 @@ static func _test_parse_mixed_bot_args() -> Result:
 	var bot_ids: Array = options.get("bot_ids", [])
 	if bot_ids.size() != 2 or str(bot_ids[0]) != "random" or str(bot_ids[1]) != "strategy":
 		return Result.failure("--bots parse mismatch: %s" % str(options))
+	if str(options.get("profile", "")) != "base_revenue_growth_v1":
+		return Result.failure("--profile parse mismatch: %s" % str(options))
 	var resolved := SelfplayToolClass._resolve_bot_ids(options, 2)
 	if not resolved.ok:
 		return resolved
@@ -38,6 +41,9 @@ static func _test_parse_mixed_bot_args() -> Result:
 	var empty_bot := SelfplayToolClass._parse_args(["--bots=random,"])
 	if empty_bot.ok:
 		return Result.failure("--bots should reject empty bot ids")
+	var empty_profile := SelfplayToolClass._parse_args(["--profile="])
+	if empty_profile.ok:
+		return Result.failure("--profile should reject empty profile ids")
 	return Result.success()
 
 static func _test_run_mixed_bot_config() -> Result:
@@ -50,6 +56,7 @@ static func _test_run_mixed_bot_config() -> Result:
 		"budget_ms": 80,
 		"trace_tail": 4,
 		"bot_ids": ["random", "strategy"],
+		"profile": "base_revenue_growth_v1",
 	})
 	if not run_read.ok:
 		return run_read
@@ -57,10 +64,12 @@ static func _test_run_mixed_bot_config() -> Result:
 	if rows.size() != 1:
 		return Result.failure("mixed selfplay should emit one row: %s" % str(run_read.value))
 	var row: Dictionary = rows[0]
-	if str(row.get("bot_config", "")) != "random_vs_strategy":
+	if str(row.get("bot_config", "")) != "random_vs_strategy@base_revenue_growth_v1":
 		return Result.failure("mixed selfplay row missing bot_config: %s" % str(row))
 	if str(row.get("bot_ids", [])) != str(["random", "strategy"]):
 		return Result.failure("mixed selfplay row missing bot_ids: %s" % str(row))
+	if str(row.get("bot_profile", "")) != "base_revenue_growth_v1":
+		return Result.failure("mixed selfplay row missing bot_profile: %s" % str(row))
 	if not bool(row.get("ok", false)):
 		return Result.failure("mixed selfplay should reach target round: %s" % str(row))
 	if int(row.get("round", 0)) < 2:

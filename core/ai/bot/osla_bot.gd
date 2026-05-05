@@ -3,6 +3,7 @@ extends "res://core/ai/bot/fcm_bot.gd"
 
 const OSLASearchClass = preload("res://core/ai/search/osla_search.gd")
 const StrategyBotClass = preload("res://core/ai/bot/strategy_bot.gd")
+const StrategyProfileClass = preload("res://core/ai/strategy/strategy_profile.gd")
 
 var search_options: Dictionary = {
 	"max_candidates": 6,
@@ -10,6 +11,17 @@ var search_options: Dictionary = {
 	"opponent_max_valid_per_action": 3,
 }
 var fallback_bot = StrategyBotClass.new()
+
+func configure_profile(profile_source: String) -> Result:
+	var loaded = StrategyProfileClass.new()
+	var load_read := loaded.configure(profile_source)
+	if not load_read.ok:
+		return load_read
+	search_options["profile"] = loaded
+	var fallback_read := fallback_bot.configure_profile(profile_source)
+	if not fallback_read.ok:
+		return fallback_read
+	return Result.success()
 
 func choose_command(
 	observation: ObservationState,
