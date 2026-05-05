@@ -5,6 +5,7 @@ const MacroActionClass = preload("res://core/ai/candidates/macro_action.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 
 const DEFAULT_MAX_VALID_PER_ACTION := 12
@@ -323,6 +324,9 @@ static func _generate_working(
 		DefsClass.SUB_PHASE_TRAIN:
 			if legal_action_ids.has("train"):
 				_generate_train(out, discarded, observation, context, validate_command, max_valid_per_action)
+		DefsClass.SUB_PHASE_MARKETING:
+			if legal_action_ids.has("initiate_marketing"):
+				_generate_marketing(out, discarded, observation, context, validate_command, max_valid_per_action)
 		DefsClass.SUB_PHASE_GET_FOOD:
 			if legal_action_ids.has("produce_food"):
 				_generate_produce_food(out, discarded, observation, context, validate_command, max_valid_per_action)
@@ -366,6 +370,69 @@ static func _generate_working_mandatory_actions(
 			0.0,
 			max_valid_per_action
 		)
+
+static func _generate_marketing(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	if not EmployeeRegistryClass.is_loaded():
+		discarded.append("marketing: EmployeeRegistry is not loaded")
+		return
+	if not MarketingRegistryClass.is_loaded():
+		discarded.append("marketing: MarketingRegistry is not loaded")
+		return
+	if not ProductRegistryClass.is_loaded():
+		discarded.append("marketing: ProductRegistry is not loaded")
+		return
+	var products := _sorted_marketable_product_ids()
+	if products.is_empty():
+		discarded.append("marketing: no marketable products")
+		return
+	var grid_size := _read_grid_size(observation.map_public)
+	if grid_size.x <= 0 or grid_size.y <= 0:
+		discarded.append("marketing: invalid grid_size %s" % str(grid_size))
+		return
+	for employee_id in _sorted_unique_strings(observation.own_player.get("employees", [])):
+		var marketing_types := _marketing_types_for_employee(employee_id)
+		if marketing_types.is_empty():
+			continue
+		var board_numbers := _sorted_marketing_board_numbers(marketing_types)
+		for board_number in board_numbers:
+			var board_def = MarketingRegistryClass.get_def(int(board_number))
+			if not (board_def is MarketingDef):
+				continue
+			var marketing_type := str((board_def as MarketingDef).type)
+			for product_id in products:
+				for y in range(grid_size.y):
+					for x in range(grid_size.x):
+						for rotation in _marketing_rotations(marketing_type):
+							if _count_action(out, "initiate_marketing") >= max_valid_per_action:
+								return
+							var params := {
+								"employee_type": employee_id,
+								"board_number": int(board_number),
+								"product": product_id,
+								"position": [x, y],
+								"rotation": int(rotation),
+							}
+							if marketing_type == "airplane":
+								params["axis"] = "row" if x == 0 or x == grid_size.x - 1 else "col"
+							_append_valid_command(
+								out,
+								discarded,
+								context,
+								"initiate_marketing",
+								params,
+								validate_command,
+								"marketing_%s_%d_%s_%d_%d_%d" % [employee_id, int(board_number), product_id, x, y, int(rotation)],
+								["working", "marketing"],
+								0.0,
+								max_valid_per_action
+							)
 
 static func _generate_house_placements(
 	out: Array[MacroAction],
@@ -753,6 +820,56 @@ static func _sorted_unique_strings(value) -> Array[String]:
 			out.append(str(key))
 	out.sort()
 	return out
+
+static func _sorted_marketable_product_ids() -> Array[String]:
+	var out: Array[String] = []
+	for product_id in ProductRegistryClass.get_all_ids():
+		var def_val = ProductRegistryClass.get_def(product_id)
+		if not (def_val is ProductDef):
+			continue
+		var def: ProductDef = def_val
+		if def.has_tag("no_marketing"):
+			continue
+		out.append(str(product_id))
+	out.sort()
+	return out
+
+static func _marketing_types_for_employee(employee_id: String) -> Array[String]:
+	var out: Array[String] = []
+	if employee_id.is_empty() or not EmployeeRegistryClass.has(employee_id):
+		return out
+	var def_val = EmployeeRegistryClass.get_def(employee_id)
+	if not (def_val is EmployeeDef):
+		return out
+	var def: EmployeeDef = def_val
+	for tag_val in def.usage_tags:
+		var tag := str(tag_val)
+		if not tag.begins_with("use:marketing:"):
+			continue
+		var marketing_type := tag.substr("use:marketing:".length()).strip_edges()
+		if marketing_type.is_empty() or out.has(marketing_type):
+			continue
+		out.append(marketing_type)
+	out.sort()
+	return out
+
+static func _sorted_marketing_board_numbers(marketing_types: Array[String]) -> Array[int]:
+	var out: Array[int] = []
+	for board_number in MarketingRegistryClass.get_all_board_numbers():
+		var def_val = MarketingRegistryClass.get_def(int(board_number))
+		if not (def_val is MarketingDef):
+			continue
+		var def: MarketingDef = def_val
+		if not marketing_types.has(str(def.type)):
+			continue
+		out.append(int(board_number))
+	out.sort()
+	return out
+
+static func _marketing_rotations(marketing_type: String) -> Array[int]:
+	if marketing_type == "airplane":
+		return [0]
+	return [0, 90, 180, 270]
 
 static func _count_owned_employees(player: Dictionary) -> Dictionary:
 	var counts := {}

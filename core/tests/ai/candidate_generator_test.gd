@@ -31,6 +31,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var move_restaurant := _test_working_move_restaurant_candidates_are_valid(seed_val)
 	if not move_restaurant.ok:
 		return move_restaurant
+	var marketing := _test_working_marketing_candidates_are_valid(seed_val)
+	if not marketing.ok:
+		return marketing
 	var payday := _test_payday_fire_candidates_are_valid(seed_val)
 	if not payday.ok:
 		return payday
@@ -40,7 +43,7 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var report := _test_restructuring_report_assignment_candidate(seed_val)
 	if not report.ok:
 		return report
-	return Result.success({"cases": 10})
+	return Result.success({"cases": 11})
 
 static func _test_reserve_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
@@ -246,6 +249,41 @@ static func _test_working_move_restaurant_candidates_are_valid(seed_val: int) ->
 	var after_anchor := _restaurant_anchor(engine.get_state(), restaurant_id)
 	if after_anchor == before_anchor:
 		return Result.failure("move_restaurant candidate should change restaurant anchor")
+	return Result.success()
+
+static func _test_working_marketing_candidates_are_valid(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var run_read := _run_random_bots_to_working(engine)
+	if not run_read.ok:
+		return run_read
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.sub_phase = DefsClass.SUB_PHASE_MARKETING
+	var actor := state.get_current_player_id()
+	if Array(state.players[actor].get("restaurants", [])).is_empty():
+		return Result.failure("marketing test requires an existing restaurant")
+	state.players[actor]["employees"].append("brand_manager")
+	state.employee_pool["brand_manager"] = int(state.employee_pool.get("brand_manager", 0)) - 1
+	var before_count := state.marketing_instances.size()
+
+	var payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	if not _has_action(candidates, "initiate_marketing"):
+		return Result.failure("Marketing should generate initiate_marketing candidate: %s" % str(_macro_debug(candidates)))
+	var command := _first_command_for_action(candidates, "initiate_marketing")
+	if command == null:
+		return Result.failure("missing initiate_marketing command")
+	var executed := engine.execute_command(command)
+	if not executed.ok:
+		return Result.failure("initiate_marketing candidate failed on execute: %s" % executed.error)
+	if engine.get_state().marketing_instances.size() <= before_count:
+		return Result.failure("initiate_marketing candidate should create a marketing instance")
 	return Result.success()
 
 static func _test_payday_fire_candidates_are_valid(seed_val: int) -> Result:
