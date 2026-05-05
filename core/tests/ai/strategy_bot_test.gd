@@ -31,6 +31,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var income_gap := _test_income_analyzer_detects_serviceable_inventory_gap(seed_val)
 	if not income_gap.ok:
 		return income_gap
+	var fridge_keep := _test_fridge_keep_prioritizes_serviceable_demand(seed_val)
+	if not fridge_keep.ok:
+		return fridge_keep
 	var product_gap_score := _test_strategy_scoring_targets_current_product_gap(seed_val)
 	if not product_gap_score.ok:
 		return product_gap_score
@@ -178,6 +181,19 @@ static func _test_income_analyzer_detects_serviceable_inventory_gap(seed_val: in
 		return Result.failure("income analyzer should expose burger inventory gap: %s" % str(burger))
 	return Result.success()
 
+static func _test_fridge_keep_prioritizes_serviceable_demand(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var observation := _synthetic_fridge_observation()
+	var keep: Dictionary = StrategyIncomeAnalyzerClass.build_fridge_keep(observation, 3)
+	if int(keep.get("burger", 0)) != 2:
+		return Result.failure("fridge keep should preserve all serviceable burger demand before excess inventory: %s" % str(keep))
+	if int(keep.get("soda", 0)) != 1:
+		return Result.failure("fridge keep should use remaining capacity deterministically after serviceable demand: %s" % str(keep))
+	return Result.success()
+
 static func _test_strategy_scoring_targets_current_product_gap(seed_val: int) -> Result:
 	var engine := GameEngine.new()
 	var init := engine.initialize(2, seed_val)
@@ -291,6 +307,45 @@ static func _synthetic_income_observation() -> ObservationState:
 		"busy_marketers": [],
 		"restaurants": ["rest_near"],
 		"inventory": {},
+	}
+	observation.map_public = {
+		"houses": {
+			"house_near": {
+				"house_number": 1,
+				"anchor_pos": Vector2i(2, 2),
+				"demands": [
+					{"product": "burger"},
+					{"product": "burger"},
+				],
+			},
+		},
+		"restaurants": {
+			"rest_near": {
+				"restaurant_id": "rest_near",
+				"owner": 0,
+				"anchor_pos": Vector2i(3, 2),
+			},
+		},
+	}
+	return observation
+
+static func _synthetic_fridge_observation() -> ObservationState:
+	var observation := ObservationState.new()
+	observation.viewer_player_id = 0
+	observation.round_number = 1
+	observation.phase = DefsClass.PHASE_CLEANUP
+	observation.sub_phase = ""
+	observation.own_player = {
+		"id": 0,
+		"cash": 20,
+		"employees": [],
+		"reserve_employees": [],
+		"busy_marketers": [],
+		"restaurants": ["rest_near"],
+		"inventory": {
+			"burger": 2,
+			"soda": 8,
+		},
 	}
 	observation.map_public = {
 		"houses": {

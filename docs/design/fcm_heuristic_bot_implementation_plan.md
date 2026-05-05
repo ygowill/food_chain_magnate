@@ -963,6 +963,7 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 - `StrategyBoardAnalyzer` 对餐厅放置/移动做轻量位置评分，优先贴近公开房屋、公开需求和当前尚未服务的需求。
 - `StrategyScorer` 对营销候选记录 `affected_houses`、`marketing_serviceable_houses`、`marketing_inventory_units`、`marketing_can_supply_product` 等特征。营销即使影响房屋，也会因没有己方餐厅、没有库存/生产能力而降权。
 - `StrategyScorer` 对生产/采购候选记录 `product_public_demand`、`product_serviceable_demand`、`product_inventory_gap`、`product_can_supply`，并用这些特征优先补当前可销售产品缺口。
+- `CandidateGenerator` 在 `choose_fridge_keep` 中复用 `StrategyIncomeAnalyzer.build_fridge_keep()`，按可服务需求、公开需求和可补给性逐单位选择冰箱保留库存，而不是简单保留最大库存堆。
 
 这仍只是策略框架和 smoke 验证，还不是完整强度版本。后续应把 `StrategyProfile` 从硬编码默认值迁移到 `data/bots/*.json`，并把阶段策略拆成更小的可测试组件。营销可服务性目前使用 observation 上的己方餐厅与房屋 anchor 的近似距离；进入 DinnerPreview / BoardAnalyzer 阶段后，应复用真实 `DinnertimeDistance` / road graph 做 golden 对齐。
 

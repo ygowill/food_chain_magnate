@@ -60,6 +60,53 @@ static func product_value(product_id: String, profile, income_analysis: Dictiona
 		"can_supply": bool(product_info.get("can_supply", false)),
 	}
 
+static func build_fridge_keep(observation: ObservationState, capacity: int, profile = null) -> Dictionary:
+	if observation == null or capacity <= 0:
+		return {}
+	var inventory_val = observation.own_player.get("inventory", {})
+	if not (inventory_val is Dictionary):
+		return {}
+	var inventory: Dictionary = inventory_val
+	var analysis := analyze(observation, profile)
+	var products: Dictionary = Dictionary(analysis.get("products", {}))
+	var units: Array[Dictionary] = []
+	for product_key in inventory.keys():
+		var product_id := str(product_key)
+		if product_id.is_empty() or not _is_storable_food_or_drink(product_id):
+			continue
+		var available := _inventory_count(observation, product_id)
+		if available <= 0:
+			continue
+		var product_info: Dictionary = Dictionary(products.get(product_id, {}))
+		for unit_index in range(1, available + 1):
+			units.append({
+				"product_id": product_id,
+				"unit_index": int(unit_index),
+				"value": _fridge_unit_value(product_id, int(unit_index), product_info, profile),
+			})
+	units.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var value_a := float(a.get("value", 0.0))
+		var value_b := float(b.get("value", 0.0))
+		if not is_equal_approx(value_a, value_b):
+			return value_a > value_b
+		var product_a := str(a.get("product_id", ""))
+		var product_b := str(b.get("product_id", ""))
+		if product_a != product_b:
+			return product_a < product_b
+		return int(a.get("unit_index", 0)) < int(b.get("unit_index", 0))
+	)
+	var keep := {}
+	var remaining := capacity
+	for unit in units:
+		if remaining <= 0:
+			break
+		var product_id := str(unit.get("product_id", ""))
+		if product_id.is_empty():
+			continue
+		keep[product_id] = int(keep.get(product_id, 0)) + 1
+		remaining -= 1
+	return keep
+
 static func employee_value(observation: ObservationState, employee_id: String, profile, income_analysis: Dictionary) -> Dictionary:
 	if employee_id.is_empty():
 		return {"score": 0.0, "role": "", "target_products": []}
@@ -123,6 +170,23 @@ static func _product_value_from_parts(product_id: String, demand: int, serviceab
 		value += float(mini(inventory, demand)) * 2.0
 	if can_supply:
 		value += 2.0
+	return value
+
+static func _fridge_unit_value(product_id: String, unit_index: int, product_info: Dictionary, profile) -> float:
+	var value := _profile_product_priority(profile, product_id) * 0.25
+	var public_demand := int(product_info.get("public_demand", 0))
+	var serviceable_demand := int(product_info.get("serviceable_demand", 0))
+	var can_supply := bool(product_info.get("can_supply", false))
+	if unit_index <= serviceable_demand:
+		value += 100.0
+	elif unit_index <= public_demand:
+		value += 45.0
+	elif unit_index <= public_demand + 2 and (public_demand > 0 or can_supply):
+		value += 8.0
+	elif can_supply:
+		value += 2.0
+	if not can_supply and unit_index <= public_demand:
+		value += 5.0
 	return value
 
 static func _employee_product_score(product_id: String, products: Dictionary, profile) -> float:
@@ -312,6 +376,17 @@ static func _is_drink(product_id: String) -> bool:
 	if ProductRegistryClass.is_loaded() and ProductRegistryClass.has(product_id):
 		return ProductRegistryClass.is_drink(product_id)
 	return product_id == "beer" or product_id == "soda" or product_id == "lemonade"
+
+static func _is_storable_food_or_drink(product_id: String) -> bool:
+	if product_id.is_empty() or not ProductRegistryClass.is_loaded():
+		return false
+	var def_val = ProductRegistryClass.get_def(product_id)
+	if not (def_val is ProductDef):
+		return false
+	var def: ProductDef = def_val
+	if def.has_tag("no_storage"):
+		return false
+	return def.has_tag("food") or def.has_tag("drink")
 
 static func _own_restaurant_count(observation: ObservationState) -> int:
 	if observation == null:

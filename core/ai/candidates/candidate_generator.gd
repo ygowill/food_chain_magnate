@@ -11,6 +11,7 @@ const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingRangeCalculatorClass = preload("res://core/rules/marketing_range_calculator.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
+const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_income_analyzer.gd")
 
 const DEFAULT_MAX_VALID_PER_ACTION := 12
 const TRAIN_ACTION_MIN_PRIOR := 0.75
@@ -1615,6 +1616,9 @@ static func _build_fridge_keep(observation: ObservationState) -> Dictionary:
 	var remaining := maxi(0, int(fridge.get("capacity", 0)))
 	if remaining <= 0:
 		return {}
+	var strategy_keep := StrategyIncomeAnalyzerClass.build_fridge_keep(observation, remaining)
+	if not strategy_keep.is_empty():
+		return strategy_keep
 	var product_ids: Array[String] = []
 	for product_key in inventory.keys():
 		var product_id := str(product_key)
