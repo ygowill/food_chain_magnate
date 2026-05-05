@@ -1038,6 +1038,11 @@ Beam Search 用 `MacroAction` 而不是裸 action 枚举，并设置：
 tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
 ```
 
+当前实现状态：
+
+- `core/tests/ai/random_legal_bot_smoke_test.gd`：两个 `RandomLegalBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic。
+- `core/tests/ai/greedy_bot_smoke_test.gd`：保留 GreedyBot 短程 deterministic 校验，并新增单程跑到至少第 3 轮或 GameOver 的 smoke。完整打完 2p base 局仍未完成。
+
 ## 15. 开发路线图
 
 Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[fcm_heuristic_bot_phase0_phase1_breakdown.md](fcm_heuristic_bot_phase0_phase1_breakdown.md)。
@@ -1154,10 +1159,10 @@ Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[f
 
 ### 强度
 
-- [ ] RandomLegalBot 无 softlock。
+- [x] RandomLegalBot 无 round 3 smoke softlock（完整局仍待自对弈工具覆盖）。
 - [ ] GreedyBot 能完整打完 2p base 局。
 - [ ] 决策 trace 可解释最高分候选。
-- [ ] 固定 seed 下 selfplay deterministic。
+- [x] 固定 seed 下 RandomLegalBot selfplay deterministic；GreedyBot 短程 deterministic。
 - [ ] 搜索超时有合法 fallback。
 
 ## 19. 后续模块支持顺序建议

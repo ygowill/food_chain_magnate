@@ -7,10 +7,10 @@ const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 
 static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
-	var first := _run_to_working(seed_val)
+	var first := _run_to_round_or_game_over(seed_val, 3)
 	if not first.ok:
 		return first
-	var second := _run_to_working(seed_val)
+	var second := _run_to_round_or_game_over(seed_val, 3)
 	if not second.ok:
 		return second
 	var first_actions: Array = first.value.get("actions", [])
@@ -25,10 +25,12 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 		return payday
 	return Result.success({
 		"steps": int(first.value.get("steps", 0)),
+		"round": int(first.value.get("round", 0)),
+		"phase": str(first.value.get("phase", "")),
 		"actions": first_actions,
 	})
 
-static func _run_to_working(seed_val: int) -> Result:
+static func _run_to_round_or_game_over(seed_val: int, min_round: int) -> Result:
 	var engine := GameEngine.new()
 	var init := engine.initialize(2, seed_val)
 	if not init.ok:
@@ -41,16 +43,16 @@ static func _run_to_working(seed_val: int) -> Result:
 	}
 	var stop_condition := func(test_engine: GameEngine) -> bool:
 		var state := test_engine.get_state()
-		return state != null and str(state.phase) == DefsClass.PHASE_WORKING
+		return state != null and (int(state.round_number) >= min_round or str(state.phase) == DefsClass.PHASE_GAME_OVER)
 
-	var run_result := controller.run_until(engine, bots, stop_condition, 80, 50)
+	var run_result := controller.run_until(engine, bots, stop_condition, 360, 50)
 	if not run_result.ok:
 		return run_result
 	var state := engine.get_state()
 	if state == null:
 		return Result.failure("engine state is null after bot run")
-	if str(state.phase) != DefsClass.PHASE_WORKING:
-		return Result.failure("expected Working after RandomLegalBot run, got %s/%s" % [str(state.phase), str(state.sub_phase)])
+	if int(state.round_number) < min_round and str(state.phase) != DefsClass.PHASE_GAME_OVER:
+		return Result.failure("expected RandomLegalBot to reach round %d or GameOver, got round=%d %s/%s" % [min_round, int(state.round_number), str(state.phase), str(state.sub_phase)])
 
 	var actions := []
 	for item in controller.last_trace:
@@ -63,6 +65,8 @@ static func _run_to_working(seed_val: int) -> Result:
 		})
 	return Result.success({
 		"steps": controller.last_trace.size(),
+		"round": int(state.round_number),
+		"phase": str(state.phase),
 		"actions": actions,
 	})
 
