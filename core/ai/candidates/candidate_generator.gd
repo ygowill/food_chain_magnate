@@ -338,6 +338,8 @@ static func _generate_working(
 		DefsClass.SUB_PHASE_PLACE_HOUSES:
 			if legal_action_ids.has("place_house"):
 				_generate_house_placements(out, discarded, observation, context, validate_command, max_valid_per_action)
+			if legal_action_ids.has("add_garden"):
+				_generate_garden_additions(out, discarded, observation, context, validate_command, max_valid_per_action)
 		DefsClass.SUB_PHASE_PLACE_RESTAURANTS:
 			if legal_action_ids.has("place_restaurant"):
 				_generate_restaurant_placements(out, discarded, observation, context, validate_command, max_valid_per_action, "working_restaurant")
@@ -473,6 +475,46 @@ static func _generate_house_placements(
 					"place_house_%d_%d_%d_%d" % [house_number, x, y, int(rotation)],
 					["working", "place_house"],
 					0.0,
+					max_valid_per_action
+				)
+
+static func _generate_garden_additions(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	var houses_val = observation.map_public.get("houses", {})
+	if not (houses_val is Dictionary):
+		discarded.append("add_garden: map_public.houses is not Dictionary")
+		return
+	var houses: Dictionary = houses_val
+	var directions := ["N", "E", "S", "W"]
+	for house_id in _sorted_string_keys(houses):
+		var house_val = houses.get(house_id, null)
+		if not (house_val is Dictionary):
+			continue
+		var house: Dictionary = house_val
+		if bool(house.get("has_garden", false)):
+			continue
+		for direction in directions:
+			if _count_action(out, "add_garden") >= max_valid_per_action:
+				return
+			_append_valid_command(
+				out,
+				discarded,
+				context,
+				"add_garden",
+				{
+					"house_id": house_id,
+					"direction": direction,
+				},
+				validate_command,
+				"add_garden_%s_%s" % [house_id, direction],
+				["working", "add_garden"],
+				0.05,
 				max_valid_per_action
 			)
 

@@ -8,6 +8,7 @@ const LegalActionServiceClass = preload("res://core/ai/bot/legal_action_service.
 const BotControllerClass = preload("res://core/ai/bot/bot_controller.gd")
 const RandomLegalBotClass = preload("res://core/ai/bot/random_legal_bot.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const AddGardenRulesTestClass = preload("res://core/tests/add_garden_rules_test.gd")
 const ProcureDrinksTestClass = preload("res://core/tests/procure_drinks_test.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 
@@ -27,6 +28,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var houses := _test_working_place_house_candidates_are_valid(seed_val)
 	if not houses.ok:
 		return houses
+	var garden := _test_working_add_garden_candidates_are_valid(seed_val)
+	if not garden.ok:
+		return garden
 	var restaurants := _test_working_place_restaurant_candidates_are_valid(seed_val)
 	if not restaurants.ok:
 		return restaurants
@@ -48,7 +52,7 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var report := _test_restructuring_report_assignment_candidate(seed_val)
 	if not report.ok:
 		return report
-	return Result.success({"cases": 12})
+	return Result.success({"cases": 13})
 
 static func _test_reserve_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
@@ -183,6 +187,50 @@ static func _test_working_place_house_candidates_are_valid(seed_val: int) -> Res
 	if not (houses_val is Dictionary) or Dictionary(houses_val).is_empty():
 		return Result.failure("place_house candidate should add a house")
 	return Result.success()
+
+static func _test_working_add_garden_candidates_are_valid(seed_val: int) -> Result:
+	var last_error := ""
+	for attempt in range(20):
+		var engine_read := _build_engine(seed_val + attempt)
+		if not engine_read.ok:
+			return engine_read
+		var engine: GameEngine = engine_read.value
+		var run_read := _run_random_bots_to_working(engine)
+		if not run_read.ok:
+			return run_read
+		var state := engine.get_state()
+		if state == null:
+			return Result.failure("engine state is null")
+		state.sub_phase = DefsClass.SUB_PHASE_PLACE_HOUSES
+		var actor := state.get_current_player_id()
+		if int(state.employee_pool.get("new_business_developer", 0)) <= 0:
+			return Result.failure("add_garden candidate test requires new_business_developer in pool")
+		state.players[actor]["employees"].append("new_business_developer")
+		state.employee_pool["new_business_developer"] = int(state.employee_pool.get("new_business_developer", 0)) - 1
+		var plan := AddGardenRulesTestClass._find_add_garden_plan(engine, actor)
+		if plan.is_empty():
+			last_error = "no add_garden plan for seed %d" % (seed_val + attempt)
+			continue
+		var target_house_id := str(plan.get("house_id", ""))
+
+		var payload_read := _generate_for_current_player(engine, seed_val + attempt, {"max_valid_per_action": 8})
+		if not payload_read.ok:
+			return payload_read
+		var candidates := _read_candidates(payload_read.value)
+		if not _has_action(candidates, "add_garden"):
+			return Result.failure("PlaceHouses should generate add_garden candidate: %s" % str(_macro_debug(candidates)))
+		var command := _first_command_for_action(candidates, "add_garden")
+		if command == null:
+			return Result.failure("missing add_garden command")
+		var executed := engine.execute_command(command)
+		if not executed.ok:
+			return Result.failure("add_garden candidate failed on execute: %s" % executed.error)
+		var applied_house_id := str(command.params.get("house_id", target_house_id))
+		var house: Dictionary = Dictionary(engine.get_state().map.get("houses", {})).get(applied_house_id, {})
+		if house.is_empty() or not bool(house.get("has_garden", false)):
+			return Result.failure("add_garden candidate should mark house as having garden")
+		return Result.success({"seed_used": seed_val + attempt})
+	return Result.failure("add_garden candidate test could not find a usable seed: %s" % last_error)
 
 static func _test_working_place_restaurant_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
