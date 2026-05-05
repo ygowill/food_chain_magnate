@@ -30,9 +30,15 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 		"recruit":
 			var employee_id := str(command.params.get("employee_type", ""))
 			var bonus := _employee_strategy_value(observation, employee_id, profile, income_analysis)
+			var roster_payload := _recruit_roster_adjustment(observation, employee_id, income_analysis)
+			var roster_adjustment := float(roster_payload.get("adjustment", 0.0))
 			features["employee_value"] = bonus
+			features["recruit_owned_count"] = int(roster_payload.get("owned_count", 0))
+			features["recruit_desired_count"] = int(roster_payload.get("desired_count", 0))
+			features["recruit_roster_saturated"] = bool(roster_payload.get("saturated", false))
+			features["recruit_roster_adjustment"] = roster_adjustment
 			_append_employee_income_features(features, observation, employee_id, income_analysis, profile, "recruit")
-			score += bonus
+			score += bonus + roster_adjustment
 		"train":
 			var from_employee := str(command.params.get("from_employee", ""))
 			var to_employee := str(command.params.get("to_employee", ""))
@@ -128,6 +134,52 @@ static func _employee_strategy_value(observation: ObservationState, employee_id:
 	elif role == "new_shop" and _own_restaurant_count(observation) <= 1:
 		value += 3.0
 	return value
+
+static func _recruit_roster_adjustment(observation: ObservationState, employee_id: String, income_analysis: Dictionary) -> Dictionary:
+	var owned_count := _count_owned_employee(observation.own_player if observation != null else {}, employee_id)
+	var desired_count := _desired_recruit_count(observation, employee_id, income_analysis)
+	var saturated := owned_count >= desired_count
+	var adjustment := 0.0
+	if saturated:
+		adjustment -= 115.0 + float(maxi(0, owned_count - desired_count)) * 25.0
+	return {
+		"owned_count": owned_count,
+		"desired_count": desired_count,
+		"saturated": saturated,
+		"adjustment": adjustment,
+	}
+
+static func _desired_recruit_count(observation: ObservationState, employee_id: String, income_analysis: Dictionary) -> int:
+	if observation == null or employee_id.is_empty() or not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(employee_id):
+		return 0
+	var role := _employee_role(employee_id)
+	match employee_id:
+		"kitchen_trainee":
+			var public_demand := int(income_analysis.get("total_public_demand", 0))
+			var inventory_gap := int(income_analysis.get("total_inventory_gap", 0))
+			return 2 if public_demand >= 5 or inventory_gap >= 4 else 1
+		"marketing_trainee":
+			if _owns_any_employee(observation, ["campaign_manager", "brand_manager", "brand_director"]):
+				return 0
+			return 1 if int(income_analysis.get("own_restaurants", 0)) > 0 else 0
+		"errand_boy":
+			return 1
+		"trainer":
+			return 1 if _has_trainable_owned_employee(observation) else 0
+		"management_trainee":
+			if _owns_any_employee(observation, ["management_trainee", "new_business_developer", "junior_vice_president", "luxury_manager"]):
+				return 0
+			return 1
+		"recruiting_girl":
+			return 1
+	if role == "new_shop":
+		var unserviceable := int(income_analysis.get("total_public_demand", 0)) - int(income_analysis.get("total_serviceable_demand", 0))
+		return 1 if unserviceable > 0 or _own_restaurant_count(observation) <= 1 else 0
+	if role == "produce_food":
+		return 2 if int(income_analysis.get("total_public_demand", 0)) >= 6 else 1
+	if role == "marketing" or role == "procure_drink" or role == "recruit_train" or role == "price":
+		return 1
+	return 1
 
 static func _product_pipeline_value(product_id: String, profile, income_analysis: Dictionary, features: Dictionary) -> float:
 	if product_id.is_empty():
@@ -376,6 +428,34 @@ static func _has_trainable_reserve_employee(observation: ObservationState) -> bo
 			continue
 		var def_val = EmployeeRegistryClass.get_def(employee_id)
 		if def_val is EmployeeDef and not (def_val as EmployeeDef).train_to.is_empty():
+			return true
+	return false
+
+static func _has_trainable_owned_employee(observation: ObservationState) -> bool:
+	if observation == null or not EmployeeRegistryClass.is_loaded():
+		return false
+	for employee_id in _owned_employee_ids(observation.own_player):
+		if employee_id.is_empty() or not EmployeeRegistryClass.has(employee_id):
+			continue
+		var def_val = EmployeeRegistryClass.get_def(employee_id)
+		if def_val is EmployeeDef and not (def_val as EmployeeDef).train_to.is_empty():
+			return true
+	return false
+
+static func _count_owned_employee(player: Dictionary, target_employee_id: String) -> int:
+	if target_employee_id.is_empty():
+		return 0
+	var count := 0
+	for employee_id in _owned_employee_ids(player):
+		if employee_id == target_employee_id:
+			count += 1
+	return count
+
+static func _owns_any_employee(observation: ObservationState, employee_ids: Array[String]) -> bool:
+	if observation == null or employee_ids.is_empty():
+		return false
+	for employee_id in _owned_employee_ids(observation.own_player):
+		if employee_ids.has(employee_id):
 			return true
 	return false
 

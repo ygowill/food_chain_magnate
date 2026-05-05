@@ -48,6 +48,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var income_gap := _test_income_analyzer_detects_serviceable_inventory_gap(seed_val)
 	if not income_gap.ok:
 		return income_gap
+	var recruit_roster := _test_recruit_score_penalizes_roster_saturation(seed_val)
+	if not recruit_roster.ok:
+		return recruit_roster
 	var fridge_keep := _test_fridge_keep_prioritizes_serviceable_demand(seed_val)
 	if not fridge_keep.ok:
 		return fridge_keep
@@ -340,6 +343,72 @@ static func _test_income_analyzer_detects_serviceable_inventory_gap(seed_val: in
 		return Result.failure("income analyzer should count serviceable burger demand: %s" % str(burger))
 	if int(burger.get("inventory_gap", 0)) != 2:
 		return Result.failure("income analyzer should expose burger inventory gap: %s" % str(burger))
+	return Result.success()
+
+static func _test_recruit_score_penalizes_roster_saturation(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var useful_observation := _synthetic_income_observation()
+	useful_observation.phase = DefsClass.PHASE_WORKING
+	useful_observation.sub_phase = DefsClass.SUB_PHASE_RECRUIT
+	var saturated_observation := _synthetic_income_observation()
+	saturated_observation.phase = DefsClass.PHASE_WORKING
+	saturated_observation.sub_phase = DefsClass.SUB_PHASE_RECRUIT
+	saturated_observation.own_player["employees"] = ["burger_cook", "pizza_cook", "trainer"]
+	var trainer_macro := MacroAction.create(
+		"recruit_trainer",
+		[Command.create("recruit", 0, {"employee_type": "trainer"})],
+		0.0,
+		["working", "recruit"],
+		{}
+	)
+	var skip_macro := MacroAction.create(
+		"skip_recruit",
+		[Command.create("skip_sub_phase", 0, {})],
+		0.0,
+		["working", "fallback"],
+		{}
+	)
+	var useful_score: Dictionary = StrategyScorerClass.score_macro(useful_observation, trainer_macro, profile)
+	var duplicate_score: Dictionary = StrategyScorerClass.score_macro(saturated_observation, trainer_macro, profile)
+	var skip_score: Dictionary = StrategyScorerClass.score_macro(saturated_observation, skip_macro, profile)
+	if float(useful_score.get("score", 0.0)) <= float(skip_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should still value first trainer when trainable staff exist: trainer=%s skip=%s" % [str(useful_score), str(skip_score)])
+	if float(duplicate_score.get("score", 0.0)) >= float(skip_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should prefer skipping over duplicate saturated trainer: trainer=%s skip=%s" % [str(duplicate_score), str(skip_score)])
+	var features: Dictionary = Dictionary(duplicate_score.get("features", {}))
+	if not bool(features.get("recruit_roster_saturated", false)):
+		return Result.failure("duplicate trainer should expose recruit_roster_saturated: %s" % str(features))
+	if int(features.get("recruit_owned_count", 0)) != 1:
+		return Result.failure("duplicate trainer should expose owned count: %s" % str(features))
+	if int(features.get("recruit_desired_count", 0)) != 1:
+		return Result.failure("duplicate trainer should expose desired count: %s" % str(features))
+	if float(features.get("recruit_roster_adjustment", 0.0)) >= 0.0:
+		return Result.failure("duplicate trainer should carry negative roster adjustment: %s" % str(features))
+	var completed_route_observation := _synthetic_income_observation()
+	completed_route_observation.phase = DefsClass.PHASE_WORKING
+	completed_route_observation.sub_phase = DefsClass.SUB_PHASE_RECRUIT
+	completed_route_observation.own_player["employees"] = ["new_business_developer"]
+	var management_macro := MacroAction.create(
+		"recruit_management_after_target",
+		[Command.create("recruit", 0, {"employee_type": "management_trainee"})],
+		0.0,
+		["working", "recruit"],
+		{}
+	)
+	var management_score: Dictionary = StrategyScorerClass.score_macro(completed_route_observation, management_macro, profile)
+	var management_skip: Dictionary = StrategyScorerClass.score_macro(completed_route_observation, skip_macro, profile)
+	if float(management_score.get("score", 0.0)) >= float(management_skip.get("score", 0.0)):
+		return Result.failure("StrategyScorer should avoid recruiting management trainee after route target exists: management=%s skip=%s" % [str(management_score), str(management_skip)])
+	var management_features: Dictionary = Dictionary(management_score.get("features", {}))
+	if int(management_features.get("recruit_desired_count", -1)) != 0:
+		return Result.failure("completed management route should expose zero desired count: %s" % str(management_features))
+	if not bool(management_features.get("recruit_roster_saturated", false)):
+		return Result.failure("completed management route should be saturated: %s" % str(management_features))
 	return Result.success()
 
 static func _test_fridge_keep_prioritizes_serviceable_demand(seed_val: int) -> Result:
