@@ -43,8 +43,9 @@ static func choose_command(
 	var best_score := -INF
 	var best_features := {}
 	var evaluated := []
+	var attempted_simulations := 0
 	for macro_val in candidates:
-		if budget != null and budget.expired():
+		if budget != null and budget.expired() and attempted_simulations > 0:
 			break
 		if not (macro_val is MacroAction):
 			discarded.append("candidate is not MacroAction")
@@ -54,6 +55,7 @@ static func choose_command(
 			discarded.append("%s: empty command list" % macro.id)
 			continue
 
+		attempted_simulations += 1
 		var sim_read := ForwardSimulatorClass.simulate_commands(engine, macro.commands, {"mode": "after_command"})
 		if not sim_read.ok:
 			discarded.append("%s: simulation failed: %s" % [macro.id, sim_read.error])
