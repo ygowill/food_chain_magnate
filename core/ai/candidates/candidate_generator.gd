@@ -120,26 +120,35 @@ static func _generate_restaurant_placements(
 		discarded.append("%s: invalid grid_size %s" % [id_prefix, str(grid_size)])
 		return
 	var rotations := [0, 90, 180, 270]
+	var employee_options := _restaurant_place_employee_options(observation)
 	for y in range(grid_size.y):
 		for x in range(grid_size.x):
 			for rotation in rotations:
-				if _count_action(out, "place_restaurant") >= max_valid_per_action:
-					return
-				_append_valid_command(
-					out,
-					discarded,
-					context,
-					"place_restaurant",
-					{
+				for employee_id in employee_options:
+					if _count_action(out, "place_restaurant") >= max_valid_per_action:
+						return
+					var params := {
 						"position": [x, y],
 						"rotation": int(rotation),
-					},
-					validate_command,
-					"%s_%d_%d_%d" % [id_prefix, x, y, int(rotation)],
-					["setup", "restaurant"],
-					0.0,
-					max_valid_per_action
-				)
+					}
+					var macro_suffix := "%d_%d_%d" % [x, y, int(rotation)]
+					var tags: Array[String] = ["setup", "restaurant"]
+					if not employee_id.is_empty():
+						params["employee_type"] = employee_id
+						macro_suffix = "%s_%s" % [employee_id, macro_suffix]
+						tags = ["working", "restaurant", employee_id]
+					_append_valid_command(
+						out,
+						discarded,
+						context,
+						"place_restaurant",
+						params,
+						validate_command,
+						"%s_%s" % [id_prefix, macro_suffix],
+						tags,
+						0.0,
+						max_valid_per_action
+					)
 
 static func _generate_restructuring(
 	out: Array[MacroAction],
@@ -970,6 +979,25 @@ static func _marketing_rotations(marketing_type: String) -> Array[int]:
 	if marketing_type == "airplane":
 		return [0]
 	return [0, 90, 180, 270]
+
+static func _restaurant_place_employee_options(observation: ObservationState) -> Array[String]:
+	if observation == null or str(observation.phase) != DefsClass.PHASE_WORKING:
+		return [""]
+	if not EmployeeRegistryClass.is_loaded():
+		return [""]
+	var out: Array[String] = []
+	for employee_id in _sorted_unique_strings(observation.own_player.get("employees", [])):
+		if not EmployeeRegistryClass.has(employee_id):
+			continue
+		var def_val = EmployeeRegistryClass.get_def(employee_id)
+		if not (def_val is EmployeeDef):
+			continue
+		var def: EmployeeDef = def_val
+		if def.has_usage_tag("use:place_restaurant"):
+			out.append(employee_id)
+	if out.is_empty():
+		out.append("")
+	return out
 
 static func _count_owned_employees(player: Dictionary) -> Dictionary:
 	var counts := {}

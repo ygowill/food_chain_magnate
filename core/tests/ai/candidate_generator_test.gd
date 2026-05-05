@@ -34,6 +34,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var restaurants := _test_working_place_restaurant_candidates_are_valid(seed_val)
 	if not restaurants.ok:
 		return restaurants
+	var local_restaurant := _test_working_local_manager_place_restaurant_is_opening_soon(seed_val)
+	if not local_restaurant.ok:
+		return local_restaurant
 	var move_restaurant := _test_working_move_restaurant_candidates_are_valid(seed_val)
 	if not move_restaurant.ok:
 		return move_restaurant
@@ -52,7 +55,7 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var report := _test_restructuring_report_assignment_candidate(seed_val)
 	if not report.ok:
 		return report
-	return Result.success({"cases": 13})
+	return Result.success({"cases": 14})
 
 static func _test_reserve_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
@@ -264,6 +267,38 @@ static func _test_working_place_restaurant_candidates_are_valid(seed_val: int) -
 	var after_count := Dictionary(engine.get_state().map.get("restaurants", {})).size()
 	if after_count <= before_count:
 		return Result.failure("place_restaurant candidate should add an open restaurant")
+	return Result.success()
+
+static func _test_working_local_manager_place_restaurant_is_opening_soon(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var run_read := _run_random_bots_to_working(engine)
+	if not run_read.ok:
+		return run_read
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.sub_phase = DefsClass.SUB_PHASE_PLACE_RESTAURANTS
+	var actor := state.get_current_player_id()
+	state.players[actor]["employees"].append("local_manager")
+	state.employee_pool["local_manager"] = int(state.employee_pool.get("local_manager", 0)) - 1
+
+	var payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	var command := _first_command_with_param(candidates, "place_restaurant", "employee_type", "local_manager")
+	if command == null:
+		return Result.failure("PlaceRestaurants should generate local_manager place_restaurant candidate: %s" % str(_macro_debug(candidates)))
+	var before_open: Array = Array(state.round_state.get("opening_soon_restaurants", []))
+	var executed := engine.execute_command(command)
+	if not executed.ok:
+		return Result.failure("local_manager place_restaurant candidate failed on execute: %s" % executed.error)
+	var after_open: Array = Array(engine.get_state().round_state.get("opening_soon_restaurants", []))
+	if after_open.size() <= before_open.size():
+		return Result.failure("local_manager place_restaurant should create opening_soon restaurant")
 	return Result.success()
 
 static func _test_working_move_restaurant_candidates_are_valid(seed_val: int) -> Result:
