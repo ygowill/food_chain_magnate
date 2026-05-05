@@ -38,9 +38,12 @@ func choose_command_with_engine(
 	if search_read.ok:
 		return search_read.value
 
-	var fallback := fallback_bot.choose_command(observation, context, legal_action_ids, validate_command, budget)
+	var fallback_budget = null if budget != null and budget.expired() else budget
+	var fallback := fallback_bot.choose_command(observation, context, legal_action_ids, validate_command, fallback_budget)
 	if fallback != null and not fallback.is_failure():
 		fallback.trace["greedy_failure"] = search_read.error
+		if budget != null and budget.expired():
+			fallback.trace["fallback_after_budget_expired"] = true
 		fallback.explanation["fallback"] = "random_legal"
 		return fallback
 	return BotDecision.failure("GreedyBot failed: %s" % search_read.error)

@@ -1163,7 +1163,7 @@ Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[f
 - [ ] GreedyBot 能完整打完 2p base 局。
 - [x] 决策 trace 可解释最高分候选。
 - [x] 固定 seed 下 RandomLegalBot selfplay deterministic；GreedyBot 短程 deterministic。
-- [ ] 搜索超时有合法 fallback。
+- [x] 搜索超时有合法 fallback。
 
 ## 19. 后续模块支持顺序建议
 

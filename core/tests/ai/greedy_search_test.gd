@@ -2,6 +2,7 @@ class_name GreedySearchTest
 extends RefCounted
 
 const GreedySearchClass = preload("res://core/ai/search/greedy_search.gd")
+const GreedyBotClass = preload("res://core/ai/bot/greedy_bot.gd")
 const ObservationAdapterClass = preload("res://core/ai/observation/observation_adapter.gd")
 const AiDecisionPointClass = preload("res://core/ai/bot/ai_decision_point.gd")
 const LegalActionServiceClass = preload("res://core/ai/bot/legal_action_service.gd")
@@ -10,7 +11,10 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var reserve := _test_choose_reserve_without_mutating_source(seed_val)
 	if not reserve.ok:
 		return reserve
-	return Result.success({"cases": 1})
+	var fallback := _test_greedy_bot_expired_budget_uses_legal_fallback(seed_val)
+	if not fallback.ok:
+		return fallback
+	return Result.success({"cases": 2})
 
 static func _test_choose_reserve_without_mutating_source(seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -50,6 +54,39 @@ static func _test_choose_reserve_without_mutating_source(seed_val: int) -> Resul
 	var trace_check := _assert_decision_trace(decision)
 	if not trace_check.ok:
 		return trace_check
+	return Result.success()
+
+static func _test_greedy_bot_expired_budget_uses_legal_fallback(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var setup := _build_search_inputs(engine, seed_val)
+	if not setup.ok:
+		return setup
+	var data: Dictionary = setup.value
+	var bot := GreedyBotClass.new()
+	var decision := bot.choose_command_with_engine(
+		engine,
+		data["observation"],
+		data["context"],
+		data["legal_action_ids"],
+		data["validate_fn"],
+		TimeBudget.start(0)
+	)
+	if decision == null:
+		return Result.failure("GreedyBot returned null decision for expired budget")
+	if decision.is_failure():
+		return Result.failure("GreedyBot should fallback to legal command for expired budget: %s" % decision.failure_reason)
+	if decision.command == null:
+		return Result.failure("GreedyBot fallback returned empty command")
+	var valid := LegalActionServiceClass.validate_command(engine, decision.command, data["context"])
+	if not valid.ok:
+		return Result.failure("GreedyBot fallback returned invalid command: %s" % valid.error)
+	if str(decision.explanation.get("fallback", "")) != "random_legal":
+		return Result.failure("GreedyBot expired budget should use random_legal fallback: %s" % str(decision.explanation))
+	if not bool(decision.trace.get("fallback_after_budget_expired", false)):
+		return Result.failure("GreedyBot fallback trace should mark expired budget: %s" % str(decision.trace))
 	return Result.success()
 
 static func _build_search_inputs(engine: GameEngine, seed_val: int) -> Result:
