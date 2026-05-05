@@ -65,7 +65,10 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var optional_training := _test_optional_training_does_not_block_revenue_staff(seed_val)
 	if not optional_training.ok:
 		return optional_training
-	return Result.success({"cases": 17})
+	var advanced_training := _test_training_candidates_cover_advanced_routes(seed_val)
+	if not advanced_training.ok:
+		return advanced_training
+	return Result.success({"cases": 18})
 
 static func _test_reserve_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
@@ -727,12 +730,76 @@ static func _test_optional_training_does_not_block_revenue_staff(seed_val: int) 
 		return Result.failure("Working/Train should not generate low-priority campaign_manager -> brand_manager training before revenue use: %s" % str(_macro_debug(train_candidates)))
 	return Result.success()
 
+static func _test_training_candidates_cover_advanced_routes(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
+	state.turn_order = [0]
+	state.current_player_index = 0
+	state.map["houses"] = {
+		"training_route_house": {
+			"house_number": 1,
+			"anchor_pos": Vector2i(2, 2),
+			"demands": [
+				{"product": "burger"},
+				{"product": "beer"},
+			],
+		},
+	}
+	var add_trainer := _add_employee_for_test(state, 0, "employees", "trainer")
+	if not add_trainer.ok:
+		return add_trainer
+	for source_id in ["burger_cook", "errand_boy", "management_trainee"]:
+		var added := _add_employee_for_test(state, 0, "reserve_employees", source_id)
+		if not added.ok:
+			return added
+
+	var payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 16})
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	if not _has_train_candidate(candidates, "burger_cook", "burger_chef"):
+		return Result.failure("Working/Train should include burger_cook -> burger_chef advanced route: %s" % str(_macro_debug(candidates)))
+	if not _has_train_candidate(candidates, "errand_boy", "cart_operator"):
+		return Result.failure("Working/Train should include errand_boy -> cart_operator drink route: %s" % str(_macro_debug(candidates)))
+	if not _has_train_candidate(candidates, "management_trainee", "junior_vice_president"):
+		return Result.failure("Working/Train should include management_trainee -> junior_vice_president manager route: %s" % str(_macro_debug(candidates)))
+	return Result.success()
+
 static func _build_engine(seed_val: int) -> Result:
 	var engine := GameEngine.new()
 	var init := engine.initialize(2, seed_val)
 	if not init.ok:
 		return Result.failure("engine initialize failed: %s" % init.error)
 	return Result.success(engine)
+
+static func _add_employee_for_test(state: GameState, player_id: int, zone: String, employee_id: String) -> Result:
+	if state == null:
+		return Result.failure("test add employee missing state")
+	if player_id < 0 or player_id >= state.players.size():
+		return Result.failure("test add employee player out of range: %d" % player_id)
+	if int(state.employee_pool.get(employee_id, 0)) <= 0:
+		return Result.failure("test requires %s in employee pool" % employee_id)
+	var player_val = state.players[player_id]
+	if not (player_val is Dictionary):
+		return Result.failure("test player is not Dictionary")
+	var player: Dictionary = player_val
+	var list_val = player.get(zone, [])
+	if not (list_val is Array):
+		player[zone] = []
+		list_val = player[zone]
+	var employees: Array = list_val
+	employees.append(employee_id)
+	player[zone] = employees
+	state.players[player_id] = player
+	state.employee_pool[employee_id] = int(state.employee_pool.get(employee_id, 0)) - 1
+	return Result.success()
 
 static func _finish_reserve_selection(engine: GameEngine) -> Result:
 	for _i in range(2):
@@ -852,6 +919,18 @@ static func _first_command_with_param(candidates: Array, action_id: String, para
 			if command.params.get(param_key, null) == param_value:
 				return command
 	return null
+
+static func _has_train_candidate(candidates: Array, from_employee: String, to_employee: String) -> bool:
+	for macro_val in candidates:
+		if not (macro_val is MacroAction):
+			continue
+		var macro: MacroAction = macro_val
+		for command in macro.commands:
+			if command == null or command.action_id != "train":
+				continue
+			if str(command.params.get("from_employee", "")) == from_employee and str(command.params.get("to_employee", "")) == to_employee:
+				return true
+	return false
 
 static func _sum_drink_inventory(inventory_val) -> int:
 	if not (inventory_val is Dictionary):

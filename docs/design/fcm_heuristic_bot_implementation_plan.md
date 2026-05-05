@@ -964,6 +964,7 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 - `StrategyProfile.configure_base_revenue()` 优先读取 `data/bots/base_revenue_v1.json`，解析失败时回落到内置默认值；`StrategyProfile.configure(id_or_path)` 可按 `data/bots/<id>.json` 或显式路径加载 profile，当前已有默认 `base_revenue_v1` 与偏扩张/供给的 `base_revenue_growth_v1`。
 - `StrategyBot`、`OSLABot`、`BeamBot` 都支持 `configure_profile()`。`tools/run_bot_selfplay.gd` / matrix runner 可用 `--profile=base_revenue_growth_v1` 将同一 profile 应用到 strategy/osla/beam bot，并把 profile 写入 `bot_config` / row metadata，避免调参结果混在同一个 summary bucket。
 - `CandidateGenerator` 在有 `source_state` 时复用 `MarketingRangeCalculator` 过滤影响不到房屋的营销候选；营销商品候选按已有库存、公开需求和当前活跃员工可供应性排序，避免 `max_valid_per_action` 被字母序靠前但短期无法兑现的商品占满。
+- `CandidateGenerator` 的培训 prior 已覆盖更多 base 进阶路线：厨师长、饮料路线、管理路线、招聘/薪资折扣、价格、新店和部分特殊员工不会再因默认低 prior 在生成阶段被直接过滤；`campaign_manager -> brand_manager` 这类会牺牲当前收入能力的可选培训仍保持低 prior，避免阻塞营销员上岗。
 - `StrategyCandidateFilter` 作为后置防线，在 `macro.debug.affected_house_ids` 明确为空时丢弃营销候选，并把原因写入 trace。
 - `StrategyIncomeAnalyzer` 从 `ObservationState` 提取产品需求、可服务需求、库存缺口、供给能力和员工对收入链的贡献。
 - `StrategyBoardAnalyzer` 对餐厅放置/移动做位置评分，优先贴近公开房屋、公开需求和当前尚未服务的需求。有 `source_state` 时会先在 state 副本上复用现有 `RestaurantPlacement.validate_restaurant_placement()` 构造候选餐厅，再用 `BoardAnalyzer` / road graph 计算真实餐厅到房屋距离；无 source state 或临时放置失败时回退到 observation anchor 近似。
@@ -1136,6 +1137,7 @@ tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
 - `core/tests/ai/random_legal_bot_smoke_test.gd`：两个 `RandomLegalBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic。
 - `core/tests/ai/greedy_bot_smoke_test.gd`：保留 GreedyBot 短程 deterministic 校验，并新增单程跑到至少第 3 轮或 GameOver 的 smoke。GreedyBot 不再要求完整打完 2p base 局。
 - `core/tests/ai/strategy_bot_test.gd`：两个 `StrategyBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic、strategy trace 元数据、profile 数据加载、营销空覆盖候选过滤、营销商品候选排序、营销可服务房屋/活跃供给评分、招聘 roster 饱和度、收入缺口、生产补缺口/过量库存惩罚、关键里程碑 race 评分、冰箱保留、餐厅位置/road graph 评分、Payday 解雇评分等特征。
+- `core/tests/ai/candidate_generator_test.gd`：覆盖高级培训路线候选生成，包括 `burger_cook -> burger_chef`、`errand_boy -> cart_operator` 和 `management_trainee -> junior_vice_president`；同时保留 `campaign_manager -> brand_manager` 不阻塞当前营销员上岗的回归测试。
 - `core/tests/ai/dinner_preview_golden_test.gd`：从同一前置状态分别跑真实 engine 与 `DinnerPreview`，校验基础销售、花园收入、drive-through 入口点、关键 Dinnertime report 字段、库存消耗、source 不变性和 registry 恢复。
 
 ## 15. 开发路线图

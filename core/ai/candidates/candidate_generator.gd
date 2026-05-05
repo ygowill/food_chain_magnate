@@ -1340,8 +1340,69 @@ static func _train_prior(from_employee: String, target_employee: String, observa
 			return 1.0 + _product_pipeline_prior(_food_for_cook(target_employee), observation)
 		"campaign_manager":
 			return 0.8
-		_:
-			return 0.2 if not from_employee.is_empty() else 0.0
+	if not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(target_employee):
+		return 0.2 if not from_employee.is_empty() else 0.0
+	var target_def_val = EmployeeRegistryClass.get_def(target_employee)
+	if not (target_def_val is EmployeeDef):
+		return 0.2 if not from_employee.is_empty() else 0.0
+	var target_def: EmployeeDef = target_def_val
+	return _generic_train_prior(from_employee, target_employee, target_def, observation)
+
+static func _generic_train_prior(from_employee: String, target_employee: String, target_def: EmployeeDef, observation: ObservationState) -> float:
+	if target_def == null:
+		return 0.0
+	match str(target_def.role):
+		"produce_food":
+			var production_prior := _best_production_target_prior(target_def, observation)
+			return 0.9 + production_prior if production_prior >= 0.5 else 0.65
+		"procure_drink":
+			return 1.0 + _best_drink_pipeline_prior(observation) + float(maxi(0, int(target_def.range_value))) * 0.02
+		"manager":
+			return 1.0 + float(clampi(int(target_def.manager_slots), 0, 10)) * 0.08
+		"recruit_train":
+			var recruit_train_prior := 0.9
+			if int(target_def.recruit_capacity) > 0:
+				recruit_train_prior += float(clampi(int(target_def.recruit_capacity), 0, 4)) * 0.18
+			if int(target_def.train_capacity) > 0:
+				recruit_train_prior += 0.4
+			return recruit_train_prior
+		"new_shop":
+			return 1.1 + float(_total_public_demand(observation)) * 0.08
+		"price":
+			return 0.95 + float(_total_public_demand(observation)) * 0.06
+		"marketing":
+			if from_employee == "campaign_manager" and target_employee == "brand_manager":
+				return 0.65
+			return 0.9 + float(_total_public_demand(observation)) * 0.08
+		"special":
+			return _special_train_prior(target_def, observation)
+	return 0.75 if not from_employee.is_empty() else 0.0
+
+static func _best_production_target_prior(target_def: EmployeeDef, observation: ObservationState) -> float:
+	if target_def == null:
+		return 0.0
+	var best := 0.0
+	for product_id in target_def.get_production_food_options():
+		best = maxf(best, _product_pipeline_prior(str(product_id), observation))
+	return best
+
+static func _best_drink_pipeline_prior(observation: ObservationState) -> float:
+	if observation == null or not ProductRegistryClass.is_loaded():
+		return 0.0
+	var best := 0.0
+	for product_id in ProductRegistryClass.get_all_ids():
+		if ProductRegistryClass.is_drink(product_id):
+			best = maxf(best, _product_pipeline_prior(product_id, observation))
+	return best
+
+static func _special_train_prior(target_def: EmployeeDef, observation: ObservationState) -> float:
+	if target_def == null:
+		return 0.0
+	if target_def.has_tag("income_50pct"):
+		return 0.9 + float(_total_public_demand(observation)) * 0.12
+	if target_def.has_tag("place_house_or_garden"):
+		return 1.1 + float(_total_public_demand(observation)) * 0.08
+	return 0.8
 
 static func _best_train_target_prior(from_employee: String, observation: ObservationState) -> float:
 	if observation == null or from_employee.is_empty() or not EmployeeRegistryClass.is_loaded():
@@ -1407,6 +1468,21 @@ static func _public_demand_count_for_product(observation: ObservationState, prod
 		for demand_val in Array(demands_val):
 			if demand_val is Dictionary and str(Dictionary(demand_val).get("product", "")) == product_id:
 				count += 1
+	return count
+
+static func _total_public_demand(observation: ObservationState) -> int:
+	if observation == null:
+		return 0
+	var houses_val = observation.map_public.get("houses", {})
+	if not (houses_val is Dictionary):
+		return 0
+	var count := 0
+	for house_val in Dictionary(houses_val).values():
+		if not (house_val is Dictionary):
+			continue
+		var demands_val = Dictionary(house_val).get("demands", [])
+		if demands_val is Array:
+			count += Array(demands_val).size()
 	return count
 
 static func _has_trainable_reserve_employee(observation: ObservationState) -> bool:
