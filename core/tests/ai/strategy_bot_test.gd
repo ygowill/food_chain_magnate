@@ -40,6 +40,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var restaurant_placement := _test_restaurant_placement_prefers_near_public_demand(seed_val)
 	if not restaurant_placement.ok:
 		return restaurant_placement
+	var payday_fire := _test_payday_fire_prefers_low_income_employee(seed_val)
+	if not payday_fire.ok:
+		return payday_fire
 	return Result.success({
 		"steps": int(first.value.get("steps", 0)),
 		"round": int(first.value.get("round", 0)),
@@ -260,6 +263,39 @@ static func _test_restaurant_placement_prefers_near_public_demand(seed_val: int)
 		return Result.failure("restaurant placement features should expose near house distance: %s" % str(features))
 	return Result.success()
 
+static func _test_payday_fire_prefers_low_income_employee(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_payday_observation()
+	var cfo_macro := MacroAction.create(
+		"fire_cfo",
+		[Command.create("fire", 0, {"employee_id": "cfo", "location": "active"})],
+		0.0,
+		["payday", "fire"],
+		{}
+	)
+	var burger_macro := MacroAction.create(
+		"fire_burger_cook",
+		[Command.create("fire", 0, {"employee_id": "burger_cook", "location": "active"})],
+		0.0,
+		["payday", "fire"],
+		{}
+	)
+	var cfo_score: Dictionary = StrategyScorerClass.score_macro(observation, cfo_macro, profile)
+	var burger_score: Dictionary = StrategyScorerClass.score_macro(observation, burger_macro, profile)
+	if float(cfo_score.get("score", 0.0)) <= float(burger_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should prefer firing lower income value employee under payday shortfall: cfo=%s burger=%s" % [str(cfo_score), str(burger_score)])
+	var features: Dictionary = Dictionary(cfo_score.get("features", {}))
+	if int(features.get("fire_payday_shortfall", 0)) <= 0:
+		return Result.failure("fire features should expose payday shortfall: %s" % str(features))
+	if int(features.get("fire_effective_salary_relief", 0)) <= 0:
+		return Result.failure("fire features should expose effective salary relief: %s" % str(features))
+	return Result.success()
+
 static func _synthetic_marketing_observation() -> ObservationState:
 	var observation := ObservationState.new()
 	observation.viewer_player_id = 0
@@ -315,6 +351,45 @@ static func _synthetic_income_observation() -> ObservationState:
 				"anchor_pos": Vector2i(2, 2),
 				"demands": [
 					{"product": "burger"},
+					{"product": "burger"},
+				],
+			},
+		},
+		"restaurants": {
+			"rest_near": {
+				"restaurant_id": "rest_near",
+				"owner": 0,
+				"anchor_pos": Vector2i(3, 2),
+			},
+		},
+	}
+	return observation
+
+static func _synthetic_payday_observation() -> ObservationState:
+	var observation := ObservationState.new()
+	observation.viewer_player_id = 0
+	observation.round_number = 1
+	observation.phase = DefsClass.PHASE_PAYDAY
+	observation.sub_phase = ""
+	observation.rules_public = {
+		"salary_cost": 5,
+	}
+	observation.own_player = {
+		"id": 0,
+		"cash": 0,
+		"employees": ["burger_cook", "cfo"],
+		"reserve_employees": [],
+		"busy_marketers": [],
+		"restaurants": ["rest_near"],
+		"inventory": {},
+		"milestones": [],
+	}
+	observation.map_public = {
+		"houses": {
+			"house_near": {
+				"house_number": 1,
+				"anchor_pos": Vector2i(2, 2),
+				"demands": [
 					{"product": "burger"},
 				],
 			},

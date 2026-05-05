@@ -3,6 +3,8 @@ extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
+const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const StrategyBoardAnalyzerClass = preload("res://core/ai/strategy/strategy_board_analyzer.gd")
 const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_income_analyzer.gd")
 
@@ -73,6 +75,18 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			features["restaurant_value"] = restaurant_bonus
 			_append_restaurant_placement_features(features, placement_payload)
 			score += restaurant_bonus
+		"fire":
+			var employee_id3 := str(command.params.get("employee_id", ""))
+			var fire_payload := _fire_value(observation, employee_id3, profile, income_analysis)
+			features["fire_employee_id"] = employee_id3
+			features["fire_location"] = str(command.params.get("location", ""))
+			features["fire_payday_cash"] = int(fire_payload.get("cash", 0))
+			features["fire_payday_due"] = int(fire_payload.get("due", 0))
+			features["fire_payday_shortfall"] = int(fire_payload.get("shortfall", 0))
+			features["fire_effective_salary_relief"] = int(fire_payload.get("effective_salary_relief", 0))
+			features["fire_employee_income_value"] = float(fire_payload.get("employee_income_value", 0.0))
+			features["fire_value"] = float(fire_payload.get("value", 0.0))
+			score += float(fire_payload.get("value", 0.0))
 		"choose_turn_order":
 			var position := int(command.params.get("position", 0))
 			var turn_bonus := maxf(0.0, 8.0 - float(position) * 2.0)
@@ -138,6 +152,67 @@ static func _append_restaurant_placement_features(features: Dictionary, placemen
 	features["restaurant_total_public_demand"] = int(placement_payload.get("total_public_demand", 0))
 	features["restaurant_unserviceable_demand_covered"] = int(placement_payload.get("unserviceable_demand_covered", 0))
 	features["restaurant_placement_value"] = float(placement_payload.get("placement_value", 0.0))
+
+static func _fire_value(observation: ObservationState, employee_id: String, profile, income_analysis: Dictionary) -> Dictionary:
+	var payday := _payday_cash_snapshot(observation)
+	var employee_payload := StrategyIncomeAnalyzerClass.employee_value(observation, employee_id, profile, income_analysis)
+	var employee_income_value := float(employee_payload.get("score", profile.employee_priority(employee_id)))
+	var shortfall := int(payday.get("shortfall", 0))
+	var effective_relief := _effective_fire_salary_relief(observation, employee_id, payday)
+	var value := 0.0
+	if shortfall > 0:
+		value += 90.0
+		value += float(effective_relief) * 8.0
+	else:
+		value -= 90.0
+	value -= employee_income_value * 2.0
+	return {
+		"value": value,
+		"cash": int(payday.get("cash", 0)),
+		"due": int(payday.get("due", 0)),
+		"shortfall": shortfall,
+		"effective_salary_relief": effective_relief,
+		"employee_income_value": employee_income_value,
+	}
+
+static func _payday_cash_snapshot(observation: ObservationState) -> Dictionary:
+	if observation == null:
+		return {
+			"cash": 0,
+			"due": 0,
+			"shortfall": 0,
+			"paid_employee_count": 0,
+			"salary_cost": 0,
+			"milestone_delta": 0,
+		}
+	var player := observation.own_player
+	var paid_count := EmployeeRulesClass.count_paid_employees(player)
+	var salary_cost := _read_non_negative_int(player.get("salary_cost_override", observation.rules_public.get("salary_cost", 5)), 5)
+	var milestone_delta := _salary_total_delta(player)
+	var due := maxi(0, paid_count * salary_cost + milestone_delta)
+	var cash := _read_non_negative_int(player.get("cash", 0), 0)
+	return {
+		"cash": cash,
+		"due": due,
+		"shortfall": maxi(0, due - cash),
+		"paid_employee_count": paid_count,
+		"salary_cost": salary_cost,
+		"milestone_delta": milestone_delta,
+	}
+
+static func _effective_fire_salary_relief(observation: ObservationState, employee_id: String, payday: Dictionary) -> int:
+	if observation == null or employee_id.is_empty():
+		return 0
+	if not EmployeeRulesClass.requires_salary(employee_id, observation.own_player):
+		return 0
+	var cash := int(payday.get("cash", 0))
+	var before_shortfall := int(payday.get("shortfall", 0))
+	var paid_count := maxi(0, int(payday.get("paid_employee_count", 0)) - 1)
+	var salary_cost := int(payday.get("salary_cost", 0))
+	var milestone_delta := int(payday.get("milestone_delta", 0))
+	var after_due := maxi(0, paid_count * salary_cost + milestone_delta)
+	var after_shortfall := maxi(0, after_due - cash)
+	return maxi(0, before_shortfall - after_shortfall)
 
 static func _affected_house_ids(macro: MacroAction) -> Array[String]:
 	var out: Array[String] = []
@@ -344,3 +419,26 @@ static func _sorted_unique_strings(value) -> Array[String]:
 				out.append(text)
 	out.sort()
 	return out
+
+static func _salary_total_delta(player: Dictionary) -> int:
+	var milestones_val = player.get("milestones", [])
+	if not (milestones_val is Array):
+		return 0
+	var delta_read := MilestoneEffectQueriesClass.sum_int_values(
+		Array(milestones_val),
+		"salary_total_delta",
+		"StrategyScorer: ",
+		"own_player.milestones"
+	)
+	if not delta_read.ok:
+		return 0
+	return int(delta_read.value)
+
+static func _read_non_negative_int(value, fallback: int) -> int:
+	if value is int:
+		return maxi(0, int(value))
+	if value is float:
+		return maxi(0, int(value))
+	if value is String and str(value).is_valid_int():
+		return maxi(0, int(str(value)))
+	return fallback
