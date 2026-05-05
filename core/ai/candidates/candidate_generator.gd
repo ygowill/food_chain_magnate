@@ -327,6 +327,9 @@ static func _generate_working(
 		DefsClass.SUB_PHASE_GET_DRINKS:
 			if legal_action_ids.has("procure_drinks"):
 				_generate_errand_boy_drinks(out, discarded, observation, context, validate_command, max_valid_per_action)
+		DefsClass.SUB_PHASE_PLACE_HOUSES:
+			if legal_action_ids.has("place_house"):
+				_generate_house_placements(out, discarded, observation, context, validate_command, max_valid_per_action)
 
 	if legal_action_ids.has(ActionIdsClass.SKIP_SUB_PHASE):
 		_append_valid_command(out, discarded, context, ActionIdsClass.SKIP_SUB_PHASE, {}, validate_command, "working_skip_sub_phase", ["working", "fallback"], -0.1, max_valid_per_action)
@@ -356,6 +359,46 @@ static func _generate_working_mandatory_actions(
 			0.0,
 			max_valid_per_action
 		)
+
+static func _generate_house_placements(
+	out: Array[MacroAction],
+	discarded: Array[String],
+	observation: ObservationState,
+	context: AiDecisionContext,
+	validate_command: Callable,
+	max_valid_per_action: int
+) -> void:
+	var grid_size := _read_grid_size(observation.map_public)
+	if grid_size.x <= 0 or grid_size.y <= 0:
+		discarded.append("place_house: invalid grid_size %s" % str(grid_size))
+		return
+	var house_numbers := _read_remaining_house_numbers(observation.map_public)
+	if house_numbers.is_empty():
+		discarded.append("place_house: no remaining house numbers")
+		return
+	var house_number := int(house_numbers[0])
+	var rotations := [0, 90, 180, 270]
+	for y in range(grid_size.y):
+		for x in range(grid_size.x):
+			for rotation in rotations:
+				if _count_action(out, "place_house") >= max_valid_per_action:
+					return
+				_append_valid_command(
+					out,
+					discarded,
+					context,
+					"place_house",
+					{
+						"position": [x, y],
+						"rotation": int(rotation),
+						"house_number": house_number,
+					},
+					validate_command,
+					"place_house_%d_%d_%d_%d" % [house_number, x, y, int(rotation)],
+					["working", "place_house"],
+					0.0,
+					max_valid_per_action
+				)
 
 static func _generate_recruit(
 	out: Array[MacroAction],
@@ -697,6 +740,25 @@ static func _read_grid_size(map_public: Dictionary) -> Vector2i:
 		if arr.size() >= 2:
 			return Vector2i(int(arr[0]), int(arr[1]))
 	return Vector2i.ZERO
+
+static func _read_remaining_house_numbers(map_public: Dictionary) -> Array[int]:
+	var value = map_public.get("house_number_supply_remaining", [])
+	var out: Array[int] = []
+	if value is Array:
+		for item in Array(value):
+			if item is int:
+				out.append(int(item))
+			elif item is float:
+				var f: float = float(item)
+				if f == floor(f):
+					out.append(int(f))
+	out.sort()
+	var dedup: Array[int] = []
+	for n in out:
+		if dedup.has(int(n)):
+			continue
+		dedup.append(int(n))
+	return dedup
 
 static func _has_pending_player_action(
 	observation: ObservationState,

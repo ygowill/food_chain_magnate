@@ -22,13 +22,16 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var mandatory := _test_working_mandatory_price_candidate(seed_val)
 	if not mandatory.ok:
 		return mandatory
+	var houses := _test_working_place_house_candidates_are_valid(seed_val)
+	if not houses.ok:
+		return houses
 	var restructuring := _test_restructuring_direct_assignment_candidate(seed_val)
 	if not restructuring.ok:
 		return restructuring
 	var report := _test_restructuring_report_assignment_candidate(seed_val)
 	if not report.ok:
 		return report
-	return Result.success({"cases": 6})
+	return Result.success({"cases": 7})
 
 static func _test_reserve_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
@@ -129,6 +132,39 @@ static func _test_working_mandatory_price_candidate(seed_val: int) -> Result:
 	var completed := _round_state_player_array(engine.get_state().round_state, "mandatory_actions_completed", actor)
 	if not completed.has("set_price"):
 		return Result.failure("mandatory set_price should be marked completed, actual: %s" % str(completed))
+	return Result.success()
+
+static func _test_working_place_house_candidates_are_valid(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var run_read := _run_random_bots_to_working(engine)
+	if not run_read.ok:
+		return run_read
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.sub_phase = DefsClass.SUB_PHASE_PLACE_HOUSES
+	var actor := state.get_current_player_id()
+	state.players[actor]["employees"].append("new_business_developer")
+	state.employee_pool["new_business_developer"] = int(state.employee_pool.get("new_business_developer", 0)) - 1
+
+	var payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	if not _has_action(candidates, "place_house"):
+		return Result.failure("PlaceHouses should generate place_house candidate: %s" % str(_macro_debug(candidates)))
+	var command := _first_command_for_action(candidates, "place_house")
+	if command == null:
+		return Result.failure("missing place_house command")
+	var executed := engine.execute_command(command)
+	if not executed.ok:
+		return Result.failure("place_house candidate failed on execute: %s" % executed.error)
+	var houses_val = engine.get_state().map.get("houses", {})
+	if not (houses_val is Dictionary) or Dictionary(houses_val).is_empty():
+		return Result.failure("place_house candidate should add a house")
 	return Result.success()
 
 static func _test_restructuring_direct_assignment_candidate(seed_val: int) -> Result:
