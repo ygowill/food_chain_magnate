@@ -51,6 +51,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var income_gap := _test_income_analyzer_detects_serviceable_inventory_gap(seed_val)
 	if not income_gap.ok:
 		return income_gap
+	var pending_marketing_demand := _test_income_analyzer_counts_pending_marketing_demand(seed_val)
+	if not pending_marketing_demand.ok:
+		return pending_marketing_demand
 	var recruit_roster := _test_recruit_score_penalizes_roster_saturation(seed_val)
 	if not recruit_roster.ok:
 		return recruit_roster
@@ -78,6 +81,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var route_drinks_score := _test_strategy_scoring_values_route_drink_products(seed_val)
 	if not route_drinks_score.ok:
 		return route_drinks_score
+	var pending_marketing_supply := _test_strategy_scoring_values_pending_marketing_supply(seed_val)
+	if not pending_marketing_supply.ok:
+		return pending_marketing_supply
 	var product_overstock := _test_strategy_scoring_penalizes_product_overstock(seed_val)
 	if not product_overstock.ok:
 		return product_overstock
@@ -443,6 +449,35 @@ static func _test_income_analyzer_detects_serviceable_inventory_gap(seed_val: in
 		return Result.failure("income analyzer should count serviceable burger demand: %s" % str(burger))
 	if int(burger.get("inventory_gap", 0)) != 2:
 		return Result.failure("income analyzer should expose burger inventory gap: %s" % str(burger))
+	return Result.success()
+
+static func _test_income_analyzer_counts_pending_marketing_demand(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_income_observation()
+	_set_observation_house_demand_count(observation, "house_near", "burger", 0)
+	observation.marketing_instances_public = [
+		{"owner": 0, "product": "beer", "remaining_duration": 2},
+		{"owner": 1, "product": "soda", "remaining_duration": 2},
+		{"owner": 0, "product": "soda", "remaining_duration": 0},
+		{"owner": 0, "product": "soda", "remaining_duration": 2, "demand_amount": 0},
+	]
+	var analysis: Dictionary = StrategyIncomeAnalyzerClass.analyze(observation, profile)
+	if int(analysis.get("total_pending_marketing_demand", 0)) != 1:
+		return Result.failure("income analyzer should count own pending marketing demand only: %s" % str(analysis))
+	var products: Dictionary = Dictionary(analysis.get("products", {}))
+	var beer: Dictionary = Dictionary(products.get("beer", {}))
+	if int(beer.get("pending_marketing_demand", 0)) != 1:
+		return Result.failure("beer should expose pending_marketing_demand from own campaign: %s" % str(beer))
+	if int(beer.get("planning_inventory_gap", 0)) != 1:
+		return Result.failure("beer should expose planning_inventory_gap from pending campaign: %s" % str(beer))
+	var soda: Dictionary = Dictionary(products.get("soda", {}))
+	if int(soda.get("pending_marketing_demand", 0)) != 0:
+		return Result.failure("opponent pending marketing should not count as own pending demand: %s" % str(soda))
 	return Result.success()
 
 static func _test_recruit_score_penalizes_roster_saturation(seed_val: int) -> Result:
@@ -875,6 +910,45 @@ static func _test_strategy_scoring_values_route_drink_products(seed_val: int) ->
 		return Result.failure("route drink scoring should expose primary product: %s" % str(features))
 	if int(features.get("product_supply_covered_units", 0)) != 2:
 		return Result.failure("route drink scoring should count covered drink demand: %s" % str(features))
+	return Result.success()
+
+static func _test_strategy_scoring_values_pending_marketing_supply(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_drink_route_observation()
+	_set_observation_house_demand_count(observation, "house_near", "soda", 0)
+	observation.marketing_instances_public = [
+		{"owner": 0, "product": "beer", "remaining_duration": 2},
+	]
+	var soda_macro := MacroAction.create(
+		"procure_route_soda_without_pending",
+		[Command.create("procure_drinks", 0, {"employee_type": "truck_driver", "restaurant_id": "rest_near", "route": [[3, 2], [4, 2]], "selected_sources": [[4, 2]]})],
+		0.0,
+		["working", "procure_drinks"],
+		{}
+	)
+	var beer_macro := MacroAction.create(
+		"procure_route_beer_for_pending",
+		[Command.create("procure_drinks", 0, {"employee_type": "truck_driver", "restaurant_id": "rest_near", "route": [[3, 2], [8, 2]], "selected_sources": [[8, 2]]})],
+		0.0,
+		["working", "procure_drinks"],
+		{}
+	)
+	var soda_score: Dictionary = StrategyScorerClass.score_macro(observation, soda_macro, profile)
+	var beer_score: Dictionary = StrategyScorerClass.score_macro(observation, beer_macro, profile)
+	if float(beer_score.get("score", 0.0)) <= float(soda_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should procure drinks matching pending own marketing: beer=%s soda=%s" % [str(beer_score), str(soda_score)])
+	var beer_features: Dictionary = Dictionary(beer_score.get("features", {}))
+	if int(beer_features.get("product_pending_marketing_demand", 0)) != 1:
+		return Result.failure("pending marketing supply should expose product_pending_marketing_demand: %s" % str(beer_features))
+	if int(beer_features.get("product_planning_inventory_gap", 0)) != 1:
+		return Result.failure("pending marketing supply should expose product_planning_inventory_gap: %s" % str(beer_features))
+	if int(beer_features.get("product_supply_future_covered_units", 0)) != 1:
+		return Result.failure("pending marketing supply should count future covered units: %s" % str(beer_features))
 	return Result.success()
 
 static func _test_strategy_scoring_penalizes_product_overstock(seed_val: int) -> Result:

@@ -417,7 +417,18 @@ static func _route_drink_supply_action_value(observation: ObservationState, comm
 		features["product_supply_buffer_units"] = total_buffer_units
 	if not best_product.is_empty():
 		features["product_supply_primary_product"] = best_product
-		for key in ["product_public_demand", "product_serviceable_demand", "product_inventory_units", "product_inventory_gap", "product_can_supply"]:
+		for key in [
+			"product_public_demand",
+			"product_serviceable_demand",
+			"product_inventory_units",
+			"product_inventory_gap",
+			"product_pending_marketing_demand",
+			"product_planning_demand",
+			"product_planning_inventory_gap",
+			"product_supply_current_covered_units",
+			"product_supply_future_covered_units",
+			"product_can_supply",
+		]:
 			if best_features.has(key):
 				features[key] = best_features[key]
 		if bool(best_features.get("product_overstock_penalty", false)):
@@ -432,22 +443,32 @@ static func _product_supply_action_value(product_id: String, profile, income_ana
 	var serviceable_demand := int(product_payload.get("serviceable_demand", 0))
 	var inventory_units := int(product_payload.get("inventory_units", 0))
 	var inventory_gap := int(product_payload.get("inventory_gap", 0))
+	var pending_marketing_demand := int(product_payload.get("pending_marketing_demand", 0))
+	var planning_demand := int(product_payload.get("planning_demand", public_demand))
+	var planning_inventory_gap := int(product_payload.get("planning_inventory_gap", inventory_gap))
 	var can_supply := bool(product_payload.get("can_supply", false))
 	var supply_units := maxi(1, expected_units)
 	features["product_public_demand"] = public_demand
 	features["product_serviceable_demand"] = serviceable_demand
 	features["product_inventory_units"] = inventory_units
 	features["product_inventory_gap"] = inventory_gap
+	features["product_pending_marketing_demand"] = pending_marketing_demand
+	features["product_planning_demand"] = planning_demand
+	features["product_planning_inventory_gap"] = planning_inventory_gap
 	features["product_can_supply"] = can_supply
-	if inventory_gap > 0:
-		var covered_units := mini(inventory_gap, supply_units)
-		var excess_units := maxi(0, supply_units - inventory_gap)
+	if planning_inventory_gap > 0:
+		var covered_units := mini(planning_inventory_gap, supply_units)
+		var current_covered_units := mini(inventory_gap, covered_units)
+		var future_covered_units := maxi(0, covered_units - current_covered_units)
+		var excess_units := maxi(0, supply_units - planning_inventory_gap)
 		features["product_supply_covered_units"] = covered_units
+		features["product_supply_current_covered_units"] = current_covered_units
+		features["product_supply_future_covered_units"] = future_covered_units
 		features["product_supply_excess_units"] = excess_units
-		return float(covered_units) * 14.0 + float(serviceable_demand) * 3.0 + float(public_demand) + float(profile.product_priority(product_id)) * 0.5 - float(excess_units) * 3.0
+		return float(current_covered_units) * 14.0 + float(future_covered_units) * 9.0 + float(serviceable_demand) * 3.0 + float(public_demand) + float(pending_marketing_demand) * 1.5 + float(profile.product_priority(product_id)) * 0.5 - float(excess_units) * 3.0
 	if public_demand <= 0 and inventory_units <= 0:
 		return float(profile.product_priority(product_id)) * 0.6
-	var desired_buffer := public_demand + 1
+	var desired_buffer := maxi(public_demand + 1, planning_demand)
 	if public_demand > 0 and inventory_units < desired_buffer:
 		var buffer_units := mini(supply_units, maxi(0, desired_buffer - inventory_units))
 		features["product_supply_buffer_units"] = buffer_units

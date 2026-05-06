@@ -9,18 +9,27 @@ static func analyze(observation: ObservationState, profile) -> Dictionary:
 	var total_public_demand := 0
 	var total_serviceable_demand := 0
 	var total_inventory_gap := 0
+	var total_pending_marketing_demand := 0
+	var total_planning_inventory_gap := 0
+	var pending_marketing_demand := _pending_marketing_demand_by_product(observation)
 	for product_id in _known_product_ids(observation, profile):
 		var demand := _public_demand_count_for_product(observation, product_id)
 		var serviceable := _serviceable_demand_count_for_product(observation, product_id)
 		var inventory := _inventory_count(observation, product_id)
 		var gap := maxi(0, demand - inventory)
+		var pending := int(pending_marketing_demand.get(product_id, 0))
+		var planning_demand := demand + pending
+		var planning_gap := maxi(0, planning_demand - inventory)
 		var can_supply := _can_supply_product(observation, product_id)
-		var value := _product_value_from_parts(product_id, demand, serviceable, inventory, gap, can_supply, profile)
+		var value := _product_value_from_parts(product_id, demand, serviceable, inventory, gap, can_supply, profile, pending, planning_gap)
 		products[product_id] = {
 			"public_demand": demand,
 			"serviceable_demand": serviceable,
 			"inventory_units": inventory,
 			"inventory_gap": gap,
+			"pending_marketing_demand": pending,
+			"planning_demand": planning_demand,
+			"planning_inventory_gap": planning_gap,
 			"can_supply": can_supply,
 			"is_drink": _is_drink(product_id),
 			"value": value,
@@ -28,11 +37,15 @@ static func analyze(observation: ObservationState, profile) -> Dictionary:
 		total_public_demand += demand
 		total_serviceable_demand += serviceable
 		total_inventory_gap += gap
+		total_pending_marketing_demand += pending
+		total_planning_inventory_gap += planning_gap
 	return {
 		"products": products,
 		"total_public_demand": total_public_demand,
 		"total_serviceable_demand": total_serviceable_demand,
 		"total_inventory_gap": total_inventory_gap,
+		"total_pending_marketing_demand": total_pending_marketing_demand,
+		"total_planning_inventory_gap": total_planning_inventory_gap,
 		"own_restaurants": _own_restaurant_count(observation),
 		"has_food_supply": _has_supply_kind(observation, false),
 		"has_drink_supply": _has_supply_kind(observation, true),
@@ -49,6 +62,9 @@ static func product_value(product_id: String, profile, income_analysis: Dictiona
 			"serviceable_demand": 0,
 			"inventory_units": 0,
 			"inventory_gap": 0,
+			"pending_marketing_demand": 0,
+			"planning_demand": 0,
+			"planning_inventory_gap": 0,
 			"can_supply": false,
 		}
 	return {
@@ -57,6 +73,9 @@ static func product_value(product_id: String, profile, income_analysis: Dictiona
 		"serviceable_demand": int(product_info.get("serviceable_demand", 0)),
 		"inventory_units": int(product_info.get("inventory_units", 0)),
 		"inventory_gap": int(product_info.get("inventory_gap", 0)),
+		"pending_marketing_demand": int(product_info.get("pending_marketing_demand", 0)),
+		"planning_demand": int(product_info.get("planning_demand", 0)),
+		"planning_inventory_gap": int(product_info.get("planning_inventory_gap", 0)),
 		"can_supply": bool(product_info.get("can_supply", false)),
 	}
 
@@ -161,13 +180,16 @@ static func employee_value(observation: ObservationState, employee_id: String, p
 		"target_products": target_products,
 	}
 
-static func _product_value_from_parts(product_id: String, demand: int, serviceable: int, inventory: int, gap: int, can_supply: bool, profile) -> float:
+static func _product_value_from_parts(product_id: String, demand: int, serviceable: int, inventory: int, gap: int, can_supply: bool, profile, pending: int, planning_gap: int) -> float:
 	var value := _profile_product_priority(profile, product_id)
+	var future_gap := maxi(0, planning_gap - gap)
 	value += float(demand) * 3.0
 	value += float(serviceable) * 4.0
 	value += float(gap) * 5.0
+	value += float(future_gap) * 4.0
+	value += float(pending) * 2.0
 	if inventory > 0:
-		value += float(mini(inventory, demand)) * 2.0
+		value += float(mini(inventory, demand + pending)) * 2.0
 	if can_supply:
 		value += 2.0
 	return value
@@ -197,10 +219,15 @@ static func _employee_product_score(product_id: String, products: Dictionary, pr
 	var demand := int(info.get("public_demand", 0))
 	var serviceable := int(info.get("serviceable_demand", 0))
 	var gap := int(info.get("inventory_gap", 0))
+	var pending := int(info.get("pending_marketing_demand", 0))
+	var planning_gap := int(info.get("planning_inventory_gap", gap))
+	var future_gap := maxi(0, planning_gap - gap)
 	var value := priority * 0.5
 	value += float(gap) * 5.0
+	value += float(future_gap) * 4.0
 	value += float(serviceable) * 3.0
 	value += float(maxi(0, demand - serviceable)) * 1.5
+	value += float(pending) * 2.0
 	return value
 
 static func _best_marketable_product_score(products: Dictionary, profile) -> float:
@@ -228,6 +255,8 @@ static func _known_product_ids(observation: ObservationState, profile) -> Array[
 		if inventory_val is Dictionary:
 			for product_id_val2 in Dictionary(inventory_val).keys():
 				_append_unique(out, str(product_id_val2))
+		for product_id_val3 in _pending_marketing_demand_by_product(observation).keys():
+			_append_unique(out, str(product_id_val3))
 		var houses_val = observation.map_public.get("houses", {})
 		if houses_val is Dictionary:
 			for house_val in Dictionary(houses_val).values():
@@ -240,6 +269,47 @@ static func _known_product_ids(observation: ObservationState, profile) -> Array[
 					if demand_val is Dictionary:
 						_append_unique(out, str(Dictionary(demand_val).get("product", "")))
 	out.sort()
+	return out
+
+static func _pending_marketing_demand_by_product(observation: ObservationState) -> Dictionary:
+	var out := {}
+	if observation == null:
+		return out
+	var viewer_id := int(observation.viewer_player_id)
+	if viewer_id < 0:
+		return out
+	var instances_val = observation.marketing_instances_public
+	if not (instances_val is Array):
+		return out
+	for inst_val in Array(instances_val):
+		if not (inst_val is Dictionary):
+			continue
+		var inst: Dictionary = inst_val
+		if int(inst.get("owner", -1)) != viewer_id:
+			continue
+		if int(inst.get("remaining_duration", 1)) <= 0:
+			continue
+		var amount := 1
+		if inst.has("demand_amount"):
+			amount = maxi(0, int(inst.get("demand_amount", 0)))
+		if amount <= 0:
+			continue
+		for product_id in _marketing_instance_products(inst):
+			out[product_id] = int(out.get(product_id, 0)) + amount
+	return out
+
+static func _marketing_instance_products(inst: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	var products_val = inst.get("products", null)
+	if products_val is Array:
+		for product_val in Array(products_val):
+			var product_id := str(product_val)
+			if not product_id.is_empty():
+				_append_unique(out, product_id)
+	if out.is_empty():
+		var fallback_product_id := str(inst.get("product", ""))
+		if not fallback_product_id.is_empty():
+			_append_unique(out, fallback_product_id)
 	return out
 
 static func _public_demand_count_for_product(observation: ObservationState, product_id: String) -> int:
