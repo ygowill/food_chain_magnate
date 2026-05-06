@@ -59,6 +59,11 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 		return _scenario_failure("first_errand_boy_counts_two_drinks", first_errand_boy)
 	names.append("first_errand_boy_counts_two_drinks")
 
+	var route_drink_sale := _scenario_route_drink_demand_produces_and_sells(seed_val)
+	if not route_drink_sale.ok:
+		return _scenario_failure("route_drink_demand_produces_and_sells", route_drink_sale)
+	names.append("route_drink_demand_produces_and_sells")
+
 	var first_recruit := _scenario_income_route_first_recruit_gets_food_supply(seed_val)
 	if not first_recruit.ok:
 		return _scenario_failure("income_route_first_recruit_gets_food_supply", first_recruit)
@@ -506,6 +511,116 @@ static func _build_first_errand_boy_drink_engine(seed_val: int) -> Result:
 	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
 	state.current_player_index = 0
 	state.milestone_pool = ["first_errand_boy"]
+	_reset_round_state_for_ai_step(state)
+	var sync := _sync_initial_checkpoint_to_current_state(engine)
+	if not sync.ok:
+		return sync
+	return Result.success(engine)
+
+static func _scenario_route_drink_demand_produces_and_sells(seed_val: int) -> Result:
+	var engine_read := _build_route_drink_sale_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var bot = StrategyBotClass.new()
+	var controller := BotControllerClass.new()
+	var step := controller.step(engine, 0, bot, TimeBudget.start(80))
+	if not step.ok:
+		return Result.failure("route drink step failed: %s" % step.error)
+	var trace: Dictionary = step.value
+	if str(trace.get("action_id", "")) != "procure_drinks":
+		return Result.failure("expected StrategyBot to procure route drinks for soda demand, got %s" % str(trace))
+	var params: Dictionary = Dictionary(trace.get("params", {}))
+	if str(params.get("employee_type", "")) != "truck_driver":
+		return Result.failure("expected route drink employee truck_driver, got %s" % str(trace))
+	var selected_sources: Array = Array(params.get("selected_sources", []))
+	if not selected_sources.has([7, 2]):
+		return Result.failure("expected route drink source [7, 2] to be selected, got %s" % str(trace))
+	var features: Dictionary = Dictionary(Dictionary(trace.get("explanation", {})).get("features", {}))
+	var expected_by_product: Dictionary = Dictionary(features.get("drink_route_expected_units_by_product", {}))
+	if int(expected_by_product.get("soda", 0)) != 2:
+		return Result.failure("expected route drink scorer to estimate 2 soda, features=%s trace=%s" % [str(features), str(trace)])
+	if str(features.get("product_supply_primary_product", "")) != "soda":
+		return Result.failure("expected route drink primary product soda, features=%s trace=%s" % [str(features), str(trace)])
+	var state := engine.get_state()
+	var inventory: Dictionary = Dictionary(Dictionary(state.players[0]).get("inventory", {}))
+	if int(inventory.get("soda", 0)) != 2:
+		return Result.failure("route drink command should procure 2 soda, inventory=%s" % str(inventory))
+	var cash_before_dinner := int(Dictionary(state.players[0]).get("cash", 0))
+	var dinner := DinnertimeSettlementTestClass._advance_to_dinnertime(engine)
+	if not dinner.ok:
+		return dinner
+	state = engine.get_state()
+	if int(Dictionary(state.players[0]).get("cash", 0)) <= cash_before_dinner:
+		return Result.failure("route drink demand should sell at Dinnertime, cash before=%d after=%d" % [cash_before_dinner, int(Dictionary(state.players[0]).get("cash", 0))])
+	if _state_product_demand_count(state, "soda") != 0:
+		return Result.failure("route drink Dinnertime should clear soda demand")
+	return Result.success()
+
+static func _build_route_drink_sale_engine(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var state := engine.get_state()
+	_force_route_turn_order(state, 2)
+	var map_result := _build_route_marketing_sale_map(0)
+	if not map_result.ok:
+		return map_result
+	state.map = map_result.value
+	var house: Dictionary = Dictionary(Dictionary(state.map.get("houses", {})).get("house_route", {})).duplicate(true)
+	house["demands"] = [
+		{"product": "soda"},
+		{"product": "soda"},
+	]
+	var houses: Dictionary = Dictionary(state.map.get("houses", {})).duplicate(true)
+	houses["house_route"] = house
+	state.map["houses"] = houses
+	state.map["drink_sources"] = [
+		{"world_pos": Vector2i(7, 2), "type": "soda", "tile_id": "R"},
+	]
+	RoadGraphCacheClass.invalidate_road_graph(state)
+	state.players[0]["restaurants"] = ["rest_0"]
+	state.players[1]["restaurants"] = []
+	var seed_cash := StateUpdaterClass.player_receive_from_bank(state, 0, 20)
+	if not seed_cash.ok:
+		return Result.failure("seed route drink cash failed: %s" % seed_cash.error)
+	state.players[0]["inventory"] = {
+		"burger": 0,
+		"pizza": 0,
+		"soda": 0,
+		"lemonade": 0,
+		"beer": 0,
+	}
+	state.players[0]["employees"] = ["ceo"]
+	state.players[0]["reserve_employees"] = []
+	state.players[0]["busy_marketers"] = []
+	state.players[0]["employees_staff_ids"] = []
+	state.players[0]["reserve_staff_ids"] = []
+	state.players[0]["busy_staff_ids"] = []
+	state.players[0]["staff_registry"] = {}
+	state.players[0]["milestones"] = []
+	state.players[0]["company_structure"] = {
+		"ceo_slots": 3,
+		"structure": [{}, {}, {}],
+	}
+	var take_truck := StateUpdaterClass.take_from_pool(state, "truck_driver", 1)
+	if not take_truck.ok:
+		return Result.failure("take truck_driver failed: %s" % take_truck.error)
+	var add_truck := StateUpdaterClass.add_employee(state, 0, "truck_driver", false)
+	if not add_truck.ok:
+		return Result.failure("add truck_driver failed: %s" % add_truck.error)
+	state.players[0]["company_structure"] = {
+		"ceo_slots": 3,
+		"structure": [
+			{"employee_id": "truck_driver", "reports": []},
+			{},
+			{},
+		],
+	}
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
+	state.current_player_index = 0
 	_reset_round_state_for_ai_step(state)
 	var sync := _sync_initial_checkpoint_to_current_state(engine)
 	if not sync.ok:
