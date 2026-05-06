@@ -10,6 +10,7 @@ const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_inc
 const StrategyProfileClass = preload("res://core/ai/strategy/strategy_profile.gd")
 const StrategyScorerClass = preload("res://core/ai/strategy/strategy_scorer.gd")
 const DinnertimeSettlementTestClass = preload("res://core/tests/dinnertime_settlement_test.gd")
+const MarketingCampaignsTestClass = preload("res://core/tests/marketing_campaigns_test.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
@@ -48,6 +49,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var road_graph_marketing := _test_marketing_score_uses_source_road_graph(seed_val)
 	if not road_graph_marketing.ok:
 		return road_graph_marketing
+	var marketing_preview := _test_marketing_score_uses_marketing_preview_for_capped_demand(seed_val)
+	if not marketing_preview.ok:
+		return marketing_preview
 	var income_gap := _test_income_analyzer_detects_serviceable_inventory_gap(seed_val)
 	if not income_gap.ok:
 		return income_gap
@@ -437,6 +441,85 @@ static func _test_marketing_score_uses_source_road_graph(seed_val: int) -> Resul
 		return Result.failure("StrategyScorer should find drive-through road-graph serviceable house: %s" % str(features))
 	if int(features.get("marketing_closest_distance", -1)) < 0:
 		return Result.failure("StrategyScorer should expose road-graph marketing distance: %s" % str(features))
+	return Result.success()
+
+static func _test_marketing_score_uses_marketing_preview_for_capped_demand(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var state := engine.get_state()
+	MarketingCampaignsTestClass._force_turn_order(state, 2)
+	var actor := state.get_current_player_id()
+	var map_result := MarketingCampaignsTestClass._build_test_map(actor)
+	if not map_result.ok:
+		return map_result
+	state.map = map_result.value
+	RoadGraphCacheClass.invalidate_road_graph(state)
+	state.players[actor]["restaurants"] = ["rest_0"]
+	state.players[actor]["cash"] = 100
+	state.players[actor]["inventory"]["burger"] = 1
+	var take := StateUpdaterClass.take_from_pool(state, "marketing_trainee", 1)
+	if not take.ok:
+		return Result.failure("take marketing_trainee failed: %s" % take.error)
+	var add := StateUpdaterClass.add_employee(state, actor, "marketing_trainee", false)
+	if not add.ok:
+		return Result.failure("add marketing_trainee failed: %s" % add.error)
+	var houses: Dictionary = state.map.get("houses", {})
+	var left: Dictionary = houses.get("house_left", {})
+	var full_demands: Array = []
+	var demand_cap := int(state.get_rule_int("demand_cap_normal"))
+	for i in range(demand_cap):
+		full_demands.append({"product": "pizza", "from_player": -1, "board_number": 0, "type": "seed_%d" % i})
+	left["demands"] = full_demands
+	houses["house_left"] = left
+	state.map["houses"] = houses
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_MARKETING
+	state.current_player_index = 0
+	state.round_state["sub_phase_passed"] = {
+		0: false,
+		1: false,
+	}
+	var sync := _sync_initial_checkpoint_to_current_state(engine)
+	if not sync.ok:
+		return sync
+	var observation_read := ObservationAdapterClass.observe_for_player(engine, actor)
+	if not observation_read.ok:
+		return observation_read
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var marketing_macro := MacroAction.create(
+		"marketing_capped_house",
+		[Command.create("initiate_marketing", actor, {
+			"employee_type": "marketing_trainee",
+			"board_number": 11,
+			"product": "burger",
+			"duration": 1,
+			"position": [0, 2],
+		})],
+		0.0,
+		["working", "marketing"],
+		{"affected_house_ids": ["house_left"]}
+	)
+	var skip_macro := MacroAction.create(
+		"skip_marketing_capped_house",
+		[Command.create("skip_sub_phase", actor, {})],
+		0.0,
+		["working", "fallback"],
+		{}
+	)
+	var marketing_score: Dictionary = StrategyScorerClass.score_macro(observation_read.value, marketing_macro, profile, {"source_engine": engine, "source_state": state})
+	var skip_score: Dictionary = StrategyScorerClass.score_macro(observation_read.value, skip_macro, profile, {"source_engine": engine, "source_state": state})
+	var features: Dictionary = Dictionary(marketing_score.get("features", {}))
+	if str(features.get("marketing_preview_source", "")) != "marketing_preview":
+		return Result.failure("marketing scoring should use MarketingPreview when source_engine is available: %s" % str(features))
+	if int(features.get("marketing_preview_demands_added", -1)) != 0:
+		return Result.failure("capped house should preview zero added demand: %s" % str(features))
+	if float(features.get("marketing_preview_no_demand_penalty", 0.0)) >= 0.0:
+		return Result.failure("zero-demand marketing should expose preview penalty: %s" % str(features))
+	if float(marketing_score.get("score", 0.0)) >= float(skip_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should prefer skipping zero-demand marketing: marketing=%s skip=%s" % [str(marketing_score), str(skip_score)])
 	return Result.success()
 
 static func _test_income_analyzer_detects_serviceable_inventory_gap(seed_val: int) -> Result:

@@ -8,6 +8,7 @@ const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_q
 const PricingPipelineClass = preload("res://core/rules/pricing_pipeline.gd")
 const BoardAnalyzerClass = preload("res://core/ai/analysis/board_analyzer.gd")
 const DinnerPreviewClass = preload("res://core/ai/analysis/dinner_preview.gd")
+const MarketingPreviewClass = preload("res://core/ai/analysis/marketing_preview.gd")
 const MilestoneRaceAnalyzerClass = preload("res://core/ai/analysis/milestone_race_analyzer.gd")
 const StrategyBoardAnalyzerClass = preload("res://core/ai/strategy/strategy_board_analyzer.gd")
 const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_income_analyzer.gd")
@@ -90,7 +91,8 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			features["marketing_own_restaurants"] = int(service_features.get("own_restaurants", 0))
 			features["marketing_distance_source"] = str(service_features.get("distance_source", "anchor"))
 			features["marketing_value"] = marketing_bonus
-			score += marketing_bonus
+			var marketing_preview_bonus := _marketing_preview_value(observation, command, profile, options, features)
+			score += marketing_bonus + marketing_preview_bonus
 		"produce_food", "procure_drinks":
 			var supply_bonus := _supply_action_value(observation, command, profile, income_analysis, features, options)
 			features["product_supply_action_value"] = supply_bonus
@@ -669,6 +671,84 @@ static func _dinner_preview_supply_value(observation: ObservationState, command:
 		var penalty := -155.0
 		features["product_dinner_preview_no_income_penalty"] = penalty
 		value += penalty
+	return value
+
+static func _marketing_preview_value(observation: ObservationState, command: Command, profile, options: Dictionary, features: Dictionary) -> float:
+	if observation == null or command == null:
+		return 0.0
+	if str(command.action_id) != "initiate_marketing":
+		return 0.0
+	var engine_val = options.get("source_engine", null)
+	if not (engine_val is GameEngine):
+		return 0.0
+	if int(features.get("affected_houses", 0)) <= 0 and int(features.get("marketing_serviceable_houses", 0)) <= 0:
+		return 0.0
+	var preview_read := MarketingPreviewClass.preview_after_commands(engine_val, [command], {"max_steps": 32})
+	if not preview_read.ok:
+		features["marketing_preview_error"] = preview_read.error
+		return 0.0
+	var payload: Dictionary = Dictionary(preview_read.value)
+	var actor := int(command.actor)
+	var board_number := int(command.params.get("board_number", 0))
+	var product_id := str(command.params.get("product", ""))
+	var demands_added := _marketing_preview_demands_added(payload, actor, board_number, product_id)
+	features["marketing_preview_source"] = "marketing_preview"
+	features["marketing_preview_demands_added"] = demands_added
+	var processed_val = payload.get("processed", [])
+	var expired_val = payload.get("expired", [])
+	features["marketing_preview_processed_count"] = Array(processed_val).size() if processed_val is Array else 0
+	features["marketing_preview_expired_count"] = Array(expired_val).size() if expired_val is Array else 0
+	var milestone_value := _marketing_preview_milestone_features(observation, payload, actor, profile, features)
+	var value := 0.0
+	if demands_added <= 0:
+		var penalty := -220.0
+		features["marketing_preview_no_demand_penalty"] = penalty
+		return penalty
+	var affected_count := int(features.get("affected_houses", 0))
+	if demands_added > affected_count:
+		value += float(demands_added - affected_count) * 8.0
+	if milestone_value > 0.0:
+		features["marketing_preview_milestone_value"] = milestone_value
+	return value
+
+static func _marketing_preview_demands_added(payload: Dictionary, player_id: int, board_number: int, product_id: String) -> int:
+	var processed_val = payload.get("processed", [])
+	if not (processed_val is Array):
+		return 0
+	var total := 0
+	for item_val in Array(processed_val):
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		if int(item.get("owner", -1)) != player_id:
+			continue
+		if board_number > 0 and int(item.get("board_number", 0)) != board_number:
+			continue
+		if not product_id.is_empty() and str(item.get("product", "")) != product_id:
+			continue
+		total += int(item.get("demands_added", 0))
+	return total
+
+static func _marketing_preview_milestone_features(observation: ObservationState, payload: Dictionary, player_id: int, profile, features: Dictionary) -> float:
+	if observation == null or player_id < 0:
+		return 0.0
+	var state_val = payload.get("state", null)
+	if not (state_val is GameState):
+		return 0.0
+	var preview_state: GameState = state_val
+	var before_ids := _own_milestones(observation)
+	var after_ids := _player_milestones_from_state(preview_state, player_id)
+	var public_ids := _sorted_unique_strings(observation.milestone_pool_public)
+	var gained: Array[String] = []
+	var value := 0.0
+	for milestone_id in after_ids:
+		if before_ids.has(milestone_id) or not public_ids.has(milestone_id):
+			continue
+		gained.append(milestone_id)
+		value += MilestoneRaceAnalyzerClass.milestone_value(milestone_id, profile)
+	if gained.is_empty():
+		return 0.0
+	features["marketing_preview_milestone_ids"] = gained.duplicate()
 	return value
 
 static func _dinner_preview_cash_milestone_value(observation: ObservationState, payload: Dictionary, player_id: int, profile, features: Dictionary) -> float:
