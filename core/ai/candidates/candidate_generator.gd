@@ -1652,7 +1652,54 @@ static func _should_preserve_for_training(employee_id: String, observation: Obse
 		return false
 	if not _has_owned_train_provider(observation):
 		return false
+	if _should_activate_for_supply(employee_id, observation):
+		return false
 	return _best_train_target_prior(employee_id, observation) >= TRAINING_PRESERVE_MIN_PRIOR
+
+static func _should_activate_for_supply(employee_id: String, observation: ObservationState) -> bool:
+	if observation == null or employee_id.is_empty() or not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(employee_id):
+		return false
+	var def_val = EmployeeRegistryClass.get_def(employee_id)
+	if not (def_val is EmployeeDef):
+		return false
+	var def: EmployeeDef = def_val
+	if not def.can_produce():
+		return false
+	var active := _sorted_unique_strings(observation.own_player.get("employees", [])).has(employee_id)
+	for product_val in def.get_production_food_options():
+		var product_id := str(product_val)
+		if product_id.is_empty():
+			continue
+		if _product_inventory_gap(product_id, observation) > 0:
+			return true
+		if _marketing_pipeline_needs_food_supply(product_id, observation):
+			if active or not _can_actively_supply_product(product_id, observation):
+				return true
+	return false
+
+static func _product_inventory_gap(product_id: String, observation: ObservationState) -> int:
+	if observation == null or product_id.is_empty():
+		return 0
+	var demand := _public_demand_count_for_product(observation, product_id)
+	var inventory_val = observation.own_player.get("inventory", {})
+	var inventory := 0
+	if inventory_val is Dictionary:
+		inventory = _read_non_negative_int(Dictionary(inventory_val).get(product_id, 0), 0)
+	return maxi(0, demand - inventory)
+
+static func _marketing_pipeline_needs_food_supply(product_id: String, observation: ObservationState) -> bool:
+	if observation == null or product_id.is_empty():
+		return false
+	if not _owns_employee_role(observation.own_player, "marketing"):
+		return false
+	if _sorted_unique_strings(observation.own_player.get("restaurants", [])).is_empty():
+		return false
+	if not _is_marketable_product(product_id):
+		return false
+	var inventory_val = observation.own_player.get("inventory", {})
+	if inventory_val is Dictionary and _read_non_negative_int(Dictionary(inventory_val).get(product_id, 0), 0) > 0:
+		return false
+	return true
 
 static func _has_owned_train_provider(observation: ObservationState) -> bool:
 	if observation == null:
@@ -1900,6 +1947,17 @@ static func _is_storable_food_or_drink(product_id: String) -> bool:
 	if def.has_tag("no_storage"):
 		return false
 	return def.has_tag("food") or def.has_tag("drink")
+
+static func _is_marketable_product(product_id: String) -> bool:
+	if product_id.is_empty():
+		return false
+	if not ProductRegistryClass.is_loaded() or not ProductRegistryClass.has(product_id):
+		return true
+	var def_val = ProductRegistryClass.get_def(product_id)
+	if def_val == null or not (def_val is ProductDef):
+		return true
+	var def: ProductDef = def_val
+	return not def.has_tag("no_marketing")
 
 static func _has_estimated_payday_salary_shortfall(observation: ObservationState) -> bool:
 	if observation == null:

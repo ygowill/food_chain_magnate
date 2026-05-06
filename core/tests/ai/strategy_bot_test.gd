@@ -69,6 +69,12 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var house_route_structure := _test_structure_score_values_reserve_new_business_developer(seed_val)
 	if not house_route_structure.ok:
 		return house_route_structure
+	var marketing_supply_structure := _test_structure_score_keeps_food_supply_for_marketing_pipeline(seed_val)
+	if not marketing_supply_structure.ok:
+		return marketing_supply_structure
+	var trainable_supply_generation := _test_candidate_generation_keeps_trainable_food_supply_available(seed_val)
+	if not trainable_supply_generation.ok:
+		return trainable_supply_generation
 	var fridge_keep := _test_fridge_keep_prioritizes_serviceable_demand(seed_val)
 	if not fridge_keep.ok:
 		return fridge_keep
@@ -784,6 +790,101 @@ static func _test_structure_score_values_reserve_new_business_developer(seed_val
 	if not is_equal_approx(float(features.get("structure_route_readiness_adjustment", -1.0)), 0.0):
 		return Result.failure("ready reserve NBD structure should not carry route readiness penalty: %s" % str(features))
 	return Result.success()
+
+static func _test_structure_score_keeps_food_supply_for_marketing_pipeline(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_income_observation()
+	observation.phase = DefsClass.PHASE_RESTRUCTURING
+	observation.sub_phase = ""
+	observation.own_player["cash"] = 20
+	observation.own_player["employees"] = ["campaign_manager"]
+	observation.own_player["reserve_employees"] = ["kitchen_trainee", "errand_boy"]
+	observation.own_player["inventory"] = {}
+	_set_observation_house_demand_count(observation, "house_near", "burger", 0)
+	var kitchen_macro := MacroAction.create(
+		"structure_kitchen_for_marketing",
+		[Command.create("set_company_structure_direct", 0, {"employee_id": "kitchen_trainee"})],
+		0.0,
+		["restructuring"],
+		{}
+	)
+	var errand_macro := MacroAction.create(
+		"structure_errand_without_food",
+		[Command.create("set_company_structure_direct", 0, {"employee_id": "errand_boy"})],
+		0.0,
+		["restructuring"],
+		{}
+	)
+	var submit_macro := MacroAction.create(
+		"submit_without_food_supply",
+		[Command.create("submit_restructuring", 0, {})],
+		0.0,
+		["restructuring"],
+		{}
+	)
+	var kitchen_score: Dictionary = StrategyScorerClass.score_macro(observation, kitchen_macro, profile)
+	var errand_score: Dictionary = StrategyScorerClass.score_macro(observation, errand_macro, profile)
+	var submit_score: Dictionary = StrategyScorerClass.score_macro(observation, submit_macro, profile)
+	if float(kitchen_score.get("score", 0.0)) <= float(errand_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should keep food supply active for owned marketing pipeline: kitchen=%s errand=%s" % [str(kitchen_score), str(errand_score)])
+	if float(kitchen_score.get("score", 0.0)) <= float(submit_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should not submit restructuring before activating food supply for marketing: kitchen=%s submit=%s" % [str(kitchen_score), str(submit_score)])
+	var features: Dictionary = Dictionary(kitchen_score.get("features", {}))
+	if float(features.get("structure_activation_value", 0.0)) <= 0.0:
+		return Result.failure("food supply structure should expose structure_activation_value: %s" % str(features))
+	var marketing_products: Array = Array(features.get("structure_marketing_supply_products", []))
+	if not marketing_products.has("burger"):
+		return Result.failure("food supply structure should expose burger marketing supply product: %s" % str(features))
+	return Result.success()
+
+static func _test_candidate_generation_keeps_trainable_food_supply_available(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var observation := _synthetic_income_observation()
+	observation.phase = DefsClass.PHASE_RESTRUCTURING
+	observation.sub_phase = ""
+	observation.own_player["employees"] = ["trainer", "campaign_manager"]
+	observation.own_player["reserve_employees"] = ["burger_cook", "errand_boy"]
+	observation.own_player["inventory"] = {}
+	observation.own_player["company_structure"] = {
+		"ceo_slots": 3,
+		"structure": [{}, {}, {}],
+	}
+	_set_observation_house_demand_count(observation, "house_near", "burger", 4)
+	var context := AiDecisionContext.create(
+		0,
+		DefsClass.PHASE_RESTRUCTURING,
+		"",
+		1,
+		seed_val,
+		[]
+	)
+	var generated := CandidateGeneratorClass.generate(
+		observation,
+		context,
+		["set_company_structure_direct", "submit_restructuring"],
+		Callable(),
+		{"max_valid_per_action": 12}
+	)
+	if not generated.ok:
+		return generated
+	var candidates: Array = Array(Dictionary(generated.value).get("candidates", []))
+	var candidate_ids: Array[String] = []
+	for candidate_val in candidates:
+		if not (candidate_val is MacroAction):
+			continue
+		var candidate: MacroAction = candidate_val
+		candidate_ids.append(str(candidate.id))
+		if str(candidate.id).find("burger_cook") >= 0:
+			return Result.success()
+	return Result.failure("CandidateGenerator should not hide trainable burger cook when current food demand needs active supply: %s" % str(candidate_ids))
 
 static func _test_fridge_keep_prioritizes_serviceable_demand(seed_val: int) -> Result:
 	var engine := GameEngine.new()

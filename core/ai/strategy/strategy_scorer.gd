@@ -61,11 +61,16 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			var employee_id2 := str(command.params.get("employee_id", ""))
 			var structure_bonus := _employee_strategy_value(observation, employee_id2, profile, income_analysis)
 			var structure_route_readiness_adjustment := _placement_route_readiness_adjustment(observation, employee_id2, income_analysis)
+			var structure_activation_payload := _structure_activation_value(observation, employee_id2, profile, income_analysis) if action_id != "restructure_employee" else {}
+			var structure_activation_value := float(structure_activation_payload.get("value", 0.0))
 			features["structure_employee_value"] = structure_bonus
+			features["structure_activation_value"] = structure_activation_value
+			features["structure_activation_products"] = Array(structure_activation_payload.get("products", [])).duplicate()
+			features["structure_marketing_supply_products"] = Array(structure_activation_payload.get("marketing_supply_products", [])).duplicate()
 			features["structure_placement_route_value"] = _placement_route_value(observation, employee_id2, income_analysis)
 			features["structure_route_readiness_adjustment"] = structure_route_readiness_adjustment
 			_append_employee_income_features(features, observation, employee_id2, income_analysis, profile, "structure")
-			score += structure_bonus + structure_route_readiness_adjustment
+			score += structure_bonus + structure_activation_value + structure_route_readiness_adjustment
 		"initiate_marketing":
 			var product_id := str(command.params.get("product", ""))
 			var affected_ids := _affected_house_ids(macro)
@@ -166,6 +171,86 @@ static func _employee_strategy_value(observation: ObservationState, employee_id:
 		value += 3.0
 	value += _placement_route_value(observation, employee_id, income_analysis)
 	return value
+
+static func _structure_activation_value(observation: ObservationState, employee_id: String, profile, income_analysis: Dictionary) -> Dictionary:
+	var out := {
+		"value": 0.0,
+		"products": [],
+		"marketing_supply_products": [],
+	}
+	if observation == null or employee_id.is_empty() or profile == null:
+		return out
+	var role := _employee_role(employee_id)
+	if role != "produce_food":
+		return out
+	var products: Array[String] = _employee_food_products(employee_id)
+	var total := 0.0
+	var activation_products: Array[String] = []
+	var marketing_supply_products: Array[String] = []
+	for product_id in products:
+		var product_payload := StrategyIncomeAnalyzerClass.product_value(product_id, profile, income_analysis)
+		var current_gap := int(product_payload.get("inventory_gap", 0))
+		var planning_gap := int(product_payload.get("planning_inventory_gap", current_gap))
+		var future_gap := maxi(0, planning_gap - current_gap)
+		var product_value := float(current_gap) * 8.0 + float(future_gap) * 6.0
+		if _marketing_pipeline_needs_active_supply(observation, product_id):
+			product_value += 16.0 + float(profile.product_priority(product_id)) * 0.8
+			marketing_supply_products.append(product_id)
+		if product_value <= 0.0:
+			continue
+		total += product_value
+		activation_products.append(product_id)
+	out["value"] = total
+	out["products"] = activation_products
+	out["marketing_supply_products"] = marketing_supply_products
+	return out
+
+static func _employee_food_products(employee_id: String) -> Array[String]:
+	var out: Array[String] = []
+	if employee_id.is_empty() or not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(employee_id):
+		return out
+	var def_val = EmployeeRegistryClass.get_def(employee_id)
+	if not (def_val is EmployeeDef):
+		return out
+	var def: EmployeeDef = def_val
+	for product_val in def.get_production_food_options():
+		var product_id := str(product_val)
+		if not product_id.is_empty() and not out.has(product_id):
+			out.append(product_id)
+	out.sort()
+	return out
+
+static func _marketing_pipeline_needs_active_supply(observation: ObservationState, product_id: String) -> bool:
+	if observation == null or product_id.is_empty():
+		return false
+	if _own_restaurant_count(observation) <= 0:
+		return false
+	if not _has_owned_marketing_employee(observation):
+		return false
+	if not _is_marketable_product(product_id):
+		return false
+	if _can_actively_supply_product(observation, product_id):
+		return false
+	return _inventory_count(observation, product_id) <= 0
+
+static func _has_owned_marketing_employee(observation: ObservationState) -> bool:
+	if observation == null:
+		return false
+	for employee_id in _owned_employee_ids(observation.own_player):
+		if _employee_role(employee_id) == "marketing":
+			return true
+	return false
+
+static func _is_marketable_product(product_id: String) -> bool:
+	if product_id.is_empty():
+		return false
+	if not ProductRegistryClass.is_loaded() or not ProductRegistryClass.has(product_id):
+		return true
+	var def_val = ProductRegistryClass.get_def(product_id)
+	if not (def_val is ProductDef):
+		return true
+	var def: ProductDef = def_val
+	return not def.has_tag("no_marketing")
 
 static func _placement_route_value(observation: ObservationState, employee_id: String, income_analysis: Dictionary) -> float:
 	if observation == null or employee_id.is_empty():
