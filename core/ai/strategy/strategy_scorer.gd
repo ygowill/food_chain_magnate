@@ -32,9 +32,11 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 		"recruit":
 			var employee_id := str(command.params.get("employee_type", ""))
 			var bonus := _employee_strategy_value(observation, employee_id, profile, income_analysis)
+			var placement_route_value := _placement_route_value(observation, employee_id, income_analysis)
 			var roster_payload := _recruit_roster_adjustment(observation, employee_id, income_analysis)
 			var roster_adjustment := float(roster_payload.get("adjustment", 0.0))
 			features["employee_value"] = bonus
+			features["recruit_placement_route_value"] = placement_route_value
 			features["recruit_owned_count"] = int(roster_payload.get("owned_count", 0))
 			features["recruit_desired_count"] = int(roster_payload.get("desired_count", 0))
 			features["recruit_roster_saturated"] = bool(roster_payload.get("saturated", false))
@@ -45,15 +47,18 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			var from_employee := str(command.params.get("from_employee", ""))
 			var to_employee := str(command.params.get("to_employee", ""))
 			var target_value := StrategyIncomeAnalyzerClass.employee_value(observation, to_employee, profile, income_analysis)
-			var train_bonus: float = float(target_value.get("score", 0.0)) * 1.2 + maxf(0.0, float(profile.employee_priority(to_employee)) - float(profile.employee_priority(from_employee)))
+			var train_placement_route_value := _placement_route_value(observation, to_employee, income_analysis)
+			var train_bonus: float = float(target_value.get("score", 0.0)) * 1.2 + maxf(0.0, float(profile.employee_priority(to_employee)) - float(profile.employee_priority(from_employee))) + train_placement_route_value
 			features["train_value"] = train_bonus
 			features["train_target_income_value"] = float(target_value.get("score", 0.0))
+			features["train_placement_route_value"] = train_placement_route_value
 			features["train_target_products"] = Array(target_value.get("target_products", [])).duplicate()
 			score += train_bonus
 		"set_company_structure_direct", "set_company_structure_report", "restructure_employee":
 			var employee_id2 := str(command.params.get("employee_id", ""))
 			var structure_bonus := _employee_strategy_value(observation, employee_id2, profile, income_analysis)
 			features["structure_employee_value"] = structure_bonus
+			features["structure_placement_route_value"] = _placement_route_value(observation, employee_id2, income_analysis)
 			_append_employee_income_features(features, observation, employee_id2, income_analysis, profile, "structure")
 			score += structure_bonus
 		"initiate_marketing":
@@ -146,7 +151,85 @@ static func _employee_strategy_value(observation: ObservationState, employee_id:
 		value += 5.0
 	elif role == "new_shop" and _own_restaurant_count(observation) <= 1:
 		value += 3.0
+	value += _placement_route_value(observation, employee_id, income_analysis)
 	return value
+
+static func _placement_route_value(observation: ObservationState, employee_id: String, income_analysis: Dictionary) -> float:
+	if observation == null or employee_id.is_empty():
+		return 0.0
+	if not _has_house_growth_space(observation):
+		return 0.0
+	if _has_owned_placement_employee(observation):
+		return 0.0
+	var pressure := _house_growth_pressure(observation, income_analysis)
+	match employee_id:
+		"new_business_developer":
+			return 42.0 + pressure
+		"management_trainee":
+			if _owns_any_employee(observation, ["management_trainee", "new_business_developer"]):
+				return 0.0
+			return 30.0 + pressure * 0.7
+		"trainer":
+			if _owns_any_employee(observation, ["trainer", "new_business_developer"]):
+				return 0.0
+			if _owns_any_employee(observation, ["management_trainee"]):
+				return 18.0 + pressure * 0.35
+	return 0.0
+
+static func _house_growth_pressure(observation: ObservationState, income_analysis: Dictionary) -> float:
+	if observation == null:
+		return 0.0
+	var pressure := float(mini(_remaining_house_number_count(observation), 4)) * 2.0
+	if _has_garden_growth_space(observation):
+		pressure += 2.0
+	if _own_restaurant_count(observation) > 0:
+		pressure += 4.0
+	var public_demand := int(income_analysis.get("total_public_demand", 0))
+	if public_demand <= 2:
+		pressure += 4.0
+	elif public_demand <= 4:
+		pressure += 2.0
+	return pressure
+
+static func _has_house_growth_space(observation: ObservationState) -> bool:
+	return _remaining_house_number_count(observation) > 0 or _has_garden_growth_space(observation)
+
+static func _remaining_house_number_count(observation: ObservationState) -> int:
+	if observation == null:
+		return 0
+	var remaining_val = observation.map_public.get("house_number_supply_remaining", [])
+	if not (remaining_val is Array):
+		return 0
+	return Array(remaining_val).size()
+
+static func _has_garden_growth_space(observation: ObservationState) -> bool:
+	if observation == null:
+		return false
+	if _read_non_negative_int(observation.map_public.get("garden_supply_remaining", 0), 0) <= 0:
+		return false
+	var houses_val = observation.map_public.get("houses", {})
+	if not (houses_val is Dictionary):
+		return false
+	for house_val in Dictionary(houses_val).values():
+		if not (house_val is Dictionary):
+			continue
+		if not bool(Dictionary(house_val).get("has_garden", true)):
+			return true
+	return false
+
+static func _has_owned_placement_employee(observation: ObservationState) -> bool:
+	if observation == null or not EmployeeRegistryClass.is_loaded():
+		return false
+	for employee_id in _owned_employee_ids(observation.own_player):
+		if employee_id.is_empty() or not EmployeeRegistryClass.has(employee_id):
+			continue
+		var def_val = EmployeeRegistryClass.get_def(employee_id)
+		if not (def_val is EmployeeDef):
+			continue
+		var def: EmployeeDef = def_val
+		if def.has_tag("place_house_or_garden") or def.has_usage_tag("use:place_house") or def.has_usage_tag("use:add_garden"):
+			return true
+	return false
 
 static func _recruit_roster_adjustment(observation: ObservationState, employee_id: String, income_analysis: Dictionary) -> Dictionary:
 	var owned_count := _count_owned_employee(observation.own_player if observation != null else {}, employee_id)

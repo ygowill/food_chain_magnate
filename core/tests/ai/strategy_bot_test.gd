@@ -51,6 +51,12 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var recruit_roster := _test_recruit_score_penalizes_roster_saturation(seed_val)
 	if not recruit_roster.ok:
 		return recruit_roster
+	var house_route_recruit := _test_recruit_score_values_house_placement_route(seed_val)
+	if not house_route_recruit.ok:
+		return house_route_recruit
+	var house_route_train := _test_train_score_values_house_placement_route(seed_val)
+	if not house_route_train.ok:
+		return house_route_train
 	var fridge_keep := _test_fridge_keep_prioritizes_serviceable_demand(seed_val)
 	if not fridge_keep.ok:
 		return fridge_keep
@@ -440,6 +446,84 @@ static func _test_recruit_score_penalizes_roster_saturation(seed_val: int) -> Re
 		return Result.failure("completed management route should expose zero desired count: %s" % str(management_features))
 	if not bool(management_features.get("recruit_roster_saturated", false)):
 		return Result.failure("completed management route should be saturated: %s" % str(management_features))
+	return Result.success()
+
+static func _test_recruit_score_values_house_placement_route(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_house_growth_observation()
+	observation.phase = DefsClass.PHASE_WORKING
+	observation.sub_phase = DefsClass.SUB_PHASE_RECRUIT
+	var management_macro := MacroAction.create(
+		"recruit_management_for_houses",
+		[Command.create("recruit", 0, {"employee_type": "management_trainee"})],
+		0.0,
+		["working", "recruit"],
+		{}
+	)
+	var kitchen_macro := MacroAction.create(
+		"recruit_kitchen",
+		[Command.create("recruit", 0, {"employee_type": "kitchen_trainee"})],
+		0.0,
+		["working", "recruit"],
+		{}
+	)
+	var management_score: Dictionary = StrategyScorerClass.score_macro(observation, management_macro, profile)
+	var kitchen_score: Dictionary = StrategyScorerClass.score_macro(observation, kitchen_macro, profile)
+	if float(management_score.get("score", 0.0)) <= float(kitchen_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should value management trainee house route over extra kitchen trainee: management=%s kitchen=%s" % [str(management_score), str(kitchen_score)])
+	var features: Dictionary = Dictionary(management_score.get("features", {}))
+	if float(features.get("recruit_placement_route_value", 0.0)) <= 0.0:
+		return Result.failure("management trainee should expose positive recruit_placement_route_value: %s" % str(features))
+	var no_growth := _synthetic_house_growth_observation()
+	no_growth.map_public["house_number_supply_remaining"] = []
+	no_growth.map_public["garden_supply_remaining"] = 0
+	var no_growth_score: Dictionary = StrategyScorerClass.score_macro(no_growth, management_macro, profile)
+	var no_growth_features: Dictionary = Dictionary(no_growth_score.get("features", {}))
+	if not is_equal_approx(float(no_growth_features.get("recruit_placement_route_value", -1.0)), 0.0):
+		return Result.failure("management trainee should not expose house route value without house/garden growth space: %s" % str(no_growth_features))
+	return Result.success()
+
+static func _test_train_score_values_house_placement_route(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_house_growth_observation()
+	observation.phase = DefsClass.PHASE_WORKING
+	observation.sub_phase = DefsClass.SUB_PHASE_TRAIN
+	observation.own_player["employees"] = ["trainer"]
+	observation.own_player["reserve_employees"] = ["management_trainee"]
+	var nbd_macro := MacroAction.create(
+		"train_management_to_new_business",
+		[Command.create("train", 0, {"from_employee": "management_trainee", "to_employee": "new_business_developer"})],
+		0.0,
+		["working", "train"],
+		{}
+	)
+	var jvp_macro := MacroAction.create(
+		"train_management_to_jvp",
+		[Command.create("train", 0, {"from_employee": "management_trainee", "to_employee": "junior_vice_president"})],
+		0.0,
+		["working", "train"],
+		{}
+	)
+	var nbd_score: Dictionary = StrategyScorerClass.score_macro(observation, nbd_macro, profile)
+	var jvp_score: Dictionary = StrategyScorerClass.score_macro(observation, jvp_macro, profile)
+	if float(nbd_score.get("score", 0.0)) <= float(jvp_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should prefer NBD training route when house growth space exists: nbd=%s jvp=%s" % [str(nbd_score), str(jvp_score)])
+	var nbd_features: Dictionary = Dictionary(nbd_score.get("features", {}))
+	if float(nbd_features.get("train_placement_route_value", 0.0)) <= 0.0:
+		return Result.failure("NBD training should expose positive train_placement_route_value: %s" % str(nbd_features))
+	var jvp_features: Dictionary = Dictionary(jvp_score.get("features", {}))
+	if not is_equal_approx(float(jvp_features.get("train_placement_route_value", -1.0)), 0.0):
+		return Result.failure("non-placement training should not expose placement route value: %s" % str(jvp_features))
 	return Result.success()
 
 static func _test_fridge_keep_prioritizes_serviceable_demand(seed_val: int) -> Result:
@@ -889,6 +973,17 @@ static func _synthetic_income_observation() -> ObservationState:
 			},
 		},
 	}
+	return observation
+
+static func _synthetic_house_growth_observation() -> ObservationState:
+	var observation := _synthetic_income_observation()
+	observation.map_public["house_number_supply_remaining"] = [2, 3, 4, 5]
+	observation.map_public["garden_supply_remaining"] = 2
+	var houses: Dictionary = Dictionary(observation.map_public.get("houses", {})).duplicate(true)
+	var house_near: Dictionary = Dictionary(houses.get("house_near", {})).duplicate(true)
+	house_near["has_garden"] = false
+	houses["house_near"] = house_near
+	observation.map_public["houses"] = houses
 	return observation
 
 static func _synthetic_drink_route_observation() -> ObservationState:
