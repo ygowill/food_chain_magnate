@@ -56,6 +56,11 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 		return _scenario_failure("income_route_recruits_drink_supply_for_drink_demand", drink_recruit)
 	names.append("income_route_recruits_drink_supply_for_drink_demand")
 
+	var pricing_recruit := _scenario_income_route_recruits_pricing_after_stable_serviceable_demand(seed_val)
+	if not pricing_recruit.ok:
+		return _scenario_failure("income_route_recruits_pricing_after_stable_serviceable_demand", pricing_recruit)
+	names.append("income_route_recruits_pricing_after_stable_serviceable_demand")
+
 	var third_recruit_milestone := _scenario_milestone_third_recruit_values_first_hire_3()
 	if not third_recruit_milestone.ok:
 		return _scenario_failure("milestone_third_recruit_values_first_hire_3", third_recruit_milestone)
@@ -363,6 +368,31 @@ static func _scenario_income_route_recruits_drink_supply_for_drink_demand(seed_v
 	var chosen: Dictionary = chosen_read.value
 	if str(chosen.get("role", "")) != "procure_drink":
 		return Result.failure("expected income route to add drink supply for drink demand, got %s" % str(chosen))
+	return Result.success()
+
+static func _scenario_income_route_recruits_pricing_after_stable_serviceable_demand(seed_val: int) -> Result:
+	var observation := _synthetic_food_income_observation()
+	observation.phase = DefsClass.PHASE_WORKING
+	observation.sub_phase = DefsClass.SUB_PHASE_RECRUIT
+	observation.own_player["cash"] = 35
+	observation.own_player["employees"] = ["burger_cook", "campaign_manager", "errand_boy"]
+	observation.own_player["reserve_employees"] = []
+	observation.own_player["inventory"] = {"burger": 3}
+	observation.own_player["milestones"] = []
+	observation.employee_pool_public = _base_income_recruit_pool()
+	observation.milestone_pool_public = ["first_lower_prices"]
+	_set_observation_house_demand_count(observation, "house_near", "burger", 3)
+	var chosen_read := _best_recruit_candidate(observation, seed_val)
+	if not chosen_read.ok:
+		return chosen_read
+	var chosen: Dictionary = chosen_read.value
+	if str(chosen.get("employee_id", "")) != "pricing_manager":
+		return Result.failure("expected stable income route to add pricing_manager before generic support, got %s" % str(chosen))
+	var features: Dictionary = Dictionary(chosen.get("features", {}))
+	if float(features.get("recruit_price_route_value", 0.0)) <= 0.0:
+		return Result.failure("expected pricing route value feature on pricing_manager recruit: %s" % str(chosen))
+	if not bool(features.get("recruit_price_route_first_lower_prices_available", false)):
+		return Result.failure("expected pricing route to expose first_lower_prices availability: %s" % str(chosen))
 	return Result.success()
 
 static func _scenario_milestone_third_recruit_values_first_hire_3() -> Result:

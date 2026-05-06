@@ -36,16 +36,19 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			var employee_id := str(command.params.get("employee_type", ""))
 			var bonus := _employee_strategy_value(observation, employee_id, profile, income_analysis)
 			var placement_route_value := _placement_route_value(observation, employee_id, income_analysis)
+			var price_route_payload := _price_employee_route_value(observation, employee_id, income_analysis)
+			var price_route_value := float(price_route_payload.get("value", 0.0))
 			var roster_payload := _recruit_roster_adjustment(observation, employee_id, income_analysis)
 			var roster_adjustment := float(roster_payload.get("adjustment", 0.0))
 			features["employee_value"] = bonus
 			features["recruit_placement_route_value"] = placement_route_value
+			_append_price_employee_route_features(features, price_route_payload, "recruit")
 			features["recruit_owned_count"] = int(roster_payload.get("owned_count", 0))
 			features["recruit_desired_count"] = int(roster_payload.get("desired_count", 0))
 			features["recruit_roster_saturated"] = bool(roster_payload.get("saturated", false))
 			features["recruit_roster_adjustment"] = roster_adjustment
 			_append_employee_income_features(features, observation, employee_id, income_analysis, profile, "recruit")
-			score += bonus + roster_adjustment
+			score += bonus + roster_adjustment + price_route_value
 		"train":
 			var from_employee := str(command.params.get("from_employee", ""))
 			var to_employee := str(command.params.get("to_employee", ""))
@@ -63,6 +66,8 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			var employee_id2 := str(command.params.get("employee_id", ""))
 			var structure_bonus := _employee_strategy_value(observation, employee_id2, profile, income_analysis)
 			var structure_route_readiness_adjustment := _placement_route_readiness_adjustment(observation, employee_id2, income_analysis)
+			var structure_price_route_payload := _price_employee_route_value(observation, employee_id2, income_analysis)
+			var structure_price_route_value := float(structure_price_route_payload.get("value", 0.0))
 			var structure_activation_payload := _structure_activation_value(observation, employee_id2, profile, income_analysis) if action_id != "restructure_employee" else {}
 			var structure_activation_value := float(structure_activation_payload.get("value", 0.0))
 			features["structure_employee_value"] = structure_bonus
@@ -71,8 +76,9 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			features["structure_marketing_supply_products"] = Array(structure_activation_payload.get("marketing_supply_products", [])).duplicate()
 			features["structure_placement_route_value"] = _placement_route_value(observation, employee_id2, income_analysis)
 			features["structure_route_readiness_adjustment"] = structure_route_readiness_adjustment
+			_append_price_employee_route_features(features, structure_price_route_payload, "structure")
 			_append_employee_income_features(features, observation, employee_id2, income_analysis, profile, "structure")
-			score += structure_bonus + structure_activation_value + structure_route_readiness_adjustment
+			score += structure_bonus + structure_activation_value + structure_route_readiness_adjustment + structure_price_route_value
 		"initiate_marketing":
 			var product_id := str(command.params.get("product", ""))
 			var affected_ids := _affected_house_ids(macro)
@@ -314,6 +320,40 @@ static func _stable_income_route_ready(observation: ObservationState, income_ana
 	if cash < maxi(20, salary_cost * 4):
 		return false
 	return int(income_analysis.get("total_serviceable_demand", 0)) >= 2 or int(income_analysis.get("total_public_demand", 0)) >= 4
+
+static func _price_employee_route_value(observation: ObservationState, employee_id: String, income_analysis: Dictionary) -> Dictionary:
+	var serviceable_demand := maxi(0, int(income_analysis.get("total_serviceable_demand", 0)))
+	var inventory_units := _total_inventory_units(observation)
+	var estimated_sale_units := serviceable_demand if inventory_units <= 0 else mini(serviceable_demand, inventory_units)
+	var first_lower_prices_available := observation != null and _sorted_unique_strings(observation.milestone_pool_public).has("first_lower_prices")
+	var out := {
+		"value": 0.0,
+		"serviceable_demand": serviceable_demand,
+		"inventory_units": inventory_units,
+		"estimated_sale_units": estimated_sale_units,
+		"first_lower_prices_available": first_lower_prices_available,
+	}
+	if employee_id.is_empty() or _employee_role(employee_id) != "price":
+		return out
+	if not _stable_income_route_ready(observation, income_analysis):
+		return out
+	if serviceable_demand <= 0:
+		return out
+
+	var value := 4.0 + float(serviceable_demand) * 1.1 + float(estimated_sale_units) * 1.4
+	if first_lower_prices_available:
+		value += 9.0
+	if employee_id == "pricing_manager":
+		value += 3.0
+	out["value"] = value
+	return out
+
+static func _append_price_employee_route_features(features: Dictionary, payload: Dictionary, prefix: String) -> void:
+	features["%s_price_route_value" % prefix] = float(payload.get("value", 0.0))
+	features["%s_price_route_serviceable_demand" % prefix] = int(payload.get("serviceable_demand", 0))
+	features["%s_price_route_inventory_units" % prefix] = int(payload.get("inventory_units", 0))
+	features["%s_price_route_estimated_sale_units" % prefix] = int(payload.get("estimated_sale_units", 0))
+	features["%s_price_route_first_lower_prices_available" % prefix] = bool(payload.get("first_lower_prices_available", false))
 
 static func _placement_route_readiness_adjustment(observation: ObservationState, employee_id: String, income_analysis: Dictionary) -> float:
 	if not _employee_is_placement_employee(employee_id):
