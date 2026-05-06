@@ -61,6 +61,11 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 		return _scenario_failure("income_route_recruits_pricing_after_stable_serviceable_demand", pricing_recruit)
 	names.append("income_route_recruits_pricing_after_stable_serviceable_demand")
 
+	var pricing_structure := _scenario_income_route_structures_pricing_after_price_recruit()
+	if not pricing_structure.ok:
+		return _scenario_failure("income_route_structures_pricing_after_price_recruit", pricing_structure)
+	names.append("income_route_structures_pricing_after_price_recruit")
+
 	var third_recruit_milestone := _scenario_milestone_third_recruit_values_first_hire_3()
 	if not third_recruit_milestone.ok:
 		return _scenario_failure("milestone_third_recruit_values_first_hire_3", third_recruit_milestone)
@@ -393,6 +398,62 @@ static func _scenario_income_route_recruits_pricing_after_stable_serviceable_dem
 		return Result.failure("expected pricing route value feature on pricing_manager recruit: %s" % str(chosen))
 	if not bool(features.get("recruit_price_route_first_lower_prices_available", false)):
 		return Result.failure("expected pricing route to expose first_lower_prices availability: %s" % str(chosen))
+	return Result.success()
+
+static func _scenario_income_route_structures_pricing_after_price_recruit() -> Result:
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_food_income_observation()
+	observation.phase = DefsClass.PHASE_RESTRUCTURING
+	observation.sub_phase = ""
+	observation.own_player["cash"] = 35
+	observation.own_player["employees"] = ["burger_cook", "campaign_manager", "pricing_manager", "trainer"]
+	observation.own_player["reserve_employees"] = []
+	observation.own_player["inventory"] = {"burger": 3}
+	observation.own_player["milestones"] = []
+	observation.own_player["company_structure"] = {
+		"ceo_slots": 3,
+		"structure": [
+			{"employee_id": "burger_cook", "reports": []},
+			{"employee_id": "campaign_manager", "reports": []},
+			{},
+		],
+	}
+	observation.milestone_pool_public = ["first_lower_prices"]
+	_set_observation_house_demand_count(observation, "house_near", "burger", 3)
+
+	var pricing_macro := MacroAction.create(
+		"structure_pricing_for_stable_income_route",
+		[Command.create("set_company_structure_direct", 0, {"slot_index": 2, "employee_id": "pricing_manager"})],
+		0.0,
+		["restructuring", "direct"],
+		{}
+	)
+	var trainer_macro := MacroAction.create(
+		"structure_trainer_after_price_recruit",
+		[Command.create("set_company_structure_direct", 0, {"slot_index": 2, "employee_id": "trainer"})],
+		0.0,
+		["restructuring", "direct"],
+		{}
+	)
+	var submit_macro := MacroAction.create(
+		"submit_without_price_manager",
+		[Command.create("submit_restructuring", 0, {})],
+		0.0,
+		["restructuring"],
+		{}
+	)
+
+	var pricing_score: Dictionary = StrategyScorerClass.score_macro(observation, pricing_macro, profile)
+	var trainer_score: Dictionary = StrategyScorerClass.score_macro(observation, trainer_macro, profile)
+	var submit_score: Dictionary = StrategyScorerClass.score_macro(observation, submit_macro, profile)
+	if float(pricing_score.get("score", 0.0)) <= float(trainer_score.get("score", 0.0)):
+		return Result.failure("expected pricing_manager structure to beat trainer after price recruit: pricing=%s trainer=%s" % [str(pricing_score), str(trainer_score)])
+	if float(pricing_score.get("score", 0.0)) <= float(submit_score.get("score", 0.0)):
+		return Result.failure("expected pricing_manager structure to beat submit after price recruit: pricing=%s submit=%s" % [str(pricing_score), str(submit_score)])
+	var features: Dictionary = Dictionary(pricing_score.get("features", {}))
+	if float(features.get("structure_price_route_value", 0.0)) <= 0.0:
+		return Result.failure("expected pricing structure route value feature: %s" % str(features))
 	return Result.success()
 
 static func _scenario_milestone_third_recruit_values_first_hire_3() -> Result:
