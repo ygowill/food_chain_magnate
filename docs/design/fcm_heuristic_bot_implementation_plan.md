@@ -987,6 +987,8 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 - `MarketingPreviewGoldenTest` 已覆盖从同一前置状态分别执行 `initiate_marketing` 并推进真实 engine / preview 到 Marketing，比较 report、最终 state hash、`first_burger_marketed` 触发、source 不变性和 registry 恢复。`StrategyBotTest` 也覆盖了“营销覆盖房屋但需求已满”的评分回归，确保这类候选不会仅凭覆盖范围获得正收益。
 - `PaydayPreview` 已用 `AiEngineFork` fork 当前 engine，执行候选命令后通过真实 Payday 退出 settlement 写入 `round_state.payday`。Payday 不是自动跳过阶段，但从 Payday 进入 Marketing 会触发 Marketing enter settlement；因此预览在 Payday 直接调用 `phase_manager.advance_phase(state)`，避免普通 `execute_command(advance_phase)` 继续自动跳过 Marketing/Cleanup 而丢失稳定落点。
 - `PaydayPreviewGoldenTest` 已覆盖无额外命令的 Payday 结算，以及 Payday 中先 `fire` 再结算的场景；测试比较真实 engine 与 preview 的 Payday report、最终 state hash、source 不变性和 registry 恢复。`StrategyBotTest` 也覆盖了“裁员一个人仍无法支付薪水”的评分回归。
+- `CleanupPreview` 已用 `AiEngineFork` fork 当前 engine，并通过真实 Marketing -> Cleanup 进入结算读取 `round_state.cleanup.inventory_discarded` / `fridge_choice_pending`。无 pending 时预览会停在 Cleanup report 落点；有冰箱超容量 pending 时，预览可返回刚进入 Cleanup 的 pending report。对 `choose_fridge_keep` 这类 Cleanup pending 命令，预览执行真实 action executor 但不触发 Cleanup auto-skip，因为普通 `execute_command()` 会进入下一轮 Restructuring 并由 `start_new_round()` 清空旧 `round_state.cleanup`。
+- `CleanupPreviewGoldenTest` 已覆盖从 Marketing 进入 Cleanup 的库存丢弃 report，以及 Cleanup pending 后执行 `choose_fridge_keep` 的 report/inventory 变化；测试比较 preview 与真实 direct settlement/action executor 的关键 report 字段、最终 state hash、source 不变性和 registry 恢复。
 - `tools/run_bot_selfplay.gd` / `tools/run_bot_selfplay.sh` 提供 Bot 自对弈入口，默认运行 StrategyBot，也可用 `--bot=random|greedy|strategy|osla|beam` 运行单一 bot，或用 `--bots=random,strategy` 这类 per-player 配置跑固定 matchup；`--profile=<id|path>` 可替换 strategy/osla/beam 使用的 `StrategyProfile`；输出每局终局摘要、action counts、trace tail、`bot_config`、`bot_ids`、profile metadata 与可选 JSONL。
 - `tools/run_bot_selfplay_matrix.gd` / `tools/run_bot_selfplay_matrix.sh` 在同一批 seed 下顺序运行多个 `--config=`（例如 `--config=strategy --config=osla --config=random,strategy`），可通过 `--profile=` 对整组配置应用同一 profile，合并 JSONL 并直接生成 summary，作为后续网格/随机调参的最小矩阵入口。
 - `tools/summarize_bot_selfplay.gd` / `tools/summarize_bot_selfplay.sh` 读取一个或多个 selfplay JSONL，按 bot/matchup 汇总成功率、平均回合/步数/命令数、action totals、每玩家现金/员工/库存/里程碑/餐厅的 avg/min/max，并输出人类可读摘要与 compact JSON，供 Strategy/OSLA/Beam/MCTS 固定 seed 对照使用。
@@ -1180,6 +1182,7 @@ tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
 - `core/tests/ai/dinner_preview_golden_test.gd`：从同一前置状态分别跑真实 engine 与 `DinnerPreview`，校验基础销售、花园收入、drive-through 入口点、关键 Dinnertime report 字段、库存消耗、source 不变性和 registry 恢复。
 - `core/tests/ai/marketing_preview_golden_test.gd`：从同一前置状态分别跑真实 engine 与 `MarketingPreview`，校验 Marketing report、最终状态、`DemandMarked` 里程碑、source 不变性和 registry 恢复。
 - `core/tests/ai/payday_preview_golden_test.gd`：从同一前置状态分别跑真实 engine 与 `PaydayPreview`，校验 Payday report、最终状态、Payday 中先裁员再结算、source 不变性和 registry 恢复。
+- `core/tests/ai/cleanup_preview_golden_test.gd`：从同一前置状态分别跑真实 engine 与 `CleanupPreview`，校验 Cleanup report、最终状态、Cleanup pending 中先选择冰箱保留再读取 report、source 不变性和 registry 恢复。
 
 ## 15. 开发路线图
 
@@ -1310,9 +1313,9 @@ Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[f
 - [x] DinnerPreview 与真实 settlement 有 golden test。
 - [x] MarketingPreview 与真实 Marketing settlement 有 golden test。
 - [x] PaydayPreview 与真实 Payday settlement 有 golden test。
+- [x] CleanupPreview 与真实 Cleanup settlement 有 golden test。
 - [x] Pricing 使用 `PricingPipeline` / `round_state.price_modifiers`。
 - [x] Drive-through 使用 `Structures.get_restaurant_entrance_points()`。
-- [ ] Cleanup 仍待真实 settlement preview。
 
 ### 强度
 

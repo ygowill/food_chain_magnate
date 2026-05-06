@@ -81,4 +81,8 @@ static func build_tests(_host) -> Array[Dictionary]:
 			"name": "PaydayPreviewGoldenTest",
 			"fn": func() -> Result: return TestRefs.PaydayPreviewGoldenTestClass.run(2, 12345),
 		},
+		{
+			"name": "CleanupPreviewGoldenTest",
+			"fn": func() -> Result: return TestRefs.CleanupPreviewGoldenTestClass.run(2, 12345),
+		},
 	]
