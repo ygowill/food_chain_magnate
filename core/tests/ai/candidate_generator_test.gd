@@ -47,6 +47,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var route_drinks := _test_working_route_drink_candidates_are_valid(seed_val)
 	if not route_drinks.ok:
 		return route_drinks
+	var route_drink_priority := _test_route_drink_candidates_prioritize_public_demand(seed_val)
+	if not route_drink_priority.ok:
+		return route_drink_priority
 	var payday := _test_payday_fire_candidates_are_valid(seed_val)
 	if not payday.ok:
 		return payday
@@ -68,7 +71,7 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var advanced_training := _test_training_candidates_cover_advanced_routes(seed_val)
 	if not advanced_training.ok:
 		return advanced_training
-	return Result.success({"cases": 18})
+	return Result.success({"cases": 19})
 
 static func _test_reserve_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
@@ -436,6 +439,67 @@ static func _test_working_route_drink_candidates_are_valid(seed_val: int) -> Res
 			return Result.failure("route procure_drinks candidate should increase drink inventory")
 		return Result.success({"seed_used": seed_val + attempt})
 	return Result.failure("route drink candidate test could not find a usable seed: %s" % last_error)
+
+static func _test_route_drink_candidates_prioritize_public_demand(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var observation := ObservationState.new()
+	observation.viewer_player_id = 0
+	observation.current_player_id = 0
+	observation.round_number = 1
+	observation.phase = DefsClass.PHASE_WORKING
+	observation.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
+	observation.turn_order = [0]
+	observation.own_player = {
+		"id": 0,
+		"cash": 20,
+		"employees": ["zeppelin_pilot"],
+		"reserve_employees": [],
+		"busy_marketers": [],
+		"restaurants": ["rest_near"],
+		"inventory": {},
+		"milestones": [],
+	}
+	observation.map_public = {
+		"grid_size": Vector2i(8, 8),
+		"tile_grid_size": Vector2i(8, 8),
+		"restaurants": {
+			"rest_near": {
+				"owner": 0,
+				"anchor_pos": Vector2i.ZERO,
+				"entrance_pos": Vector2i.ZERO,
+			},
+		},
+		"drink_sources": [
+			{"type": "beer", "world_pos": Vector2i(0, 1)},
+			{"type": "lemonade", "world_pos": Vector2i(0, 2)},
+			{"type": "soda", "world_pos": Vector2i(3, 0)},
+		],
+		"houses": {
+			"soda_house": {
+				"house_number": 1,
+				"anchor_pos": Vector2i(3, 1),
+				"demands": [
+					{"product": "soda"},
+					{"product": "soda"},
+				],
+			},
+		},
+	}
+	var context := AiDecisionContext.create(0, DefsClass.PHASE_WORKING, DefsClass.SUB_PHASE_GET_DRINKS, 1, seed_val, [])
+	var payload_read := CandidateGeneratorClass.generate(observation, context, ["procure_drinks"], Callable(), {"max_valid_per_action": 1})
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	if _count_action(candidates, "procure_drinks") != 1:
+		return Result.failure("route drink priority test should keep exactly one route candidate: %s" % str(_macro_debug(candidates)))
+	var command := _first_procure_route_command(candidates)
+	if command == null:
+		return Result.failure("route drink priority test should generate a route procure_drinks candidate: %s" % str(_macro_debug(candidates)))
+	if not _command_selected_sources_has(command, Vector2i(3, 0)):
+		return Result.failure("route drink priority should keep demanded soda source when candidate budget is tight: %s" % str(command.params))
+	return Result.success()
 
 static func _test_payday_fire_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
@@ -907,6 +971,25 @@ static func _first_procure_route_command(candidates: Array) -> Command:
 			if command.params.has("route") and command.params.has("selected_sources"):
 				return command
 	return null
+
+static func _command_selected_sources_has(command: Command, expected: Vector2i) -> bool:
+	if command == null:
+		return false
+	var selected_val = command.params.get("selected_sources", [])
+	if not (selected_val is Array):
+		return false
+	for source_val in Array(selected_val):
+		if source_val is Vector2i and source_val == expected:
+			return true
+		if source_val is Vector2:
+			var source_vec: Vector2 = source_val
+			if Vector2i(int(source_vec.x), int(source_vec.y)) == expected:
+				return true
+		if source_val is Array:
+			var arr: Array = source_val
+			if arr.size() >= 2 and Vector2i(int(arr[0]), int(arr[1])) == expected:
+				return true
+	return false
 
 static func _first_command_with_param(candidates: Array, action_id: String, param_key: String, param_value: Variant) -> Command:
 	for macro_val in candidates:

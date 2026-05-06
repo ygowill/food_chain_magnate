@@ -16,6 +16,7 @@ const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_inc
 const DEFAULT_MAX_VALID_PER_ACTION := 12
 const TRAIN_ACTION_MIN_PRIOR := 0.75
 const TRAINING_PRESERVE_MIN_PRIOR := 2.5
+const ROUTE_DRINK_SEARCH_MULTIPLIER := 4
 const WORKING_MANDATORY_ACTION_IDS := [
 	"set_discount",
 	"set_luxury_price",
@@ -784,7 +785,8 @@ static func _generate_route_drinks(
 		var def: EmployeeDef = def_val
 		if not def.can_procure():
 			continue
-		var routes_read := DrinkRouteAnalyzerClass.generate_routes(observation, employee_id, max_valid_per_action)
+		var route_search_limit := maxi(max_valid_per_action, max_valid_per_action * ROUTE_DRINK_SEARCH_MULTIPLIER)
+		var routes_read := DrinkRouteAnalyzerClass.generate_routes(observation, employee_id, route_search_limit)
 		if not routes_read.ok:
 			discarded.append("procure_drinks:%s: %s" % [employee_id, routes_read.error])
 			continue
@@ -792,6 +794,7 @@ static func _generate_route_drinks(
 		if routes.is_empty():
 			discarded.append("procure_drinks:%s: no route candidates" % employee_id)
 			continue
+		_sort_route_drinks_for_observation(routes, observation)
 		for route_val in routes:
 			if _count_action(out, "procure_drinks") >= max_valid_per_action:
 				return
@@ -805,6 +808,7 @@ static func _generate_route_drinks(
 			var range_type := str(route.get("range_type", "route"))
 			var source_count := int(route.get("source_count", 0))
 			var route_index := _count_action(out, "procure_drinks")
+			var route_prior := _route_drink_prior(route, observation)
 			_append_valid_command(
 				out,
 				discarded,
@@ -814,7 +818,7 @@ static func _generate_route_drinks(
 				validate_command,
 				"procure_%s_%s_%d_%d" % [employee_id, range_type, source_count, route_index],
 				["working", "procure_drinks", range_type],
-				float(source_count) * 0.05 + _product_pipeline_prior(str(params.get("drink_type", "")), observation),
+				route_prior,
 				max_valid_per_action
 			)
 
@@ -1069,6 +1073,58 @@ static func _sorted_unique_strings(value) -> Array[String]:
 	for key in set.keys():
 		if key is String:
 			out.append(str(key))
+	out.sort()
+	return out
+
+static func _sort_route_drinks_for_observation(routes: Array, observation: ObservationState) -> void:
+	routes.sort_custom(func(a, b) -> bool:
+		var route_a: Dictionary = a if a is Dictionary else {}
+		var route_b: Dictionary = b if b is Dictionary else {}
+		var prior_a := _route_drink_prior(route_a, observation)
+		var prior_b := _route_drink_prior(route_b, observation)
+		if not is_equal_approx(prior_a, prior_b):
+			return prior_a > prior_b
+		var source_a := int(route_a.get("source_count", 0))
+		var source_b := int(route_b.get("source_count", 0))
+		if source_a != source_b:
+			return source_a > source_b
+		var distance_a := int(route_a.get("distance", 999999))
+		var distance_b := int(route_b.get("distance", 999999))
+		if distance_a != distance_b:
+			return distance_a < distance_b
+		var steps_a := int(route_a.get("steps", 999999))
+		var steps_b := int(route_b.get("steps", 999999))
+		if steps_a != steps_b:
+			return steps_a < steps_b
+		var rest_a := str(route_a.get("restaurant_id", ""))
+		var rest_b := str(route_b.get("restaurant_id", ""))
+		if rest_a != rest_b:
+			return rest_a < rest_b
+		return str(route_a.get("range_type", "")) < str(route_b.get("range_type", ""))
+	)
+
+static func _route_drink_prior(route: Dictionary, observation: ObservationState) -> float:
+	if route.is_empty():
+		return 0.0
+	var prior := float(maxi(0, int(route.get("source_count", 0)))) * 0.05
+	for product_id in _route_drink_source_types(route):
+		prior += _product_pipeline_prior(product_id, observation)
+	return prior
+
+static func _route_drink_source_types(route: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	var source_types_val = route.get("source_types", [])
+	if source_types_val is Array:
+		for product_val in Array(source_types_val):
+			var product_id := str(product_val)
+			if product_id.is_empty() or out.has(product_id):
+				continue
+			out.append(product_id)
+	var params_val = route.get("params", {})
+	if out.is_empty() and params_val is Dictionary:
+		var drink_type := str(Dictionary(params_val).get("drink_type", ""))
+		if not drink_type.is_empty():
+			out.append(drink_type)
 	out.sort()
 	return out
 
