@@ -58,11 +58,14 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			var target_value := StrategyIncomeAnalyzerClass.employee_value(observation, to_employee, profile, income_analysis)
 			var train_placement_route_value := _placement_route_value(observation, to_employee, income_analysis)
 			var train_route_readiness_adjustment := _placement_route_readiness_adjustment(observation, to_employee, income_analysis)
-			var train_bonus: float = float(target_value.get("score", 0.0)) * 1.2 + maxf(0.0, float(profile.employee_priority(to_employee)) - float(profile.employee_priority(from_employee))) + train_placement_route_value + train_route_readiness_adjustment
+			var train_capacity_upgrade_payload := _train_capacity_upgrade_value(observation, from_employee, to_employee, profile, income_analysis)
+			var train_capacity_upgrade_value := float(train_capacity_upgrade_payload.get("value", 0.0))
+			var train_bonus: float = float(target_value.get("score", 0.0)) * 1.2 + maxf(0.0, float(profile.employee_priority(to_employee)) - float(profile.employee_priority(from_employee))) + train_placement_route_value + train_route_readiness_adjustment + train_capacity_upgrade_value
 			features["train_value"] = train_bonus
 			features["train_target_income_value"] = float(target_value.get("score", 0.0))
 			features["train_placement_route_value"] = train_placement_route_value
 			features["train_route_readiness_adjustment"] = train_route_readiness_adjustment
+			_append_train_capacity_upgrade_features(features, train_capacity_upgrade_payload)
 			features["train_target_products"] = Array(target_value.get("target_products", [])).duplicate()
 			score += train_bonus
 		"set_company_structure_direct", "set_company_structure_report", "restructure_employee":
@@ -299,6 +302,90 @@ static func _placement_route_value(observation: ObservationState, employee_id: S
 					return 0.0
 				return 5.0 + pressure * 0.15
 	return 0.0
+
+static func _train_capacity_upgrade_value(observation: ObservationState, from_employee: String, to_employee: String, profile, income_analysis: Dictionary) -> Dictionary:
+	var out := {
+		"value": 0.0,
+		"products": [],
+		"target_units_by_product": {},
+		"source_units_by_product": {},
+		"delta_units_by_product": {},
+		"target_action_values": {},
+		"source_action_values": {},
+	}
+	if observation == null or from_employee.is_empty() or to_employee.is_empty() or profile == null:
+		return out
+	if not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(to_employee):
+		return out
+	var target_def_val = EmployeeRegistryClass.get_def(to_employee)
+	if not (target_def_val is EmployeeDef):
+		return out
+	var target_def: EmployeeDef = target_def_val
+	if not target_def.can_produce():
+		return out
+	var target_units := _expected_food_units(to_employee)
+	var source_units := _expected_food_units(from_employee)
+	var products: Array[String] = []
+	for product_val in target_def.get_production_food_options():
+		var product_id := str(product_val)
+		if not product_id.is_empty():
+			products.append(product_id)
+	products.sort()
+	var total := 0.0
+	var valued_products: Array[String] = []
+	var target_units_by_product := {}
+	var source_units_by_product := {}
+	var delta_units_by_product := {}
+	var target_action_values := {}
+	var source_action_values := {}
+	for product_id in products:
+		var source_can_produce := _employee_can_produce_product(from_employee, product_id)
+		var product_source_units := source_units if source_can_produce else 0
+		var delta_units := maxi(0, target_units - product_source_units)
+		if delta_units <= 0:
+			continue
+		var target_features := {}
+		var source_features := {}
+		var target_action_value := _product_supply_action_value(product_id, profile, income_analysis, target_features, target_units, observation)
+		var source_action_value := 0.0
+		if product_source_units > 0:
+			source_action_value = _product_supply_action_value(product_id, profile, income_analysis, source_features, product_source_units, observation)
+		var delta_value := maxf(0.0, target_action_value - source_action_value) * 0.75
+		if delta_value <= 0.0:
+			continue
+		total += delta_value
+		valued_products.append(product_id)
+		target_units_by_product[product_id] = target_units
+		source_units_by_product[product_id] = product_source_units
+		delta_units_by_product[product_id] = delta_units
+		target_action_values[product_id] = target_action_value
+		source_action_values[product_id] = source_action_value
+	out["value"] = total
+	out["products"] = valued_products
+	out["target_units_by_product"] = target_units_by_product
+	out["source_units_by_product"] = source_units_by_product
+	out["delta_units_by_product"] = delta_units_by_product
+	out["target_action_values"] = target_action_values
+	out["source_action_values"] = source_action_values
+	return out
+
+static func _append_train_capacity_upgrade_features(features: Dictionary, payload: Dictionary) -> void:
+	features["train_capacity_upgrade_value"] = float(payload.get("value", 0.0))
+	features["train_capacity_upgrade_products"] = Array(payload.get("products", [])).duplicate()
+	features["train_capacity_upgrade_target_units_by_product"] = Dictionary(payload.get("target_units_by_product", {})).duplicate()
+	features["train_capacity_upgrade_source_units_by_product"] = Dictionary(payload.get("source_units_by_product", {})).duplicate()
+	features["train_capacity_upgrade_delta_units_by_product"] = Dictionary(payload.get("delta_units_by_product", {})).duplicate()
+	features["train_capacity_upgrade_target_action_values"] = Dictionary(payload.get("target_action_values", {})).duplicate()
+	features["train_capacity_upgrade_source_action_values"] = Dictionary(payload.get("source_action_values", {})).duplicate()
+
+static func _employee_can_produce_product(employee_id: String, product_id: String) -> bool:
+	if employee_id.is_empty() or product_id.is_empty() or not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(employee_id):
+		return false
+	var def_val = EmployeeRegistryClass.get_def(employee_id)
+	if not (def_val is EmployeeDef):
+		return false
+	var def: EmployeeDef = def_val
+	return def.can_produce() and def.get_production_food_options().has(product_id)
 
 static func _house_route_economy_ready(observation: ObservationState, income_analysis: Dictionary) -> bool:
 	if not _stable_income_route_ready(observation, income_analysis):

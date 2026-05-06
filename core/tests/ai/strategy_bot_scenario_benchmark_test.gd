@@ -40,6 +40,11 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 		return _scenario_failure("income_route_trains_food_supply_for_serviceable_demand", training_food_supply)
 	names.append("income_route_trains_food_supply_for_serviceable_demand")
 
+	var training_food_capacity := _scenario_income_route_trains_food_capacity_for_serviceable_demand(seed_val)
+	if not training_food_capacity.ok:
+		return _scenario_failure("income_route_trains_food_capacity_for_serviceable_demand", training_food_capacity)
+	names.append("income_route_trains_food_capacity_for_serviceable_demand")
+
 	var trainable_supply := _scenario_trainable_supply_stays_structure_candidate(seed_val)
 	if not trainable_supply.ok:
 		return _scenario_failure("trainable_supply_stays_structure_candidate", trainable_supply)
@@ -365,6 +370,33 @@ static func _scenario_income_route_trains_food_supply_for_serviceable_demand(see
 		return Result.failure("training route should trigger first_train milestone, milestones=%s" % str(milestones))
 	return Result.success()
 
+static func _scenario_income_route_trains_food_capacity_for_serviceable_demand(seed_val: int) -> Result:
+	var engine_read := _build_training_capacity_upgrade_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var bot = StrategyBotClass.new()
+	var controller := BotControllerClass.new()
+	var step := controller.step(engine, 0, bot, TimeBudget.start(80))
+	if not step.ok:
+		return Result.failure("training capacity route step failed: %s" % step.error)
+	var trace: Dictionary = step.value
+	if str(trace.get("action_id", "")) != "train":
+		return Result.failure("expected StrategyBot to train advanced food capacity, got %s" % str(trace))
+	var params: Dictionary = Dictionary(trace.get("params", {}))
+	if str(params.get("from_employee", "")) != "burger_cook" or str(params.get("to_employee", "")) != "burger_chef":
+		return Result.failure("expected burger_cook -> burger_chef capacity upgrade, got %s" % str(trace))
+	var features: Dictionary = Dictionary(Dictionary(trace.get("explanation", {})).get("features", {}))
+	if float(features.get("train_capacity_upgrade_value", 0.0)) <= 0.0:
+		return Result.failure("capacity upgrade should expose positive train_capacity_upgrade_value: %s" % str(trace))
+	var state := engine.get_state()
+	var reserve: Array = Array(Dictionary(state.players[0]).get("reserve_employees", []))
+	if not reserve.has("burger_chef"):
+		return Result.failure("training capacity route should leave burger_chef in reserve after training, reserve=%s" % str(reserve))
+	if reserve.has("burger_cook"):
+		return Result.failure("training capacity route should consume burger_cook source card, reserve=%s" % str(reserve))
+	return Result.success()
+
 static func _build_training_income_route_engine(seed_val: int) -> Result:
 	var engine := GameEngine.new()
 	var init := engine.initialize(2, seed_val)
@@ -436,6 +468,52 @@ static func _build_training_income_route_engine(seed_val: int) -> Result:
 	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
 	state.current_player_index = 0
 	state.milestone_pool = ["first_train"]
+	_reset_round_state_for_ai_step(state)
+	var sync := _sync_initial_checkpoint_to_current_state(engine)
+	if not sync.ok:
+		return sync
+	return Result.success(engine)
+
+static func _build_training_capacity_upgrade_engine(seed_val: int) -> Result:
+	var engine_read := _build_training_income_route_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	var houses: Dictionary = Dictionary(state.map.get("houses", {})).duplicate(true)
+	var house: Dictionary = Dictionary(houses.get("house_route", {})).duplicate(true)
+	var demands: Array = []
+	for _i in range(9):
+		demands.append({"product": "burger"})
+	house["demands"] = demands
+	houses["house_route"] = house
+	state.map["houses"] = houses
+	RoadGraphCacheClass.invalidate_road_graph(state)
+	var take_active_cook := StateUpdaterClass.take_from_pool(state, "burger_cook", 1)
+	if not take_active_cook.ok:
+		return Result.failure("take active burger_cook failed: %s" % take_active_cook.error)
+	var add_active_cook := StateUpdaterClass.add_employee(state, 0, "burger_cook", false)
+	if not add_active_cook.ok:
+		return Result.failure("add active burger_cook failed: %s" % add_active_cook.error)
+	var take_reserve_cook := StateUpdaterClass.take_from_pool(state, "burger_cook", 1)
+	if not take_reserve_cook.ok:
+		return Result.failure("take reserve burger_cook failed: %s" % take_reserve_cook.error)
+	var add_reserve_cook := StateUpdaterClass.add_employee(state, 0, "burger_cook", true)
+	if not add_reserve_cook.ok:
+		return Result.failure("add reserve burger_cook failed: %s" % add_reserve_cook.error)
+	state.players[0]["company_structure"] = {
+		"ceo_slots": 3,
+		"structure": [
+			{"employee_id": "trainer", "reports": []},
+			{"employee_id": "campaign_manager", "reports": []},
+			{"employee_id": "burger_cook", "reports": []},
+		],
+	}
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
+	state.current_player_index = 0
 	_reset_round_state_for_ai_step(state)
 	var sync := _sync_initial_checkpoint_to_current_state(engine)
 	if not sync.ok:
