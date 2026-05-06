@@ -963,6 +963,7 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 
 - `StrategyProfile.configure_base_revenue()` 优先读取 `data/bots/base_revenue_v1.json`，解析失败时回落到内置默认值；`StrategyProfile.configure(id_or_path)` 可按 `data/bots/<id>.json` 或显式路径加载 profile，当前已有默认 `base_revenue_v1` 与偏扩张/供给的 `base_revenue_growth_v1`。
 - `StrategyBot`、`OSLABot`、`BeamBot` 都支持 `configure_profile()`。`tools/run_bot_selfplay.gd` / matrix runner 可用 `--profile=base_revenue_growth_v1` 将同一 profile 应用到 strategy/osla/beam bot，并把 profile 写入 `bot_config` / row metadata，避免调参结果混在同一个 summary bucket。
+- `StrategyScorer` 已给 `select_reserve_card` 增加显式评分，不再依赖候选顺序选择储备卡；评分按当前规则实现里的 `ceo_slots` 与 `cash` 建模，优先获得后续公司结构容量，其次考虑银行续局资源，并在 trace 中记录 `reserve_card_*` features。
 - `CandidateGenerator` 在有 `source_state` 时复用 `MarketingRangeCalculator` 过滤影响不到房屋的营销候选；营销商品候选按已有库存、公开需求和当前活跃员工可供应性排序，避免 `max_valid_per_action` 被字母序靠前但短期无法兑现的商品占满。
 - `CandidateGenerator` 的培训 prior 已覆盖更多 base 进阶路线：厨师长、饮料路线、管理路线、招聘/薪资折扣、价格、新店和部分特殊员工不会再因默认低 prior 在生成阶段被直接过滤；`campaign_manager -> brand_manager` 这类会牺牲当前收入能力的可选培训仍保持低 prior，避免阻塞营销员上岗。
 - `StrategyCandidateFilter` 作为后置防线，在 `macro.debug.affected_house_ids` 明确为空时丢弃营销候选，并把原因写入 trace。

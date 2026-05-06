@@ -30,6 +30,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var profile_load := _test_strategy_profile_loads_data_config()
 	if not profile_load.ok:
 		return profile_load
+	var reserve_card_score := _test_reserve_card_score_prefers_strategy_capacity(seed_val)
+	if not reserve_card_score.ok:
+		return reserve_card_score
 	var filter_case := _test_marketing_filter_discards_no_house_candidate()
 	if not filter_case.ok:
 		return filter_case
@@ -189,6 +192,51 @@ static func _test_strategy_profile_loads_data_config() -> Result:
 		return Result.failure("StrategyBot should configure named profile: %s" % bot_read.error)
 	if str(bot.profile.id) != "base_revenue_growth_v1":
 		return Result.failure("StrategyBot configured wrong profile: %s" % str(bot.profile.id))
+	return Result.success()
+
+static func _test_reserve_card_score_prefers_strategy_capacity(seed_val: int) -> Result:
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_reserve_card_observation()
+	var low_macro := MacroAction.create(
+		"reserve_card_0",
+		[Command.create("select_reserve_card", 0, {"selected_index": 0})],
+		0.0,
+		["setup", "reserve"],
+		{}
+	)
+	var high_macro := MacroAction.create(
+		"reserve_card_2",
+		[Command.create("select_reserve_card", 0, {"selected_index": 2})],
+		0.0,
+		["setup", "reserve"],
+		{}
+	)
+	var low_score: Dictionary = StrategyScorerClass.score_macro(observation, low_macro, profile)
+	var high_score: Dictionary = StrategyScorerClass.score_macro(observation, high_macro, profile)
+	if float(high_score.get("score", 0.0)) <= float(low_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should prefer reserve card with stronger CEO capacity: high=%s low=%s" % [str(high_score), str(low_score)])
+	var features: Dictionary = Dictionary(high_score.get("features", {}))
+	if int(features.get("reserve_card_ceo_slots", 0)) != 4:
+		return Result.failure("reserve card score should expose ceo slot capacity: %s" % str(features))
+	if int(features.get("reserve_card_cash", 0)) != 150:
+		return Result.failure("reserve card score should expose reserve cash: %s" % str(features))
+	if float(features.get("reserve_card_value", 0.0)) <= 0.0:
+		return Result.failure("reserve card score should expose positive value: %s" % str(features))
+	var bot = StrategyBotClass.new()
+	var context := AiDecisionContext.create(
+		0,
+		DefsClass.PHASE_SETUP,
+		DefsClass.SUB_PHASE_RESERVE_CARDS,
+		1,
+		seed_val,
+		[]
+	)
+	var decision := bot.choose_command(observation, context, ["select_reserve_card"], Callable(), null)
+	if decision == null or decision.is_failure():
+		return Result.failure("StrategyBot should choose a reserve card: %s" % (decision.failure_reason if decision != null else "null decision"))
+	if int(decision.command.params.get("selected_index", -1)) != 2:
+		return Result.failure("StrategyBot should choose the highest strategic reserve card, got decision=%s trace=%s" % [str(decision.command.to_dict()), str(decision.trace)])
 	return Result.success()
 
 static func _test_marketing_filter_discards_no_house_candidate() -> Result:
@@ -1029,6 +1077,29 @@ static func _synthetic_marketing_observation() -> ObservationState:
 				"anchor_pos": Vector2i(3, 2),
 			},
 		},
+	}
+	return observation
+
+static func _synthetic_reserve_card_observation() -> ObservationState:
+	var observation := ObservationState.new()
+	observation.viewer_player_id = 0
+	observation.round_number = 1
+	observation.phase = DefsClass.PHASE_SETUP
+	observation.sub_phase = DefsClass.SUB_PHASE_RESERVE_CARDS
+	observation.own_player = {
+		"id": 0,
+		"cash": 20,
+		"employees": [],
+		"reserve_employees": [],
+		"busy_marketers": [],
+		"restaurants": [],
+		"inventory": {},
+		"reserve_cards": [
+			{"type": 5, "cash": 50, "ceo_slots": 2},
+			{"type": 10, "cash": 100, "ceo_slots": 3},
+			{"type": 20, "cash": 150, "ceo_slots": 4},
+		],
+		"reserve_card_selected": -1,
 	}
 	return observation
 

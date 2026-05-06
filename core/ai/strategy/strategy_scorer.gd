@@ -87,6 +87,10 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			var price_payload := _price_action_value(observation, command, income_analysis, options.get("source_state", null))
 			_append_price_features(features, price_payload)
 			score += float(price_payload.get("value", 0.0))
+		"select_reserve_card":
+			var reserve_payload := _reserve_card_value(observation, command.params)
+			_append_reserve_card_features(features, reserve_payload)
+			score += float(reserve_payload.get("value", 0.0))
 		"place_house":
 			var house_payload := _house_placement_value(observation, command.params)
 			_append_house_placement_features(features, house_payload)
@@ -570,6 +574,53 @@ static func _append_price_features(features: Dictionary, price_payload: Dictiona
 	features["price_revenue_delta_estimate"] = int(price_payload.get("revenue_delta_estimate", 0))
 	features["price_competition_delta_estimate"] = int(price_payload.get("competition_delta_estimate", 0))
 	features["price_action_value"] = float(price_payload.get("value", 0.0))
+
+static func _reserve_card_value(observation: ObservationState, params: Dictionary) -> Dictionary:
+	var selected_index := _read_int(params.get("selected_index", -1), -1)
+	var cards_val = observation.own_player.get("reserve_cards", []) if observation != null else []
+	if not (cards_val is Array):
+		return {
+			"value": -100.0,
+			"selected_index": selected_index,
+			"valid": false,
+		}
+	var cards: Array = cards_val
+	if selected_index < 0 or selected_index >= cards.size():
+		return {
+			"value": -100.0,
+			"selected_index": selected_index,
+			"valid": false,
+		}
+	var card_val = cards[selected_index]
+	if not (card_val is Dictionary):
+		return {
+			"value": -100.0,
+			"selected_index": selected_index,
+			"valid": false,
+		}
+	var card: Dictionary = card_val
+	var cash := _read_non_negative_int(card.get("cash", 0), 0)
+	var ceo_slots := _read_non_negative_int(card.get("ceo_slots", 0), 0)
+	var card_type := _read_non_negative_int(card.get("type", 0), 0)
+	var value := float(ceo_slots) * 8.0 + float(cash) * 0.05
+	if ceo_slots <= 0:
+		value -= 50.0
+	return {
+		"value": value,
+		"selected_index": selected_index,
+		"valid": true,
+		"type": card_type,
+		"cash": cash,
+		"ceo_slots": ceo_slots,
+	}
+
+static func _append_reserve_card_features(features: Dictionary, reserve_payload: Dictionary) -> void:
+	features["reserve_card_value"] = float(reserve_payload.get("value", 0.0))
+	features["reserve_card_selected_index"] = int(reserve_payload.get("selected_index", -1))
+	features["reserve_card_valid"] = bool(reserve_payload.get("valid", false))
+	features["reserve_card_type"] = int(reserve_payload.get("type", 0))
+	features["reserve_card_cash"] = int(reserve_payload.get("cash", 0))
+	features["reserve_card_ceo_slots"] = int(reserve_payload.get("ceo_slots", 0))
 
 static func _current_unit_price_payload(observation: ObservationState, source_state, player_id: int) -> Dictionary:
 	if source_state is GameState:
