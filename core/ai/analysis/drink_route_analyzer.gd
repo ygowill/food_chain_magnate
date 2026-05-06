@@ -3,6 +3,8 @@ extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const DrinksProcurementClass = preload("res://core/rules/drinks_procurement.gd")
+const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
+const MilestoneRegistryClass = preload("res://core/data/milestone_registry.gd")
 const RoadGraphClass = preload("res://core/map/road_graph.gd")
 
 const DEFAULT_MAX_CANDIDATES := 4
@@ -29,11 +31,15 @@ static func generate_routes(
 		return Result.success([])
 
 	var range_type := str(def.range_type)
-	var range_value := int(def.range_value)
-	if range_value <= 0:
+	var base_range_value := int(def.range_value)
+	if base_range_value <= 0:
 		return Result.success([])
 	if range_type != "air" and range_type != "road":
 		return Result.success([])
+	var range_read := _effective_range_value(observation, employee_id, base_range_value)
+	if not range_read.ok:
+		return range_read
+	var range_value := int(range_read.value)
 
 	var restaurants_val = observation.map_public.get("restaurants", null)
 	if not (restaurants_val is Dictionary):
@@ -169,6 +175,126 @@ static func _build_candidate(
 			"selected_sources": DrinksProcurementClass.serialize_route(selected_sources),
 		},
 	}
+
+static func _effective_range_value(observation: ObservationState, employee_id: String, base_range_value: int) -> Result:
+	var own_read := _own_milestones(observation)
+	if not own_read.ok:
+		return own_read
+	var own_ids: Array[String] = own_read.value
+
+	var owned_bonus_read := _distance_range_bonus_from_milestones(own_ids, employee_id, "own_player.milestones")
+	if not owned_bonus_read.ok:
+		return owned_bonus_read
+	var same_turn_bonus_read := _same_turn_use_employee_distance_bonus(observation, employee_id, own_ids)
+	if not same_turn_bonus_read.ok:
+		return same_turn_bonus_read
+	return Result.success(base_range_value + int(owned_bonus_read.value) + int(same_turn_bonus_read.value))
+
+static func _same_turn_use_employee_distance_bonus(
+	observation: ObservationState,
+	employee_id: String,
+	own_ids: Array[String]
+) -> Result:
+	if observation == null or employee_id.is_empty():
+		return Result.success(0)
+	var public_read := _public_milestones(observation)
+	if not public_read.ok:
+		return public_read
+	var public_ids: Array[String] = public_read.value
+	if public_ids.is_empty():
+		return Result.success(0)
+	if not MilestoneRegistryClass.is_loaded():
+		return Result.failure("DrinkRouteAnalyzer: MilestoneRegistry 未初始化")
+
+	var matching_ids: Array[String] = []
+	var context := {
+		"player_id": int(observation.viewer_player_id),
+		"id": employee_id,
+	}
+	for milestone_id in public_ids:
+		if own_ids.has(milestone_id):
+			continue
+		var def_val = MilestoneRegistryClass.get_def(milestone_id)
+		if def_val == null:
+			return Result.failure("DrinkRouteAnalyzer: 未知里程碑定义: %s" % milestone_id)
+		if not (def_val is MilestoneDef):
+			return Result.failure("DrinkRouteAnalyzer: 里程碑定义类型错误（期望 MilestoneDef）: %s" % milestone_id)
+		var def: MilestoneDef = def_val
+		if def.matches("UseEmployee", context):
+			matching_ids.append(milestone_id)
+	return _distance_range_bonus_from_milestones(matching_ids, employee_id, "milestone_pool_public")
+
+static func _distance_range_bonus_from_milestones(
+	milestone_ids: Array[String],
+	employee_id: String,
+	milestones_path: String
+) -> Result:
+	if employee_id.is_empty() or milestone_ids.is_empty():
+		return Result.success(0)
+	var entries_read := MilestoneEffectQueriesClass.collect_effect_entries(
+		milestone_ids,
+		"distance_plus_one",
+		"DrinkRouteAnalyzer: ",
+		milestones_path
+	)
+	if not entries_read.ok:
+		return entries_read
+	var bonus := 0
+	var entries: Array = entries_read.value
+	for entry_val in entries:
+		var entry: Dictionary = entry_val
+		var mid: String = str(entry.get("milestone_id", ""))
+		var e_i: int = int(entry.get("effect_index", -1))
+		var eff_val = entry.get("effect", null)
+		if not (eff_val is Dictionary):
+			return Result.failure("DrinkRouteAnalyzer: %s.effects[%d] 类型错误（期望 Dictionary）" % [mid, e_i])
+		var eff: Dictionary = eff_val
+		if not eff.has("targets") or not (eff["targets"] is Array):
+			return Result.failure("DrinkRouteAnalyzer: %s.effects[%d].targets 缺失或类型错误（期望 Array）" % [mid, e_i])
+		var targets: Array = eff["targets"]
+		for j in range(targets.size()):
+			var target_val = targets[j]
+			if not (target_val is String):
+				return Result.failure("DrinkRouteAnalyzer: %s.effects[%d].targets[%d] 类型错误（期望 String）" % [mid, e_i, j])
+			var target := str(target_val)
+			if target.is_empty():
+				return Result.failure("DrinkRouteAnalyzer: %s.effects[%d].targets[%d] 不能为空" % [mid, e_i, j])
+			if target == employee_id:
+				bonus += 1
+				break
+	return Result.success(bonus)
+
+static func _own_milestones(observation: ObservationState) -> Result:
+	if observation == null:
+		return Result.success([])
+	return _read_string_array(observation.own_player.get("milestones", []), "own_player.milestones")
+
+static func _public_milestones(observation: ObservationState) -> Result:
+	if observation == null:
+		return Result.success([])
+	return _read_string_array(observation.milestone_pool_public, "milestone_pool_public")
+
+static func _read_string_array(value, path: String) -> Result:
+	if value == null:
+		return Result.success([])
+	if not (value is Array):
+		return Result.failure("DrinkRouteAnalyzer: %s 类型错误（期望 Array）" % path)
+	var out: Array[String] = []
+	var seen := {}
+	var arr: Array = value
+	for i in range(arr.size()):
+		var item_val = arr[i]
+		if not (item_val is String):
+			return Result.failure("DrinkRouteAnalyzer: %s[%d] 类型错误（期望 String）" % [path, i])
+		var item := str(item_val)
+		if item.is_empty():
+			return Result.failure("DrinkRouteAnalyzer: %s[%d] 不能为空" % [path, i])
+		if seen.has(item):
+			continue
+		seen[item] = true
+		out.append(item)
+	out.sort()
+	return Result.success(out)
 
 static func _build_air_route(map_public: Dictionary, from_pos: Vector2i, to_pos: Vector2i) -> Array[Vector2i]:
 	var route: Array[Vector2i] = []

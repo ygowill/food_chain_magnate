@@ -70,6 +70,11 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 		return _scenario_failure("route_drink_demand_produces_and_sells", route_drink_sale)
 	names.append("route_drink_demand_produces_and_sells")
 
+	var first_cart_range := _scenario_first_cart_operator_range_bonus_routes_drinks(seed_val)
+	if not first_cart_range.ok:
+		return _scenario_failure("first_cart_operator_range_bonus_routes_drinks", first_cart_range)
+	names.append("first_cart_operator_range_bonus_routes_drinks")
+
 	var first_recruit := _scenario_income_route_first_recruit_gets_food_supply(seed_val)
 	if not first_recruit.ok:
 		return _scenario_failure("income_route_first_recruit_gets_food_supply", first_recruit)
@@ -661,6 +666,47 @@ static func _scenario_route_drink_demand_produces_and_sells(seed_val: int) -> Re
 		return Result.failure("route drink Dinnertime should clear soda demand")
 	return Result.success()
 
+static func _scenario_first_cart_operator_range_bonus_routes_drinks(seed_val: int) -> Result:
+	var engine_read := _build_first_cart_operator_range_bonus_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var bot = StrategyBotClass.new()
+	var controller := BotControllerClass.new()
+	var step := controller.step(engine, 0, bot, TimeBudget.start(80))
+	if not step.ok:
+		return Result.failure("first cart operator route step failed: %s" % step.error)
+	var trace: Dictionary = step.value
+	if str(trace.get("action_id", "")) != "procure_drinks":
+		return Result.failure("expected StrategyBot to procure drinks with first Cart Operator range bonus, got %s" % str(trace))
+	var params: Dictionary = Dictionary(trace.get("params", {}))
+	if str(params.get("employee_type", "")) != "cart_operator":
+		return Result.failure("expected first Cart Operator route employee cart_operator, got %s" % str(trace))
+	var selected_sources: Array = Array(params.get("selected_sources", []))
+	if not selected_sources.has([19, 0]):
+		return Result.failure("expected first Cart Operator route source [19, 0] to be selected, got %s" % str(trace))
+	var features: Dictionary = Dictionary(Dictionary(trace.get("explanation", {})).get("features", {}))
+	var expected_by_product: Dictionary = Dictionary(features.get("drink_route_expected_units_by_product", {}))
+	if int(expected_by_product.get("soda", 0)) != 2:
+		return Result.failure("expected first Cart Operator scorer to estimate 2 soda, features=%s trace=%s" % [str(features), str(trace)])
+	var state := engine.get_state()
+	var inventory: Dictionary = Dictionary(Dictionary(state.players[0]).get("inventory", {}))
+	if int(inventory.get("soda", 0)) != 2:
+		return Result.failure("first Cart Operator route command should procure 2 soda, inventory=%s" % str(inventory))
+	var milestones: Array = Array(Dictionary(state.players[0]).get("milestones", []))
+	if not milestones.has("first_cart_operator"):
+		return Result.failure("first Cart Operator route should trigger first_cart_operator, milestones=%s" % str(milestones))
+	var cash_before_dinner := int(Dictionary(state.players[0]).get("cash", 0))
+	var dinner := DinnertimeSettlementTestClass._advance_to_dinnertime(engine)
+	if not dinner.ok:
+		return dinner
+	state = engine.get_state()
+	if int(Dictionary(state.players[0]).get("cash", 0)) <= cash_before_dinner:
+		return Result.failure("first Cart Operator range route should sell at Dinnertime, cash before=%d after=%d" % [cash_before_dinner, int(Dictionary(state.players[0]).get("cash", 0))])
+	if _state_product_demand_count(state, "soda") != 0:
+		return Result.failure("first Cart Operator Dinnertime should clear soda demand")
+	return Result.success()
+
 static func _scenario_income_route_trains_drink_capacity_for_serviceable_demand(seed_val: int) -> Result:
 	var engine_read := _build_training_drink_capacity_upgrade_engine(seed_val)
 	if not engine_read.ok:
@@ -749,6 +795,64 @@ static func _build_route_drink_sale_engine(seed_val: int) -> Result:
 			{},
 		],
 	}
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
+	state.current_player_index = 0
+	_reset_round_state_for_ai_step(state)
+	var sync := _sync_initial_checkpoint_to_current_state(engine)
+	if not sync.ok:
+		return sync
+	return Result.success(engine)
+
+static func _build_first_cart_operator_range_bonus_engine(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	_force_route_turn_order(state, 2)
+	var map_result := _build_first_cart_operator_range_bonus_map(0)
+	if not map_result.ok:
+		return map_result
+	state.map = map_result.value
+	RoadGraphCacheClass.invalidate_road_graph(state)
+	state.players[0]["restaurants"] = ["rest_0"]
+	state.players[1]["restaurants"] = []
+	var seed_cash := StateUpdaterClass.player_receive_from_bank(state, 0, 20)
+	if not seed_cash.ok:
+		return Result.failure("seed first cart route drink cash failed: %s" % seed_cash.error)
+	state.players[0]["inventory"] = {
+		"burger": 0,
+		"pizza": 0,
+		"soda": 0,
+		"lemonade": 0,
+		"beer": 0,
+	}
+	state.players[0]["employees"] = ["ceo"]
+	state.players[0]["reserve_employees"] = []
+	state.players[0]["busy_marketers"] = []
+	state.players[0]["employees_staff_ids"] = []
+	state.players[0]["reserve_staff_ids"] = []
+	state.players[0]["busy_staff_ids"] = []
+	state.players[0]["staff_registry"] = {}
+	state.players[0]["milestones"] = []
+	var take_cart := StateUpdaterClass.take_from_pool(state, "cart_operator", 1)
+	if not take_cart.ok:
+		return Result.failure("take cart_operator failed: %s" % take_cart.error)
+	var add_cart := StateUpdaterClass.add_employee(state, 0, "cart_operator", false)
+	if not add_cart.ok:
+		return Result.failure("add cart_operator failed: %s" % add_cart.error)
+	state.players[0]["company_structure"] = {
+		"ceo_slots": 3,
+		"structure": [
+			{"employee_id": "cart_operator", "reports": []},
+			{},
+			{},
+		],
+	}
+	state.milestone_pool = ["first_cart_operator"]
 	state.phase = DefsClass.PHASE_WORKING
 	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
 	state.current_player_index = 0
@@ -904,6 +1008,66 @@ static func _build_route_marketing_sale_map(owner: int) -> Result:
 			},
 		},
 		"drink_sources": [],
+		"next_house_number": 2,
+		"next_restaurant_id": 1,
+		"boundary_index": {},
+		"marketing_placements": {},
+	})
+
+static func _build_first_cart_operator_range_bonus_map(owner: int) -> Result:
+	var grid_size := Vector2i(20, 5)
+	var cells := _build_route_empty_cells(grid_size)
+
+	for x in range(grid_size.x):
+		var dirs: Array = []
+		if x > 0:
+			dirs.append("W")
+		if x < grid_size.x - 1:
+			dirs.append("E")
+		_set_route_road(cells, Vector2i(x, 1), dirs)
+
+	var house_cells: Array[Vector2i] = [
+		Vector2i(2, 2), Vector2i(3, 2),
+		Vector2i(2, 3), Vector2i(3, 3),
+	]
+	var rest_cells: Array[Vector2i] = [
+		Vector2i(0, 0),
+	]
+	_set_route_house(cells, "house_route", 1, house_cells)
+	_set_route_restaurant(cells, "rest_0", owner, rest_cells)
+
+	return Result.success({
+		"grid_size": grid_size,
+		"tile_grid_size": Vector2i(4, 1),
+		"cells": cells,
+		"houses": {
+			"house_route": {
+				"house_id": "house_route",
+				"house_number": 1,
+				"anchor_pos": Vector2i(2, 2),
+				"cells": house_cells,
+				"has_garden": false,
+				"is_apartment": false,
+				"printed": false,
+				"owner": -1,
+				"demands": [
+					{"product": "soda"},
+					{"product": "soda"},
+				],
+			},
+		},
+		"restaurants": {
+			"rest_0": {
+				"restaurant_id": "rest_0",
+				"owner": owner,
+				"anchor_pos": Vector2i(0, 0),
+				"entrance_pos": Vector2i(0, 0),
+				"cells": rest_cells,
+			},
+		},
+		"drink_sources": [
+			{"world_pos": Vector2i(19, 0), "type": "soda", "tile_id": "C"},
+		],
 		"next_house_number": 2,
 		"next_restaurant_id": 1,
 		"boundary_index": {},
