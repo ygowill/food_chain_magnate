@@ -57,6 +57,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var house_route_train := _test_train_score_values_house_placement_route(seed_val)
 	if not house_route_train.ok:
 		return house_route_train
+	var house_route_structure := _test_structure_score_values_reserve_new_business_developer(seed_val)
+	if not house_route_structure.ok:
+		return house_route_structure
 	var fridge_keep := _test_fridge_keep_prioritizes_serviceable_demand(seed_val)
 	if not fridge_keep.ok:
 		return fridge_keep
@@ -84,6 +87,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var restaurant_road_graph := _test_restaurant_placement_uses_source_road_graph(seed_val)
 	if not restaurant_road_graph.ok:
 		return restaurant_road_graph
+	var house_placement := _test_house_placement_prefers_near_owned_restaurant(seed_val)
+	if not house_placement.ok:
+		return house_placement
 	var payday_fire := _test_payday_fire_prefers_low_income_employee(seed_val)
 	if not payday_fire.ok:
 		return payday_fire
@@ -544,6 +550,41 @@ static func _test_train_score_values_house_placement_route(seed_val: int) -> Res
 		return Result.failure("non-placement training should not expose placement route value: %s" % str(jvp_features))
 	return Result.success()
 
+static func _test_structure_score_values_reserve_new_business_developer(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_house_growth_observation()
+	observation.phase = DefsClass.PHASE_RESTRUCTURING
+	observation.sub_phase = ""
+	observation.own_player["employees"] = ["trainer", "kitchen_trainee"]
+	observation.own_player["reserve_employees"] = ["new_business_developer"]
+	var nbd_macro := MacroAction.create(
+		"structure_new_business_developer",
+		[Command.create("set_company_structure_direct", 0, {"employee_id": "new_business_developer"})],
+		0.0,
+		["restructuring"],
+		{}
+	)
+	var kitchen_macro := MacroAction.create(
+		"structure_kitchen_trainee",
+		[Command.create("set_company_structure_direct", 0, {"employee_id": "kitchen_trainee"})],
+		0.0,
+		["restructuring"],
+		{}
+	)
+	var nbd_score: Dictionary = StrategyScorerClass.score_macro(observation, nbd_macro, profile)
+	var kitchen_score: Dictionary = StrategyScorerClass.score_macro(observation, kitchen_macro, profile)
+	if float(nbd_score.get("score", 0.0)) <= float(kitchen_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should activate reserve NBD when house growth is ready: nbd=%s kitchen=%s" % [str(nbd_score), str(kitchen_score)])
+	var features: Dictionary = Dictionary(nbd_score.get("features", {}))
+	if float(features.get("structure_placement_route_value", 0.0)) <= 0.0:
+		return Result.failure("reserve NBD structure should expose positive structure_placement_route_value: %s" % str(features))
+	return Result.success()
+
 static func _test_fridge_keep_prioritizes_serviceable_demand(seed_val: int) -> Result:
 	var engine := GameEngine.new()
 	var init := engine.initialize(2, seed_val)
@@ -869,6 +910,41 @@ static func _test_restaurant_placement_uses_source_road_graph(seed_val: int) -> 
 		return Result.failure("StrategyScorer should use source road graph for move_restaurant: %s" % str(move_features))
 	if int(move_features.get("restaurant_nearby_demand", 0)) <= 0:
 		return Result.failure("road graph restaurant move should expose nearby demand: %s" % str(move_features))
+	return Result.success()
+
+static func _test_house_placement_prefers_near_owned_restaurant(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_income_observation()
+	observation.phase = DefsClass.PHASE_WORKING
+	observation.sub_phase = DefsClass.SUB_PHASE_PLACE_HOUSES
+	var near_macro := MacroAction.create(
+		"place_house_near_restaurant",
+		[Command.create("place_house", 0, {"position": [4, 3], "rotation": 0, "house_number": 2})],
+		0.0,
+		["working", "place_house"],
+		{}
+	)
+	var far_macro := MacroAction.create(
+		"place_house_far_restaurant",
+		[Command.create("place_house", 0, {"position": [10, 10], "rotation": 0, "house_number": 2})],
+		0.0,
+		["working", "place_house"],
+		{}
+	)
+	var near_score: Dictionary = StrategyScorerClass.score_macro(observation, near_macro, profile)
+	var far_score: Dictionary = StrategyScorerClass.score_macro(observation, far_macro, profile)
+	if float(near_score.get("score", 0.0)) <= float(far_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should prefer placing houses near owned restaurants: near=%s far=%s" % [str(near_score), str(far_score)])
+	var features: Dictionary = Dictionary(near_score.get("features", {}))
+	if int(features.get("house_nearest_restaurant_distance", -1)) > 2:
+		return Result.failure("near house placement should expose close restaurant distance: %s" % str(features))
+	if float(features.get("house_placement_value", 0.0)) <= 0.0:
+		return Result.failure("near house placement should expose positive house_placement_value: %s" % str(features))
 	return Result.success()
 
 static func _test_payday_fire_prefers_low_income_employee(seed_val: int) -> Result:

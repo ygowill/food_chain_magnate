@@ -87,6 +87,10 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			var price_payload := _price_action_value(observation, command, income_analysis, options.get("source_state", null))
 			_append_price_features(features, price_payload)
 			score += float(price_payload.get("value", 0.0))
+		"place_house":
+			var house_payload := _house_placement_value(observation, command.params)
+			_append_house_placement_features(features, house_payload)
+			score += float(house_payload.get("value", 0.0))
 		"place_restaurant", "move_restaurant":
 			var placement_payload := StrategyBoardAnalyzerClass.restaurant_placement_value(
 				observation,
@@ -160,7 +164,8 @@ static func _placement_route_value(observation: ObservationState, employee_id: S
 	if not _has_house_growth_space(observation):
 		return 0.0
 	if _has_owned_placement_employee(observation):
-		return 0.0
+		if employee_id != "new_business_developer" or _has_active_placement_employee(observation):
+			return 0.0
 	var pressure := _house_growth_pressure(observation, income_analysis)
 	var economy_ready := _house_route_economy_ready(observation, income_analysis)
 	match employee_id:
@@ -237,15 +242,26 @@ static func _has_owned_placement_employee(observation: ObservationState) -> bool
 	if observation == null or not EmployeeRegistryClass.is_loaded():
 		return false
 	for employee_id in _owned_employee_ids(observation.own_player):
-		if employee_id.is_empty() or not EmployeeRegistryClass.has(employee_id):
-			continue
-		var def_val = EmployeeRegistryClass.get_def(employee_id)
-		if not (def_val is EmployeeDef):
-			continue
-		var def: EmployeeDef = def_val
-		if def.has_tag("place_house_or_garden") or def.has_usage_tag("use:place_house") or def.has_usage_tag("use:add_garden"):
+		if _employee_is_placement_employee(employee_id):
 			return true
 	return false
+
+static func _has_active_placement_employee(observation: ObservationState) -> bool:
+	if observation == null or not EmployeeRegistryClass.is_loaded():
+		return false
+	for employee_id in _active_employee_ids(observation.own_player):
+		if _employee_is_placement_employee(employee_id):
+			return true
+	return false
+
+static func _employee_is_placement_employee(employee_id: String) -> bool:
+	if employee_id.is_empty() or not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(employee_id):
+		return false
+	var def_val = EmployeeRegistryClass.get_def(employee_id)
+	if not (def_val is EmployeeDef):
+		return false
+	var def: EmployeeDef = def_val
+	return def.has_tag("place_house_or_garden") or def.has_usage_tag("use:place_house") or def.has_usage_tag("use:add_garden")
 
 static func _recruit_roster_adjustment(observation: ObservationState, employee_id: String, income_analysis: Dictionary) -> Dictionary:
 	var owned_count := _count_owned_employee(observation.own_player if observation != null else {}, employee_id)
@@ -606,6 +622,34 @@ static func _append_restaurant_placement_features(features: Dictionary, placemen
 	features["restaurant_placement_value"] = float(placement_payload.get("placement_value", 0.0))
 	features["restaurant_distance_source"] = str(placement_payload.get("distance_source", "anchor"))
 
+static func _house_placement_value(observation: ObservationState, params: Dictionary) -> Dictionary:
+	var anchor := _read_vector2i(params.get("position", Vector2i.ZERO))
+	var restaurant_distance := _nearest_distance_to_owned_restaurant_anchor(observation, anchor)
+	var existing_house_distance := _nearest_distance_to_house_anchor(observation, anchor)
+	var value := 0.0
+	if restaurant_distance >= 0:
+		value += maxf(0.0, 10.0 - float(restaurant_distance)) * 4.0
+		if restaurant_distance <= 4:
+			value += 12.0
+		elif restaurant_distance > 8:
+			value -= 10.0
+	else:
+		value -= 12.0
+	if existing_house_distance >= 0:
+		value += maxf(0.0, 6.0 - float(existing_house_distance)) * 2.0
+	return {
+		"value": value,
+		"anchor": [anchor.x, anchor.y],
+		"nearest_restaurant_distance": restaurant_distance,
+		"nearest_existing_house_distance": existing_house_distance,
+	}
+
+static func _append_house_placement_features(features: Dictionary, house_payload: Dictionary) -> void:
+	features["house_candidate_anchor"] = Array(house_payload.get("anchor", [])).duplicate()
+	features["house_nearest_restaurant_distance"] = int(house_payload.get("nearest_restaurant_distance", -1))
+	features["house_nearest_existing_house_distance"] = int(house_payload.get("nearest_existing_house_distance", -1))
+	features["house_placement_value"] = float(house_payload.get("value", 0.0))
+
 static func _fire_value(observation: ObservationState, employee_id: String, profile, income_analysis: Dictionary) -> Dictionary:
 	var payday := _payday_cash_snapshot(observation)
 	var employee_payload := StrategyIncomeAnalyzerClass.employee_value(observation, employee_id, profile, income_analysis)
@@ -941,6 +985,36 @@ static func _own_milestones(observation: ObservationState) -> Array[String]:
 	if observation == null:
 		return []
 	return _sorted_unique_strings(observation.own_player.get("milestones", []))
+
+static func _nearest_distance_to_owned_restaurant_anchor(observation: ObservationState, pos: Vector2i) -> int:
+	if observation == null:
+		return -1
+	var restaurants_val = observation.map_public.get("restaurants", {})
+	if not (restaurants_val is Dictionary):
+		return -1
+	var restaurants: Dictionary = restaurants_val
+	var best := 2147483647
+	for restaurant_id in _sorted_unique_strings(observation.own_player.get("restaurants", [])):
+		var rest_val = restaurants.get(restaurant_id, null)
+		if not (rest_val is Dictionary):
+			continue
+		var rest_anchor := _read_vector2i(Dictionary(rest_val).get("anchor_pos", Vector2i.ZERO))
+		best = mini(best, absi(pos.x - rest_anchor.x) + absi(pos.y - rest_anchor.y))
+	return best if best < 2147483647 else -1
+
+static func _nearest_distance_to_house_anchor(observation: ObservationState, pos: Vector2i) -> int:
+	if observation == null:
+		return -1
+	var houses_val = observation.map_public.get("houses", {})
+	if not (houses_val is Dictionary):
+		return -1
+	var best := 2147483647
+	for house_val in Dictionary(houses_val).values():
+		if not (house_val is Dictionary):
+			continue
+		var house_anchor := _read_vector2i(Dictionary(house_val).get("anchor_pos", Vector2i.ZERO))
+		best = mini(best, absi(pos.x - house_anchor.x) + absi(pos.y - house_anchor.y))
+	return best if best < 2147483647 else -1
 
 static func _min_house_distance_to_owned_restaurant(observation: ObservationState, house_id: String) -> int:
 	if observation == null or house_id.is_empty():

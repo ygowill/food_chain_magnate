@@ -519,27 +519,27 @@ static func _generate_house_placements(
 		return
 	var house_number := int(house_numbers[0])
 	var rotations := [0, 90, 180, 270]
-	for y in range(grid_size.y):
-		for x in range(grid_size.x):
-			for rotation in rotations:
-				if _count_action(out, "place_house") >= max_valid_per_action:
-					return
-				_append_valid_command(
-					out,
-					discarded,
-					context,
-					"place_house",
-					{
-						"position": [x, y],
-						"rotation": int(rotation),
-						"house_number": house_number,
-					},
-					validate_command,
-					"place_house_%d_%d_%d_%d" % [house_number, x, y, int(rotation)],
-					["working", "place_house"],
-					0.0,
-					max_valid_per_action
-				)
+	var positions := _house_placement_positions(observation, grid_size)
+	for pos in positions:
+		for rotation in rotations:
+			if _count_action(out, "place_house") >= max_valid_per_action:
+				return
+			_append_valid_command(
+				out,
+				discarded,
+				context,
+				"place_house",
+				{
+					"position": [pos.x, pos.y],
+					"rotation": int(rotation),
+					"house_number": house_number,
+				},
+				validate_command,
+				"place_house_%d_%d_%d_%d" % [house_number, pos.x, pos.y, int(rotation)],
+				["working", "place_house"],
+				_house_placement_prior(observation, pos),
+				max_valid_per_action
+			)
 
 static func _generate_garden_additions(
 	out: Array[MacroAction],
@@ -1243,6 +1243,71 @@ static func _marketing_candidate_positions(observation: ObservationState, grid_s
 		for x in range(grid_size.x):
 			_append_marketing_position(out, seen, Vector2i(x, y), grid_size)
 	return out
+
+static func _house_placement_positions(observation: ObservationState, grid_size: Vector2i) -> Array[Vector2i]:
+	var seen := {}
+	var out: Array[Vector2i] = []
+	for anchor in _owned_restaurant_anchors(observation):
+		for radius in range(1, maxi(grid_size.x, grid_size.y) + 1):
+			for dy in range(-radius, radius + 1):
+				for dx in range(-radius, radius + 1):
+					if maxi(absi(dx), absi(dy)) != radius:
+						continue
+					_append_house_placement_position(out, seen, anchor + Vector2i(dx, dy), grid_size)
+	var houses_val = observation.map_public.get("houses", {})
+	if houses_val is Dictionary:
+		var houses: Dictionary = houses_val
+		for house_id in _sorted_house_ids_by_restaurant_distance(observation, houses):
+			var house_val = houses.get(house_id, null)
+			if not (house_val is Dictionary):
+				continue
+			for cell in _house_candidate_cells(house_val):
+				for radius2 in range(1, 5):
+					for dy2 in range(-radius2, radius2 + 1):
+						for dx2 in range(-radius2, radius2 + 1):
+							if maxi(absi(dx2), absi(dy2)) != radius2:
+								continue
+							_append_house_placement_position(out, seen, cell + Vector2i(dx2, dy2), grid_size)
+	for y in range(grid_size.y):
+		for x in range(grid_size.x):
+			_append_house_placement_position(out, seen, Vector2i(x, y), grid_size)
+	return out
+
+static func _append_house_placement_position(out: Array[Vector2i], seen: Dictionary, pos: Vector2i, grid_size: Vector2i) -> void:
+	if pos.x < 0 or pos.y < 0 or pos.x >= grid_size.x or pos.y >= grid_size.y:
+		return
+	var key := "%d,%d" % [pos.x, pos.y]
+	if seen.has(key):
+		return
+	seen[key] = true
+	out.append(pos)
+
+static func _house_placement_prior(observation: ObservationState, pos: Vector2i) -> float:
+	var value := 0.0
+	var restaurant_distance := _position_distance_to_anchors(pos, _owned_restaurant_anchors(observation))
+	if restaurant_distance >= 0:
+		value += maxf(0.0, 8.0 - float(restaurant_distance)) * 0.7
+		if restaurant_distance <= 4:
+			value += 1.5
+	var houses_val = observation.map_public.get("houses", {})
+	if houses_val is Dictionary:
+		var house_cells: Array[Vector2i] = []
+		for house_val in Dictionary(houses_val).values():
+			for cell in _house_candidate_cells(house_val):
+				if not house_cells.has(cell):
+					house_cells.append(cell)
+		var house_distance := _position_distance_to_anchors(pos, house_cells)
+		if house_distance >= 0:
+			value += maxf(0.0, 6.0 - float(house_distance)) * 0.25
+	return value
+
+static func _position_distance_to_anchors(pos: Vector2i, anchors: Array[Vector2i]) -> int:
+	if anchors.is_empty():
+		return -1
+	var best := 2147483647
+	for anchor in anchors:
+		best = mini(best, absi(pos.x - anchor.x) + absi(pos.y - anchor.y))
+	return best if best < 2147483647 else -1
 
 static func _source_state_from_options(options: Dictionary) -> GameState:
 	var state_val = options.get("source_state", null)
