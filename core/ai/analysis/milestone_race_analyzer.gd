@@ -53,10 +53,9 @@ static func _candidate_milestone_ids(action_id: String, params: Dictionary) -> A
 				out.append("first_errand_boy")
 			elif employee_id == "cart_operator":
 				out.append("first_cart_operator")
-			elif employee_id == "zeppelin_pilot":
-				out.append("first_airplane")
 		"initiate_marketing":
 			var product_id2 := str(params.get("product", "")).strip_edges()
+			var marketing_type := str(params.get("marketing_type", "")).strip_edges()
 			var board_number := int(params.get("board_number", -1))
 			if product_id2 == "burger":
 				out.append("first_burger_marketed")
@@ -68,6 +67,8 @@ static func _candidate_milestone_ids(action_id: String, params: Dictionary) -> A
 				out.append("first_billboard")
 			elif board_number >= 1 and board_number <= 3:
 				out.append("first_radio")
+			elif marketing_type == "airplane" or (board_number >= 4 and board_number <= 6):
+				out.append("first_airplane")
 		"set_price", "set_discount", "set_luxury_price":
 			out.append("first_lower_prices")
 	return out
@@ -121,6 +122,8 @@ static func _effects_value(effects: Array, profile) -> float:
 				total += 10.0
 			"sell_bonus":
 				total += maxf(0.0, float(effect.get("value", 0)))
+			"turnorder_empty_slots":
+				total += maxf(0.0, float(effect.get("value", 0))) * 4.0
 			"peek_reserve_cards":
 				total += 6.0
 			"ceo_get_cfo":

@@ -48,6 +48,11 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 		return _scenario_failure("milestone_marketing_sell_bonus_is_valued", marketing_sell_bonus)
 	names.append("milestone_marketing_sell_bonus_is_valued")
 
+	var airplane_trigger := _scenario_milestone_airplane_trigger_uses_marketing_board()
+	if not airplane_trigger.ok:
+		return _scenario_failure("milestone_airplane_trigger_uses_marketing_board", airplane_trigger)
+	names.append("milestone_airplane_trigger_uses_marketing_board")
+
 	return Result.success({
 		"scenarios": names.size(),
 		"names": names.duplicate(),
@@ -266,6 +271,45 @@ static func _scenario_milestone_marketing_sell_bonus_is_valued() -> Result:
 		return Result.failure("expected first_burger_marketed race id: %s" % str(features))
 	if float(features.get("milestone_race_value", 0.0)) <= 5.0:
 		return Result.failure("expected sell_bonus effect to raise marketing milestone value above base value: %s" % str(features))
+	return Result.success()
+
+static func _scenario_milestone_airplane_trigger_uses_marketing_board() -> Result:
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_food_income_observation()
+	observation.phase = DefsClass.PHASE_WORKING
+	observation.sub_phase = DefsClass.SUB_PHASE_MARKETING
+	observation.own_player["employees"] = ["campaign_manager", "burger_cook", "zeppelin_pilot"]
+	observation.own_player["reserve_employees"] = []
+	observation.own_player["inventory"] = {"burger": 1}
+	observation.own_player["milestones"] = []
+	observation.milestone_pool_public = ["first_airplane"]
+	_set_observation_house_demand_count(observation, "house_near", "burger", 0)
+	var airplane_macro := MacroAction.create(
+		"market_airplane_for_turn_order",
+		[Command.create("initiate_marketing", 0, {"employee_type": "campaign_manager", "marketing_type": "airplane", "board_number": 4, "product": "burger", "position": [2, 2]})],
+		0.0,
+		["working", "marketing"],
+		{"affected_house_ids": ["house_near"]}
+	)
+	var airplane_score: Dictionary = StrategyScorerClass.score_macro(observation, airplane_macro, profile)
+	var airplane_features: Dictionary = Dictionary(airplane_score.get("features", {}))
+	if not Array(airplane_features.get("milestone_race_ids", [])).has("first_airplane"):
+		return Result.failure("expected airplane marketing to expose first_airplane race id: %s" % str(airplane_features))
+	if float(airplane_features.get("milestone_race_value", 0.0)) <= 7.0:
+		return Result.failure("expected first_airplane effect to raise value above base value: %s" % str(airplane_features))
+
+	var zeppelin_macro := MacroAction.create(
+		"zeppelin_drink_route_should_not_trigger_airplane",
+		[Command.create("procure_drinks", 0, {"employee_type": "zeppelin_pilot", "restaurant_id": "rest_near", "route": [[3, 2], [4, 2]], "selected_sources": [[4, 2]]})],
+		0.0,
+		["working", "procure_drinks"],
+		{}
+	)
+	var zeppelin_score: Dictionary = StrategyScorerClass.score_macro(observation, zeppelin_macro, profile)
+	var zeppelin_features: Dictionary = Dictionary(zeppelin_score.get("features", {}))
+	if Array(zeppelin_features.get("milestone_race_ids", [])).has("first_airplane"):
+		return Result.failure("zeppelin drink procurement must not expose first_airplane race id: %s" % str(zeppelin_features))
 	return Result.success()
 
 static func _best_recruit_candidate(observation: ObservationState, seed_val: int) -> Result:

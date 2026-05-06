@@ -978,7 +978,7 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 - `StrategyScorer` 对生产/采购候选记录 `product_public_demand`、`product_serviceable_demand`、`product_inventory_gap`、`product_pending_marketing_demand`、`product_planning_inventory_gap`、`product_can_supply`、`product_supply_expected_units`、`product_supply_current_covered_units`、`product_supply_future_covered_units` 等特征，并用这些特征优先补当前可销售产品缺口，同时让饮料/食物供应能提前匹配己方已经发起、但还未在 Marketing 结算成房屋需求的商品。生产/采购使用独立的 `product_supply_action_value`：Burger Cook、Burger Chef、Errand Boy 与路线饮料这类不同产量动作会按预计供给数量覆盖 planning gap，当前缺口权重高于 pending marketing 对应的未来缺口，超过 planning gap 的部分会降权；路线饮料没有 `drink_type` 参数时，会从公开 `drink_sources` 与 `selected_sources` 反推 `drink_route_expected_units_by_product`，把每种饮料分别按 planning gap 评分；当库存已经覆盖公开需求和一单位缓冲时会施加包含本次预计产量的 `product_overstock_penalty`，避免多个员工在同一子阶段继续无效囤货。若食物生产没有公开需求、没有可服务需求、没有库存缺口且现金不足以支付基础薪资，会额外记录 `product_no_demand_cash_safety_penalty`，避免为了短期生产里程碑拿到带薪厨师后又立刻在 Payday 解雇；pending marketing 不会被当作本轮 Dinnertime 已可出售收入，因此不会绕过这条现金安全线。在 `StrategyBot.choose_command_with_engine()` 路径下，公开需求存在的食物生产还会通过 `DinnerPreview` fork 当前 engine 执行该候选并推进到 Dinnertime，读取真实 `total_income` / `income_sales` 写入 `product_dinner_preview_*` features。如果预览显示本次生产不能带来收入且现金不足基础薪资，会记录 `product_dinner_preview_no_income_penalty`，覆盖“有需求但被对手餐厅、距离、库存或价格竞争抢走”的现金安全场景。
 - `CandidateGenerator` 对路线型饮料采购会按 `max_valid_per_action` 的数倍先取候选路线，再用路线 source types 的商品 pipeline prior 重新排序，保证紧预算下需求相关饮料源不会在评分前被距离/source_count 排序截断。
 - `StrategyScorer` 对 `set_price`、`set_discount`、`set_luxury_price` 记录 `price_source`、`price_current_unit_price`、`price_action_delta`、`price_projected_unit_price`、`price_round_modifier_total` 等特征。有 `source_state` 时直接复用 `PricingPipeline.calculate_unit_price()` 读取当前单价与 `round_state.price_modifiers`；无 source state 时才用 observation 中的公开规则、己方里程碑和公开 round state 做保守回退。
-- `MilestoneRaceAnalyzer` 只基于公开 `milestone_pool_public`、己方已获得里程碑和候选动作触发类型做弱评估；当前覆盖 `first_train`、基础生产、Errand Boy/Cart/Zeppelin、基础营销与降价类里程碑，并会把营销里程碑的 `sell_bonus` effect 计入弱估值，把 `milestone_race_value` / `milestone_race_ids` 写入 scorer features。它不会读取隐藏对手状态，也不会假设未公开结构。
+- `MilestoneRaceAnalyzer` 只基于公开 `milestone_pool_public`、己方已获得里程碑和候选动作触发类型做弱评估；当前覆盖 `first_train`、基础生产、Errand Boy/Cart、飞机营销、基础营销与降价类里程碑，并会把营销里程碑的 `sell_bonus` 和飞机营销的 `turnorder_empty_slots` effect 计入弱估值，把 `milestone_race_value` / `milestone_race_ids` 写入 scorer features。它不会读取隐藏对手状态，也不会假设未公开结构。
 - `CandidateGenerator` 在 `choose_fridge_keep` 中复用 `StrategyIncomeAnalyzer.build_fridge_keep()`，按可服务需求、公开需求和可补给性逐单位选择冰箱保留库存，而不是简单保留最大库存堆。
 - `StrategyScorer` 对 `fire` 候选记录发薪现金、估算应付、短缺、解雇后的有效薪资缓解和员工收入价值；发薪短缺时优先解雇收入链价值较低的可付薪员工。
 - `DinnerPreview` 已用 `AiEngineFork` fork 当前 engine，通过真实 `execute_command()` 和 settlement hooks 推进到 Dinnertime，并在返回前恢复 source engine 的 registry bundle。
@@ -1008,6 +1008,7 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 - 己方 pending marketing 还没转成房屋需求时，供给评分应提前匹配对应商品，特别是路线饮料来源。
 - 早期 Recruit 应按收入路线补齐能力：先拿食品生产；已有食品供给后补营销；公开饮料需求出现且无饮料供给时补采购员工。
 - `first_*_marketed` 这类销售奖金里程碑不能只按基础首发标记计分，必须把公开规则数据里的 `sell_bonus` 计入 `milestone_race_value`。
+- `first_airplane` 必须由飞机营销触发，不能由 `zeppelin_pilot` 饮料采购误触发；公开规则数据里的 `turnorder_empty_slots` 需要进入弱估值。
 
 这组 benchmark 是 StrategyBot MVP 进入下一阶段的行为闸门；后续新增路线时，应先追加场景，再做 scorer 或 profile 调整。
 
