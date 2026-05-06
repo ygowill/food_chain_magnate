@@ -983,6 +983,8 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 - `StrategyScorer` 对 `fire` 候选记录发薪现金、估算应付、短缺、解雇后的有效薪资缓解和员工收入价值；发薪短缺时优先解雇收入链价值较低的可付薪员工。
 - `DinnerPreview` 已用 `AiEngineFork` fork 当前 engine，通过真实 `execute_command()` 和 settlement hooks 推进到 Dinnertime，并在返回前恢复 source engine 的 registry bundle。
 - `DinnerPreviewGoldenTest` 已覆盖基础销售、花园收入、drive-through 入口点与 source 不变性/registry 恢复，比较 preview 与真实 Dinnertime report 的关键字段和库存消耗。
+- `MarketingPreview` 已用 `AiEngineFork` fork 当前 engine，执行候选命令后通过真实阶段推进进入 Marketing，读取 `round_state.marketing.processed` / `expired` / `timeline_events`，并在返回前恢复 source engine 的 registry bundle。它只负责真实结算预览，不替代营销候选的影响房屋过滤和供给 readiness 评分。
+- `MarketingPreviewGoldenTest` 已覆盖从同一前置状态分别执行 `initiate_marketing` 并推进真实 engine / preview 到 Marketing，比较 report、最终 state hash、`first_burger_marketed` 触发、source 不变性和 registry 恢复。
 - `tools/run_bot_selfplay.gd` / `tools/run_bot_selfplay.sh` 提供 Bot 自对弈入口，默认运行 StrategyBot，也可用 `--bot=random|greedy|strategy|osla|beam` 运行单一 bot，或用 `--bots=random,strategy` 这类 per-player 配置跑固定 matchup；`--profile=<id|path>` 可替换 strategy/osla/beam 使用的 `StrategyProfile`；输出每局终局摘要、action counts、trace tail、`bot_config`、`bot_ids`、profile metadata 与可选 JSONL。
 - `tools/run_bot_selfplay_matrix.gd` / `tools/run_bot_selfplay_matrix.sh` 在同一批 seed 下顺序运行多个 `--config=`（例如 `--config=strategy --config=osla --config=random,strategy`），可通过 `--profile=` 对整组配置应用同一 profile，合并 JSONL 并直接生成 summary，作为后续网格/随机调参的最小矩阵入口。
 - `tools/summarize_bot_selfplay.gd` / `tools/summarize_bot_selfplay.sh` 读取一个或多个 selfplay JSONL，按 bot/matchup 汇总成功率、平均回合/步数/命令数、action totals、每玩家现金/员工/库存/里程碑/餐厅的 avg/min/max，并输出人类可读摘要与 compact JSON，供 Strategy/OSLA/Beam/MCTS 固定 seed 对照使用。
@@ -1174,6 +1176,7 @@ tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
 - `core/tests/ai/strategy_bot_scenario_benchmark_test.gd`：StrategyBot 的路线级场景基准。它不替代 `StrategyBotTest` 的组件断言，而是把关键策略断点抽成可命名、可扩展的 deterministic benchmark，作为后续 StrategyBot 开发的主验收入口。
 - `core/tests/ai/candidate_generator_test.gd`：覆盖高级培训路线候选生成，包括 `burger_cook -> burger_chef`、`errand_boy -> cart_operator` 和 `management_trainee -> junior_vice_president`；同时保留 `campaign_manager -> brand_manager` 不阻塞当前营销员上岗的回归测试，并验证路线饮料候选在 tight budget 下优先保留满足公开需求的饮料源。
 - `core/tests/ai/dinner_preview_golden_test.gd`：从同一前置状态分别跑真实 engine 与 `DinnerPreview`，校验基础销售、花园收入、drive-through 入口点、关键 Dinnertime report 字段、库存消耗、source 不变性和 registry 恢复。
+- `core/tests/ai/marketing_preview_golden_test.gd`：从同一前置状态分别跑真实 engine 与 `MarketingPreview`，校验 Marketing report、最终状态、`DemandMarked` 里程碑、source 不变性和 registry 恢复。
 
 ## 15. 开发路线图
 
@@ -1302,9 +1305,10 @@ Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[f
 - [x] Errand Boy 规则已按规则书修复并测试。
 - [x] 初始餐厅 pass 当前禁用但接口保留。
 - [x] DinnerPreview 与真实 settlement 有 golden test。
+- [x] MarketingPreview 与真实 Marketing settlement 有 golden test。
 - [x] Pricing 使用 `PricingPipeline` / `round_state.price_modifiers`。
 - [x] Drive-through 使用 `Structures.get_restaurant_entrance_points()`。
-- [ ] Cleanup、Payday、Marketing 均通过真实 settlement 模拟。
+- [ ] Cleanup、Payday 仍待真实 settlement preview。
 
 ### 强度
 
