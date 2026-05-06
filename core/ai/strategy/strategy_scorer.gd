@@ -162,19 +162,35 @@ static func _placement_route_value(observation: ObservationState, employee_id: S
 	if _has_owned_placement_employee(observation):
 		return 0.0
 	var pressure := _house_growth_pressure(observation, income_analysis)
+	var economy_ready := _house_route_economy_ready(observation, income_analysis)
 	match employee_id:
 		"new_business_developer":
+			if not economy_ready:
+				return 6.0 + pressure * 0.1
 			return 42.0 + pressure
 		"management_trainee":
 			if _owns_any_employee(observation, ["management_trainee", "new_business_developer"]):
 				return 0.0
+			if not economy_ready:
+				return 4.0 + pressure * 0.1
 			return 30.0 + pressure * 0.7
 		"trainer":
 			if _owns_any_employee(observation, ["trainer", "new_business_developer"]):
 				return 0.0
 			if _owns_any_employee(observation, ["management_trainee"]):
+				if not economy_ready:
+					return 3.0 + pressure * 0.1
 				return 18.0 + pressure * 0.35
 	return 0.0
+
+static func _house_route_economy_ready(observation: ObservationState, income_analysis: Dictionary) -> bool:
+	if observation == null:
+		return false
+	if int(income_analysis.get("total_public_demand", 0)) > 0:
+		return true
+	var salary_cost := _read_non_negative_int(observation.rules_public.get("salary_cost", 5), 5)
+	var cash := _read_non_negative_int(observation.own_player.get("cash", 0), 0)
+	return salary_cost <= 0 or cash >= salary_cost
 
 static func _house_growth_pressure(observation: ObservationState, income_analysis: Dictionary) -> float:
 	if observation == null:

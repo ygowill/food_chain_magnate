@@ -479,6 +479,24 @@ static func _test_recruit_score_values_house_placement_route(seed_val: int) -> R
 	var features: Dictionary = Dictionary(management_score.get("features", {}))
 	if float(features.get("recruit_placement_route_value", 0.0)) <= 0.0:
 		return Result.failure("management trainee should expose positive recruit_placement_route_value: %s" % str(features))
+	var pre_demand := _synthetic_house_growth_observation()
+	pre_demand.own_player["cash"] = 0
+	var houses: Dictionary = Dictionary(pre_demand.map_public.get("houses", {})).duplicate(true)
+	var house_near: Dictionary = Dictionary(houses.get("house_near", {})).duplicate(true)
+	house_near["demands"] = []
+	houses["house_near"] = house_near
+	pre_demand.map_public["houses"] = houses
+	var marketing_macro := MacroAction.create(
+		"recruit_marketing_before_salary_route",
+		[Command.create("recruit", 0, {"employee_type": "marketing_trainee"})],
+		0.0,
+		["working", "recruit"],
+		{}
+	)
+	var pre_demand_management_score: Dictionary = StrategyScorerClass.score_macro(pre_demand, management_macro, profile)
+	var pre_demand_marketing_score: Dictionary = StrategyScorerClass.score_macro(pre_demand, marketing_macro, profile)
+	if float(pre_demand_management_score.get("score", 0.0)) >= float(pre_demand_marketing_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should build marketing demand before early salaried house route: management=%s marketing=%s" % [str(pre_demand_management_score), str(pre_demand_marketing_score)])
 	var no_growth := _synthetic_house_growth_observation()
 	no_growth.map_public["house_number_supply_remaining"] = []
 	no_growth.map_public["garden_supply_remaining"] = 0
