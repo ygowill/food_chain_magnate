@@ -1553,6 +1553,8 @@ static func _marketing_product_prior(product_id: String, observation: Observatio
 			prior += 0.8
 	if _can_actively_supply_product(product_id, observation):
 		prior += 0.5
+	elif _can_supply_product(product_id, observation):
+		prior += 0.35
 	prior += float(_public_demand_count_for_product(observation, product_id)) * 0.25
 	return prior
 

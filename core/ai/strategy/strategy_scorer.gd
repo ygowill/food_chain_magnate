@@ -85,6 +85,8 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			features["marketing_closest_distance"] = int(service_features.get("closest_distance", -1))
 			features["marketing_inventory_units"] = int(service_features.get("inventory_units", 0))
 			features["marketing_can_supply_product"] = bool(service_features.get("can_supply_product", false))
+			features["marketing_can_future_supply_product"] = bool(service_features.get("can_future_supply_product", false))
+			features["marketing_supply_readiness_penalty"] = float(service_features.get("supply_readiness_penalty", 0.0))
 			features["marketing_own_restaurants"] = int(service_features.get("own_restaurants", 0))
 			features["marketing_distance_source"] = str(service_features.get("distance_source", "anchor"))
 			features["marketing_value"] = marketing_bonus
@@ -1071,6 +1073,7 @@ static func _marketing_service_features(observation: ObservationState, affected_
 		"average_distance": average_distance,
 		"inventory_units": _inventory_count(observation, product_id),
 		"can_supply_product": _can_actively_supply_product(observation, product_id),
+		"can_future_supply_product": _can_supply_product(observation, product_id),
 		"own_restaurants": _own_restaurant_count(observation),
 		"distance_source": "anchor",
 	}
@@ -1109,6 +1112,7 @@ static func _marketing_service_features_from_source(source_state: GameState, obs
 		"average_distance": average_distance,
 		"inventory_units": _inventory_count(observation, product_id),
 		"can_supply_product": _can_actively_supply_product(observation, product_id),
+		"can_future_supply_product": _can_supply_product(observation, product_id),
 		"own_restaurants": _own_restaurant_count(observation),
 		"distance_source": "road_graph",
 	}
@@ -1121,6 +1125,7 @@ static func _marketing_value_from_features(affected_count: int, pipeline_value: 
 	var closest_distance := int(service_features.get("closest_distance", -1))
 	var own_restaurants := int(service_features.get("own_restaurants", 0))
 	var can_supply_product := bool(service_features.get("can_supply_product", false))
+	var can_future_supply_product := bool(service_features.get("can_future_supply_product", can_supply_product))
 	var value := float(affected_count) * 10.0 + pipeline_value
 	value += float(serviceable) * 7.0
 	value += float(mini(inventory_units, affected_count)) * 4.0
@@ -1129,7 +1134,9 @@ static func _marketing_value_from_features(affected_count: int, pipeline_value: 
 	if own_restaurants <= 0:
 		value -= 16.0
 	if not can_supply_product and inventory_units <= 0:
-		value -= 12.0
+		var penalty := -6.0 if can_future_supply_product else -140.0
+		service_features["supply_readiness_penalty"] = penalty
+		value += penalty
 	return value
 
 static func _has_non_skip_alternative(_observation: ObservationState, _macro: MacroAction) -> bool:

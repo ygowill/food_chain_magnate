@@ -18,6 +18,11 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 		return _scenario_failure("marketing_pipeline_requires_active_food_supply", marketing_pipeline)
 	names.append("marketing_pipeline_requires_active_food_supply")
 
+	var marketing_next_round_supply := _scenario_marketing_values_next_round_supply_capacity()
+	if not marketing_next_round_supply.ok:
+		return _scenario_failure("marketing_values_next_round_supply_capacity", marketing_next_round_supply)
+	names.append("marketing_values_next_round_supply_capacity")
+
 	var trainable_supply := _scenario_trainable_supply_stays_structure_candidate(seed_val)
 	if not trainable_supply.ok:
 		return _scenario_failure("trainable_supply_stays_structure_candidate", trainable_supply)
@@ -68,6 +73,59 @@ static func _load_registries(seed_val: int) -> Result:
 	var init := engine.initialize(2, seed_val)
 	if not init.ok:
 		return Result.failure("engine initialize failed while loading registries: %s" % init.error)
+	return Result.success()
+
+static func _scenario_marketing_values_next_round_supply_capacity() -> Result:
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var no_supply_observation := _synthetic_food_income_observation()
+	no_supply_observation.phase = DefsClass.PHASE_WORKING
+	no_supply_observation.sub_phase = DefsClass.SUB_PHASE_MARKETING
+	no_supply_observation.own_player["employees"] = ["campaign_manager"]
+	no_supply_observation.own_player["reserve_employees"] = []
+	no_supply_observation.own_player["inventory"] = {}
+	_set_observation_house_demand_count(no_supply_observation, "house_near", "burger", 0)
+
+	var future_supply_observation := _synthetic_food_income_observation()
+	future_supply_observation.phase = DefsClass.PHASE_WORKING
+	future_supply_observation.sub_phase = DefsClass.SUB_PHASE_MARKETING
+	future_supply_observation.own_player["employees"] = ["campaign_manager"]
+	future_supply_observation.own_player["reserve_employees"] = ["burger_cook"]
+	future_supply_observation.own_player["inventory"] = {}
+	_set_observation_house_demand_count(future_supply_observation, "house_near", "burger", 0)
+
+	var marketing_macro := MacroAction.create(
+		"market_burger_for_next_round",
+		[Command.create("initiate_marketing", 0, {"employee_type": "campaign_manager", "marketing_type": "mailbox", "board_number": 8, "product": "burger", "position": [2, 2]})],
+		0.0,
+		["working", "marketing"],
+		{"affected_house_ids": ["house_near"]}
+	)
+	var skip_macro := MacroAction.create(
+		"skip_marketing_without_supply",
+		[Command.create("skip_sub_phase", 0, {})],
+		0.0,
+		["working", "fallback"],
+		{}
+	)
+
+	var no_supply_score: Dictionary = StrategyScorerClass.score_macro(no_supply_observation, marketing_macro, profile)
+	var future_supply_score: Dictionary = StrategyScorerClass.score_macro(future_supply_observation, marketing_macro, profile)
+	var skip_score: Dictionary = StrategyScorerClass.score_macro(no_supply_observation, skip_macro, profile)
+	var no_supply_features: Dictionary = Dictionary(no_supply_score.get("features", {}))
+	var future_supply_features: Dictionary = Dictionary(future_supply_score.get("features", {}))
+	if bool(no_supply_features.get("marketing_can_future_supply_product", true)):
+		return Result.failure("expected no future burger supply when no production employee exists: %s" % str(no_supply_features))
+	if not bool(future_supply_features.get("marketing_can_future_supply_product", false)):
+		return Result.failure("expected reserve burger cook to count as next-round supply capacity: %s" % str(future_supply_features))
+	if float(no_supply_features.get("marketing_supply_readiness_penalty", 0.0)) >= -100.0:
+		return Result.failure("expected severe marketing readiness penalty with no future supply: %s" % str(no_supply_features))
+	if float(future_supply_features.get("marketing_supply_readiness_penalty", 0.0)) < -20.0:
+		return Result.failure("expected only mild marketing readiness penalty when next-round supply exists: %s" % str(future_supply_features))
+	if float(no_supply_score.get("score", 0.0)) >= float(skip_score.get("score", 0.0)):
+		return Result.failure("expected marketing with no future supply to lose to skip: marketing=%s skip=%s" % [str(no_supply_score), str(skip_score)])
+	if float(future_supply_score.get("score", 0.0)) <= float(no_supply_score.get("score", 0.0)) + 50.0:
+		return Result.failure("expected next-round supply capacity to materially raise marketing value: future=%s no_supply=%s" % [str(future_supply_score), str(no_supply_score)])
 	return Result.success()
 
 static func _scenario_failure(name: String, result: Result) -> Result:
