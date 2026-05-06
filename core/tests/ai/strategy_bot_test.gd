@@ -121,6 +121,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var payday_fire := _test_payday_fire_prefers_low_income_employee(seed_val)
 	if not payday_fire.ok:
 		return payday_fire
+	var payday_preview_fire := _test_payday_fire_uses_payday_preview_for_unresolved_shortfall(seed_val)
+	if not payday_preview_fire.ok:
+		return payday_preview_fire
 	return Result.success({
 		"steps": int(first.value.get("steps", 0)),
 		"round": int(first.value.get("round", 0)),
@@ -1538,6 +1541,63 @@ static func _test_payday_fire_prefers_low_income_employee(seed_val: int) -> Resu
 		return Result.failure("fire features should expose payday shortfall: %s" % str(features))
 	if int(features.get("fire_effective_salary_relief", 0)) <= 0:
 		return Result.failure("fire features should expose effective salary relief: %s" % str(features))
+	return Result.success()
+
+static func _test_payday_fire_uses_payday_preview_for_unresolved_shortfall(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.phase = DefsClass.PHASE_PAYDAY
+	state.sub_phase = ""
+	state.turn_order = [0, 1]
+	state.current_player_index = 0
+	var set_cash := StateUpdaterClass.set_player_cash(state, 0, 5)
+	if not set_cash.ok:
+		return Result.failure("payday preview fire test set cash failed: %s" % set_cash.error)
+	for employee_id in ["burger_cook", "pizza_cook", "cfo"]:
+		var take := StateUpdaterClass.take_from_pool(state, employee_id, 1)
+		if not take.ok:
+			return Result.failure("payday preview fire test take %s failed: %s" % [employee_id, take.error])
+		var add := StateUpdaterClass.add_employee(state, 0, employee_id, false)
+		if not add.ok:
+			return Result.failure("payday preview fire test add %s failed: %s" % [employee_id, add.error])
+	var sync := _sync_initial_checkpoint_to_current_state(engine)
+	if not sync.ok:
+		return sync
+	var observation_read := ObservationAdapterClass.observe_for_player(engine, 0)
+	if not observation_read.ok:
+		return observation_read
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var fire_macro := MacroAction.create(
+		"fire_one_employee_still_short",
+		[Command.create("fire", 0, {"employee_id": "cfo", "location": "active"})],
+		0.0,
+		["payday", "fire"],
+		{}
+	)
+	var skip_macro := MacroAction.create(
+		"skip_payday_shortfall",
+		[Command.create("skip", 0, {})],
+		0.0,
+		["payday", "fallback"],
+		{}
+	)
+	var fire_score: Dictionary = StrategyScorerClass.score_macro(observation_read.value, fire_macro, profile, {"source_engine": engine, "source_state": state})
+	var skip_score: Dictionary = StrategyScorerClass.score_macro(observation_read.value, skip_macro, profile, {"source_engine": engine, "source_state": state})
+	var features: Dictionary = Dictionary(fire_score.get("features", {}))
+	if str(features.get("fire_payday_preview_source", "")) != "payday_preview":
+		return Result.failure("fire scoring should use PaydayPreview when source_engine is available: %s" % str(features))
+	if str(features.get("fire_payday_preview_error", "")).is_empty():
+		return Result.failure("unresolved fire shortfall should expose PaydayPreview error: %s" % str(features))
+	if float(features.get("fire_payday_preview_failure_penalty", 0.0)) >= 0.0:
+		return Result.failure("unresolved fire shortfall should expose preview failure penalty: %s" % str(features))
+	if float(fire_score.get("score", 0.0)) >= float(skip_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should prefer skipping fire that still cannot settle Payday: fire=%s skip=%s" % [str(fire_score), str(skip_score)])
 	return Result.success()
 
 static func _synthetic_marketing_observation() -> ObservationState:

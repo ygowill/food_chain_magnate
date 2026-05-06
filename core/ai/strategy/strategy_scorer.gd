@@ -9,6 +9,7 @@ const PricingPipelineClass = preload("res://core/rules/pricing_pipeline.gd")
 const BoardAnalyzerClass = preload("res://core/ai/analysis/board_analyzer.gd")
 const DinnerPreviewClass = preload("res://core/ai/analysis/dinner_preview.gd")
 const MarketingPreviewClass = preload("res://core/ai/analysis/marketing_preview.gd")
+const PaydayPreviewClass = preload("res://core/ai/analysis/payday_preview.gd")
 const MilestoneRaceAnalyzerClass = preload("res://core/ai/analysis/milestone_race_analyzer.gd")
 const StrategyBoardAnalyzerClass = preload("res://core/ai/strategy/strategy_board_analyzer.gd")
 const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_income_analyzer.gd")
@@ -133,7 +134,8 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			features["fire_effective_salary_relief"] = int(fire_payload.get("effective_salary_relief", 0))
 			features["fire_employee_income_value"] = float(fire_payload.get("employee_income_value", 0.0))
 			features["fire_value"] = float(fire_payload.get("value", 0.0))
-			score += float(fire_payload.get("value", 0.0))
+			var fire_preview_value := _fire_payday_preview_value(observation, command, options, features)
+			score += float(fire_payload.get("value", 0.0)) + fire_preview_value
 		"choose_turn_order":
 			var position := int(command.params.get("position", 0))
 			var turn_bonus := maxf(0.0, 8.0 - float(position) * 2.0)
@@ -1109,6 +1111,56 @@ static func _fire_value(observation: ObservationState, employee_id: String, prof
 		"effective_salary_relief": effective_relief,
 		"employee_income_value": employee_income_value,
 	}
+
+static func _fire_payday_preview_value(observation: ObservationState, command: Command, options: Dictionary, features: Dictionary) -> float:
+	if observation == null or command == null:
+		return 0.0
+	if str(command.action_id) != "fire":
+		return 0.0
+	var engine_val = options.get("source_engine", null)
+	if not (engine_val is GameEngine):
+		return 0.0
+	features["fire_payday_preview_source"] = "payday_preview"
+	var preview_read := PaydayPreviewClass.preview_after_commands(engine_val, [command], {"max_steps": 12})
+	if not preview_read.ok:
+		features["fire_payday_preview_error"] = preview_read.error
+		if _payday_preview_error_is_salary_shortfall(preview_read.error):
+			var failure_penalty := -240.0
+			features["fire_payday_preview_failure_penalty"] = failure_penalty
+			return failure_penalty
+		return 0.0
+	var payload: Dictionary = Dictionary(preview_read.value)
+	var actor := int(command.actor)
+	var due := _read_indexed_int(payload.get("due", []), actor, 0)
+	var paid := _read_indexed_int(payload.get("paid", []), actor, 0)
+	var unpaid := _read_indexed_int(payload.get("unpaid", []), actor, 0)
+	var cash_after := _payday_preview_cash_after(payload, actor, _read_non_negative_int(observation.own_player.get("cash", 0), 0))
+	features["fire_payday_preview_due"] = due
+	features["fire_payday_preview_paid"] = paid
+	features["fire_payday_preview_unpaid"] = unpaid
+	features["fire_payday_preview_cash_after"] = cash_after
+	if unpaid > 0:
+		var unpaid_penalty := -240.0 - float(unpaid) * 10.0
+		features["fire_payday_preview_unpaid_penalty"] = unpaid_penalty
+		return unpaid_penalty
+	return 0.0
+
+static func _payday_preview_error_is_salary_shortfall(error: String) -> bool:
+	var text := str(error)
+	return text.contains("薪水不足") or text.contains("仍欠") or text.contains("unpaid")
+
+static func _payday_preview_cash_after(payload: Dictionary, player_id: int, fallback: int) -> int:
+	var details_val = payload.get("details", [])
+	if not (details_val is Array):
+		return fallback
+	for item_val in Array(details_val):
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		if int(item.get("player_id", -1)) != player_id:
+			continue
+		return _read_int(item.get("cash_after", fallback), fallback)
+	return fallback
 
 static func _payday_cash_snapshot(observation: ObservationState) -> Dictionary:
 	if observation == null:

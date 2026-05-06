@@ -980,11 +980,13 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 - `StrategyScorer` 对 `set_price`、`set_discount`、`set_luxury_price` 记录 `price_source`、`price_current_unit_price`、`price_action_delta`、`price_projected_unit_price`、`price_round_modifier_total` 等特征。有 `source_state` 时直接复用 `PricingPipeline.calculate_unit_price()` 读取当前单价与 `round_state.price_modifiers`；无 source state 时才用 observation 中的公开规则、己方里程碑和公开 round state 做保守回退。
 - `MilestoneRaceAnalyzer` 只基于公开 `milestone_pool_public`、己方已获得里程碑、公开 round counters 和候选动作触发类型做弱评估；当前覆盖 `first_train`、第三次招聘触发的 `first_hire_3`、基础生产、Errand Boy/Cart、飞机营销、基础营销与降价类里程碑，并会把 `gain_cards`、营销里程碑的 `sell_bonus` 和飞机营销的 `turnorder_empty_slots` effect 计入弱估值，把 `milestone_race_value` / `milestone_race_ids` 写入 scorer features。`first_lower_prices` 只由真实会触发 `LowerPrice` 的 `set_price` / `set_discount` 计入，`set_luxury_price` 不会获得降价里程碑价值。它不会读取隐藏对手状态，也不会假设未公开结构。
 - `CandidateGenerator` 在 `choose_fridge_keep` 中复用 `StrategyIncomeAnalyzer.build_fridge_keep()`，按可服务需求、公开需求和可补给性逐单位选择冰箱保留库存，而不是简单保留最大库存堆。
-- `StrategyScorer` 对 `fire` 候选记录发薪现金、估算应付、短缺、解雇后的有效薪资缓解和员工收入价值；发薪短缺时优先解雇收入链价值较低的可付薪员工。
+- `StrategyScorer` 对 `fire` 候选记录发薪现金、估算应付、短缺、解雇后的有效薪资缓解和员工收入价值；发薪短缺时优先解雇收入链价值较低的可付薪员工。有 source engine 时，`fire` 候选还会通过 `PaydayPreview` 执行候选裁员并推进真实 Payday 退出结算，记录 `fire_payday_preview_due` / `paid` / `unpaid` / `cash_after`。如果预览显示裁员后仍无法完成 Payday 结算，会记录 `fire_payday_preview_failure_penalty` 并降权，避免只靠估算薪资缓解选择无效裁员。
 - `DinnerPreview` 已用 `AiEngineFork` fork 当前 engine，通过真实 `execute_command()` 和 settlement hooks 推进到 Dinnertime，并在返回前恢复 source engine 的 registry bundle。
 - `DinnerPreviewGoldenTest` 已覆盖基础销售、花园收入、drive-through 入口点与 source 不变性/registry 恢复，比较 preview 与真实 Dinnertime report 的关键字段和库存消耗。
 - `MarketingPreview` 已用 `AiEngineFork` fork 当前 engine，执行候选命令后通过真实阶段推进进入 Marketing，读取 `round_state.marketing.processed` / `expired` / `timeline_events`，并在返回前恢复 source engine 的 registry bundle。它只负责真实结算预览，不替代营销候选的影响房屋过滤和供给 readiness 评分。
 - `MarketingPreviewGoldenTest` 已覆盖从同一前置状态分别执行 `initiate_marketing` 并推进真实 engine / preview 到 Marketing，比较 report、最终 state hash、`first_burger_marketed` 触发、source 不变性和 registry 恢复。`StrategyBotTest` 也覆盖了“营销覆盖房屋但需求已满”的评分回归，确保这类候选不会仅凭覆盖范围获得正收益。
+- `PaydayPreview` 已用 `AiEngineFork` fork 当前 engine，执行候选命令后通过真实 Payday 退出 settlement 写入 `round_state.payday`。Payday 不是自动跳过阶段，但从 Payday 进入 Marketing 会触发 Marketing enter settlement；因此预览在 Payday 直接调用 `phase_manager.advance_phase(state)`，避免普通 `execute_command(advance_phase)` 继续自动跳过 Marketing/Cleanup 而丢失稳定落点。
+- `PaydayPreviewGoldenTest` 已覆盖无额外命令的 Payday 结算，以及 Payday 中先 `fire` 再结算的场景；测试比较真实 engine 与 preview 的 Payday report、最终 state hash、source 不变性和 registry 恢复。`StrategyBotTest` 也覆盖了“裁员一个人仍无法支付薪水”的评分回归。
 - `tools/run_bot_selfplay.gd` / `tools/run_bot_selfplay.sh` 提供 Bot 自对弈入口，默认运行 StrategyBot，也可用 `--bot=random|greedy|strategy|osla|beam` 运行单一 bot，或用 `--bots=random,strategy` 这类 per-player 配置跑固定 matchup；`--profile=<id|path>` 可替换 strategy/osla/beam 使用的 `StrategyProfile`；输出每局终局摘要、action counts、trace tail、`bot_config`、`bot_ids`、profile metadata 与可选 JSONL。
 - `tools/run_bot_selfplay_matrix.gd` / `tools/run_bot_selfplay_matrix.sh` 在同一批 seed 下顺序运行多个 `--config=`（例如 `--config=strategy --config=osla --config=random,strategy`），可通过 `--profile=` 对整组配置应用同一 profile，合并 JSONL 并直接生成 summary，作为后续网格/随机调参的最小矩阵入口。
 - `tools/summarize_bot_selfplay.gd` / `tools/summarize_bot_selfplay.sh` 读取一个或多个 selfplay JSONL，按 bot/matchup 汇总成功率、平均回合/步数/命令数、action totals、每玩家现金/员工/库存/里程碑/餐厅的 avg/min/max，并输出人类可读摘要与 compact JSON，供 Strategy/OSLA/Beam/MCTS 固定 seed 对照使用。
@@ -1172,11 +1174,12 @@ tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
 - `core/tests/ai/beam_search_test.gd`：验证 BeamSearch 不修改 source engine、返回合法命令、输出 beam path/eval trace、同 seed deterministic，并验证 BeamBot 无 engine 时回退到 OSLABot/StrategyBot 链路。
 - `core/tests/ai/random_legal_bot_smoke_test.gd`：两个 `RandomLegalBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic。
 - `core/tests/ai/greedy_bot_smoke_test.gd`：保留 GreedyBot 短程 deterministic 校验，并新增单程跑到至少第 3 轮或 GameOver 的 smoke。GreedyBot 不再要求完整打完 2p base 局。
-- `core/tests/ai/strategy_bot_test.gd`：两个 `StrategyBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic、strategy trace 元数据、profile 数据加载、营销空覆盖候选过滤、营销商品候选排序、营销可服务房屋/活跃供给评分、MarketingPreview 零新增需求惩罚、招聘 roster 饱和度、结构阶段食品供给激活与训练保留豁免、房屋扩张路线招聘/培训评分、收入缺口、pending marketing planning demand、生产补缺口/供给数量/路线饮料商品推断/过量库存惩罚、DinnerPreview 食物收入安全惩罚、PricingPipeline 价格动作评分、关键里程碑 race 评分、冰箱保留、餐厅位置/road graph 评分、房屋放置距离评分、Payday 解雇评分等特征。
+- `core/tests/ai/strategy_bot_test.gd`：两个 `StrategyBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic、strategy trace 元数据、profile 数据加载、营销空覆盖候选过滤、营销商品候选排序、营销可服务房屋/活跃供给评分、MarketingPreview 零新增需求惩罚、招聘 roster 饱和度、结构阶段食品供给激活与训练保留豁免、房屋扩张路线招聘/培训评分、收入缺口、pending marketing planning demand、生产补缺口/供给数量/路线饮料商品推断/过量库存惩罚、DinnerPreview 食物收入安全惩罚、PricingPipeline 价格动作评分、关键里程碑 race 评分、冰箱保留、餐厅位置/road graph 评分、房屋放置距离评分、Payday 解雇评分、PaydayPreview 未解决薪资短缺惩罚等特征。
 - `core/tests/ai/strategy_bot_scenario_benchmark_test.gd`：StrategyBot 的路线级场景基准。它不替代 `StrategyBotTest` 的组件断言，而是把关键策略断点抽成可命名、可扩展的 deterministic benchmark，作为后续 StrategyBot 开发的主验收入口。
 - `core/tests/ai/candidate_generator_test.gd`：覆盖高级培训路线候选生成，包括 `burger_cook -> burger_chef`、`errand_boy -> cart_operator` 和 `management_trainee -> junior_vice_president`；同时保留 `campaign_manager -> brand_manager` 不阻塞当前营销员上岗的回归测试，并验证路线饮料候选在 tight budget 下优先保留满足公开需求的饮料源。
 - `core/tests/ai/dinner_preview_golden_test.gd`：从同一前置状态分别跑真实 engine 与 `DinnerPreview`，校验基础销售、花园收入、drive-through 入口点、关键 Dinnertime report 字段、库存消耗、source 不变性和 registry 恢复。
 - `core/tests/ai/marketing_preview_golden_test.gd`：从同一前置状态分别跑真实 engine 与 `MarketingPreview`，校验 Marketing report、最终状态、`DemandMarked` 里程碑、source 不变性和 registry 恢复。
+- `core/tests/ai/payday_preview_golden_test.gd`：从同一前置状态分别跑真实 engine 与 `PaydayPreview`，校验 Payday report、最终状态、Payday 中先裁员再结算、source 不变性和 registry 恢复。
 
 ## 15. 开发路线图
 
@@ -1306,9 +1309,10 @@ Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[f
 - [x] 初始餐厅 pass 当前禁用但接口保留。
 - [x] DinnerPreview 与真实 settlement 有 golden test。
 - [x] MarketingPreview 与真实 Marketing settlement 有 golden test。
+- [x] PaydayPreview 与真实 Payday settlement 有 golden test。
 - [x] Pricing 使用 `PricingPipeline` / `round_state.price_modifiers`。
 - [x] Drive-through 使用 `Structures.get_restaurant_entrance_points()`。
-- [ ] Cleanup、Payday 仍待真实 settlement preview。
+- [ ] Cleanup 仍待真实 settlement preview。
 
 ### 强度
 
