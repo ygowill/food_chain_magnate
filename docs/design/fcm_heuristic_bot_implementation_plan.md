@@ -1015,6 +1015,7 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 - 己方 pending marketing 还没转成房屋需求时，供给评分应遵守真实时序：无冰箱则延后到下一轮生产/采购，有冰箱且商品可储存时才允许提前备货，特别是路线饮料来源。
 - 营销评分应区分“已经通过招聘/培训拿到下轮产能”和“完全没有可兑现产能”：前者可以作为下一轮收入路线，后者即使影响房屋也会被严重降权。
 - 无冰箱的常规营销收入链应按真实回合闭环：本回合营销只在 Marketing 结算后产生房屋需求；下轮先在 Restructuring 补齐或激活产能，再在 GetFood/GetDrinks 生产或采购，Dinnertime 才能销售并清掉需求。
+- Train 子阶段应能沿收入路线补产能：已有 Trainer、营销能力和可服务食品需求时，预备区的 `kitchen_trainee` 应优先训练成 `burger_cook`，并触发真实 `first_train` 里程碑，而不是跳过或继续补无关营销能力。
 - 早期 Recruit 应按收入路线补齐能力：先拿食品生产；已有食品供给后补营销；公开饮料需求出现且无饮料供给时补采购员工。
 - 稳定收入路线已经具备餐厅、生产、营销、现金缓冲、可服务需求和可卖库存后，Recruit 应把无薪价格支持纳入下一层收入路线，优先拿 `pricing_manager`，并把 `first_lower_prices` 可用性暴露为 trace feature。
 - 已经招到价格支持后，Restructuring 应在稳定收入路线中激活 `pricing_manager`，让下一次 Working 能执行真实 `set_price` mandatory action，而不是把空位让给泛用 Trainer 或直接提交。
@@ -1182,7 +1183,7 @@ tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
 - `core/tests/ai/random_legal_bot_smoke_test.gd`：两个 `RandomLegalBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic。
 - `core/tests/ai/greedy_bot_smoke_test.gd`：保留 GreedyBot 短程 deterministic 校验，并新增单程跑到至少第 3 轮或 GameOver 的 smoke。GreedyBot 不再要求完整打完 2p base 局。
 - `core/tests/ai/strategy_bot_test.gd`：两个 `StrategyBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic、strategy trace 元数据、profile 数据加载、营销空覆盖候选过滤、营销商品候选排序、营销可服务房屋/活跃供给评分、MarketingPreview 零新增需求惩罚、招聘 roster 饱和度、结构阶段食品供给激活与训练保留豁免、房屋扩张路线招聘/培训评分、收入缺口、pending marketing planning demand、生产补缺口/供给数量/路线饮料商品推断/过量库存惩罚、DinnerPreview 食物收入安全惩罚、PricingPipeline 价格动作评分、关键里程碑 race 评分、冰箱保留、餐厅位置/road graph 评分、房屋放置距离评分、Payday 解雇评分、PaydayPreview 未解决薪资短缺惩罚等特征。
-- `core/tests/ai/strategy_bot_scenario_benchmark_test.gd`：StrategyBot 的路线级场景基准。它不替代 `StrategyBotTest` 的组件断言，而是把关键策略断点抽成可命名、可扩展的 deterministic benchmark，作为后续 StrategyBot 开发的主验收入口。当前已覆盖营销本回合发起、Marketing 结算生成需求、下轮结构补产能、生产并在 Dinnertime 销售的无冰箱常规收入链。
+- `core/tests/ai/strategy_bot_scenario_benchmark_test.gd`：StrategyBot 的路线级场景基准。它不替代 `StrategyBotTest` 的组件断言，而是把关键策略断点抽成可命名、可扩展的 deterministic benchmark，作为后续 StrategyBot 开发的主验收入口。当前已覆盖营销本回合发起、Marketing 结算生成需求、下轮结构补产能、训练补食品产能、生产并在 Dinnertime 销售的无冰箱常规收入链。
 - `core/tests/ai/candidate_generator_test.gd`：覆盖高级培训路线候选生成，包括 `burger_cook -> burger_chef`、`errand_boy -> cart_operator` 和 `management_trainee -> junior_vice_president`；同时保留 `campaign_manager -> brand_manager` 不阻塞当前营销员上岗的回归测试，并验证路线饮料候选在 tight budget 下优先保留满足公开需求的饮料源。
 - `core/tests/ai/dinner_preview_golden_test.gd`：从同一前置状态分别跑真实 engine 与 `DinnerPreview`，校验基础销售、花园收入、drive-through 入口点、关键 Dinnertime report 字段、库存消耗、source 不变性和 registry 恢复。
 - `core/tests/ai/marketing_preview_golden_test.gd`：从同一前置状态分别跑真实 engine 与 `MarketingPreview`，校验 Marketing report、最终状态、`DemandMarked` 里程碑、source 不变性和 registry 恢复。

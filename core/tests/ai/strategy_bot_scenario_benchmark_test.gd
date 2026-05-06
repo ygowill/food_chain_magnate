@@ -34,6 +34,11 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 		return _scenario_failure("marketing_next_round_route_produces_and_sells", marketing_next_round_sale)
 	names.append("marketing_next_round_route_produces_and_sells")
 
+	var training_food_supply := _scenario_income_route_trains_food_supply_for_serviceable_demand(seed_val)
+	if not training_food_supply.ok:
+		return _scenario_failure("income_route_trains_food_supply_for_serviceable_demand", training_food_supply)
+	names.append("income_route_trains_food_supply_for_serviceable_demand")
+
 	var trainable_supply := _scenario_trainable_supply_stays_structure_candidate(seed_val)
 	if not trainable_supply.ok:
 		return _scenario_failure("trainable_supply_stays_structure_candidate", trainable_supply)
@@ -302,6 +307,110 @@ static func _build_marketing_next_round_route_engine(seed_val: int) -> Result:
 		return sync
 	return Result.success(engine)
 
+static func _scenario_income_route_trains_food_supply_for_serviceable_demand(seed_val: int) -> Result:
+	var engine_read := _build_training_income_route_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var bot = StrategyBotClass.new()
+	var controller := BotControllerClass.new()
+	var step := controller.step(engine, 0, bot, TimeBudget.start(80))
+	if not step.ok:
+		return Result.failure("training route step failed: %s" % step.error)
+	var trace: Dictionary = step.value
+	if str(trace.get("action_id", "")) != "train":
+		return Result.failure("expected StrategyBot to train food supply for serviceable burger demand, got %s" % str(trace))
+	var params: Dictionary = Dictionary(trace.get("params", {}))
+	if str(params.get("from_employee", "")) != "kitchen_trainee" or str(params.get("to_employee", "")) != "burger_cook":
+		return Result.failure("expected kitchen_trainee -> burger_cook training route, got %s" % str(trace))
+	var state := engine.get_state()
+	var reserve: Array = Array(Dictionary(state.players[0]).get("reserve_employees", []))
+	if not reserve.has("burger_cook"):
+		return Result.failure("training route should leave burger_cook in reserve after training, reserve=%s" % str(reserve))
+	if reserve.has("kitchen_trainee"):
+		return Result.failure("training route should consume kitchen_trainee source card, reserve=%s" % str(reserve))
+	var milestones: Array = Array(Dictionary(state.players[0]).get("milestones", []))
+	if not milestones.has("first_train"):
+		return Result.failure("training route should trigger first_train milestone, milestones=%s" % str(milestones))
+	return Result.success()
+
+static func _build_training_income_route_engine(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var state := engine.get_state()
+	_force_route_turn_order(state, 2)
+	var map_result := _build_route_marketing_sale_map(0)
+	if not map_result.ok:
+		return map_result
+	state.map = map_result.value
+	var house: Dictionary = Dictionary(Dictionary(state.map.get("houses", {})).get("house_route", {})).duplicate(true)
+	house["demands"] = [
+		{"product": "burger"},
+		{"product": "burger"},
+		{"product": "burger"},
+	]
+	var houses: Dictionary = Dictionary(state.map.get("houses", {})).duplicate(true)
+	houses["house_route"] = house
+	state.map["houses"] = houses
+	RoadGraphCacheClass.invalidate_road_graph(state)
+	state.players[0]["restaurants"] = ["rest_0"]
+	state.players[1]["restaurants"] = []
+	var seed_cash := StateUpdaterClass.player_receive_from_bank(state, 0, 30)
+	if not seed_cash.ok:
+		return Result.failure("seed training route cash failed: %s" % seed_cash.error)
+	state.players[0]["inventory"] = {
+		"burger": 0,
+		"pizza": 0,
+		"soda": 0,
+		"lemonade": 0,
+		"beer": 0,
+	}
+	state.players[0]["employees"] = ["ceo"]
+	state.players[0]["reserve_employees"] = []
+	state.players[0]["busy_marketers"] = []
+	state.players[0]["employees_staff_ids"] = []
+	state.players[0]["reserve_staff_ids"] = []
+	state.players[0]["busy_staff_ids"] = []
+	state.players[0]["staff_registry"] = {}
+	state.players[0]["milestones"] = []
+	state.players[0]["company_structure"] = {
+		"ceo_slots": 3,
+		"structure": [{}, {}, {}],
+	}
+	for employee_id in ["trainer", "campaign_manager"]:
+		var take_active := StateUpdaterClass.take_from_pool(state, employee_id, 1)
+		if not take_active.ok:
+			return Result.failure("take %s failed: %s" % [employee_id, take_active.error])
+		var add_active := StateUpdaterClass.add_employee(state, 0, employee_id, false)
+		if not add_active.ok:
+			return Result.failure("add %s failed: %s" % [employee_id, add_active.error])
+	for reserve_employee_id in ["kitchen_trainee", "marketing_trainee"]:
+		var take_reserve := StateUpdaterClass.take_from_pool(state, reserve_employee_id, 1)
+		if not take_reserve.ok:
+			return Result.failure("take %s failed: %s" % [reserve_employee_id, take_reserve.error])
+		var add_reserve := StateUpdaterClass.add_employee(state, 0, reserve_employee_id, true)
+		if not add_reserve.ok:
+			return Result.failure("add %s failed: %s" % [reserve_employee_id, add_reserve.error])
+	state.players[0]["company_structure"] = {
+		"ceo_slots": 3,
+		"structure": [
+			{"employee_id": "trainer", "reports": []},
+			{"employee_id": "campaign_manager", "reports": []},
+			{},
+		],
+	}
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
+	state.current_player_index = 0
+	state.milestone_pool = ["first_train"]
+	_reset_round_state_for_ai_step(state)
+	var sync := _sync_initial_checkpoint_to_current_state(engine)
+	if not sync.ok:
+		return sync
+	return Result.success(engine)
+
 static func _force_route_turn_order(state: GameState, player_count: int) -> void:
 	state.turn_order.clear()
 	for i in range(player_count):
@@ -471,6 +580,7 @@ static func _reset_round_state_for_ai_step(state: GameState) -> void:
 		0: false,
 		1: false,
 	}
+	state.round_state["train_events"] = []
 	state.round_state["staff_usage"] = {}
 	state.round_state["staff_train_event_counts"] = {}
 
