@@ -864,7 +864,11 @@ static func _expected_food_units(employee_id: String) -> int:
 static func _expected_drink_units(observation: ObservationState, command: Command) -> int:
 	var employee_id := str(command.params.get("employee_type", ""))
 	if employee_id == "errand_boy":
-		return 2 if _own_milestones(observation).has("first_errand_boy") else 1
+		if _own_milestones(observation).has("first_errand_boy"):
+			return 2
+		if observation != null and observation.milestone_pool_public.has("first_errand_boy"):
+			return 2
+		return 1
 	var selected_val = command.params.get("selected_sources", [])
 	if selected_val is Array:
 		return maxi(1, Array(selected_val).size() * _route_drinks_per_source(observation, command))

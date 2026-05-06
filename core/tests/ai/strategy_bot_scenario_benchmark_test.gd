@@ -54,6 +54,11 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 		return _scenario_failure("pending_marketing_drink_supply_targets_product_with_fridge", pending_drinks_fridge)
 	names.append("pending_marketing_drink_supply_targets_product_with_fridge")
 
+	var first_errand_boy := _scenario_first_errand_boy_counts_two_drinks(seed_val)
+	if not first_errand_boy.ok:
+		return _scenario_failure("first_errand_boy_counts_two_drinks", first_errand_boy)
+	names.append("first_errand_boy_counts_two_drinks")
+
 	var first_recruit := _scenario_income_route_first_recruit_gets_food_supply(seed_val)
 	if not first_recruit.ok:
 		return _scenario_failure("income_route_first_recruit_gets_food_supply", first_recruit)
@@ -405,6 +410,102 @@ static func _build_training_income_route_engine(seed_val: int) -> Result:
 	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
 	state.current_player_index = 0
 	state.milestone_pool = ["first_train"]
+	_reset_round_state_for_ai_step(state)
+	var sync := _sync_initial_checkpoint_to_current_state(engine)
+	if not sync.ok:
+		return sync
+	return Result.success(engine)
+
+static func _scenario_first_errand_boy_counts_two_drinks(seed_val: int) -> Result:
+	var engine_read := _build_first_errand_boy_drink_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var bot = StrategyBotClass.new()
+	var controller := BotControllerClass.new()
+	var step := controller.step(engine, 0, bot, TimeBudget.start(80))
+	if not step.ok:
+		return Result.failure("first errand boy route step failed: %s" % step.error)
+	var trace: Dictionary = step.value
+	if str(trace.get("action_id", "")) != "procure_drinks":
+		return Result.failure("expected StrategyBot to procure drinks with first Errand Boy, got %s" % str(trace))
+	var params: Dictionary = Dictionary(trace.get("params", {}))
+	if str(params.get("employee_type", "")) != "errand_boy" or str(params.get("drink_type", "")) != "soda":
+		return Result.failure("expected first Errand Boy to target soda demand, got %s" % str(trace))
+	var features: Dictionary = Dictionary(Dictionary(trace.get("explanation", {})).get("features", {}))
+	if int(features.get("product_supply_expected_units", 0)) != 2:
+		return Result.failure("StrategyScorer should estimate first Errand Boy as 2 drinks, features=%s trace=%s" % [str(features), str(trace)])
+	var state := engine.get_state()
+	var inventory: Dictionary = Dictionary(Dictionary(state.players[0]).get("inventory", {}))
+	if int(inventory.get("soda", 0)) != 2:
+		return Result.failure("first Errand Boy should actually procure 2 soda, inventory=%s" % str(inventory))
+	var milestones: Array = Array(Dictionary(state.players[0]).get("milestones", []))
+	if not milestones.has("first_errand_boy"):
+		return Result.failure("first Errand Boy route should trigger first_errand_boy, milestones=%s" % str(milestones))
+	return Result.success()
+
+static func _build_first_errand_boy_drink_engine(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var state := engine.get_state()
+	_force_route_turn_order(state, 2)
+	var map_result := _build_route_marketing_sale_map(0)
+	if not map_result.ok:
+		return map_result
+	state.map = map_result.value
+	var house: Dictionary = Dictionary(Dictionary(state.map.get("houses", {})).get("house_route", {})).duplicate(true)
+	house["demands"] = [
+		{"product": "soda"},
+		{"product": "soda"},
+	]
+	var houses: Dictionary = Dictionary(state.map.get("houses", {})).duplicate(true)
+	houses["house_route"] = house
+	state.map["houses"] = houses
+	RoadGraphCacheClass.invalidate_road_graph(state)
+	state.players[0]["restaurants"] = ["rest_0"]
+	state.players[1]["restaurants"] = []
+	var seed_cash := StateUpdaterClass.player_receive_from_bank(state, 0, 20)
+	if not seed_cash.ok:
+		return Result.failure("seed errand route cash failed: %s" % seed_cash.error)
+	state.players[0]["inventory"] = {
+		"burger": 0,
+		"pizza": 0,
+		"soda": 0,
+		"lemonade": 0,
+		"beer": 0,
+	}
+	state.players[0]["employees"] = ["ceo"]
+	state.players[0]["reserve_employees"] = []
+	state.players[0]["busy_marketers"] = []
+	state.players[0]["employees_staff_ids"] = []
+	state.players[0]["reserve_staff_ids"] = []
+	state.players[0]["busy_staff_ids"] = []
+	state.players[0]["staff_registry"] = {}
+	state.players[0]["milestones"] = []
+	state.players[0]["company_structure"] = {
+		"ceo_slots": 3,
+		"structure": [{}, {}, {}],
+	}
+	var take_errand := StateUpdaterClass.take_from_pool(state, "errand_boy", 1)
+	if not take_errand.ok:
+		return Result.failure("take errand_boy failed: %s" % take_errand.error)
+	var add_errand := StateUpdaterClass.add_employee(state, 0, "errand_boy", false)
+	if not add_errand.ok:
+		return Result.failure("add errand_boy failed: %s" % add_errand.error)
+	state.players[0]["company_structure"] = {
+		"ceo_slots": 3,
+		"structure": [
+			{"employee_id": "errand_boy", "reports": []},
+			{},
+			{},
+		],
+	}
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
+	state.current_player_index = 0
+	state.milestone_pool = ["first_errand_boy"]
 	_reset_round_state_for_ai_step(state)
 	var sync := _sync_initial_checkpoint_to_current_state(engine)
 	if not sync.ok:
