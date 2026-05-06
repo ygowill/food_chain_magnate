@@ -404,9 +404,11 @@ static func _desired_recruit_count(observation: ObservationState, employee_id: S
 	var role := _employee_role(employee_id)
 	match employee_id:
 		"kitchen_trainee":
-			var public_demand := int(income_analysis.get("total_public_demand", 0))
-			var inventory_gap := int(income_analysis.get("total_inventory_gap", 0))
-			return 2 if public_demand >= 5 or inventory_gap >= 4 else 1
+			var food_public_demand := _food_public_demand(income_analysis)
+			var food_inventory_gap := _food_inventory_gap(income_analysis)
+			if _owns_role(observation, "produce_food") and food_public_demand < 5 and food_inventory_gap < 4:
+				return 0
+			return 2 if food_public_demand >= 5 or food_inventory_gap >= 4 else 1
 		"marketing_trainee":
 			if _owns_any_employee(observation, ["campaign_manager", "brand_manager", "brand_director"]):
 				return 0
@@ -427,7 +429,11 @@ static func _desired_recruit_count(observation: ObservationState, employee_id: S
 		var unserviceable := int(income_analysis.get("total_public_demand", 0)) - int(income_analysis.get("total_serviceable_demand", 0))
 		return 1 if unserviceable > 0 or _own_restaurant_count(observation) <= 1 else 0
 	if role == "produce_food":
-		return 2 if int(income_analysis.get("total_public_demand", 0)) >= 6 else 1
+		var role_food_public_demand := _food_public_demand(income_analysis)
+		var role_food_inventory_gap := _food_inventory_gap(income_analysis)
+		if _owns_role(observation, "produce_food") and role_food_public_demand < 6 and role_food_inventory_gap < 4:
+			return 0
+		return 2 if role_food_public_demand >= 6 or role_food_inventory_gap >= 4 else 1
 	if role == "price":
 		if int(income_analysis.get("total_serviceable_demand", 0)) <= 0:
 			return 0
@@ -435,6 +441,41 @@ static func _desired_recruit_count(observation: ObservationState, employee_id: S
 	if role == "marketing" or role == "procure_drink" or role == "recruit_train":
 		return 1
 	return 1
+
+static func _food_public_demand(income_analysis: Dictionary) -> int:
+	var total := 0
+	for product_id in _income_analysis_product_ids(income_analysis):
+		if _is_food_product(product_id):
+			var info: Dictionary = Dictionary(Dictionary(income_analysis.get("products", {})).get(product_id, {}))
+			total += int(info.get("public_demand", 0))
+	return total
+
+static func _food_inventory_gap(income_analysis: Dictionary) -> int:
+	var total := 0
+	for product_id in _income_analysis_product_ids(income_analysis):
+		if _is_food_product(product_id):
+			var info: Dictionary = Dictionary(Dictionary(income_analysis.get("products", {})).get(product_id, {}))
+			total += int(info.get("inventory_gap", 0))
+	return total
+
+static func _income_analysis_product_ids(income_analysis: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	var products: Dictionary = Dictionary(income_analysis.get("products", {}))
+	for product_id_val in products.keys():
+		var product_id := str(product_id_val)
+		if not product_id.is_empty():
+			out.append(product_id)
+	out.sort()
+	return out
+
+static func _is_food_product(product_id: String) -> bool:
+	if product_id.is_empty() or not ProductRegistryClass.is_loaded() or not ProductRegistryClass.has(product_id):
+		return false
+	var def_val = ProductRegistryClass.get_def(product_id)
+	if def_val is ProductDef:
+		var def: ProductDef = def_val
+		return def.has_tag("food") and not def.is_drink()
+	return false
 
 static func _product_pipeline_value(product_id: String, profile, income_analysis: Dictionary, features: Dictionary) -> float:
 	if product_id.is_empty():

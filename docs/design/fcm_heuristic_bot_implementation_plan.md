@@ -970,6 +970,7 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 - `StrategyIncomeAnalyzer` 从 `ObservationState` 提取产品需求、可服务需求、库存缺口、供给能力、己方尚未结算的公开营销实例和员工对收入链的贡献。己方 pending marketing 会转成 `pending_marketing_demand`、`planning_demand` 与 `planning_inventory_gap`，只用于规划下一轮供应；对手营销和已结束营销不会计入己方 planning demand。
 - `StrategyBoardAnalyzer` 对餐厅放置/移动做位置评分，优先贴近公开房屋、公开需求和当前尚未服务的需求。有 `source_state` 时会先在 state 副本上复用现有 `RestaurantPlacement.validate_restaurant_placement()` 构造候选餐厅，再用 `BoardAnalyzer` / road graph 计算真实餐厅到房屋距离；无 source state 或临时放置失败时回退到 observation anchor 近似。
 - `StrategyScorer` 对 `recruit` 候选记录 `recruit_owned_count`、`recruit_desired_count`、`recruit_roster_saturated` 与 `recruit_roster_adjustment`。首个路线关键员工仍可高分；当同名员工数量已经达到当前需求上限，或训练源的目标路线已经完成时会降权，避免基础 action weight 推动重复招聘 trainer、management trainee 或入门员工。
+- `StrategyScorer` 的早期生产员工招聘需求上限按食品需求/缺口计算，而不是用所有商品总需求；当已经有食品生产角色且食品缺口不大时，不再继续把 `kitchen_trainee` 排在营销/饮料供给前面。这样 StrategyBot 的收入路线招聘顺序会先补食品供给，再补营销，遇到饮料需求时补饮料采购。
 - `StrategyScorer` 对结构上岗候选记录 `structure_activation_value`、`structure_activation_products` 与 `structure_marketing_supply_products`。当前/规划库存缺口会提高对应生产员工的上岗价值；当已有营销能力和餐厅、但没有活跃食品供给时，食品生产员工会获得额外结构价值，避免营销链路因为厨师留在 reserve 而无法兑现。`CandidateGenerator._should_preserve_for_training()` 也会让当前需求或营销收入链需要的可生产员工优先保持可上岗，不再单纯因为能继续培训成更高级厨师就从结构候选中隐藏。
 - `StrategyScorer` 已给房屋/花园扩张链路增加显式路线价值，但该路线是低优先级的后期选择：只有当己方已有餐厅、生产和营销能力，现金至少达到更高的后期缓冲线，并且公开需求/可服务需求已经形成规模时，`management_trainee`、`management_trainee -> new_business_developer` 培训，以及把 reserve 中的 NBD 上岗才会获得 `*_placement_route_value`。在早期经济未成型时，`management_trainee` 的招聘需求上限为 0，NBD 培训/上岗会携带显式 route readiness 惩罚，避免 Bot 为少见的新房路线压过生产、营销、采购、价格和现金安全。`pricing_manager` 与 `recruiting_girl` 这类高级支持员工也需要先满足稳定收入路线门槛，避免在无法扩大可服务收入时提前消耗招聘节奏。
 - `CandidateGenerator` 放房屋候选不再直接使用左上到右下的 grid order 截断 topK，而是先尝试己方餐厅附近、再尝试已有房屋附近、最后才全图兜底；`StrategyScorer` 对 `place_house` 记录 `house_nearest_restaurant_distance`、`house_nearest_existing_house_distance` 与 `house_placement_value`，优先把新房放到后续可营销、可服务的位置。
@@ -1005,6 +1006,7 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 - 有营销链路但无食品供给时，Restructuring 应优先激活可兑现营销需求的食品生产员工，而不是提交结构或激活无关员工。
 - 有 Trainer 且员工可继续培训时，若当前收入链需要该员工供给，候选生成不能把它从结构上岗候选里隐藏。
 - 己方 pending marketing 还没转成房屋需求时，供给评分应提前匹配对应商品，特别是路线饮料来源。
+- 早期 Recruit 应按收入路线补齐能力：先拿食品生产；已有食品供给后补营销；公开饮料需求出现且无饮料供给时补采购员工。
 
 这组 benchmark 是 StrategyBot MVP 进入下一阶段的行为闸门；后续新增路线时，应先追加场景，再做 scorer 或 profile 调整。
 
