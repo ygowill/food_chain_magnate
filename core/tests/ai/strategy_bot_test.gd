@@ -78,6 +78,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var product_overstock := _test_strategy_scoring_penalizes_product_overstock(seed_val)
 	if not product_overstock.ok:
 		return product_overstock
+	var no_demand_food := _test_strategy_scoring_skips_no_demand_food_when_cash_unsafe(seed_val)
+	if not no_demand_food.ok:
+		return no_demand_food
 	var pricing_pipeline := _test_strategy_scoring_uses_pricing_pipeline_for_price_actions(seed_val)
 	if not pricing_pipeline.ok:
 		return pricing_pipeline
@@ -810,6 +813,49 @@ static func _test_strategy_scoring_penalizes_product_overstock(seed_val: int) ->
 		return Result.failure("overstock production should expose zero product_inventory_gap: %s" % str(features))
 	if not bool(features.get("product_overstock_penalty", false)):
 		return Result.failure("overstock production should expose product_overstock_penalty: %s" % str(features))
+	return Result.success()
+
+static func _test_strategy_scoring_skips_no_demand_food_when_cash_unsafe(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_income_observation()
+	observation.rules_public = {"salary_cost": 5}
+	observation.own_player["cash"] = 0
+	observation.own_player["employees"] = ["kitchen_trainee"]
+	observation.own_player["inventory"] = {}
+	observation.milestone_pool_public = ["first_burger_produced"]
+	var houses: Dictionary = Dictionary(observation.map_public.get("houses", {})).duplicate(true)
+	var house_near: Dictionary = Dictionary(houses.get("house_near", {})).duplicate(true)
+	house_near["demands"] = []
+	houses["house_near"] = house_near
+	observation.map_public["houses"] = houses
+	var burger_macro := MacroAction.create(
+		"produce_no_demand_burger",
+		[Command.create("produce_food", 0, {"employee_type": "kitchen_trainee", "food_type": "burger"})],
+		0.0,
+		["working", "produce_food"],
+		{}
+	)
+	var skip_macro := MacroAction.create(
+		"skip_get_food",
+		[Command.create("skip_sub_phase", 0, {})],
+		0.0,
+		["working", "fallback"],
+		{}
+	)
+	var burger_score: Dictionary = StrategyScorerClass.score_macro(observation, burger_macro, profile)
+	var skip_score: Dictionary = StrategyScorerClass.score_macro(observation, skip_macro, profile)
+	if float(burger_score.get("score", 0.0)) >= float(skip_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should skip no-demand food production when cash cannot keep the milestone cook: burger=%s skip=%s" % [str(burger_score), str(skip_score)])
+	var features: Dictionary = Dictionary(burger_score.get("features", {}))
+	if float(features.get("product_no_demand_cash_safety_penalty", 0.0)) >= 0.0:
+		return Result.failure("no-demand unsafe food production should expose cash safety penalty: %s" % str(features))
+	if float(features.get("milestone_race_value", 0.0)) <= 0.0:
+		return Result.failure("test should still include the first_burger_produced race value: %s" % str(features))
 	return Result.success()
 
 static func _test_strategy_scoring_uses_pricing_pipeline_for_price_actions(seed_val: int) -> Result:

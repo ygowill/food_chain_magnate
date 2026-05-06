@@ -339,7 +339,10 @@ static func _supply_action_value(observation: ObservationState, command: Command
 	var expected_units := _expected_supply_units(observation, command)
 	var supply_bonus := _product_supply_action_value(product_id, profile, income_analysis, features, expected_units)
 	features["product_supply_expected_units"] = expected_units
-	return supply_bonus
+	var no_demand_penalty := _no_demand_food_cash_safety_penalty(observation, command, features)
+	if not is_equal_approx(no_demand_penalty, 0.0):
+		features["product_no_demand_cash_safety_penalty"] = no_demand_penalty
+	return supply_bonus + no_demand_penalty
 
 static func _route_drink_supply_action_value(observation: ObservationState, command: Command, profile, income_analysis: Dictionary, features: Dictionary) -> float:
 	var expected_by_product := _expected_route_drinks_by_product(observation, command)
@@ -417,6 +420,27 @@ static func _product_supply_action_value(product_id: String, profile, income_ana
 		return 4.0 + float(buffer_units) * 2.0 + float(profile.product_priority(product_id)) * 0.25
 	features["product_overstock_penalty"] = true
 	return -100.0 - float(maxi(0, inventory_units + supply_units - desired_buffer)) * 8.0
+
+static func _no_demand_food_cash_safety_penalty(observation: ObservationState, command: Command, features: Dictionary) -> float:
+	if observation == null or command == null:
+		return 0.0
+	if str(command.action_id) != "produce_food":
+		return 0.0
+	if int(features.get("product_public_demand", 0)) > 0:
+		return 0.0
+	if int(features.get("product_serviceable_demand", 0)) > 0:
+		return 0.0
+	if int(features.get("product_inventory_gap", 0)) > 0:
+		return 0.0
+	if int(features.get("product_inventory_units", 0)) > 0:
+		return 0.0
+	var salary_cost := _read_non_negative_int(observation.rules_public.get("salary_cost", 5), 5)
+	if salary_cost <= 0:
+		return 0.0
+	var cash := _read_non_negative_int(observation.own_player.get("cash", 0), 0)
+	if cash >= salary_cost:
+		return 0.0
+	return -125.0
 
 static func _expected_supply_units(observation: ObservationState, command: Command) -> int:
 	if command == null:
