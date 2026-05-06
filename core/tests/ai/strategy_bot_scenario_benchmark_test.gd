@@ -85,6 +85,11 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 		return _scenario_failure("income_route_recruits_drink_supply_for_drink_demand", drink_recruit)
 	names.append("income_route_recruits_drink_supply_for_drink_demand")
 
+	var training_drink_capacity := _scenario_income_route_trains_drink_capacity_for_serviceable_demand(seed_val)
+	if not training_drink_capacity.ok:
+		return _scenario_failure("income_route_trains_drink_capacity_for_serviceable_demand", training_drink_capacity)
+	names.append("income_route_trains_drink_capacity_for_serviceable_demand")
+
 	var pricing_recruit := _scenario_income_route_recruits_pricing_after_stable_serviceable_demand(seed_val)
 	if not pricing_recruit.ok:
 		return _scenario_failure("income_route_recruits_pricing_after_stable_serviceable_demand", pricing_recruit)
@@ -656,6 +661,33 @@ static func _scenario_route_drink_demand_produces_and_sells(seed_val: int) -> Re
 		return Result.failure("route drink Dinnertime should clear soda demand")
 	return Result.success()
 
+static func _scenario_income_route_trains_drink_capacity_for_serviceable_demand(seed_val: int) -> Result:
+	var engine_read := _build_training_drink_capacity_upgrade_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var bot = StrategyBotClass.new()
+	var controller := BotControllerClass.new()
+	var step := controller.step(engine, 0, bot, TimeBudget.start(80))
+	if not step.ok:
+		return Result.failure("training drink capacity route step failed: %s" % step.error)
+	var trace: Dictionary = step.value
+	if str(trace.get("action_id", "")) != "train":
+		return Result.failure("expected StrategyBot to train drink capacity, got %s" % str(trace))
+	var params: Dictionary = Dictionary(trace.get("params", {}))
+	if str(params.get("from_employee", "")) != "errand_boy" or str(params.get("to_employee", "")) != "cart_operator":
+		return Result.failure("expected errand_boy -> cart_operator drink capacity upgrade, got %s" % str(trace))
+	var features: Dictionary = Dictionary(Dictionary(trace.get("explanation", {})).get("features", {}))
+	if float(features.get("train_drink_route_upgrade_value", 0.0)) <= 0.0:
+		return Result.failure("drink upgrade should expose positive train_drink_route_upgrade_value: %s" % str(trace))
+	var state := engine.get_state()
+	var reserve: Array = Array(Dictionary(state.players[0]).get("reserve_employees", []))
+	if not reserve.has("cart_operator"):
+		return Result.failure("training drink route should leave cart_operator in reserve after training, reserve=%s" % str(reserve))
+	if reserve.has("errand_boy"):
+		return Result.failure("training drink route should consume errand_boy source card, reserve=%s" % str(reserve))
+	return Result.success()
+
 static func _build_route_drink_sale_engine(seed_val: int) -> Result:
 	var engine := GameEngine.new()
 	var init := engine.initialize(2, seed_val)
@@ -720,6 +752,87 @@ static func _build_route_drink_sale_engine(seed_val: int) -> Result:
 	state.phase = DefsClass.PHASE_WORKING
 	state.sub_phase = DefsClass.SUB_PHASE_GET_DRINKS
 	state.current_player_index = 0
+	_reset_round_state_for_ai_step(state)
+	var sync := _sync_initial_checkpoint_to_current_state(engine)
+	if not sync.ok:
+		return sync
+	return Result.success(engine)
+
+static func _build_training_drink_capacity_upgrade_engine(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var state := engine.get_state()
+	_force_route_turn_order(state, 2)
+	var map_result := _build_route_marketing_sale_map(0)
+	if not map_result.ok:
+		return map_result
+	state.map = map_result.value
+	var house: Dictionary = Dictionary(Dictionary(state.map.get("houses", {})).get("house_route", {})).duplicate(true)
+	house["demands"] = [
+		{"product": "soda"},
+		{"product": "soda"},
+		{"product": "soda"},
+		{"product": "soda"},
+	]
+	var houses: Dictionary = Dictionary(state.map.get("houses", {})).duplicate(true)
+	houses["house_route"] = house
+	state.map["houses"] = houses
+	state.map["drink_sources"] = [
+		{"world_pos": Vector2i(7, 2), "type": "soda", "tile_id": "R"},
+	]
+	RoadGraphCacheClass.invalidate_road_graph(state)
+	state.players[0]["restaurants"] = ["rest_0"]
+	state.players[1]["restaurants"] = []
+	var seed_cash := StateUpdaterClass.player_receive_from_bank(state, 0, 30)
+	if not seed_cash.ok:
+		return Result.failure("seed drink training route cash failed: %s" % seed_cash.error)
+	state.players[0]["inventory"] = {
+		"burger": 0,
+		"pizza": 0,
+		"soda": 0,
+		"lemonade": 0,
+		"beer": 0,
+	}
+	state.players[0]["employees"] = ["ceo"]
+	state.players[0]["reserve_employees"] = []
+	state.players[0]["busy_marketers"] = []
+	state.players[0]["employees_staff_ids"] = []
+	state.players[0]["reserve_staff_ids"] = []
+	state.players[0]["busy_staff_ids"] = []
+	state.players[0]["staff_registry"] = {}
+	state.players[0]["milestones"] = []
+	state.players[0]["company_structure"] = {
+		"ceo_slots": 3,
+		"structure": [{}, {}, {}],
+	}
+	for employee_id in ["trainer", "errand_boy"]:
+		var take_active := StateUpdaterClass.take_from_pool(state, employee_id, 1)
+		if not take_active.ok:
+			return Result.failure("take %s failed: %s" % [employee_id, take_active.error])
+		var add_active := StateUpdaterClass.add_employee(state, 0, employee_id, false)
+		if not add_active.ok:
+			return Result.failure("add %s failed: %s" % [employee_id, add_active.error])
+	for reserve_employee_id in ["errand_boy", "kitchen_trainee", "marketing_trainee"]:
+		var take_reserve := StateUpdaterClass.take_from_pool(state, reserve_employee_id, 1)
+		if not take_reserve.ok:
+			return Result.failure("take %s failed: %s" % [reserve_employee_id, take_reserve.error])
+		var add_reserve := StateUpdaterClass.add_employee(state, 0, reserve_employee_id, true)
+		if not add_reserve.ok:
+			return Result.failure("add %s failed: %s" % [reserve_employee_id, add_reserve.error])
+	state.players[0]["company_structure"] = {
+		"ceo_slots": 3,
+		"structure": [
+			{"employee_id": "trainer", "reports": []},
+			{"employee_id": "errand_boy", "reports": []},
+			{},
+		],
+	}
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_TRAIN
+	state.current_player_index = 0
+	state.milestone_pool = ["first_train", "first_cart_operator"]
 	_reset_round_state_for_ai_step(state)
 	var sync := _sync_initial_checkpoint_to_current_state(engine)
 	if not sync.ok:

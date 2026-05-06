@@ -11,6 +11,7 @@ const DinnerPreviewClass = preload("res://core/ai/analysis/dinner_preview.gd")
 const MarketingPreviewClass = preload("res://core/ai/analysis/marketing_preview.gd")
 const PaydayPreviewClass = preload("res://core/ai/analysis/payday_preview.gd")
 const MilestoneRaceAnalyzerClass = preload("res://core/ai/analysis/milestone_race_analyzer.gd")
+const DrinkRouteAnalyzerClass = preload("res://core/ai/analysis/drink_route_analyzer.gd")
 const StrategyBoardAnalyzerClass = preload("res://core/ai/strategy/strategy_board_analyzer.gd")
 const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_income_analyzer.gd")
 
@@ -60,12 +61,15 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			var train_route_readiness_adjustment := _placement_route_readiness_adjustment(observation, to_employee, income_analysis)
 			var train_capacity_upgrade_payload := _train_capacity_upgrade_value(observation, from_employee, to_employee, profile, income_analysis)
 			var train_capacity_upgrade_value := float(train_capacity_upgrade_payload.get("value", 0.0))
-			var train_bonus: float = float(target_value.get("score", 0.0)) * 1.2 + maxf(0.0, float(profile.employee_priority(to_employee)) - float(profile.employee_priority(from_employee))) + train_placement_route_value + train_route_readiness_adjustment + train_capacity_upgrade_value
+			var train_drink_route_upgrade_payload := _train_drink_route_upgrade_value(observation, from_employee, to_employee, profile, income_analysis)
+			var train_drink_route_upgrade_value := float(train_drink_route_upgrade_payload.get("value", 0.0))
+			var train_bonus: float = float(target_value.get("score", 0.0)) * 1.2 + maxf(0.0, float(profile.employee_priority(to_employee)) - float(profile.employee_priority(from_employee))) + train_placement_route_value + train_route_readiness_adjustment + train_capacity_upgrade_value + train_drink_route_upgrade_value
 			features["train_value"] = train_bonus
 			features["train_target_income_value"] = float(target_value.get("score", 0.0))
 			features["train_placement_route_value"] = train_placement_route_value
 			features["train_route_readiness_adjustment"] = train_route_readiness_adjustment
 			_append_train_capacity_upgrade_features(features, train_capacity_upgrade_payload)
+			_append_train_drink_route_upgrade_features(features, train_drink_route_upgrade_payload)
 			features["train_target_products"] = Array(target_value.get("target_products", [])).duplicate()
 			score += train_bonus
 		"set_company_structure_direct", "set_company_structure_report", "restructure_employee":
@@ -386,6 +390,137 @@ static func _employee_can_produce_product(employee_id: String, product_id: Strin
 		return false
 	var def: EmployeeDef = def_val
 	return def.can_produce() and def.get_production_food_options().has(product_id)
+
+static func _train_drink_route_upgrade_value(observation: ObservationState, from_employee: String, to_employee: String, profile, income_analysis: Dictionary) -> Dictionary:
+	var out := {
+		"value": 0.0,
+		"products": [],
+		"target_units_by_product": {},
+		"source_units_by_product": {},
+		"delta_units_by_product": {},
+		"target_action_values": {},
+		"source_action_values": {},
+		"target_route_source_count": 0,
+		"target_route_distance": -1,
+	}
+	if observation == null or from_employee.is_empty() or to_employee.is_empty() or profile == null:
+		return out
+	if not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(to_employee):
+		return out
+	var target_def_val = EmployeeRegistryClass.get_def(to_employee)
+	if not (target_def_val is EmployeeDef):
+		return out
+	var target_def: EmployeeDef = target_def_val
+	if not target_def.can_procure() or to_employee == "errand_boy":
+		return out
+	var target_payload := _best_route_drink_expected_by_product(observation, to_employee, profile, income_analysis)
+	var target_units_by_product: Dictionary = Dictionary(target_payload.get("units_by_product", {}))
+	if target_units_by_product.is_empty():
+		return out
+	var source_units_by_product := _source_drink_expected_by_product(observation, from_employee, target_units_by_product, profile, income_analysis)
+	var total := 0.0
+	var valued_products: Array[String] = []
+	var delta_units_by_product := {}
+	var target_action_values := {}
+	var source_action_values := {}
+	for product_id in _sorted_dictionary_keys(target_units_by_product):
+		var target_units := maxi(0, int(target_units_by_product.get(product_id, 0)))
+		var source_units := maxi(0, int(source_units_by_product.get(product_id, 0)))
+		var delta_units := maxi(0, target_units - source_units)
+		if delta_units <= 0:
+			continue
+		var target_features := {}
+		var source_features := {}
+		var target_action_value := _product_supply_action_value(product_id, profile, income_analysis, target_features, target_units, observation)
+		var source_action_value := 0.0
+		if source_units > 0:
+			source_action_value = _product_supply_action_value(product_id, profile, income_analysis, source_features, source_units, observation)
+		var delta_value := maxf(0.0, target_action_value - source_action_value) * 0.75
+		if delta_value <= 0.0:
+			continue
+		total += delta_value
+		valued_products.append(product_id)
+		delta_units_by_product[product_id] = delta_units
+		target_action_values[product_id] = target_action_value
+		source_action_values[product_id] = source_action_value
+	out["value"] = total
+	out["products"] = valued_products
+	out["target_units_by_product"] = target_units_by_product
+	out["source_units_by_product"] = source_units_by_product
+	out["delta_units_by_product"] = delta_units_by_product
+	out["target_action_values"] = target_action_values
+	out["source_action_values"] = source_action_values
+	out["target_route_source_count"] = int(target_payload.get("source_count", 0))
+	out["target_route_distance"] = int(target_payload.get("distance", -1))
+	return out
+
+static func _append_train_drink_route_upgrade_features(features: Dictionary, payload: Dictionary) -> void:
+	features["train_drink_route_upgrade_value"] = float(payload.get("value", 0.0))
+	features["train_drink_route_upgrade_products"] = Array(payload.get("products", [])).duplicate()
+	features["train_drink_route_upgrade_target_units_by_product"] = Dictionary(payload.get("target_units_by_product", {})).duplicate()
+	features["train_drink_route_upgrade_source_units_by_product"] = Dictionary(payload.get("source_units_by_product", {})).duplicate()
+	features["train_drink_route_upgrade_delta_units_by_product"] = Dictionary(payload.get("delta_units_by_product", {})).duplicate()
+	features["train_drink_route_upgrade_target_action_values"] = Dictionary(payload.get("target_action_values", {})).duplicate()
+	features["train_drink_route_upgrade_source_action_values"] = Dictionary(payload.get("source_action_values", {})).duplicate()
+	features["train_drink_route_upgrade_target_route_source_count"] = int(payload.get("target_route_source_count", 0))
+	features["train_drink_route_upgrade_target_route_distance"] = int(payload.get("target_route_distance", -1))
+
+static func _best_route_drink_expected_by_product(observation: ObservationState, employee_id: String, profile, income_analysis: Dictionary) -> Dictionary:
+	var out := {
+		"units_by_product": {},
+		"source_count": 0,
+		"distance": -1,
+	}
+	if observation == null or employee_id.is_empty():
+		return out
+	var routes_read := DrinkRouteAnalyzerClass.generate_routes(observation, employee_id, 6)
+	if not routes_read.ok:
+		return out
+	var routes: Array = Array(routes_read.value)
+	var best_units_by_product := {}
+	var best_score := -INF
+	var best_source_count := 0
+	var best_distance := -1
+	for route_val in routes:
+		if not (route_val is Dictionary):
+			continue
+		var route: Dictionary = route_val
+		var params_val = route.get("params", null)
+		if not (params_val is Dictionary):
+			continue
+		var command := Command.create("procure_drinks", int(observation.current_player_id), Dictionary(params_val).duplicate(true))
+		var expected_by_product := _expected_route_drinks_by_product(observation, command)
+		if expected_by_product.is_empty():
+			continue
+		var route_score := 0.0
+		for product_id in _sorted_dictionary_keys(expected_by_product):
+			var product_payload := StrategyIncomeAnalyzerClass.product_value(product_id, profile, income_analysis)
+			route_score += float(expected_by_product.get(product_id, 0)) * float(product_payload.get("score", 0.0))
+		if route_score <= best_score:
+			continue
+		best_score = route_score
+		best_units_by_product = expected_by_product
+		best_source_count = int(route.get("source_count", 0))
+		best_distance = int(route.get("distance", -1))
+	out["units_by_product"] = best_units_by_product
+	out["source_count"] = best_source_count
+	out["distance"] = best_distance
+	return out
+
+static func _source_drink_expected_by_product(observation: ObservationState, from_employee: String, target_units_by_product: Dictionary, profile, income_analysis: Dictionary) -> Dictionary:
+	if from_employee.is_empty():
+		return {}
+	if from_employee == "errand_boy":
+		var out := {}
+		for product_id in _sorted_dictionary_keys(target_units_by_product):
+			var command := Command.create("procure_drinks", int(observation.current_player_id), {
+				"employee_type": "errand_boy",
+				"drink_type": product_id,
+			})
+			out[product_id] = _expected_drink_units(observation, command)
+		return out
+	var source_payload := _best_route_drink_expected_by_product(observation, from_employee, profile, income_analysis)
+	return Dictionary(source_payload.get("units_by_product", {}))
 
 static func _house_route_economy_ready(observation: ObservationState, income_analysis: Dictionary) -> bool:
 	if not _stable_income_route_ready(observation, income_analysis):
