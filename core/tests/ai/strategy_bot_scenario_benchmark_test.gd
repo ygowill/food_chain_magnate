@@ -7,6 +7,7 @@ const DinnertimeSettlementTestClass = preload("res://core/tests/dinnertime_settl
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const ObservationAdapterClass = preload("res://core/ai/observation/observation_adapter.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const StrategyBotClass = preload("res://core/ai/bot/strategy_bot.gd")
 const StrategyProfileClass = preload("res://core/ai/strategy/strategy_profile.gd")
 const StrategyScorerClass = preload("res://core/ai/strategy/strategy_scorer.gd")
 
@@ -65,6 +66,11 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not pricing_structure.ok:
 		return _scenario_failure("income_route_structures_pricing_after_price_recruit", pricing_structure)
 	names.append("income_route_structures_pricing_after_price_recruit")
+
+	var pricing_action := _scenario_income_route_executes_price_action_after_price_structure(seed_val)
+	if not pricing_action.ok:
+		return _scenario_failure("income_route_executes_price_action_after_price_structure", pricing_action)
+	names.append("income_route_executes_price_action_after_price_structure")
 
 	var third_recruit_milestone := _scenario_milestone_third_recruit_values_first_hire_3()
 	if not third_recruit_milestone.ok:
@@ -454,6 +460,47 @@ static func _scenario_income_route_structures_pricing_after_price_recruit() -> R
 	var features: Dictionary = Dictionary(pricing_score.get("features", {}))
 	if float(features.get("structure_price_route_value", 0.0)) <= 0.0:
 		return Result.failure("expected pricing structure route value feature: %s" % str(features))
+	return Result.success()
+
+static func _scenario_income_route_executes_price_action_after_price_structure(seed_val: int) -> Result:
+	var observation := _synthetic_food_income_observation()
+	observation.phase = DefsClass.PHASE_WORKING
+	observation.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
+	observation.own_player["cash"] = 35
+	observation.own_player["employees"] = ["burger_cook", "campaign_manager", "pricing_manager"]
+	observation.own_player["reserve_employees"] = []
+	observation.own_player["inventory"] = {"burger": 3}
+	observation.own_player["milestones"] = []
+	observation.round_state_public = {}
+	_set_observation_house_demand_count(observation, "house_near", "burger", 3)
+	var context := AiDecisionContext.create(
+		0,
+		DefsClass.PHASE_WORKING,
+		DefsClass.SUB_PHASE_GET_FOOD,
+		int(observation.round_number),
+		seed_val,
+		[]
+	)
+	var bot = StrategyBotClass.new()
+	var decision: BotDecision = bot.choose_command(
+		observation,
+		context,
+		["set_price", "produce_food", "skip_sub_phase"],
+		Callable(),
+		null
+	)
+	if decision == null or decision.is_failure():
+		return Result.failure("expected StrategyBot price decision, got %s" % (decision.failure_reason if decision != null else "null"))
+	if decision.command == null or str(decision.command.action_id) != "set_price":
+		return Result.failure("expected active pricing_manager to execute mandatory set_price, got %s" % str(decision.to_debug_dict()))
+	var features: Dictionary = Dictionary(decision.explanation.get("features", {}))
+	if int(features.get("price_action_delta", 0)) != -1:
+		return Result.failure("expected set_price delta feature on price action: %s" % str(decision.to_debug_dict()))
+	if int(features.get("price_estimated_sale_units", 0)) <= 0:
+		return Result.failure("expected price action to estimate sale units from serviceable demand: %s" % str(decision.to_debug_dict()))
+	var top_candidates: Array = Array(Dictionary(decision.trace).get("top_candidates", []))
+	if top_candidates.is_empty() or str(Dictionary(top_candidates[0]).get("action_id", "")) != "set_price":
+		return Result.failure("expected set_price to lead StrategyBot top candidates: %s" % str(decision.to_debug_dict()))
 	return Result.success()
 
 static func _scenario_milestone_third_recruit_values_first_hire_3() -> Result:

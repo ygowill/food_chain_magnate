@@ -1017,6 +1017,7 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 - 早期 Recruit 应按收入路线补齐能力：先拿食品生产；已有食品供给后补营销；公开饮料需求出现且无饮料供给时补采购员工。
 - 稳定收入路线已经具备餐厅、生产、营销、现金缓冲、可服务需求和可卖库存后，Recruit 应把无薪价格支持纳入下一层收入路线，优先拿 `pricing_manager`，并把 `first_lower_prices` 可用性暴露为 trace feature。
 - 已经招到价格支持后，Restructuring 应在稳定收入路线中激活 `pricing_manager`，让下一次 Working 能执行真实 `set_price` mandatory action，而不是把空位让给泛用 Trainer 或直接提交。
+- `pricing_manager` 已经上岗时，StrategyBot 应把 mandatory `set_price` 排在生产/跳过等候选之前，并在 trace 中暴露 `price_action_delta` 与预计销售单位，确认价格路线闭环到真实行动。
 - 当前玩家本回合已经招聘 2 次时，第三次 `recruit` 应显式计入 `first_hire_3` 的 `gain_cards` 价值；第一/第二次招聘不应提前拿到这项即时里程碑 race value。
 - `first_lower_prices` 必须按真实 action trigger 识别：`set_price` / `set_discount` 可以计入，`set_luxury_price` 不能因为同属价格动作而获得降价 race value。
 - `DinnerPreview` 如果显示生产后的晚餐收入会让己方获得 `first_have_20` / `first_have_100`，StrategyScorer 应把这些现金里程碑作为 preview milestone value 计入，而不是只看销售收入数值。
