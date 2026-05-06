@@ -708,7 +708,7 @@ static func _dinner_preview_supply_value(observation: ObservationState, command:
 	features["product_dinner_preview_sales_income"] = income_sales
 	features["product_dinner_preview_source"] = "dinner_preview"
 	var value := float(total_income) * 0.35
-	value += _dinner_preview_cash_milestone_value(observation, payload, actor, profile, features)
+	value += _dinner_preview_milestone_value(observation, command, payload, actor, profile, features)
 	if total_income <= 0 and int(features.get("product_public_demand", 0)) > 0 and _cash_below_salary_cost(observation):
 		var penalty := -155.0
 		features["product_dinner_preview_no_income_penalty"] = penalty
@@ -793,7 +793,7 @@ static func _marketing_preview_milestone_features(observation: ObservationState,
 	features["marketing_preview_milestone_ids"] = gained.duplicate()
 	return value
 
-static func _dinner_preview_cash_milestone_value(observation: ObservationState, payload: Dictionary, player_id: int, profile, features: Dictionary) -> float:
+static func _dinner_preview_milestone_value(observation: ObservationState, command: Command, payload: Dictionary, player_id: int, profile, features: Dictionary) -> float:
 	if observation == null or player_id < 0:
 		return 0.0
 	var state_val = payload.get("state", null)
@@ -803,10 +803,13 @@ static func _dinner_preview_cash_milestone_value(observation: ObservationState, 
 	var before_ids := _own_milestones(observation)
 	var after_ids := _player_milestones_from_state(preview_state, player_id)
 	var public_ids := _sorted_unique_strings(observation.milestone_pool_public)
+	var immediate_ids := _immediate_milestone_ids_for_command(command)
 	var gained: Array[String] = []
 	var value := 0.0
-	for milestone_id in ["first_have_20", "first_have_100"]:
-		if before_ids.has(milestone_id) or not after_ids.has(milestone_id) or not public_ids.has(milestone_id):
+	for milestone_id in after_ids:
+		if before_ids.has(milestone_id) or not public_ids.has(milestone_id):
+			continue
+		if immediate_ids.has(milestone_id):
 			continue
 		gained.append(milestone_id)
 		value += MilestoneRaceAnalyzerClass.milestone_value(milestone_id, profile)
@@ -815,6 +818,19 @@ static func _dinner_preview_cash_milestone_value(observation: ObservationState, 
 	features["product_dinner_preview_milestone_ids"] = gained.duplicate()
 	features["product_dinner_preview_milestone_value"] = value
 	return value
+
+static func _immediate_milestone_ids_for_command(command: Command) -> Array[String]:
+	var out: Array[String] = []
+	if command == null:
+		return out
+	match str(command.action_id):
+		"produce_food":
+			var product_id := str(command.params.get("food_type", command.params.get("product", ""))).strip_edges()
+			if product_id == "burger":
+				out.append("first_burger_produced")
+			elif product_id == "pizza":
+				out.append("first_pizza_produced")
+	return out
 
 static func _player_milestones_from_state(state: GameState, player_id: int) -> Array[String]:
 	if state == null or player_id < 0 or player_id >= state.players.size():
