@@ -81,6 +81,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var no_demand_food := _test_strategy_scoring_skips_no_demand_food_when_cash_unsafe(seed_val)
 	if not no_demand_food.ok:
 		return no_demand_food
+	var dinner_preview_food := _test_strategy_scoring_uses_dinner_preview_for_food_income(seed_val)
+	if not dinner_preview_food.ok:
+		return dinner_preview_food
 	var pricing_pipeline := _test_strategy_scoring_uses_pricing_pipeline_for_price_actions(seed_val)
 	if not pricing_pipeline.ok:
 		return pricing_pipeline
@@ -856,6 +859,82 @@ static func _test_strategy_scoring_skips_no_demand_food_when_cash_unsafe(seed_va
 		return Result.failure("no-demand unsafe food production should expose cash safety penalty: %s" % str(features))
 	if float(features.get("milestone_race_value", 0.0)) <= 0.0:
 		return Result.failure("test should still include the first_burger_produced race value: %s" % str(features))
+	return Result.success()
+
+static func _test_strategy_scoring_uses_dinner_preview_for_food_income(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var state := engine.get_state()
+	DinnertimeSettlementTestClass._force_turn_order(state)
+	DinnertimeSettlementTestClass._apply_test_map(state)
+	DinnertimeSettlementTestClass._set_house_demands(state, "house_left", [])
+	DinnertimeSettlementTestClass._set_house_demands(state, "house_right", [{"product": "burger"}])
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
+	state.current_player_index = 0
+	state.players[0]["cash"] = 0
+	state.players[0]["inventory"] = {}
+	state.players[1]["inventory"] = {"burger": 1}
+	state.rules["salary_cost"] = 5
+	state.milestone_pool = ["first_burger_produced"]
+	var take := StateUpdaterClass.take_from_pool(state, "kitchen_trainee", 1)
+	if not take.ok:
+		return Result.failure("dinner preview food test take kitchen_trainee failed: %s" % take.error)
+	var add := StateUpdaterClass.add_employee(state, 0, "kitchen_trainee", false)
+	if not add.ok:
+		return Result.failure("dinner preview food test add kitchen_trainee failed: %s" % add.error)
+	RoadGraphCacheClass.invalidate_road_graph(state)
+	var sync := _sync_initial_checkpoint_to_current_state(engine)
+	if not sync.ok:
+		return sync
+	var observation_read := ObservationAdapterClass.observe_for_player(engine, 0)
+	if not observation_read.ok:
+		return observation_read
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var burger_macro := MacroAction.create(
+		"produce_contested_burger",
+		[Command.create("produce_food", 0, {"employee_type": "kitchen_trainee", "food_type": "burger"})],
+		0.0,
+		["working", "produce_food"],
+		{}
+	)
+	var skip_macro := MacroAction.create(
+		"skip_get_food",
+		[Command.create("skip_sub_phase", 0, {})],
+		0.0,
+		["working", "fallback"],
+		{}
+	)
+	var burger_score: Dictionary = StrategyScorerClass.score_macro(observation_read.value, burger_macro, profile, {"source_engine": engine, "source_state": state})
+	var skip_score: Dictionary = StrategyScorerClass.score_macro(observation_read.value, skip_macro, profile, {"source_engine": engine, "source_state": state})
+	var features: Dictionary = Dictionary(burger_score.get("features", {}))
+	if str(features.get("product_dinner_preview_source", "")) != "dinner_preview":
+		return Result.failure("food scoring should use DinnerPreview when source_engine is available: score=%s features=%s" % [str(burger_score), str(features)])
+	if int(features.get("product_public_demand", 0)) <= 0:
+		return Result.failure("dinner preview food test should retain public burger demand: %s" % str(features))
+	if int(features.get("product_dinner_preview_income", -1)) != 0:
+		return Result.failure("contested production should preview zero income for player 0: %s" % str(features))
+	if float(features.get("product_dinner_preview_no_income_penalty", 0.0)) >= 0.0:
+		return Result.failure("zero-income unsafe production should expose DinnerPreview penalty: %s" % str(features))
+	if float(burger_score.get("score", 0.0)) >= float(skip_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should prefer skipping contested zero-income food while cash is unsafe: burger=%s skip=%s" % [str(burger_score), str(skip_score)])
+	return Result.success()
+
+static func _sync_initial_checkpoint_to_current_state(engine: GameEngine) -> Result:
+	if engine == null or engine.get_state() == null:
+		return Result.failure("cannot sync checkpoint: engine/state is null")
+	if engine.checkpoints.is_empty() or not (engine.checkpoints[0] is Dictionary):
+		return Result.failure("cannot sync checkpoint: checkpoint[0] missing")
+	var state := engine.get_state()
+	var checkpoint: Dictionary = engine.checkpoints[0]
+	checkpoint["state_dict"] = state.to_dict().duplicate(true)
+	checkpoint["hash"] = state.compute_hash()
+	engine.checkpoints[0] = checkpoint
+	engine.command_history.clear()
+	engine.current_command_index = -1
 	return Result.success()
 
 static func _test_strategy_scoring_uses_pricing_pipeline_for_price_actions(seed_val: int) -> Result:

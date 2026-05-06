@@ -41,6 +41,7 @@ func choose_command_with_engine(
 ) -> BotDecision:
 	var options := {}
 	if engine != null:
+		options["source_engine"] = engine
 		options["source_state"] = engine.get_state()
 	return _choose_command_with_options(observation, context, legal_action_ids, validate_command, budget, options)
 
@@ -92,6 +93,7 @@ func _choose_command_with_options(
 			continue
 		var macro: MacroAction = macro_val
 		var score_payload := StrategyScorerClass.score_macro(observation, macro, profile, {
+			"source_engine": generator_options.get("source_engine", null),
 			"source_state": generator_options.get("source_state", null),
 		})
 		var score := float(score_payload.get("score", -INF))

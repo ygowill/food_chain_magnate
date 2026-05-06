@@ -7,6 +7,7 @@ const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const PricingPipelineClass = preload("res://core/rules/pricing_pipeline.gd")
 const BoardAnalyzerClass = preload("res://core/ai/analysis/board_analyzer.gd")
+const DinnerPreviewClass = preload("res://core/ai/analysis/dinner_preview.gd")
 const MilestoneRaceAnalyzerClass = preload("res://core/ai/analysis/milestone_race_analyzer.gd")
 const StrategyBoardAnalyzerClass = preload("res://core/ai/strategy/strategy_board_analyzer.gd")
 const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_income_analyzer.gd")
@@ -80,7 +81,7 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			features["marketing_value"] = marketing_bonus
 			score += marketing_bonus
 		"produce_food", "procure_drinks":
-			var supply_bonus := _supply_action_value(observation, command, profile, income_analysis, features)
+			var supply_bonus := _supply_action_value(observation, command, profile, income_analysis, features, options)
 			features["product_supply_action_value"] = supply_bonus
 			score += supply_bonus
 		"set_price", "set_discount", "set_luxury_price":
@@ -329,7 +330,7 @@ static func _product_pipeline_value(product_id: String, profile, income_analysis
 	features["product_can_supply"] = bool(product_payload.get("can_supply", false))
 	return float(product_payload.get("score", 0.0))
 
-static func _supply_action_value(observation: ObservationState, command: Command, profile, income_analysis: Dictionary, features: Dictionary) -> float:
+static func _supply_action_value(observation: ObservationState, command: Command, profile, income_analysis: Dictionary, features: Dictionary, options: Dictionary = {}) -> float:
 	if command == null:
 		return 0.0
 	var action_id := str(command.action_id)
@@ -342,7 +343,8 @@ static func _supply_action_value(observation: ObservationState, command: Command
 	var no_demand_penalty := _no_demand_food_cash_safety_penalty(observation, command, features)
 	if not is_equal_approx(no_demand_penalty, 0.0):
 		features["product_no_demand_cash_safety_penalty"] = no_demand_penalty
-	return supply_bonus + no_demand_penalty
+	var preview_value := _dinner_preview_supply_value(observation, command, options, features)
+	return supply_bonus + no_demand_penalty + preview_value
 
 static func _route_drink_supply_action_value(observation: ObservationState, command: Command, profile, income_analysis: Dictionary, features: Dictionary) -> float:
 	var expected_by_product := _expected_route_drinks_by_product(observation, command)
@@ -441,6 +443,52 @@ static func _no_demand_food_cash_safety_penalty(observation: ObservationState, c
 	if cash >= salary_cost:
 		return 0.0
 	return -125.0
+
+static func _dinner_preview_supply_value(observation: ObservationState, command: Command, options: Dictionary, features: Dictionary) -> float:
+	if observation == null or command == null:
+		return 0.0
+	if str(command.action_id) != "produce_food":
+		return 0.0
+	if int(features.get("product_public_demand", 0)) <= 0:
+		return 0.0
+	var engine_val = options.get("source_engine", null)
+	if not (engine_val is GameEngine):
+		return 0.0
+	var preview_read := DinnerPreviewClass.preview_after_commands(engine_val, [command], {"max_steps": 24})
+	if not preview_read.ok:
+		features["product_dinner_preview_error"] = preview_read.error
+		return 0.0
+	var payload: Dictionary = Dictionary(preview_read.value)
+	var actor := int(command.actor)
+	var total_income := _read_indexed_int(payload.get("total_income", []), actor, 0)
+	var income_sales := _read_indexed_int(payload.get("income_sales", []), actor, 0)
+	features["product_dinner_preview_income"] = total_income
+	features["product_dinner_preview_sales_income"] = income_sales
+	features["product_dinner_preview_source"] = "dinner_preview"
+	var value := float(total_income) * 0.35
+	if total_income <= 0 and int(features.get("product_public_demand", 0)) > 0 and _cash_below_salary_cost(observation):
+		var penalty := -155.0
+		features["product_dinner_preview_no_income_penalty"] = penalty
+		value += penalty
+	return value
+
+static func _cash_below_salary_cost(observation: ObservationState) -> bool:
+	if observation == null:
+		return false
+	var salary_cost := _read_non_negative_int(observation.rules_public.get("salary_cost", 5), 5)
+	if salary_cost <= 0:
+		return false
+	var cash := _read_non_negative_int(observation.own_player.get("cash", 0), 0)
+	return cash < salary_cost
+
+static func _read_indexed_int(value, index: int, fallback: int) -> int:
+	if index < 0:
+		return fallback
+	if value is Array:
+		var arr: Array = value
+		if index < arr.size():
+			return _read_int(arr[index], fallback)
+	return fallback
 
 static func _expected_supply_units(observation: ObservationState, command: Command) -> int:
 	if command == null:
