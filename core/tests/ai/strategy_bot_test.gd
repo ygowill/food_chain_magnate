@@ -480,11 +480,18 @@ static func _test_recruit_score_values_house_placement_route(seed_val: int) -> R
 	)
 	var management_score: Dictionary = StrategyScorerClass.score_macro(observation, management_macro, profile)
 	var kitchen_score: Dictionary = StrategyScorerClass.score_macro(observation, kitchen_macro, profile)
-	if float(management_score.get("score", 0.0)) <= float(kitchen_score.get("score", 0.0)):
-		return Result.failure("StrategyScorer should value management trainee house route over extra kitchen trainee: management=%s kitchen=%s" % [str(management_score), str(kitchen_score)])
+	if float(management_score.get("score", 0.0)) >= float(kitchen_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should not push house route over core income before surplus economy: management=%s kitchen=%s" % [str(management_score), str(kitchen_score)])
 	var features: Dictionary = Dictionary(management_score.get("features", {}))
-	if float(features.get("recruit_placement_route_value", 0.0)) <= 0.0:
-		return Result.failure("management trainee should expose positive recruit_placement_route_value: %s" % str(features))
+	if not is_equal_approx(float(features.get("recruit_placement_route_value", -1.0)), 0.0):
+		return Result.failure("early management trainee should not expose recruit_placement_route_value: %s" % str(features))
+	var ready_observation := _synthetic_house_growth_observation()
+	ready_observation.own_player["cash"] = 30
+	ready_observation.own_player["employees"] = ["burger_cook", "marketing_trainee"]
+	var ready_score: Dictionary = StrategyScorerClass.score_macro(ready_observation, management_macro, profile)
+	var ready_features: Dictionary = Dictionary(ready_score.get("features", {}))
+	if float(ready_features.get("recruit_placement_route_value", 0.0)) <= 0.0:
+		return Result.failure("late management trainee should expose positive recruit_placement_route_value: %s" % str(ready_features))
 	var pre_demand := _synthetic_house_growth_observation()
 	pre_demand.own_player["cash"] = 0
 	var houses: Dictionary = Dictionary(pre_demand.map_public.get("houses", {})).duplicate(true)
@@ -539,12 +546,22 @@ static func _test_train_score_values_house_placement_route(seed_val: int) -> Res
 		{}
 	)
 	var nbd_score: Dictionary = StrategyScorerClass.score_macro(observation, nbd_macro, profile)
-	var jvp_score: Dictionary = StrategyScorerClass.score_macro(observation, jvp_macro, profile)
-	if float(nbd_score.get("score", 0.0)) <= float(jvp_score.get("score", 0.0)):
-		return Result.failure("StrategyScorer should prefer NBD training route when house growth space exists: nbd=%s jvp=%s" % [str(nbd_score), str(jvp_score)])
 	var nbd_features: Dictionary = Dictionary(nbd_score.get("features", {}))
-	if float(nbd_features.get("train_placement_route_value", 0.0)) <= 0.0:
-		return Result.failure("NBD training should expose positive train_placement_route_value: %s" % str(nbd_features))
+	if not is_equal_approx(float(nbd_features.get("train_placement_route_value", -1.0)), 0.0):
+		return Result.failure("early NBD training should not expose train_placement_route_value: %s" % str(nbd_features))
+	var ready_observation := _synthetic_house_growth_observation()
+	ready_observation.phase = DefsClass.PHASE_WORKING
+	ready_observation.sub_phase = DefsClass.SUB_PHASE_TRAIN
+	ready_observation.own_player["cash"] = 30
+	ready_observation.own_player["employees"] = ["trainer", "burger_cook", "marketing_trainee"]
+	ready_observation.own_player["reserve_employees"] = ["management_trainee"]
+	var ready_nbd_score: Dictionary = StrategyScorerClass.score_macro(ready_observation, nbd_macro, profile)
+	var jvp_score: Dictionary = StrategyScorerClass.score_macro(ready_observation, jvp_macro, profile)
+	if float(ready_nbd_score.get("score", 0.0)) <= float(jvp_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should prefer NBD training only after surplus economy is ready: nbd=%s jvp=%s" % [str(ready_nbd_score), str(jvp_score)])
+	var ready_nbd_features: Dictionary = Dictionary(ready_nbd_score.get("features", {}))
+	if float(ready_nbd_features.get("train_placement_route_value", 0.0)) <= 0.0:
+		return Result.failure("late NBD training should expose positive train_placement_route_value: %s" % str(ready_nbd_features))
 	var jvp_features: Dictionary = Dictionary(jvp_score.get("features", {}))
 	if not is_equal_approx(float(jvp_features.get("train_placement_route_value", -1.0)), 0.0):
 		return Result.failure("non-placement training should not expose placement route value: %s" % str(jvp_features))
@@ -560,7 +577,8 @@ static func _test_structure_score_values_reserve_new_business_developer(seed_val
 	var observation := _synthetic_house_growth_observation()
 	observation.phase = DefsClass.PHASE_RESTRUCTURING
 	observation.sub_phase = ""
-	observation.own_player["employees"] = ["trainer", "kitchen_trainee"]
+	observation.own_player["cash"] = 30
+	observation.own_player["employees"] = ["trainer", "kitchen_trainee", "marketing_trainee"]
 	observation.own_player["reserve_employees"] = ["new_business_developer"]
 	var nbd_macro := MacroAction.create(
 		"structure_new_business_developer",

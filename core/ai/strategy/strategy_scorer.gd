@@ -171,31 +171,36 @@ static func _placement_route_value(observation: ObservationState, employee_id: S
 	match employee_id:
 		"new_business_developer":
 			if not economy_ready:
-				return 6.0 + pressure * 0.1
-			return 42.0 + pressure
+				return 0.0
+			return 18.0 + pressure * 0.5
 		"management_trainee":
 			if _owns_any_employee(observation, ["management_trainee", "new_business_developer"]):
 				return 0.0
 			if not economy_ready:
-				return 4.0 + pressure * 0.1
-			return 30.0 + pressure * 0.7
+				return 0.0
+			return 7.0 + pressure * 0.2
 		"trainer":
 			if _owns_any_employee(observation, ["trainer", "new_business_developer"]):
 				return 0.0
 			if _owns_any_employee(observation, ["management_trainee"]):
 				if not economy_ready:
-					return 3.0 + pressure * 0.1
-				return 18.0 + pressure * 0.35
+					return 0.0
+				return 5.0 + pressure * 0.15
 	return 0.0
 
 static func _house_route_economy_ready(observation: ObservationState, income_analysis: Dictionary) -> bool:
 	if observation == null:
 		return false
-	if int(income_analysis.get("total_public_demand", 0)) > 0:
-		return true
 	var salary_cost := _read_non_negative_int(observation.rules_public.get("salary_cost", 5), 5)
 	var cash := _read_non_negative_int(observation.own_player.get("cash", 0), 0)
-	return salary_cost <= 0 or cash >= salary_cost
+	var required_cash := maxi(10, salary_cost * 3)
+	if cash < required_cash:
+		return false
+	if not _owns_role(observation, "produce_food"):
+		return false
+	if not _owns_role(observation, "marketing"):
+		return false
+	return int(income_analysis.get("total_public_demand", 0)) >= 2 or int(income_analysis.get("total_serviceable_demand", 0)) >= 2
 
 static func _house_growth_pressure(observation: ObservationState, income_analysis: Dictionary) -> float:
 	if observation == null:
@@ -206,9 +211,9 @@ static func _house_growth_pressure(observation: ObservationState, income_analysi
 	if _own_restaurant_count(observation) > 0:
 		pressure += 4.0
 	var public_demand := int(income_analysis.get("total_public_demand", 0))
-	if public_demand <= 2:
+	if public_demand >= 8:
 		pressure += 4.0
-	elif public_demand <= 4:
+	elif public_demand >= 4:
 		pressure += 2.0
 	return pressure
 
