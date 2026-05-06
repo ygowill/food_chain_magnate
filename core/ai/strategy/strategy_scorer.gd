@@ -496,7 +496,7 @@ static func _supply_action_value(observation: ObservationState, command: Command
 	if action_id == "procure_drinks" and product_id.is_empty():
 		return _route_drink_supply_action_value(observation, command, profile, income_analysis, features)
 	var expected_units := _expected_supply_units(observation, command)
-	var supply_bonus := _product_supply_action_value(product_id, profile, income_analysis, features, expected_units)
+	var supply_bonus := _product_supply_action_value(product_id, profile, income_analysis, features, expected_units, observation)
 	features["product_supply_expected_units"] = expected_units
 	var no_demand_penalty := _no_demand_food_cash_safety_penalty(observation, command, features)
 	if not is_equal_approx(no_demand_penalty, 0.0):
@@ -523,7 +523,7 @@ static func _route_drink_supply_action_value(observation: ObservationState, comm
 	for product_id in product_ids:
 		var expected_units := maxi(1, int(expected_by_product.get(product_id, 0)))
 		var product_features := {}
-		var product_value := _product_supply_action_value(product_id, profile, income_analysis, product_features, expected_units)
+		var product_value := _product_supply_action_value(product_id, profile, income_analysis, product_features, expected_units, observation)
 		product_values[product_id] = product_value
 		total_value += product_value
 		total_expected_units += expected_units
@@ -551,6 +551,11 @@ static func _route_drink_supply_action_value(observation: ObservationState, comm
 			"product_pending_marketing_demand",
 			"product_planning_demand",
 			"product_planning_inventory_gap",
+			"product_effective_pending_marketing_demand",
+			"product_effective_planning_demand",
+			"product_effective_planning_inventory_gap",
+			"product_future_supply_storage_available",
+			"product_pending_marketing_supply_deferred",
 			"product_supply_current_covered_units",
 			"product_supply_future_covered_units",
 			"product_can_supply",
@@ -561,7 +566,7 @@ static func _route_drink_supply_action_value(observation: ObservationState, comm
 			features["product_overstock_penalty"] = true
 	return total_value
 
-static func _product_supply_action_value(product_id: String, profile, income_analysis: Dictionary, features: Dictionary, expected_units: int = 1) -> float:
+static func _product_supply_action_value(product_id: String, profile, income_analysis: Dictionary, features: Dictionary, expected_units: int = 1, observation: ObservationState = null) -> float:
 	if product_id.is_empty():
 		return 0.0
 	var product_payload := StrategyIncomeAnalyzerClass.product_value(product_id, profile, income_analysis)
@@ -573,6 +578,12 @@ static func _product_supply_action_value(product_id: String, profile, income_ana
 	var planning_demand := int(product_payload.get("planning_demand", public_demand))
 	var planning_inventory_gap := int(product_payload.get("planning_inventory_gap", inventory_gap))
 	var can_supply := bool(product_payload.get("can_supply", false))
+	var can_preserve_future_inventory := StrategyIncomeAnalyzerClass.can_preserve_product_for_future_demand(observation, product_id)
+	var effective_pending_marketing_demand := pending_marketing_demand if can_preserve_future_inventory else 0
+	var effective_planning_demand := planning_demand if can_preserve_future_inventory else public_demand
+	var effective_planning_inventory_gap := planning_inventory_gap
+	if pending_marketing_demand > 0 and not can_preserve_future_inventory:
+		effective_planning_inventory_gap = inventory_gap
 	var supply_units := maxi(1, expected_units)
 	features["product_public_demand"] = public_demand
 	features["product_serviceable_demand"] = serviceable_demand
@@ -581,20 +592,26 @@ static func _product_supply_action_value(product_id: String, profile, income_ana
 	features["product_pending_marketing_demand"] = pending_marketing_demand
 	features["product_planning_demand"] = planning_demand
 	features["product_planning_inventory_gap"] = planning_inventory_gap
+	features["product_effective_pending_marketing_demand"] = effective_pending_marketing_demand
+	features["product_effective_planning_demand"] = effective_planning_demand
+	features["product_effective_planning_inventory_gap"] = effective_planning_inventory_gap
+	features["product_future_supply_storage_available"] = can_preserve_future_inventory
+	if pending_marketing_demand > 0 and not can_preserve_future_inventory:
+		features["product_pending_marketing_supply_deferred"] = true
 	features["product_can_supply"] = can_supply
-	if planning_inventory_gap > 0:
-		var covered_units := mini(planning_inventory_gap, supply_units)
+	if effective_planning_inventory_gap > 0:
+		var covered_units := mini(effective_planning_inventory_gap, supply_units)
 		var current_covered_units := mini(inventory_gap, covered_units)
 		var future_covered_units := maxi(0, covered_units - current_covered_units)
-		var excess_units := maxi(0, supply_units - planning_inventory_gap)
+		var excess_units := maxi(0, supply_units - effective_planning_inventory_gap)
 		features["product_supply_covered_units"] = covered_units
 		features["product_supply_current_covered_units"] = current_covered_units
 		features["product_supply_future_covered_units"] = future_covered_units
 		features["product_supply_excess_units"] = excess_units
-		return float(current_covered_units) * 14.0 + float(future_covered_units) * 9.0 + float(serviceable_demand) * 3.0 + float(public_demand) + float(pending_marketing_demand) * 1.5 + float(profile.product_priority(product_id)) * 0.5 - float(excess_units) * 3.0
+		return float(current_covered_units) * 14.0 + float(future_covered_units) * 9.0 + float(serviceable_demand) * 3.0 + float(public_demand) + float(effective_pending_marketing_demand) * 1.5 + float(profile.product_priority(product_id)) * 0.5 - float(excess_units) * 3.0
 	if public_demand <= 0 and inventory_units <= 0:
 		return float(profile.product_priority(product_id)) * 0.6
-	var desired_buffer := maxi(public_demand + 1, planning_demand)
+	var desired_buffer := maxi(public_demand + 1, effective_planning_demand)
 	if public_demand > 0 and inventory_units < desired_buffer:
 		var buffer_units := mini(supply_units, maxi(0, desired_buffer - inventory_units))
 		features["product_supply_buffer_units"] = buffer_units

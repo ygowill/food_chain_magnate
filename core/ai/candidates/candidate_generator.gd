@@ -1920,22 +1920,7 @@ static func _build_fridge_keep(observation: ObservationState) -> Dictionary:
 	return keep
 
 static func _get_fridge_capacity_from_milestones(milestones: Array) -> Dictionary:
-	var best_read := MilestoneEffectQueriesClass.max_non_negative_int_value(
-		milestones,
-		"gain_fridge",
-		"CandidateGenerator: ",
-		"own_player.milestones"
-	)
-	if not best_read.ok or not (best_read.value is Dictionary):
-		return {
-			"has_fridge": false,
-			"capacity": 0,
-		}
-	var best: Dictionary = best_read.value
-	return {
-		"has_fridge": bool(best.get("found", false)),
-		"capacity": int(best.get("value", 0)),
-	}
+	return StrategyIncomeAnalyzerClass.fridge_capacity_from_milestones(milestones, "CandidateGenerator: ", "own_player.milestones")
 
 static func _is_storable_food_or_drink(product_id: String) -> bool:
 	if product_id.is_empty() or not ProductRegistryClass.is_loaded():

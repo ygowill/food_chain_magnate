@@ -23,10 +23,15 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 		return _scenario_failure("trainable_supply_stays_structure_candidate", trainable_supply)
 	names.append("trainable_supply_stays_structure_candidate")
 
-	var pending_drinks := _scenario_pending_marketing_drink_supply_targets_product()
-	if not pending_drinks.ok:
-		return _scenario_failure("pending_marketing_drink_supply_targets_product", pending_drinks)
-	names.append("pending_marketing_drink_supply_targets_product")
+	var pending_drinks_deferred := _scenario_pending_marketing_drink_supply_deferred_without_fridge()
+	if not pending_drinks_deferred.ok:
+		return _scenario_failure("pending_marketing_drink_supply_deferred_without_fridge", pending_drinks_deferred)
+	names.append("pending_marketing_drink_supply_deferred_without_fridge")
+
+	var pending_drinks_fridge := _scenario_pending_marketing_drink_supply_targets_product_with_fridge()
+	if not pending_drinks_fridge.ok:
+		return _scenario_failure("pending_marketing_drink_supply_targets_product_with_fridge", pending_drinks_fridge)
+	names.append("pending_marketing_drink_supply_targets_product_with_fridge")
 
 	var first_recruit := _scenario_income_route_first_recruit_gets_food_supply(seed_val)
 	if not first_recruit.ok:
@@ -160,11 +165,44 @@ static func _scenario_trainable_supply_stays_structure_candidate(seed_val: int) 
 			return Result.success()
 	return Result.failure("expected burger_cook direct structure candidate while trainer exists: %s" % str(candidate_ids))
 
-static func _scenario_pending_marketing_drink_supply_targets_product() -> Result:
+static func _scenario_pending_marketing_drink_supply_deferred_without_fridge() -> Result:
 	var profile = StrategyProfileClass.new()
 	profile.configure_base_revenue()
 	var observation := _synthetic_drink_route_observation()
 	_set_observation_house_demand_count(observation, "house_near", "soda", 0)
+	observation.own_player["milestones"] = []
+	observation.marketing_instances_public = [
+		{"owner": 0, "product": "beer", "remaining_duration": 2},
+	]
+
+	var beer_macro := MacroAction.create(
+		"procure_route_beer_without_fridge",
+		[Command.create("procure_drinks", 0, {"employee_type": "truck_driver", "restaurant_id": "rest_near", "route": [[3, 2], [8, 2]], "selected_sources": [[8, 2]]})],
+		0.0,
+		["working", "procure_drinks"],
+		{}
+	)
+
+	var beer_score: Dictionary = StrategyScorerClass.score_macro(observation, beer_macro, profile)
+	var beer_features: Dictionary = Dictionary(beer_score.get("features", {}))
+	if int(beer_features.get("product_pending_marketing_demand", 0)) != 1:
+		return Result.failure("expected product_pending_marketing_demand=1: %s" % str(beer_features))
+	if bool(beer_features.get("product_future_supply_storage_available", true)):
+		return Result.failure("expected no future storage without fridge: %s" % str(beer_features))
+	if not bool(beer_features.get("product_pending_marketing_supply_deferred", false)):
+		return Result.failure("expected pending marketing supply to be deferred without fridge: %s" % str(beer_features))
+	if int(beer_features.get("product_supply_future_covered_units", 0)) != 0:
+		return Result.failure("expected no future supply coverage without fridge: %s" % str(beer_features))
+	if int(beer_features.get("product_effective_pending_marketing_demand", -1)) != 0:
+		return Result.failure("expected effective pending demand=0 without fridge: %s" % str(beer_features))
+	return Result.success()
+
+static func _scenario_pending_marketing_drink_supply_targets_product_with_fridge() -> Result:
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_drink_route_observation()
+	_set_observation_house_demand_count(observation, "house_near", "soda", 0)
+	observation.own_player["milestones"] = ["first_throw_away"]
 	observation.marketing_instances_public = [
 		{"owner": 0, "product": "beer", "remaining_duration": 2},
 	]
@@ -177,7 +215,7 @@ static func _scenario_pending_marketing_drink_supply_targets_product() -> Result
 		{}
 	)
 	var beer_macro := MacroAction.create(
-		"procure_route_beer_for_pending",
+		"procure_route_beer_for_pending_with_fridge",
 		[Command.create("procure_drinks", 0, {"employee_type": "truck_driver", "restaurant_id": "rest_near", "route": [[3, 2], [8, 2]], "selected_sources": [[8, 2]]})],
 		0.0,
 		["working", "procure_drinks"],
@@ -187,12 +225,18 @@ static func _scenario_pending_marketing_drink_supply_targets_product() -> Result
 	var soda_score: Dictionary = StrategyScorerClass.score_macro(observation, soda_macro, profile)
 	var beer_score: Dictionary = StrategyScorerClass.score_macro(observation, beer_macro, profile)
 	if float(beer_score.get("score", 0.0)) <= float(soda_score.get("score", 0.0)):
-		return Result.failure("expected beer route to beat soda route for pending beer marketing: beer=%s soda=%s" % [str(beer_score), str(soda_score)])
+		return Result.failure("expected beer route to beat soda route for pending beer marketing with fridge: beer=%s soda=%s" % [str(beer_score), str(soda_score)])
 	var beer_features: Dictionary = Dictionary(beer_score.get("features", {}))
 	if int(beer_features.get("product_pending_marketing_demand", 0)) != 1:
 		return Result.failure("expected product_pending_marketing_demand=1: %s" % str(beer_features))
+	if not bool(beer_features.get("product_future_supply_storage_available", false)):
+		return Result.failure("expected future storage with fridge: %s" % str(beer_features))
+	if bool(beer_features.get("product_pending_marketing_supply_deferred", false)):
+		return Result.failure("expected pending marketing supply not to be deferred with fridge: %s" % str(beer_features))
 	if int(beer_features.get("product_supply_future_covered_units", 0)) != 1:
-		return Result.failure("expected pending beer supply to cover one future unit: %s" % str(beer_features))
+		return Result.failure("expected pending beer supply to cover one future unit with fridge: %s" % str(beer_features))
+	if int(beer_features.get("product_effective_pending_marketing_demand", 0)) != 1:
+		return Result.failure("expected effective pending demand=1 with fridge: %s" % str(beer_features))
 	return Result.success()
 
 static func _scenario_income_route_first_recruit_gets_food_supply(seed_val: int) -> Result:

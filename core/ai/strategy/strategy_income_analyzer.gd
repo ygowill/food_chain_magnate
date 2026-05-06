@@ -3,6 +3,7 @@ extends RefCounted
 
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 
 static func analyze(observation: ObservationState, profile) -> Dictionary:
 	var products := {}
@@ -19,15 +20,17 @@ static func analyze(observation: ObservationState, profile) -> Dictionary:
 		var gap := maxi(0, demand - inventory)
 		var pending := int(pending_marketing_demand.get(product_id, 0))
 		var planning_demand := demand + pending
-		var planning_gap := maxi(0, planning_demand - inventory)
+		var pending_inventory_credit := _pending_marketing_inventory_credit(observation, product_id, demand, inventory, pending)
+		var planning_gap := gap + maxi(0, pending - pending_inventory_credit)
 		var can_supply := _can_supply_product(observation, product_id)
-		var value := _product_value_from_parts(product_id, demand, serviceable, inventory, gap, can_supply, profile, pending, planning_gap)
+		var value := _product_value_from_parts(product_id, demand, serviceable, inventory, gap, can_supply, profile, pending, planning_gap, pending_inventory_credit)
 		products[product_id] = {
 			"public_demand": demand,
 			"serviceable_demand": serviceable,
 			"inventory_units": inventory,
 			"inventory_gap": gap,
 			"pending_marketing_demand": pending,
+			"pending_marketing_inventory_credit": pending_inventory_credit,
 			"planning_demand": planning_demand,
 			"planning_inventory_gap": planning_gap,
 			"can_supply": can_supply,
@@ -63,6 +66,7 @@ static func product_value(product_id: String, profile, income_analysis: Dictiona
 			"inventory_units": 0,
 			"inventory_gap": 0,
 			"pending_marketing_demand": 0,
+			"pending_marketing_inventory_credit": 0,
 			"planning_demand": 0,
 			"planning_inventory_gap": 0,
 			"can_supply": false,
@@ -74,10 +78,52 @@ static func product_value(product_id: String, profile, income_analysis: Dictiona
 		"inventory_units": int(product_info.get("inventory_units", 0)),
 		"inventory_gap": int(product_info.get("inventory_gap", 0)),
 		"pending_marketing_demand": int(product_info.get("pending_marketing_demand", 0)),
+		"pending_marketing_inventory_credit": int(product_info.get("pending_marketing_inventory_credit", 0)),
 		"planning_demand": int(product_info.get("planning_demand", 0)),
 		"planning_inventory_gap": int(product_info.get("planning_inventory_gap", 0)),
 		"can_supply": bool(product_info.get("can_supply", false)),
 	}
+
+static func fridge_capacity_from_observation(observation: ObservationState) -> Dictionary:
+	if observation == null:
+		return {
+			"has_fridge": false,
+			"capacity": 0,
+		}
+	var milestones_val = observation.own_player.get("milestones", [])
+	if not (milestones_val is Array):
+		return {
+			"has_fridge": false,
+			"capacity": 0,
+		}
+	return fridge_capacity_from_milestones(Array(milestones_val), "StrategyIncomeAnalyzer: ", "own_player.milestones")
+
+static func fridge_capacity_from_milestones(milestones: Array, context_prefix: String = "StrategyIncomeAnalyzer: ", path: String = "milestones") -> Dictionary:
+	var best_read := MilestoneEffectQueriesClass.max_non_negative_int_value(
+		milestones,
+		"gain_fridge",
+		context_prefix,
+		path
+	)
+	if not best_read.ok or not (best_read.value is Dictionary):
+		return {
+			"has_fridge": false,
+			"capacity": 0,
+		}
+	var best: Dictionary = best_read.value
+	return {
+		"has_fridge": bool(best.get("found", false)),
+		"capacity": int(best.get("value", 0)),
+	}
+
+static func can_preserve_product_for_future_demand(observation: ObservationState, product_id: String) -> bool:
+	if product_id.is_empty() or not can_store_product(product_id):
+		return false
+	var fridge := fridge_capacity_from_observation(observation)
+	return bool(fridge.get("has_fridge", false)) and int(fridge.get("capacity", 0)) > 0
+
+static func can_store_product(product_id: String) -> bool:
+	return _is_storable_food_or_drink(product_id)
 
 static func build_fridge_keep(observation: ObservationState, capacity: int, profile = null) -> Dictionary:
 	if observation == null or capacity <= 0:
@@ -180,7 +226,7 @@ static func employee_value(observation: ObservationState, employee_id: String, p
 		"target_products": target_products,
 	}
 
-static func _product_value_from_parts(product_id: String, demand: int, serviceable: int, inventory: int, gap: int, can_supply: bool, profile, pending: int, planning_gap: int) -> float:
+static func _product_value_from_parts(product_id: String, demand: int, serviceable: int, inventory: int, gap: int, can_supply: bool, profile, pending: int, planning_gap: int, pending_inventory_credit: int) -> float:
 	var value := _profile_product_priority(profile, product_id)
 	var future_gap := maxi(0, planning_gap - gap)
 	value += float(demand) * 3.0
@@ -189,7 +235,7 @@ static func _product_value_from_parts(product_id: String, demand: int, serviceab
 	value += float(future_gap) * 4.0
 	value += float(pending) * 2.0
 	if inventory > 0:
-		value += float(mini(inventory, demand + pending)) * 2.0
+		value += float(mini(inventory, demand + pending_inventory_credit)) * 2.0
 	if can_supply:
 		value += 2.0
 	return value
@@ -198,11 +244,14 @@ static func _fridge_unit_value(product_id: String, unit_index: int, product_info
 	var value := _profile_product_priority(profile, product_id) * 0.25
 	var public_demand := int(product_info.get("public_demand", 0))
 	var serviceable_demand := int(product_info.get("serviceable_demand", 0))
+	var pending_marketing_demand := int(product_info.get("pending_marketing_demand", 0))
 	var can_supply := bool(product_info.get("can_supply", false))
 	if unit_index <= serviceable_demand:
 		value += 100.0
 	elif unit_index <= public_demand:
 		value += 45.0
+	elif unit_index <= public_demand + pending_marketing_demand:
+		value += 30.0
 	elif unit_index <= public_demand + 2 and (public_demand > 0 or can_supply):
 		value += 8.0
 	elif can_supply:
@@ -297,6 +346,13 @@ static func _pending_marketing_demand_by_product(observation: ObservationState) 
 		for product_id in _marketing_instance_products(inst):
 			out[product_id] = int(out.get(product_id, 0)) + amount
 	return out
+
+static func _pending_marketing_inventory_credit(observation: ObservationState, product_id: String, demand: int, inventory: int, pending: int) -> int:
+	if pending <= 0 or inventory <= demand:
+		return 0
+	if not can_preserve_product_for_future_demand(observation, product_id):
+		return 0
+	return mini(pending, inventory - demand)
 
 static func _marketing_instance_products(inst: Dictionary) -> Array[String]:
 	var out: Array[String] = []

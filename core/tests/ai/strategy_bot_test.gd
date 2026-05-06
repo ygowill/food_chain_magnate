@@ -1022,7 +1022,34 @@ static func _test_strategy_scoring_values_pending_marketing_supply(seed_val: int
 	profile.configure_base_revenue()
 	var observation := _synthetic_drink_route_observation()
 	_set_observation_house_demand_count(observation, "house_near", "soda", 0)
+	observation.own_player["milestones"] = []
 	observation.marketing_instances_public = [
+		{"owner": 0, "product": "beer", "remaining_duration": 2},
+	]
+	var beer_macro := MacroAction.create(
+		"procure_route_beer_without_fridge",
+		[Command.create("procure_drinks", 0, {"employee_type": "truck_driver", "restaurant_id": "rest_near", "route": [[3, 2], [8, 2]], "selected_sources": [[8, 2]]})],
+		0.0,
+		["working", "procure_drinks"],
+		{}
+	)
+	var beer_score: Dictionary = StrategyScorerClass.score_macro(observation, beer_macro, profile)
+	var beer_features: Dictionary = Dictionary(beer_score.get("features", {}))
+	if int(beer_features.get("product_pending_marketing_demand", 0)) != 1:
+		return Result.failure("pending marketing supply should expose product_pending_marketing_demand: %s" % str(beer_features))
+	if int(beer_features.get("product_planning_inventory_gap", 0)) != 1:
+		return Result.failure("pending marketing supply should expose product_planning_inventory_gap: %s" % str(beer_features))
+	if not bool(beer_features.get("product_pending_marketing_supply_deferred", false)):
+		return Result.failure("pending marketing supply should be deferred without fridge: %s" % str(beer_features))
+	if int(beer_features.get("product_supply_future_covered_units", 0)) != 0:
+		return Result.failure("pending marketing supply should not count future covered units without fridge: %s" % str(beer_features))
+	if int(beer_features.get("product_effective_pending_marketing_demand", -1)) != 0:
+		return Result.failure("pending marketing supply should have effective pending demand 0 without fridge: %s" % str(beer_features))
+
+	var fridge_observation := _synthetic_drink_route_observation()
+	_set_observation_house_demand_count(fridge_observation, "house_near", "soda", 0)
+	fridge_observation.own_player["milestones"] = ["first_throw_away"]
+	fridge_observation.marketing_instances_public = [
 		{"owner": 0, "product": "beer", "remaining_duration": 2},
 	]
 	var soda_macro := MacroAction.create(
@@ -1032,24 +1059,15 @@ static func _test_strategy_scoring_values_pending_marketing_supply(seed_val: int
 		["working", "procure_drinks"],
 		{}
 	)
-	var beer_macro := MacroAction.create(
-		"procure_route_beer_for_pending",
-		[Command.create("procure_drinks", 0, {"employee_type": "truck_driver", "restaurant_id": "rest_near", "route": [[3, 2], [8, 2]], "selected_sources": [[8, 2]]})],
-		0.0,
-		["working", "procure_drinks"],
-		{}
-	)
-	var soda_score: Dictionary = StrategyScorerClass.score_macro(observation, soda_macro, profile)
-	var beer_score: Dictionary = StrategyScorerClass.score_macro(observation, beer_macro, profile)
-	if float(beer_score.get("score", 0.0)) <= float(soda_score.get("score", 0.0)):
-		return Result.failure("StrategyScorer should procure drinks matching pending own marketing: beer=%s soda=%s" % [str(beer_score), str(soda_score)])
-	var beer_features: Dictionary = Dictionary(beer_score.get("features", {}))
-	if int(beer_features.get("product_pending_marketing_demand", 0)) != 1:
-		return Result.failure("pending marketing supply should expose product_pending_marketing_demand: %s" % str(beer_features))
-	if int(beer_features.get("product_planning_inventory_gap", 0)) != 1:
-		return Result.failure("pending marketing supply should expose product_planning_inventory_gap: %s" % str(beer_features))
-	if int(beer_features.get("product_supply_future_covered_units", 0)) != 1:
-		return Result.failure("pending marketing supply should count future covered units: %s" % str(beer_features))
+	var fridge_beer_score: Dictionary = StrategyScorerClass.score_macro(fridge_observation, beer_macro, profile)
+	var soda_score: Dictionary = StrategyScorerClass.score_macro(fridge_observation, soda_macro, profile)
+	if float(fridge_beer_score.get("score", 0.0)) <= float(soda_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should procure drinks matching pending own marketing when fridge can preserve it: beer=%s soda=%s" % [str(fridge_beer_score), str(soda_score)])
+	var fridge_beer_features: Dictionary = Dictionary(fridge_beer_score.get("features", {}))
+	if int(fridge_beer_features.get("product_supply_future_covered_units", 0)) != 1:
+		return Result.failure("pending marketing supply should count future covered units with fridge: %s" % str(fridge_beer_features))
+	if int(fridge_beer_features.get("product_effective_pending_marketing_demand", 0)) != 1:
+		return Result.failure("pending marketing supply should have effective pending demand 1 with fridge: %s" % str(fridge_beer_features))
 	return Result.success()
 
 static func _test_strategy_scoring_penalizes_product_overstock(seed_val: int) -> Result:
