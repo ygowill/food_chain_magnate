@@ -150,12 +150,24 @@ static func _effects_value(effects: Array, profile) -> float:
 						total += 5.0 + _employee_priority(profile, str(card_val)) * 0.6
 			"procure_plus_one":
 				total += 14.0
+			"drinks_per_source_delta":
+				total += maxf(10.0, _non_negative_float(effect.get("value", 1), 1.0) * 10.0)
+			"distance_plus_one":
+				total += 6.0 + float(maxi(1, _array_size(effect.get("targets", [])))) * 4.0
 			"marketing_no_salary", "marketing_permanent":
 				total += 10.0
+			"extra_marketing":
+				total += 12.0 + _non_negative_float(effect.get("value", 0), 0.0) * 4.0
+			"gain_fridge":
+				total += 12.0 + _non_negative_float(effect.get("value", 0), 0.0) * 0.8
 			"sell_bonus":
 				total += maxf(0.0, float(effect.get("value", 0)))
+			"waitress_tips":
+				total += maxf(6.0, _non_negative_float(effect.get("value", 0), 0.0) * 2.0)
 			"turnorder_empty_slots":
 				total += maxf(0.0, float(effect.get("value", 0))) * 4.0
+			"multi_trainer_on_one":
+				total += 12.0
 			"peek_reserve_cards":
 				total += 6.0
 			"ceo_get_cfo":
@@ -165,6 +177,16 @@ static func _effects_value(effects: Array, profile) -> float:
 			"base_price_delta":
 				total += maxf(0.0, -float(effect.get("value", 0))) * 2.0
 	return total
+
+static func _non_negative_float(value, fallback: float = 0.0) -> float:
+	if value is int or value is float:
+		return maxf(0.0, float(value))
+	return fallback
+
+static func _array_size(value) -> int:
+	if value is Array:
+		return Array(value).size()
+	return 0
 
 static func _employee_priority(profile, employee_id: String) -> float:
 	if profile != null and profile.has_method("employee_priority"):

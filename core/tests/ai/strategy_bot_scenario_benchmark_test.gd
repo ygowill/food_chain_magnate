@@ -6,6 +6,7 @@ const CandidateGeneratorClass = preload("res://core/ai/candidates/candidate_gene
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const DinnertimeSettlementTestClass = preload("res://core/tests/dinnertime_settlement_test.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const MilestoneRaceAnalyzerClass = preload("res://core/ai/analysis/milestone_race_analyzer.gd")
 const ObservationAdapterClass = preload("res://core/ai/observation/observation_adapter.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
@@ -123,6 +124,11 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not airplane_trigger.ok:
 		return _scenario_failure("milestone_airplane_trigger_uses_marketing_board", airplane_trigger)
 	names.append("milestone_airplane_trigger_uses_marketing_board")
+
+	var support_effect_values := _scenario_milestone_effect_values_base_support()
+	if not support_effect_values.ok:
+		return _scenario_failure("milestone_effect_values_base_support", support_effect_values)
+	names.append("milestone_effect_values_base_support")
 
 	return Result.success({
 		"scenarios": names.size(),
@@ -1422,6 +1428,31 @@ static func _scenario_milestone_airplane_trigger_uses_marketing_board() -> Resul
 	var zeppelin_features: Dictionary = Dictionary(zeppelin_score.get("features", {}))
 	if Array(zeppelin_features.get("milestone_race_ids", [])).has("first_airplane"):
 		return Result.failure("zeppelin drink procurement must not expose first_airplane race id: %s" % str(zeppelin_features))
+	return Result.success()
+
+static func _scenario_milestone_effect_values_base_support() -> Result:
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var checks: Array[Dictionary] = [
+		{"id": "first_waitress", "min": 8.0, "effect": "waitress_tips"},
+		{"id": "first_throw_away", "min": 12.0, "effect": "gain_fridge"},
+		{"id": "first_pay_20_salaries", "min": 10.0, "effect": "multi_trainer_on_one"},
+		{"id": "first_radio", "min": 14.0, "effect": "extra_marketing"},
+		{"id": "first_cart_operator", "min": 12.0, "effect": "distance_plus_one"},
+	]
+	for check in checks:
+		var milestone_id := str(check.get("id", ""))
+		var min_value := float(check.get("min", 0.0))
+		var value := MilestoneRaceAnalyzerClass.milestone_value(milestone_id, profile)
+		if value < min_value:
+			return Result.failure(
+				"expected %s to value %s effect at least %.1f, got %.1f" % [
+					milestone_id,
+					str(check.get("effect", "")),
+					min_value,
+					value,
+				]
+			)
 	return Result.success()
 
 static func _best_recruit_candidate(observation: ObservationState, seed_val: int) -> Result:
