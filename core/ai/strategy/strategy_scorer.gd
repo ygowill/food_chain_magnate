@@ -503,7 +503,7 @@ static func _supply_action_value(observation: ObservationState, command: Command
 	var no_demand_penalty := _no_demand_food_cash_safety_penalty(observation, command, features)
 	if not is_equal_approx(no_demand_penalty, 0.0):
 		features["product_no_demand_cash_safety_penalty"] = no_demand_penalty
-	var preview_value := _dinner_preview_supply_value(observation, command, options, features)
+	var preview_value := _dinner_preview_supply_value(observation, command, profile, options, features)
 	return supply_bonus + no_demand_penalty + preview_value
 
 static func _route_drink_supply_action_value(observation: ObservationState, command: Command, profile, income_analysis: Dictionary, features: Dictionary) -> float:
@@ -642,7 +642,7 @@ static func _no_demand_food_cash_safety_penalty(observation: ObservationState, c
 		return 0.0
 	return -125.0
 
-static func _dinner_preview_supply_value(observation: ObservationState, command: Command, options: Dictionary, features: Dictionary) -> float:
+static func _dinner_preview_supply_value(observation: ObservationState, command: Command, profile, options: Dictionary, features: Dictionary) -> float:
 	if observation == null or command == null:
 		return 0.0
 	if str(command.action_id) != "produce_food":
@@ -664,11 +664,43 @@ static func _dinner_preview_supply_value(observation: ObservationState, command:
 	features["product_dinner_preview_sales_income"] = income_sales
 	features["product_dinner_preview_source"] = "dinner_preview"
 	var value := float(total_income) * 0.35
+	value += _dinner_preview_cash_milestone_value(observation, payload, actor, profile, features)
 	if total_income <= 0 and int(features.get("product_public_demand", 0)) > 0 and _cash_below_salary_cost(observation):
 		var penalty := -155.0
 		features["product_dinner_preview_no_income_penalty"] = penalty
 		value += penalty
 	return value
+
+static func _dinner_preview_cash_milestone_value(observation: ObservationState, payload: Dictionary, player_id: int, profile, features: Dictionary) -> float:
+	if observation == null or player_id < 0:
+		return 0.0
+	var state_val = payload.get("state", null)
+	if not (state_val is GameState):
+		return 0.0
+	var preview_state: GameState = state_val
+	var before_ids := _own_milestones(observation)
+	var after_ids := _player_milestones_from_state(preview_state, player_id)
+	var public_ids := _sorted_unique_strings(observation.milestone_pool_public)
+	var gained: Array[String] = []
+	var value := 0.0
+	for milestone_id in ["first_have_20", "first_have_100"]:
+		if before_ids.has(milestone_id) or not after_ids.has(milestone_id) or not public_ids.has(milestone_id):
+			continue
+		gained.append(milestone_id)
+		value += MilestoneRaceAnalyzerClass.milestone_value(milestone_id, profile)
+	if gained.is_empty():
+		return 0.0
+	features["product_dinner_preview_milestone_ids"] = gained.duplicate()
+	features["product_dinner_preview_milestone_value"] = value
+	return value
+
+static func _player_milestones_from_state(state: GameState, player_id: int) -> Array[String]:
+	if state == null or player_id < 0 or player_id >= state.players.size():
+		return []
+	var player_val = state.players[player_id]
+	if not (player_val is Dictionary):
+		return []
+	return _sorted_unique_strings(Dictionary(player_val).get("milestones", []))
 
 static func _cash_below_salary_cost(observation: ObservationState) -> bool:
 	if observation == null:

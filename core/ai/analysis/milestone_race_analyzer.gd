@@ -76,6 +76,9 @@ static func _candidate_milestone_ids(observation: ObservationState, action_id: S
 			out.append("first_lower_prices")
 	return out
 
+static func milestone_value(milestone_id: String, profile) -> float:
+	return _milestone_value(milestone_id, profile)
+
 static func _recruit_would_trigger_first_hire_3(observation: ObservationState, actor_id: int) -> bool:
 	if observation == null:
 		return false

@@ -3,7 +3,10 @@ extends RefCounted
 
 const CandidateGeneratorClass = preload("res://core/ai/candidates/candidate_generator.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const DinnertimeSettlementTestClass = preload("res://core/tests/dinnertime_settlement_test.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const ObservationAdapterClass = preload("res://core/ai/observation/observation_adapter.gd")
+const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const StrategyProfileClass = preload("res://core/ai/strategy/strategy_profile.gd")
 const StrategyScorerClass = preload("res://core/ai/strategy/strategy_scorer.gd")
 
@@ -62,6 +65,11 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not lower_price_milestone.ok:
 		return _scenario_failure("milestone_lower_price_ignores_luxury_price", lower_price_milestone)
 	names.append("milestone_lower_price_ignores_luxury_price")
+
+	var cash_reached_milestone := _scenario_dinner_preview_values_cash_reached_milestone(seed_val)
+	if not cash_reached_milestone.ok:
+		return _scenario_failure("dinner_preview_values_cash_reached_milestone", cash_reached_milestone)
+	names.append("dinner_preview_values_cash_reached_milestone")
 
 	var marketing_sell_bonus := _scenario_milestone_marketing_sell_bonus_is_valued()
 	if not marketing_sell_bonus.ok:
@@ -436,6 +444,57 @@ static func _scenario_milestone_lower_price_ignores_luxury_price() -> Result:
 		return Result.failure("luxury price should not receive lower-price race value: %s" % str(luxury_features))
 	return Result.success()
 
+static func _scenario_dinner_preview_values_cash_reached_milestone(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var state := engine.get_state()
+	DinnertimeSettlementTestClass._force_turn_order(state)
+	DinnertimeSettlementTestClass._apply_test_map(state)
+	DinnertimeSettlementTestClass._set_house_demands(state, "house_left", [{"product": "burger"}])
+	DinnertimeSettlementTestClass._set_house_demands(state, "house_right", [])
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
+	state.current_player_index = 0
+	state.players[0]["cash"] = 10
+	state.players[0]["inventory"] = {}
+	state.players[0]["milestones"] = []
+	state.players[1]["inventory"] = {}
+	state.rules["salary_cost"] = 5
+	state.milestone_pool = ["first_have_20"]
+	var take := StateUpdaterClass.take_from_pool(state, "kitchen_trainee", 1)
+	if not take.ok:
+		return Result.failure("cash milestone preview take kitchen_trainee failed: %s" % take.error)
+	var add := StateUpdaterClass.add_employee(state, 0, "kitchen_trainee", false)
+	if not add.ok:
+		return Result.failure("cash milestone preview add kitchen_trainee failed: %s" % add.error)
+	var sync := _sync_initial_checkpoint_to_current_state(engine)
+	if not sync.ok:
+		return sync
+	var observation_read := ObservationAdapterClass.observe_for_player(engine, 0)
+	if not observation_read.ok:
+		return observation_read
+
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var burger_macro := MacroAction.create(
+		"produce_burger_reaches_cash_20",
+		[Command.create("produce_food", 0, {"employee_type": "kitchen_trainee", "food_type": "burger"})],
+		0.0,
+		["working", "produce_food"],
+		{}
+	)
+	var score: Dictionary = StrategyScorerClass.score_macro(observation_read.value, burger_macro, profile, {"source_engine": engine, "source_state": state})
+	var features: Dictionary = Dictionary(score.get("features", {}))
+	if str(features.get("product_dinner_preview_source", "")) != "dinner_preview":
+		return Result.failure("cash milestone scenario should use DinnerPreview: %s" % str(features))
+	if not Array(features.get("product_dinner_preview_milestone_ids", [])).has("first_have_20"):
+		return Result.failure("expected DinnerPreview to expose first_have_20 cash milestone: %s" % str(features))
+	if float(features.get("product_dinner_preview_milestone_value", 0.0)) <= 0.0:
+		return Result.failure("expected DinnerPreview cash milestone to add positive value: %s" % str(features))
+	return Result.success()
+
 static func _scenario_milestone_marketing_sell_bonus_is_valued() -> Result:
 	var profile = StrategyProfileClass.new()
 	profile.configure_base_revenue()
@@ -689,3 +748,19 @@ static func _set_observation_house_demand_count(observation: ObservationState, h
 	house["demands"] = demands
 	houses[house_id] = house
 	observation.map_public["houses"] = houses
+
+static func _sync_initial_checkpoint_to_current_state(engine: GameEngine) -> Result:
+	if engine == null:
+		return Result.failure("engine is null")
+	if engine.checkpoints.is_empty():
+		return Result.failure("engine has no initial checkpoint")
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	var checkpoint: Dictionary = engine.checkpoints[0]
+	checkpoint["state_dict"] = state.to_dict().duplicate(true)
+	checkpoint["hash"] = state.compute_hash()
+	engine.checkpoints[0] = checkpoint
+	engine.command_history.clear()
+	engine.current_command_index = -1
+	return Result.success()
