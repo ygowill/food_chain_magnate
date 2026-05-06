@@ -49,19 +49,23 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			var to_employee := str(command.params.get("to_employee", ""))
 			var target_value := StrategyIncomeAnalyzerClass.employee_value(observation, to_employee, profile, income_analysis)
 			var train_placement_route_value := _placement_route_value(observation, to_employee, income_analysis)
-			var train_bonus: float = float(target_value.get("score", 0.0)) * 1.2 + maxf(0.0, float(profile.employee_priority(to_employee)) - float(profile.employee_priority(from_employee))) + train_placement_route_value
+			var train_route_readiness_adjustment := _placement_route_readiness_adjustment(observation, to_employee, income_analysis)
+			var train_bonus: float = float(target_value.get("score", 0.0)) * 1.2 + maxf(0.0, float(profile.employee_priority(to_employee)) - float(profile.employee_priority(from_employee))) + train_placement_route_value + train_route_readiness_adjustment
 			features["train_value"] = train_bonus
 			features["train_target_income_value"] = float(target_value.get("score", 0.0))
 			features["train_placement_route_value"] = train_placement_route_value
+			features["train_route_readiness_adjustment"] = train_route_readiness_adjustment
 			features["train_target_products"] = Array(target_value.get("target_products", [])).duplicate()
 			score += train_bonus
 		"set_company_structure_direct", "set_company_structure_report", "restructure_employee":
 			var employee_id2 := str(command.params.get("employee_id", ""))
 			var structure_bonus := _employee_strategy_value(observation, employee_id2, profile, income_analysis)
+			var structure_route_readiness_adjustment := _placement_route_readiness_adjustment(observation, employee_id2, income_analysis)
 			features["structure_employee_value"] = structure_bonus
 			features["structure_placement_route_value"] = _placement_route_value(observation, employee_id2, income_analysis)
+			features["structure_route_readiness_adjustment"] = structure_route_readiness_adjustment
 			_append_employee_income_features(features, observation, employee_id2, income_analysis, profile, "structure")
-			score += structure_bonus
+			score += structure_bonus + structure_route_readiness_adjustment
 		"initiate_marketing":
 			var product_id := str(command.params.get("product", ""))
 			var affected_ids := _affected_house_ids(macro)
@@ -194,18 +198,40 @@ static func _placement_route_value(observation: ObservationState, employee_id: S
 	return 0.0
 
 static func _house_route_economy_ready(observation: ObservationState, income_analysis: Dictionary) -> bool:
+	if not _stable_income_route_ready(observation, income_analysis):
+		return false
 	if observation == null:
 		return false
 	var salary_cost := _read_non_negative_int(observation.rules_public.get("salary_cost", 5), 5)
 	var cash := _read_non_negative_int(observation.own_player.get("cash", 0), 0)
-	var required_cash := maxi(10, salary_cost * 3)
+	var required_cash := maxi(40, salary_cost * 8)
 	if cash < required_cash:
+		return false
+	return int(income_analysis.get("total_public_demand", 0)) >= 5 or int(income_analysis.get("total_serviceable_demand", 0)) >= 3
+
+static func _stable_income_route_ready(observation: ObservationState, income_analysis: Dictionary) -> bool:
+	if observation == null:
+		return false
+	if _own_restaurant_count(observation) <= 0:
 		return false
 	if not _owns_role(observation, "produce_food"):
 		return false
 	if not _owns_role(observation, "marketing"):
 		return false
-	return int(income_analysis.get("total_public_demand", 0)) >= 2 or int(income_analysis.get("total_serviceable_demand", 0)) >= 2
+	var salary_cost := _read_non_negative_int(observation.rules_public.get("salary_cost", 5), 5)
+	var cash := _read_non_negative_int(observation.own_player.get("cash", 0), 0)
+	if cash < maxi(20, salary_cost * 4):
+		return false
+	return int(income_analysis.get("total_serviceable_demand", 0)) >= 2 or int(income_analysis.get("total_public_demand", 0)) >= 4
+
+static func _placement_route_readiness_adjustment(observation: ObservationState, employee_id: String, income_analysis: Dictionary) -> float:
+	if not _employee_is_placement_employee(employee_id):
+		return 0.0
+	if not _has_house_growth_space(observation):
+		return -115.0
+	if _house_route_economy_ready(observation, income_analysis):
+		return 0.0
+	return -115.0
 
 static func _house_growth_pressure(observation: ObservationState, income_analysis: Dictionary) -> float:
 	if observation == null:
@@ -307,15 +333,21 @@ static func _desired_recruit_count(observation: ObservationState, employee_id: S
 		"management_trainee":
 			if _owns_any_employee(observation, ["management_trainee", "new_business_developer", "junior_vice_president", "luxury_manager"]):
 				return 0
-			return 1
+			if not _has_house_growth_space(observation):
+				return 0
+			return 1 if _house_route_economy_ready(observation, income_analysis) else 0
 		"recruiting_girl":
-			return 1
+			return 1 if _stable_income_route_ready(observation, income_analysis) else 0
 	if role == "new_shop":
 		var unserviceable := int(income_analysis.get("total_public_demand", 0)) - int(income_analysis.get("total_serviceable_demand", 0))
 		return 1 if unserviceable > 0 or _own_restaurant_count(observation) <= 1 else 0
 	if role == "produce_food":
 		return 2 if int(income_analysis.get("total_public_demand", 0)) >= 6 else 1
-	if role == "marketing" or role == "procure_drink" or role == "recruit_train" or role == "price":
+	if role == "price":
+		if int(income_analysis.get("total_serviceable_demand", 0)) <= 0:
+			return 0
+		return 1 if _stable_income_route_ready(observation, income_analysis) else 0
+	if role == "marketing" or role == "procure_drink" or role == "recruit_train":
 		return 1
 	return 1
 

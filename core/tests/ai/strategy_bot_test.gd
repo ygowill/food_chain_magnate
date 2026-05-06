@@ -54,6 +54,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var recruit_roster := _test_recruit_score_penalizes_roster_saturation(seed_val)
 	if not recruit_roster.ok:
 		return recruit_roster
+	var advanced_support_recruit := _test_recruit_score_delays_advanced_support_until_income_ready(seed_val)
+	if not advanced_support_recruit.ok:
+		return advanced_support_recruit
 	var house_route_recruit := _test_recruit_score_values_house_placement_route(seed_val)
 	if not house_route_recruit.ok:
 		return house_route_recruit
@@ -508,6 +511,68 @@ static func _test_recruit_score_penalizes_roster_saturation(seed_val: int) -> Re
 		return Result.failure("completed management route should be saturated: %s" % str(management_features))
 	return Result.success()
 
+static func _test_recruit_score_delays_advanced_support_until_income_ready(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_income_observation()
+	observation.phase = DefsClass.PHASE_WORKING
+	observation.sub_phase = DefsClass.SUB_PHASE_RECRUIT
+	observation.own_player["employees"] = ["burger_cook"]
+	var pricing_macro := MacroAction.create(
+		"recruit_pricing_before_stable_income",
+		[Command.create("recruit", 0, {"employee_type": "pricing_manager"})],
+		0.0,
+		["working", "recruit"],
+		{}
+	)
+	var recruiter_macro := MacroAction.create(
+		"recruit_recruiting_girl_before_stable_income",
+		[Command.create("recruit", 0, {"employee_type": "recruiting_girl"})],
+		0.0,
+		["working", "recruit"],
+		{}
+	)
+	var skip_macro := MacroAction.create(
+		"skip_recruit",
+		[Command.create("skip_sub_phase", 0, {})],
+		0.0,
+		["working", "fallback"],
+		{}
+	)
+	var early_pricing_score: Dictionary = StrategyScorerClass.score_macro(observation, pricing_macro, profile)
+	var early_recruiter_score: Dictionary = StrategyScorerClass.score_macro(observation, recruiter_macro, profile)
+	var skip_score: Dictionary = StrategyScorerClass.score_macro(observation, skip_macro, profile)
+	if float(early_pricing_score.get("score", 0.0)) >= float(skip_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should skip pricing manager before stable income route: pricing=%s skip=%s" % [str(early_pricing_score), str(skip_score)])
+	if float(early_recruiter_score.get("score", 0.0)) >= float(skip_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should skip recruiting girl before stable income route: recruiting_girl=%s skip=%s" % [str(early_recruiter_score), str(skip_score)])
+	var early_pricing_features: Dictionary = Dictionary(early_pricing_score.get("features", {}))
+	if int(early_pricing_features.get("recruit_desired_count", -1)) != 0:
+		return Result.failure("early pricing manager should expose zero desired count: %s" % str(early_pricing_features))
+	var early_recruiter_features: Dictionary = Dictionary(early_recruiter_score.get("features", {}))
+	if int(early_recruiter_features.get("recruit_desired_count", -1)) != 0:
+		return Result.failure("early recruiting girl should expose zero desired count: %s" % str(early_recruiter_features))
+
+	var ready_observation := _synthetic_income_observation()
+	ready_observation.phase = DefsClass.PHASE_WORKING
+	ready_observation.sub_phase = DefsClass.SUB_PHASE_RECRUIT
+	ready_observation.own_player["cash"] = 25
+	ready_observation.own_player["employees"] = ["burger_cook", "marketing_trainee"]
+	ready_observation.own_player["inventory"] = {"burger": 2}
+	var ready_pricing_score: Dictionary = StrategyScorerClass.score_macro(ready_observation, pricing_macro, profile)
+	var ready_recruiter_score: Dictionary = StrategyScorerClass.score_macro(ready_observation, recruiter_macro, profile)
+	var ready_pricing_features: Dictionary = Dictionary(ready_pricing_score.get("features", {}))
+	if int(ready_pricing_features.get("recruit_desired_count", 0)) != 1:
+		return Result.failure("stable income pricing manager should expose desired count 1: %s" % str(ready_pricing_features))
+	var ready_recruiter_features: Dictionary = Dictionary(ready_recruiter_score.get("features", {}))
+	if int(ready_recruiter_features.get("recruit_desired_count", 0)) != 1:
+		return Result.failure("stable income recruiting girl should expose desired count 1: %s" % str(ready_recruiter_features))
+	return Result.success()
+
 static func _test_recruit_score_values_house_placement_route(seed_val: int) -> Result:
 	var engine := GameEngine.new()
 	var init := engine.initialize(2, seed_val)
@@ -539,13 +604,19 @@ static func _test_recruit_score_values_house_placement_route(seed_val: int) -> R
 	var features: Dictionary = Dictionary(management_score.get("features", {}))
 	if not is_equal_approx(float(features.get("recruit_placement_route_value", -1.0)), 0.0):
 		return Result.failure("early management trainee should not expose recruit_placement_route_value: %s" % str(features))
+	if int(features.get("recruit_desired_count", -1)) != 0:
+		return Result.failure("early management trainee should expose zero desired count: %s" % str(features))
 	var ready_observation := _synthetic_house_growth_observation()
-	ready_observation.own_player["cash"] = 30
+	ready_observation.own_player["cash"] = 50
 	ready_observation.own_player["employees"] = ["burger_cook", "marketing_trainee"]
+	ready_observation.own_player["inventory"] = {"burger": 5}
+	_set_observation_house_demand_count(ready_observation, "house_near", "burger", 5)
 	var ready_score: Dictionary = StrategyScorerClass.score_macro(ready_observation, management_macro, profile)
 	var ready_features: Dictionary = Dictionary(ready_score.get("features", {}))
 	if float(ready_features.get("recruit_placement_route_value", 0.0)) <= 0.0:
 		return Result.failure("late management trainee should expose positive recruit_placement_route_value: %s" % str(ready_features))
+	if int(ready_features.get("recruit_desired_count", 0)) != 1:
+		return Result.failure("late management trainee should expose desired count 1: %s" % str(ready_features))
 	var pre_demand := _synthetic_house_growth_observation()
 	pre_demand.own_player["cash"] = 0
 	var houses: Dictionary = Dictionary(pre_demand.map_public.get("houses", {})).duplicate(true)
@@ -603,12 +674,16 @@ static func _test_train_score_values_house_placement_route(seed_val: int) -> Res
 	var nbd_features: Dictionary = Dictionary(nbd_score.get("features", {}))
 	if not is_equal_approx(float(nbd_features.get("train_placement_route_value", -1.0)), 0.0):
 		return Result.failure("early NBD training should not expose train_placement_route_value: %s" % str(nbd_features))
+	if float(nbd_features.get("train_route_readiness_adjustment", 0.0)) >= 0.0:
+		return Result.failure("early NBD training should carry negative route readiness adjustment: %s" % str(nbd_features))
 	var ready_observation := _synthetic_house_growth_observation()
 	ready_observation.phase = DefsClass.PHASE_WORKING
 	ready_observation.sub_phase = DefsClass.SUB_PHASE_TRAIN
-	ready_observation.own_player["cash"] = 30
+	ready_observation.own_player["cash"] = 50
 	ready_observation.own_player["employees"] = ["trainer", "burger_cook", "marketing_trainee"]
 	ready_observation.own_player["reserve_employees"] = ["management_trainee"]
+	ready_observation.own_player["inventory"] = {"burger": 5}
+	_set_observation_house_demand_count(ready_observation, "house_near", "burger", 5)
 	var ready_nbd_score: Dictionary = StrategyScorerClass.score_macro(ready_observation, nbd_macro, profile)
 	var jvp_score: Dictionary = StrategyScorerClass.score_macro(ready_observation, jvp_macro, profile)
 	if float(ready_nbd_score.get("score", 0.0)) <= float(jvp_score.get("score", 0.0)):
@@ -631,7 +706,7 @@ static func _test_structure_score_values_reserve_new_business_developer(seed_val
 	var observation := _synthetic_house_growth_observation()
 	observation.phase = DefsClass.PHASE_RESTRUCTURING
 	observation.sub_phase = ""
-	observation.own_player["cash"] = 30
+	observation.own_player["cash"] = 20
 	observation.own_player["employees"] = ["trainer", "kitchen_trainee", "marketing_trainee"]
 	observation.own_player["reserve_employees"] = ["new_business_developer"]
 	var nbd_macro := MacroAction.create(
@@ -650,11 +725,29 @@ static func _test_structure_score_values_reserve_new_business_developer(seed_val
 	)
 	var nbd_score: Dictionary = StrategyScorerClass.score_macro(observation, nbd_macro, profile)
 	var kitchen_score: Dictionary = StrategyScorerClass.score_macro(observation, kitchen_macro, profile)
-	if float(nbd_score.get("score", 0.0)) <= float(kitchen_score.get("score", 0.0)):
-		return Result.failure("StrategyScorer should activate reserve NBD when house growth is ready: nbd=%s kitchen=%s" % [str(nbd_score), str(kitchen_score)])
-	var features: Dictionary = Dictionary(nbd_score.get("features", {}))
+	if float(nbd_score.get("score", 0.0)) >= float(kitchen_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should not activate reserve NBD before house growth is ready: nbd=%s kitchen=%s" % [str(nbd_score), str(kitchen_score)])
+	var early_features: Dictionary = Dictionary(nbd_score.get("features", {}))
+	if float(early_features.get("structure_route_readiness_adjustment", 0.0)) >= 0.0:
+		return Result.failure("early reserve NBD structure should carry negative route readiness adjustment: %s" % str(early_features))
+
+	var ready_observation := _synthetic_house_growth_observation()
+	ready_observation.phase = DefsClass.PHASE_RESTRUCTURING
+	ready_observation.sub_phase = ""
+	ready_observation.own_player["cash"] = 50
+	ready_observation.own_player["employees"] = ["trainer", "kitchen_trainee", "marketing_trainee"]
+	ready_observation.own_player["reserve_employees"] = ["new_business_developer"]
+	ready_observation.own_player["inventory"] = {"burger": 5}
+	_set_observation_house_demand_count(ready_observation, "house_near", "burger", 5)
+	var ready_nbd_score: Dictionary = StrategyScorerClass.score_macro(ready_observation, nbd_macro, profile)
+	var ready_kitchen_score: Dictionary = StrategyScorerClass.score_macro(ready_observation, kitchen_macro, profile)
+	if float(ready_nbd_score.get("score", 0.0)) <= float(ready_kitchen_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should activate reserve NBD when house growth is ready: nbd=%s kitchen=%s" % [str(ready_nbd_score), str(ready_kitchen_score)])
+	var features: Dictionary = Dictionary(ready_nbd_score.get("features", {}))
 	if float(features.get("structure_placement_route_value", 0.0)) <= 0.0:
 		return Result.failure("reserve NBD structure should expose positive structure_placement_route_value: %s" % str(features))
+	if not is_equal_approx(float(features.get("structure_route_readiness_adjustment", -1.0)), 0.0):
+		return Result.failure("ready reserve NBD structure should not carry route readiness penalty: %s" % str(features))
 	return Result.success()
 
 static func _test_fridge_keep_prioritizes_serviceable_demand(seed_val: int) -> Result:
@@ -1293,6 +1386,18 @@ static func _synthetic_house_growth_observation() -> ObservationState:
 	houses["house_near"] = house_near
 	observation.map_public["houses"] = houses
 	return observation
+
+static func _set_observation_house_demand_count(observation: ObservationState, house_id: String, product_id: String, count: int) -> void:
+	if observation == null or house_id.is_empty() or product_id.is_empty():
+		return
+	var houses: Dictionary = Dictionary(observation.map_public.get("houses", {})).duplicate(true)
+	var house: Dictionary = Dictionary(houses.get(house_id, {})).duplicate(true)
+	var demands: Array = []
+	for _i in range(maxi(0, count)):
+		demands.append({"product": product_id})
+	house["demands"] = demands
+	houses[house_id] = house
+	observation.map_public["houses"] = houses
 
 static func _synthetic_drink_route_observation() -> ObservationState:
 	var observation := ObservationState.new()
