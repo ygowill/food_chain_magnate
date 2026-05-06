@@ -72,7 +72,7 @@ static func _candidate_milestone_ids(observation: ObservationState, action_id: S
 				out.append("first_radio")
 			elif marketing_type == "airplane" or (board_number >= 4 and board_number <= 6):
 				out.append("first_airplane")
-		"set_price", "set_discount", "set_luxury_price":
+		"set_price", "set_discount":
 			out.append("first_lower_prices")
 	return out
 

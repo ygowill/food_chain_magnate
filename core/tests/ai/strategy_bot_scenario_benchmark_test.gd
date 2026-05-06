@@ -58,6 +58,11 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 		return _scenario_failure("milestone_third_recruit_values_first_hire_3", third_recruit_milestone)
 	names.append("milestone_third_recruit_values_first_hire_3")
 
+	var lower_price_milestone := _scenario_milestone_lower_price_ignores_luxury_price()
+	if not lower_price_milestone.ok:
+		return _scenario_failure("milestone_lower_price_ignores_luxury_price", lower_price_milestone)
+	names.append("milestone_lower_price_ignores_luxury_price")
+
 	var marketing_sell_bonus := _scenario_milestone_marketing_sell_bonus_is_valued()
 	if not marketing_sell_bonus.ok:
 		return _scenario_failure("milestone_marketing_sell_bonus_is_valued", marketing_sell_bonus)
@@ -393,6 +398,42 @@ static func _scenario_milestone_third_recruit_values_first_hire_3() -> Result:
 	var early_features: Dictionary = Dictionary(early_score.get("features", {}))
 	if Array(early_features.get("milestone_race_ids", [])).has("first_hire_3"):
 		return Result.failure("first or second recruit should not claim immediate first_hire_3 race value: %s" % str(early_features))
+	return Result.success()
+
+static func _scenario_milestone_lower_price_ignores_luxury_price() -> Result:
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_food_income_observation()
+	observation.phase = DefsClass.PHASE_WORKING
+	observation.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
+	observation.own_player["milestones"] = []
+	observation.milestone_pool_public = ["first_lower_prices"]
+	var discount_macro := MacroAction.create(
+		"discount_triggers_first_lower_prices",
+		[Command.create("set_discount", 0, {})],
+		0.0,
+		["working", "price"],
+		{}
+	)
+	var luxury_macro := MacroAction.create(
+		"luxury_price_does_not_lower_prices",
+		[Command.create("set_luxury_price", 0, {})],
+		0.0,
+		["working", "price"],
+		{}
+	)
+	var discount_score: Dictionary = StrategyScorerClass.score_macro(observation, discount_macro, profile)
+	var discount_features: Dictionary = Dictionary(discount_score.get("features", {}))
+	if not Array(discount_features.get("milestone_race_ids", [])).has("first_lower_prices"):
+		return Result.failure("discount should expose first_lower_prices race id: %s" % str(discount_features))
+	if float(discount_features.get("milestone_race_value", 0.0)) <= 4.0:
+		return Result.failure("discount should include first_lower_prices base_price_delta effect value: %s" % str(discount_features))
+	var luxury_score: Dictionary = StrategyScorerClass.score_macro(observation, luxury_macro, profile)
+	var luxury_features: Dictionary = Dictionary(luxury_score.get("features", {}))
+	if Array(luxury_features.get("milestone_race_ids", [])).has("first_lower_prices"):
+		return Result.failure("luxury price should not expose first_lower_prices race id: %s" % str(luxury_features))
+	if float(luxury_features.get("milestone_race_value", 0.0)) != 0.0:
+		return Result.failure("luxury price should not receive lower-price race value: %s" % str(luxury_features))
 	return Result.success()
 
 static func _scenario_milestone_marketing_sell_bonus_is_valued() -> Result:
