@@ -1,11 +1,13 @@
 class_name StrategyBotScenarioBenchmarkTest
 extends RefCounted
 
+const BotControllerClass = preload("res://core/ai/bot/bot_controller.gd")
 const CandidateGeneratorClass = preload("res://core/ai/candidates/candidate_generator.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const DinnertimeSettlementTestClass = preload("res://core/tests/dinnertime_settlement_test.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const ObservationAdapterClass = preload("res://core/ai/observation/observation_adapter.gd")
+const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 const StrategyBotClass = preload("res://core/ai/bot/strategy_bot.gd")
 const StrategyProfileClass = preload("res://core/ai/strategy/strategy_profile.gd")
@@ -26,6 +28,11 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not marketing_next_round_supply.ok:
 		return _scenario_failure("marketing_values_next_round_supply_capacity", marketing_next_round_supply)
 	names.append("marketing_values_next_round_supply_capacity")
+
+	var marketing_next_round_sale := _scenario_marketing_next_round_route_produces_and_sells(seed_val)
+	if not marketing_next_round_sale.ok:
+		return _scenario_failure("marketing_next_round_route_produces_and_sells", marketing_next_round_sale)
+	names.append("marketing_next_round_route_produces_and_sells")
 
 	var trainable_supply := _scenario_trainable_supply_stays_structure_candidate(seed_val)
 	if not trainable_supply.ok:
@@ -161,6 +168,340 @@ static func _scenario_marketing_values_next_round_supply_capacity() -> Result:
 	if float(future_supply_score.get("score", 0.0)) <= float(no_supply_score.get("score", 0.0)) + 50.0:
 		return Result.failure("expected next-round supply capacity to materially raise marketing value: future=%s no_supply=%s" % [str(future_supply_score), str(no_supply_score)])
 	return Result.success()
+
+static func _scenario_marketing_next_round_route_produces_and_sells(seed_val: int) -> Result:
+	var engine_read := _build_marketing_next_round_route_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var bot = StrategyBotClass.new()
+
+	var marketing_controller := BotControllerClass.new()
+	var marketing_step := marketing_controller.step(engine, 0, bot, TimeBudget.start(80))
+	if not marketing_step.ok:
+		return Result.failure("marketing route step failed: %s" % marketing_step.error)
+	var marketing_trace: Dictionary = marketing_step.value
+	if str(marketing_trace.get("action_id", "")) != "initiate_marketing":
+		return Result.failure("expected StrategyBot to initiate burger marketing for next-round supply, got %s" % str(marketing_trace))
+	var marketing_params: Dictionary = Dictionary(marketing_trace.get("params", {}))
+	if str(marketing_params.get("product", "")) != "burger":
+		return Result.failure("expected next-round route marketing product burger, got %s" % str(marketing_trace))
+	var state := engine.get_state()
+	if _state_product_demand_count(state, "burger") != 0:
+		return Result.failure("marketing action should not create same-round burger demand before Marketing settlement")
+	if _player_inventory_units_for_product(state, 0, "burger") != 0:
+		return Result.failure("marketing action should not create same-round burger inventory")
+
+	var settled := _advance_direct_payday_to_marketing(engine)
+	if not settled.ok:
+		return settled
+	state = engine.get_state()
+	if _state_product_demand_count(state, "burger") <= 0:
+		return Result.failure("Marketing settlement should create burger demand for next round")
+
+	var prepare_next_round := _prepare_next_round_restructuring(engine)
+	if not prepare_next_round.ok:
+		return prepare_next_round
+	var structure_controller := BotControllerClass.new()
+	var structure_step := structure_controller.step(engine, 0, bot, TimeBudget.start(80))
+	if not structure_step.ok:
+		return Result.failure("next-round restructuring step failed: %s" % structure_step.error)
+	var structure_trace: Dictionary = structure_step.value
+	if str(structure_trace.get("action_id", "")) != "set_company_structure_direct":
+		return Result.failure("expected next-round route to activate burger_cook, got %s" % str(structure_trace))
+	var structure_params: Dictionary = Dictionary(structure_trace.get("params", {}))
+	if str(structure_params.get("employee_id", "")) != "burger_cook":
+		return Result.failure("expected next-round route structure employee burger_cook, got %s" % str(structure_trace))
+
+	var prepare_get_food := _prepare_next_round_get_food(engine)
+	if not prepare_get_food.ok:
+		return prepare_get_food
+	var produce_controller := BotControllerClass.new()
+	var produce_step := produce_controller.step(engine, 0, bot, TimeBudget.start(80))
+	if not produce_step.ok:
+		return Result.failure("next-round production step failed: %s" % produce_step.error)
+	var produce_trace: Dictionary = produce_step.value
+	if str(produce_trace.get("action_id", "")) != "produce_food":
+		return Result.failure("expected next-round route to produce burger for settled demand, got %s" % str(produce_trace))
+	var produce_params: Dictionary = Dictionary(produce_trace.get("params", {}))
+	if str(produce_params.get("food_type", "")) != "burger":
+		return Result.failure("expected next-round production food burger, got %s" % str(produce_trace))
+
+	state = engine.get_state()
+	var cash_before_dinner := int(state.players[0].get("cash", 0))
+	var dinner := DinnertimeSettlementTestClass._advance_to_dinnertime(engine)
+	if not dinner.ok:
+		return dinner
+	state = engine.get_state()
+	if int(state.players[0].get("cash", 0)) <= cash_before_dinner:
+		return Result.failure("next-round route should sell produced burger at Dinnertime, cash before=%d after=%d" % [cash_before_dinner, int(state.players[0].get("cash", 0))])
+	if _state_product_demand_count(state, "burger") != 0:
+		return Result.failure("next-round Dinnertime should clear marketed burger demand")
+	return Result.success()
+
+static func _build_marketing_next_round_route_engine(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var state := engine.get_state()
+	_force_route_turn_order(state, 2)
+	var map_result := _build_route_marketing_sale_map(0)
+	if not map_result.ok:
+		return map_result
+	state.map = map_result.value
+	RoadGraphCacheClass.invalidate_road_graph(state)
+	state.players[0]["restaurants"] = ["rest_0"]
+	state.players[1]["restaurants"] = []
+	var seed_cash := StateUpdaterClass.player_receive_from_bank(state, 0, 50)
+	if not seed_cash.ok:
+		return Result.failure("seed route cash failed: %s" % seed_cash.error)
+	state.players[0]["inventory"] = {
+		"burger": 0,
+		"pizza": 0,
+		"soda": 0,
+		"lemonade": 0,
+		"beer": 0,
+	}
+	state.players[1]["inventory"] = {
+		"burger": 0,
+		"pizza": 0,
+		"soda": 0,
+		"lemonade": 0,
+		"beer": 0,
+	}
+	state.players[0]["employees"] = ["ceo"]
+	state.players[0]["reserve_employees"] = []
+	state.players[0]["busy_marketers"] = []
+	state.players[0]["employees_staff_ids"] = []
+	state.players[0]["reserve_staff_ids"] = []
+	state.players[0]["busy_staff_ids"] = []
+	state.players[0]["staff_registry"] = {}
+	state.players[0]["company_structure"] = {
+		"ceo_slots": 3,
+		"structure": [{}, {}, {}],
+	}
+	var take_campaign := StateUpdaterClass.take_from_pool(state, "campaign_manager", 1)
+	if not take_campaign.ok:
+		return Result.failure("take campaign_manager failed: %s" % take_campaign.error)
+	var add_campaign := StateUpdaterClass.add_employee(state, 0, "campaign_manager", false)
+	if not add_campaign.ok:
+		return Result.failure("add campaign_manager failed: %s" % add_campaign.error)
+	var take_cook := StateUpdaterClass.take_from_pool(state, "burger_cook", 1)
+	if not take_cook.ok:
+		return Result.failure("take burger_cook failed: %s" % take_cook.error)
+	var add_cook := StateUpdaterClass.add_employee(state, 0, "burger_cook", true)
+	if not add_cook.ok:
+		return Result.failure("add burger_cook failed: %s" % add_cook.error)
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_MARKETING
+	state.current_player_index = 0
+	_reset_round_state_for_ai_step(state)
+	var sync := _sync_initial_checkpoint_to_current_state(engine)
+	if not sync.ok:
+		return sync
+	return Result.success(engine)
+
+static func _force_route_turn_order(state: GameState, player_count: int) -> void:
+	state.turn_order.clear()
+	for i in range(player_count):
+		state.turn_order.append(i)
+	state.current_player_index = 0
+
+static func _build_route_marketing_sale_map(owner: int) -> Result:
+	var grid_size := Vector2i(8, 6)
+	var cells := _build_route_empty_cells(grid_size)
+
+	for y in range(grid_size.y):
+		var dirs: Array = []
+		if y > 0:
+			dirs.append("N")
+		if y < grid_size.y - 1:
+			dirs.append("S")
+		_set_route_road(cells, Vector2i(0, y), dirs.duplicate())
+		_set_route_road(cells, Vector2i(6, y), dirs.duplicate())
+	for x in range(0, 7):
+		var dirs2: Array = []
+		if x > 0:
+			dirs2.append("W")
+		if x < 6:
+			dirs2.append("E")
+		_set_route_road(cells, Vector2i(x, 5), dirs2)
+	_set_route_road(cells, Vector2i(0, 5), ["N", "E"])
+	_set_route_road(cells, Vector2i(6, 5), ["N", "W"])
+
+	var house_cells: Array[Vector2i] = [
+		Vector2i(4, 2), Vector2i(5, 2),
+		Vector2i(4, 3), Vector2i(5, 3),
+	]
+	var rest_cells: Array[Vector2i] = [
+		Vector2i(4, 4), Vector2i(5, 4),
+	]
+	_set_route_house(cells, "house_route", 1, house_cells)
+	_set_route_restaurant(cells, "rest_0", owner, rest_cells)
+
+	return Result.success({
+		"grid_size": grid_size,
+		"tile_grid_size": Vector2i(2, 2),
+		"cells": cells,
+		"houses": {
+			"house_route": {
+				"house_id": "house_route",
+				"house_number": 1,
+				"anchor_pos": Vector2i(4, 2),
+				"cells": house_cells,
+				"has_garden": false,
+				"is_apartment": false,
+				"printed": false,
+				"owner": -1,
+				"demands": [],
+			},
+		},
+		"restaurants": {
+			"rest_0": {
+				"restaurant_id": "rest_0",
+				"owner": owner,
+				"anchor_pos": Vector2i(4, 4),
+				"entrance_pos": Vector2i(6, 4),
+				"cells": rest_cells,
+			},
+		},
+		"drink_sources": [],
+		"next_house_number": 2,
+		"next_restaurant_id": 1,
+		"boundary_index": {},
+		"marketing_placements": {},
+	})
+
+static func _build_route_empty_cells(grid_size: Vector2i) -> Array:
+	var cells: Array = []
+	for y in range(grid_size.y):
+		var row: Array = []
+		for x in range(grid_size.x):
+			row.append({
+				"terrain_type": "empty",
+				"structure": {},
+				"road_segments": [],
+				"blocked": false,
+			})
+		cells.append(row)
+	return cells
+
+static func _set_route_road(cells: Array, pos: Vector2i, dirs: Array) -> void:
+	cells[pos.y][pos.x]["road_segments"] = [{"dirs": dirs}]
+
+static func _set_route_house(cells: Array, house_id: String, house_number: int, footprint: Array[Vector2i]) -> void:
+	for p in footprint:
+		cells[p.y][p.x]["structure"] = {
+			"piece_id": "house",
+			"house_id": house_id,
+			"house_number": house_number,
+			"has_garden": false,
+			"dynamic": true,
+		}
+
+static func _set_route_restaurant(cells: Array, restaurant_id: String, owner: int, footprint: Array[Vector2i]) -> void:
+	for p in footprint:
+		cells[p.y][p.x]["structure"] = {
+			"piece_id": "restaurant",
+			"restaurant_id": restaurant_id,
+			"owner": owner,
+			"dynamic": true,
+		}
+
+static func _advance_direct_payday_to_marketing(engine: GameEngine) -> Result:
+	if engine == null:
+		return Result.failure("engine is null")
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.phase = DefsClass.PHASE_PAYDAY
+	state.sub_phase = ""
+	state.current_player_index = 0
+	var adv := engine.phase_manager.advance_phase(state)
+	if not adv.ok:
+		return Result.failure("advance Payday to Marketing failed: %s" % adv.error)
+	state = engine.get_state()
+	var marketing_report_val = state.round_state.get("marketing", null)
+	if not (marketing_report_val is Dictionary):
+		return Result.failure("Marketing settlement report missing after advance")
+	return Result.success()
+
+static func _prepare_next_round_restructuring(engine: GameEngine) -> Result:
+	if engine == null:
+		return Result.failure("engine is null")
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.round_number += 1
+	state.phase = DefsClass.PHASE_RESTRUCTURING
+	state.sub_phase = ""
+	state.current_player_index = 0
+	_reset_round_state_for_ai_step(state)
+	var player: Dictionary = state.players[0]
+	player["company_structure"] = {
+		"ceo_slots": 3,
+		"structure": [{}, {}, {}],
+	}
+	state.players[0] = player
+	return _sync_initial_checkpoint_to_current_state(engine)
+
+static func _prepare_next_round_get_food(engine: GameEngine) -> Result:
+	if engine == null:
+		return Result.failure("engine is null")
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
+	state.current_player_index = 0
+	_reset_round_state_for_ai_step(state)
+	return _sync_initial_checkpoint_to_current_state(engine)
+
+static func _reset_round_state_for_ai_step(state: GameState) -> void:
+	if state == null:
+		return
+	state.round_state["mandatory_actions_completed"] = {
+		0: [],
+		1: [],
+	}
+	state.round_state["actions_this_round"] = []
+	state.round_state["action_counts"] = {}
+	state.round_state["sub_phase_passed"] = {
+		0: false,
+		1: false,
+	}
+	state.round_state["staff_usage"] = {}
+	state.round_state["staff_train_event_counts"] = {}
+
+static func _state_product_demand_count(state: GameState, product_id: String) -> int:
+	if state == null or product_id.is_empty():
+		return 0
+	var houses_val = state.map.get("houses", {})
+	if not (houses_val is Dictionary):
+		return 0
+	var total := 0
+	for house_val in Dictionary(houses_val).values():
+		if not (house_val is Dictionary):
+			continue
+		var demands_val = Dictionary(house_val).get("demands", [])
+		if not (demands_val is Array):
+			continue
+		for demand_val in Array(demands_val):
+			if demand_val is Dictionary and str(Dictionary(demand_val).get("product", "")) == product_id:
+				total += 1
+	return total
+
+static func _player_inventory_units_for_product(state: GameState, player_id: int, product_id: String) -> int:
+	if state == null or product_id.is_empty() or player_id < 0 or player_id >= state.players.size():
+		return 0
+	var player_val = state.players[player_id]
+	if not (player_val is Dictionary):
+		return 0
+	var inventory_val = Dictionary(player_val).get("inventory", {})
+	if not (inventory_val is Dictionary):
+		return 0
+	return maxi(0, int(Dictionary(inventory_val).get(product_id, 0)))
 
 static func _scenario_failure(name: String, result: Result) -> Result:
 	return Result.failure("%s failed: %s" % [name, result.error])
