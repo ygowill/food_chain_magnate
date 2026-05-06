@@ -95,6 +95,16 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 		return _scenario_failure("income_route_executes_price_action_after_price_structure", pricing_action)
 	names.append("income_route_executes_price_action_after_price_structure")
 
+	var waitress_recruit := _scenario_income_route_recruits_waitress_after_price_support(seed_val)
+	if not waitress_recruit.ok:
+		return _scenario_failure("income_route_recruits_waitress_after_price_support", waitress_recruit)
+	names.append("income_route_recruits_waitress_after_price_support")
+
+	var waitress_structure := _scenario_income_route_structures_waitress_after_support_recruit()
+	if not waitress_structure.ok:
+		return _scenario_failure("income_route_structures_waitress_after_support_recruit", waitress_structure)
+	names.append("income_route_structures_waitress_after_support_recruit")
+
 	var third_recruit_milestone := _scenario_milestone_third_recruit_values_first_hire_3()
 	if not third_recruit_milestone.ok:
 		return _scenario_failure("milestone_third_recruit_values_first_hire_3", third_recruit_milestone)
@@ -1179,6 +1189,114 @@ static func _scenario_income_route_executes_price_action_after_price_structure(s
 	var top_candidates: Array = Array(Dictionary(decision.trace).get("top_candidates", []))
 	if top_candidates.is_empty() or str(Dictionary(top_candidates[0]).get("action_id", "")) != "set_price":
 		return Result.failure("expected set_price to lead StrategyBot top candidates: %s" % str(decision.to_debug_dict()))
+	return Result.success()
+
+static func _scenario_income_route_recruits_waitress_after_price_support(seed_val: int) -> Result:
+	var observation := _synthetic_food_income_observation()
+	observation.phase = DefsClass.PHASE_WORKING
+	observation.sub_phase = DefsClass.SUB_PHASE_RECRUIT
+	observation.own_player["cash"] = 35
+	observation.own_player["employees"] = ["burger_cook", "campaign_manager", "errand_boy", "pricing_manager"]
+	observation.own_player["reserve_employees"] = []
+	observation.own_player["inventory"] = {"burger": 3}
+	observation.own_player["milestones"] = []
+	observation.employee_pool_public = {
+		"management_trainee": 1,
+		"recruiting_girl": 1,
+		"trainer": 2,
+		"waitress": 1,
+	}
+	observation.milestone_pool_public = ["first_waitress"]
+	_set_observation_house_demand_count(observation, "house_near", "burger", 3)
+	var pre_price_observation := _synthetic_food_income_observation()
+	pre_price_observation.phase = observation.phase
+	pre_price_observation.sub_phase = observation.sub_phase
+	pre_price_observation.own_player["cash"] = 35
+	pre_price_observation.own_player["employees"] = ["burger_cook", "campaign_manager", "errand_boy"]
+	pre_price_observation.own_player["reserve_employees"] = []
+	pre_price_observation.own_player["inventory"] = {"burger": 3}
+	pre_price_observation.own_player["milestones"] = []
+	pre_price_observation.milestone_pool_public = ["first_waitress"]
+	_set_observation_house_demand_count(pre_price_observation, "house_near", "burger", 3)
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var pre_price_waitress_macro := MacroAction.create(
+		"recruit_waitress_before_price_support",
+		[Command.create("recruit", 0, {"employee_type": "waitress"})],
+		0.0,
+		["recruit"],
+		{}
+	)
+	var pre_price_waitress_score: Dictionary = StrategyScorerClass.score_macro(pre_price_observation, pre_price_waitress_macro, profile)
+	var pre_price_features: Dictionary = Dictionary(pre_price_waitress_score.get("features", {}))
+	if float(pre_price_features.get("recruit_waitress_route_value", 0.0)) != 0.0:
+		return Result.failure("expected waitress route value to stay disabled before price support: %s" % str(pre_price_features))
+	var chosen_read := _best_recruit_candidate(observation, seed_val)
+	if not chosen_read.ok:
+		return chosen_read
+	var chosen: Dictionary = chosen_read.value
+	if str(chosen.get("employee_id", "")) != "waitress":
+		return Result.failure("expected stable income route with price support to add waitress, got %s" % str(chosen))
+	var features: Dictionary = Dictionary(chosen.get("features", {}))
+	if float(features.get("recruit_waitress_route_value", 0.0)) <= 0.0:
+		return Result.failure("expected waitress route value feature on waitress recruit: %s" % str(chosen))
+	if not bool(features.get("recruit_waitress_first_waitress_available", false)):
+		return Result.failure("expected waitress recruit to expose first_waitress availability: %s" % str(chosen))
+	return Result.success()
+
+static func _scenario_income_route_structures_waitress_after_support_recruit() -> Result:
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_food_income_observation()
+	observation.phase = DefsClass.PHASE_RESTRUCTURING
+	observation.sub_phase = ""
+	observation.own_player["cash"] = 35
+	observation.own_player["employees"] = ["burger_cook", "campaign_manager", "pricing_manager", "trainer", "waitress"]
+	observation.own_player["reserve_employees"] = []
+	observation.own_player["inventory"] = {"burger": 3}
+	observation.own_player["milestones"] = []
+	observation.own_player["company_structure"] = {
+		"ceo_slots": 4,
+		"structure": [
+			{"employee_id": "burger_cook", "reports": []},
+			{"employee_id": "campaign_manager", "reports": []},
+			{"employee_id": "pricing_manager", "reports": []},
+			{},
+		],
+	}
+	observation.milestone_pool_public = ["first_waitress"]
+	_set_observation_house_demand_count(observation, "house_near", "burger", 3)
+	var waitress_macro := MacroAction.create(
+		"activate_waitress_for_dinner_tips",
+		[Command.create("set_company_structure_direct", 0, {"slot_index": 3, "employee_id": "waitress"})],
+		0.0,
+		["restructuring", "structure"],
+		{}
+	)
+	var trainer_macro := MacroAction.create(
+		"activate_trainer_without_train_route",
+		[Command.create("set_company_structure_direct", 0, {"slot_index": 3, "employee_id": "trainer"})],
+		0.0,
+		["restructuring", "structure"],
+		{}
+	)
+	var submit_macro := MacroAction.create(
+		"submit_without_waitress",
+		[Command.create("submit_restructuring", 0, {})],
+		0.0,
+		["restructuring", "fallback"],
+		{}
+	)
+	var waitress_score: Dictionary = StrategyScorerClass.score_macro(observation, waitress_macro, profile)
+	var trainer_score: Dictionary = StrategyScorerClass.score_macro(observation, trainer_macro, profile)
+	var submit_score: Dictionary = StrategyScorerClass.score_macro(observation, submit_macro, profile)
+	if float(waitress_score.get("score", 0.0)) <= float(trainer_score.get("score", 0.0)):
+		return Result.failure("expected waitress structure to beat idle trainer after support recruit: waitress=%s trainer=%s" % [str(waitress_score), str(trainer_score)])
+	if float(waitress_score.get("score", 0.0)) <= float(submit_score.get("score", 0.0)):
+		return Result.failure("expected waitress structure to beat submit after support recruit: waitress=%s submit=%s" % [str(waitress_score), str(submit_score)])
+	var features: Dictionary = Dictionary(waitress_score.get("features", {}))
+	if float(features.get("structure_waitress_route_value", 0.0)) <= 0.0:
+		return Result.failure("expected waitress structure route value feature: %s" % str(features))
 	return Result.success()
 
 static func _scenario_milestone_third_recruit_values_first_hire_3() -> Result:

@@ -38,17 +38,20 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			var placement_route_value := _placement_route_value(observation, employee_id, income_analysis)
 			var price_route_payload := _price_employee_route_value(observation, employee_id, income_analysis)
 			var price_route_value := float(price_route_payload.get("value", 0.0))
+			var waitress_route_payload := _waitress_route_value(observation, employee_id, profile, income_analysis)
+			var waitress_route_value := float(waitress_route_payload.get("value", 0.0))
 			var roster_payload := _recruit_roster_adjustment(observation, employee_id, income_analysis)
 			var roster_adjustment := float(roster_payload.get("adjustment", 0.0))
 			features["employee_value"] = bonus
 			features["recruit_placement_route_value"] = placement_route_value
 			_append_price_employee_route_features(features, price_route_payload, "recruit")
+			_append_waitress_route_features(features, waitress_route_payload, "recruit")
 			features["recruit_owned_count"] = int(roster_payload.get("owned_count", 0))
 			features["recruit_desired_count"] = int(roster_payload.get("desired_count", 0))
 			features["recruit_roster_saturated"] = bool(roster_payload.get("saturated", false))
 			features["recruit_roster_adjustment"] = roster_adjustment
 			_append_employee_income_features(features, observation, employee_id, income_analysis, profile, "recruit")
-			score += bonus + roster_adjustment + price_route_value
+			score += bonus + roster_adjustment + price_route_value + waitress_route_value
 		"train":
 			var from_employee := str(command.params.get("from_employee", ""))
 			var to_employee := str(command.params.get("to_employee", ""))
@@ -68,6 +71,8 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			var structure_route_readiness_adjustment := _placement_route_readiness_adjustment(observation, employee_id2, income_analysis)
 			var structure_price_route_payload := _price_employee_route_value(observation, employee_id2, income_analysis)
 			var structure_price_route_value := float(structure_price_route_payload.get("value", 0.0))
+			var structure_waitress_route_payload := _waitress_route_value(observation, employee_id2, profile, income_analysis)
+			var structure_waitress_route_value := float(structure_waitress_route_payload.get("value", 0.0))
 			var structure_activation_payload := _structure_activation_value(observation, employee_id2, profile, income_analysis) if action_id != "restructure_employee" else {}
 			var structure_activation_value := float(structure_activation_payload.get("value", 0.0))
 			features["structure_employee_value"] = structure_bonus
@@ -77,8 +82,9 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			features["structure_placement_route_value"] = _placement_route_value(observation, employee_id2, income_analysis)
 			features["structure_route_readiness_adjustment"] = structure_route_readiness_adjustment
 			_append_price_employee_route_features(features, structure_price_route_payload, "structure")
+			_append_waitress_route_features(features, structure_waitress_route_payload, "structure")
 			_append_employee_income_features(features, observation, employee_id2, income_analysis, profile, "structure")
-			score += structure_bonus + structure_activation_value + structure_route_readiness_adjustment + structure_price_route_value
+			score += structure_bonus + structure_activation_value + structure_route_readiness_adjustment + structure_price_route_value + structure_waitress_route_value
 		"initiate_marketing":
 			var product_id := str(command.params.get("product", ""))
 			var affected_ids := _affected_house_ids(macro)
@@ -354,6 +360,43 @@ static func _append_price_employee_route_features(features: Dictionary, payload:
 	features["%s_price_route_inventory_units" % prefix] = int(payload.get("inventory_units", 0))
 	features["%s_price_route_estimated_sale_units" % prefix] = int(payload.get("estimated_sale_units", 0))
 	features["%s_price_route_first_lower_prices_available" % prefix] = bool(payload.get("first_lower_prices_available", false))
+
+static func _waitress_route_value(observation: ObservationState, employee_id: String, profile, income_analysis: Dictionary) -> Dictionary:
+	var tips := 3
+	var first_waitress_available := false
+	if observation != null:
+		tips = _read_non_negative_int(observation.rules_public.get("waitress_tips", 3), 3)
+		first_waitress_available = _sorted_unique_strings(observation.milestone_pool_public).has("first_waitress") and not _own_milestones(observation).has("first_waitress")
+	var out := {
+		"value": 0.0,
+		"tips": tips,
+		"first_waitress_available": first_waitress_available,
+		"first_waitress_value": 0.0,
+	}
+	if employee_id != "waitress":
+		return out
+	if not _stable_income_route_ready(observation, income_analysis):
+		return out
+	if not _waitress_route_support_ready(observation):
+		return out
+
+	var first_waitress_value := 0.0
+	if first_waitress_available:
+		first_waitress_value = MilestoneRaceAnalyzerClass.milestone_value("first_waitress", profile)
+	out["first_waitress_value"] = first_waitress_value
+	out["value"] = 8.0 + float(tips) * 2.0 + first_waitress_value * 0.4
+	return out
+
+static func _waitress_route_support_ready(observation: ObservationState) -> bool:
+	if observation == null:
+		return false
+	return _owns_role(observation, "price") or _own_milestones(observation).has("first_lower_prices")
+
+static func _append_waitress_route_features(features: Dictionary, payload: Dictionary, prefix: String) -> void:
+	features["%s_waitress_route_value" % prefix] = float(payload.get("value", 0.0))
+	features["%s_waitress_tips" % prefix] = int(payload.get("tips", 0))
+	features["%s_waitress_first_waitress_available" % prefix] = bool(payload.get("first_waitress_available", false))
+	features["%s_waitress_first_waitress_value" % prefix] = float(payload.get("first_waitress_value", 0.0))
 
 static func _placement_route_readiness_adjustment(observation: ObservationState, employee_id: String, income_analysis: Dictionary) -> float:
 	if not _employee_is_placement_employee(employee_id):
