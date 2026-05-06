@@ -119,6 +119,8 @@ static func _effects_value(effects: Array, profile) -> float:
 				total += 14.0
 			"marketing_no_salary", "marketing_permanent":
 				total += 10.0
+			"sell_bonus":
+				total += maxf(0.0, float(effect.get("value", 0)))
 			"peek_reserve_cards":
 				total += 6.0
 			"ceo_get_cfo":

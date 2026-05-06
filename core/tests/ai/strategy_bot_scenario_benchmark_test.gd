@@ -43,6 +43,11 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 		return _scenario_failure("income_route_recruits_drink_supply_for_drink_demand", drink_recruit)
 	names.append("income_route_recruits_drink_supply_for_drink_demand")
 
+	var marketing_sell_bonus := _scenario_milestone_marketing_sell_bonus_is_valued()
+	if not marketing_sell_bonus.ok:
+		return _scenario_failure("milestone_marketing_sell_bonus_is_valued", marketing_sell_bonus)
+	names.append("milestone_marketing_sell_bonus_is_valued")
+
 	return Result.success({
 		"scenarios": names.size(),
 		"names": names.duplicate(),
@@ -233,6 +238,34 @@ static func _scenario_income_route_recruits_drink_supply_for_drink_demand(seed_v
 	var chosen: Dictionary = chosen_read.value
 	if str(chosen.get("role", "")) != "procure_drink":
 		return Result.failure("expected income route to add drink supply for drink demand, got %s" % str(chosen))
+	return Result.success()
+
+static func _scenario_milestone_marketing_sell_bonus_is_valued() -> Result:
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_food_income_observation()
+	observation.phase = DefsClass.PHASE_WORKING
+	observation.sub_phase = DefsClass.SUB_PHASE_MARKETING
+	observation.own_player["employees"] = ["campaign_manager", "burger_cook"]
+	observation.own_player["reserve_employees"] = []
+	observation.own_player["inventory"] = {"burger": 1}
+	observation.own_player["milestones"] = []
+	observation.milestone_pool_public = ["first_burger_marketed"]
+	_set_observation_house_demand_count(observation, "house_near", "burger", 0)
+	var macro := MacroAction.create(
+		"market_burger_for_sell_bonus",
+		[Command.create("initiate_marketing", 0, {"employee_type": "campaign_manager", "marketing_type": "mailbox", "board_number": 8, "product": "burger", "position": [2, 2]})],
+		0.0,
+		["working", "marketing"],
+		{"affected_house_ids": ["house_near"]}
+	)
+	var score: Dictionary = StrategyScorerClass.score_macro(observation, macro, profile)
+	var features: Dictionary = Dictionary(score.get("features", {}))
+	var race_ids: Array = Array(features.get("milestone_race_ids", []))
+	if not race_ids.has("first_burger_marketed"):
+		return Result.failure("expected first_burger_marketed race id: %s" % str(features))
+	if float(features.get("milestone_race_value", 0.0)) <= 5.0:
+		return Result.failure("expected sell_bonus effect to raise marketing milestone value above base value: %s" % str(features))
 	return Result.success()
 
 static func _best_recruit_candidate(observation: ObservationState, seed_val: int) -> Result:
