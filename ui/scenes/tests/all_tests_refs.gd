@@ -131,6 +131,7 @@ const BotSelfplayToolTestClass = preload("res://core/tests/ai/bot_selfplay_tool_
 const BotSelfplayMatrixTestClass = preload("res://core/tests/ai/bot_selfplay_matrix_test.gd")
 const GreedyBotSmokeTestClass = preload("res://core/tests/ai/greedy_bot_smoke_test.gd")
 const StrategyBotTestClass = preload("res://core/tests/ai/strategy_bot_test.gd")
+const StrategyBotScenarioBenchmarkTestClass = preload("res://core/tests/ai/strategy_bot_scenario_benchmark_test.gd")
 const LegalActionServiceTestClass = preload("res://core/tests/ai/legal_action_service_test.gd")
 const RandomLegalBotSmokeTestClass = preload("res://core/tests/ai/random_legal_bot_smoke_test.gd")
 const AiEngineForkTestClass = preload("res://core/tests/ai/ai_engine_fork_test.gd")

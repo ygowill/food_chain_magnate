@@ -988,6 +988,26 @@ StrategyBot 是下一阶段真正的人机对手入口。它不做单步 fork �
 
 这仍只是策略框架和 smoke 验证，还不是完整强度版本。后续应继续扩展难度配置、引入参数搜索产物，并把阶段策略拆成更小的可测试组件。餐厅放置/移动在 StrategyBot 的 engine 路径下已经优先使用 road graph，但没有 source state 的离线评分仍会保留 anchor 回退。
 
+### 11.4.1 StrategyBot 开发流程切换
+
+当前 StrategyBot 不再按“跑一条固定 selfplay trace，看到局部错误就补一个权重”的方式推进。后续策略开发以场景基准为主入口，自对弈只作为流程 smoke、回归监控和宏观指标来源。
+
+新的实施顺序：
+
+1. 先把策略断点写成 deterministic scenario benchmark，描述路线级不变量，而不是只描述某个 seed 的某一步。
+2. 若 benchmark 已经通过，需要在测试名和失败信息中明确它保护的行为；若未通过，再进入实现。
+3. 实现阶段优先改 candidate/filter/scorer/profile 中最小的对应层，避免把长程规划问题继续摊成全局权重补丁。
+4. 每次策略改动至少跑 scenario benchmark、compile check 和 AllTests；selfplay matrix 只用于观察行动分布、资源趋势和是否出现 softlock。
+5. 任何新的 heuristic 权重如果影响路线选择，必须在 trace feature 中可解释，并有一个命名场景保护它。
+
+第一版场景基准放在 `core/tests/ai/strategy_bot_scenario_benchmark_test.gd`，并通过现有 `ui/scenes/tests/all_tests.tscn` 聚合入口运行。它先覆盖已经暴露过的策略断点：
+
+- 有营销链路但无食品供给时，Restructuring 应优先激活可兑现营销需求的食品生产员工，而不是提交结构或激活无关员工。
+- 有 Trainer 且员工可继续培训时，若当前收入链需要该员工供给，候选生成不能把它从结构上岗候选里隐藏。
+- 己方 pending marketing 还没转成房屋需求时，供给评分应提前匹配对应商品，特别是路线饮料来源。
+
+这组 benchmark 是 StrategyBot MVP 进入下一阶段的行为闸门；后续新增路线时，应先追加场景，再做 scorer 或 profile 调整。
+
 ### 11.5 OSLA / Beam
 
 OSLA 用一层自己的候选 + 对手简单策略 response。
@@ -1143,6 +1163,7 @@ tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
 - `core/tests/ai/random_legal_bot_smoke_test.gd`：两个 `RandomLegalBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic。
 - `core/tests/ai/greedy_bot_smoke_test.gd`：保留 GreedyBot 短程 deterministic 校验，并新增单程跑到至少第 3 轮或 GameOver 的 smoke。GreedyBot 不再要求完整打完 2p base 局。
 - `core/tests/ai/strategy_bot_test.gd`：两个 `StrategyBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic、strategy trace 元数据、profile 数据加载、营销空覆盖候选过滤、营销商品候选排序、营销可服务房屋/活跃供给评分、招聘 roster 饱和度、结构阶段食品供给激活与训练保留豁免、房屋扩张路线招聘/培训评分、收入缺口、pending marketing planning demand、生产补缺口/供给数量/路线饮料商品推断/过量库存惩罚、DinnerPreview 食物收入安全惩罚、PricingPipeline 价格动作评分、关键里程碑 race 评分、冰箱保留、餐厅位置/road graph 评分、房屋放置距离评分、Payday 解雇评分等特征。
+- `core/tests/ai/strategy_bot_scenario_benchmark_test.gd`：StrategyBot 的路线级场景基准。它不替代 `StrategyBotTest` 的组件断言，而是把关键策略断点抽成可命名、可扩展的 deterministic benchmark，作为后续 StrategyBot 开发的主验收入口。
 - `core/tests/ai/candidate_generator_test.gd`：覆盖高级培训路线候选生成，包括 `burger_cook -> burger_chef`、`errand_boy -> cart_operator` 和 `management_trainee -> junior_vice_president`；同时保留 `campaign_manager -> brand_manager` 不阻塞当前营销员上岗的回归测试，并验证路线饮料候选在 tight budget 下优先保留满足公开需求的饮料源。
 - `core/tests/ai/dinner_preview_golden_test.gd`：从同一前置状态分别跑真实 engine 与 `DinnerPreview`，校验基础销售、花园收入、drive-through 入口点、关键 Dinnertime report 字段、库存消耗、source 不变性和 registry 恢复。
 
@@ -1198,7 +1219,8 @@ Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[f
 - StrategyBot 复用候选生成器和 validator，不直接读隐藏状态。
 - StrategyBot 固定 seed 自对弈能到第 3 轮或 GameOver。
 - 将默认 profile 迁移到 `data/bots/*.json`。
-- 拆分阶段策略器并补 targeted tests。
+- 以 scenario benchmark 作为主验收入口，先覆盖营销-供给、训练保留、pending marketing 供给等路线级不变量。
+- 拆分阶段策略器并补 targeted tests；新增 heuristic 前先补场景，再调 scorer/profile。
 
 ### Phase 5：OSLA 与 Beam
 
@@ -1216,7 +1238,7 @@ Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[f
 - 汇总固定 seed 矩阵的成功率、行动分布、回合/步数/命令数和每玩家资源趋势。
 - 支持固定 bot config 对战：`--bot=` 用同一 bot 填满所有玩家，`--bots=` 按玩家指定 matchup。
 - 支持 `--profile=<id|path>` 固定 profile 对照；当前已有 `base_revenue_v1` 与 `base_revenue_growth_v1` 两个数据配置。
-- 先做简单网格/随机搜索，再考虑 SPSA。
+- 先用 scenario benchmark 固定策略行为闸门，再做简单网格/随机搜索；若权重空间和指标稳定，再考虑 SPSA。
 - 当前 StrategyBot、OSLABot、BeamBot 已在 seed 12345-12347、target round 4 的 smoke matrix 中全部成功到达第 4 回合。该结果只证明流程稳定和输出可比较，不代表强度已经足够。
 
 ### Phase 7：产品接入
