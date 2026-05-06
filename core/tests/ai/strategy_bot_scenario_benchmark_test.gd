@@ -53,6 +53,11 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 		return _scenario_failure("income_route_recruits_drink_supply_for_drink_demand", drink_recruit)
 	names.append("income_route_recruits_drink_supply_for_drink_demand")
 
+	var third_recruit_milestone := _scenario_milestone_third_recruit_values_first_hire_3()
+	if not third_recruit_milestone.ok:
+		return _scenario_failure("milestone_third_recruit_values_first_hire_3", third_recruit_milestone)
+	names.append("milestone_third_recruit_values_first_hire_3")
+
 	var marketing_sell_bonus := _scenario_milestone_marketing_sell_bonus_is_valued()
 	if not marketing_sell_bonus.ok:
 		return _scenario_failure("milestone_marketing_sell_bonus_is_valued", marketing_sell_bonus)
@@ -345,6 +350,49 @@ static func _scenario_income_route_recruits_drink_supply_for_drink_demand(seed_v
 	var chosen: Dictionary = chosen_read.value
 	if str(chosen.get("role", "")) != "procure_drink":
 		return Result.failure("expected income route to add drink supply for drink demand, got %s" % str(chosen))
+	return Result.success()
+
+static func _scenario_milestone_third_recruit_values_first_hire_3() -> Result:
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_food_income_observation()
+	observation.phase = DefsClass.PHASE_WORKING
+	observation.sub_phase = DefsClass.SUB_PHASE_RECRUIT
+	observation.own_player["milestones"] = []
+	observation.milestone_pool_public = ["first_hire_3"]
+	observation.round_state_public = {
+		"recruit_used": {
+			0: 2,
+		},
+	}
+	var recruit_macro := MacroAction.create(
+		"third_recruit_for_first_hire_3",
+		[Command.create("recruit", 0, {"employee_type": "trainer"})],
+		0.0,
+		["working", "recruit"],
+		{}
+	)
+	var score: Dictionary = StrategyScorerClass.score_macro(observation, recruit_macro, profile)
+	var features: Dictionary = Dictionary(score.get("features", {}))
+	if not Array(features.get("milestone_race_ids", [])).has("first_hire_3"):
+		return Result.failure("expected third recruit to expose first_hire_3 race id: %s" % str(features))
+	if float(features.get("milestone_race_value", 0.0)) <= 10.0:
+		return Result.failure("expected first_hire_3 gain_cards effect to be materially valued: %s" % str(features))
+
+	var early_observation := _synthetic_food_income_observation()
+	early_observation.phase = DefsClass.PHASE_WORKING
+	early_observation.sub_phase = DefsClass.SUB_PHASE_RECRUIT
+	early_observation.own_player["milestones"] = []
+	early_observation.milestone_pool_public = ["first_hire_3"]
+	early_observation.round_state_public = {
+		"recruit_used": {
+			0: 1,
+		},
+	}
+	var early_score: Dictionary = StrategyScorerClass.score_macro(early_observation, recruit_macro, profile)
+	var early_features: Dictionary = Dictionary(early_score.get("features", {}))
+	if Array(early_features.get("milestone_race_ids", [])).has("first_hire_3"):
+		return Result.failure("first or second recruit should not claim immediate first_hire_3 race value: %s" % str(early_features))
 	return Result.success()
 
 static func _scenario_milestone_marketing_sell_bonus_is_valued() -> Result:

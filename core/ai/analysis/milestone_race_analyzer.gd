@@ -9,7 +9,7 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 	var command: Command = macro.commands[0]
 	if command == null:
 		return _empty_payload()
-	var candidate_ids := _candidate_milestone_ids(str(command.action_id), command.params)
+	var candidate_ids := _candidate_milestone_ids(observation, str(command.action_id), command.params, int(command.actor))
 	if candidate_ids.is_empty():
 		return _empty_payload()
 
@@ -36,9 +36,12 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 		"milestones": scored,
 	}
 
-static func _candidate_milestone_ids(action_id: String, params: Dictionary) -> Array[String]:
+static func _candidate_milestone_ids(observation: ObservationState, action_id: String, params: Dictionary, actor_id: int) -> Array[String]:
 	var out: Array[String] = []
 	match action_id:
+		"recruit":
+			if _recruit_would_trigger_first_hire_3(observation, actor_id):
+				out.append("first_hire_3")
 		"train":
 			out.append("first_train")
 		"produce_food":
@@ -72,6 +75,32 @@ static func _candidate_milestone_ids(action_id: String, params: Dictionary) -> A
 		"set_price", "set_discount", "set_luxury_price":
 			out.append("first_lower_prices")
 	return out
+
+static func _recruit_would_trigger_first_hire_3(observation: ObservationState, actor_id: int) -> bool:
+	if observation == null:
+		return false
+	var player_id := actor_id
+	if player_id < 0:
+		player_id = int(observation.current_player_id)
+	if player_id < 0:
+		player_id = int(observation.viewer_player_id)
+	if player_id < 0:
+		return false
+	return _round_state_player_count(observation.round_state_public, "recruit_used", player_id) == 2
+
+static func _round_state_player_count(round_state: Dictionary, counter_key: String, player_id: int) -> int:
+	if not (round_state is Dictionary):
+		return 0
+	var all_val = round_state.get(counter_key, null)
+	if not (all_val is Dictionary):
+		return 0
+	var all_counts: Dictionary = all_val
+	if all_counts.has(player_id):
+		return int(all_counts.get(player_id, 0))
+	var string_key := str(player_id)
+	if all_counts.has(string_key):
+		return int(all_counts.get(string_key, 0))
+	return 0
 
 static func _milestone_value(milestone_id: String, profile) -> float:
 	if milestone_id.is_empty():
