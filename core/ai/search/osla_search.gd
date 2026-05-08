@@ -3,6 +3,7 @@ extends RefCounted
 
 const CandidateGeneratorClass = preload("res://core/ai/candidates/candidate_generator.gd")
 const StrategyCandidateFilterClass = preload("res://core/ai/strategy/strategy_candidate_filter.gd")
+const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_income_analyzer.gd")
 const StrategyProfileClass = preload("res://core/ai/strategy/strategy_profile.gd")
 const StrategyScorerClass = preload("res://core/ai/strategy/strategy_scorer.gd")
 const ForwardSimulatorClass = preload("res://core/ai/simulation/forward_simulator.gd")
@@ -56,7 +57,12 @@ static func choose_command(
 		return Result.failure("OSLASearch.choose_command: no candidates generated")
 
 	var discarded := _copy_string_array(gen_payload.get("discarded_reasons", []))
-	var filter_payload: Dictionary = StrategyCandidateFilterClass.filter_candidates(observation, candidates, profile)
+	var source_state := engine.get_state()
+	var income_analysis := StrategyIncomeAnalyzerClass.analyze(observation, profile, source_state)
+	var filter_payload: Dictionary = StrategyCandidateFilterClass.filter_candidates(observation, candidates, profile, {
+		"source_state": source_state,
+		"income_analysis": income_analysis,
+	})
 	var filtered_val = filter_payload.get("candidates", [])
 	if not (filtered_val is Array):
 		return Result.failure("OSLASearch.choose_command: StrategyCandidateFilter returned invalid candidates")
@@ -78,9 +84,11 @@ static func choose_command(
 	var best_features := {}
 	var evaluated: Array[Dictionary] = []
 	var attempted := 0
+	var budget_expired := false
 	var limit := mini(max_candidates, scored_candidates.size())
 	for i in range(limit):
 		if budget != null and budget.expired() and attempted > 0:
+			budget_expired = true
 			break
 		var entry: Dictionary = scored_candidates[i]
 		var macro: MacroAction = entry.get("macro", null)
@@ -130,10 +138,17 @@ static func choose_command(
 		features["osla_evaluator_weight"] = evaluator_weight
 		features["osla_final_features"] = Dictionary(eval_payload.get("features", {})).duplicate(true)
 		var response: Dictionary = Dictionary(entry.get("opponent_response", {}))
+		if str(response.get("response_skipped_reason", "")) == "budget expired":
+			budget_expired = true
 		features["osla_opponent_response_macro_id"] = str(response.get("response_macro_id", ""))
 		features["osla_opponent_response_action_id"] = str(response.get("response_action_id", ""))
 		features["osla_opponent_response_score"] = float(response.get("response_score", 0.0))
+		features["osla_opponent_response_evaluated_count"] = int(response.get("response_evaluated_count", 0))
 		features["osla_opponent_response_skipped_reason"] = str(response.get("response_skipped_reason", ""))
+		features["osla_budget_expired"] = budget_expired
+		features["osla_budget_ms"] = int(budget.budget_ms) if budget != null else -1
+		features["osla_budget_elapsed_ms"] = int(budget.elapsed_ms()) if budget != null else -1
+		features["osla_budget_remaining_ms"] = int(budget.remaining_ms()) if budget != null else -1
 
 		var first_command: Command = macro.commands[0]
 		evaluated.append({
@@ -154,6 +169,10 @@ static func choose_command(
 	if best_macro == null:
 		return Result.failure("OSLASearch.choose_command: no candidate simulated successfully: %s" % "; ".join(discarded.slice(0, 8)))
 	_sort_evaluated(evaluated)
+	best_features["osla_budget_expired"] = budget_expired
+	best_features["osla_budget_ms"] = int(budget.budget_ms) if budget != null else -1
+	best_features["osla_budget_elapsed_ms"] = int(budget.elapsed_ms()) if budget != null else -1
+	best_features["osla_budget_remaining_ms"] = int(budget.remaining_ms()) if budget != null else -1
 
 	var chosen_command: Command = best_macro.commands[0]
 	return Result.success(BotDecision.create(
@@ -165,6 +184,7 @@ static func choose_command(
 			"candidate_count": candidates.size(),
 			"valid_candidate_count": evaluated.size(),
 			"attempted_simulations": attempted,
+			"budget_expired": budget_expired,
 			"filter_stats": filter_stats,
 		},
 		{
@@ -177,6 +197,7 @@ static func choose_command(
 			"candidate_count": candidates.size(),
 			"valid_candidate_count": evaluated.size(),
 			"attempted_simulations": attempted,
+			"budget_expired": budget_expired,
 			"filter_stats": filter_stats,
 			"top_candidates": evaluated.slice(0, 5),
 			"discarded_reasons": discarded.slice(0, 20),
@@ -268,7 +289,12 @@ static func _simulate_opponent_response(
 	var candidates: Array = candidates_val
 	if candidates.is_empty():
 		return Result.success(_opponent_response_payload(engine, "no response candidates", null, 0.0, 0))
-	var filter_payload: Dictionary = StrategyCandidateFilterClass.filter_candidates(response_observation, candidates, profile)
+	var response_source_state := engine.get_state()
+	var response_income_analysis := StrategyIncomeAnalyzerClass.analyze(response_observation, profile, response_source_state)
+	var filter_payload: Dictionary = StrategyCandidateFilterClass.filter_candidates(response_observation, candidates, profile, {
+		"source_state": response_source_state,
+		"income_analysis": response_income_analysis,
+	})
 	var filtered_val = filter_payload.get("candidates", [])
 	if not (filtered_val is Array):
 		return Result.success(_opponent_response_payload(engine, "filter returned invalid candidates", null, 0.0, 0))

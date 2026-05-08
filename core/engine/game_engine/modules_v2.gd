@@ -36,14 +36,18 @@ static func reset(engine) -> void:
 	if engine == null:
 		return
 
+	var owns_runtime := true
+	var owns_val = engine.get("owns_module_runtime_v2")
+	if owns_val is bool:
+		owns_runtime = bool(owns_val)
 	var old_ruleset = engine.ruleset_v2
-	if old_ruleset != null and old_ruleset.has_method("dispose"):
+	if owns_runtime and old_ruleset != null and old_ruleset.has_method("dispose"):
 		old_ruleset.dispose()
 	var old_catalog = engine.content_catalog_v2
-	if old_catalog != null and old_catalog.has_method("clear"):
+	if owns_runtime and old_catalog != null and old_catalog.has_method("clear"):
 		old_catalog.clear()
 	var old_ui_extensions = engine.module_ui_extensions_v2
-	if old_ui_extensions != null and old_ui_extensions.has_method("clear"):
+	if owns_runtime and old_ui_extensions != null and old_ui_extensions.has_method("clear"):
 		old_ui_extensions.clear()
 
 	var empty_plan: Array[String] = []
@@ -53,9 +57,10 @@ static func reset(engine) -> void:
 	engine.ruleset_v2 = null
 	engine.module_ui_extensions_v2 = null
 	engine.modules_v2_base_dir = ""
-	if engine.catalog_registry_bundle != null and engine.catalog_registry_bundle.has_method("clear"):
+	engine.owns_module_runtime_v2 = true
+	if owns_runtime and engine.catalog_registry_bundle != null and engine.catalog_registry_bundle.has_method("clear"):
 		engine.catalog_registry_bundle.clear()
-	if engine.rules_registry_bundle != null and engine.rules_registry_bundle.has_method("clear"):
+	if owns_runtime and engine.rules_registry_bundle != null and engine.rules_registry_bundle.has_method("clear"):
 		engine.rules_registry_bundle.clear()
 	if engine.has_method("activate_registry_bundles"):
 		engine.activate_registry_bundles()

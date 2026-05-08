@@ -7,10 +7,13 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var parse := _test_parse_mixed_bot_args()
 	if not parse.ok:
 		return parse
+	var mandatory_summary := _test_mandatory_completion_summary_counts_untraced_auto_actions()
+	if not mandatory_summary.ok:
+		return mandatory_summary
 	var smoke := _test_run_mixed_bot_config()
 	if not smoke.ok:
 		return smoke
-	return Result.success({"cases": 2})
+	return Result.success({"cases": 3})
 
 static func _test_parse_mixed_bot_args() -> Result:
 	var parsed := SelfplayToolClass._parse_args([
@@ -18,6 +21,7 @@ static func _test_parse_mixed_bot_args() -> Result:
 		"--bots=random,strategy",
 		"--profile=base_revenue_growth_v1",
 		"--matches=1",
+		"--trace-detail=decision",
 	])
 	if not parsed.ok:
 		return parsed
@@ -27,6 +31,8 @@ static func _test_parse_mixed_bot_args() -> Result:
 		return Result.failure("--bots parse mismatch: %s" % str(options))
 	if str(options.get("profile", "")) != "base_revenue_growth_v1":
 		return Result.failure("--profile parse mismatch: %s" % str(options))
+	if str(options.get("trace_detail", "")) != "decision":
+		return Result.failure("--trace-detail parse mismatch: %s" % str(options))
 	var resolved := SelfplayToolClass._resolve_bot_ids(options, 2)
 	if not resolved.ok:
 		return resolved
@@ -44,6 +50,174 @@ static func _test_parse_mixed_bot_args() -> Result:
 	var empty_profile := SelfplayToolClass._parse_args(["--profile="])
 	if empty_profile.ok:
 		return Result.failure("--profile should reject empty profile ids")
+	var invalid_trace_detail := SelfplayToolClass._parse_args(["--trace-detail=full"])
+	if invalid_trace_detail.ok:
+		return Result.failure("--trace-detail should reject unsupported modes")
+	return Result.success()
+
+static func _test_mandatory_completion_summary_counts_untraced_auto_actions() -> Result:
+	var bot_trace: Array[Dictionary] = [
+		{
+			"action_id": "skip_sub_phase",
+			"macro_action_id": "working_skip_sub_phase",
+			"phase_before": "Working",
+			"sub_phase_before": "Recruit",
+			"phase_after": "Working",
+			"sub_phase_after": "Train",
+			"mandatory_actions_completed_added": [
+				{"player_id": 1, "action_id": "set_price"},
+			],
+		},
+		{
+			"action_id": "set_price",
+			"macro_action_id": "mandatory_set_price",
+			"mandatory_actions_completed_added": [
+				{"player_id": 0, "action_id": "set_price"},
+			],
+		},
+	]
+
+	var counts := SelfplayToolClass._mandatory_completion_counts(bot_trace)
+	if int(counts.get("set_price", 0)) != 2:
+		return Result.failure("mandatory completion counts should include set_price twice: %s" % str(counts))
+
+	var untraced := SelfplayToolClass._untraced_mandatory_completion_counts(bot_trace)
+	if int(untraced.get("set_price", 0)) != 1:
+		return Result.failure("untraced mandatory completion counts should include auto set_price once: %s" % str(untraced))
+
+	var trace_tail := SelfplayToolClass._trace_tail(bot_trace, 2)
+	if not Dictionary(trace_tail[0]).has("mandatory_actions_completed_added"):
+		return Result.failure("trace tail should expose mandatory completions: %s" % str(trace_tail))
+
+	var tail := SelfplayToolClass._mandatory_completion_tail(bot_trace, 1)
+	if tail.size() != 1:
+		return Result.failure("mandatory completion tail should include direct set_price: %s" % str(tail))
+	var tail_row: Dictionary = tail[0]
+	if str(tail_row.get("action_id", "")) != "set_price" or str(tail_row.get("completed_by_action_id", "")) != "set_price":
+		return Result.failure("mandatory completion tail row mismatch: %s" % str(tail_row))
+	var cash_trace: Array[Dictionary] = [
+		{
+			"player_cash_before": [0, 0],
+			"player_cash_after": [0, 4],
+		},
+		{
+			"player_cash_before": [6, 4],
+			"player_cash_after": [2, 0],
+		},
+	]
+	var cash_min_after_positive := SelfplayToolClass._trace_player_cash_min_after_first_positive(cash_trace)
+	if cash_min_after_positive.size() != 2 or int(cash_min_after_positive[0]) != 2 or int(cash_min_after_positive[1]) != 0:
+		return Result.failure("cash min after first positive mismatch: %s" % str(cash_min_after_positive))
+	var search_trace: Array[Dictionary] = [
+		{
+			"explanation": {
+				"attempted_simulations": 3,
+				"expanded_nodes": 0,
+				"budget_expired": false,
+			},
+			"decision_trace": {
+				"search": "osla",
+				"time_ms": 11,
+			},
+		},
+		{
+			"explanation": {
+				"attempted_simulations": 4,
+				"expanded_nodes": 2,
+				"budget_expired": true,
+			},
+			"decision_trace": {
+				"search": "beam",
+				"time_ms": 17,
+			},
+		},
+		{
+			"explanation": {},
+			"decision_trace": {},
+		},
+	]
+	var search_metrics := SelfplayToolClass._trace_search_metrics(search_trace)
+	if int(search_metrics.get("decision_count", 0)) != 2:
+		return Result.failure("search metrics should count search decisions: %s" % str(search_metrics))
+	if int(search_metrics.get("budget_expired_count", 0)) != 1:
+		return Result.failure("search metrics should count budget expiry: %s" % str(search_metrics))
+	if int(search_metrics.get("attempted_simulations", 0)) != 7 or int(search_metrics.get("expanded_nodes", 0)) != 2:
+		return Result.failure("search metrics should aggregate simulations and expansions: %s" % str(search_metrics))
+	if float(search_metrics.get("time_ms_avg_per_decision", 0.0)) != 14.0:
+		return Result.failure("search metrics should average time per decision: %s" % str(search_metrics))
+	var type_counts: Dictionary = Dictionary(search_metrics.get("search_type_counts", {}))
+	if int(type_counts.get("osla", 0)) != 1 or int(type_counts.get("beam", 0)) != 1:
+		return Result.failure("search metrics should count search types: %s" % str(search_metrics))
+	var opening_trace: Array[Dictionary] = [
+		{
+			"player_id": 0,
+			"action_id": "recruit",
+			"macro_action_id": "recruit_kitchen_trainee",
+			"params": {"employee_id": "kitchen_trainee"},
+			"round_before": 1,
+			"round_after": 1,
+			"player_cash_before": [0, 0],
+			"player_cash_after": [0, 0],
+		},
+		{
+			"player_id": 0,
+			"action_id": "recruit",
+			"macro_action_id": "recruit_errand_boy",
+			"params": {"employee_id": "errand_boy"},
+			"round_before": 1,
+			"round_after": 1,
+			"player_cash_before": [0, 0],
+			"player_cash_after": [0, 0],
+		},
+		{
+			"player_id": 1,
+			"action_id": "recruit",
+			"macro_action_id": "recruit_pricing_manager",
+			"round_before": 1,
+			"round_after": 1,
+			"player_cash_before": [0, 0],
+			"player_cash_after": [0, 0],
+		},
+		{
+			"player_id": 1,
+			"action_id": "procure_drinks",
+			"macro_action_id": "errand_boy_beer",
+			"round_before": 2,
+			"round_after": 2,
+			"player_cash_before": [0, 0],
+			"player_cash_after": [0, 0],
+		},
+		{
+			"player_id": 0,
+			"action_id": "produce_food",
+			"macro_action_id": "produce_burger",
+			"round_before": 3,
+			"round_after": 3,
+			"player_cash_before": [0, 0],
+			"player_cash_after": [5, 0],
+		},
+	]
+	var opening_metrics := SelfplayToolClass._trace_opening_metrics(opening_trace, 2)
+	if int(opening_metrics.get("players_with_positive_cash", 0)) != 1 or int(opening_metrics.get("players_without_positive_cash", 0)) != 1:
+		return Result.failure("opening metrics should count positive-cash players: %s" % str(opening_metrics))
+	var first_rounds: Array = opening_metrics.get("first_positive_cash_rounds", [])
+	if first_rounds.size() != 2 or int(first_rounds[0]) != 3 or int(first_rounds[1]) != -1:
+		return Result.failure("opening metrics should expose first positive cash rounds: %s" % str(opening_metrics))
+	var recruit_counts: Dictionary = Dictionary(opening_metrics.get("pre_revenue_recruit_counts", {}))
+	if int(recruit_counts.get("kitchen_trainee", 0)) != 1 or int(recruit_counts.get("errand_boy", 0)) != 1 or int(recruit_counts.get("pricing_manager", 0)) != 1:
+		return Result.failure("opening metrics should count pre-revenue recruit ids: %s" % str(opening_metrics))
+	if int(opening_metrics.get("pre_revenue_errand_boy_recruit_count", 0)) != 1 or int(opening_metrics.get("pre_revenue_pricing_manager_recruit_count", 0)) != 1 or int(opening_metrics.get("pre_revenue_procure_drinks_count", 0)) != 1:
+		return Result.failure("opening metrics should expose tunable pre-revenue route signals: %s" % str(opening_metrics))
+	var food_delay_rounds: Array = opening_metrics.get("food_recruit_to_produce_round_delays", [])
+	var food_delay_steps: Array = opening_metrics.get("food_recruit_to_produce_step_delays", [])
+	if food_delay_rounds.size() != 2 or int(food_delay_rounds[0]) != 2 or int(food_delay_rounds[1]) != -1:
+		return Result.failure("opening metrics should expose food recruit to produce round delay: %s" % str(opening_metrics))
+	if food_delay_steps.size() != 2 or int(food_delay_steps[0]) != 4 or int(food_delay_steps[1]) != -1:
+		return Result.failure("opening metrics should expose food recruit to produce step delay: %s" % str(opening_metrics))
+	var opening_tail := SelfplayToolClass._trace_tail(opening_trace, 1)
+	var opening_tail_row: Dictionary = Dictionary(opening_tail[0])
+	if int(opening_tail_row.get("round_before", -1)) != 3 or int(opening_tail_row.get("round_after", -1)) != 3:
+		return Result.failure("trace tail should include round diagnostics: %s" % str(opening_tail))
 	return Result.success()
 
 static func _test_run_mixed_bot_config() -> Result:
@@ -74,4 +248,36 @@ static func _test_run_mixed_bot_config() -> Result:
 		return Result.failure("mixed selfplay should reach target round: %s" % str(row))
 	if int(row.get("round", 0)) < 2:
 		return Result.failure("mixed selfplay should reach round 2: %s" % str(row))
+	var milestone_ids: Array = row.get("player_milestone_ids", [])
+	if milestone_ids.size() != 2:
+		return Result.failure("mixed selfplay row should include per-player milestone ids: %s" % str(row))
+	var cash_min_seen: Array = row.get("player_cash_min_seen", [])
+	var cash_min_after_first_positive: Array = row.get("player_cash_min_after_first_positive", [])
+	var cash_max_seen: Array = row.get("player_cash_max_seen", [])
+	if not row.has("player_cash_min_after_first_positive"):
+		return Result.failure("mixed selfplay row should include cash-after-positive diagnostic key: %s" % str(row))
+	if cash_min_seen.size() != 2 or cash_max_seen.size() != 2:
+		return Result.failure("mixed selfplay row should include per-player cash min/max diagnostics: %s" % str(row))
+	if not cash_min_after_first_positive.is_empty() and cash_min_after_first_positive.size() != 2:
+		return Result.failure("cash-after-positive diagnostic should be empty or per-player sized: %s" % str(row))
+	var employee_groups: Array = row.get("player_employee_groups", [])
+	if employee_groups.size() != 2:
+		return Result.failure("mixed selfplay row should include per-player employee groups: %s" % str(row))
+	var first_employee_groups := Dictionary(employee_groups[0])
+	if not first_employee_groups.has("active") or not first_employee_groups.has("reserve") or not first_employee_groups.has("busy"):
+		return Result.failure("employee groups should include active/reserve/busy: %s" % str(first_employee_groups))
+	var inventory_details: Array = row.get("player_inventory", [])
+	if inventory_details.size() != 2:
+		return Result.failure("mixed selfplay row should include per-player inventory details: %s" % str(row))
+	var restaurant_details: Array = row.get("player_restaurant_details", [])
+	if restaurant_details.size() != 2:
+		return Result.failure("mixed selfplay row should include per-player restaurant details: %s" % str(row))
+	if not (restaurant_details[0] is Array) or Array(restaurant_details[0]).is_empty():
+		return Result.failure("mixed selfplay row should include first player restaurant detail rows: %s" % str(row))
+	var first_restaurant_val = Array(restaurant_details[0])[0]
+	if not (first_restaurant_val is Dictionary):
+		return Result.failure("mixed selfplay restaurant detail should resolve ids to map dictionaries: %s" % str(row))
+	var first_restaurant: Dictionary = first_restaurant_val
+	if str(first_restaurant.get("restaurant_id", "")).is_empty() or not first_restaurant.has("owner"):
+		return Result.failure("mixed selfplay restaurant detail should include id and owner: %s" % str(first_restaurant))
 	return Result.success()

@@ -239,3 +239,31 @@ func clear_all() -> void:
 	_validators_by_action.clear()
 	_global_validators.clear()
 	_availability_registry = null
+
+func duplicate_runtime() -> ActionRegistry:
+	var copy := ActionRegistry.new()
+	copy._executors = _executors.duplicate()
+	if _availability_registry != null and _availability_registry.has_method("duplicate_runtime"):
+		copy._availability_registry = _availability_registry.duplicate_runtime()
+	else:
+		copy._availability_registry = _availability_registry
+	copy._validators_by_action = _duplicate_validator_map(_validators_by_action)
+	copy._global_validators = _duplicate_validator_list(_global_validators)
+	return copy
+
+static func _duplicate_validator_map(source: Dictionary) -> Dictionary:
+	var out := {}
+	for action_id in source.keys():
+		var list_val = source.get(action_id, [])
+		if list_val is Array:
+			out[action_id] = _duplicate_validator_list(Array(list_val))
+		else:
+			out[action_id] = []
+	return out
+
+static func _duplicate_validator_list(source: Array) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for item in source:
+		if item is Dictionary:
+			out.append(Dictionary(item).duplicate())
+	return out

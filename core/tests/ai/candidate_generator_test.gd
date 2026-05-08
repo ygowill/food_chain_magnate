@@ -8,10 +8,13 @@ const LegalActionServiceClass = preload("res://core/ai/bot/legal_action_service.
 const BotControllerClass = preload("res://core/ai/bot/bot_controller.gd")
 const RandomLegalBotClass = preload("res://core/ai/bot/random_legal_bot.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingRangeCalculatorClass = preload("res://core/rules/marketing_range_calculator.gd")
 const AddGardenRulesTestClass = preload("res://core/tests/add_garden_rules_test.gd")
+const DinnertimeSettlementTestClass = preload("res://core/tests/dinnertime_settlement_test.gd")
 const ProcureDrinksTestClass = preload("res://core/tests/procure_drinks_test.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const StateUpdaterClass = preload("res://core/state/state_updater.gd")
 
 static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var reserve := _test_reserve_candidates_are_valid(seed_val)
@@ -23,6 +26,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var working := _test_working_recruit_candidates_are_valid_and_deterministic(seed_val)
 	if not working.ok:
 		return working
+	var recruit_priority := _test_recruit_candidates_prioritize_strategy_roles_under_budget(seed_val)
+	if not recruit_priority.ok:
+		return recruit_priority
 	var mandatory := _test_working_mandatory_price_candidate(seed_val)
 	if not mandatory.ok:
 		return mandatory
@@ -41,9 +47,18 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var move_restaurant := _test_working_move_restaurant_candidates_are_valid(seed_val)
 	if not move_restaurant.ok:
 		return move_restaurant
+	var move_restaurant_priority := _test_working_move_restaurant_candidates_prioritize_demand_positions(seed_val)
+	if not move_restaurant_priority.ok:
+		return move_restaurant_priority
 	var marketing := _test_working_marketing_candidates_are_valid(seed_val)
 	if not marketing.ok:
 		return marketing
+	var marketing_occupied_board := _test_working_marketing_candidates_skip_occupied_board(seed_val)
+	if not marketing_occupied_board.ok:
+		return marketing_occupied_board
+	var marketing_board_order := _test_marketing_board_order_uses_board_id(seed_val)
+	if not marketing_board_order.ok:
+		return marketing_board_order
 	var route_drinks := _test_working_route_drink_candidates_are_valid(seed_val)
 	if not route_drinks.ok:
 		return route_drinks
@@ -65,13 +80,22 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var training_layout := _test_restructuring_preserves_trainable_source_for_training(seed_val)
 	if not training_layout.ok:
 		return training_layout
+	var blocked_marketing_training := _test_restructuring_reserves_blocked_marketing_trainee_for_campaign_training(seed_val)
+	if not blocked_marketing_training.ok:
+		return blocked_marketing_training
+	var blocked_marketing_direct := _test_restructuring_keeps_blocked_marketing_trainee_reserved_for_campaign_training(seed_val)
+	if not blocked_marketing_direct.ok:
+		return blocked_marketing_direct
+	var contested_billboard_upgrade := _test_restructuring_keeps_contested_billboard_marketer_reserved_for_campaign_training(seed_val)
+	if not contested_billboard_upgrade.ok:
+		return contested_billboard_upgrade
 	var optional_training := _test_optional_training_does_not_block_revenue_staff(seed_val)
 	if not optional_training.ok:
 		return optional_training
 	var advanced_training := _test_training_candidates_cover_advanced_routes(seed_val)
 	if not advanced_training.ok:
 		return advanced_training
-	return Result.success({"cases": 19})
+	return Result.success({"cases": 26})
 
 static func _test_reserve_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
@@ -134,12 +158,87 @@ static func _test_working_recruit_candidates_are_valid_and_deterministic(seed_va
 		return second_read
 	var first_candidates := _read_candidates(first_read.value)
 	var second_candidates := _read_candidates(second_read.value)
+	var first_discarded: Array = first_read.value.get("discarded_reasons", [])
+	for reason_val in first_discarded:
+		if str(reason_val).find("只能招聘入门级员工") >= 0:
+			return Result.failure("Working/Recruit generation should not waste candidate budget on non-entry recruits: %s" % str(first_discarded))
 	if not _has_action(first_candidates, "skip_sub_phase"):
 		return Result.failure("working candidates should include skip_sub_phase fallback: %s" % str(_macro_debug(first_candidates)))
 	if not _has_action(first_candidates, "recruit"):
 		return Result.failure("Working/Recruit candidates should include at least one recruit command: %s" % str(_macro_debug(first_candidates)))
 	if str(_macro_debug(first_candidates)) != str(_macro_debug(second_candidates)):
 		return Result.failure("candidate generation should be deterministic for same state and seed")
+	return Result.success()
+
+static func _test_recruit_candidates_prioritize_strategy_roles_under_budget(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_RECRUIT
+	state.turn_order = [0, 1]
+	state.current_player_index = 0
+	state.round_state["sub_phase_passed"] = {
+		0: false,
+		1: false,
+	}
+	state.players[0]["cash"] = 35
+	state.players[0]["employees"] = []
+	state.players[0]["reserve_employees"] = []
+	state.players[0]["busy_marketers"] = []
+	state.players[0]["restaurants"] = ["recruit_restaurant"]
+	state.map["restaurants"] = {
+		"recruit_restaurant": {
+			"restaurant_id": "recruit_restaurant",
+			"owner": 0,
+			"anchor_pos": Vector2i(3, 2),
+		},
+	}
+	state.map["houses"] = {
+		"recruit_house": {
+			"house_number": 1,
+			"anchor_pos": Vector2i(2, 2),
+			"demands": [
+				{"product": "burger"},
+				{"product": "burger"},
+				{"product": "burger"},
+			],
+		},
+	}
+	for employee_id in ["burger_cook", "campaign_manager", "errand_boy"]:
+		var added := _add_employee_for_test(state, 0, "employees", employee_id)
+		if not added.ok:
+			return added
+
+	var observation_read := ObservationAdapterClass.observe_for_player(engine, 0)
+	if not observation_read.ok:
+		return observation_read
+	var observation: ObservationState = observation_read.value
+	var context := AiDecisionContext.create(
+		0,
+		DefsClass.PHASE_WORKING,
+		DefsClass.SUB_PHASE_RECRUIT,
+		int(observation.round_number),
+		seed_val,
+		[]
+	)
+	var payload_read := CandidateGeneratorClass.generate(
+		observation,
+		context,
+		["recruit", "skip_sub_phase"],
+		Callable(),
+		{"max_valid_per_action": 12}
+	)
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	var pricing_command := _first_command_with_param(candidates, "recruit", "employee_type", "pricing_manager")
+	if pricing_command == null:
+		return Result.failure("Recruit candidates should keep pricing_manager under default candidate budget once stable income is ready: %s" % str(_macro_debug(candidates)))
 	return Result.success()
 
 static func _test_working_mandatory_price_candidate(seed_val: int) -> Result:
@@ -154,8 +253,9 @@ static func _test_working_mandatory_price_candidate(seed_val: int) -> Result:
 	if state == null:
 		return Result.failure("engine state is null")
 	var actor := state.get_current_player_id()
-	state.players[actor]["employees"].append("pricing_manager")
-	state.employee_pool["pricing_manager"] = int(state.employee_pool.get("pricing_manager", 0)) - 1
+	var add_price := _add_employee_for_test(state, actor, "employees", "pricing_manager")
+	if not add_price.ok:
+		return add_price
 
 	var payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
 	if not payload_read.ok:
@@ -355,6 +455,83 @@ static func _test_working_move_restaurant_candidates_are_valid(seed_val: int) ->
 		return Result.failure("move_restaurant candidate should change restaurant anchor")
 	return Result.success()
 
+static func _test_working_move_restaurant_candidates_prioritize_demand_positions(seed_val: int) -> Result:
+	var observation := ObservationState.new()
+	observation.viewer_player_id = 0
+	observation.current_player_id = 0
+	observation.round_number = 4
+	observation.phase = DefsClass.PHASE_WORKING
+	observation.sub_phase = DefsClass.SUB_PHASE_PLACE_RESTAURANTS
+	observation.turn_order = [0]
+	observation.own_player = {
+		"id": 0,
+		"cash": 50,
+		"employees": ["regional_manager"],
+		"reserve_employees": [],
+		"busy_marketers": [],
+		"restaurants": ["rest_far"],
+		"inventory": {},
+		"milestones": [],
+	}
+	observation.public_players = [
+		{
+			"id": 0,
+			"cash": 50,
+			"employees": ["regional_manager"],
+			"reserve_employees": [],
+			"busy_marketers": [],
+			"restaurants": ["rest_far"],
+			"inventory": {},
+			"milestones": [],
+		},
+	]
+	observation.map_public = {
+		"grid_size": Vector2i(8, 8),
+		"tile_grid_size": Vector2i(8, 8),
+		"restaurants": {
+			"rest_far": {
+				"restaurant_id": "rest_far",
+				"owner": 0,
+				"anchor_pos": Vector2i(0, 0),
+			},
+		},
+		"houses": {
+			"house_target": {
+				"house_number": 1,
+				"anchor_pos": Vector2i(7, 7),
+				"demands": [
+					{"product": "burger"},
+					{"product": "burger"},
+				],
+			},
+		},
+	}
+	var context := AiDecisionContext.create(
+		0,
+		DefsClass.PHASE_WORKING,
+		DefsClass.SUB_PHASE_PLACE_RESTAURANTS,
+		4,
+		seed_val,
+		[]
+	)
+	var payload_read := CandidateGeneratorClass.generate(
+		observation,
+		context,
+		["move_restaurant"],
+		Callable(),
+		{"max_valid_per_action": 2}
+	)
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	var command := _first_command_for_action(candidates, "move_restaurant")
+	if command == null:
+		return Result.failure("PlaceRestaurants should generate move_restaurant candidate near demand: %s" % str(_macro_debug(candidates)))
+	var position := _command_param_vector2i(command, "position")
+	if position != Vector2i(7, 7):
+		return Result.failure("move_restaurant candidates should be demand-prioritized before candidate cap, first=%s candidates=%s" % [str(command.params), str(_macro_debug(candidates))])
+	return Result.success()
+
 static func _test_working_marketing_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
 	if not engine_read.ok:
@@ -370,8 +547,18 @@ static func _test_working_marketing_candidates_are_valid(seed_val: int) -> Resul
 	var actor := state.get_current_player_id()
 	if Array(state.players[actor].get("restaurants", [])).is_empty():
 		return Result.failure("marketing test requires an existing restaurant")
-	state.players[actor]["employees"].append("brand_manager")
-	state.employee_pool["brand_manager"] = int(state.employee_pool.get("brand_manager", 0)) - 1
+	DinnertimeSettlementTestClass._apply_test_map(state)
+	var target_house := "house_left" if actor == 0 else "house_right"
+	var other_house := "house_right" if actor == 0 else "house_left"
+	DinnertimeSettlementTestClass._set_house_demands(state, target_house, [{"product": "burger"}])
+	DinnertimeSettlementTestClass._set_house_demands(state, other_house, [])
+	state.marketing_instances = []
+	var add_marketer := _add_employee_for_test(state, actor, "employees", "brand_manager")
+	if not add_marketer.ok:
+		return add_marketer
+	var inventory: Dictionary = Dictionary(state.players[actor].get("inventory", {})).duplicate(true)
+	inventory["burger"] = maxi(1, int(inventory.get("burger", 0)))
+	state.players[actor]["inventory"] = inventory
 	var before_count := state.marketing_instances.size()
 
 	var payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
@@ -379,7 +566,7 @@ static func _test_working_marketing_candidates_are_valid(seed_val: int) -> Resul
 		return payload_read
 	var candidates := _read_candidates(payload_read.value)
 	if not _has_action(candidates, "initiate_marketing"):
-		return Result.failure("Marketing should generate initiate_marketing candidate: %s" % str(_macro_debug(candidates)))
+		return Result.failure("Marketing should generate initiate_marketing candidate: candidates=%s discarded=%s" % [str(_macro_debug(candidates)), str(payload_read.value.get("discarded_reasons", []))])
 	var command := _first_command_for_action(candidates, "initiate_marketing")
 	if command == null:
 		return Result.failure("missing initiate_marketing command")
@@ -395,6 +582,85 @@ static func _test_working_marketing_candidates_are_valid(seed_val: int) -> Resul
 	var affected: Array = affected_read.value
 	if affected.is_empty():
 		return Result.failure("initiate_marketing candidate should affect at least one house: %s" % str(command.params))
+	return Result.success()
+
+static func _test_working_marketing_candidates_skip_occupied_board(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var run_read := _run_random_bots_to_working(engine)
+	if not run_read.ok:
+		return run_read
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.sub_phase = DefsClass.SUB_PHASE_MARKETING
+	var actor := state.get_current_player_id()
+	if Array(state.players[actor].get("restaurants", [])).is_empty():
+		return Result.failure("occupied board marketing test requires an existing restaurant")
+	state.players[actor]["employees"] = ["marketing_trainee"]
+	state.players[actor]["reserve_employees"] = []
+	state.players[actor]["busy_marketers"] = []
+	if int(state.employee_pool.get("marketing_trainee", 0)) <= 0:
+		return Result.failure("occupied board marketing test requires marketing_trainee in pool")
+	state.employee_pool["marketing_trainee"] = int(state.employee_pool.get("marketing_trainee", 0)) - 1
+	state.marketing_instances = [
+		{
+			"board_number": 11,
+			"type": "billboard",
+			"owner": 1 - actor,
+			"employee_type": "marketing_trainee",
+			"product": "burger",
+			"world_pos": Vector2i.ZERO,
+			"rotation": 0,
+			"footprint_size": Vector2i(3, 2),
+			"remaining_duration": 1,
+			"axis": "",
+			"tile_index": -1,
+			"created_round": int(state.round_number),
+		},
+	]
+
+	var payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	var discarded: Array = payload_read.value.get("discarded_reasons", [])
+	var occupied_skip_seen := false
+	var occupied_expanded_seen := false
+	for reason_val in discarded:
+		var reason := str(reason_val)
+		if reason.begins_with("marketing_board_11:"):
+			occupied_skip_seen = true
+		if reason.begins_with("marketing_marketing_trainee_11_"):
+			occupied_expanded_seen = true
+	if not occupied_skip_seen:
+		return Result.failure("Marketing should explicitly skip occupied board #11 before position expansion: discarded=%s" % str(discarded))
+	if occupied_expanded_seen:
+		return Result.failure("Marketing should not expand occupied board #11 into placement candidates: discarded=%s" % str(discarded))
+	var command := _first_command_for_action(candidates, "initiate_marketing")
+	if command != null and int(command.params.get("board_number", 0)) == 11:
+		return Result.failure("Marketing should skip occupied board #11, got %s" % str(command.params))
+	return Result.success()
+
+static func _test_marketing_board_order_uses_board_id(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var board_numbers: Array[int] = CandidateGeneratorClass._sorted_marketing_board_numbers(["airplane"], null)
+	var expected: Array[int] = [4, 5, 6]
+	if board_numbers != expected:
+		return Result.failure("Marketing board order should use board id order, expected %s got %s" % [str(expected), str(board_numbers)])
+	var areas: Array[int] = []
+	for board_number in board_numbers:
+		var def_val = MarketingRegistryClass.get_def(int(board_number))
+		if not (def_val is MarketingDef):
+			return Result.failure("Marketing board #%d should be registered" % int(board_number))
+		var def: MarketingDef = def_val
+		areas.append(int(def.footprint_size.x) * int(def.footprint_size.y))
+	if str(areas) != str([2, 6, 10]):
+		return Result.failure("Airplane board footprint areas changed; update this order regression test: %s" % str(areas))
 	return Result.success()
 
 static func _test_working_route_drink_candidates_are_valid(seed_val: int) -> Result:
@@ -742,6 +1008,229 @@ static func _test_restructuring_preserves_trainable_source_for_training(seed_val
 		return Result.failure("management_trainee training should prefer new_business_developer, actual: %s" % str(train_command.params))
 	return Result.success()
 
+static func _test_restructuring_reserves_blocked_marketing_trainee_for_campaign_training(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var run_read := _run_random_bots_to_working(engine)
+	if not run_read.ok:
+		return run_read
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.phase = DefsClass.PHASE_RESTRUCTURING
+	state.sub_phase = ""
+	state.turn_order = [0, 1]
+	state.selection_order = [0, 1]
+	state.current_player_index = 0
+	state.round_state["restructuring"] = {
+		"finalized": false,
+		"submitted": {
+			0: false,
+			1: false,
+		},
+	}
+	state.players[0]["company_structure"]["ceo_slots"] = 1
+	state.players[0]["company_structure"]["structure"] = [
+		{"employee_id": "marketing_trainee", "reports": []},
+	]
+	state.players[0]["employees"] = ["ceo"]
+	state.players[0]["reserve_employees"] = []
+	state.players[0]["busy_marketers"] = []
+	var add_marketer := _add_employee_for_test(state, 0, "employees", "marketing_trainee")
+	if not add_marketer.ok:
+		return add_marketer
+	var add_trainer := _add_employee_for_test(state, 0, "reserve_employees", "trainer")
+	if not add_trainer.ok:
+		return add_trainer
+	if int(state.employee_pool.get("campaign_manager", 0)) <= 0:
+		return Result.failure("blocked marketing training test requires campaign_manager in pool")
+	state.marketing_instances = []
+	for board_number in [11, 13, 14]:
+		state.marketing_instances.append({
+			"board_number": int(board_number),
+			"type": "billboard",
+			"owner": 1,
+			"employee_type": "marketing_trainee",
+			"product": "burger",
+			"world_pos": Vector2i.ZERO,
+			"rotation": 0,
+			"footprint_size": Vector2i(3, 2),
+			"remaining_duration": 1,
+			"axis": "",
+			"tile_index": -1,
+			"created_round": int(state.round_number),
+		})
+
+	var payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	var move_command := _first_command_with_param(candidates, "restructure_employee", "employee_id", "marketing_trainee")
+	if move_command == null:
+		return Result.failure("restructuring should reserve blocked marketing_trainee for campaign_manager training: %s" % str(_macro_debug(candidates)))
+	if not bool(move_command.params.get("to_reserve", false)):
+		return Result.failure("blocked marketing training move should target reserve: %s" % str(move_command.params))
+	var moved := engine.execute_command(move_command)
+	if not moved.ok:
+		return Result.failure("blocked marketing training reserve move failed on execute: %s" % moved.error)
+
+	var train_state := engine.get_state()
+	train_state.phase = DefsClass.PHASE_WORKING
+	train_state.sub_phase = DefsClass.SUB_PHASE_TRAIN
+	train_state.turn_order = [0]
+	train_state.current_player_index = 0
+	train_state.players[0]["employees"] = ["ceo", "trainer"]
+	train_state.players[0]["reserve_employees"] = ["marketing_trainee"]
+	var train_payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not train_payload_read.ok:
+		return train_payload_read
+	var train_candidates := _read_candidates(train_payload_read.value)
+	if not _has_train_candidate(train_candidates, "marketing_trainee", "campaign_manager"):
+		return Result.failure("Working/Train should generate marketing_trainee -> campaign_manager after reserve move: %s" % str(_macro_debug(train_candidates)))
+	return Result.success()
+
+static func _test_restructuring_keeps_blocked_marketing_trainee_reserved_for_campaign_training(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var run_read := _run_random_bots_to_working(engine)
+	if not run_read.ok:
+		return run_read
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.phase = DefsClass.PHASE_RESTRUCTURING
+	state.sub_phase = ""
+	state.turn_order = [0, 1]
+	state.selection_order = [0, 1]
+	state.current_player_index = 0
+	state.round_state["restructuring"] = {
+		"finalized": false,
+		"submitted": {
+			0: false,
+			1: false,
+		},
+	}
+	state.players[0]["company_structure"]["ceo_slots"] = 2
+	state.players[0]["company_structure"]["structure"] = []
+	state.players[0]["employees"] = ["ceo"]
+	state.players[0]["reserve_employees"] = []
+	state.players[0]["busy_marketers"] = []
+	var add_trainer := _add_employee_for_test(state, 0, "employees", "trainer")
+	if not add_trainer.ok:
+		return add_trainer
+	var add_marketer := _add_employee_for_test(state, 0, "reserve_employees", "marketing_trainee")
+	if not add_marketer.ok:
+		return add_marketer
+	if int(state.employee_pool.get("campaign_manager", 0)) <= 0:
+		return Result.failure("blocked marketing direct test requires campaign_manager in pool")
+	state.marketing_instances = []
+	for board_number in [11, 13, 14]:
+		state.marketing_instances.append({
+			"board_number": int(board_number),
+			"type": "billboard",
+			"owner": 1,
+			"employee_type": "marketing_trainee",
+			"product": "burger",
+			"world_pos": Vector2i.ZERO,
+			"rotation": 0,
+			"footprint_size": Vector2i(3, 2),
+			"remaining_duration": 1,
+			"axis": "",
+			"tile_index": -1,
+			"created_round": int(state.round_number),
+		})
+
+	var payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	var direct_command := _first_command_with_param(candidates, "set_company_structure_direct", "employee_id", "marketing_trainee")
+	if direct_command != null:
+		return Result.failure("blocked marketing_trainee should stay reserved instead of being direct-assigned: %s" % str(_macro_debug(candidates)))
+	var report_command := _first_command_with_param(candidates, "set_company_structure_report", "employee_id", "marketing_trainee")
+	if report_command != null:
+		return Result.failure("blocked marketing_trainee should stay reserved instead of reporting to a manager: %s" % str(_macro_debug(candidates)))
+
+	var train_state := engine.get_state()
+	train_state.phase = DefsClass.PHASE_WORKING
+	train_state.sub_phase = DefsClass.SUB_PHASE_TRAIN
+	train_state.turn_order = [0]
+	train_state.current_player_index = 0
+	var train_payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not train_payload_read.ok:
+		return train_payload_read
+	var train_candidates := _read_candidates(train_payload_read.value)
+	if not _has_train_candidate(train_candidates, "marketing_trainee", "campaign_manager"):
+		return Result.failure("Working/Train should keep marketing_trainee -> campaign_manager available while reserved: %s" % str(_macro_debug(train_candidates)))
+	return Result.success()
+
+static func _test_restructuring_keeps_contested_billboard_marketer_reserved_for_campaign_training(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var run_read := _run_random_bots_to_working(engine)
+	if not run_read.ok:
+		return run_read
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.phase = DefsClass.PHASE_RESTRUCTURING
+	state.sub_phase = ""
+	state.turn_order = [0, 1]
+	state.selection_order = [0, 1]
+	state.current_player_index = 0
+	state.round_state["restructuring"] = {
+		"finalized": false,
+		"submitted": {
+			0: false,
+			1: false,
+		},
+	}
+	state.players[0]["company_structure"]["ceo_slots"] = 2
+	state.players[0]["company_structure"]["structure"] = []
+	state.players[0]["employees"] = ["ceo"]
+	state.players[0]["reserve_employees"] = []
+	state.players[0]["busy_marketers"] = []
+	state.players[0]["milestones"] = []
+	if not Array(state.players[1].get("milestones", [])).has("first_billboard"):
+		state.players[1]["milestones"].append("first_billboard")
+	state.milestone_pool.erase("first_billboard")
+	var add_trainer := _add_employee_for_test(state, 0, "employees", "trainer")
+	if not add_trainer.ok:
+		return add_trainer
+	var add_marketer := _add_employee_for_test(state, 0, "reserve_employees", "marketing_trainee")
+	if not add_marketer.ok:
+		return add_marketer
+	if int(state.employee_pool.get("campaign_manager", 0)) <= 0:
+		return Result.failure("contested billboard upgrade test requires campaign_manager in pool")
+	state.marketing_instances = []
+
+	var payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	var direct_command := _first_command_with_param(candidates, "set_company_structure_direct", "employee_id", "marketing_trainee")
+	if direct_command != null:
+		return Result.failure("marketing_trainee should stay reserved for mailbox upgrade once first_billboard is gone: %s" % str(_macro_debug(candidates)))
+
+	var train_state := engine.get_state()
+	train_state.phase = DefsClass.PHASE_WORKING
+	train_state.sub_phase = DefsClass.SUB_PHASE_TRAIN
+	train_state.turn_order = [0]
+	train_state.current_player_index = 0
+	var train_payload_read := _generate_for_current_player(engine, seed_val, {"max_valid_per_action": 8})
+	if not train_payload_read.ok:
+		return train_payload_read
+	var train_candidates := _read_candidates(train_payload_read.value)
+	if not _has_train_candidate(train_candidates, "marketing_trainee", "campaign_manager"):
+		return Result.failure("Working/Train should generate marketing_trainee -> campaign_manager for mailbox upgrade: %s" % str(_macro_debug(train_candidates)))
+	return Result.success()
+
 static func _test_optional_training_does_not_block_revenue_staff(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
 	if not engine_read.ok:
@@ -850,20 +1339,18 @@ static func _add_employee_for_test(state: GameState, player_id: int, zone: Strin
 		return Result.failure("test add employee player out of range: %d" % player_id)
 	if int(state.employee_pool.get(employee_id, 0)) <= 0:
 		return Result.failure("test requires %s in employee pool" % employee_id)
-	var player_val = state.players[player_id]
-	if not (player_val is Dictionary):
-		return Result.failure("test player is not Dictionary")
-	var player: Dictionary = player_val
-	var list_val = player.get(zone, [])
-	if not (list_val is Array):
-		player[zone] = []
-		list_val = player[zone]
-	var employees: Array = list_val
-	employees.append(employee_id)
-	player[zone] = employees
-	state.players[player_id] = player
-	state.employee_pool[employee_id] = int(state.employee_pool.get(employee_id, 0)) - 1
-	return Result.success()
+	var take := StateUpdaterClass.take_from_pool(state, employee_id, 1)
+	if not take.ok:
+		return take
+	if zone == "employees" or zone == "reserve_employees":
+		var add := StateUpdaterClass.add_employee(state, player_id, employee_id, zone == "reserve_employees")
+		if not add.ok:
+			return add
+		return Result.success(add.value)
+	var add_staff := StateUpdaterClass.add_staff_for_employee(state, player_id, employee_id, zone)
+	if not add_staff.ok:
+		return add_staff
+	return Result.success(add_staff.value)
 
 static func _finish_reserve_selection(engine: GameEngine) -> Result:
 	for _i in range(2):
@@ -1052,6 +1539,20 @@ static func _restaurant_anchor(state: GameState, restaurant_id: String) -> Vecto
 	if not (rest_val is Dictionary):
 		return Vector2i.ZERO
 	var value = Dictionary(rest_val).get("anchor_pos", Vector2i.ZERO)
+	if value is Vector2i:
+		return value
+	if value is Vector2:
+		var vec: Vector2 = value
+		return Vector2i(int(vec.x), int(vec.y))
+	if value is Array and Array(value).size() >= 2:
+		var arr: Array = value
+		return Vector2i(int(arr[0]), int(arr[1]))
+	return Vector2i.ZERO
+
+static func _command_param_vector2i(command: Command, key: String) -> Vector2i:
+	if command == null:
+		return Vector2i.ZERO
+	var value = command.params.get(key, Vector2i.ZERO)
 	if value is Vector2i:
 		return value
 	if value is Vector2:

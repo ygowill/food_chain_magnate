@@ -6,6 +6,55 @@ const DataParseHelpersClass = preload("res://core/data/parse_helpers.gd")
 const DEFAULT_PROFILE_ID := "base_revenue_v1"
 const PROFILE_DIR := "res://data/bots"
 const DEFAULT_BASE_REVENUE_PATH := "res://data/bots/base_revenue_v1.json"
+const DEFAULT_MILESTONE_PRIORITIES := {
+	"first_train": 10.0,
+	"first_burger_produced": 8.0,
+	"first_pizza_produced": 8.0,
+	"first_errand_boy": 7.0,
+	"first_cart_operator": 7.0,
+	"first_airplane": 7.0,
+	"first_billboard": 9.0,
+	"first_radio": 9.0,
+	"first_burger_marketed": 5.0,
+	"first_pizza_marketed": 5.0,
+	"first_drink_marketed": 5.0,
+	"first_lower_prices": 4.0,
+}
+const DEFAULT_MILESTONE_EFFECT_WEIGHTS := {
+	"salary_total_delta": 1.0,
+	"gain_card": 1.0,
+	"gain_cards": 1.0,
+	"procure_plus_one": 1.0,
+	"drinks_per_source_delta": 1.0,
+	"distance_plus_one": 1.0,
+	"marketing_no_salary": 1.0,
+	"marketing_permanent": 1.0,
+	"extra_marketing": 1.0,
+	"gain_fridge": 1.0,
+	"sell_bonus": 1.0,
+	"waitress_tips": 1.0,
+	"turnorder_empty_slots": 1.0,
+	"multi_trainer_on_one": 1.0,
+	"peek_reserve_cards": 1.0,
+	"ceo_get_cfo": 1.0,
+	"ban_card": 1.0,
+	"base_price_delta": 1.0,
+}
+const DEFAULT_ROLE_BONUSES := {
+	"strategy_first_produce_food": 8.0,
+	"strategy_first_marketing": 7.0,
+	"strategy_first_procure_drink": 6.0,
+	"strategy_recruit_train_trainable": 5.0,
+	"strategy_early_new_shop": 3.0,
+	"income_first_produce_food": 4.0,
+	"income_no_drink_supply": 4.0,
+	"income_marketing_own_restaurant": 2.0,
+	"income_first_marketing": 3.0,
+	"income_first_new_shop": 10.0,
+	"income_unserviceable_new_shop": 4.0,
+	"income_recruit_train_trainable": 4.0,
+	"income_price_serviceable": 2.0,
+}
 
 var id: String = DEFAULT_PROFILE_ID
 var max_valid_per_action: int = 12
@@ -13,6 +62,9 @@ var strict_marketing_must_affect_houses: bool = true
 var action_weights: Dictionary = {}
 var employee_priorities: Dictionary = {}
 var product_priorities: Dictionary = {}
+var milestone_priorities: Dictionary = {}
+var milestone_effect_weights: Dictionary = {}
+var role_bonuses: Dictionary = {}
 
 func configure_base_revenue() -> void:
 	configure(DEFAULT_PROFILE_ID)
@@ -73,6 +125,27 @@ func configure_from_dict(data: Dictionary) -> Result:
 	var product_read := _parse_float_dictionary(data.get("product_priorities", null), "StrategyProfile.product_priorities")
 	if not product_read.ok:
 		return product_read
+	var milestone_read := _parse_optional_float_dictionary(
+		data.get("milestone_priorities", null),
+		DEFAULT_MILESTONE_PRIORITIES,
+		"StrategyProfile.milestone_priorities"
+	)
+	if not milestone_read.ok:
+		return milestone_read
+	var milestone_effect_read := _parse_optional_float_dictionary(
+		data.get("milestone_effect_weights", null),
+		DEFAULT_MILESTONE_EFFECT_WEIGHTS,
+		"StrategyProfile.milestone_effect_weights"
+	)
+	if not milestone_effect_read.ok:
+		return milestone_effect_read
+	var role_bonus_read := _parse_optional_float_dictionary(
+		data.get("role_bonuses", null),
+		DEFAULT_ROLE_BONUSES,
+		"StrategyProfile.role_bonuses"
+	)
+	if not role_bonus_read.ok:
+		return role_bonus_read
 
 	id = str(id_read.value)
 	max_valid_per_action = int(max_read.value)
@@ -80,6 +153,9 @@ func configure_from_dict(data: Dictionary) -> Result:
 	action_weights = Dictionary(action_read.value)
 	employee_priorities = Dictionary(employee_read.value)
 	product_priorities = Dictionary(product_read.value)
+	milestone_priorities = Dictionary(milestone_read.value)
+	milestone_effect_weights = Dictionary(milestone_effect_read.value)
+	role_bonuses = Dictionary(role_bonus_read.value)
 	return Result.success()
 
 func _configure_base_revenue_fallback() -> void:
@@ -131,6 +207,9 @@ func _configure_base_revenue_fallback() -> void:
 		"soda": 3.5,
 		"lemonade": 3.0,
 	}
+	milestone_priorities = DEFAULT_MILESTONE_PRIORITIES.duplicate()
+	milestone_effect_weights = DEFAULT_MILESTONE_EFFECT_WEIGHTS.duplicate()
+	role_bonuses = DEFAULT_ROLE_BONUSES.duplicate()
 
 func action_weight(action_id: String) -> float:
 	return float(action_weights.get(action_id, 0.0))
@@ -140,6 +219,15 @@ func employee_priority(employee_id: String) -> float:
 
 func product_priority(product_id: String) -> float:
 	return float(product_priorities.get(product_id, 1.0))
+
+func milestone_priority(milestone_id: String, fallback: float = 3.0) -> float:
+	return float(milestone_priorities.get(milestone_id, fallback))
+
+func milestone_effect_weight(effect_type: String) -> float:
+	return float(milestone_effect_weights.get(effect_type, 1.0))
+
+func role_bonus(key: String, fallback: float = 0.0) -> float:
+	return float(role_bonuses.get(key, fallback))
 
 static func _parse_float_dictionary(value, path: String) -> Result:
 	if not (value is Dictionary):
@@ -155,3 +243,8 @@ static func _parse_float_dictionary(value, path: String) -> Result:
 			continue
 		return Result.failure("%s.%s 类型错误（期望 number）" % [path, key])
 	return Result.success(out)
+
+static func _parse_optional_float_dictionary(value, fallback: Dictionary, path: String) -> Result:
+	if value == null:
+		return Result.success(fallback.duplicate())
+	return _parse_float_dictionary(value, path)

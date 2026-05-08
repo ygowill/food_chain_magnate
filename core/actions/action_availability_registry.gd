@@ -20,6 +20,15 @@ func reset() -> void:
 	_compiled_any_phase.clear()
 	_compiled_ready = false
 
+func duplicate_runtime() -> ActionAvailabilityRegistry:
+	var copy := ActionAvailabilityRegistry.new()
+	copy._default_points_by_action = _default_points_by_action.duplicate(true)
+	copy._override_by_action = _override_by_action.duplicate(true)
+	copy._compiled = _compiled.duplicate(true)
+	copy._compiled_any_phase = Array(_compiled_any_phase, TYPE_STRING, "", null)
+	copy._compiled_ready = _compiled_ready
+	return copy
+
 func build_defaults_from_executors(executors: Array) -> Result:
 	_default_points_by_action.clear()
 	_compiled_ready = false

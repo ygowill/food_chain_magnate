@@ -131,6 +131,14 @@ func unregister_hook(phase: int, hook_type: int, callback: Callable) -> bool:
 			return true
 	return false
 
+func duplicate_runtime():
+	var copy = get_script().new([], [], _hook_types)
+	copy._phase_hooks = _duplicate_hook_table(_phase_hooks)
+	copy._sub_phase_hooks = _duplicate_hook_table(_sub_phase_hooks)
+	copy._sub_phase_hooks_by_name = _duplicate_hook_table(_sub_phase_hooks_by_name)
+	copy._hook_types = _hook_types.duplicate()
+	return copy
+
 func run_phase_hooks(phase: int, hook_type: int, state: GameState) -> Result:
 	if not _phase_hooks.has(phase):
 		return Result.success()
@@ -221,6 +229,24 @@ static func _run_hooks(hooks: Array, state: GameState, ctx: String = "") -> Resu
 			AutoloadAccessClass.log_warn("PhaseManager", msg)
 			return Result.failure(msg).with_warnings(warnings)
 	return Result.success().with_warnings(warnings)
+
+static func _duplicate_hook_table(table: Dictionary) -> Dictionary:
+	var out := {}
+	for key in table.keys():
+		var by_type_val = table.get(key, null)
+		var by_type_out := {}
+		if by_type_val is Dictionary:
+			var by_type: Dictionary = by_type_val
+			for hook_type in by_type.keys():
+				var list_out := []
+				var list_val = by_type.get(hook_type, [])
+				if list_val is Array:
+					for hook_val in Array(list_val):
+						if hook_val is Dictionary:
+							list_out.append(Dictionary(hook_val).duplicate())
+				by_type_out[hook_type] = list_out
+		out[key] = by_type_out
+	return out
 
 static func _hook_type_name(hook_type: int) -> String:
 	match hook_type:

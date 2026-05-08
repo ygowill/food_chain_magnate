@@ -7,6 +7,8 @@ const ObservationAdapterClass = preload("res://core/ai/observation/observation_a
 const EvaluatorClass = preload("res://core/ai/evaluation/evaluator.gd")
 const DecisionTraceClass = preload("res://core/ai/logging/decision_trace.gd")
 const MarketingRangeCalculatorClass = preload("res://core/rules/marketing_range_calculator.gd")
+const PaydayPreviewClass = preload("res://core/ai/analysis/payday_preview.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func choose_command(
 	engine: GameEngine,
@@ -59,7 +61,7 @@ static func choose_command(
 			continue
 
 		attempted_simulations += 1
-		var sim_read := ForwardSimulatorClass.simulate_commands(engine, macro.commands, {"mode": "after_command"})
+		var sim_read := _simulate_macro_for_scoring(engine, observation, macro)
 		if not sim_read.ok:
 			discarded.append("%s: simulation failed: %s" % [macro.id, sim_read.error])
 			continue
@@ -150,6 +152,25 @@ static func _copy_string_array(value) -> Array[String]:
 		for item in Array(value):
 			out.append(str(item))
 	return out
+
+static func _simulate_macro_for_scoring(engine: GameEngine, observation: ObservationState, macro: MacroAction) -> Result:
+	if observation != null and str(observation.phase) == DefsClass.PHASE_PAYDAY:
+		var preview_read := PaydayPreviewClass.preview_after_commands(engine, macro.commands, {"max_steps": 16})
+		if not preview_read.ok:
+			return preview_read
+		var preview_payload: Dictionary = preview_read.value
+		var preview_engine: GameEngine = preview_payload.get("engine", null)
+		if preview_engine == null:
+			return Result.failure("Payday preview result missing engine")
+		return Result.success({
+			"engine": preview_engine,
+			"state": preview_engine.get_state(),
+			"commands_executed": preview_payload.get("commands_executed", []),
+			"warnings": preview_payload.get("warnings", []),
+			"failed_command_index": -1,
+			"error": "",
+		})
+	return ForwardSimulatorClass.simulate_commands(engine, macro.commands, {"mode": "after_command"})
 
 static func _macro_context_bonus(sim_engine: GameEngine, player_id: int, macro: MacroAction) -> float:
 	if sim_engine == null or macro == null or macro.commands.is_empty():

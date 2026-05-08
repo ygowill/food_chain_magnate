@@ -155,6 +155,15 @@ func fast_forward(target_count: int) -> void:
 		_rng.randi()
 		_call_count += 1
 
+func duplicate_manager() -> RandomManager:
+	var copy := RandomManager.new(_initial_seed)
+	copy._rng.state = _rng.state
+	copy._call_count = _call_count
+	copy._record_history = _record_history
+	if _record_history:
+		copy._history = _history.duplicate(true)
+	return copy
+
 # === 历史记录 ===
 
 func _record_call(method: String, params: Dictionary, result) -> void:

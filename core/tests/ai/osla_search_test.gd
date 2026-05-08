@@ -59,10 +59,16 @@ static func _test_choose_command_without_mutating_source(seed_val: int) -> Resul
 	var features: Dictionary = Dictionary(decision.explanation.get("features", {}))
 	if not features.has("osla_eval_score"):
 		return Result.failure("OSLASearch should expose osla_eval_score: %s" % str(features))
+	if not features.has("osla_budget_expired"):
+		return Result.failure("OSLASearch should expose budget status in features: %s" % str(features))
+	if not decision.explanation.has("budget_expired"):
+		return Result.failure("OSLASearch should expose budget status in explanation: %s" % str(decision.explanation))
 	var response_macro := str(features.get("osla_opponent_response_macro_id", ""))
 	var response_skip := str(features.get("osla_opponent_response_skipped_reason", ""))
 	if response_macro.is_empty() and response_skip.is_empty():
 		return Result.failure("OSLASearch should expose opponent response result or skip reason: %s" % str(features))
+	if not response_macro.is_empty() and int(features.get("osla_opponent_response_evaluated_count", 0)) <= 0:
+		return Result.failure("OSLASearch should expose evaluated opponent response count: %s" % str(features))
 	return Result.success()
 
 static func _test_osla_search_is_deterministic(seed_val: int) -> Result:

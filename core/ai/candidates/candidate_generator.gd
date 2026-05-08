@@ -9,14 +9,24 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeRulesClass = preload("res://core/rules/employee_rules.gd")
 const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingRangeCalculatorClass = preload("res://core/rules/marketing_range_calculator.gd")
+const MarketingRulesClass = preload("res://core/rules/marketing_rules.gd")
+const MarketingTypeRegistryClass = preload("res://core/rules/marketing_type_registry.gd")
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
+const MarketingPressureAnalyzerClass = preload("res://core/ai/analysis/marketing_pressure_analyzer.gd")
+const BoardAnalyzerClass = preload("res://core/ai/analysis/board_analyzer.gd")
 const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_income_analyzer.gd")
+const StrategyRoutePlannerClass = preload("res://core/ai/strategy/strategy_route_planner.gd")
+const CellsClass = preload("res://core/map/map_runtime/cells.gd")
+const CoordsClass = preload("res://core/map/map_runtime/coords.gd")
+const MapUtilsClass = preload("res://core/map/map_utils.gd")
 
 const DEFAULT_MAX_VALID_PER_ACTION := 12
 const TRAIN_ACTION_MIN_PRIOR := 0.75
 const TRAINING_PRESERVE_MIN_PRIOR := 2.5
+const MARKETING_TRAINING_ROUTE_CHECK_LIMIT := 1200
 const ROUTE_DRINK_SEARCH_MULTIPLIER := 4
+const MARKETING_POSITION_LOST_SCORE := -100000.0
 const WORKING_MANDATORY_ACTION_IDS := [
 	"set_discount",
 	"set_luxury_price",
@@ -48,7 +58,7 @@ static func generate(
 		DefsClass.PHASE_SETUP:
 			_generate_setup(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action)
 		DefsClass.PHASE_RESTRUCTURING:
-			_generate_restructuring(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action)
+			_generate_restructuring(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action, options)
 		DefsClass.PHASE_ORDER_OF_BUSINESS:
 			_generate_order_of_business(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action)
 		DefsClass.PHASE_WORKING:
@@ -128,34 +138,44 @@ static func _generate_restaurant_placements(
 		return
 	var rotations := [0, 90, 180, 270]
 	var employee_options := _restaurant_place_employee_options(observation)
-	for y in range(grid_size.y):
-		for x in range(grid_size.x):
+	var use_competition_order := _has_competitor_restaurants(observation)
+	var positions := _restaurant_placement_positions(observation, grid_size)
+	var rotation_quota := _restaurant_position_rotation_quota(id_prefix, use_competition_order)
+	for pos in positions:
+		var x := pos.x
+		var y := pos.y
+		for employee_id in employee_options:
+			var added_for_position := 0
 			for rotation in rotations:
-				for employee_id in employee_options:
-					if _count_action(out, "place_restaurant") >= max_valid_per_action:
-						return
-					var params := {
-						"position": [x, y],
-						"rotation": int(rotation),
-					}
-					var macro_suffix := "%d_%d_%d" % [x, y, int(rotation)]
-					var tags: Array[String] = ["setup", "restaurant"]
-					if not employee_id.is_empty():
-						params["employee_type"] = employee_id
-						macro_suffix = "%s_%s" % [employee_id, macro_suffix]
-						tags = ["working", "restaurant", employee_id]
-					_append_valid_command(
-						out,
-						discarded,
-						context,
-						"place_restaurant",
-						params,
-						validate_command,
-						"%s_%s" % [id_prefix, macro_suffix],
-						tags,
-						0.0,
-						max_valid_per_action
-					)
+				if _count_action(out, "place_restaurant") >= max_valid_per_action:
+					return
+				if added_for_position >= rotation_quota:
+					break
+				var params := {
+					"position": [x, y],
+					"rotation": int(rotation),
+				}
+				var macro_suffix := "%d_%d_%d" % [x, y, int(rotation)]
+				var tags: Array[String] = ["setup", "restaurant"]
+				if not employee_id.is_empty():
+					params["employee_type"] = employee_id
+					macro_suffix = "%s_%s" % [employee_id, macro_suffix]
+					tags = ["working", "restaurant", employee_id]
+				var count_before := _count_action(out, "place_restaurant")
+				_append_valid_command(
+					out,
+					discarded,
+					context,
+					"place_restaurant",
+					params,
+					validate_command,
+					"%s_%s" % [id_prefix, macro_suffix],
+					tags,
+					0.0,
+					max_valid_per_action
+				)
+				if _count_action(out, "place_restaurant") > count_before:
+					added_for_position += 1
 
 static func _generate_restructuring(
 	out: Array[MacroAction],
@@ -164,14 +184,15 @@ static func _generate_restructuring(
 	context: AiDecisionContext,
 	legal_action_ids: Array[String],
 	validate_command: Callable,
-	max_valid_per_action: int
+	max_valid_per_action: int,
+	options: Dictionary
 ) -> void:
 	if legal_action_ids.has("restructure_employee"):
-		_generate_training_reserve_moves(out, discarded, observation, context, validate_command, max_valid_per_action)
+		_generate_training_reserve_moves(out, discarded, observation, context, validate_command, max_valid_per_action, options)
 	if legal_action_ids.has("set_company_structure_direct"):
-		_generate_direct_structure_assignments(out, discarded, observation, context, validate_command, max_valid_per_action)
+		_generate_direct_structure_assignments(out, discarded, observation, context, validate_command, max_valid_per_action, options)
 	if legal_action_ids.has("set_company_structure_report"):
-		_generate_report_structure_assignments(out, discarded, observation, context, validate_command, max_valid_per_action)
+		_generate_report_structure_assignments(out, discarded, observation, context, validate_command, max_valid_per_action, options)
 	if legal_action_ids.has("submit_restructuring"):
 		_append_valid_command(out, discarded, context, "submit_restructuring", {}, validate_command, "submit_restructuring", ["restructuring"], _submit_restructuring_prior(observation), max_valid_per_action)
 
@@ -181,7 +202,8 @@ static func _generate_training_reserve_moves(
 	observation: ObservationState,
 	context: AiDecisionContext,
 	validate_command: Callable,
-	max_valid_per_action: int
+	max_valid_per_action: int,
+	options: Dictionary
 ) -> void:
 	if not EmployeeRegistryClass.is_loaded():
 		discarded.append("restructuring: EmployeeRegistry is not loaded")
@@ -189,7 +211,7 @@ static func _generate_training_reserve_moves(
 	for employee_id in _sorted_unique_strings(observation.own_player.get("employees", [])):
 		if _is_train_provider_employee(employee_id):
 			continue
-		if not _should_preserve_for_training(employee_id, observation):
+		if not _should_preserve_for_training(employee_id, observation, context, validate_command, options):
 			continue
 		_append_valid_command(
 			out,
@@ -203,7 +225,7 @@ static func _generate_training_reserve_moves(
 			validate_command,
 			"restructure_to_reserve_%s" % employee_id,
 			["restructuring", "reserve", "train"],
-			_training_reserve_move_prior(employee_id, observation),
+			_training_reserve_move_prior(employee_id, observation, context, validate_command, options),
 			max_valid_per_action
 		)
 
@@ -213,7 +235,8 @@ static func _generate_direct_structure_assignments(
 	observation: ObservationState,
 	context: AiDecisionContext,
 	validate_command: Callable,
-	max_valid_per_action: int
+	max_valid_per_action: int,
+	options: Dictionary
 ) -> void:
 	var cs_val = observation.own_player.get("company_structure", {})
 	if not (cs_val is Dictionary):
@@ -234,7 +257,7 @@ static func _generate_direct_structure_assignments(
 	for employee_id in employee_ids:
 		if employee_id == "ceo":
 			continue
-		if _should_preserve_for_training(employee_id, observation):
+		if _should_preserve_for_training(employee_id, observation, context, validate_command, options):
 			continue
 		var remaining := int(owned_counts.get(employee_id, 0)) - int(assigned_counts.get(employee_id, 0))
 		if remaining <= 0:
@@ -252,7 +275,7 @@ static func _generate_direct_structure_assignments(
 				validate_command,
 				"restructure_direct_%d_%s" % [int(slot_index), employee_id],
 				["restructuring", "direct"],
-				_structure_assignment_prior(employee_id, observation),
+				_structure_assignment_prior(employee_id, observation, context, validate_command, options),
 				max_valid_per_action
 			)
 
@@ -262,7 +285,8 @@ static func _generate_report_structure_assignments(
 	observation: ObservationState,
 	context: AiDecisionContext,
 	validate_command: Callable,
-	max_valid_per_action: int
+	max_valid_per_action: int,
+	options: Dictionary
 ) -> void:
 	if not EmployeeRegistryClass.is_loaded():
 		discarded.append("restructuring: EmployeeRegistry is not loaded")
@@ -307,7 +331,7 @@ static func _generate_report_structure_assignments(
 		for employee_id in employee_ids:
 			if employee_id == "ceo" or _is_manager_employee(employee_id):
 				continue
-			if _should_preserve_for_training(employee_id, observation):
+			if _should_preserve_for_training(employee_id, observation, context, validate_command, options):
 				continue
 			var remaining := int(owned_counts.get(employee_id, 0)) - int(assigned_counts.get(employee_id, 0))
 			if remaining <= 0:
@@ -324,7 +348,7 @@ static func _generate_report_structure_assignments(
 				validate_command,
 				"restructure_report_%d_%s" % [int(slot_index), employee_id],
 				["restructuring", "report"],
-				_structure_assignment_prior(employee_id, observation),
+				_structure_assignment_prior(employee_id, observation, context, validate_command, options),
 				max_valid_per_action
 			)
 
@@ -378,10 +402,10 @@ static func _generate_working(
 	match str(observation.sub_phase):
 		DefsClass.SUB_PHASE_RECRUIT:
 			if legal_action_ids.has("recruit"):
-				_generate_recruit(out, discarded, observation, context, validate_command, max_valid_per_action)
+				_generate_recruit(out, discarded, observation, context, validate_command, max_valid_per_action, options)
 		DefsClass.SUB_PHASE_TRAIN:
 			if legal_action_ids.has("train"):
-				_generate_train(out, discarded, observation, context, validate_command, max_valid_per_action)
+				_generate_train(out, discarded, observation, context, validate_command, max_valid_per_action, options)
 		DefsClass.SUB_PHASE_MARKETING:
 			if legal_action_ids.has("initiate_marketing"):
 				_generate_marketing(out, discarded, observation, context, validate_command, max_valid_per_action, options)
@@ -459,24 +483,68 @@ static func _generate_marketing(
 		discarded.append("marketing: invalid grid_size %s" % str(grid_size))
 		return
 	var source_state := _source_state_from_options(options)
-	var candidate_positions := _marketing_candidate_positions(observation, grid_size)
+	var source_analysis := _source_board_analysis(source_state, options)
+	if source_state != null:
+		_sort_marketing_products_for_source_state(products, observation, source_state, source_analysis)
 	for employee_id in _sorted_unique_strings(observation.own_player.get("employees", [])):
 		var marketing_types := _marketing_types_for_employee(employee_id)
 		if marketing_types.is_empty():
 			continue
-		var board_numbers := _sorted_marketing_board_numbers(marketing_types)
+		var board_numbers := _available_marketing_board_numbers(marketing_types, observation, discarded)
+		var board_quota := _marketing_board_candidate_quota(max_valid_per_action, board_numbers.size(), options)
 		for board_number in board_numbers:
 			var board_def = MarketingRegistryClass.get_def(int(board_number))
 			if not (board_def is MarketingDef):
 				continue
 			var marketing_type := str((board_def as MarketingDef).type)
+			var added_for_board := 0
+			var board_full := false
+			var rotations := _marketing_rotations_for_board(board_def as MarketingDef, marketing_type)
+			var positions_by_rotation := {}
+			for rotation in rotations:
+				positions_by_rotation[int(rotation)] = _marketing_candidate_positions_for_board_rotation(
+					observation,
+					grid_size,
+					board_def as MarketingDef,
+					marketing_type,
+					int(rotation),
+					source_state
+				)
 			for product_id in products:
-				for pos in candidate_positions:
-					var x := pos.x
-					var y := pos.y
-					for rotation in _marketing_rotations(marketing_type):
+				if board_full:
+					break
+				for rotation in rotations:
+					if board_full:
+						break
+					var candidate_positions_val = positions_by_rotation.get(int(rotation), [])
+					if not (candidate_positions_val is Array):
+						continue
+					var candidate_positions: Array = _rank_marketing_candidate_positions(
+						observation,
+						context,
+						candidate_positions_val,
+						product_id,
+						source_state,
+						source_analysis,
+						board_def as MarketingDef,
+						marketing_type,
+						int(rotation),
+						discarded
+					)
+					if candidate_positions.is_empty():
+						continue
+					for pos_val in candidate_positions:
+						var pos := _read_vector2i(pos_val)
+						if _budget_expired(options):
+							discarded.append("marketing: budget expired")
+							return
 						if _count_action(out, "initiate_marketing") >= max_valid_per_action:
 							return
+						if added_for_board >= board_quota:
+							board_full = true
+							break
+						var x := pos.x
+						var y := pos.y
 						var params := {
 							"employee_type": employee_id,
 							"board_number": int(board_number),
@@ -486,20 +554,34 @@ static func _generate_marketing(
 						}
 						if marketing_type == "airplane":
 							params["axis"] = "row" if x == 0 or x == grid_size.x - 1 else "col"
+						var macro_id := "marketing_%s_%d_%s_%d_%d_%d" % [employee_id, int(board_number), product_id, x, y, int(rotation)]
+						var precheck_reason := _marketing_geometry_precheck(source_state, params, board_def as MarketingDef, marketing_type)
+						if not precheck_reason.is_empty():
+							discarded.append("%s: %s" % [macro_id, precheck_reason])
+							continue
+						var count_before := _count_action(out, "initiate_marketing")
 						_append_valid_marketing_command(
 							out,
 							discarded,
 							context,
+							observation,
 							params,
 							validate_command,
-							"marketing_%s_%d_%s_%d_%d_%d" % [employee_id, int(board_number), product_id, x, y, int(rotation)],
+							macro_id,
 							["working", "marketing"],
 							_marketing_product_prior(product_id, observation),
 							max_valid_per_action,
 							source_state,
+							source_analysis,
 							board_def as MarketingDef,
 							marketing_type
 						)
+						var count_after := _count_action(out, "initiate_marketing")
+						if count_after > count_before:
+							added_for_board += count_after - count_before
+							if added_for_board >= board_quota:
+								board_full = true
+								break
 
 static func _generate_house_placements(
 	out: Array[MacroAction],
@@ -603,32 +685,44 @@ static func _generate_restaurant_moves(
 		discarded.append("move_restaurant: own player has no restaurants")
 		return
 	var rotations := [0, 90, 180, 270]
+	var use_competition_order := _has_competitor_restaurants(observation)
+	var positions := _restaurant_placement_positions(observation, grid_size)
+	var rotation_quota := _restaurant_position_rotation_quota("move_restaurant", use_competition_order)
 	for restaurant_id in restaurant_ids:
 		var rest: Dictionary = restaurants.get(restaurant_id, {})
 		var current_anchor := _read_vector2i(rest.get("anchor_pos", Vector2i(-9999, -9999)))
-		for y in range(grid_size.y):
-			for x in range(grid_size.x):
-				if Vector2i(x, y) == current_anchor:
-					continue
-				for rotation in rotations:
-					if _count_action(out, "move_restaurant") >= max_valid_per_action:
-						return
-					_append_valid_command(
-						out,
-						discarded,
-						context,
-						"move_restaurant",
-						{
-							"restaurant_id": restaurant_id,
-							"position": [x, y],
-							"rotation": int(rotation),
-						},
-						validate_command,
-						"move_restaurant_%s_%d_%d_%d" % [restaurant_id, x, y, int(rotation)],
-						["working", "move_restaurant"],
-						0.0,
-						max_valid_per_action
-					)
+		for pos in positions:
+			var x := pos.x
+			var y := pos.y
+			if pos == current_anchor:
+				continue
+			var added_for_position := 0
+			for rotation in rotations:
+				if _count_action(out, "move_restaurant") >= max_valid_per_action:
+					return
+				if added_for_position >= rotation_quota:
+					break
+				var count_before := _count_action(out, "move_restaurant")
+				_append_valid_command(
+					out,
+					discarded,
+					context,
+					"move_restaurant",
+					{
+						"restaurant_id": restaurant_id,
+						"position": [x, y],
+						"rotation": int(rotation),
+					},
+					validate_command,
+					"move_restaurant_%s_%d_%d_%d" % [restaurant_id, x, y, int(rotation)],
+					["working", "move_restaurant"],
+					0.0,
+					max_valid_per_action
+				)
+				if _count_action(out, "move_restaurant") > count_before:
+					added_for_position += 1
+				if _count_action(out, "move_restaurant") >= max_valid_per_action:
+					return
 
 static func _generate_recruit(
 	out: Array[MacroAction],
@@ -636,9 +730,11 @@ static func _generate_recruit(
 	observation: ObservationState,
 	context: AiDecisionContext,
 	validate_command: Callable,
-	max_valid_per_action: int
+	max_valid_per_action: int,
+	options: Dictionary = {}
 ) -> void:
-	for employee_id in _sorted_positive_pool_ids(observation.employee_pool_public):
+	var route_plan := _recruit_route_plan(observation, options)
+	for employee_id in _sorted_recruit_pool_ids(observation, route_plan):
 		_append_valid_command(
 			out,
 			discarded,
@@ -648,7 +744,7 @@ static func _generate_recruit(
 			validate_command,
 			"recruit_%s" % employee_id,
 			["working", "recruit"],
-			_recruit_prior(employee_id, observation),
+			_recruit_prior_with_route_plan(employee_id, observation, route_plan),
 			max_valid_per_action
 		)
 
@@ -658,7 +754,8 @@ static func _generate_train(
 	observation: ObservationState,
 	context: AiDecisionContext,
 	validate_command: Callable,
-	max_valid_per_action: int
+	max_valid_per_action: int,
+	options: Dictionary = {}
 ) -> void:
 	if not EmployeeRegistryClass.is_loaded():
 		discarded.append("train: EmployeeRegistry is not loaded")
@@ -674,7 +771,7 @@ static func _generate_train(
 				continue
 			if int(observation.employee_pool_public.get(target, 0)) <= 0:
 				continue
-			var prior := _train_prior(from_employee, target, observation)
+			var prior := _train_prior(from_employee, target, observation, context, validate_command, options)
 			if prior < TRAIN_ACTION_MIN_PRIOR:
 				continue
 			_append_valid_command(
@@ -947,6 +1044,7 @@ static func _append_valid_marketing_command(
 	out: Array[MacroAction],
 	discarded: Array[String],
 	context: AiDecisionContext,
+	observation: ObservationState,
 	params: Dictionary,
 	validate_command: Callable,
 	macro_id: String,
@@ -954,6 +1052,7 @@ static func _append_valid_marketing_command(
 	prior_score: float,
 	max_valid_per_action: int,
 	source_state: GameState,
+	source_analysis: Dictionary,
 	board_def: MarketingDef,
 	marketing_type: String
 ) -> void:
@@ -961,11 +1060,8 @@ static func _append_valid_marketing_command(
 	if _count_action(out, action_id) >= max_valid_per_action:
 		return
 	var command := Command.create(action_id, context.player_id, params.duplicate(true))
-	var validate := _validate_command(command, validate_command)
-	if not validate.ok:
-		discarded.append("%s: %s" % [macro_id, validate.error])
-		return
 	var affected: Array = []
+	var service_features := {}
 	if source_state != null:
 		var affected_read := _marketing_command_affected_house_ids(source_state, context.player_id, command, board_def, marketing_type)
 		if not affected_read.ok:
@@ -975,13 +1071,97 @@ static func _append_valid_marketing_command(
 		if affected.is_empty():
 			discarded.append("%s: affects no houses" % macro_id)
 			return
+		var affected_ids := _string_array(affected)
+		service_features = MarketingPressureAnalyzerClass.analyze_candidate(observation, affected_ids, str(params.get("product", "")), source_state, source_analysis)
+		var discard_reason := _marketing_serviceability_discard_reason(service_features)
+		if not discard_reason.is_empty():
+			discarded.append("%s: %s" % [macro_id, discard_reason])
+			return
+	var validate := _validate_command(command, validate_command)
+	if not validate.ok:
+		discarded.append("%s: %s" % [macro_id, validate.error])
+		return
 	var commands: Array[Command] = []
 	commands.append(command)
 	out.append(MacroActionClass.create(macro_id, commands, prior_score, tags, {
 		"action_id": action_id,
 		"validation": "passed" if validate_command.is_valid() else "skipped",
 		"affected_house_ids": affected.duplicate(),
+		"marketing_service_features": service_features.duplicate(true),
 	}))
+
+static func _marketing_serviceability_discard_reason(service_features: Dictionary) -> String:
+	return MarketingPressureAnalyzerClass.discard_reason(service_features)
+
+static func _marketing_geometry_precheck(
+	state: GameState,
+	params: Dictionary,
+	board_def: MarketingDef,
+	marketing_type: String
+) -> String:
+	if state == null or board_def == null:
+		return ""
+	if marketing_type == "airplane":
+		return ""
+	var world_pos := _read_vector2i(params.get("position", Vector2i.ZERO))
+	var rotation := int(params.get("rotation", 0))
+	var size_read := MarketingRulesClass.get_rotated_footprint_size(Vector2i(board_def.footprint_size), rotation)
+	if not size_read.ok:
+		return size_read.error
+	var size: Vector2i = size_read.value
+	var footprint_cells: Array[Vector2i] = MarketingRulesClass.build_footprint_cells(world_pos, size)
+	if footprint_cells.is_empty():
+		return "marketing footprint is empty"
+	for cell_pos in footprint_cells:
+		if not CoordsClass.is_world_pos_in_grid(state, cell_pos):
+			return "position 越界: %s" % str(cell_pos)
+		var cell := CellsClass.get_cell(state, cell_pos)
+		if cell.is_empty():
+			return "position 无效: %s" % str(cell_pos)
+		var structure_val = cell.get("structure", null)
+		if structure_val is Dictionary and not Dictionary(structure_val).is_empty():
+			return "该位置已有建筑，无法放置营销: %s" % str(cell_pos)
+		var drink_source_val = cell.get("drink_source", null)
+		if drink_source_val != null and (not (drink_source_val is Dictionary) or not Dictionary(drink_source_val).is_empty()):
+			return "该位置是饮品进货点，无法放置营销: %s" % str(cell_pos)
+
+	var requires_edge := MarketingTypeRegistryClass.requires_edge(marketing_type)
+	if requires_edge:
+		var minp := CoordsClass.get_world_min(state)
+		var maxp := CoordsClass.get_world_max(state)
+		var left := world_pos.x
+		var right := world_pos.x + size.x - 1
+		var top := world_pos.y
+		var bottom := world_pos.y + size.y - 1
+		if left != minp.x and right != maxp.x and top != minp.y and bottom != maxp.y:
+			return "该营销必须有一条边完全贴地图边缘: %s" % str(world_pos)
+		return ""
+
+	var footprint_set := {}
+	for cell_pos2 in footprint_cells:
+		var cell2 := CellsClass.get_cell(state, cell_pos2)
+		if bool(cell2.get("blocked", false)):
+			return "该位置被阻塞: %s" % str(cell_pos2)
+		var road_segments_val = cell2.get("road_segments", [])
+		if road_segments_val is Array and not Array(road_segments_val).is_empty():
+			return "营销必须放置在空格（非道路）上: %s (anchor=%s board=#%d)" % [str(cell_pos2), str(world_pos), int(board_def.board_number)]
+		footprint_set[cell_pos2] = true
+	var has_adjacent_road := false
+	for cell_pos3 in footprint_cells:
+		for dir in MapUtilsClass.DIRECTIONS:
+			var neighbor := MapUtilsClass.get_neighbor_pos(cell_pos3, dir)
+			if footprint_set.has(neighbor):
+				continue
+			if not CoordsClass.is_world_pos_in_grid(state, neighbor):
+				continue
+			if CellsClass.has_road_at(state, neighbor):
+				has_adjacent_road = true
+				break
+		if has_adjacent_road:
+			break
+	if not has_adjacent_road:
+		return "营销必须邻接道路: %s" % str(world_pos)
+	return ""
 
 static func _validate_command(command: Command, validate_command: Callable) -> Result:
 	if not validate_command.is_valid():
@@ -1053,6 +1233,26 @@ static func _sorted_positive_pool_ids(pool: Dictionary) -> Array[String]:
 	out.sort()
 	return out
 
+static func _sorted_recruit_pool_ids(observation: ObservationState, route_plan: Dictionary = {}) -> Array[String]:
+	if observation == null:
+		return []
+	var out: Array[String] = []
+	for employee_id in _sorted_positive_pool_ids(observation.employee_pool_public):
+		if not EmployeeRulesClass.is_entry_level(employee_id):
+			continue
+		out.append(employee_id)
+	var priorities := {}
+	for employee_id in out:
+		priorities[employee_id] = _recruit_prior_with_route_plan(employee_id, observation, route_plan)
+	out.sort_custom(func(a: String, b: String) -> bool:
+		var prior_a := float(priorities.get(a, 0.0))
+		var prior_b := float(priorities.get(b, 0.0))
+		if not is_equal_approx(prior_a, prior_b):
+			return prior_a > prior_b
+		return a < b
+	)
+	return out
+
 static func _sorted_string_keys(dict: Dictionary) -> Array[String]:
 	var out: Array[String] = []
 	for key in dict.keys():
@@ -1074,6 +1274,16 @@ static func _sorted_unique_strings(value) -> Array[String]:
 		if key is String:
 			out.append(str(key))
 	out.sort()
+	return out
+
+static func _string_array(value) -> Array[String]:
+	var out: Array[String] = []
+	if value is Array:
+		for item in Array(value):
+			var id := str(item)
+			if id.is_empty():
+				continue
+			out.append(id)
 	return out
 
 static func _sort_route_drinks_for_observation(routes: Array, observation: ObservationState) -> void:
@@ -1161,6 +1371,31 @@ static func _sorted_marketable_product_ids_for_observation(observation: Observat
 	)
 	return out
 
+static func _sort_marketing_products_for_source_state(products: Array[String], observation: ObservationState, source_state: GameState, source_analysis: Dictionary = {}) -> void:
+	if products.is_empty() or observation == null or source_state == null:
+		return
+	var pressure_by_product := {}
+	var supply_by_product := {}
+	for product_id in products:
+		var supply_rank := _marketing_product_supply_rank(product_id, observation)
+		supply_by_product[product_id] = supply_rank
+		pressure_by_product[product_id] = MarketingPressureAnalyzerClass.product_pressure_prior(source_state, observation, product_id, source_analysis) if supply_rank > 0 else 0
+	products.sort_custom(func(a: String, b: String) -> bool:
+		var supply_a := int(supply_by_product.get(a, 0))
+		var supply_b := int(supply_by_product.get(b, 0))
+		if supply_a != supply_b:
+			return supply_a > supply_b
+		var gap_a := int(pressure_by_product.get(a, 0))
+		var gap_b := int(pressure_by_product.get(b, 0))
+		if gap_a != gap_b:
+			return gap_a > gap_b
+		var prior_a := _marketing_product_prior(a, observation)
+		var prior_b := _marketing_product_prior(b, observation)
+		if not is_equal_approx(prior_a, prior_b):
+			return prior_a > prior_b
+		return a < b
+	)
+
 static func _marketing_types_for_employee(employee_id: String) -> Array[String]:
 	var out: Array[String] = []
 	if employee_id.is_empty() or not EmployeeRegistryClass.has(employee_id):
@@ -1180,7 +1415,7 @@ static func _marketing_types_for_employee(employee_id: String) -> Array[String]:
 	out.sort()
 	return out
 
-static func _sorted_marketing_board_numbers(marketing_types: Array[String]) -> Array[int]:
+static func _sorted_marketing_board_numbers(marketing_types: Array[String], observation: ObservationState = null) -> Array[int]:
 	var out: Array[int] = []
 	for board_number in MarketingRegistryClass.get_all_board_numbers():
 		var def_val = MarketingRegistryClass.get_def(int(board_number))
@@ -1190,23 +1425,88 @@ static func _sorted_marketing_board_numbers(marketing_types: Array[String]) -> A
 		if not marketing_types.has(str(def.type)):
 			continue
 		out.append(int(board_number))
-	out.sort_custom(func(a: int, b: int) -> bool:
-		var def_a = MarketingRegistryClass.get_def(int(a))
-		var def_b = MarketingRegistryClass.get_def(int(b))
-		var type_a := str((def_a as MarketingDef).type) if def_a is MarketingDef else ""
-		var type_b := str((def_b as MarketingDef).type) if def_b is MarketingDef else ""
-		var priority_a := _marketing_type_search_priority(type_a)
-		var priority_b := _marketing_type_search_priority(type_b)
-		if priority_a != priority_b:
-			return priority_a < priority_b
-		return int(a) < int(b)
-	)
+	out.sort()
 	return out
+
+static func _available_marketing_board_numbers(marketing_types: Array[String], observation: ObservationState, discarded: Array[String]) -> Array[int]:
+	var out: Array[int] = []
+	for board_number in _sorted_marketing_board_numbers(marketing_types, observation):
+		var board_def = MarketingRegistryClass.get_def(int(board_number))
+		if not (board_def is MarketingDef):
+			continue
+		if not _marketing_board_available_for_observation(board_def as MarketingDef, observation):
+			continue
+		if _marketing_board_occupied(observation, int(board_number)):
+			discarded.append("marketing_board_%d: board already occupied" % int(board_number))
+			continue
+		out.append(int(board_number))
+	return out
+
+static func _marketing_board_candidate_quota(max_valid_per_action: int, board_count: int, options: Dictionary = {}) -> int:
+	var budget_val = options.get("budget", null)
+	if budget_val is TimeBudget:
+		return 1
+	if max_valid_per_action <= 0:
+		return 1
+	if board_count <= 1:
+		return max_valid_per_action
+	var quota := int(max_valid_per_action / board_count)
+	if max_valid_per_action % board_count != 0:
+		quota += 1
+	return maxi(1, quota)
+
+static func _marketing_board_available_for_observation(board_def: MarketingDef, observation: ObservationState) -> bool:
+	if board_def == null:
+		return false
+	var player_count := 0
+	if observation != null:
+		player_count = Array(observation.public_players).size()
+		if player_count <= 0:
+			player_count = Array(observation.turn_order).size()
+	if player_count <= 0:
+		player_count = 2
+	if board_def.has_method("is_available_for_player_count"):
+		return bool(board_def.is_available_for_player_count(player_count))
+	return true
+
+static func _marketing_board_occupied(observation: ObservationState, board_number: int) -> bool:
+	if observation == null or board_number <= 0:
+		return false
+	for inst_val in observation.marketing_instances_public:
+		if not (inst_val is Dictionary):
+			continue
+		if int(Dictionary(inst_val).get("board_number", -1)) == board_number:
+			return true
+	var placements_val = observation.map_public.get("marketing_placements", {})
+	if placements_val is Dictionary:
+		var placements: Dictionary = placements_val
+		if placements.has(str(board_number)) or placements.has(board_number):
+			return true
+	return false
 
 static func _marketing_rotations(marketing_type: String) -> Array[int]:
 	if marketing_type == "airplane":
 		return [0]
 	return [0, 90, 180, 270]
+
+static func _marketing_rotations_for_board(board_def: MarketingDef, marketing_type: String) -> Array[int]:
+	if board_def == null:
+		return _marketing_rotations(marketing_type)
+	if marketing_type == "airplane":
+		return [0]
+	var out: Array[int] = []
+	var seen := {}
+	for rotation in _marketing_rotations(marketing_type):
+		var size_read := MarketingRulesClass.get_rotated_footprint_size(Vector2i(board_def.footprint_size), int(rotation))
+		if not size_read.ok:
+			continue
+		var size: Vector2i = size_read.value
+		var key := "%d,%d" % [size.x, size.y]
+		if seen.has(key):
+			continue
+		seen[key] = true
+		out.append(int(rotation))
+	return out if not out.is_empty() else _marketing_rotations(marketing_type)
 
 static func _marketing_type_search_priority(marketing_type: String) -> int:
 	match marketing_type:
@@ -1220,6 +1520,19 @@ static func _marketing_type_search_priority(marketing_type: String) -> int:
 			return 3
 		_:
 			return 10
+
+static func _marketing_board_search_priority(marketing_type: String, observation: ObservationState) -> int:
+	var priority := _marketing_type_search_priority(marketing_type)
+	if observation == null:
+		return priority
+	var pool := _sorted_unique_strings(observation.milestone_pool_public)
+	if marketing_type == "airplane" and pool.has("first_airplane"):
+		return priority - 20
+	if marketing_type == "radio" and pool.has("first_radio"):
+		return priority - 20
+	if marketing_type == "billboard" and pool.has("first_billboard"):
+		return priority - 20
+	return priority
 
 static func _marketing_candidate_positions(observation: ObservationState, grid_size: Vector2i) -> Array[Vector2i]:
 	var seen := {}
@@ -1243,6 +1556,289 @@ static func _marketing_candidate_positions(observation: ObservationState, grid_s
 		for x in range(grid_size.x):
 			_append_marketing_position(out, seen, Vector2i(x, y), grid_size)
 	return out
+
+static func _marketing_candidate_positions_for_board_rotation(
+	observation: ObservationState,
+	grid_size: Vector2i,
+	board_def: MarketingDef,
+	marketing_type: String,
+	rotation: int,
+	source_state: GameState = null
+) -> Array[Vector2i]:
+	if observation == null or board_def == null:
+		return []
+	var positions: Array[Vector2i] = []
+	match marketing_type:
+		"billboard":
+			positions = _billboard_candidate_positions_for_rotation(observation, grid_size, board_def, rotation)
+		"airplane":
+			positions = _edge_marketing_positions(grid_size)
+		_:
+			positions = _marketing_candidate_positions(observation, grid_size)
+	if source_state == null or marketing_type == "airplane":
+		return positions
+	return _filter_marketing_geometry_positions(source_state, positions, grid_size, board_def, marketing_type, rotation)
+
+static func _rank_marketing_candidate_positions(
+	observation: ObservationState,
+	context: AiDecisionContext,
+	positions: Array,
+	product_id: String,
+	source_state: GameState,
+	source_analysis: Dictionary,
+	board_def: MarketingDef,
+	marketing_type: String,
+	rotation: int,
+	discarded: Array[String] = []
+) -> Array:
+	if observation == null or context == null or source_state == null or board_def == null or product_id.is_empty() or positions.size() <= 1:
+		return positions.duplicate()
+	var ranked: Array[Dictionary] = []
+	var order := 0
+	var viable_count := 0
+	for pos_val in positions:
+		var pos := _read_vector2i(pos_val)
+		var params := {
+			"employee_type": "",
+			"board_number": int(board_def.board_number),
+			"product": product_id,
+			"position": [pos.x, pos.y],
+			"rotation": int(rotation),
+		}
+		if marketing_type == "airplane":
+			var grid_size := _read_grid_size(observation.map_public)
+			params["axis"] = "row" if pos.x == 0 or pos.x == grid_size.x - 1 else "col"
+		var command := Command.create("initiate_marketing", context.player_id, params)
+		var score := MARKETING_POSITION_LOST_SCORE
+		var discard_reason := ""
+		var affected_read := _marketing_command_affected_house_ids(source_state, context.player_id, command, board_def, marketing_type)
+		if affected_read.ok:
+			var affected_ids := _string_array(affected_read.value)
+			if not affected_ids.is_empty():
+				var service_features := MarketingPressureAnalyzerClass.analyze_candidate(observation, affected_ids, product_id, source_state, source_analysis)
+				score = _marketing_position_service_score(service_features)
+				if score <= MARKETING_POSITION_LOST_SCORE:
+					discard_reason = MarketingPressureAnalyzerClass.discard_reason(service_features)
+			else:
+				discard_reason = "affects no houses"
+		elif not affected_read.error.is_empty():
+			discard_reason = affected_read.error
+		if score <= MARKETING_POSITION_LOST_SCORE and not discard_reason.is_empty():
+			discarded.append("marketing_position_%d_%s_%d_%d_%d: %s" % [
+				int(board_def.board_number),
+				product_id,
+				pos.x,
+				pos.y,
+				int(rotation),
+				discard_reason,
+			])
+		ranked.append({
+			"position": pos,
+			"score": score,
+			"order": order,
+		})
+		if score > MARKETING_POSITION_LOST_SCORE:
+			viable_count += 1
+		order += 1
+	if viable_count <= 0:
+		return []
+	ranked.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var score_a := float(a.get("score", MARKETING_POSITION_LOST_SCORE))
+		var score_b := float(b.get("score", MARKETING_POSITION_LOST_SCORE))
+		if not is_equal_approx(score_a, score_b):
+			return score_a > score_b
+		return int(a.get("order", 0)) < int(b.get("order", 0))
+	)
+	var out: Array = []
+	for item in ranked:
+		if float(item.get("score", MARKETING_POSITION_LOST_SCORE)) <= MARKETING_POSITION_LOST_SCORE:
+			continue
+		out.append(item.get("position", Vector2i.ZERO))
+	return out
+
+static func _marketing_position_service_score(features: Dictionary) -> float:
+	if features.is_empty():
+		return MARKETING_POSITION_LOST_SCORE
+	var affected := int(features.get("affected_houses", 0))
+	if affected <= 0:
+		return MARKETING_POSITION_LOST_SCORE
+	var strategic := int(features.get("strategic_houses", 0))
+	if strategic <= 0:
+		return MARKETING_POSITION_LOST_SCORE
+	var self_capture := int(features.get("self_capture_houses", features.get("competitive_houses", 0)))
+	var opponent_pressure := int(features.get("opponent_pressure_houses", features.get("opponent_capacity_gap_houses", 0)))
+	var serviceable := int(features.get("serviceable_houses", 0))
+	var competitive := int(features.get("competitive_houses", serviceable))
+	var blocked := int(features.get("self_supply_blocked_houses", 0))
+	var lost := int(features.get("lost_to_competitor_houses", 0))
+	var dominated := int(features.get("restaurant_dominated_houses", 0))
+	var closest := int(features.get("closest_distance", -1))
+	var value := float(self_capture) * 1400.0
+	value += float(opponent_pressure) * 1100.0
+	value += float(competitive) * 220.0
+	value += float(serviceable) * 40.0
+	value += float(affected) * 8.0
+	value -= float(blocked) * 900.0
+	value -= float(lost) * 760.0
+	value -= float(dominated) * 640.0
+	if closest >= 0:
+		value += maxf(0.0, 80.0 - float(closest) * 4.0)
+	return value
+
+static func _filter_marketing_geometry_positions(
+	state: GameState,
+	positions: Array[Vector2i],
+	grid_size: Vector2i,
+	board_def: MarketingDef,
+	marketing_type: String,
+	rotation: int
+) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var seen := {}
+	for pos in positions:
+		var params := {
+			"position": [pos.x, pos.y],
+			"rotation": int(rotation),
+		}
+		var precheck_reason := _marketing_geometry_precheck(state, params, board_def, marketing_type)
+		if not precheck_reason.is_empty():
+			continue
+		_append_marketing_position(out, seen, pos, grid_size)
+	return out
+
+static func _billboard_candidate_positions_for_rotation(
+	observation: ObservationState,
+	grid_size: Vector2i,
+	board_def: MarketingDef,
+	rotation: int
+) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var seen := {}
+	if grid_size.x <= 0 or grid_size.y <= 0:
+		return out
+	var size_read := MarketingRulesClass.get_rotated_footprint_size(Vector2i(board_def.footprint_size), rotation)
+	if not size_read.ok:
+		return out
+	var size: Vector2i = size_read.value
+	var houses_val = observation.map_public.get("houses", {})
+	if not (houses_val is Dictionary):
+		return out
+	var houses: Dictionary = houses_val
+	for house_id in _sorted_house_ids_by_restaurant_distance(observation, houses):
+		var house_val = houses.get(house_id, null)
+		if not (house_val is Dictionary):
+			continue
+		for house_cell in _house_candidate_cells(house_val):
+			for dy in range(size.y):
+				for dx in range(size.x):
+					for dir in MapUtilsClass.DIRECTIONS:
+						var footprint_cell := MapUtilsClass.get_neighbor_pos(house_cell, dir)
+						var anchor := footprint_cell - Vector2i(dx, dy)
+						_append_marketing_position(out, seen, anchor, grid_size)
+	return out
+
+static func _edge_marketing_positions(grid_size: Vector2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var seen := {}
+	if grid_size.x <= 0 or grid_size.y <= 0:
+		return out
+	for y in range(grid_size.y):
+		for x in range(grid_size.x):
+			if x != 0 and x != grid_size.x - 1 and y != 0 and y != grid_size.y - 1:
+				continue
+			_append_marketing_position(out, seen, Vector2i(x, y), grid_size)
+	return out
+
+static func _restaurant_placement_positions(observation: ObservationState, grid_size: Vector2i) -> Array[Vector2i]:
+	var entries: Array[Dictionary] = []
+	for y in range(grid_size.y):
+		for x in range(grid_size.x):
+			var pos := Vector2i(x, y)
+			entries.append({
+				"pos": pos,
+				"prior": _restaurant_position_prior(observation, pos, grid_size),
+			})
+	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var prior_a := float(a.get("prior", 0.0))
+		var prior_b := float(b.get("prior", 0.0))
+		if not is_equal_approx(prior_a, prior_b):
+			return prior_a > prior_b
+		var pos_a := Vector2i(a.get("pos", Vector2i.ZERO))
+		var pos_b := Vector2i(b.get("pos", Vector2i.ZERO))
+		if pos_a.y != pos_b.y:
+			return pos_a.y < pos_b.y
+		return pos_a.x < pos_b.x
+	)
+	var out: Array[Vector2i] = []
+	for entry in entries:
+		out.append(Vector2i(entry.get("pos", Vector2i.ZERO)))
+	return out
+
+static func _restaurant_row_major_positions(grid_size: Vector2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for y in range(grid_size.y):
+		for x in range(grid_size.x):
+			out.append(Vector2i(x, y))
+	return out
+
+static func _restaurant_position_rotation_quota(id_prefix: String, use_competition_order: bool) -> int:
+	if use_competition_order and id_prefix.begins_with("initial_restaurant"):
+		return 1
+	if use_competition_order:
+		return 2
+	return 4
+
+static func _has_competitor_restaurants(observation: ObservationState) -> bool:
+	if observation == null:
+		return false
+	var restaurants_val = observation.map_public.get("restaurants", {})
+	if not (restaurants_val is Dictionary):
+		return false
+	var own_ids := _sorted_unique_strings(observation.own_player.get("restaurants", []))
+	var player_id := int(observation.viewer_player_id)
+	for restaurant_id_val in Dictionary(restaurants_val).keys():
+		var restaurant_id := str(restaurant_id_val)
+		if own_ids.has(restaurant_id):
+			continue
+		var rest_val = Dictionary(restaurants_val).get(restaurant_id_val, null)
+		if not (rest_val is Dictionary):
+			continue
+		var owner := int(Dictionary(rest_val).get("owner", -1))
+		if owner >= 0 and owner != player_id:
+			return true
+	return false
+
+static func _restaurant_position_prior(observation: ObservationState, pos: Vector2i, grid_size: Vector2i) -> float:
+	var value := 0.0
+	if grid_size.x > 1 and grid_size.y > 1:
+		var center := Vector2(float(grid_size.x - 1) * 0.5, float(grid_size.y - 1) * 0.5)
+		var center_distance := absf(float(pos.x) - center.x) + absf(float(pos.y) - center.y)
+		value -= center_distance * 0.08
+	var houses_val = observation.map_public.get("houses", {})
+	if not (houses_val is Dictionary):
+		return value
+	for house_val in Dictionary(houses_val).values():
+		if not (house_val is Dictionary):
+			continue
+		var house_anchor := _read_vector2i(Dictionary(house_val).get("anchor_pos", Vector2i.ZERO))
+		var distance := absi(pos.x - house_anchor.x) + absi(pos.y - house_anchor.y)
+		var house_base := maxf(0.0, float(8 - distance))
+		if house_base <= 0.0:
+			continue
+		var competitor_distance := _nearest_competitor_restaurant_anchor_distance(observation, house_anchor)
+		if competitor_distance >= 0 and competitor_distance < distance:
+			value -= house_base * 1.5
+			if distance <= 4:
+				value -= 2.0
+		elif competitor_distance == distance:
+			value -= house_base * 0.5
+			if distance <= 4:
+				value -= 1.0
+		else:
+			value += house_base
+			if distance <= 4:
+				value += 2.0
+	return value
 
 static func _house_placement_positions(observation: ObservationState, grid_size: Vector2i) -> Array[Vector2i]:
 	var seen := {}
@@ -1309,6 +1905,30 @@ static func _position_distance_to_anchors(pos: Vector2i, anchors: Array[Vector2i
 		best = mini(best, absi(pos.x - anchor.x) + absi(pos.y - anchor.y))
 	return best if best < 2147483647 else -1
 
+static func _nearest_competitor_restaurant_anchor_distance(observation: ObservationState, pos: Vector2i) -> int:
+	if observation == null:
+		return -1
+	var restaurants_val = observation.map_public.get("restaurants", {})
+	if not (restaurants_val is Dictionary):
+		return -1
+	var own_ids := _sorted_unique_strings(observation.own_player.get("restaurants", []))
+	var player_id := int(observation.viewer_player_id)
+	var best := 2147483647
+	for restaurant_id_val in Dictionary(restaurants_val).keys():
+		var restaurant_id := str(restaurant_id_val)
+		if own_ids.has(restaurant_id):
+			continue
+		var rest_val = Dictionary(restaurants_val).get(restaurant_id_val, null)
+		if not (rest_val is Dictionary):
+			continue
+		var rest: Dictionary = rest_val
+		var owner := int(rest.get("owner", -1))
+		if owner < 0 or owner == player_id:
+			continue
+		var rest_anchor := _read_vector2i(rest.get("anchor_pos", Vector2i.ZERO))
+		best = mini(best, absi(pos.x - rest_anchor.x) + absi(pos.y - rest_anchor.y))
+	return best if best < 2147483647 else -1
+
 static func _source_state_from_options(options: Dictionary) -> GameState:
 	var state_val = options.get("source_state", null)
 	if state_val is GameState:
@@ -1317,6 +1937,17 @@ static func _source_state_from_options(options: Dictionary) -> GameState:
 	if engine_val is GameEngine:
 		return engine_val.get_state()
 	return null
+
+static func _source_board_analysis(source_state: GameState, options: Dictionary = {}) -> Dictionary:
+	var cached_val = options.get("source_analysis", null)
+	if cached_val is Dictionary and not Dictionary(cached_val).is_empty():
+		return Dictionary(cached_val).duplicate(true)
+	if source_state == null:
+		return {}
+	var analysis_read := BoardAnalyzerClass.analyze_state(source_state)
+	if not analysis_read.ok or not (analysis_read.value is Dictionary):
+		return {}
+	return Dictionary(analysis_read.value).duplicate(true)
 
 static func _sorted_house_ids_by_restaurant_distance(observation: ObservationState, houses: Dictionary) -> Array[String]:
 	var out := _sorted_string_keys(houses)
@@ -1410,10 +2041,18 @@ static func _count_owned_employees(player: Dictionary) -> Dictionary:
 			counts[employee_id] = int(counts.get(employee_id, 0)) + 1
 	return counts
 
-static func _recruit_prior(employee_id: String, observation: ObservationState) -> float:
+static func _recruit_prior(employee_id: String, observation: ObservationState, options: Dictionary = {}) -> float:
+	return _recruit_prior_with_route_plan(employee_id, observation, _recruit_route_plan(observation, options))
+
+static func _recruit_prior_with_route_plan(employee_id: String, observation: ObservationState, route_plan: Dictionary) -> float:
 	if observation == null or employee_id.is_empty():
 		return 0.0
 	var owned := _count_owned_employees(observation.own_player)
+	var role := _employee_role(employee_id)
+	var stable_income_ready := bool(route_plan.get("stable_income_ready", false))
+	var price_route_ready := bool(route_plan.get("price_route_ready", false))
+	var owns_price := bool(route_plan.get("owns_price", false))
+	var waitress_ready := bool(route_plan.get("waitress_support_ready", false))
 	match employee_id:
 		"kitchen_trainee":
 			return 3.0 if int(owned.get("kitchen_trainee", 0)) <= 0 and not _owns_employee_role(observation.own_player, "produce_food") else 0.25
@@ -1421,25 +2060,57 @@ static func _recruit_prior(employee_id: String, observation: ObservationState) -
 			return 2.8 if int(owned.get("marketing_trainee", 0)) <= 0 and not _owns_employee_role(observation.own_player, "marketing") else 0.25
 		"management_trainee":
 			if int(owned.get("new_business_developer", 0)) <= 0 and int(owned.get("management_trainee", 0)) <= 0:
-				return 2.6
+				return 2.6 if bool(route_plan.get("house_growth_ready", false)) else 0.25
+			return 0.2
+		"pricing_manager":
+			if price_route_ready and not owns_price and int(owned.get("pricing_manager", 0)) <= 0:
+				return 2.7
+			return 0.2
+		"waitress":
+			if stable_income_ready and waitress_ready and int(owned.get("waitress", 0)) <= 0:
+				return 2.4
 			return 0.2
 		"trainer":
 			if int(owned.get("trainer", 0)) <= 0 and _has_trainable_owned_employee(observation):
 				return 3.2
 			return 0.7 if int(owned.get("trainer", 0)) <= 0 else 0.2
 		"recruiting_girl":
-			return 0.9 if int(owned.get("recruiting_girl", 0)) <= 0 else 0.2
+			if stable_income_ready and int(owned.get("recruiting_girl", 0)) <= 0:
+				return 1.4
+			return 0.2
 		"errand_boy":
 			return 2.2 if not _can_supply_any_drink(observation) else 0.2
 		_:
+			if role == "price":
+				return 1.5 if price_route_ready and not owns_price else 0.2
 			return 0.5
 
-static func _structure_assignment_prior(employee_id: String, observation: ObservationState) -> float:
+static func _recruit_route_plan(observation: ObservationState, options: Dictionary = {}) -> Dictionary:
+	if observation == null:
+		return {}
+	var income_analysis := StrategyIncomeAnalyzerClass.analyze(observation, null, _source_state_from_options(options))
+	return StrategyRoutePlannerClass.analyze(observation, income_analysis, null)
+
+static func _employee_role(employee_id: String) -> String:
+	if employee_id.is_empty() or not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(employee_id):
+		return ""
+	var def_val = EmployeeRegistryClass.get_def(employee_id)
+	if def_val is EmployeeDef:
+		return str((def_val as EmployeeDef).role)
+	return ""
+
+static func _structure_assignment_prior(
+	employee_id: String,
+	observation: ObservationState,
+	context: AiDecisionContext = null,
+	validate_command: Callable = Callable(),
+	options: Dictionary = {}
+) -> float:
 	if observation == null or employee_id.is_empty():
 		return 0.0
 	if _is_train_provider_employee(employee_id) and _has_trainable_reserve_employee(observation):
 		return 5.0
-	if _should_preserve_for_training(employee_id, observation):
+	if _should_preserve_for_training(employee_id, observation, context, validate_command, options):
 		return -5.0
 	return 0.0
 
@@ -1448,10 +2119,23 @@ static func _submit_restructuring_prior(observation: ObservationState) -> float:
 		return 5.0
 	return 0.0
 
-static func _training_reserve_move_prior(employee_id: String, observation: ObservationState) -> float:
-	return 6.5 + _best_train_target_prior(employee_id, observation)
+static func _training_reserve_move_prior(
+	employee_id: String,
+	observation: ObservationState,
+	context: AiDecisionContext = null,
+	validate_command: Callable = Callable(),
+	options: Dictionary = {}
+) -> float:
+	return 6.5 + _best_train_target_prior(employee_id, observation, context, validate_command, options)
 
-static func _train_prior(from_employee: String, target_employee: String, observation: ObservationState) -> float:
+static func _train_prior(
+	from_employee: String,
+	target_employee: String,
+	observation: ObservationState,
+	context: AiDecisionContext = null,
+	validate_command: Callable = Callable(),
+	options: Dictionary = {}
+) -> float:
 	if target_employee.is_empty():
 		return 0.0
 	match target_employee:
@@ -1460,6 +2144,9 @@ static func _train_prior(from_employee: String, target_employee: String, observa
 		"burger_cook", "pizza_cook":
 			return 1.0 + _product_pipeline_prior(_food_for_cook(target_employee), observation)
 		"campaign_manager":
+			var unblock_prior := _marketing_training_unblock_prior(from_employee, target_employee, observation, context, validate_command, options)
+			if unblock_prior > 0.0:
+				return unblock_prior
 			return 0.8
 	if not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(target_employee):
 		return 0.2 if not from_employee.is_empty() else 0.0
@@ -1525,7 +2212,13 @@ static func _special_train_prior(target_def: EmployeeDef, observation: Observati
 		return 1.1 + float(_total_public_demand(observation)) * 0.08
 	return 0.8
 
-static func _best_train_target_prior(from_employee: String, observation: ObservationState) -> float:
+static func _best_train_target_prior(
+	from_employee: String,
+	observation: ObservationState,
+	context: AiDecisionContext = null,
+	validate_command: Callable = Callable(),
+	options: Dictionary = {}
+) -> float:
 	if observation == null or from_employee.is_empty() or not EmployeeRegistryClass.is_loaded():
 		return 0.0
 	if not EmployeeRegistryClass.has(from_employee):
@@ -1539,8 +2232,136 @@ static func _best_train_target_prior(from_employee: String, observation: Observa
 		var target := str(target_val)
 		if target.is_empty() or int(observation.employee_pool_public.get(target, 0)) <= 0:
 			continue
-		best = maxf(best, _train_prior(from_employee, target, observation))
+		best = maxf(best, _train_prior(from_employee, target, observation, context, validate_command, options))
 	return best
+
+static func _marketing_training_unblock_prior(
+	from_employee: String,
+	target_employee: String,
+	observation: ObservationState,
+	context: AiDecisionContext,
+	validate_command: Callable,
+	options: Dictionary
+) -> float:
+	if from_employee != "marketing_trainee" or target_employee != "campaign_manager":
+		return 0.0
+	if observation == null or context == null or not validate_command.is_valid():
+		return 0.0
+	if _source_state_from_options(options) == null:
+		return 0.0
+	var source_types := _marketing_types_for_employee(from_employee)
+	var target_types := _marketing_types_for_employee(target_employee)
+	if source_types.is_empty() or target_types.is_empty():
+		return 0.0
+	var unlocks_marketing_type := false
+	for target_type in target_types:
+		if not source_types.has(target_type):
+			unlocks_marketing_type = true
+			break
+	if not unlocks_marketing_type:
+		return 0.0
+	var source_has_effective_candidate := _marketing_employee_has_effective_candidate(from_employee, observation, context, validate_command, options)
+	if not source_has_effective_candidate:
+		return 2.8
+	var mailbox_upgrade_prior := _marketing_mailbox_route_upgrade_prior(source_types, target_types, observation)
+	if mailbox_upgrade_prior > 0.0:
+		return mailbox_upgrade_prior
+	return 0.0
+
+static func _marketing_mailbox_route_upgrade_prior(source_types: Array[String], target_types: Array[String], observation: ObservationState) -> float:
+	if observation == null:
+		return 0.0
+	if source_types.has("mailbox") or not target_types.has("mailbox"):
+		return 0.0
+	if _sorted_unique_strings(observation.own_player.get("milestones", [])).has("first_billboard"):
+		return 0.0
+	if _sorted_unique_strings(observation.milestone_pool_public).has("first_billboard"):
+		return 0.0
+	return 2.65
+
+static func _marketing_employee_has_effective_candidate(
+	employee_id: String,
+	observation: ObservationState,
+	context: AiDecisionContext,
+	validate_command: Callable,
+	options: Dictionary
+) -> bool:
+	var cache_key := "%d:%s" % [context.player_id if context != null else -1, employee_id]
+	var cache_val = options.get("_marketing_effective_candidate_cache", null)
+	if cache_val is Dictionary:
+		var cache: Dictionary = cache_val
+		if cache.has(cache_key):
+			return bool(cache.get(cache_key, true))
+	else:
+		options["_marketing_effective_candidate_cache"] = {}
+	var result := _compute_marketing_employee_has_effective_candidate(employee_id, observation, context, validate_command, options)
+	var writable_cache_val = options.get("_marketing_effective_candidate_cache", null)
+	if writable_cache_val is Dictionary:
+		var writable_cache: Dictionary = writable_cache_val
+		writable_cache[cache_key] = result
+	return result
+
+static func _compute_marketing_employee_has_effective_candidate(
+	employee_id: String,
+	observation: ObservationState,
+	context: AiDecisionContext,
+	validate_command: Callable,
+	options: Dictionary
+) -> bool:
+	if employee_id.is_empty() or observation == null or context == null or not validate_command.is_valid():
+		return true
+	var source_state := _source_state_from_options(options)
+	if source_state == null:
+		return true
+	if not MarketingRegistryClass.is_loaded() or not ProductRegistryClass.is_loaded():
+		return true
+	var grid_size := _read_grid_size(observation.map_public)
+	if grid_size.x <= 0 or grid_size.y <= 0:
+		return true
+	var products := _sorted_marketable_product_ids_for_observation(observation)
+	if products.is_empty():
+		return false
+	var product_id := str(products[0])
+	var marketing_types := _marketing_types_for_employee(employee_id)
+	if marketing_types.is_empty():
+		return false
+	var positions := _marketing_candidate_positions(observation, grid_size)
+	var checked := 0
+	for board_number in _sorted_marketing_board_numbers(marketing_types, observation):
+		var board_def = MarketingRegistryClass.get_def(int(board_number))
+		if not (board_def is MarketingDef):
+			continue
+		var marketing_def: MarketingDef = board_def
+		if not _marketing_board_available_for_observation(marketing_def, observation):
+			continue
+		if _marketing_board_occupied(observation, int(board_number)):
+			continue
+		var marketing_type := str(marketing_def.type)
+		for pos in positions:
+			for rotation in _marketing_rotations(marketing_type):
+				checked += 1
+				if checked > MARKETING_TRAINING_ROUTE_CHECK_LIMIT:
+					return true
+				var params := {
+					"employee_type": employee_id,
+					"board_number": int(board_number),
+					"product": product_id,
+					"position": [pos.x, pos.y],
+					"rotation": int(rotation),
+				}
+				if marketing_type == "airplane":
+					params["axis"] = "row" if pos.x == 0 or pos.x == grid_size.x - 1 else "col"
+				var command := Command.create("initiate_marketing", context.player_id, params)
+				var validate := _validate_command(command, validate_command)
+				if not validate.ok:
+					continue
+				var affected_read := _marketing_command_affected_house_ids(source_state, context.player_id, command, marketing_def, marketing_type)
+				if not affected_read.ok:
+					continue
+				var affected: Array = affected_read.value
+				if not affected.is_empty():
+					return true
+	return false
 
 static func _marketing_product_prior(product_id: String, observation: ObservationState) -> float:
 	if product_id.is_empty() or observation == null:
@@ -1557,6 +2378,18 @@ static func _marketing_product_prior(product_id: String, observation: Observatio
 		prior += 0.35
 	prior += float(_public_demand_count_for_product(observation, product_id)) * 0.25
 	return prior
+
+static func _marketing_product_supply_rank(product_id: String, observation: ObservationState) -> int:
+	if product_id.is_empty() or observation == null:
+		return 0
+	var inventory_val = observation.own_player.get("inventory", {})
+	if inventory_val is Dictionary and _read_non_negative_int(Dictionary(inventory_val).get(product_id, 0), 0) > 0:
+		return 3
+	if _can_actively_supply_product(product_id, observation):
+		return 2
+	if _can_supply_product(product_id, observation):
+		return 1
+	return 0
 
 static func _product_pipeline_prior(product_id: String, observation: ObservationState) -> float:
 	if product_id.is_empty() or observation == null:
@@ -1647,7 +2480,13 @@ static func _is_trainable_source_employee(employee_id: String, observation: Obse
 			return true
 	return false
 
-static func _should_preserve_for_training(employee_id: String, observation: ObservationState) -> bool:
+static func _should_preserve_for_training(
+	employee_id: String,
+	observation: ObservationState,
+	context: AiDecisionContext = null,
+	validate_command: Callable = Callable(),
+	options: Dictionary = {}
+) -> bool:
 	if employee_id.is_empty() or employee_id == "ceo":
 		return false
 	if _is_train_provider_employee(employee_id):
@@ -1656,7 +2495,7 @@ static func _should_preserve_for_training(employee_id: String, observation: Obse
 		return false
 	if _should_activate_for_supply(employee_id, observation):
 		return false
-	return _best_train_target_prior(employee_id, observation) >= TRAINING_PRESERVE_MIN_PRIOR
+	return _best_train_target_prior(employee_id, observation, context, validate_command, options) >= TRAINING_PRESERVE_MIN_PRIOR
 
 static func _should_activate_for_supply(employee_id: String, observation: ObservationState) -> bool:
 	if observation == null or employee_id.is_empty() or not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(employee_id):
@@ -1665,6 +2504,8 @@ static func _should_activate_for_supply(employee_id: String, observation: Observ
 	if not (def_val is EmployeeDef):
 		return false
 	var def: EmployeeDef = def_val
+	if def.can_procure():
+		return _should_activate_for_drink_supply(employee_id, observation)
 	if not def.can_produce():
 		return false
 	var active := _sorted_unique_strings(observation.own_player.get("employees", [])).has(employee_id)
@@ -1676,6 +2517,25 @@ static func _should_activate_for_supply(employee_id: String, observation: Observ
 			return true
 		if _marketing_pipeline_needs_food_supply(product_id, observation):
 			if active or not _can_actively_supply_product(product_id, observation):
+				return true
+	return false
+
+static func _should_activate_for_drink_supply(employee_id: String, observation: ObservationState) -> bool:
+	if observation == null or employee_id.is_empty() or not ProductRegistryClass.is_loaded():
+		return false
+	if employee_id == "errand_boy":
+		for product_id in ProductRegistryClass.get_all_ids():
+			if ProductRegistryClass.is_drink(product_id) and _product_inventory_gap(product_id, observation) > 0:
+				return true
+		return false
+	var routes_read := DrinkRouteAnalyzerClass.generate_routes(observation, employee_id, 6)
+	if not routes_read.ok:
+		return false
+	for route_val in Array(routes_read.value):
+		if not (route_val is Dictionary):
+			continue
+		for product_id in _route_drink_source_types(Dictionary(route_val)):
+			if ProductRegistryClass.has(product_id) and ProductRegistryClass.is_drink(product_id) and _product_inventory_gap(product_id, observation) > 0:
 				return true
 	return false
 
@@ -2009,6 +2869,12 @@ static func _read_vector2i(value) -> Vector2i:
 		if arr.size() >= 2:
 			return Vector2i(int(arr[0]), int(arr[1]))
 	return Vector2i.ZERO
+
+static func _budget_expired(options: Dictionary) -> bool:
+	var budget_val = options.get("budget", null)
+	if budget_val is TimeBudget:
+		return (budget_val as TimeBudget).expired()
+	return false
 
 static func _sorted_owned_restaurant_ids(player: Dictionary, restaurants: Dictionary) -> Array[String]:
 	var out: Array[String] = []

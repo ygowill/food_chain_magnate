@@ -300,6 +300,25 @@ func unregister_hook(phase: int, hook_type: int, callback: Callable) -> bool:
 func reset_hooks() -> void:
 	_hooks = HooksClass.new(PHASE_NAMES.keys(), SUB_PHASE_NAMES.keys(), HookType.values())
 
+func duplicate_runtime() -> PhaseManager:
+	var copy := PhaseManager.new()
+	if _hooks != null and _hooks.has_method("duplicate_runtime"):
+		copy._hooks = _hooks.duplicate_runtime()
+	copy._marketing_range_calculator = _marketing_range_calculator
+	copy._settlement_registry = _settlement_registry
+	copy._effect_registry = _effect_registry
+	copy._phase_order_enums = Array(_phase_order_enums, TYPE_INT, "", null)
+	copy._phase_order_names = Array(_phase_order_names, TYPE_STRING, "", null)
+	copy._settlement_triggers_on_enter = _settlement_triggers_on_enter.duplicate(true)
+	copy._settlement_triggers_on_exit = _settlement_triggers_on_exit.duplicate(true)
+	copy._timeline_settlement_event_policies = _timeline_settlement_event_policies.duplicate(true)
+	copy._working_sub_phase_order_names = Array(_working_sub_phase_order_names, TYPE_STRING, "", null)
+	copy._cleanup_sub_phase_order_names = Array(_cleanup_sub_phase_order_names, TYPE_STRING, "", null)
+	copy._phase_sub_phase_orders = _phase_sub_phase_orders.duplicate(true)
+	copy._timeline_trace_enabled = _timeline_trace_enabled
+	copy._timeline_last_advance_trace = {}
+	return copy
+
 # 计算确定性的“游戏内时间戳”
 # 对齐 docs/design.md（round * 1000 + phase_index * 100 + sub_phase_index）
 static func compute_timestamp(state: GameState) -> int:

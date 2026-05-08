@@ -4,6 +4,7 @@ extends RefCounted
 const AiEngineForkClass = preload("res://core/ai/simulation/ai_engine_fork.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const PreviewLogSilencerClass = preload("res://core/ai/analysis/preview_log_silencer.gd")
 
 static func preview_after_commands(
 	engine: GameEngine,
@@ -13,6 +14,7 @@ static func preview_after_commands(
 	if engine == null:
 		return Result.failure("DinnerPreview.preview_after_commands: engine is null")
 
+	PreviewLogSilencerClass.silence(options)
 	var fork_read := AiEngineForkClass.fork_from_engine(engine)
 	if not fork_read.ok:
 		_restore_source_registries(engine)
@@ -174,5 +176,6 @@ static func _copy_array(value) -> Array:
 	return []
 
 static func _restore_source_registries(engine: GameEngine) -> void:
+	PreviewLogSilencerClass.restore()
 	if engine != null:
 		engine.activate_registry_bundles()

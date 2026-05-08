@@ -49,6 +49,7 @@ var content_catalog_v2 = null  # ContentCatalog
 var ruleset_v2 = null  # RulesetV2
 var module_ui_extensions_v2 = null  # RulesetV2UiExtensions
 var modules_v2_base_dir: String = ""
+var owns_module_runtime_v2: bool = true
 var catalog_registry_bundle = CatalogRegistryBundleClass.new()
 var rules_registry_bundle = RulesRegistryBundleClass.new()
 var dependencies = GameEngineDependenciesClass.new()

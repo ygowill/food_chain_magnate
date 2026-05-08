@@ -17,8 +17,26 @@ const DEFAULT_TARGET_ROUND := 3
 const DEFAULT_MAX_STEPS := 720
 const DEFAULT_BUDGET_MS := 80
 const DEFAULT_TRACE_TAIL := 8
+const DEFAULT_TRACE_DETAIL := "compact"
 const DEFAULT_BOT_ID := "strategy"
 const SUPPORTED_BOT_IDS := ["random", "greedy", "strategy", "osla", "beam"]
+const SUPPORTED_TRACE_DETAILS := ["compact", "decision"]
+const FOOD_PRODUCER_EMPLOYEE_IDS := [
+	"kitchen_trainee",
+	"burger_cook",
+	"pizza_cook",
+	"burger_chef",
+	"pizza_chef",
+	"noodle_cook",
+	"noodle_chef",
+	"barista_trainee",
+	"barista",
+	"lead_barista",
+	"kimchi_master",
+	"sushi_cook",
+	"sushi_chef",
+	"fry_chef",
+]
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -50,6 +68,7 @@ static func run(options: Dictionary) -> Result:
 	var max_steps := int(options.get("max_steps", DEFAULT_MAX_STEPS))
 	var budget_ms := int(options.get("budget_ms", DEFAULT_BUDGET_MS))
 	var trace_tail := int(options.get("trace_tail", DEFAULT_TRACE_TAIL))
+	var trace_detail := str(options.get("trace_detail", DEFAULT_TRACE_DETAIL)).strip_edges()
 	var bot_id := str(options.get("bot_id", DEFAULT_BOT_ID)).strip_edges()
 	var output_jsonl := str(options.get("output_jsonl", "")).strip_edges()
 	var bot_ids_read := _resolve_bot_ids(options, player_count)
@@ -72,6 +91,8 @@ static func run(options: Dictionary) -> Result:
 		return Result.failure("--budget-ms must be > 0")
 	if not SUPPORTED_BOT_IDS.has(bot_id):
 		return Result.failure("--bot must be one of: %s" % ", ".join(SUPPORTED_BOT_IDS))
+	if not SUPPORTED_TRACE_DETAILS.has(trace_detail):
+		return Result.failure("--trace-detail must be one of: %s" % ", ".join(SUPPORTED_TRACE_DETAILS))
 
 	var file: FileAccess = null
 	if not output_jsonl.is_empty():
@@ -99,7 +120,7 @@ static func run(options: Dictionary) -> Result:
 	var failures := 0
 	for match_index in range(matches):
 		var seed := start_seed + match_index
-		var row := _run_match(match_index, player_count, seed, target_round, max_steps, budget_ms, trace_tail, bot_ids, bot_config, profile_source, profile_config)
+		var row := _run_match(match_index, player_count, seed, target_round, max_steps, budget_ms, trace_tail, trace_detail, bot_ids, bot_config, profile_source, profile_config)
 		rows.append(row)
 		if not bool(row.get("ok", false)):
 			failures += 1
@@ -127,6 +148,7 @@ static func _run_match(
 	max_steps: int,
 	budget_ms: int,
 	trace_tail: int,
+	trace_detail: String,
 	bot_ids: Array[String],
 	bot_config: String,
 	profile_source: String,
@@ -175,7 +197,7 @@ static func _run_match(
 		return false
 	var run_read := controller.run_until(engine, bots, stop_condition, max_steps, budget_ms)
 	var state := engine.get_state()
-	var row := _build_match_row(match_index, player_count, seed, state, controller.last_trace, trace_tail)
+	var row := _build_match_row(match_index, player_count, seed, state, controller.last_trace, trace_tail, trace_detail)
 	row["bot"] = bot_config
 	row["bot_config"] = bot_config
 	row["bot_ids"] = bot_ids.duplicate()
@@ -261,7 +283,8 @@ static func _build_match_row(
 	seed: int,
 	state: GameState,
 	trace: Array[Dictionary],
-	trace_tail: int
+	trace_tail: int,
+	trace_detail: String = DEFAULT_TRACE_DETAIL
 ) -> Dictionary:
 	var row := {
 		"match_index": match_index,
@@ -272,8 +295,16 @@ static func _build_match_row(
 		"sub_phase": "",
 		"command_count": trace.size(),
 		"action_counts": _action_counts(trace),
-		"trace_tail": _trace_tail(trace, trace_tail),
+		"player_cash_min_seen": _trace_player_cash_extreme(trace, true),
+		"player_cash_min_after_first_positive": _trace_player_cash_min_after_first_positive(trace),
+		"player_cash_max_seen": _trace_player_cash_extreme(trace, false),
+		"opening_metrics": _trace_opening_metrics(trace, player_count),
+		"search_metrics": _trace_search_metrics(trace),
+		"trace_tail": _trace_tail(trace, trace_tail, trace_detail),
 	}
+	row["mandatory_completion_counts"] = _mandatory_completion_counts(trace)
+	row["untraced_mandatory_completion_counts"] = _untraced_mandatory_completion_counts(trace)
+	row["mandatory_completion_tail"] = _mandatory_completion_tail(trace, trace_tail)
 	if state == null:
 		return row
 	row["round"] = int(state.round_number)
@@ -282,9 +313,13 @@ static func _build_match_row(
 	row["current_player_id"] = int(state.get_current_player_id())
 	row["player_cash"] = _player_cash(state)
 	row["player_restaurants"] = _player_restaurant_counts(state)
+	row["player_restaurant_details"] = _player_restaurant_details(state)
 	row["player_employees"] = _player_employee_counts(state)
+	row["player_employee_groups"] = _player_employee_groups(state)
 	row["player_inventory_units"] = _player_inventory_units(state)
+	row["player_inventory"] = _player_inventory(state)
 	row["player_milestones"] = _player_milestone_counts(state)
+	row["player_milestone_ids"] = _player_milestone_ids(state)
 	row["bank_total"] = int(state.bank.get("total", 0)) if state.bank is Dictionary else 0
 	row["state_hash"] = state.compute_hash()
 	return row
@@ -298,22 +333,339 @@ static func _action_counts(trace: Array[Dictionary]) -> Dictionary:
 		out[action_id] = int(out.get(action_id, 0)) + 1
 	return out
 
-static func _trace_tail(trace: Array[Dictionary], count: int) -> Array[Dictionary]:
+static func _trace_tail(trace: Array[Dictionary], count: int, trace_detail: String = DEFAULT_TRACE_DETAIL) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if count <= 0:
 		return out
 	var start := maxi(0, trace.size() - count)
 	for i in range(start, trace.size()):
 		var item: Dictionary = trace[i]
-		out.append({
+		var row := {
 			"player_id": int(item.get("player_id", -1)),
 			"action_id": str(item.get("action_id", "")),
+			"round_before": int(item.get("round_before", -1)),
 			"phase_before": str(item.get("phase_before", "")),
 			"sub_phase_before": str(item.get("sub_phase_before", "")),
+			"round_after": int(item.get("round_after", -1)),
 			"phase_after": str(item.get("phase_after", "")),
 			"sub_phase_after": str(item.get("sub_phase_after", "")),
 			"macro_action_id": str(item.get("macro_action_id", "")),
 			"score": float(item.get("score", 0.0)),
+		}
+		var player_cash_before := _int_array(item.get("player_cash_before", []))
+		if not player_cash_before.is_empty():
+			row["player_cash_before"] = player_cash_before
+		var player_cash_after := _int_array(item.get("player_cash_after", []))
+		if not player_cash_after.is_empty():
+			row["player_cash_after"] = player_cash_after
+		if trace_detail == "decision":
+			row["params"] = Dictionary(item.get("params", {})).duplicate(true)
+			row["explanation"] = Dictionary(item.get("explanation", {})).duplicate(true)
+			row["decision_trace"] = Dictionary(item.get("decision_trace", {})).duplicate(true)
+		var mandatory_added := _mandatory_actions_added_for_trace_item(item)
+		if not mandatory_added.is_empty():
+			row["mandatory_actions_completed_added"] = mandatory_added
+		out.append(row)
+	return out
+
+static func _trace_player_cash_extreme(trace: Array[Dictionary], use_min: bool) -> Array[int]:
+	var out: Array[int] = []
+	for item in trace:
+		for key in ["player_cash_before", "player_cash_after"]:
+			var values := _int_array(item.get(key, []))
+			for i in range(values.size()):
+				var value := int(values[i])
+				if i >= out.size():
+					out.append(value)
+				elif use_min:
+					out[i] = mini(int(out[i]), value)
+				else:
+					out[i] = maxi(int(out[i]), value)
+	return out
+
+static func _trace_player_cash_min_after_first_positive(trace: Array[Dictionary]) -> Array[int]:
+	var out: Array[int] = []
+	var seen_positive: Array[bool] = []
+	for item in trace:
+		for key in ["player_cash_before", "player_cash_after"]:
+			var values := _int_array(item.get(key, []))
+			for i in range(values.size()):
+				_ensure_bool_size(seen_positive, i + 1, false)
+				var value := int(values[i])
+				if not bool(seen_positive[i]) and value <= 0:
+					continue
+				if not bool(seen_positive[i]):
+					seen_positive[i] = true
+				_ensure_int_size(out, i + 1, value)
+				out[i] = mini(int(out[i]), value)
+	return out
+
+static func _trace_search_metrics(trace: Array[Dictionary]) -> Dictionary:
+	var out := {
+		"decision_count": 0,
+		"budget_expired_count": 0,
+		"attempted_simulations": 0,
+		"expanded_nodes": 0,
+		"time_ms_sum": 0,
+		"time_ms_max": 0,
+		"search_type_counts": {},
+	}
+	for item in trace:
+		var explanation: Dictionary = Dictionary(item.get("explanation", {}))
+		var decision_trace: Dictionary = Dictionary(item.get("decision_trace", {}))
+		var search_id := str(decision_trace.get("search", "")).strip_edges()
+		var attempted := int(explanation.get("attempted_simulations", decision_trace.get("attempted_simulations", 0)))
+		var expanded := int(explanation.get("expanded_nodes", decision_trace.get("expanded_nodes", 0)))
+		var budget_expired := bool(explanation.get("budget_expired", decision_trace.get("budget_expired", false)))
+		var time_ms := int(decision_trace.get("time_ms", explanation.get("time_ms", 0)))
+		if search_id.is_empty() and attempted <= 0 and expanded <= 0 and not budget_expired:
+			continue
+		out["decision_count"] = int(out.get("decision_count", 0)) + 1
+		out["budget_expired_count"] = int(out.get("budget_expired_count", 0)) + (1 if budget_expired else 0)
+		out["attempted_simulations"] = int(out.get("attempted_simulations", 0)) + maxi(0, attempted)
+		out["expanded_nodes"] = int(out.get("expanded_nodes", 0)) + maxi(0, expanded)
+		out["time_ms_sum"] = int(out.get("time_ms_sum", 0)) + maxi(0, time_ms)
+		out["time_ms_max"] = maxi(int(out.get("time_ms_max", 0)), maxi(0, time_ms))
+		if not search_id.is_empty():
+			var counts: Dictionary = out["search_type_counts"]
+			counts[search_id] = int(counts.get(search_id, 0)) + 1
+	var decisions := int(out.get("decision_count", 0))
+	out["time_ms_avg_per_decision"] = _avg_float(float(out.get("time_ms_sum", 0)), decisions)
+	out["attempted_simulations_avg_per_decision"] = _avg_float(float(out.get("attempted_simulations", 0)), decisions)
+	out["expanded_nodes_avg_per_decision"] = _avg_float(float(out.get("expanded_nodes", 0)), decisions)
+	out["budget_expired_rate"] = _avg_float(float(out.get("budget_expired_count", 0)), decisions)
+	return out
+
+static func _trace_opening_metrics(trace: Array[Dictionary], player_count: int) -> Dictionary:
+	var first_positive_seen: Array[bool] = []
+	var first_positive_rounds: Array[int] = []
+	var first_positive_steps: Array[int] = []
+	var first_food_recruit_seen: Array[bool] = []
+	var first_food_recruit_rounds: Array[int] = []
+	var first_food_recruit_steps: Array[int] = []
+	var first_produce_food_seen: Array[bool] = []
+	var first_produce_food_rounds: Array[int] = []
+	var first_produce_food_steps: Array[int] = []
+	for i in range(player_count):
+		first_positive_seen.append(false)
+		first_positive_rounds.append(-1)
+		first_positive_steps.append(-1)
+		first_food_recruit_seen.append(false)
+		first_food_recruit_rounds.append(-1)
+		first_food_recruit_steps.append(-1)
+		first_produce_food_seen.append(false)
+		first_produce_food_rounds.append(-1)
+		first_produce_food_steps.append(-1)
+	var pre_revenue_action_counts := {}
+	var pre_revenue_recruit_counts := {}
+	var pre_revenue_recruit_count := 0
+	var pre_revenue_errand_boy_recruit_count := 0
+	var pre_revenue_pricing_manager_recruit_count := 0
+	var pre_revenue_procure_drinks_count := 0
+	for step_index in range(trace.size()):
+		var item: Dictionary = trace[step_index]
+		_update_first_positive_cash(
+			first_positive_seen,
+			first_positive_rounds,
+			first_positive_steps,
+			item.get("player_cash_before", []),
+			int(item.get("round_before", -1)),
+			step_index
+		)
+		var player_id := int(item.get("player_id", -1))
+		var action_id := str(item.get("action_id", "")).strip_edges()
+		if player_id >= 0 and player_id < player_count and not action_id.is_empty():
+			if action_id == "recruit":
+				var opening_employee_id := _trace_recruit_employee_id(item)
+				if _is_food_producer_employee_id(opening_employee_id) and not bool(first_food_recruit_seen[player_id]):
+					first_food_recruit_seen[player_id] = true
+					first_food_recruit_rounds[player_id] = int(item.get("round_before", -1))
+					first_food_recruit_steps[player_id] = step_index
+			elif action_id == "produce_food" and not bool(first_produce_food_seen[player_id]):
+				first_produce_food_seen[player_id] = true
+				first_produce_food_rounds[player_id] = int(item.get("round_before", -1))
+				first_produce_food_steps[player_id] = step_index
+		if player_id >= 0 and player_id < player_count and not bool(first_positive_seen[player_id]):
+			if not action_id.is_empty():
+				_increment_count(pre_revenue_action_counts, action_id, 1)
+				if action_id == "recruit":
+					pre_revenue_recruit_count += 1
+					var employee_id := _trace_recruit_employee_id(item)
+					if not employee_id.is_empty():
+						_increment_count(pre_revenue_recruit_counts, employee_id, 1)
+					if employee_id == "errand_boy":
+						pre_revenue_errand_boy_recruit_count += 1
+					elif employee_id == "pricing_manager":
+						pre_revenue_pricing_manager_recruit_count += 1
+				elif action_id == "procure_drinks":
+					pre_revenue_procure_drinks_count += 1
+		_update_first_positive_cash(
+			first_positive_seen,
+			first_positive_rounds,
+			first_positive_steps,
+			item.get("player_cash_after", []),
+			int(item.get("round_after", -1)),
+			step_index
+		)
+	var players_with_positive_cash := 0
+	for seen in first_positive_seen:
+		if bool(seen):
+			players_with_positive_cash += 1
+	var food_recruit_to_produce_round_delays: Array[int] = []
+	var food_recruit_to_produce_step_delays: Array[int] = []
+	for i in range(player_count):
+		if int(first_food_recruit_rounds[i]) >= 0 and int(first_produce_food_rounds[i]) >= 0:
+			food_recruit_to_produce_round_delays.append(maxi(0, int(first_produce_food_rounds[i]) - int(first_food_recruit_rounds[i])))
+			food_recruit_to_produce_step_delays.append(maxi(0, int(first_produce_food_steps[i]) - int(first_food_recruit_steps[i])))
+		else:
+			food_recruit_to_produce_round_delays.append(-1)
+			food_recruit_to_produce_step_delays.append(-1)
+	return {
+		"players_with_positive_cash": players_with_positive_cash,
+		"players_without_positive_cash": maxi(0, player_count - players_with_positive_cash),
+		"first_positive_cash_rounds": first_positive_rounds,
+		"first_positive_cash_steps": first_positive_steps,
+		"first_food_recruit_rounds": first_food_recruit_rounds,
+		"first_food_recruit_steps": first_food_recruit_steps,
+		"first_produce_food_rounds": first_produce_food_rounds,
+		"first_produce_food_steps": first_produce_food_steps,
+		"food_recruit_to_produce_round_delays": food_recruit_to_produce_round_delays,
+		"food_recruit_to_produce_step_delays": food_recruit_to_produce_step_delays,
+		"pre_revenue_action_counts": _sorted_count_dict(pre_revenue_action_counts),
+		"pre_revenue_recruit_counts": _sorted_count_dict(pre_revenue_recruit_counts),
+		"pre_revenue_recruit_count": pre_revenue_recruit_count,
+		"pre_revenue_errand_boy_recruit_count": pre_revenue_errand_boy_recruit_count,
+		"pre_revenue_pricing_manager_recruit_count": pre_revenue_pricing_manager_recruit_count,
+		"pre_revenue_procure_drinks_count": pre_revenue_procure_drinks_count,
+	}
+
+static func _update_first_positive_cash(
+	seen: Array[bool],
+	rounds: Array[int],
+	steps: Array[int],
+	values_val,
+	round_number: int,
+	step_index: int
+) -> void:
+	if not (values_val is Array):
+		return
+	for i in range(Array(values_val).size()):
+		if i >= seen.size():
+			break
+		if bool(seen[i]) or int(Array(values_val)[i]) <= 0:
+			continue
+		seen[i] = true
+		rounds[i] = round_number
+		steps[i] = step_index
+
+static func _trace_recruit_employee_id(item: Dictionary) -> String:
+	var params_val = item.get("params", {})
+	if params_val is Dictionary:
+		var employee_id := str(Dictionary(params_val).get("employee_id", "")).strip_edges()
+		if employee_id.is_empty():
+			employee_id = str(Dictionary(params_val).get("employee_type", "")).strip_edges()
+		if not employee_id.is_empty():
+			return employee_id
+	var macro_action_id := str(item.get("macro_action_id", "")).strip_edges()
+	if macro_action_id.begins_with("recruit_"):
+		return macro_action_id.trim_prefix("recruit_")
+	return ""
+
+static func _is_food_producer_employee_id(employee_id: String) -> bool:
+	return FOOD_PRODUCER_EMPLOYEE_IDS.has(employee_id.strip_edges())
+
+static func _increment_count(target: Dictionary, key: String, amount: int) -> void:
+	var clean_key := key.strip_edges()
+	if clean_key.is_empty():
+		return
+	target[clean_key] = int(target.get(clean_key, 0)) + amount
+
+static func _sorted_count_dict(value: Dictionary) -> Dictionary:
+	var out := {}
+	var keys := value.keys()
+	keys.sort()
+	for key in keys:
+		out[str(key)] = int(value.get(key, 0))
+	return out
+
+static func _int_array(value) -> Array[int]:
+	var out: Array[int] = []
+	if value is Array:
+		for item in Array(value):
+			out.append(int(item))
+	return out
+
+static func _avg_float(total: float, count: int) -> float:
+	if count <= 0:
+		return 0.0
+	return round((total / float(count)) * 1000.0) / 1000.0
+
+static func _ensure_int_size(values: Array[int], size: int, fill_value: int) -> void:
+	while values.size() < size:
+		values.append(fill_value)
+
+static func _ensure_bool_size(values: Array[bool], size: int, fill_value: bool) -> void:
+	while values.size() < size:
+		values.append(fill_value)
+
+static func _mandatory_completion_counts(trace: Array[Dictionary]) -> Dictionary:
+	var out := {}
+	for item in trace:
+		for row in _mandatory_actions_added_for_trace_item(item):
+			var action_id := str(row.get("action_id", "")).strip_edges()
+			if action_id.is_empty():
+				continue
+			out[action_id] = int(out.get(action_id, 0)) + 1
+	return out
+
+static func _untraced_mandatory_completion_counts(trace: Array[Dictionary]) -> Dictionary:
+	var out := {}
+	for item in trace:
+		var command_action_id := str(item.get("action_id", "")).strip_edges()
+		for row in _mandatory_actions_added_for_trace_item(item):
+			var action_id := str(row.get("action_id", "")).strip_edges()
+			if action_id.is_empty() or action_id == command_action_id:
+				continue
+			out[action_id] = int(out.get(action_id, 0)) + 1
+	return out
+
+static func _mandatory_completion_tail(trace: Array[Dictionary], count: int) -> Array[Dictionary]:
+	var rows: Array[Dictionary] = []
+	for item in trace:
+		var command_action_id := str(item.get("action_id", "")).strip_edges()
+		var macro_action_id := str(item.get("macro_action_id", "")).strip_edges()
+		for added in _mandatory_actions_added_for_trace_item(item):
+			var row := Dictionary(added).duplicate(true)
+			row["completed_by_action_id"] = command_action_id
+			row["completed_by_macro_action_id"] = macro_action_id
+			row["phase_before"] = str(item.get("phase_before", ""))
+			row["sub_phase_before"] = str(item.get("sub_phase_before", ""))
+			row["phase_after"] = str(item.get("phase_after", ""))
+			row["sub_phase_after"] = str(item.get("sub_phase_after", ""))
+			rows.append(row)
+	if count <= 0:
+		return []
+	var start := maxi(0, rows.size() - count)
+	var out: Array[Dictionary] = []
+	for i in range(start, rows.size()):
+		out.append(rows[i].duplicate(true))
+	return out
+
+static func _mandatory_actions_added_for_trace_item(item: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var added_val = item.get("mandatory_actions_completed_added", [])
+	if not (added_val is Array):
+		return out
+	for added_item in Array(added_val):
+		if not (added_item is Dictionary):
+			continue
+		var added: Dictionary = added_item
+		var action_id := str(added.get("action_id", "")).strip_edges()
+		if action_id.is_empty():
+			continue
+		out.append({
+			"player_id": int(added.get("player_id", -1)),
+			"action_id": action_id,
 		})
 	return out
 
@@ -334,6 +686,41 @@ static func _player_restaurant_counts(state: GameState) -> Array[int]:
 		out.append(Array(restaurants_val).size() if restaurants_val is Array else 0)
 	return out
 
+static func _player_restaurant_details(state: GameState) -> Array:
+	var out := []
+	var restaurants_by_id := {}
+	if state.map is Dictionary:
+		var map_restaurants_val = Dictionary(state.map).get("restaurants", {})
+		if map_restaurants_val is Dictionary:
+			restaurants_by_id = Dictionary(map_restaurants_val)
+	for player_val in state.players:
+		if not (player_val is Dictionary):
+			out.append([])
+			continue
+		var restaurants_val = Dictionary(player_val).get("restaurants", [])
+		if not (restaurants_val is Array):
+			out.append([])
+			continue
+		var restaurants := []
+		for restaurant_val in Array(restaurants_val):
+			if restaurant_val is Dictionary:
+				restaurants.append(Dictionary(restaurant_val).duplicate(true))
+			else:
+				var restaurant_id := str(restaurant_val)
+				var detail := {
+					"restaurant_id": restaurant_id,
+				}
+				var map_detail_val = restaurants_by_id.get(restaurant_id, null)
+				if map_detail_val is Dictionary:
+					detail = Dictionary(map_detail_val).duplicate(true)
+					if not detail.has("restaurant_id"):
+						detail["restaurant_id"] = restaurant_id
+				else:
+					detail["missing_map_detail"] = true
+				restaurants.append(detail)
+		out.append(restaurants)
+	return out
+
 static func _player_employee_counts(state: GameState) -> Array[int]:
 	var out: Array[int] = []
 	for player_val in state.players:
@@ -347,6 +734,20 @@ static func _player_employee_counts(state: GameState) -> Array[int]:
 			if list_val is Array:
 				count += Array(list_val).size()
 		out.append(count)
+	return out
+
+static func _player_employee_groups(state: GameState) -> Array:
+	var out := []
+	for player_val in state.players:
+		if not (player_val is Dictionary):
+			out.append({"active": [], "reserve": [], "busy": []})
+			continue
+		var player: Dictionary = player_val
+		out.append({
+			"active": _string_array(player.get("employees", [])),
+			"reserve": _string_array(player.get("reserve_employees", [])),
+			"busy": _string_array(player.get("busy_marketers", [])),
+		})
 	return out
 
 static func _player_inventory_units(state: GameState) -> Array[int]:
@@ -365,6 +766,24 @@ static func _player_inventory_units(state: GameState) -> Array[int]:
 		out.append(total)
 	return out
 
+static func _player_inventory(state: GameState) -> Array:
+	var out := []
+	for player_val in state.players:
+		if not (player_val is Dictionary):
+			out.append({})
+			continue
+		var inventory_val = Dictionary(player_val).get("inventory", {})
+		if not (inventory_val is Dictionary):
+			out.append({})
+			continue
+		var inventory := {}
+		for key in Dictionary(inventory_val).keys():
+			var amount := int(Dictionary(inventory_val).get(key, 0))
+			if amount > 0:
+				inventory[str(key)] = amount
+		out.append(inventory)
+	return out
+
 static func _player_milestone_counts(state: GameState) -> Array[int]:
 	var out: Array[int] = []
 	for player_val in state.players:
@@ -373,6 +792,35 @@ static func _player_milestone_counts(state: GameState) -> Array[int]:
 			continue
 		var milestones_val = Dictionary(player_val).get("milestones", [])
 		out.append(Array(milestones_val).size() if milestones_val is Array else 0)
+	return out
+
+static func _player_milestone_ids(state: GameState) -> Array:
+	var out := []
+	for player_val in state.players:
+		if not (player_val is Dictionary):
+			out.append([])
+			continue
+		var milestones_val = Dictionary(player_val).get("milestones", [])
+		out.append(_sorted_unique_strings(milestones_val))
+	return out
+
+static func _sorted_unique_strings(value) -> Array[String]:
+	var out: Array[String] = []
+	if value is Array:
+		for item in Array(value):
+			var text := str(item)
+			if not text.is_empty() and not out.has(text):
+				out.append(text)
+	out.sort()
+	return out
+
+static func _string_array(value) -> Array[String]:
+	var out: Array[String] = []
+	if value is Array:
+		for item in Array(value):
+			var text := str(item).strip_edges()
+			if not text.is_empty():
+				out.append(text)
 	return out
 
 static func _prepare_output_file(path: String) -> Result:
@@ -396,6 +844,7 @@ static func _parse_args(args: Array[String]) -> Result:
 		"max_steps": DEFAULT_MAX_STEPS,
 		"budget_ms": DEFAULT_BUDGET_MS,
 		"trace_tail": DEFAULT_TRACE_TAIL,
+		"trace_detail": DEFAULT_TRACE_DETAIL,
 		"bot_id": DEFAULT_BOT_ID,
 		"profile": "",
 		"output_jsonl": "",
@@ -439,6 +888,11 @@ static func _parse_args(args: Array[String]) -> Result:
 			if not value.is_valid_int():
 				return Result.failure("--trace-tail must be an integer")
 			options["trace_tail"] = int(value)
+		elif arg.begins_with("--trace-detail="):
+			var value := arg.trim_prefix("--trace-detail=").strip_edges()
+			if not SUPPORTED_TRACE_DETAILS.has(value):
+				return Result.failure("--trace-detail must be one of: %s" % ", ".join(SUPPORTED_TRACE_DETAILS))
+			options["trace_detail"] = value
 		elif arg.begins_with("--bot="):
 			options["bot_id"] = arg.trim_prefix("--bot=").strip_edges()
 			options["explicit_bot_id"] = true
@@ -472,4 +926,4 @@ static func _parse_args(args: Array[String]) -> Result:
 	return Result.success(options)
 
 static func _print_usage() -> void:
-	print("Usage: tools/run_bot_selfplay.sh [--bot=random|greedy|strategy|osla|beam] [--bots=strategy,beam] [--profile=base_revenue_v1] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--output-jsonl=res://.godot/bot_selfplay.jsonl]")
+	print("Usage: tools/run_bot_selfplay.sh [--bot=random|greedy|strategy|osla|beam] [--bots=strategy,beam] [--profile=base_revenue_v1] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--trace-detail=compact|decision] [--output-jsonl=res://.godot/bot_selfplay.jsonl]")

@@ -39,6 +39,10 @@ func step(engine: GameEngine, player_id: int, bot, budget: TimeBudget = null) ->
 
 	var phase_before := str(observation.phase)
 	var sub_phase_before := str(observation.sub_phase)
+	var state_before := engine.get_state()
+	var round_before := int(state_before.round_number) if state_before != null else -1
+	var player_cash_before := _player_cash_snapshot(state_before)
+	var mandatory_completed_before := _mandatory_completed_snapshot(state_before)
 	var decision := _choose_command(engine, bot, observation, context, legal_action_ids, validate_fn, budget)
 	if decision == null:
 		return Result.failure("BotController.step: bot returned null decision")
@@ -56,14 +60,22 @@ func step(engine: GameEngine, player_id: int, bot, budget: TimeBudget = null) ->
 		return Result.failure("BotController.step: execute failed for %s: %s" % [str(decision.command), executed.error])
 
 	var state_after := engine.get_state()
+	var round_after := int(state_after.round_number) if state_after != null else -1
+	var player_cash_after := _player_cash_snapshot(state_after)
+	var mandatory_completed_after := _mandatory_completed_snapshot(state_after)
 	var trace_item := {
 		"player_id": player_id,
 		"action_id": decision.command.action_id,
 		"params": decision.command.params.duplicate(true),
+		"round_before": round_before,
 		"phase_before": phase_before,
 		"sub_phase_before": sub_phase_before,
+		"round_after": round_after,
 		"phase_after": str(state_after.phase) if state_after != null else "",
 		"sub_phase_after": str(state_after.sub_phase) if state_after != null else "",
+		"player_cash_before": player_cash_before,
+		"player_cash_after": player_cash_after,
+		"mandatory_actions_completed_added": _mandatory_completed_added(mandatory_completed_before, mandatory_completed_after),
 		"macro_action_id": decision.macro_action_id,
 		"score": decision.score,
 		"explanation": decision.explanation.duplicate(true),
@@ -193,4 +205,54 @@ func _last_trace_slice(count: int) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for i in range(start, last_trace.size()):
 		out.append(last_trace[i].duplicate(true))
+	return out
+
+static func _mandatory_completed_snapshot(state: GameState) -> Dictionary:
+	var out := {}
+	if state == null or not (state.round_state is Dictionary):
+		return out
+	var completed_val = state.round_state.get("mandatory_actions_completed", {})
+	if not (completed_val is Dictionary):
+		return out
+	var completed: Dictionary = completed_val
+	for player_id_val in completed.keys():
+		var player_id := int(player_id_val)
+		out[player_id] = _sorted_unique_strings(completed.get(player_id_val, []))
+	return out
+
+static func _player_cash_snapshot(state: GameState) -> Array[int]:
+	var out: Array[int] = []
+	if state == null or not (state.players is Array):
+		return out
+	for player_val in state.players:
+		if player_val is Dictionary:
+			out.append(int(Dictionary(player_val).get("cash", 0)))
+	return out
+
+static func _mandatory_completed_added(before: Dictionary, after: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var player_ids: Array[int] = []
+	for player_id_val in after.keys():
+		player_ids.append(int(player_id_val))
+	player_ids.sort()
+	for player_id in player_ids:
+		var before_actions := _sorted_unique_strings(before.get(player_id, []))
+		var after_actions := _sorted_unique_strings(after.get(player_id, []))
+		for action_id in after_actions:
+			if before_actions.has(action_id):
+				continue
+			out.append({
+				"player_id": player_id,
+				"action_id": action_id,
+			})
+	return out
+
+static func _sorted_unique_strings(value) -> Array[String]:
+	var out: Array[String] = []
+	if value is Array:
+		for item in Array(value):
+			var text := str(item).strip_edges()
+			if not text.is_empty() and not out.has(text):
+				out.append(text)
+	out.sort()
 	return out

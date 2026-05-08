@@ -3,6 +3,7 @@ extends RefCounted
 
 const CandidateGeneratorClass = preload("res://core/ai/candidates/candidate_generator.gd")
 const StrategyCandidateFilterClass = preload("res://core/ai/strategy/strategy_candidate_filter.gd")
+const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_income_analyzer.gd")
 const StrategyProfileClass = preload("res://core/ai/strategy/strategy_profile.gd")
 const StrategyScorerClass = preload("res://core/ai/strategy/strategy_scorer.gd")
 const ForwardSimulatorClass = preload("res://core/ai/simulation/forward_simulator.gd")
@@ -72,10 +73,12 @@ static func choose_command(
 	var attempted_simulations := 0
 	var expanded_nodes := 0
 	var deepest_depth := 0
+	var budget_expired := false
 	var initial_nodes: Array[Dictionary] = []
 	var root_limit := mini(top_k_per_node, root_scored.size())
 	for i in range(root_limit):
 		if budget != null and budget.expired() and attempted_simulations > 0:
+			budget_expired = true
 			break
 		var root_entry: Dictionary = root_scored[i]
 		var root_macro: MacroAction = root_entry.get("macro", null)
@@ -115,10 +118,12 @@ static func choose_command(
 
 	for depth in range(2, max_depth + 1):
 		if budget != null and budget.expired():
+			budget_expired = true
 			break
 		var next_nodes: Array[Dictionary] = []
 		for node_val in beam:
 			if budget != null and budget.expired():
+				budget_expired = true
 				break
 			var node: Dictionary = node_val
 			var expansion_read := _expand_node(
@@ -129,6 +134,7 @@ static func choose_command(
 				top_k_per_node,
 				opponent_weight,
 				path_discount,
+				budget,
 				discarded
 			)
 			if not expansion_read.ok:
@@ -137,6 +143,8 @@ static func choose_command(
 			var expansion: Dictionary = expansion_read.value
 			attempted_simulations += int(expansion.get("attempted_simulations", 0))
 			expanded_nodes += int(expansion.get("expanded_nodes", 0))
+			if bool(expansion.get("budget_expired", false)):
+				budget_expired = true
 			var children: Array = expansion.get("nodes", [])
 			for child_val in children:
 				if not (child_val is Dictionary):
@@ -167,6 +175,7 @@ static func choose_command(
 	features["beam_deepest_depth"] = deepest_depth
 	features["beam_top_k_per_node"] = top_k_per_node
 	features["beam_path"] = Array(best_node.get("path", [])).duplicate(true)
+	features["beam_selected_depth"] = int(best_node.get("depth", 0))
 	features["beam_path_score"] = float(best_node.get("path_score", 0.0))
 	features["beam_eval_score"] = float(best_node.get("eval_score", 0.0))
 	features["beam_evaluator_weight"] = evaluator_weight
@@ -174,6 +183,10 @@ static func choose_command(
 	features["beam_path_discount"] = path_discount
 	features["beam_attempted_simulations"] = attempted_simulations
 	features["beam_expanded_nodes"] = expanded_nodes
+	features["beam_budget_expired"] = budget_expired
+	features["beam_budget_ms"] = int(budget.budget_ms) if budget != null else -1
+	features["beam_budget_elapsed_ms"] = int(budget.elapsed_ms()) if budget != null else -1
+	features["beam_budget_remaining_ms"] = int(budget.remaining_ms()) if budget != null else -1
 
 	var top_nodes := _top_node_trace(all_evaluated, 5)
 	return Result.success(BotDecision.create(
@@ -186,6 +199,7 @@ static func choose_command(
 			"valid_candidate_count": all_evaluated.size(),
 			"attempted_simulations": attempted_simulations,
 			"expanded_nodes": expanded_nodes,
+			"budget_expired": budget_expired,
 			"filter_stats": Dictionary(root_payload.get("filter_stats", {})).duplicate(true),
 		},
 		{
@@ -199,6 +213,7 @@ static func choose_command(
 			"valid_candidate_count": all_evaluated.size(),
 			"attempted_simulations": attempted_simulations,
 			"expanded_nodes": expanded_nodes,
+			"budget_expired": budget_expired,
 			"beam_width": beam_width,
 			"max_depth": max_depth,
 			"deepest_depth": deepest_depth,
@@ -239,7 +254,12 @@ static func _generate_scored_candidates(
 		return Result.failure("no candidates generated")
 	discarded.append_array(_copy_string_array(gen_payload.get("discarded_reasons", [])))
 
-	var filter_payload: Dictionary = StrategyCandidateFilterClass.filter_candidates(observation, candidates, profile)
+	var source_state := engine.get_state()
+	var income_analysis := StrategyIncomeAnalyzerClass.analyze(observation, profile, source_state)
+	var filter_payload: Dictionary = StrategyCandidateFilterClass.filter_candidates(observation, candidates, profile, {
+		"source_state": source_state,
+		"income_analysis": income_analysis,
+	})
 	var filtered_val = filter_payload.get("candidates", [])
 	if not (filtered_val is Array):
 		return Result.failure("StrategyCandidateFilter returned invalid candidates")
@@ -266,6 +286,7 @@ static func _expand_node(
 	top_k_per_node: int,
 	opponent_weight: float,
 	path_discount: float,
+	budget: TimeBudget,
 	discarded: Array[String]
 ) -> Result:
 	var engine: GameEngine = node.get("engine", null)
@@ -307,10 +328,14 @@ static func _expand_node(
 	var attempted := 0
 	var expanded := 0
 	var children: Array[Dictionary] = []
+	var budget_expired := false
 	var contribution_factor := 1.0 if actor == root_player_id else -maxf(0.0, opponent_weight)
 	var depth := int(node.get("depth", 0)) + 1
 	var discount := pow(path_discount, float(maxi(0, depth - 1)))
 	for i in range(limit):
+		if budget != null and budget.expired() and attempted > 0:
+			budget_expired = true
+			break
 		var entry: Dictionary = scored[i]
 		var macro: MacroAction = entry.get("macro", null)
 		if macro == null or macro.commands.is_empty():
@@ -341,6 +366,7 @@ static func _expand_node(
 		"nodes": children,
 		"attempted_simulations": attempted,
 		"expanded_nodes": expanded,
+		"budget_expired": budget_expired,
 	})
 
 static func _score_candidates(
