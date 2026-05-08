@@ -55,6 +55,57 @@
 
 不再把 GreedyBot 调成“会玩”的 Bot，不要求它完整打完 2p base 局，也不继续为长期经济规划、里程碑路线、对手反制等目标堆单步贪心补丁。真正的人机对手从 `StrategyBot` 起步，用长期计划和阶段策略驱动候选选择。
 
+### 0.5 当前进度追踪
+
+本节作为后续开发的进度账本。每完成一个阶段性步骤，先更新这里的状态、验证结果、已知问题和下一步计划，再提交代码。
+
+最近快照：
+
+- 日期：2026-05-08
+- 提交：`6a937463 feat(ai): implement strategy bot planning`
+- 远端分支：`origin/bot`
+- 验证：
+  - `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`
+  - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`
+  - 结果：compile PASS，`AllTests` 424/424 PASS，耗时约 110s。Godot headless 退出时仍会输出既有 RID/resource leak warning；以测试脚本 summary 为准。
+
+当前阶段判断：
+
+- Phase -1 到 Phase 5 已基本落地：规则对齐、观察层、候选生成、fork/preview、Greedy smoke、StrategyBot MVP、OSLA/Beam 最小搜索入口均已实现并有测试覆盖。
+- Phase 6 已进入可运行状态：selfplay、matrix、profile sweep、profile variant 生成和 summary 工具已提交，可以开始更大规模实验。
+- 当前 StrategyBot 是“可测试的 MVP”，不是最终强度版本。它已经能在固定场景和轻量自对弈中形成基础收入路线，但还没有达到“合格玩家级对手”的验收标准。
+
+已完成的关键能力：
+
+- `StrategyScorer` 已拆出阶段策略组件：`StrategyPhasePlanner`、`StrategyRoutePlanner`、`StrategyEmployeePlanner`、`StrategyRecruitPlanner`、`StrategySetupPlanner`、`StrategySupplyPlanner`、`StrategyTrainPlanner`、`StrategyMarketingPlanner`、`StrategyStructurePlanner`、`StrategySupportPlanner`、`StrategyCashPlanner`、`StrategyDinnerPlanner`。
+- `MarketingPressureAnalyzer` / `StrategyRecoveryPlanner` 已把三类常见玩家响应建成显式结构：
+  - 换客户群体/换房屋：寻找己方仍能服务且竞争可赢的房屋。
+  - 降价：通过 `PricingPipeline` 和 lower-price pressure 识别可恢复需求。
+  - 换产品卡对手：营销对手当前计划无法完整供应的产品，破坏其完整订单。
+- 营销候选不再只看覆盖范围；它会检查是否影响战略上有用的房屋、己方是否能当前或未来供应、是否会只给对手创造销售机会，以及真实 MarketingPreview 是否实际新增需求。
+- 开局餐厅评分已加入竞争安全、road graph 距离、营销路线可达性和独立 billboard 板件数，降低“只靠一个容易被抢占的板件”的开局。
+- 供给逻辑区分当前可销售缺口、price recovery 缺口、product switch 缺口、pending marketing 规划缺口和无冰箱时不能提前兑现的未来需求。
+- Scenario benchmark 已成为 StrategyBot 开发主闸门，覆盖营销结算、训练补产能、饮料路线、价格路线、waitress、Payday 裁员、Cleanup 冰箱保留、关键里程碑预览等路线级断点。
+- 自对弈工具已能输出 JSONL、summary、mandatory completion、search metrics、玩家现金/员工/库存/里程碑统计和 tuning objective。
+
+当前已知问题与风险：
+
+- 大规模自对弈仍是 smoke 和诊断工具，不应直接当作强度指标。近期 60 局 probe 曾发现少数 seed 中一方长期没有正现金，根因包括开局营销路线被抢占、只有单一基本 billboard 路线、候选缺少替代客户群体等；当前已增加路线选项/板件数建模，但仍需要重新跑更大规模矩阵确认。
+- 目前 profile 权重仍是人工构造的基线。单参数 sweep 不足以说明问题，因为一个合理参数可能被其他不合理权重拖累；后续调参必须使用多参数候选、至少 3 个以上 seed，并结合对局日志人工检查异常。
+- 自对弈指标不能使用“双方动作分化”这类只对 bot-vs-bot 有意义、对真实对局无直接价值的指标。优先看收入形成速度、收入形成后现金底线、可销售需求兑现率、关键路线覆盖、异常对局存档。
+- OSLA/Beam 当前主要用于验证 fork simulation、trace、预算和多步接口；它们还不是默认强度路线。MCTS 暂不进入，等 StrategyBot 场景闸门和 profile 基线稳定后再评估。
+- 新房/新餐厅扩张路线仍按低优先级处理。实际游戏中建造新房屋较少，当前阶段优先保证初始餐厅、营销、产能、价格和现金安全路线。
+- 严格隐藏信息接口已有基础要求，但后续产品接入、在线配置和调试 UI 仍需继续确认不会暴露对手隐藏信息。
+- Godot 会生成大量未跟踪 `.uid` 文件；这些不是本阶段 AI 逻辑源码，不应纳入策略提交。
+
+下一步计划：
+
+1. **补结构性恢复场景基准**：为“换客户/房屋”“降价恢复需求”“换产品卡对手产能缺口”分别补 deterministic scenario，确保这些不是单纯权重效果。
+2. **重跑更大规模 StrategyBot selfplay**：用 `base_revenue_growth_v1`，至少 3 个以上 seed，优先覆盖 target round 10/12；对所有无正现金、现金回落、无需求采购饮料、营销无收益等异常输出存档或 trace。
+3. **整理调参实验协议**：使用 profile variant manifest 和 tuning matrix 做多参数组合实验；每组 profile 至少跑相同 seed 集，summary 中优先比较 `cash_min_after_first_positive`、`cash_max_seen`、里程碑覆盖、收入形成轮次和异常局数量。
+4. **人工检查异常对局**：对 summary 标记的低现金或无销售局生成典型存档，确认是权重问题、候选缺失、规则建模问题还是搜索/预览问题。
+5. **再进入搜索增强**：只有当 StrategyBot 在场景基准和中等规模 selfplay 中稳定后，再扩展 OSLA/Beam 的 horizon、opponent policy 和预算分配；MCTS 作为更后续阶段，不用于当前问题的短期修补。
+
 ## 1. 当前代码基线
 
 ### 1.1 核心入口
@@ -1382,6 +1433,7 @@ Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[f
 - [x] GreedyBot 作为流程 smoke baseline 能到第 3 轮或 GameOver。
 - [x] StrategyBot 最小骨架能到第 3 轮或 GameOver。
 - [x] OSLA / Beam 最小搜索骨架能通过 fixed seed smoke。
+- [x] StrategyBot 在固定场景基准与轻量 selfplay 中能形成基础收入路线。
 - [ ] StrategyBot 能形成稳定收入路线并完成 base 关键里程碑规划。
 - [x] 决策 trace 可解释最高分候选。
 - [x] 固定 seed 下 RandomLegalBot、GreedyBot、StrategyBot selfplay deterministic；OSLA / Beam 已有 targeted deterministic test。
