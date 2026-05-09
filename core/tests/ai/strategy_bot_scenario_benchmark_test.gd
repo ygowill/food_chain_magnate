@@ -74,6 +74,21 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 		return _scenario_failure("marketing_generation_discards_competitor_captured_candidates", marketing_competition_filter)
 	names.append("marketing_generation_discards_competitor_captured_candidates")
 
+	var recovery_customer_switch := _scenario_recovery_customer_switch_values_alternate_house(seed_val)
+	if not recovery_customer_switch.ok:
+		return _scenario_failure("recovery_customer_switch_values_alternate_house", recovery_customer_switch)
+	names.append("recovery_customer_switch_values_alternate_house")
+
+	var recovery_price_action := _scenario_recovery_price_action_recovers_lost_demand(seed_val)
+	if not recovery_price_action.ok:
+		return _scenario_failure("recovery_price_action_recovers_lost_demand", recovery_price_action)
+	names.append("recovery_price_action_recovers_lost_demand")
+
+	var recovery_product_switch := _scenario_recovery_product_switch_marketing_targets_opponent_capacity_gap(seed_val)
+	if not recovery_product_switch.ok:
+		return _scenario_failure("recovery_product_switch_marketing_targets_opponent_capacity_gap", recovery_product_switch)
+	names.append("recovery_product_switch_marketing_targets_opponent_capacity_gap")
+
 	var billboard_marketing_route := _scenario_billboard_marketing_claims_first_billboard_and_sells(seed_val)
 	if not billboard_marketing_route.ok:
 		return _scenario_failure("billboard_marketing_claims_first_billboard_and_sells", billboard_marketing_route)
@@ -822,6 +837,165 @@ static func _scenario_marketing_generation_discards_competitor_captured_candidat
 			break
 	if not saw_competition_discard:
 		return Result.failure("CandidateGenerator should report discarded competitor-captured marketing candidates")
+	return Result.success()
+
+static func _scenario_recovery_customer_switch_values_alternate_house(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	DinnertimeSettlementTestClass._force_turn_order(state)
+	DinnertimeSettlementTestClass._apply_test_map(state)
+	DinnertimeSettlementTestClass._set_house_demands(state, "house_left", [])
+	DinnertimeSettlementTestClass._set_house_demands(state, "house_right", [{"product": "burger"}])
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_MARKETING
+	state.current_player_index = 0
+	state.players[0]["employees"] = ["campaign_manager", "burger_cook"]
+	state.players[1]["employees"] = ["burger_cook"]
+	state.players[0]["inventory"] = {"burger": 1}
+	state.players[1]["inventory"] = {"burger": 2}
+	_reset_round_state_for_ai_step(state)
+	var observation_read := ObservationAdapterClass.observe_for_player(engine, 0)
+	if not observation_read.ok:
+		return observation_read
+	var observation: ObservationState = observation_read.value
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var alternate_house_macro := MacroAction.create(
+		"recovery_customer_switch_alternate_house",
+		[Command.create("initiate_marketing", 0, {"employee_type": "campaign_manager", "marketing_type": "billboard", "board_number": 11, "product": "burger", "position": [0, 2]})],
+		0.0,
+		["working", "marketing"],
+		{"affected_house_ids": ["house_left"]}
+	)
+	var captured_house_macro := MacroAction.create(
+		"recovery_customer_switch_captured_house",
+		[Command.create("initiate_marketing", 0, {"employee_type": "campaign_manager", "marketing_type": "billboard", "board_number": 12, "product": "burger", "position": [8, 2]})],
+		0.0,
+		["working", "marketing"],
+		{"affected_house_ids": ["house_right"]}
+	)
+	var skip_macro := MacroAction.create(
+		"skip_customer_switch_recovery",
+		[Command.create("skip_sub_phase", 0, {})],
+		0.0,
+		["working", "fallback"],
+		{}
+	)
+	var score_options := {"source_state": state}
+	var alternate_score: Dictionary = StrategyScorerClass.score_macro(observation, alternate_house_macro, profile, score_options)
+	var captured_score: Dictionary = StrategyScorerClass.score_macro(observation, captured_house_macro, profile, score_options)
+	var skip_score: Dictionary = StrategyScorerClass.score_macro(observation, skip_macro, profile, score_options)
+	var features: Dictionary = Dictionary(alternate_score.get("features", {}))
+	if int(features.get("marketing_self_capture_houses", 0)) <= 0:
+		return Result.failure("alternate house marketing should expose self-captured house: %s" % str(features))
+	if int(features.get("marketing_recovery_lost_to_competitor_demand", 0)) <= 0:
+		return Result.failure("alternate house recovery should see lost competitor demand elsewhere: %s" % str(features))
+	if not Array(features.get("marketing_recovery_modes", [])).has("customer_switch"):
+		return Result.failure("alternate house recovery should expose customer_switch mode: %s" % str(features))
+	if float(features.get("marketing_recovery_value", 0.0)) <= 0.0:
+		return Result.failure("alternate house recovery should have positive recovery value: %s" % str(features))
+	if float(alternate_score.get("score", 0.0)) <= float(captured_score.get("score", 0.0)):
+		return Result.failure("customer switch should prefer alternate own-serviceable house over captured house: alternate=%s captured=%s" % [str(alternate_score), str(captured_score)])
+	if float(alternate_score.get("score", 0.0)) <= float(skip_score.get("score", 0.0)):
+		return Result.failure("customer switch should beat skip when an alternate house is serviceable: alternate=%s skip=%s" % [str(alternate_score), str(skip_score)])
+	return Result.success()
+
+static func _scenario_recovery_price_action_recovers_lost_demand(seed_val: int) -> Result:
+	var engine_read := _build_income_route_contested_price_action_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var bot = StrategyBotClass.new()
+	var controller := BotControllerClass.new()
+	var step := controller.step(engine, 0, bot, TimeBudget.start(80))
+	if not step.ok:
+		return Result.failure("price recovery action step failed: %s" % step.error)
+	var trace: Dictionary = step.value
+	if str(trace.get("action_id", "")) != "set_price":
+		return Result.failure("expected price recovery to execute set_price, got %s" % str(trace))
+	var features: Dictionary = Dictionary(Dictionary(trace.get("explanation", {})).get("features", {}))
+	if int(features.get("income_total_price_recoverable_demand", 0)) <= 0:
+		return Result.failure("price recovery should expose income_total_price_recoverable_demand: %s" % str(features))
+	if not bool(features.get("price_recovery_needed", false)):
+		return Result.failure("price recovery should mark recovery_needed: %s" % str(features))
+	if not Array(features.get("price_recovery_modes", [])).has("price_recovery"):
+		return Result.failure("price recovery should expose price_recovery mode: %s" % str(features))
+	if float(features.get("price_recovery_value", 0.0)) <= 0.0:
+		return Result.failure("price recovery should add positive recovery value: %s" % str(features))
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null after price recovery action")
+	var cash_before := int(Dictionary(state.players[0]).get("cash", 0))
+	var dinner := DinnertimeSettlementTestClass._advance_to_dinnertime(engine)
+	if not dinner.ok:
+		return dinner
+	state = engine.get_state()
+	if int(Dictionary(state.players[0]).get("cash", 0)) <= cash_before:
+		return Result.failure("price recovery action should convert recovered demand into sale, before=%d after=%d" % [cash_before, int(Dictionary(state.players[0]).get("cash", 0))])
+	return Result.success()
+
+static func _scenario_recovery_product_switch_marketing_targets_opponent_capacity_gap(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	DinnertimeSettlementTestClass._force_turn_order(state)
+	DinnertimeSettlementTestClass._apply_test_map(state)
+	DinnertimeSettlementTestClass._set_house_demands(state, "house_right", [{"product": "burger"}])
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_MARKETING
+	state.current_player_index = 0
+	state.players[0]["employees"] = ["campaign_manager"]
+	state.players[1]["employees"] = ["burger_cook"]
+	state.players[0]["inventory"] = {}
+	state.players[1]["inventory"] = {}
+	_reset_round_state_for_ai_step(state)
+	var observation_read := ObservationAdapterClass.observe_for_player(engine, 0)
+	if not observation_read.ok:
+		return observation_read
+	var observation: ObservationState = observation_read.value
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var disruptive_macro := MacroAction.create(
+		"recovery_product_switch_marketing_pizza",
+		[Command.create("initiate_marketing", 0, {"employee_type": "campaign_manager", "marketing_type": "billboard", "board_number": 11, "product": "pizza", "position": [8, 2]})],
+		0.0,
+		["working", "marketing"],
+		{"affected_house_ids": ["house_right"]}
+	)
+	var skip_macro := MacroAction.create(
+		"skip_product_switch_recovery",
+		[Command.create("skip_sub_phase", 0, {})],
+		0.0,
+		["working", "fallback"],
+		{}
+	)
+	var score_options := {"source_state": state}
+	var disruptive_score: Dictionary = StrategyScorerClass.score_macro(observation, disruptive_macro, profile, score_options)
+	var skip_score: Dictionary = StrategyScorerClass.score_macro(observation, skip_macro, profile, score_options)
+	var features: Dictionary = Dictionary(disruptive_score.get("features", {}))
+	if int(features.get("marketing_opponent_capacity_gap_houses", 0)) != 1:
+		return Result.failure("product switch should expose one opponent capacity gap house: %s" % str(features))
+	if int(features.get("marketing_opponent_capacity_gap_prevented_sales", 0)) != 1:
+		return Result.failure("product switch should expose one prevented opponent sale: %s" % str(features))
+	if not Array(features.get("marketing_opponent_capacity_gap_products", [])).has("pizza"):
+		return Result.failure("product switch should expose pizza as gap product: %s" % str(features))
+	if str(features.get("marketing_pressure_mode", "")) != "opponent_pressure":
+		return Result.failure("product switch should be opponent_pressure marketing: %s" % str(features))
+	if not Array(features.get("marketing_recovery_modes", [])).has("product_switch"):
+		return Result.failure("product switch should expose product_switch recovery mode: %s" % str(features))
+	if float(features.get("marketing_recovery_value", 0.0)) <= 0.0:
+		return Result.failure("product switch should add positive recovery value: %s" % str(features))
+	if float(disruptive_score.get("score", 0.0)) <= float(skip_score.get("score", 0.0)):
+		return Result.failure("product switch opponent-gap marketing should beat skip: disruptive=%s skip=%s" % [str(disruptive_score), str(skip_score)])
 	return Result.success()
 
 static func _scenario_billboard_marketing_claims_first_billboard_and_sells(seed_val: int) -> Result:

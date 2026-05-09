@@ -22,6 +22,10 @@ build/
 # macOS
 .DS_Store
 
+# Godot import sidecars
+*.import
+*.uid
+
 .claude/
 
 node_modules/

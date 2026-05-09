@@ -1,18 +1,19 @@
-class_name OSLABot
+class_name MCTSBot
 extends "res://core/ai/bot/fcm_bot.gd"
 
-const OSLASearchClass = preload("res://core/ai/search/osla_search.gd")
-const StrategyBotClass = preload("res://core/ai/bot/strategy_bot.gd")
+const MCTSSearchClass = preload("res://core/ai/search/mcts_search.gd")
+const BeamBotClass = preload("res://core/ai/bot/beam_bot.gd")
 const StrategyPhasePlannerClass = preload("res://core/ai/strategy/strategy_phase_planner.gd")
 const StrategyProfileClass = preload("res://core/ai/strategy/strategy_profile.gd")
 
 var search_options: Dictionary = {
-	"max_candidates": 6,
-	"opponent_max_candidates": 3,
-	"opponent_max_valid_per_action": 3,
-	"opponent_response_horizon": 1,
+	"mcts_iterations": 24,
+	"mcts_max_depth": 3,
+	"mcts_top_k_per_node": 4,
+	"mcts_exploration": 1.25,
+	"mcts_min_simulation_budget_ms": 24,
 }
-var fallback_bot = StrategyBotClass.new()
+var fallback_bot = BeamBotClass.new()
 
 func configure_profile(profile_source: String) -> Result:
 	var loaded = StrategyProfileClass.new()
@@ -48,7 +49,7 @@ func choose_command_with_engine(
 		search_options.get("profile", null),
 		search_options
 	)
-	var search_read := OSLASearchClass.choose_command(
+	var search_read := MCTSSearchClass.choose_command(
 		engine,
 		observation,
 		context,
@@ -66,9 +67,9 @@ func choose_command_with_engine(
 	else:
 		fallback = fallback_bot.choose_command_with_engine(engine, observation, context, legal_action_ids, validate_command, budget)
 	if fallback != null and not fallback.is_failure():
-		fallback.trace["osla_failure"] = search_read.error
+		fallback.trace["mcts_failure"] = search_read.error
 		if budget != null and budget.expired():
 			fallback.trace["fallback_after_budget_expired"] = true
-		fallback.explanation["fallback"] = "strategy"
+		fallback.explanation["fallback"] = "beam"
 		return fallback
-	return BotDecision.failure("OSLABot failed: %s" % search_read.error)
+	return BotDecision.failure("MCTSBot failed: %s" % search_read.error)

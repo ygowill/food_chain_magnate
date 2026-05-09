@@ -212,6 +212,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var restaurant_opening_robustness := _test_initial_restaurant_placement_values_opening_robustness(seed_val)
 	if not restaurant_opening_robustness.ok:
 		return restaurant_opening_robustness
+	var restaurant_opening_dominance := _test_initial_restaurant_placement_prefers_broader_opening_route()
+	if not restaurant_opening_dominance.ok:
+		return restaurant_opening_dominance
 	var second_player_opening_route := _test_strategy_bot_opens_second_player_marketing_route()
 	if not second_player_opening_route.ok:
 		return second_player_opening_route
@@ -370,8 +373,45 @@ static func _test_phase_planner_classifies_strategy_context(seed_val: int) -> Re
 		return Result.failure("StrategyPhasePlanner should classify Working/Train: %s" % str(train_plan))
 	if str(train_plan.get("goal", "")) != "income_route":
 		return Result.failure("StrategyPhasePlanner should mark Working/Train as income route: %s" % str(train_plan))
-	if int(train_plan.get("max_valid_per_action", 0)) != int(profile.max_valid_per_action):
-		return Result.failure("StrategyPhasePlanner should carry profile candidate budget: %s" % str(train_plan))
+	if int(train_plan.get("max_valid_per_action", 0)) != 16:
+		return Result.failure("StrategyPhasePlanner should expand Working/Train candidate budget to sixteen: %s" % str(train_plan))
+	var train_search_hints: Dictionary = Dictionary(train_plan.get("search_hints", {}))
+	if int(train_search_hints.get("beam_width", 0)) != 5:
+		return Result.failure("Working/Train should widen beam search: %s" % str(train_search_hints))
+	if int(train_search_hints.get("max_depth", 0)) != 3:
+		return Result.failure("Working/Train should keep a depth-3 horizon: %s" % str(train_search_hints))
+	if int(train_search_hints.get("top_k_per_node", 0)) != 4:
+		return Result.failure("Working/Train should broaden per-node candidates: %s" % str(train_search_hints))
+	if int(train_search_hints.get("max_candidates", 0)) != 8:
+		return Result.failure("Working/Train should broaden OSLA candidates: %s" % str(train_search_hints))
+	if int(train_search_hints.get("opponent_max_candidates", 0)) != 3:
+		return Result.failure("Working/Train should keep opponent response breadth at three: %s" % str(train_search_hints))
+	var train_search_options := StrategyPhasePlannerClass.build_search_options(train_observation, train_context, profile)
+	if int(train_search_options.get("max_valid_per_action", 0)) != 16:
+		return Result.failure("StrategyPhasePlanner.build_search_options should merge train candidate budget sixteen: %s" % str(train_search_options))
+	if int(train_search_options.get("beam_width", 0)) != 5:
+		return Result.failure("StrategyPhasePlanner.build_search_options should merge train beam width: %s" % str(train_search_options))
+
+	var oob_observation := _synthetic_order_of_business_observation()
+	var oob_context := AiDecisionContext.create(
+		0,
+		DefsClass.PHASE_ORDER_OF_BUSINESS,
+		"",
+		1,
+		seed_val,
+		[]
+	)
+	var oob_plan: Dictionary = StrategyPhasePlannerClass.plan(oob_observation, oob_context, profile)
+	if str(oob_plan.get("id", "")) != "order_of_business_tempo":
+		return Result.failure("StrategyPhasePlanner should classify OrderOfBusiness tempo: %s" % str(oob_plan))
+	if str(oob_plan.get("goal", "")) != "tempo":
+		return Result.failure("StrategyPhasePlanner should mark OrderOfBusiness as tempo: %s" % str(oob_plan))
+	var oob_search_hints: Dictionary = Dictionary(oob_plan.get("search_hints", {}))
+	if int(oob_search_hints.get("opponent_response_horizon", 0)) != 2:
+		return Result.failure("OrderOfBusiness should use a two-step opponent response horizon: %s" % str(oob_search_hints))
+	var oob_search_options := StrategyPhasePlannerClass.build_search_options(oob_observation, oob_context, profile)
+	if int(oob_search_options.get("opponent_response_horizon", 0)) != 2:
+		return Result.failure("StrategyPhasePlanner.build_search_options should merge OrderOfBusiness response horizon: %s" % str(oob_search_options))
 
 	var reserve_observation := _synthetic_reserve_card_observation()
 	var reserve_context := AiDecisionContext.create(
@@ -403,6 +443,61 @@ static func _test_phase_planner_classifies_strategy_context(seed_val: int) -> Re
 		return Result.failure("StrategyPhasePlanner should classify Setup restaurant placement: %s" % str(setup_restaurant_plan))
 	if int(setup_restaurant_plan.get("max_valid_per_action", 0)) < 64:
 		return Result.failure("Setup restaurant placement should broaden candidate coverage: %s" % str(setup_restaurant_plan))
+	var setup_restaurant_search_hints: Dictionary = Dictionary(setup_restaurant_plan.get("search_hints", {}))
+	if int(setup_restaurant_search_hints.get("max_valid_per_action", 0)) < 64:
+		return Result.failure("Setup restaurant placement should widen search candidate coverage: %s" % str(setup_restaurant_search_hints))
+	if int(setup_restaurant_search_hints.get("beam_width", 0)) != 6:
+		return Result.failure("Setup restaurant placement should widen beam search: %s" % str(setup_restaurant_search_hints))
+	if int(setup_restaurant_search_hints.get("max_depth", 0)) != 2:
+		return Result.failure("Setup restaurant placement should stay shallow: %s" % str(setup_restaurant_search_hints))
+	if int(setup_restaurant_search_hints.get("max_candidates", 0)) != 10:
+		return Result.failure("Setup restaurant placement should broaden OSLA candidates: %s" % str(setup_restaurant_search_hints))
+	var setup_restaurant_search_options := StrategyPhasePlannerClass.build_search_options(setup_restaurant_observation, setup_restaurant_context, profile)
+	if int(setup_restaurant_search_options.get("max_valid_per_action", 0)) < 64:
+		return Result.failure("StrategyPhasePlanner.build_search_options should preserve setup restaurant candidate coverage: %s" % str(setup_restaurant_search_options))
+	if int(setup_restaurant_search_options.get("beam_width", 0)) != 6:
+		return Result.failure("StrategyPhasePlanner.build_search_options should merge setup restaurant beam width: %s" % str(setup_restaurant_search_options))
+
+	var growth_observation := _synthetic_house_growth_observation()
+	growth_observation.phase = DefsClass.PHASE_WORKING
+	growth_observation.sub_phase = DefsClass.SUB_PHASE_PLACE_HOUSES
+	var growth_context := AiDecisionContext.create(
+		0,
+		DefsClass.PHASE_WORKING,
+		DefsClass.SUB_PHASE_PLACE_HOUSES,
+		1,
+		seed_val,
+		[]
+	)
+	var growth_plan: Dictionary = StrategyPhasePlannerClass.plan(growth_observation, growth_context, profile)
+	if str(growth_plan.get("id", "")) != "working_place_houses_growth":
+		return Result.failure("StrategyPhasePlanner should classify Working/PlaceHouses growth: %s" % str(growth_plan))
+	var growth_search_hints: Dictionary = Dictionary(growth_plan.get("search_hints", {}))
+	if int(growth_search_hints.get("beam_width", 0)) != 6:
+		return Result.failure("Working/PlaceHouses should widen beam search: %s" % str(growth_search_hints))
+	if int(growth_search_hints.get("max_depth", 0)) != 4:
+		return Result.failure("Working/PlaceHouses should deepen the search horizon: %s" % str(growth_search_hints))
+	if int(growth_search_hints.get("top_k_per_node", 0)) != 5:
+		return Result.failure("Working/PlaceHouses should broaden per-node candidates: %s" % str(growth_search_hints))
+	if int(growth_search_hints.get("max_candidates", 0)) != 10:
+		return Result.failure("Working/PlaceHouses should broaden OSLA candidates: %s" % str(growth_search_hints))
+	if int(growth_search_hints.get("opponent_max_candidates", 0)) != 4:
+		return Result.failure("Working/PlaceHouses should widen opponent response breadth: %s" % str(growth_search_hints))
+	if int(growth_search_hints.get("opponent_max_valid_per_action", 0)) != 4:
+		return Result.failure("Working/PlaceHouses should widen opponent valid-action coverage: %s" % str(growth_search_hints))
+	if int(growth_search_hints.get("max_valid_per_action", 0)) != 24:
+		return Result.failure("Working/PlaceHouses should widen candidate coverage to twenty-four: %s" % str(growth_search_hints))
+	var growth_search_options := StrategyPhasePlannerClass.build_search_options(growth_observation, growth_context, profile)
+	if int(growth_search_options.get("max_valid_per_action", 0)) != 24:
+		return Result.failure("StrategyPhasePlanner.build_search_options should merge growth candidate coverage: %s" % str(growth_search_options))
+	if int(growth_search_options.get("max_depth", 0)) != 4:
+		return Result.failure("StrategyPhasePlanner.build_search_options should merge the deeper growth horizon: %s" % str(growth_search_options))
+	if int(growth_search_options.get("beam_width", 0)) != 6:
+		return Result.failure("StrategyPhasePlanner.build_search_options should merge growth beam width: %s" % str(growth_search_options))
+	if int(growth_search_options.get("opponent_max_candidates", 0)) != 4:
+		return Result.failure("StrategyPhasePlanner.build_search_options should merge growth opponent breadth: %s" % str(growth_search_options))
+	if int(growth_search_options.get("opponent_max_valid_per_action", 0)) != 4:
+		return Result.failure("StrategyPhasePlanner.build_search_options should merge growth opponent valid-action coverage: %s" % str(growth_search_options))
 
 	var payday_observation := _synthetic_payday_observation()
 	var payday_context := AiDecisionContext.create(
@@ -3678,6 +3773,59 @@ static func _test_initial_restaurant_placement_values_opening_robustness(seed_va
 		return Result.failure("opening marketing route options should include board-level alternatives: %s" % str(robust_features))
 	return Result.success()
 
+static func _test_initial_restaurant_placement_prefers_broader_opening_route() -> Result:
+	var observation := ObservationState.new()
+	observation.phase = DefsClass.PHASE_SETUP
+	observation.sub_phase = ""
+	observation.own_player = {
+		"id": 0,
+		"cash": 0,
+		"employees": [],
+		"reserve_employees": [],
+		"busy_marketers": [],
+		"restaurants": [],
+		"inventory": {},
+	}
+	var singleton_entry := {
+		"macro_action_id": "initial_restaurant_singleton",
+		"action_id": "place_restaurant",
+		"params": {"position": [1, 1], "rotation": 0},
+		"score": 84.0,
+		"features": {
+			"restaurant_competitive_houses": 1,
+			"restaurant_contested_houses": 0,
+			"restaurant_competitor_dominated_houses": 0,
+			"restaurant_opening_marketing_route_houses": 1,
+			"restaurant_opening_marketing_route_board_count": 1,
+			"restaurant_opening_marketing_route_options": 1,
+		},
+	}
+	var broader_entry := {
+		"macro_action_id": "initial_restaurant_broader",
+		"action_id": "place_restaurant",
+		"params": {"position": [2, 2], "rotation": 0},
+		"score": 80.0,
+		"features": {
+			"restaurant_competitive_houses": 2,
+			"restaurant_contested_houses": 0,
+			"restaurant_competitor_dominated_houses": 0,
+			"restaurant_opening_marketing_route_houses": 3,
+			"restaurant_opening_marketing_route_board_count": 2,
+			"restaurant_opening_marketing_route_options": 4,
+		},
+	}
+	var filtered := StrategyBotClass._filter_unsafe_opening_restaurant_entries(observation, [singleton_entry, broader_entry])
+	var kept: Array = Array(filtered.get("ranked", []))
+	if kept.size() != 1:
+		return Result.failure("opening route filter should keep only the broader candidate: %s" % str(filtered))
+	var kept_entry: Dictionary = Dictionary(kept[0])
+	if str(kept_entry.get("macro_action_id", "")) != "initial_restaurant_broader":
+		return Result.failure("opening route filter should discard the singleton opening when a broader route exists: %s" % str(filtered))
+	var discarded_reasons: Array = Array(filtered.get("discarded_reasons", []))
+	if discarded_reasons.is_empty() or str(discarded_reasons[0]).find("broader marketing route") < 0:
+		return Result.failure("opening route filter should explain the dominance discard: %s" % str(filtered))
+	return Result.success()
+
 static func _test_strategy_bot_opens_second_player_marketing_route() -> Result:
 	var engine := GameEngine.new()
 	var init := engine.initialize(2, 331009)
@@ -3978,6 +4126,23 @@ static func _sorted_unique_strings(value) -> Array[String]:
 		out.append(str(key))
 	out.sort()
 	return out
+
+static func _synthetic_order_of_business_observation() -> ObservationState:
+	var observation := ObservationState.new()
+	observation.viewer_player_id = 0
+	observation.round_number = 1
+	observation.phase = DefsClass.PHASE_ORDER_OF_BUSINESS
+	observation.sub_phase = ""
+	observation.own_player = {
+		"id": 0,
+		"cash": 20,
+		"employees": [],
+		"reserve_employees": [],
+		"busy_marketers": [],
+		"restaurants": [],
+		"inventory": {},
+	}
+	return observation
 
 static func _synthetic_reserve_card_observation() -> ObservationState:
 	var observation := ObservationState.new()

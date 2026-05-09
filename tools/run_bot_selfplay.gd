@@ -6,6 +6,7 @@ const GreedyBotClass = preload("res://core/ai/bot/greedy_bot.gd")
 const StrategyBotClass = preload("res://core/ai/bot/strategy_bot.gd")
 const OSLABotClass = preload("res://core/ai/bot/osla_bot.gd")
 const BeamBotClass = preload("res://core/ai/bot/beam_bot.gd")
+const MCTSBotClass = preload("res://core/ai/bot/mcts_bot.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const StrategyProfileClass = preload("res://core/ai/strategy/strategy_profile.gd")
 
@@ -19,7 +20,7 @@ const DEFAULT_BUDGET_MS := 80
 const DEFAULT_TRACE_TAIL := 8
 const DEFAULT_TRACE_DETAIL := "compact"
 const DEFAULT_BOT_ID := "strategy"
-const SUPPORTED_BOT_IDS := ["random", "greedy", "strategy", "osla", "beam"]
+const SUPPORTED_BOT_IDS := ["random", "greedy", "strategy", "osla", "beam", "mcts"]
 const SUPPORTED_TRACE_DETAILS := ["compact", "decision"]
 const FOOD_PRODUCER_EMPLOYEE_IDS := [
 	"kitchen_trainee",
@@ -223,6 +224,8 @@ static func _create_bot(bot_id: String, profile_source: String = "") -> Result:
 			bot = OSLABotClass.new()
 		"beam":
 			bot = BeamBotClass.new()
+		"mcts":
+			bot = MCTSBotClass.new()
 		_:
 			return Result.failure("unknown bot: %s" % bot_id)
 	var profile := profile_source.strip_edges()
@@ -926,4 +929,4 @@ static func _parse_args(args: Array[String]) -> Result:
 	return Result.success(options)
 
 static func _print_usage() -> void:
-	print("Usage: tools/run_bot_selfplay.sh [--bot=random|greedy|strategy|osla|beam] [--bots=strategy,beam] [--profile=base_revenue_v1] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--trace-detail=compact|decision] [--output-jsonl=res://.godot/bot_selfplay.jsonl]")
+	print("Usage: tools/run_bot_selfplay.sh [--bot=random|greedy|strategy|osla|beam|mcts] [--bots=strategy,beam] [--profile=base_revenue_v1] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--trace-detail=compact|decision] [--output-jsonl=res://.godot/bot_selfplay.jsonl]")

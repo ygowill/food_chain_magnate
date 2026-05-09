@@ -9,6 +9,7 @@ const StrategyScorerClass = preload("res://core/ai/strategy/strategy_scorer.gd")
 const ForwardSimulatorClass = preload("res://core/ai/simulation/forward_simulator.gd")
 const ObservationAdapterClass = preload("res://core/ai/observation/observation_adapter.gd")
 const EvaluatorClass = preload("res://core/ai/evaluation/evaluator.gd")
+const SearchCandidateUtilsClass = preload("res://core/ai/search/search_candidate_utils.gd")
 const AiDecisionPointClass = preload("res://core/ai/bot/ai_decision_point.gd")
 const BotControllerClass = preload("res://core/ai/bot/bot_controller.gd")
 const LegalActionServiceClass = preload("res://core/ai/bot/legal_action_service.gd")
@@ -17,6 +18,7 @@ const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const DEFAULT_MAX_CANDIDATES := 6
 const DEFAULT_OPPONENT_MAX_CANDIDATES := 3
 const DEFAULT_EVALUATOR_WEIGHT := 0.35
+const DEFAULT_OPPONENT_RESPONSE_HORIZON := 1
 
 static func choose_command(
 	engine: GameEngine,
@@ -44,7 +46,7 @@ static func choose_command(
 
 	var gen_options := options.duplicate()
 	gen_options["source_state"] = engine.get_state()
-	gen_options["max_valid_per_action"] = maxi(1, int(profile.max_valid_per_action))
+	gen_options["max_valid_per_action"] = maxi(1, int(options.get("max_valid_per_action", profile.max_valid_per_action)))
 	var gen_read := CandidateGeneratorClass.generate(observation, context, legal_action_ids, validate_command, gen_options)
 	if not gen_read.ok:
 		return gen_read
@@ -76,8 +78,13 @@ static func choose_command(
 	if scored_candidates.is_empty():
 		return Result.failure("OSLASearch.choose_command: no candidates scored: %s" % "; ".join(discarded.slice(0, 8)))
 	_sort_scored_candidates(scored_candidates)
+	var dedupe_payload := _dedupe_scored_candidates(scored_candidates)
+	scored_candidates = SearchCandidateUtilsClass.copy_scored_candidates(dedupe_payload.get("scored", []))
+	var deduped_candidates := int(dedupe_payload.get("deduped_count", 0))
+	_sort_scored_candidates(scored_candidates)
 
 	var max_candidates := maxi(1, int(options.get("max_candidates", DEFAULT_MAX_CANDIDATES)))
+	var response_horizon := maxi(1, int(options.get("opponent_response_horizon", DEFAULT_OPPONENT_RESPONSE_HORIZON)))
 	var evaluator_weight := float(options.get("evaluator_weight", DEFAULT_EVALUATOR_WEIGHT))
 	var best_macro: MacroAction = null
 	var best_score := -INF
@@ -106,7 +113,7 @@ static func choose_command(
 			discarded.append("%s: simulation result missing engine" % macro.id)
 			continue
 
-		var response_payload := _simulate_opponent_response(eval_engine, context.player_id, profile, budget, options)
+		var response_payload := _simulate_opponent_response(eval_engine, context.player_id, profile, budget, options, response_horizon)
 		if response_payload.ok:
 			var response_data: Dictionary = Dictionary(response_payload.value)
 			var response_engine: GameEngine = response_data.get("engine", null)
@@ -137,14 +144,22 @@ static func choose_command(
 		features["osla_eval_score"] = eval_score
 		features["osla_evaluator_weight"] = evaluator_weight
 		features["osla_final_features"] = Dictionary(eval_payload.get("features", {})).duplicate(true)
+		features["osla_deduped_candidates"] = deduped_candidates
 		var response: Dictionary = Dictionary(entry.get("opponent_response", {}))
-		if str(response.get("response_skipped_reason", "")) == "budget expired":
+		if str(response.get("response_skipped_reason", "")) == "budget expired" or str(response.get("response_chain_stop_reason", "")) == "budget expired":
 			budget_expired = true
 		features["osla_opponent_response_macro_id"] = str(response.get("response_macro_id", ""))
 		features["osla_opponent_response_action_id"] = str(response.get("response_action_id", ""))
 		features["osla_opponent_response_score"] = float(response.get("response_score", 0.0))
 		features["osla_opponent_response_evaluated_count"] = int(response.get("response_evaluated_count", 0))
 		features["osla_opponent_response_skipped_reason"] = str(response.get("response_skipped_reason", ""))
+		features["osla_opponent_response_step_index"] = int(response.get("response_step_index", 0))
+		features["osla_opponent_response_player_id"] = int(response.get("response_player_id", -1))
+		features["osla_opponent_response_horizon"] = int(response.get("response_horizon", 1))
+		features["osla_opponent_response_chain_length"] = int(response.get("response_chain_length", 0))
+		features["osla_opponent_response_chain"] = Array(response.get("response_chain", [])).duplicate(true)
+		features["osla_opponent_response_chain_stop_reason"] = str(response.get("response_chain_stop_reason", ""))
+		features["osla_opponent_response_deduped_candidates"] = int(response.get("response_candidate_deduped_count", 0))
 		features["osla_budget_expired"] = budget_expired
 		features["osla_budget_ms"] = int(budget.budget_ms) if budget != null else -1
 		features["osla_budget_elapsed_ms"] = int(budget.elapsed_ms()) if budget != null else -1
@@ -169,6 +184,7 @@ static func choose_command(
 	if best_macro == null:
 		return Result.failure("OSLASearch.choose_command: no candidate simulated successfully: %s" % "; ".join(discarded.slice(0, 8)))
 	_sort_evaluated(evaluated)
+	best_features["osla_deduped_candidates"] = deduped_candidates
 	best_features["osla_budget_expired"] = budget_expired
 	best_features["osla_budget_ms"] = int(budget.budget_ms) if budget != null else -1
 	best_features["osla_budget_elapsed_ms"] = int(budget.elapsed_ms()) if budget != null else -1
@@ -183,8 +199,12 @@ static func choose_command(
 			"features": best_features,
 			"candidate_count": candidates.size(),
 			"valid_candidate_count": evaluated.size(),
+			"candidate_deduped_count": deduped_candidates,
 			"attempted_simulations": attempted,
 			"budget_expired": budget_expired,
+			"response_horizon": response_horizon,
+			"response_chain_length": int(best_features.get("osla_opponent_response_chain_length", 0)),
+			"response_chain_stop_reason": str(best_features.get("osla_opponent_response_chain_stop_reason", "")),
 			"filter_stats": filter_stats,
 		},
 		{
@@ -196,8 +216,12 @@ static func choose_command(
 			"player_id": context.player_id,
 			"candidate_count": candidates.size(),
 			"valid_candidate_count": evaluated.size(),
+			"candidate_deduped_count": deduped_candidates,
 			"attempted_simulations": attempted,
 			"budget_expired": budget_expired,
+			"response_horizon": response_horizon,
+			"response_chain_length": int(best_features.get("osla_opponent_response_chain_length", 0)),
+			"response_chain_stop_reason": str(best_features.get("osla_opponent_response_chain_stop_reason", "")),
 			"filter_stats": filter_stats,
 			"top_candidates": evaluated.slice(0, 5),
 			"discarded_reasons": discarded.slice(0, 20),
@@ -239,22 +263,96 @@ static func _simulate_opponent_response(
 	root_player_id: int,
 	profile,
 	budget: TimeBudget,
-	options: Dictionary
+	options: Dictionary,
+	response_horizon: int = 1
+) -> Result:
+	return _simulate_opponent_response_chain(engine, root_player_id, profile, budget, options, response_horizon)
+
+static func _simulate_opponent_response_chain(
+	engine: GameEngine,
+	root_player_id: int,
+	profile,
+	budget: TimeBudget,
+	options: Dictionary,
+	response_horizon: int
+) -> Result:
+	if engine == null:
+		return Result.failure("engine is null")
+	var chain: Array[Dictionary] = []
+	var current_engine: GameEngine = engine
+	var top_payload: Dictionary = {}
+	var stop_reason := ""
+	var horizon_limit := maxi(1, response_horizon)
+	for step_index in range(1, horizon_limit + 1):
+		var step_read := _simulate_opponent_response_step(current_engine, root_player_id, profile, budget, options, step_index)
+		if not step_read.ok:
+			return step_read
+		var step_payload: Dictionary = Dictionary(step_read.value)
+		if top_payload.is_empty():
+			top_payload = step_payload.duplicate(true)
+		var response_macro_id := str(step_payload.get("response_macro_id", ""))
+		var response_skipped_reason := str(step_payload.get("response_skipped_reason", ""))
+		if response_macro_id.is_empty():
+			stop_reason = response_skipped_reason
+			break
+		chain.append({
+			"step_index": int(step_payload.get("response_step_index", step_index)),
+			"player_id": int(step_payload.get("response_player_id", -1)),
+			"response_macro_id": response_macro_id,
+			"response_action_id": str(step_payload.get("response_action_id", "")),
+			"response_params": Dictionary(step_payload.get("response_params", {})).duplicate(true),
+			"response_score": float(step_payload.get("response_score", 0.0)),
+			"response_evaluated_count": int(step_payload.get("response_evaluated_count", 0)),
+			"response_candidate_deduped_count": int(step_payload.get("response_candidate_deduped_count", 0)),
+			"response_skipped_reason": "",
+		})
+		current_engine = step_payload.get("engine", current_engine)
+		var next_player_id := BotControllerClass.resolve_next_player_id(current_engine)
+		if next_player_id < 0:
+			stop_reason = "no next player"
+			break
+		if next_player_id == root_player_id:
+			stop_reason = "next decision is root player"
+			break
+		if step_index >= horizon_limit:
+			stop_reason = "response horizon reached"
+			break
+	return Result.success(_compose_opponent_response_chain_payload(current_engine, top_payload, chain, stop_reason, response_horizon))
+
+static func _simulate_opponent_response_step(
+	engine: GameEngine,
+	root_player_id: int,
+	profile,
+	budget: TimeBudget,
+	options: Dictionary,
+	step_index: int
 ) -> Result:
 	if engine == null:
 		return Result.failure("engine is null")
 	if budget != null and budget.expired():
-		return Result.success(_opponent_response_payload(engine, "budget expired", null, 0.0, 0))
+		var budget_payload := _opponent_response_payload(engine, "budget expired", null, 0.0, 0)
+		budget_payload["response_step_index"] = step_index
+		budget_payload["response_player_id"] = -1
+		return Result.success(budget_payload)
 	var state := engine.get_state()
 	if state == null:
 		return Result.failure("state is null")
 	if str(state.phase) == DefsClass.PHASE_GAME_OVER:
-		return Result.success(_opponent_response_payload(engine, "game over", null, 0.0, 0))
+		var game_over_payload := _opponent_response_payload(engine, "game over", null, 0.0, 0)
+		game_over_payload["response_step_index"] = step_index
+		game_over_payload["response_player_id"] = -1
+		return Result.success(game_over_payload)
 	var response_player_id := BotControllerClass.resolve_next_player_id(engine)
 	if response_player_id < 0:
-		return Result.success(_opponent_response_payload(engine, "no next player", null, 0.0, 0))
+		var no_next_payload := _opponent_response_payload(engine, "no next player", null, 0.0, 0)
+		no_next_payload["response_step_index"] = step_index
+		no_next_payload["response_player_id"] = response_player_id
+		return Result.success(no_next_payload)
 	if response_player_id == root_player_id:
-		return Result.success(_opponent_response_payload(engine, "next decision is root player", null, 0.0, 0))
+		var root_next_payload := _opponent_response_payload(engine, "next decision is root player", null, 0.0, 0)
+		root_next_payload["response_step_index"] = step_index
+		root_next_payload["response_player_id"] = response_player_id
+		return Result.success(root_next_payload)
 
 	var observation_read := ObservationAdapterClass.observe_for_player(engine, response_player_id)
 	if not observation_read.ok:
@@ -273,7 +371,10 @@ static func _simulate_opponent_response(
 		return ids_read
 	var legal_ids: Array[String] = ids_read.value
 	if legal_ids.is_empty():
-		return Result.success(_opponent_response_payload(engine, "no legal actions", null, 0.0, 0))
+		var no_legal_payload := _opponent_response_payload(engine, "no legal actions", null, 0.0, 0)
+		no_legal_payload["response_step_index"] = step_index
+		no_legal_payload["response_player_id"] = response_player_id
+		return Result.success(no_legal_payload)
 	var validate_fn := func(command: Command) -> Result:
 		return LegalActionServiceClass.validate_command(engine, command, response_context)
 	var gen_options := options.duplicate()
@@ -281,14 +382,23 @@ static func _simulate_opponent_response(
 	gen_options["max_valid_per_action"] = maxi(1, int(options.get("opponent_max_valid_per_action", DEFAULT_OPPONENT_MAX_CANDIDATES)))
 	var gen_read := CandidateGeneratorClass.generate(response_observation, response_context, legal_ids, validate_fn, gen_options)
 	if not gen_read.ok:
-		return Result.success(_opponent_response_payload(engine, "candidate generation failed: %s" % gen_read.error, null, 0.0, 0))
+		var gen_fail_payload := _opponent_response_payload(engine, "candidate generation failed: %s" % gen_read.error, null, 0.0, 0)
+		gen_fail_payload["response_step_index"] = step_index
+		gen_fail_payload["response_player_id"] = response_player_id
+		return Result.success(gen_fail_payload)
 	var gen_payload: Dictionary = Dictionary(gen_read.value)
 	var candidates_val = gen_payload.get("candidates", [])
 	if not (candidates_val is Array):
-		return Result.success(_opponent_response_payload(engine, "candidate generation returned invalid candidates", null, 0.0, 0))
+		var invalid_candidates_payload := _opponent_response_payload(engine, "candidate generation returned invalid candidates", null, 0.0, 0)
+		invalid_candidates_payload["response_step_index"] = step_index
+		invalid_candidates_payload["response_player_id"] = response_player_id
+		return Result.success(invalid_candidates_payload)
 	var candidates: Array = candidates_val
 	if candidates.is_empty():
-		return Result.success(_opponent_response_payload(engine, "no response candidates", null, 0.0, 0))
+		var no_candidates_payload := _opponent_response_payload(engine, "no response candidates", null, 0.0, 0)
+		no_candidates_payload["response_step_index"] = step_index
+		no_candidates_payload["response_player_id"] = response_player_id
+		return Result.success(no_candidates_payload)
 	var response_source_state := engine.get_state()
 	var response_income_analysis := StrategyIncomeAnalyzerClass.analyze(response_observation, profile, response_source_state)
 	var filter_payload: Dictionary = StrategyCandidateFilterClass.filter_candidates(response_observation, candidates, profile, {
@@ -297,15 +407,28 @@ static func _simulate_opponent_response(
 	})
 	var filtered_val = filter_payload.get("candidates", [])
 	if not (filtered_val is Array):
-		return Result.success(_opponent_response_payload(engine, "filter returned invalid candidates", null, 0.0, 0))
+		var invalid_filter_payload := _opponent_response_payload(engine, "filter returned invalid candidates", null, 0.0, 0)
+		invalid_filter_payload["response_step_index"] = step_index
+		invalid_filter_payload["response_player_id"] = response_player_id
+		return Result.success(invalid_filter_payload)
 	candidates = filtered_val
 	if candidates.is_empty():
-		return Result.success(_opponent_response_payload(engine, "filter discarded all candidates", null, 0.0, 0))
+		var filtered_empty_payload := _opponent_response_payload(engine, "filter discarded all candidates", null, 0.0, 0)
+		filtered_empty_payload["response_step_index"] = step_index
+		filtered_empty_payload["response_player_id"] = response_player_id
+		return Result.success(filtered_empty_payload)
 
 	var discarded: Array[String] = []
 	var scored := _score_candidates(response_observation, candidates, profile, engine.get_state(), discarded)
 	if scored.is_empty():
-		return Result.success(_opponent_response_payload(engine, "no scored response candidates", null, 0.0, 0))
+		var no_scored_payload := _opponent_response_payload(engine, "no scored response candidates", null, 0.0, 0)
+		no_scored_payload["response_step_index"] = step_index
+		no_scored_payload["response_player_id"] = response_player_id
+		return Result.success(no_scored_payload)
+	_sort_scored_candidates(scored)
+	var response_dedupe_payload := _dedupe_scored_candidates(scored)
+	scored = SearchCandidateUtilsClass.copy_scored_candidates(response_dedupe_payload.get("scored", []))
+	var response_deduped_candidates := int(response_dedupe_payload.get("deduped_count", 0))
 	_sort_scored_candidates(scored)
 	var max_candidates := maxi(1, int(options.get("opponent_max_candidates", DEFAULT_OPPONENT_MAX_CANDIDATES)))
 	var limit := mini(max_candidates, scored.size())
@@ -321,16 +444,59 @@ static func _simulate_opponent_response(
 			best_macro = macro
 			best_score = score
 	if best_macro == null:
-		return Result.success(_opponent_response_payload(engine, "no response macro selected", null, 0.0, limit))
+		var no_response_macro_payload := _opponent_response_payload(engine, "no response macro selected", null, 0.0, limit)
+		no_response_macro_payload["response_step_index"] = step_index
+		no_response_macro_payload["response_player_id"] = response_player_id
+		no_response_macro_payload["response_candidate_deduped_count"] = response_deduped_candidates
+		return Result.success(no_response_macro_payload)
 
 	var sim_read := ForwardSimulatorClass.simulate_commands(engine, best_macro.commands, {"mode": "after_command"})
 	if not sim_read.ok:
-		return Result.success(_opponent_response_payload(engine, "response simulation failed: %s" % sim_read.error, null, 0.0, limit))
+		var sim_fail_payload := _opponent_response_payload(engine, "response simulation failed: %s" % sim_read.error, null, 0.0, limit)
+		sim_fail_payload["response_step_index"] = step_index
+		sim_fail_payload["response_player_id"] = response_player_id
+		sim_fail_payload["response_candidate_deduped_count"] = response_deduped_candidates
+		return Result.success(sim_fail_payload)
 	var sim_payload: Dictionary = Dictionary(sim_read.value)
 	var response_engine: GameEngine = sim_payload.get("engine", null)
 	if response_engine == null:
-		return Result.success(_opponent_response_payload(engine, "response simulation missing engine", null, 0.0, limit))
-	return Result.success(_opponent_response_payload(response_engine, "", best_macro, best_score, limit))
+		var missing_engine_payload := _opponent_response_payload(engine, "response simulation missing engine", null, 0.0, limit)
+		missing_engine_payload["response_step_index"] = step_index
+		missing_engine_payload["response_player_id"] = response_player_id
+		missing_engine_payload["response_candidate_deduped_count"] = response_deduped_candidates
+		return Result.success(missing_engine_payload)
+	var success_payload := _opponent_response_payload(response_engine, "", best_macro, best_score, limit)
+	success_payload["response_step_index"] = step_index
+	success_payload["response_player_id"] = response_player_id
+	success_payload["response_candidate_deduped_count"] = response_deduped_candidates
+	return Result.success(success_payload)
+
+static func _compose_opponent_response_chain_payload(
+	engine: GameEngine,
+	top_payload: Dictionary,
+	chain: Array[Dictionary],
+	stop_reason: String,
+	response_horizon: int
+) -> Dictionary:
+	var payload: Dictionary = {}
+	var reference_payload := top_payload
+	if reference_payload.is_empty():
+		reference_payload = _opponent_response_payload(engine, "", null, 0.0, 0)
+	payload["engine"] = engine
+	payload["response_macro_id"] = str(reference_payload.get("response_macro_id", ""))
+	payload["response_action_id"] = str(reference_payload.get("response_action_id", ""))
+	payload["response_params"] = Dictionary(reference_payload.get("response_params", {})).duplicate(true)
+	payload["response_score"] = float(reference_payload.get("response_score", 0.0))
+	payload["response_evaluated_count"] = int(reference_payload.get("response_evaluated_count", 0))
+	payload["response_candidate_deduped_count"] = int(reference_payload.get("response_candidate_deduped_count", 0))
+	payload["response_skipped_reason"] = str(reference_payload.get("response_skipped_reason", ""))
+	payload["response_step_index"] = int(reference_payload.get("response_step_index", 0))
+	payload["response_player_id"] = int(reference_payload.get("response_player_id", -1))
+	payload["response_chain"] = chain.duplicate(true)
+	payload["response_chain_length"] = chain.size()
+	payload["response_horizon"] = int(response_horizon)
+	payload["response_chain_stop_reason"] = stop_reason
+	return payload
 
 static func _opponent_response_payload(
 	engine: GameEngine,
@@ -347,8 +513,12 @@ static func _opponent_response_payload(
 		"response_params": first_command.params.duplicate(true) if first_command != null else {},
 		"response_score": float(score),
 		"response_evaluated_count": int(evaluated_count),
+		"response_candidate_deduped_count": 0,
 		"response_skipped_reason": str(skipped_reason),
 	}
+
+static func _dedupe_scored_candidates(scored: Array[Dictionary]) -> Dictionary:
+	return SearchCandidateUtilsClass.dedupe_scored_candidates(scored)
 
 static func _sort_scored_candidates(scored: Array[Dictionary]) -> void:
 	scored.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:

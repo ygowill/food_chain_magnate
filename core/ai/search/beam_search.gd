@@ -9,6 +9,7 @@ const StrategyScorerClass = preload("res://core/ai/strategy/strategy_scorer.gd")
 const ForwardSimulatorClass = preload("res://core/ai/simulation/forward_simulator.gd")
 const ObservationAdapterClass = preload("res://core/ai/observation/observation_adapter.gd")
 const EvaluatorClass = preload("res://core/ai/evaluation/evaluator.gd")
+const SearchCandidateUtilsClass = preload("res://core/ai/search/search_candidate_utils.gd")
 const AiDecisionPointClass = preload("res://core/ai/bot/ai_decision_point.gd")
 const BotControllerClass = preload("res://core/ai/bot/bot_controller.gd")
 const LegalActionServiceClass = preload("res://core/ai/bot/legal_action_service.gd")
@@ -66,14 +67,21 @@ static func choose_command(
 	var beam_width := maxi(1, int(options.get("beam_width", DEFAULT_BEAM_WIDTH)))
 	var max_depth := maxi(1, int(options.get("max_depth", DEFAULT_MAX_DEPTH)))
 	var top_k_per_node := maxi(1, int(options.get("top_k_per_node", DEFAULT_TOP_K_PER_NODE)))
+	var opponent_top_k_per_node := maxi(1, int(options.get("opponent_max_candidates", top_k_per_node)))
+	var root_max_valid_per_action := maxi(1, int(options.get("max_valid_per_action", profile.max_valid_per_action)))
+	var opponent_max_valid_per_action := maxi(1, int(options.get("opponent_max_valid_per_action", root_max_valid_per_action)))
 	var evaluator_weight := float(options.get("evaluator_weight", DEFAULT_EVALUATOR_WEIGHT))
 	var opponent_weight := float(options.get("opponent_weight", DEFAULT_OPPONENT_WEIGHT))
 	var path_discount := clampf(float(options.get("path_discount", DEFAULT_PATH_DISCOUNT)), 0.0, 1.0)
 
 	var attempted_simulations := 0
 	var expanded_nodes := 0
+	var candidate_deduped_count := int(root_payload.get("candidate_deduped_count", 0))
+	var deduped_nodes := 0
+	var transposition_pruned_nodes := 0
 	var deepest_depth := 0
 	var budget_expired := false
+	var best_state_scores: Dictionary = {}
 	var initial_nodes: Array[Dictionary] = []
 	var root_limit := mini(top_k_per_node, root_scored.size())
 	for i in range(root_limit):
@@ -113,6 +121,12 @@ static func choose_command(
 	if initial_nodes.is_empty():
 		return Result.failure("BeamSearch.choose_command: no root candidate simulated successfully: %s" % "; ".join(discarded.slice(0, 8)))
 	_sort_nodes(initial_nodes)
+	var initial_dedupe := _dedupe_nodes_by_state(initial_nodes)
+	initial_nodes = _copy_node_array(initial_dedupe.get("nodes", []))
+	deduped_nodes += int(initial_dedupe.get("deduped_count", 0))
+	var initial_prune := _prune_nodes_by_transposition(initial_nodes, best_state_scores)
+	initial_nodes = _copy_node_array(initial_prune.get("nodes", []))
+	transposition_pruned_nodes += int(initial_prune.get("pruned_count", 0))
 	var beam := initial_nodes.slice(0, beam_width)
 	var all_evaluated := beam.duplicate(true)
 
@@ -132,6 +146,9 @@ static func choose_command(
 				profile,
 				options,
 				top_k_per_node,
+				opponent_top_k_per_node,
+				root_max_valid_per_action,
+				opponent_max_valid_per_action,
 				opponent_weight,
 				path_discount,
 				budget,
@@ -143,6 +160,7 @@ static func choose_command(
 			var expansion: Dictionary = expansion_read.value
 			attempted_simulations += int(expansion.get("attempted_simulations", 0))
 			expanded_nodes += int(expansion.get("expanded_nodes", 0))
+			candidate_deduped_count += int(expansion.get("candidate_deduped_count", 0))
 			if bool(expansion.get("budget_expired", false)):
 				budget_expired = true
 			var children: Array = expansion.get("nodes", [])
@@ -157,10 +175,21 @@ static func choose_command(
 		if next_nodes.is_empty():
 			break
 		_sort_nodes(next_nodes)
+		var next_dedupe := _dedupe_nodes_by_state(next_nodes)
+		next_nodes = _copy_node_array(next_dedupe.get("nodes", []))
+		deduped_nodes += int(next_dedupe.get("deduped_count", 0))
+		var next_prune := _prune_nodes_by_transposition(next_nodes, best_state_scores)
+		next_nodes = _copy_node_array(next_prune.get("nodes", []))
+		transposition_pruned_nodes += int(next_prune.get("pruned_count", 0))
+		if next_nodes.is_empty():
+			break
 		deepest_depth = maxi(deepest_depth, depth)
 		beam = next_nodes.slice(0, beam_width)
 		all_evaluated.append_array(beam)
 
+	var final_dedupe := _dedupe_nodes_by_state(all_evaluated)
+	all_evaluated = _copy_node_array(final_dedupe.get("nodes", []))
+	deduped_nodes += int(final_dedupe.get("deduped_count", 0))
 	if all_evaluated.is_empty():
 		return Result.failure("BeamSearch.choose_command: no beam nodes evaluated")
 	_sort_nodes(all_evaluated)
@@ -174,6 +203,9 @@ static func choose_command(
 	features["beam_max_depth"] = max_depth
 	features["beam_deepest_depth"] = deepest_depth
 	features["beam_top_k_per_node"] = top_k_per_node
+	features["beam_opponent_top_k_per_node"] = opponent_top_k_per_node
+	features["beam_root_max_valid_per_action"] = root_max_valid_per_action
+	features["beam_opponent_max_valid_per_action"] = opponent_max_valid_per_action
 	features["beam_path"] = Array(best_node.get("path", [])).duplicate(true)
 	features["beam_selected_depth"] = int(best_node.get("depth", 0))
 	features["beam_path_score"] = float(best_node.get("path_score", 0.0))
@@ -183,6 +215,9 @@ static func choose_command(
 	features["beam_path_discount"] = path_discount
 	features["beam_attempted_simulations"] = attempted_simulations
 	features["beam_expanded_nodes"] = expanded_nodes
+	features["beam_candidate_deduped_count"] = candidate_deduped_count
+	features["beam_deduped_nodes"] = deduped_nodes
+	features["beam_transposition_pruned_nodes"] = transposition_pruned_nodes
 	features["beam_budget_expired"] = budget_expired
 	features["beam_budget_ms"] = int(budget.budget_ms) if budget != null else -1
 	features["beam_budget_elapsed_ms"] = int(budget.elapsed_ms()) if budget != null else -1
@@ -199,6 +234,9 @@ static func choose_command(
 			"valid_candidate_count": all_evaluated.size(),
 			"attempted_simulations": attempted_simulations,
 			"expanded_nodes": expanded_nodes,
+			"candidate_deduped_count": candidate_deduped_count,
+			"deduped_nodes": deduped_nodes,
+			"transposition_pruned_nodes": transposition_pruned_nodes,
 			"budget_expired": budget_expired,
 			"filter_stats": Dictionary(root_payload.get("filter_stats", {})).duplicate(true),
 		},
@@ -213,10 +251,16 @@ static func choose_command(
 			"valid_candidate_count": all_evaluated.size(),
 			"attempted_simulations": attempted_simulations,
 			"expanded_nodes": expanded_nodes,
+			"candidate_deduped_count": candidate_deduped_count,
+			"deduped_nodes": deduped_nodes,
+			"transposition_pruned_nodes": transposition_pruned_nodes,
 			"budget_expired": budget_expired,
 			"beam_width": beam_width,
 			"max_depth": max_depth,
 			"deepest_depth": deepest_depth,
+			"root_max_valid_per_action": root_max_valid_per_action,
+			"opponent_max_valid_per_action": opponent_max_valid_per_action,
+			"opponent_top_k_per_node": opponent_top_k_per_node,
 			"top_nodes": top_nodes,
 			"discarded_reasons": discarded.slice(0, 20),
 			"time_ms": Time.get_ticks_msec() - start_ms,
@@ -241,7 +285,7 @@ static func _generate_scored_candidates(
 		return Result.failure("context is null")
 	var gen_options := options.duplicate()
 	gen_options["source_state"] = engine.get_state()
-	gen_options["max_valid_per_action"] = maxi(1, int(profile.max_valid_per_action))
+	gen_options["max_valid_per_action"] = maxi(1, int(options.get("max_valid_per_action", profile.max_valid_per_action)))
 	var gen_read := CandidateGeneratorClass.generate(observation, context, legal_action_ids, validate_command, gen_options)
 	if not gen_read.ok:
 		return gen_read
@@ -272,9 +316,14 @@ static func _generate_scored_candidates(
 	if scored.is_empty():
 		return Result.failure("no candidates scored")
 	_sort_scored_candidates(scored)
+	var dedupe_payload := _dedupe_scored_candidates(scored)
+	scored = SearchCandidateUtilsClass.copy_scored_candidates(dedupe_payload.get("scored", []))
+	var candidate_deduped_count := int(dedupe_payload.get("deduped_count", 0))
+	_sort_scored_candidates(scored)
 	return Result.success({
 		"scored": scored,
 		"candidate_count": candidates.size(),
+		"candidate_deduped_count": candidate_deduped_count,
 		"filter_stats": Dictionary(filter_payload.get("stats", {})).duplicate(true),
 	})
 
@@ -284,6 +333,9 @@ static func _expand_node(
 	profile,
 	options: Dictionary,
 	top_k_per_node: int,
+	opponent_top_k_per_node: int,
+	root_max_valid_per_action: int,
+	opponent_max_valid_per_action: int,
 	opponent_weight: float,
 	path_discount: float,
 	budget: TimeBudget,
@@ -320,11 +372,17 @@ static func _expand_node(
 		return Result.failure("no legal actions")
 	var validate_fn := func(command: Command) -> Result:
 		return LegalActionServiceClass.validate_command(engine, command, context)
-	var gen_read := _generate_scored_candidates(engine, observation, context, legal_ids, validate_fn, profile, options, discarded)
+	var actor_is_root := actor == root_player_id
+	var node_options := options.duplicate()
+	node_options["max_valid_per_action"] = root_max_valid_per_action if actor_is_root else opponent_max_valid_per_action
+	var gen_read := _generate_scored_candidates(engine, observation, context, legal_ids, validate_fn, profile, node_options, discarded)
 	if not gen_read.ok:
 		return gen_read
-	var scored: Array = Dictionary(gen_read.value).get("scored", [])
-	var limit := mini(maxi(1, top_k_per_node), scored.size())
+	var gen_payload: Dictionary = Dictionary(gen_read.value)
+	var scored: Array = gen_payload.get("scored", [])
+	var candidate_deduped_count := int(gen_payload.get("candidate_deduped_count", 0))
+	var node_top_k_per_node := top_k_per_node if actor_is_root else opponent_top_k_per_node
+	var limit := mini(maxi(1, node_top_k_per_node), scored.size())
 	var attempted := 0
 	var expanded := 0
 	var children: Array[Dictionary] = []
@@ -366,7 +424,11 @@ static func _expand_node(
 		"nodes": children,
 		"attempted_simulations": attempted,
 		"expanded_nodes": expanded,
+		"candidate_deduped_count": candidate_deduped_count,
 		"budget_expired": budget_expired,
+		"branch_limit": node_top_k_per_node,
+		"max_valid_per_action": int(node_options.get("max_valid_per_action", 0)),
+		"actor_is_root": actor_is_root,
 	})
 
 static func _score_candidates(
@@ -429,6 +491,7 @@ static func _make_node(
 		"engine": engine,
 		"root_macro": root_macro,
 		"root_macro_id": str(root_macro.id) if root_macro != null else "",
+		"state_key": _state_key_for_engine(engine),
 		"path": path.duplicate(true),
 		"path_score": float(path_score),
 		"depth": int(depth),
@@ -463,6 +526,95 @@ static func _top_node_trace(nodes: Array, count: int) -> Array[Dictionary]:
 			"path": Array(node.get("path", [])).duplicate(true),
 		})
 	return out
+
+static func _dedupe_nodes_by_state(nodes: Array) -> Dictionary:
+	var deduped: Array[Dictionary] = []
+	var seen: Dictionary = {}
+	var deduped_count := 0
+	for node_val in nodes:
+		if not (node_val is Dictionary):
+			continue
+		var node: Dictionary = Dictionary(node_val)
+		var state_key := str(node.get("state_key", ""))
+		if state_key.is_empty():
+			var engine_val = node.get("engine", null)
+			var node_engine: GameEngine = engine_val if engine_val is GameEngine else null
+			state_key = _state_key_for_engine(node_engine)
+		if state_key.is_empty():
+			deduped.append(node)
+			continue
+		node["state_key"] = state_key
+		if not seen.has(state_key):
+			seen[state_key] = deduped.size()
+			deduped.append(node)
+			continue
+		deduped_count += 1
+		var existing_index := int(seen.get(state_key, -1))
+		if existing_index < 0 or existing_index >= deduped.size():
+			continue
+		var existing: Dictionary = Dictionary(deduped[existing_index])
+		if _node_is_better_for_dedupe(node, existing):
+			deduped[existing_index] = node
+	_sort_nodes(deduped)
+	return {
+		"nodes": deduped,
+		"deduped_count": deduped_count,
+	}
+
+static func _prune_nodes_by_transposition(nodes: Array, best_state_scores: Dictionary) -> Dictionary:
+	var kept: Array[Dictionary] = []
+	var pruned_count := 0
+	for node_val in nodes:
+		if not (node_val is Dictionary):
+			continue
+		var node: Dictionary = Dictionary(node_val)
+		var state_key := str(node.get("state_key", ""))
+		if state_key.is_empty():
+			var engine_val = node.get("engine", null)
+			var node_engine: GameEngine = engine_val if engine_val is GameEngine else null
+			state_key = _state_key_for_engine(node_engine)
+		if state_key.is_empty():
+			kept.append(node)
+			continue
+		node["state_key"] = state_key
+		var node_score := float(node.get("total_score", -INF))
+		if best_state_scores.has(state_key):
+			var best_score := float(best_state_scores.get(state_key, -INF))
+			if node_score <= best_score:
+				pruned_count += 1
+				continue
+		best_state_scores[state_key] = node_score
+		kept.append(node)
+	return {
+		"nodes": kept,
+		"pruned_count": pruned_count,
+	}
+
+static func _node_is_better_for_dedupe(candidate: Dictionary, existing: Dictionary) -> bool:
+	var candidate_score := float(candidate.get("total_score", -INF))
+	var existing_score := float(existing.get("total_score", -INF))
+	if not is_equal_approx(candidate_score, existing_score):
+		return candidate_score > existing_score
+	var candidate_path_score := float(candidate.get("path_score", -INF))
+	var existing_path_score := float(existing.get("path_score", -INF))
+	if not is_equal_approx(candidate_path_score, existing_path_score):
+		return candidate_path_score > existing_path_score
+	return str(candidate.get("root_macro_id", "")) < str(existing.get("root_macro_id", ""))
+
+static func _state_key_for_engine(engine: GameEngine) -> String:
+	if engine == null:
+		return ""
+	var state := engine.get_state()
+	if state == null:
+		return ""
+	var hash_value := str(state.compute_hash())
+	var phase := str(state.phase)
+	var sub_phase := str(state.sub_phase)
+	var next_player := BotControllerClass.resolve_next_player_id(engine)
+	return "%s|%s|%s|%d" % [hash_value, phase, sub_phase, next_player]
+
+static func _dedupe_scored_candidates(scored: Array[Dictionary]) -> Dictionary:
+	return SearchCandidateUtilsClass.dedupe_scored_candidates(scored)
 
 static func _sort_scored_candidates(scored: Array[Dictionary]) -> void:
 	scored.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
@@ -522,4 +674,12 @@ static func _copy_string_array(value) -> Array[String]:
 	if value is Array:
 		for item in Array(value):
 			out.append(str(item))
+	return out
+
+static func _copy_node_array(value) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if value is Array:
+		for item in Array(value):
+			if item is Dictionary:
+				out.append(Dictionary(item))
 	return out

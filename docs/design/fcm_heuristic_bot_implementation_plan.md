@@ -61,13 +61,31 @@
 
 最近快照：
 
-- 日期：2026-05-08
+- 日期：2026-05-09
 - 提交：`6a937463 feat(ai): implement strategy bot planning`
 - 远端分支：`origin/bot`
+- 工作区进展：`StrategyBotScenarioBenchmarkTest` 已补三类结构性恢复 deterministic scenario：换客户/房屋、降价恢复需求、换产品卡对手产能缺口；开局餐厅选择新增 route-dominance 结构过滤，避免在存在更宽营销路线时保留单一薄弱开局。
+- 工作区进展：已接入首版启发式 `MCTS` 搜索骨架，`MCTSSearch` 通过 `CandidateGenerator` / `StrategyCandidateFilter` / `StrategyScorer` / `ForwardSimulator` / `Evaluator` 做宏动作树搜索，`MCTSBot` 在搜索失败或无 engine 时回退到 `BeamBot`。
 - 验证：
   - `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`
   - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`
-  - 结果：compile PASS，`AllTests` 424/424 PASS，耗时约 110s。Godot headless 退出时仍会输出既有 RID/resource leak warning；以测试脚本 summary 为准。
+  - 结果：compile PASS（1228 files），`AllTests` 425/425 PASS，`total_ms=158187`（约 158s）。Godot headless 退出时仍会输出既有 RID/resource leak warning；以测试脚本 summary 为准。
+  - MCTS selfplay smoke：`mcts@base_revenue_growth_v1` / 2p / seed 12345 / target round 4 / 1 match：PASS，failures `0`，steps `42`，search types `mcts=28` / `beam=14`，但 avg decision time `453.81ms`、budget expired rate `0.667`，说明首版可运行但下一步需要优先做预算/成本剖析。
+  - selfplay：`base_revenue_growth_v1` / 2p / target round 12 / 60 seeds：success `1.0`，failures `0`，avg round `11.55`，avg steps `201.717`，opening players without positive cash avg `0.033`，cash_min_after_first_positive avg `[9.933, 9.661]`。
+  - selfplay：`base_revenue_growth_v1` / 2p / target round 14 / 30 seeds：success `1.0`，failures `0`，avg round `12.333`，avg steps `226.433`，opening players without positive cash avg `0.033`，cash_min_after_first_positive avg `[9.933, 9.667]`。
+  - tuning R1：6 个 profile 变体在 `r12` / 6 seeds 下完成 sweep，`sample_005` 以 `score=1152.596` 排第 1，baseline 为 `1118.072`；随后用同一组候选做 `r12` / 30 seeds 与 `r14` / 30 seeds 复核，`sample_005` 仍保持第 1，且两轮均为 `success=1.0`、`failures=0`。
+  - tuning R1 复核：`r12` / 30 seeds 下 `sample_005` `score=1029.512`，baseline `1009.355`；`r14` / 30 seeds 下 `sample_005` `score=999.003`，baseline `953.793`。当前主收益仍是整体分数与搜索成本下降，`cash_min_after_first_positive` 仍需在下一轮继续盯住，但没有出现失败或结构性退化。
+- search R1：`BeamSearch` 增加了按 `GameState` + `next_player` 的 state dedupe 和 transposition pruning，去重/剪枝计数通过 `beam_deduped_nodes` / `beam_transposition_pruned_nodes` 进入 trace / explanation；`AllTests` 424/424 PASS，说明这一步没有破坏现有 AI smoke / deterministic test。
+- search R2：`StrategyPhasePlanner` 现在会输出阶段自适应 `search_hints`，`OSLABot` / `BeamBot` 会按 `phase/sub_phase` 自动放宽 `Working` / `Train` / `PlaceHouses` 等阶段的 candidate coverage、beam width 和 topK；`AllTests` 424/424 PASS，说明这一步没有破坏现有 AI smoke / deterministic test。
+- search R3：增长路线的 `max_depth` 已从 3 提升到 4，`StrategyPhasePlanner` 和 phase-planner tests 已同步覆盖更深 horizon；这一步仍只针对结构性的长期路线，不回退到单 seed 权重修补。
+- search R4：增长路线的 OSLA 候选与对手回应 breadth 继续放宽到 `max_candidates=10`、`opponent_max_candidates=4`、`opponent_max_valid_per_action=4`，继续向更深的结构性探索推进，而不是靠权重微调追单 seed。
+- search R5：OSLA / Beam 的 growth smoke 已切到“先到 Working，再直接定位 PlaceHouses，并注入 `new_business_developer` 以保证多候选增长分支”的稳定 setup；两条 smoke 都重新覆盖了 `trace.phase/sub_phase` 与 `candidate_count>1`，`AllTests` 424/424 PASS，说明当前搜索增强链路保持可运行。
+- search R6：BeamSearch 现在会按 actor 切分分支预算：己方节点继续用 root `top_k_per_node` / `max_valid_per_action`，对手节点改用 `opponent_max_candidates` / `opponent_max_valid_per_action`；trace 同步暴露 `beam_root_max_valid_per_action`、`beam_opponent_max_valid_per_action`、`beam_opponent_top_k_per_node`，`AllTests` 424/424 PASS。
+- search R7：OSLASearch 增加 `opponent_response_horizon` 与多步 response chain；`order_of_business_tempo` 先启用 2-step horizon，并用 3p OrderOfBusiness smoke 确认 trace 中能看到两步对手响应链。trace / explanation 现在暴露 `osla_opponent_response_chain_length`、`osla_opponent_response_chain`、`osla_opponent_response_chain_stop_reason`，`AllTests` 424/424 PASS。
+- search R8：OSLA / Beam 增加 scored candidate command-signature dedupe：同一命令签名只保留最高 `strategy_score` 候选，平分按 `macro_action_id` 稳定 tie-break；trace / explanation 暴露 `candidate_deduped_count`，OSLA 额外暴露 root / opponent response 去重计数，Beam 汇总 root + expansion 的候选去重计数。`AllTests` 424/424 PASS。
+- search R9：首版启发式 `MCTS` 已接入，默认仍保留 `BeamBot` 作为 fallback；`MCTSSearchTest` 现在覆盖 source isolation、deterministic macro 选择和 budget-expired fallback，`AllTests` 425/425 PASS。
+- search R10：MCTS 增加 simulation 级成本诊断和低剩余预算扩展保护：trace / explanation 暴露 `mcts_simulation_ms`、`mcts_max_simulation_ms`、`mcts_simulation_budget_skips`、`mcts_min_simulation_budget_ms` 与 `mcts_budget_guarded`；`ForwardSimulator` 接受共享 `TimeBudget`，可在多命令宏动作的命令边界停止继续模拟。这个改动只处理结构性预算边界，不做单 seed 权重修补。
+- search R11：已用同一 profile、同一 seed 窗口做三 bot 对照矩阵（`strategy` / `beam` / `mcts`，`base_revenue_growth_v1`）。当前结果是：`MCTS` 明显优于 `Beam` 的总搜索成本和 tuning 分数，但仍落后于 `StrategyBot`；在 r8/12 seeds 上 `strategy=1038.466`、`mcts=-768.455`、`beam=-3203.407`，在 r12/6 seeds 上 `strategy=1232.346`、`mcts=-3701.037`、`beam=-6607.731`。这说明 MCTS 是有效的实验分支，但还不是比 Strategy 更强的默认路线。
 
 当前阶段判断：
 
@@ -85,26 +103,39 @@
 - 营销候选不再只看覆盖范围；它会检查是否影响战略上有用的房屋、己方是否能当前或未来供应、是否会只给对手创造销售机会，以及真实 MarketingPreview 是否实际新增需求。
 - 开局餐厅评分已加入竞争安全、road graph 距离、营销路线可达性和独立 billboard 板件数，降低“只靠一个容易被抢占的板件”的开局。
 - 供给逻辑区分当前可销售缺口、price recovery 缺口、product switch 缺口、pending marketing 规划缺口和无冰箱时不能提前兑现的未来需求。
-- Scenario benchmark 已成为 StrategyBot 开发主闸门，覆盖营销结算、训练补产能、饮料路线、价格路线、waitress、Payday 裁员、Cleanup 冰箱保留、关键里程碑预览等路线级断点。
+- Scenario benchmark 已成为 StrategyBot 开发主闸门，覆盖营销结算、训练补产能、饮料路线、价格路线、waitress、Payday 裁员、Cleanup 冰箱保留、关键里程碑预览等路线级断点；本轮补齐结构性恢复 gate：换客户/房屋、降价恢复需求、换产品卡对手产能缺口。
 - 自对弈工具已能输出 JSONL、summary、mandatory completion、search metrics、玩家现金/员工/库存/里程碑统计和 tuning objective。
+- BeamSearch 当前已加入 state dedupe 与 transposition pruning，后续搜索增强应继续从更强的 horizon、候选裁剪和对手响应建模推进，而不是回到 profile 权重微调。
 
 当前已知问题与风险：
 
-- 大规模自对弈仍是 smoke 和诊断工具，不应直接当作强度指标。近期 60 局 probe 曾发现少数 seed 中一方长期没有正现金，根因包括开局营销路线被抢占、只有单一基本 billboard 路线、候选缺少替代客户群体等；当前已增加路线选项/板件数建模，但仍需要重新跑更大规模矩阵确认。
+- 大规模自对弈仍是 smoke 和诊断工具，不应直接当作强度指标。当前 60 局 target round 12 与 30 局 target round 14 均稳定通过，但仍有约 `0.033` players/match 的开局无正现金现象；这类问题后续按聚合异常与确定结构缺口处理，不围绕单个 seed 调权重。
 - 目前 profile 权重仍是人工构造的基线。单参数 sweep 不足以说明问题，因为一个合理参数可能被其他不合理权重拖累；后续调参必须使用多参数候选、至少 3 个以上 seed，并结合对局日志人工检查异常。
 - 自对弈指标不能使用“双方动作分化”这类只对 bot-vs-bot 有意义、对真实对局无直接价值的指标。优先看收入形成速度、收入形成后现金底线、可销售需求兑现率、关键路线覆盖、异常对局存档。
-- OSLA/Beam 当前主要用于验证 fork simulation、trace、预算和多步接口；它们还不是默认强度路线。MCTS 暂不进入，等 StrategyBot 场景闸门和 profile 基线稳定后再评估。
+- OSLA/Beam/MCTS 当前主要用于验证 fork simulation、trace、预算和多步接口；MCTS 已进入试验性接入，但仍不是默认强度路线，后续先做结构性搜索增强与小规模 selfplay 复核。
+- 最新矩阵结果表明，MCTS 相比 Beam 已经有明显改进，但在当前 profile 与 seed 窗口下仍没有超过 StrategyBot；因此它现在应继续作为实验分支，而不是替代基线。
+- MCTS 仍存在单次 `GameEngine.execute_command()` 不可抢占的长尾风险；当前预算保护能避免低剩余预算下继续启动新模拟，并能定位耗时集中在单次 simulation 还是候选生成/leaf eval，但不能中断已经进入 engine 的单条命令执行。
 - 新房/新餐厅扩张路线仍按低优先级处理。实际游戏中建造新房屋较少，当前阶段优先保证初始餐厅、营销、产能、价格和现金安全路线。
 - 严格隐藏信息接口已有基础要求，但后续产品接入、在线配置和调试 UI 仍需继续确认不会暴露对手隐藏信息。
-- Godot 会生成大量未跟踪 `.uid` 文件；这些不是本阶段 AI 逻辑源码，不应纳入策略提交。
+- Godot 会生成大量 `.import` / `.uid` sidecar；这些不是本阶段 AI 逻辑源码，后续不应纳入策略提交。
 
 下一步计划：
 
-1. **补结构性恢复场景基准**：为“换客户/房屋”“降价恢复需求”“换产品卡对手产能缺口”分别补 deterministic scenario，确保这些不是单纯权重效果。
-2. **重跑更大规模 StrategyBot selfplay**：用 `base_revenue_growth_v1`，至少 3 个以上 seed，优先覆盖 target round 10/12；对所有无正现金、现金回落、无需求采购饮料、营销无收益等异常输出存档或 trace。
-3. **整理调参实验协议**：使用 profile variant manifest 和 tuning matrix 做多参数组合实验；每组 profile 至少跑相同 seed 集，summary 中优先比较 `cash_min_after_first_positive`、`cash_max_seen`、里程碑覆盖、收入形成轮次和异常局数量。
-4. **人工检查异常对局**：对 summary 标记的低现金或无销售局生成典型存档，确认是权重问题、候选缺失、规则建模问题还是搜索/预览问题。
-5. **再进入搜索增强**：只有当 StrategyBot 在场景基准和中等规模 selfplay 中稳定后，再扩展 OSLA/Beam 的 horizon、opponent policy 和预算分配；MCTS 作为更后续阶段，不用于当前问题的短期修补。
+1. **继续做 MCTS 参数 sweep**：当前 MCTS 还没超过 StrategyBot，但已经显著优于 Beam；下一步优先扫 `mcts_iterations` / `mcts_max_depth` / `mcts_top_k_per_node` / `mcts_exploration` / `mcts_min_simulation_budget_ms`，看是否能把 MCTS 拉到 Strategy 之上。
+2. **保留 StrategyBot 作为强基线**：在没有证据证明 MCTS 更强前，StrategyBot 继续作为默认强度对照，Beam 只保留为较便宜的对照组。
+3. **继续看聚合指标**：优先看 `cash_min_after_first_positive`、`milestone_counts`、`opening_first_positive_cash_step_avg`、`search_time_ms_avg_per_decision`，不要被单个 seed 或单局 trace 带偏。
+4. **只有确认结构缺口才改代码**：如果后续矩阵显示某类异常高频出现，再回到 deterministic scenario 和结构修复；暂时不做单 seed 权重修补。
+
+### 0.6 Profile tuning 实验协议
+
+当前阶段 profile tuning 的目标是筛选方向，不是把 `base_revenue_growth_v1` 调成最终强度版本。实验必须满足：
+
+- **固定基线**：每轮 tuning matrix 都包含 `base_revenue_growth_v1`，并把同一组 seed、玩家数、target round、max steps、budget 应用于所有候选。
+- **多参数候选**：候选 profile 应一次调整一组相关路径，例如开局收入节奏、营销/生产节奏、早期训练/招聘节奏；不再用单 seed、单权重微调解释问题。
+- **先小后大**：第一轮使用 5-8 个候选、每个候选 5-10 局；只有候选在聚合指标上稳定优于基线，才进入 30+ seeds 的 r12/r14 复核。
+- **主指标优先级**：先看 success/failures、`opening.players_without_positive_cash_avg_per_match`、`cash_min_after_first_positive`、`opening.first_positive_cash_round/step`、`cash_max_seen`、milestones，再看 tuning objective 总分。
+- **异常处理**：只有异常在多个 seed 或多个 profile 中重复出现，且能归因为候选缺失、规则建模、阶段策略或搜索预算问题时，才补 deterministic scenario 或结构修复。
+- **不提交生成物**：`.godot/bot_profile_variants*`、`.godot/bot_tuning_matrix*`、selfplay JSONL/summary 仍是实验输出，不作为源码提交对象。
 
 ## 1. 当前代码基线
 
@@ -956,8 +987,9 @@ score =
 4. `StrategyBot`
 5. `OSLABot`
 6. `BeamBot`
+7. `MCTSBot`
 
-首版不要直接上 MCTS。当前游戏分支因子高、结算复杂、隐藏信息多，先把候选和 forward simulation 做准更重要。
+首版没有直接上纯随机 rollout 的 MCTS；当前已接入的是启发式引导、以候选和 forward simulation 为核心的树搜索骨架。
 
 ### 11.2 RandomLegalBot
 
@@ -1142,9 +1174,9 @@ Beam Search 用 `MacroAction` 而不是裸 action 枚举，并设置：
 
 当前已落地 OSLA 的最小搜索骨架：
 
-- `core/ai/search/osla_search.gd` 复用 `CandidateGenerator`、`StrategyCandidateFilter`、`StrategyScorer`、`ForwardSimulator` 与 `Evaluator`。流程是先用 StrategyScorer 对当前候选排序，只模拟 topK；每个候选在 fork engine 上执行后，尝试为下一个非己方玩家生成一层简单 response，再从己方视角观察最终 fork state 并用 Evaluator 加权。
+- `core/ai/search/osla_search.gd` 复用 `CandidateGenerator`、`StrategyCandidateFilter`、`StrategyScorer`、`ForwardSimulator` 与 `Evaluator`。流程是先用 StrategyScorer 对当前候选排序，只模拟 topK；每个候选在 fork engine 上执行后，按 `opponent_response_horizon` 生成一到多步 response chain，再从己方视角观察最终 fork state 并用 Evaluator 加权。
 - `core/ai/bot/osla_bot.gd` 是薄包装；有 engine 时走 `OSLASearch`，没有 engine 或搜索失败时回退到 `StrategyBot`。因此 OSLA 目前不会替代默认 `StrategyBot`；`tools/run_bot_selfplay.gd` 默认仍跑 StrategyBot，但可显式传入 `--bot=osla` 或 `--bot=beam` 做对照。
-- `OSLASearch` 的 trace 暴露 `osla_strategy_score`、`osla_eval_score`、`osla_opponent_response_*`、对手回应候选评估数、top candidates、discarded reasons、预算是否耗尽与耗时，用于后续比较 StrategyBot 单步评分、OSLA、Beam 和未来 MCTS 的差异。targeted test 会确认如果 OSLA 实际模拟了对手回应，则 trace 里必须能看到回应 action 和 evaluated count，并且 explanation/trace 始终暴露 budget status，避免搜索退化成不可解释的单步 scorer wrapper。
+- `OSLASearch` 的 trace 暴露 `osla_strategy_score`、`osla_eval_score`、`osla_opponent_response_*`、对手回应候选评估数、response chain、candidate dedupe count、top candidates、discarded reasons、预算是否耗尽与耗时，用于后续比较 StrategyBot 单步评分、OSLA、Beam 和 MCTS 的差异。targeted test 会确认如果 OSLA 实际模拟了对手回应，则 trace 里必须能看到回应 action、evaluated count 和 chain length，并且 explanation/trace 始终暴露 budget status，避免搜索退化成不可解释的单步 scorer wrapper。
 - 这一层仍不是 MCTS：没有 rollout、tree policy、visit count 或 backpropagation。它的作用是验证 fork simulation、response policy、隐藏信息观察和 deterministic 排序能在同一接口里稳定工作。
 
 当前已落地 Beam 的最小搜索骨架：
@@ -1152,7 +1184,15 @@ Beam Search 用 `MacroAction` 而不是裸 action 枚举，并设置：
 - `core/ai/search/beam_search.gd` 在根节点按 `StrategyScorer` 排序并只模拟 topK `MacroAction`。后续每一层从当前 fork engine 中解析下一位需要决策的玩家，继续复用 `ObservationAdapter`、`LegalActionService`、`CandidateGenerator`、`StrategyCandidateFilter`、`StrategyScorer` 与 `ForwardSimulator` 展开候选。
 - Beam 节点用根玩家视角的 `Evaluator` 评估最终 fork state；己方行动的策略分正向进入路径分，对手行动的策略分按 `opponent_weight` 负向进入路径分。当前默认配置是小宽度/浅深度，用于验证流程和 trace，不用于最终强度。
 - `core/ai/bot/beam_bot.gd` 是薄包装；有 engine 时走 `BeamSearch`，没有 engine 或搜索失败时回退到 `OSLABot`。`tools/run_bot_selfplay.gd` 支持 `--bot=beam` 做固定 seed 对照。
-- `BeamSearch` 的 trace 暴露 `beam_width`、`max_depth`、`deepest_depth`、`selected_depth`、`attempted_simulations`、`expanded_nodes`、`beam_path`、`beam_eval_score`、预算是否耗尽与 top nodes。Beam 子节点展开复用同一个 `TimeBudget`，预算耗尽后不会继续在同一节点内追加模拟。targeted test 已确认初始 fixed seed smoke 至少能展开到 depth 2 并记录 expanded node count；另一个可回放场景用真实命令完成上一轮招聘 `recruiting_girl`、下一轮重组上岗，再在 Working/Recruit 中确认 Beam 可以选择同一玩家连续两次 `recruit` 的 depth 2 路径。这样 trace 既能区分“没有展开”和“展开了但深层节点没有超过根节点”，也能证明深层路径在己方连续行动时确实会进入最终选择。后续调参会优先比较 StrategyBot、OSLA、Beam 在同 seed JSONL 中的行动分布、库存/现金/里程碑趋势。
+- `BeamSearch` 的 trace 暴露 `beam_width`、`max_depth`、`deepest_depth`、`selected_depth`、`attempted_simulations`、`expanded_nodes`、`candidate_deduped_count`、`beam_path`、`beam_eval_score`、预算是否耗尽与 top nodes。Beam 子节点展开复用同一个 `TimeBudget`，预算耗尽后不会继续在同一节点内追加模拟。targeted test 已确认初始 fixed seed smoke 至少能展开到 depth 2 并记录 expanded node count；另一个可回放场景用真实命令完成上一轮招聘 `recruiting_girl`、下一轮重组上岗，再在 Working/Recruit 中确认 Beam 可以选择同一玩家连续两次 `recruit` 的 depth 2 路径。这样 trace 既能区分“没有展开”和“展开了但深层节点没有超过根节点”，也能证明深层路径在己方连续行动时确实会进入最终选择。后续调参会优先比较 StrategyBot、OSLA、Beam 在同 seed JSONL 中的行动分布、库存/现金/里程碑趋势。
+
+当前已落地 MCTS 的最小搜索骨架：
+
+- `core/ai/search/mcts_search.gd` 复用同一组候选、过滤、评分、forward simulation 与 evaluator 组件，按 `mcts_iterations` / `mcts_max_depth` / `mcts_top_k_per_node` 做启发式宏动作树搜索，不做纯随机 rollout。
+- `core/ai/bot/mcts_bot.gd` 是薄包装；有 engine 时走 `MCTSSearch`，无 engine、预算过期或搜索失败时回退到 `BeamBot`，保证不会因为实验性 MCTS 阻塞 bot 决策链路。
+- `MCTSSearch` 会在内部 fork source engine，并用 fork engine 绑定根节点 validation，避免搜索候选生成或模拟污染调用方 engine；返回前恢复调用方 registry bundle，确保 hash / serialization 不受 fork search 影响。
+- `MCTSSearchTest` 覆盖 source isolation、同 seed deterministic、trace/explanation 中的 visit/q/prior/eval/预算字段，以及 budget-expired fallback 到 Beam。
+- MCTS 现在会把 `TimeBudget` 传入 `ForwardSimulator`，并在每次扩展前检查 `mcts_min_simulation_budget_ms`。trace / explanation 额外记录 `mcts_simulation_ms`、`mcts_max_simulation_ms`、`mcts_simulation_budget_skips` 和 `mcts_budget_guarded`，用于区分“候选生成慢”“单次模拟慢”和“预算不足主动停扩展”。单条 engine command 仍不可中断，因此后续如果长尾集中在 settlement/skip 类命令，应按 phase 限制 MCTS 或改用更便宜的 fallback。
 
 ## 12. 模块扩展契约
 
@@ -1277,8 +1317,8 @@ tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
 
 当前实现状态：
 
-- `core/tests/ai/osla_search_test.gd`：验证 OSLASearch 不修改 source engine、返回合法命令、输出 OSLA 评分/response trace、对手回应 evaluated count 与 budget status、同 seed deterministic，并验证 OSLABot 无 engine 时回退到 StrategyBot。
-- `core/tests/ai/beam_search_test.gd`：验证 BeamSearch 不修改 source engine、返回合法命令、输出 beam path/eval trace 和 budget status、至少在 fixed seed smoke 中展开到 depth 2 并记录 selected depth / expanded nodes；并用可回放的招聘员场景确认 Beam 能选择同一玩家连续 `recruit` 的 depth 2 path。同 seed deterministic，并验证 BeamBot 无 engine 时回退到 OSLABot/StrategyBot 链路。
+- `core/tests/ai/osla_search_test.gd`：验证 OSLASearch 不修改 source engine、返回合法命令、输出 OSLA 评分/response trace、对手回应 evaluated count 与 budget status、候选 command-signature dedupe、同 seed deterministic、growth route breadth，以及 3p OrderOfBusiness 的 2-step response chain；并验证 OSLABot 无 engine 时回退到 StrategyBot。
+- `core/tests/ai/beam_search_test.gd`：验证 BeamSearch 不修改 source engine、返回合法命令、输出 beam path/eval trace、candidate dedupe 和 budget status、至少在 fixed seed smoke 中展开到 depth 2 并记录 selected depth / expanded nodes；并用可回放的招聘员场景确认 Beam 能选择同一玩家连续 `recruit` 的 depth 2 path。同 seed deterministic，并验证 BeamBot 无 engine 时回退到 OSLABot/StrategyBot 链路。
 - `core/tests/ai/random_legal_bot_smoke_test.gd`：两个 `RandomLegalBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic。
 - `core/tests/ai/greedy_bot_smoke_test.gd`：保留 GreedyBot 短程 deterministic 校验，并新增单程跑到至少第 3 轮或 GameOver 的 smoke。GreedyBot 不再要求完整打完 2p base 局。
 - `core/tests/ai/strategy_bot_test.gd`：两个 `StrategyBot` 在 2p base、固定 seed 下跑到至少第 3 轮或 GameOver，并校验同 seed 行动 trace deterministic、strategy trace 元数据、phase strategy 分类 trace、route planner 收入路线 readiness、employee planner 员工基础价值/placement route readiness、recruit planner 招聘目标/roster 饱和度、setup planner 储备卡/行动顺序 payload、supply/train planner 产量与训练增量估值、marketing planner 供给 readiness、structure planner 食品上岗/营销链激活价值、support planner 价格员工/waitress/调价 payload、cash planner 无需求现金安全/Payday 裁员 payload、dinner planner 食物生产真实销售预览 payload、board analyzer 餐厅选址 payload、profile 数据加载、营销空覆盖候选过滤、营销商品候选排序、营销可服务房屋/活跃供给评分、营销被对手餐厅完全占优时的候选生成过滤、MarketingPreview 零新增需求惩罚、招聘 roster 饱和度、结构阶段食品供给激活与训练保留豁免、房屋扩张路线招聘/培训评分、价格支持与 waitress 支持路线评分、收入缺口、pending marketing planning demand、生产补缺口/供给数量/路线饮料商品推断/过量库存惩罚、无需求现金安全在基础/成长 profile 下均压过首产里程碑、DinnerPreview 食物收入安全惩罚、PricingPipeline 价格动作评分、关键里程碑 race 评分、冰箱保留、餐厅位置/road graph 评分、房屋放置距离评分、Payday 解雇评分、PaydayPreview 未解决当前玩家薪资短缺惩罚、其他玩家仍欠薪不压低当前玩家已解决 shortfall 的裁员候选等特征。
@@ -1347,7 +1387,8 @@ Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[f
 ### Phase 5：OSLA 与 Beam
 
 - 已实现 OSLA 最小搜索骨架：候选 topK、fork simulation、简单 opponent response、Evaluator 加权和 deterministic trace；trace 已能显示对手回应 action、score 和 evaluated count。
-- 已实现 Beam 最小搜索骨架：小宽度、多深度、按下一决策玩家展开、根玩家视角评估和 deterministic trace；trace 已能显示 deepest/selected depth 和 expanded node count，用于区分“未展开”与“展开但未选择深层路径”。可回放的招聘员 targeted test 已确认 Beam 在同一玩家可连续行动时能选择 depth 2 recruit path。
+- 已实现 Beam 最小搜索骨架：小宽度、多深度、按下一决策玩家展开、根玩家视角评估和 deterministic trace；trace 已能显示 deepest/selected depth、expanded node count、candidate dedupe count、state dedupe count 和 transposition prune count，用于区分“未展开”“重复候选浪费预算”“重复状态浪费预算”“被更优同态状态剪枝”和“展开但未选择深层路径”。可回放的招聘员 targeted test 已确认 Beam 在同一玩家可连续行动时能选择 depth 2 recruit path。
+- 已开始做 phase-adaptive search budget：`StrategyPhasePlanner` 会按当前 phase/sub_phase 生成 `search_hints`，OSLA / Beam wrapper 会把这些 hints 传给搜索器；当前先覆盖 setup、income route 与 growth route，后续再继续扩展 opponent policy、跨阶段 horizon 和更深层的 response 建模。
 - 后续完善 opponent policy 的强度、预算分配和跨阶段 response horizon。
 - 后续完善 Beam 的预算分配、候选裁剪和跨阶段 horizon。
 
@@ -1362,7 +1403,7 @@ Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[f
 - 汇总固定 seed 矩阵的成功率、行动分布、回合/步数/命令数和每玩家资源趋势。
 - 支持固定 bot config 对战：`--bot=` 用同一 bot 填满所有玩家，`--bots=` 按玩家指定 matchup。
 - 支持 `--profile=<id|path>` 固定 profile 对照；当前已有 `base_revenue_v1` 与 `base_revenue_growth_v1` 两个数据配置。
-- selfplay JSONL 已包含每位玩家的 `player_milestone_ids`；summary 会输出 `MILESTONES` 覆盖频次，可用于后续分析 StrategyBot、OSLA、Beam 和未来 MCTS 在关键里程碑规划上的差异。JSONL 也会区分 bot 主动命令 `action_counts` 与自动强制动作 completion 统计，避免 `pricing_manager` 已经触发自动 `set_price` 但行动分布里看不到 `set_price` 时误判价格路线没有闭环。OSLA/Beam 调参还应同时查看 `search_metrics` / `SEARCH` / comparison `search_delta`，并结合 `TUNING` / `tuning_score_delta` 判断新增搜索是否带来行动或路线质量变化，而不是只增加 attempted simulations、expanded nodes、耗时或 budget expired。
+- selfplay JSONL 已包含每位玩家的 `player_milestone_ids`；summary 会输出 `MILESTONES` 覆盖频次，可用于后续分析 StrategyBot、OSLA、Beam 和 MCTS 在关键里程碑规划上的差异。JSONL 也会区分 bot 主动命令 `action_counts` 与自动强制动作 completion 统计，避免 `pricing_manager` 已经触发自动 `set_price` 但行动分布里看不到 `set_price` 时误判价格路线没有闭环。OSLA/Beam/MCTS 调参还应同时查看 `search_metrics` / `SEARCH` / comparison `search_delta`，并结合 `TUNING` / `tuning_score_delta` 判断新增搜索是否带来行动或路线质量变化，而不是只增加 attempted simulations、expanded nodes、耗时或 budget expired。
 - `BotSelfplayMatrixTest` 现包含一个搜索 bot 流程 smoke：`strategy/osla/beam` 使用同一 `base_revenue_growth_v1` profile、seed 12345、target round 4、1 局，断言三类 bot 都能到达第 4 回合并完成放餐厅、招聘和发起营销等基础动作，同时验证 summary bucket 成功率为 1.0。这条测试只作为 OSLA/Beam wrapper 与 matrix 汇总的流程 gate，不把三者早期行动分布相同视为强度通过。
 - `BotSelfplayMatrixTest` 现包含一个 Strategy-only `base_revenue_growth_v1` 轻量质量门：seed 12345、target round 8、1 局，断言到达第 8 回合、两名玩家现金形成后不跌破 10、现金峰值至少 20，并在真实自对弈中覆盖 `initiate_marketing`、`produce_food`、`procure_drinks`、`recruit`、真实 `set_price` mandatory completion，以及 `first_billboard`、`first_burger_marketed`、`first_burger_produced`、`first_errand_boy`、`first_lower_prices`。这条测试只作为核心收入与关键路线监控，不把 `first_throw_away` 当作主动策略目标。
 - 先用 scenario benchmark 固定策略行为闸门，再做简单网格/随机搜索；若权重空间和指标稳定，再考虑 SPSA。

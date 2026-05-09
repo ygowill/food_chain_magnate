@@ -16,6 +16,8 @@ static func simulate_commands(source: GameEngine, commands: Array[Command], opti
 	var mode := str(options.get("mode", "after_command"))
 	if mode != "after_command":
 		return Result.failure("ForwardSimulator.simulate_commands: unsupported mode: %s" % mode)
+	var budget_val = options.get("budget", null)
+	var budget: TimeBudget = budget_val if budget_val is TimeBudget else null
 
 	var fork_read := AiEngineForkClass.fork_from_engine(source)
 	if not fork_read.ok:
@@ -26,6 +28,9 @@ static func simulate_commands(source: GameEngine, commands: Array[Command], opti
 	var executed: Array = []
 	var all_warnings: Array[String] = []
 	for i in range(commands.size()):
+		if budget != null and budget.expired():
+			_restore_source_registries(source)
+			return Result.failure("ForwardSimulator.simulate_commands: budget expired before command[%d]" % i).with_value(_failure_payload(fork, executed, i, "budget expired", all_warnings))
 		var command := commands[i]
 		if command == null:
 			_restore_source_registries(source)
@@ -46,6 +51,7 @@ static func simulate_commands(source: GameEngine, commands: Array[Command], opti
 		"warnings": all_warnings,
 		"failed_command_index": -1,
 		"error": "",
+		"budget_expired": budget != null and budget.expired(),
 	})
 
 static func _failure_payload(

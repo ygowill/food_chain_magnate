@@ -3,6 +3,7 @@ extends "res://core/ai/bot/fcm_bot.gd"
 
 const BeamSearchClass = preload("res://core/ai/search/beam_search.gd")
 const OSLABotClass = preload("res://core/ai/bot/osla_bot.gd")
+const StrategyPhasePlannerClass = preload("res://core/ai/strategy/strategy_phase_planner.gd")
 const StrategyProfileClass = preload("res://core/ai/strategy/strategy_profile.gd")
 
 var search_options: Dictionary = {
@@ -40,6 +41,12 @@ func choose_command_with_engine(
 	validate_command: Callable = Callable(),
 	budget: TimeBudget = null
 ) -> BotDecision:
+	var phase_search_options := StrategyPhasePlannerClass.build_search_options(
+		observation,
+		context,
+		search_options.get("profile", null),
+		search_options
+	)
 	var search_read := BeamSearchClass.choose_command(
 		engine,
 		observation,
@@ -47,15 +54,20 @@ func choose_command_with_engine(
 		legal_action_ids,
 		validate_command,
 		budget,
-		search_options
+		phase_search_options
 	)
 	if search_read.ok:
 		return search_read.value
 
-	var fallback_budget = null if budget != null and budget.expired() else budget
-	var fallback := fallback_bot.choose_command_with_engine(engine, observation, context, legal_action_ids, validate_command, fallback_budget)
+	var fallback: BotDecision = null
+	if budget != null and budget.expired():
+		fallback = fallback_bot.choose_command(observation, context, legal_action_ids, validate_command, null)
+	else:
+		fallback = fallback_bot.choose_command_with_engine(engine, observation, context, legal_action_ids, validate_command, budget)
 	if fallback != null and not fallback.is_failure():
 		fallback.trace["beam_failure"] = search_read.error
+		if budget != null and budget.expired():
+			fallback.trace["fallback_after_budget_expired"] = true
 		fallback.explanation["fallback"] = "osla"
 		return fallback
 	return BotDecision.failure("BeamBot failed: %s" % search_read.error)

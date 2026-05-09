@@ -242,12 +242,13 @@ static func _filter_unsafe_opening_restaurant_entries(observation: ObservationSt
 			"discarded_reasons": [],
 		}
 	var has_viable_opening := false
+	var viable_opening_entries: Array[Dictionary] = []
 	for entry in ranked:
 		if not _is_restaurant_entry(entry):
 			continue
 		if _is_viable_opening_restaurant_entry(entry):
 			has_viable_opening = true
-			break
+			viable_opening_entries.append(entry)
 	if not has_viable_opening:
 		return {
 			"ranked": ranked,
@@ -267,6 +268,10 @@ static func _filter_unsafe_opening_restaurant_entries(observation: ObservationSt
 				discarded_reasons.append("%s: opening restaurant has no serviceable opening houses" % macro_id)
 			else:
 				discarded_reasons.append("%s: opening restaurant dominated houses %d > servable houses %d" % [macro_id, dominated, servable])
+			continue
+		if _is_restaurant_entry(entry) and _is_viable_opening_restaurant_entry(entry) and _is_dominated_opening_restaurant_entry(entry, viable_opening_entries):
+			var macro_id2 := str(entry.get("macro_action_id", ""))
+			discarded_reasons.append("%s: opening restaurant is dominated by a broader marketing route" % macro_id2)
 			continue
 		kept.append(entry)
 	return {
@@ -291,6 +296,28 @@ static func _is_viable_opening_restaurant_entry(entry: Dictionary) -> bool:
 	var dominated := int(features.get("restaurant_competitor_dominated_houses", 0))
 	var servable := int(features.get("restaurant_competitive_houses", 0)) + int(features.get("restaurant_contested_houses", 0))
 	return servable > 0 and dominated <= servable
+
+static func _is_dominated_opening_restaurant_entry(entry: Dictionary, viable_opening_entries: Array[Dictionary]) -> bool:
+	if not _is_restaurant_entry(entry):
+		return false
+	for other_entry in viable_opening_entries:
+		if _opening_route_dominates(other_entry, entry):
+			return true
+	return false
+
+static func _opening_route_dominates(a_entry: Dictionary, b_entry: Dictionary) -> bool:
+	var a_features: Dictionary = Dictionary(a_entry.get("features", {}))
+	var b_features: Dictionary = Dictionary(b_entry.get("features", {}))
+	var a_houses := int(a_features.get("restaurant_opening_marketing_route_houses", 0))
+	var a_boards := int(a_features.get("restaurant_opening_marketing_route_board_count", 0))
+	var a_options := int(a_features.get("restaurant_opening_marketing_route_options", 0))
+	var b_houses := int(b_features.get("restaurant_opening_marketing_route_houses", 0))
+	var b_boards := int(b_features.get("restaurant_opening_marketing_route_board_count", 0))
+	var b_options := int(b_features.get("restaurant_opening_marketing_route_options", 0))
+	var dominates := a_houses >= b_houses and a_boards >= b_boards and a_options >= b_options
+	if not dominates:
+		return false
+	return a_houses > b_houses or a_boards > b_boards or a_options > b_options
 
 static func _finalize_ranked_candidates(
 	observation: ObservationState,

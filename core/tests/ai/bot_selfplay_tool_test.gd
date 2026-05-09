@@ -7,13 +7,16 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var parse := _test_parse_mixed_bot_args()
 	if not parse.ok:
 		return parse
+	var mcts_support := _test_mcts_bot_support()
+	if not mcts_support.ok:
+		return mcts_support
 	var mandatory_summary := _test_mandatory_completion_summary_counts_untraced_auto_actions()
 	if not mandatory_summary.ok:
 		return mandatory_summary
 	var smoke := _test_run_mixed_bot_config()
 	if not smoke.ok:
 		return smoke
-	return Result.success({"cases": 3})
+	return Result.success({"cases": 4})
 
 static func _test_parse_mixed_bot_args() -> Result:
 	var parsed := SelfplayToolClass._parse_args([
@@ -53,6 +56,30 @@ static func _test_parse_mixed_bot_args() -> Result:
 	var invalid_trace_detail := SelfplayToolClass._parse_args(["--trace-detail=full"])
 	if invalid_trace_detail.ok:
 		return Result.failure("--trace-detail should reject unsupported modes")
+	return Result.success()
+
+static func _test_mcts_bot_support() -> Result:
+	if not SelfplayToolClass.SUPPORTED_BOT_IDS.has("mcts"):
+		return Result.failure("SUPPORTED_BOT_IDS should include mcts: %s" % str(SelfplayToolClass.SUPPORTED_BOT_IDS))
+	var parsed := SelfplayToolClass._parse_args([
+		"--bot=mcts",
+		"--matches=1",
+	])
+	if not parsed.ok:
+		return parsed
+	if str(Dictionary(parsed.value).get("bot_id", "")) != "mcts":
+		return Result.failure("--bot should parse mcts: %s" % str(parsed.value))
+	var resolved := SelfplayToolClass._resolve_bot_ids(Dictionary(parsed.value), 1)
+	if not resolved.ok:
+		return resolved
+	if str(resolved.value) != str(["mcts"]):
+		return Result.failure("resolved mcts bot ids mismatch: %s" % str(resolved.value))
+	var bot_read := SelfplayToolClass._create_bot("mcts", "base_revenue_growth_v1")
+	if not bot_read.ok:
+		return bot_read
+	var bot = bot_read.value
+	if bot == null or not bot.has_method("choose_command_with_engine"):
+		return Result.failure("mcts bot should expose choose_command_with_engine")
 	return Result.success()
 
 static func _test_mandatory_completion_summary_counts_untraced_auto_actions() -> Result:
