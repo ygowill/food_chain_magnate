@@ -1,6 +1,8 @@
 class_name StrategyPlanHints
 extends RefCounted
 
+const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+
 var preferred_products: Array[String] = []
 var preferred_employee_roles: Array[String] = []
 var preferred_employee_ids: Array[String] = []
@@ -47,6 +49,9 @@ static func create(
 static func from_plan(plan):
 	if plan == null:
 		return load("res://core/ai/planning/strategic_plan_hints.gd").create()
+	var target_products := _string_array(plan.target_products)
+	var include_food := _target_products_include_food(target_products)
+	var include_drink := _target_products_include_drink(target_products)
 	var roles: Array[String] = []
 	var employees: Array[String] = []
 	var price_actions: Array[String] = []
@@ -58,24 +63,32 @@ static func from_plan(plan):
 	match str(plan.route_type):
 		"marketing_income", "product_switch_attack":
 			roles.append("marketing")
-			roles.append("produce_food")
-			roles.append("procure_drink")
+			if include_food:
+				roles.append("produce_food")
+			if include_drink:
+				roles.append("procure_drink")
 			employees.append_array(plan.target_employees)
 			actions.append("initiate_marketing")
-			actions.append("produce_food")
-			actions.append("procure_drinks")
+			if include_food:
+				actions.append("produce_food")
+			if include_drink:
+				actions.append("procure_drinks")
 			actions.append("recruit")
 			actions.append("train")
 			avoid.append("fire")
 		"supply_capacity":
-			roles.append("produce_food")
-			roles.append("procure_drink")
+			if include_food:
+				roles.append("produce_food")
+			if include_drink:
+				roles.append("procure_drink")
 			roles.append("recruit_train")
 			employees.append_array(plan.target_employees)
 			actions.append("recruit")
 			actions.append("train")
-			actions.append("produce_food")
-			actions.append("procure_drinks")
+			if include_food:
+				actions.append("produce_food")
+			if include_drink:
+				actions.append("procure_drinks")
 		"price_recovery":
 			roles.append("price")
 			employees.append("pricing_manager")
@@ -85,6 +98,12 @@ static func from_plan(plan):
 			actions.append("set_price")
 			actions.append("set_discount")
 			actions.append("set_luxury_price")
+			if include_food:
+				roles.append("produce_food")
+				actions.append("produce_food")
+			if include_drink:
+				roles.append("procure_drink")
+				actions.append("procure_drinks")
 			actions.append("recruit")
 			actions.append("train")
 		"growth":
@@ -191,3 +210,22 @@ static func _ordered_string_array(value) -> Array[String]:
 			if not text.is_empty() and not out.has(text):
 				out.append(text)
 	return out
+
+static func _target_products_include_food(product_ids: Array[String]) -> bool:
+	for product_id in product_ids:
+		if not _is_drink(product_id):
+			return true
+	return false
+
+static func _target_products_include_drink(product_ids: Array[String]) -> bool:
+	for product_id in product_ids:
+		if _is_drink(product_id):
+			return true
+	return false
+
+static func _is_drink(product_id: String) -> bool:
+	if product_id.is_empty():
+		return false
+	if ProductRegistryClass.is_loaded() and ProductRegistryClass.has(product_id):
+		return ProductRegistryClass.is_drink(product_id)
+	return product_id == "beer" or product_id == "soda" or product_id == "lemonade"

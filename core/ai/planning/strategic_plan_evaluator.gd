@@ -157,10 +157,11 @@ static func _route_transition_bonus(
 	if current_route_type.is_empty():
 		return 0.0
 	var streak := maxf(1.0, float(int(tail.get("streak", 1))))
+	var has_cash_footing := _has_cash_footing(rollout)
 	if current_route_type == previous_route_type:
 		match current_route_type:
 			"marketing_income":
-				return -3.0 * streak
+				return (-3.0 if has_cash_footing else -1.0) * streak
 			"price_recovery", "supply_capacity":
 				return -1.5 * streak
 			"product_switch_attack":
@@ -172,6 +173,8 @@ static func _route_transition_bonus(
 		"marketing_income":
 			match current_route_type:
 				"price_recovery", "supply_capacity":
+					if not has_cash_footing:
+						return -1.0 * streak
 					return 5.5 + streak * 1.25
 				"product_switch_attack":
 					return 3.0 + streak * 0.75
@@ -218,6 +221,13 @@ static func _route_transition_bonus(
 				_:
 					return -0.5
 	return 0.0
+
+static func _has_cash_footing(rollout: Dictionary) -> bool:
+	if rollout.is_empty():
+		return false
+	if int(rollout.get("cash_before", 0)) >= 10:
+		return true
+	return int(rollout.get("cash_min_after_first_positive", 0)) >= 10
 
 static func _sequence_progress_bonus(plan, rollout: Dictionary = {}) -> float:
 	if plan == null or not plan.has_method("is_valid"):

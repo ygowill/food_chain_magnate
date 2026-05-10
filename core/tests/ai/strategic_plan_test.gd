@@ -77,6 +77,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var stall_guard := _test_evaluator_penalizes_stalled_route(seed_val)
 	if not stall_guard.ok:
 		return stall_guard
+	var footing_guard := _test_route_transition_bonus_waits_for_cash_footing(seed_val)
+	if not footing_guard.ok:
+		return footing_guard
 	var actionable_guard := _test_strategic_search_filters_stalled_routes()
 	if not actionable_guard.ok:
 		return actionable_guard
@@ -98,7 +101,7 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var mcts_mode := _test_strategic_bot_mcts_mode(seed_val)
 	if not mcts_mode.ok:
 		return mcts_mode
-	return Result.success({"cases": 25})
+	return Result.success({"cases": 26})
 
 static func _test_plan_and_hints_roundtrip() -> Result:
 	var plan = StrategicPlanClass.create(
@@ -132,13 +135,41 @@ static func _test_plan_and_hints_roundtrip() -> Result:
 		return Result.failure("StrategyPlanHints should prefer target product: %s" % str(hints_dict))
 	if not Array(hints_dict.get("preferred_employee_roles", [])).has("marketing"):
 		return Result.failure("StrategyPlanHints should include marketing role: %s" % str(hints_dict))
+	if Array(hints_dict.get("preferred_employee_roles", [])).has("procure_drink"):
+		return Result.failure("StrategyPlanHints should not inject drink role for burger route: %s" % str(hints_dict))
 	if not Array(hints_dict.get("preferred_actions", [])).has("initiate_marketing"):
 		return Result.failure("StrategyPlanHints should include route actions: %s" % str(hints_dict))
+	if Array(hints_dict.get("preferred_actions", [])).has("procure_drinks"):
+		return Result.failure("StrategyPlanHints should not inject drink action for burger route: %s" % str(hints_dict))
 	if Array(hints_dict.get("execution_sequence", [])).is_empty():
 		return Result.failure("StrategyPlanHints should preserve execution sequence: %s" % str(hints_dict))
 	var hints_copy = StrategyPlanHintsClass.from_dict(hints_dict)
 	if str(hints_copy.to_dict()) != str(hints_dict):
 		return Result.failure("StrategyPlanHints dict roundtrip mismatch: %s vs %s" % [str(hints_copy.to_dict()), str(hints_dict)])
+	var drink_plan = StrategicPlanClass.create(
+		"marketing_income_beer",
+		0,
+		"marketing_income",
+		21.0,
+		["beer"],
+		[],
+		[],
+		{},
+		["income", "marketing"],
+		2,
+		16,
+		["initiate_marketing", "procure_drinks"]
+	)
+	var drink_hints = StrategyPlanHintsClass.from_plan(drink_plan)
+	var drink_hints_dict: Dictionary = drink_hints.to_dict()
+	if not Array(drink_hints_dict.get("preferred_employee_roles", [])).has("procure_drink"):
+		return Result.failure("StrategyPlanHints should include drink role for beer route: %s" % str(drink_hints_dict))
+	if Array(drink_hints_dict.get("preferred_employee_roles", [])).has("produce_food"):
+		return Result.failure("StrategyPlanHints should not inject food role for drink-only route: %s" % str(drink_hints_dict))
+	if not Array(drink_hints_dict.get("preferred_actions", [])).has("procure_drinks"):
+		return Result.failure("StrategyPlanHints should include drink action for beer route: %s" % str(drink_hints_dict))
+	if Array(drink_hints_dict.get("preferred_actions", [])).has("produce_food"):
+		return Result.failure("StrategyPlanHints should not inject food action for drink-only route: %s" % str(drink_hints_dict))
 	return Result.success()
 
 static func _test_generator_creates_income_and_supply_plans() -> Result:
@@ -1084,6 +1115,90 @@ static func _test_evaluator_penalizes_stalled_route(seed_val: int) -> Result:
 		return Result.failure("route action progress should not receive stalled penalty: %s" % str(progress_breakdown))
 	if float(progress_payload.get("score", 0.0)) <= float(stalled_payload.get("score", 0.0)):
 		return Result.failure("route progress should score above stalled route: stalled=%s progress=%s" % [str(stalled_breakdown), str(progress_breakdown)])
+	return Result.success()
+
+static func _test_route_transition_bonus_waits_for_cash_footing(seed_val: int) -> Result:
+	var inputs_read := _build_income_route_inputs(seed_val)
+	if not inputs_read.ok:
+		return inputs_read
+	var data: Dictionary = inputs_read.value
+	var profile := StrategyProfileClass.new()
+	var profile_read := profile.configure("base_revenue_growth_v1")
+	if not profile_read.ok:
+		return profile_read
+	var repeat_plan = StrategicPlanClass.create(
+		"marketing_repeat",
+		0,
+		"marketing_income",
+		0.0,
+		["burger"],
+		["house_left"],
+		["campaign_manager"],
+		{},
+		["marketing"],
+		2,
+		16,
+		["recruit", "initiate_marketing", "produce_food"]
+	)
+	var switch_plan = StrategicPlanClass.create(
+		"supply_switch",
+		0,
+		"supply_capacity",
+		0.0,
+		["burger"],
+		["house_left"],
+		["burger_cook"],
+		{},
+		["supply"],
+		2,
+		16,
+		["train", "produce_food"]
+	)
+	var early_rollout := {
+		"engine": data["engine"],
+		"commands_executed": [
+			{"actor": 0, "action_id": "initiate_marketing", "params": {"product": "burger"}},
+		],
+		"cash_before": 0,
+		"cash_min_after_first_positive": 0,
+		"cash_max_seen": 0,
+		"route_history": ["marketing_income"],
+		"search_time_ms": 0,
+		"milestones_gained": [],
+		"demand_created": 0,
+		"demand_sold": 0,
+	}
+	var early_repeat_eval := StrategicPlanEvaluatorClass.evaluate_rollout(repeat_plan, early_rollout, profile)
+	if not early_repeat_eval.ok:
+		return early_repeat_eval
+	var early_switch_eval := StrategicPlanEvaluatorClass.evaluate_rollout(switch_plan, early_rollout, profile)
+	if not early_switch_eval.ok:
+		return early_switch_eval
+	var early_repeat_breakdown: Dictionary = Dictionary(Dictionary(early_repeat_eval.value).get("breakdown", {}))
+	var early_switch_breakdown: Dictionary = Dictionary(Dictionary(early_switch_eval.value).get("breakdown", {}))
+	var early_repeat_bonus := float(early_repeat_breakdown.get("route_transition_bonus", 0.0))
+	var early_switch_bonus := float(early_switch_breakdown.get("route_transition_bonus", 0.0))
+	if early_switch_bonus > 0.0:
+		return Result.failure("route transition bonus should not reward early marketing-to-supply switch before cash footing: %s" % str(early_switch_breakdown))
+	if early_switch_bonus > early_repeat_bonus:
+		return Result.failure("route transition bonus should not prefer early marketing-to-supply switch before cash footing: switch=%f repeat=%f" % [early_switch_bonus, early_repeat_bonus])
+
+	var grounded_rollout := early_rollout.duplicate(true)
+	grounded_rollout["cash_before"] = 12
+	grounded_rollout["cash_min_after_first_positive"] = 12
+	grounded_rollout["cash_max_seen"] = 20
+	var grounded_repeat_eval := StrategicPlanEvaluatorClass.evaluate_rollout(repeat_plan, grounded_rollout, profile)
+	if not grounded_repeat_eval.ok:
+		return grounded_repeat_eval
+	var grounded_switch_eval := StrategicPlanEvaluatorClass.evaluate_rollout(switch_plan, grounded_rollout, profile)
+	if not grounded_switch_eval.ok:
+		return grounded_switch_eval
+	var grounded_repeat_bonus := float(Dictionary(Dictionary(grounded_repeat_eval.value).get("breakdown", {})).get("route_transition_bonus", 0.0))
+	var grounded_switch_bonus := float(Dictionary(Dictionary(grounded_switch_eval.value).get("breakdown", {})).get("route_transition_bonus", 0.0))
+	if grounded_switch_bonus <= grounded_repeat_bonus:
+		return Result.failure("route transition bonus should prefer marketing-to-supply switch after cash footing: switch=%f repeat=%f" % [grounded_switch_bonus, grounded_repeat_bonus])
+	if grounded_switch_bonus <= early_switch_bonus:
+		return Result.failure("route transition bonus should increase after cash footing: early=%f grounded=%f" % [early_switch_bonus, grounded_switch_bonus])
 	return Result.success()
 
 static func _test_strategic_search_filters_stalled_routes() -> Result:
