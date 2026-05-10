@@ -60,6 +60,9 @@ static func choose_plan_mcts(
 	root["candidate_count"] = plans.size()
 	root["candidate_deduped_count"] = plans.size()
 	root["root_player_id"] = root_player_id
+	root["non_root_populated_nodes"] = 0
+	root["non_root_expanded_nodes"] = 0
+	root["non_root_candidate_count"] = 0
 
 	var attempted_rollouts := 0
 	var expanded_nodes := 0
@@ -73,6 +76,9 @@ static func choose_plan_mcts(
 	var executed_iterations := 0
 	var plan_state_deduped_nodes := 0
 	var plan_transposition_pruned_nodes := 0
+	var non_root_populated_nodes := 0
+	var non_root_expanded_nodes := 0
+	var non_root_candidate_count := 0
 	var best_state_scores: Dictionary = {}
 
 	for _iteration in range(iterations):
@@ -129,6 +135,10 @@ static func choose_plan_mcts(
 			budget_expired = true
 			break
 
+	non_root_populated_nodes = int(root.get("non_root_populated_nodes", 0))
+	non_root_expanded_nodes = int(root.get("non_root_expanded_nodes", 0))
+	non_root_candidate_count = int(root.get("non_root_candidate_count", 0))
+
 	var root_children: Array = Array(root.get("children", []))
 	if root_children.is_empty():
 		return Result.failure("StrategicMCTSSearch.choose_plan_mcts: no root children evaluated")
@@ -153,6 +163,8 @@ static func choose_plan_mcts(
 	var selected_leaf_depth := int(best_child.get("best_leaf_depth", best_child.get("depth", 0)))
 	var selected_leaf_value_score := float(best_child.get("best_leaf_value_score", best_value_score))
 	var selected_state_key := str(best_child.get("state_key", ""))
+	var selected_route_types := _route_types_for_path(selected_path)
+	var selected_route_switch_count := _route_switch_count(selected_route_types)
 	var root_selection_mode := str(root_selection_payload.get("selection_mode", "visits"))
 	var root_prior_guarded := bool(root_selection_payload.get("prior_guarded", false))
 	var root_min_required_visits := int(root_selection_payload.get("min_required_visits", 0))
@@ -175,6 +187,8 @@ static func choose_plan_mcts(
 	features["mcts_selected_leaf_depth"] = selected_leaf_depth
 	features["mcts_selected_leaf_value_score"] = selected_leaf_value_score
 	features["mcts_selected_state_key"] = selected_state_key
+	features["mcts_selected_route_types"] = selected_route_types.duplicate()
+	features["mcts_route_switch_count"] = selected_route_switch_count
 	features["mcts_root_child_count"] = root_children.size()
 	features["mcts_root_raw_child_count"] = root_raw_child_count
 	features["mcts_max_depth"] = max_depth
@@ -196,6 +210,9 @@ static func choose_plan_mcts(
 	features["mcts_backprop_ms"] = backprop_ms
 	features["mcts_plan_state_deduped_nodes"] = plan_state_deduped_nodes
 	features["mcts_plan_transposition_pruned_nodes"] = plan_transposition_pruned_nodes
+	features["mcts_non_root_populated_nodes"] = non_root_populated_nodes
+	features["mcts_non_root_expanded_nodes"] = non_root_expanded_nodes
+	features["mcts_non_root_candidate_count"] = non_root_candidate_count
 
 	var top_plans := _trace_evaluated(root_children, 5)
 	return Result.success({
@@ -224,8 +241,13 @@ static func choose_plan_mcts(
 		"mcts_selected_leaf_depth": selected_leaf_depth,
 		"mcts_selected_leaf_value_score": selected_leaf_value_score,
 		"mcts_selected_state_key": selected_state_key,
+		"mcts_selected_route_types": selected_route_types,
+		"mcts_route_switch_count": selected_route_switch_count,
 		"mcts_plan_state_deduped_nodes": plan_state_deduped_nodes,
 		"mcts_plan_transposition_pruned_nodes": plan_transposition_pruned_nodes,
+		"mcts_non_root_populated_nodes": non_root_populated_nodes,
+		"mcts_non_root_expanded_nodes": non_root_expanded_nodes,
+		"mcts_non_root_candidate_count": non_root_candidate_count,
 		"plan_eval_breakdown": Dictionary(best_child.get("leaf_breakdown", {})).duplicate(true),
 	})
 
@@ -300,6 +322,9 @@ static func _select_leaf(
 			if not populate_read.ok:
 				return populate_read
 			var populate_payload: Dictionary = Dictionary(populate_read.value)
+			if int(current.get("depth", 0)) > 0 and int(current.get("candidate_count", 0)) > 0:
+				node["non_root_populated_nodes"] = int(node.get("non_root_populated_nodes", 0)) + 1
+				node["non_root_candidate_count"] = int(node.get("non_root_candidate_count", 0)) + int(current.get("candidate_count", 0))
 			if bool(populate_payload.get("budget_expired", false)):
 				return Result.success({
 					"leaf": current,
@@ -352,6 +377,8 @@ static func _select_leaf(
 			expanded_nodes += int(expand_payload.get("expanded_nodes", 0))
 			plan_state_deduped_nodes += int(expand_payload.get("plan_state_deduped_nodes", 0))
 			plan_transposition_pruned_nodes += int(expand_payload.get("plan_transposition_pruned_nodes", 0))
+			if expanded_now and int(current.get("depth", 0)) > 0:
+				node["non_root_expanded_nodes"] = int(node.get("non_root_expanded_nodes", 0)) + 1
 			rollout_ms += int(expand_payload.get("rollout_ms", 0))
 			rollout_ms_max = maxi(rollout_ms_max, int(expand_payload.get("rollout_ms_max", 0)))
 			eval_ms += int(expand_payload.get("eval_ms", 0))
@@ -845,6 +872,10 @@ static func _trace_evaluated(nodes: Array, limit: int) -> Array[Dictionary]:
 			continue
 		var item: Dictionary = item_val
 		var rollout: Dictionary = Dictionary(item.get("rollout", {}))
+		var path: Array = Array(item.get("path", [])).duplicate(true)
+		var best_path: Array = Array(item.get("best_leaf_path", item.get("path", []))).duplicate(true)
+		var route_types := _route_types_for_path(path)
+		var best_route_types := _route_types_for_path(best_path)
 		out.append({
 			"plan_id": str(item.get("plan_id", "")),
 			"route_type": str(item.get("route_type", "")),
@@ -859,8 +890,11 @@ static func _trace_evaluated(nodes: Array, limit: int) -> Array[Dictionary]:
 			"visits": int(item.get("visits", 0)),
 			"q": float(item.get("q", 0.0)),
 			"depth": int(item.get("depth", 0)),
-			"path": Array(item.get("path", [])).duplicate(true),
-			"best_path": Array(item.get("best_leaf_path", item.get("path", []))).duplicate(true),
+			"path": path,
+			"best_path": best_path,
+			"route_types": route_types,
+			"best_route_types": best_route_types,
+			"route_switch_count": _route_switch_count(best_route_types),
 			"best_leaf_depth": int(item.get("best_leaf_depth", item.get("depth", 0))),
 			"best_leaf_value_score": float(item.get("best_leaf_value_score", item.get("leaf_value_score", 0.0))),
 		})
@@ -918,6 +952,29 @@ static func _path_item(plan, depth: int, path_contribution: float) -> Dictionary
 		"depth": int(depth),
 		"path_contribution": float(path_contribution),
 	}
+
+static func _route_types_for_path(path: Array) -> Array[String]:
+	var route_types: Array[String] = []
+	for path_item_val in path:
+		if not (path_item_val is Dictionary):
+			continue
+		var route_type := str(Dictionary(path_item_val).get("route_type", "")).strip_edges()
+		if route_type.is_empty():
+			continue
+		route_types.append(route_type)
+	return route_types
+
+static func _route_switch_count(route_types: Array) -> int:
+	var previous := ""
+	var switch_count := 0
+	for route_type_val in route_types:
+		var route_type := str(route_type_val).strip_edges()
+		if route_type.is_empty():
+			continue
+		if not previous.is_empty() and route_type != previous:
+			switch_count += 1
+		previous = route_type
+	return switch_count
 
 static func _register_transposition_state(node: Dictionary, best_state_scores: Dictionary) -> Dictionary:
 	var state_key := str(node.get("state_key", ""))

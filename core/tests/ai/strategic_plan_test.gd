@@ -86,10 +86,13 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var mcts_search := _test_strategic_mcts_search_returns_plan_level_trace(seed_val)
 	if not mcts_search.ok:
 		return mcts_search
+	var mcts_non_root := _test_strategic_mcts_expands_non_root_plan_nodes(seed_val)
+	if not mcts_non_root.ok:
+		return mcts_non_root
 	var mcts_mode := _test_strategic_bot_mcts_mode(seed_val)
 	if not mcts_mode.ok:
 		return mcts_mode
-	return Result.success({"cases": 22})
+	return Result.success({"cases": 23})
 
 static func _test_plan_and_hints_roundtrip() -> Result:
 	var plan = StrategicPlanClass.create(
@@ -1182,6 +1185,13 @@ static func _test_strategic_mcts_search_returns_plan_level_trace(seed_val: int) 
 		return Result.failure("Strategic plan MCTS should expose selected plan continuation path: %s" % str(payload))
 	if str(payload.get("mcts_selected_state_key", "")).is_empty():
 		return Result.failure("Strategic plan MCTS should expose selected plan-state key: %s" % str(payload))
+	var selected_route_types: Array = Array(payload.get("mcts_selected_route_types", []))
+	if selected_route_types.is_empty():
+		return Result.failure("Strategic plan MCTS should expose selected route types: %s" % str(payload))
+	if int(payload.get("mcts_route_switch_count", -1)) != StrategicMCTSSearchClass._route_switch_count(selected_route_types):
+		return Result.failure("Strategic plan MCTS route switch count should match selected route types: %s" % str(payload))
+	if not payload.has("mcts_non_root_populated_nodes") or not payload.has("mcts_non_root_expanded_nodes") or not payload.has("mcts_non_root_candidate_count"):
+		return Result.failure("Strategic plan MCTS should expose non-root expansion metrics: %s" % str(payload))
 	if not payload.has("mcts_plan_state_deduped_nodes") or not payload.has("mcts_plan_transposition_pruned_nodes"):
 		return Result.failure("Strategic plan MCTS should expose plan transposition metrics: %s" % str(payload))
 	var evaluated_plans: Array = Array(payload.get("evaluated_plans", []))
@@ -1203,6 +1213,11 @@ static func _test_strategic_mcts_search_returns_plan_level_trace(seed_val: int) 
 	var best_path: Array = Array(first_eval.get("best_path", []))
 	if best_path.is_empty():
 		return Result.failure("Strategic plan MCTS evaluated node should expose its best continuation path: %s" % str(first_eval))
+	var best_route_types: Array = Array(first_eval.get("best_route_types", []))
+	if best_route_types.is_empty():
+		return Result.failure("Strategic plan MCTS evaluated node should expose best route types: %s" % str(first_eval))
+	if int(first_eval.get("route_switch_count", -1)) != StrategicMCTSSearchClass._route_switch_count(best_route_types):
+		return Result.failure("Strategic plan MCTS evaluated node route switch count should match best route types: %s" % str(first_eval))
 	for path_item_val in path:
 		if not (path_item_val is Dictionary):
 			return Result.failure("Strategic plan MCTS path entries should be dictionaries: %s" % str(path))
@@ -1211,6 +1226,59 @@ static func _test_strategic_mcts_search_returns_plan_level_trace(seed_val: int) 
 			return Result.failure("Strategic plan MCTS path entries should identify plans: %s" % str(path))
 		if path_item.has("command") or path_item.has("commands_executed"):
 			return Result.failure("Strategic plan MCTS path should stay at plan level: %s" % str(path))
+	return Result.success()
+
+static func _test_strategic_mcts_expands_non_root_plan_nodes(seed_val: int) -> Result:
+	var route_types := StrategicMCTSSearchClass._route_types_for_path([
+		{"route_type": "marketing_income"},
+		{"route_type": "supply_capacity"},
+		{"route_type": "supply_capacity"},
+		{"route_type": "price_recovery"},
+	])
+	if route_types.size() != 4 or str(route_types[0]) != "marketing_income":
+		return Result.failure("MCTS route type helper should preserve path order: %s" % str(route_types))
+	if StrategicMCTSSearchClass._route_switch_count(route_types) != 2:
+		return Result.failure("MCTS route switch helper should count route transitions: %s" % str(route_types))
+
+	var inputs_read := _build_income_route_inputs(seed_val)
+	if not inputs_read.ok:
+		return inputs_read
+	var data: Dictionary = inputs_read.value
+	var profile := StrategyProfileClass.new()
+	var profile_read := profile.configure("base_revenue_growth_v1")
+	if not profile_read.ok:
+		return profile_read
+	var search_read := StrategicSearchClass.choose_plan_mcts(
+		data["engine"],
+		data["observation"],
+		profile,
+		TimeBudget.start(1200),
+		{
+			"max_plans": 1,
+			"min_plans_for_rollout": 1,
+			"horizon_decisions": 4,
+			"horizon_rounds": 1,
+			"step_budget_ms": 20,
+			"mcts_iterations": 3,
+			"mcts_max_depth": 2,
+			"mcts_top_k_per_node": 1,
+			"mcts_root_prior_min_visits_per_child": 0,
+		}
+	)
+	if not search_read.ok:
+		return search_read
+	var payload: Dictionary = Dictionary(search_read.value)
+	if int(payload.get("mcts_non_root_populated_nodes", 0)) <= 0:
+		return Result.failure("Strategic plan MCTS should regenerate candidates below root: %s" % str(payload))
+	if int(payload.get("mcts_non_root_candidate_count", 0)) <= 0:
+		return Result.failure("Strategic plan MCTS should count non-root generated candidates: %s" % str(payload))
+	if int(payload.get("mcts_non_root_expanded_nodes", 0)) <= 0:
+		return Result.failure("Strategic plan MCTS should expand at least one non-root plan node: %s" % str(payload))
+	var features: Dictionary = Dictionary(payload.get("features", {}))
+	if int(features.get("mcts_non_root_populated_nodes", 0)) != int(payload.get("mcts_non_root_populated_nodes", 0)):
+		return Result.failure("Strategic plan MCTS features should mirror non-root metrics: features=%s payload=%s" % [str(features), str(payload)])
+	if Array(payload.get("mcts_selected_route_types", [])).is_empty():
+		return Result.failure("Strategic plan MCTS should expose selected route type sequence: %s" % str(payload))
 	return Result.success()
 
 static func _test_strategic_bot_mcts_mode(seed_val: int) -> Result:
@@ -1257,6 +1325,12 @@ static func _test_strategic_bot_mcts_mode(seed_val: int) -> Result:
 		return Result.failure("StrategicBot mcts mode should expose selected plan continuation path: %s" % str(trace))
 	if str(trace.get("mcts_selected_state_key", "")).is_empty():
 		return Result.failure("StrategicBot mcts mode should expose selected plan-state key: %s" % str(trace))
+	if Array(trace.get("mcts_selected_route_types", [])).is_empty():
+		return Result.failure("StrategicBot mcts mode should expose selected route types: %s" % str(trace))
+	if not trace.has("mcts_route_switch_count"):
+		return Result.failure("StrategicBot mcts mode should expose route switch count: %s" % str(trace))
+	if not trace.has("mcts_non_root_populated_nodes") or not trace.has("mcts_non_root_expanded_nodes") or not trace.has("mcts_non_root_candidate_count"):
+		return Result.failure("StrategicBot mcts mode should expose non-root expansion metrics: %s" % str(trace))
 	if not trace.has("mcts_plan_state_deduped_nodes"):
 		return Result.failure("StrategicBot mcts mode should expose plan-state dedupe count: %s" % str(trace))
 	if not trace.has("mcts_plan_transposition_pruned_nodes"):
@@ -1267,6 +1341,10 @@ static func _test_strategic_bot_mcts_mode(seed_val: int) -> Result:
 		return Result.failure("StrategicBot mcts explanation should expose plan transposition prune count: %s" % str(decision.explanation))
 	if str(decision.explanation.get("mcts_selected_state_key", "")).is_empty():
 		return Result.failure("StrategicBot mcts explanation should expose selected plan-state key: %s" % str(decision.explanation))
+	if Array(decision.explanation.get("mcts_selected_route_types", [])).is_empty():
+		return Result.failure("StrategicBot mcts explanation should expose selected route types: %s" % str(decision.explanation))
+	if not decision.explanation.has("mcts_non_root_populated_nodes"):
+		return Result.failure("StrategicBot mcts explanation should expose non-root expansion metrics: %s" % str(decision.explanation))
 	var valid := LegalActionServiceClass.validate_command(data["engine"], decision.command, data["context"])
 	if not valid.ok:
 		return Result.failure("StrategicBot mcts mode returned invalid command: %s" % valid.error)
@@ -1291,6 +1369,8 @@ static func _test_strategic_bot_mcts_mode(seed_val: int) -> Result:
 		return Result.failure("StrategicBot mcts mode should expose evaluated plan path: %s" % str(trace))
 	if Array(first_eval.get("best_path", [])).is_empty():
 		return Result.failure("StrategicBot mcts mode should expose evaluated plan best continuation path: %s" % str(trace))
+	if Array(first_eval.get("best_route_types", [])).is_empty():
+		return Result.failure("StrategicBot mcts mode should expose evaluated plan best route types: %s" % str(trace))
 	var cached := bot.choose_command_with_engine(
 		data["engine"],
 		data["observation"],

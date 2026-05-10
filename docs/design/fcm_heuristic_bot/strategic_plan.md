@@ -155,6 +155,14 @@ rollout 输出：
    - rollout policy 仍用 StrategyBot + plan hints。
    - visit/q/backprop 在 plan 层进行，不再直接比较单个 `Command` 的 visits。
 
+### 当前实现
+
+`StrategicMCTSSearch` 已经落到 plan-level trace，而不是 action-level 搜索：
+
+- `evaluated_plans` 记录 `path`、`best_path`、`route_types`、`best_route_types` 和 `route_switch_count`。
+- 最终 payload / `StrategicBot` trace 记录 `mcts_selected_route_types`、`mcts_route_switch_count`、`mcts_non_root_populated_nodes`、`mcts_non_root_expanded_nodes`、`mcts_non_root_candidate_count`。
+- 这些指标用于区分根 plan 选择和后续 plan 展开，不再回到 raw command 级 visits/q 比较。
+
 ## 测试与验收
 
 新增测试建议：
@@ -232,7 +240,7 @@ rollout 输出：
 - `StrategyPlanHints` 默认是软约束；只有明显非法或会破坏计划的动作才进入 `avoid_actions`。
 - rollout 对手首版固定使用 StrategyBot，避免战略搜索和自身策略递归耦合。
 - `StrategicBot` 的 fallback 顺序应是 `StrategyBot`，不是其他搜索 bot，因为当前强基线是 Strategy。
-- trace 必须记录 `plan_id`、`route_type`、`plan_prior_score`、`plan_eval_score`、`plan_eval_breakdown`、`plan_rollout_stop_reason`、`plan_search_time_ms`。
+- trace 必须记录 `plan_id`、`route_type`、`route_types` / `best_route_types`、`mcts_selected_route_types`、`mcts_route_switch_count`、`mcts_non_root_populated_nodes`、`mcts_non_root_expanded_nodes`、`mcts_non_root_candidate_count`、`plan_prior_score`、`plan_eval_score`、`plan_eval_breakdown`、`plan_rollout_stop_reason`、`plan_search_time_ms`。
 
 最小 CLI 接入：
 

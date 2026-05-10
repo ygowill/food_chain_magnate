@@ -241,8 +241,13 @@ func _choose_with_plan(
 		decision.trace["mcts_selected_leaf_depth"] = int(search_payload.get("mcts_selected_leaf_depth", 0))
 		decision.trace["mcts_selected_leaf_value_score"] = float(search_payload.get("mcts_selected_leaf_value_score", search_payload.get("score", 0.0)))
 		decision.trace["mcts_selected_state_key"] = str(search_payload.get("mcts_selected_state_key", ""))
+		decision.trace["mcts_selected_route_types"] = Array(search_payload.get("mcts_selected_route_types", [])).duplicate()
+		decision.trace["mcts_route_switch_count"] = int(search_payload.get("mcts_route_switch_count", 0))
 		decision.trace["mcts_plan_state_deduped_nodes"] = int(search_payload.get("mcts_plan_state_deduped_nodes", 0))
 		decision.trace["mcts_plan_transposition_pruned_nodes"] = int(search_payload.get("mcts_plan_transposition_pruned_nodes", 0))
+		decision.trace["mcts_non_root_populated_nodes"] = int(search_payload.get("mcts_non_root_populated_nodes", 0))
+		decision.trace["mcts_non_root_expanded_nodes"] = int(search_payload.get("mcts_non_root_expanded_nodes", 0))
+		decision.trace["mcts_non_root_candidate_count"] = int(search_payload.get("mcts_non_root_candidate_count", 0))
 		decision.explanation["search"] = "strategic_cached" if used_cached_plan else "strategic"
 		decision.explanation["strategic_budget_profile"] = budget_profile
 		decision.explanation["plan_id"] = plan.id
@@ -269,8 +274,13 @@ func _choose_with_plan(
 		decision.explanation["mcts_selected_leaf_depth"] = int(search_payload.get("mcts_selected_leaf_depth", 0))
 		decision.explanation["mcts_selected_leaf_value_score"] = float(search_payload.get("mcts_selected_leaf_value_score", search_payload.get("score", 0.0)))
 		decision.explanation["mcts_selected_state_key"] = str(search_payload.get("mcts_selected_state_key", ""))
+		decision.explanation["mcts_selected_route_types"] = Array(search_payload.get("mcts_selected_route_types", [])).duplicate()
+		decision.explanation["mcts_route_switch_count"] = int(search_payload.get("mcts_route_switch_count", 0))
 		decision.explanation["mcts_plan_state_deduped_nodes"] = int(search_payload.get("mcts_plan_state_deduped_nodes", 0))
 		decision.explanation["mcts_plan_transposition_pruned_nodes"] = int(search_payload.get("mcts_plan_transposition_pruned_nodes", 0))
+		decision.explanation["mcts_non_root_populated_nodes"] = int(search_payload.get("mcts_non_root_populated_nodes", 0))
+		decision.explanation["mcts_non_root_expanded_nodes"] = int(search_payload.get("mcts_non_root_expanded_nodes", 0))
+		decision.explanation["mcts_non_root_candidate_count"] = int(search_payload.get("mcts_non_root_candidate_count", 0))
 		return decision
 	return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), "hinted strategy failed")
 
