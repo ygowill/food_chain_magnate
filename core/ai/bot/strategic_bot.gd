@@ -11,6 +11,7 @@ const MIN_PLAN_SEARCH_MS := 16
 const DEFAULT_MIN_PLAN_SEARCH_MS := 240
 const DEFAULT_MIN_PLANS_FOR_ROLLOUT := 1
 const DEFAULT_BUDGET_PROFILE := "play"
+const MAX_ROUTE_HISTORY := 6
 const STRATEGIC_ACTION_IDS := [
 	"recruit",
 	"train",
@@ -46,6 +47,10 @@ var fallback_bot = StrategyBotClass.new()
 var _cached_plan = null
 var _cached_plan_key: String = ""
 var _cached_search_payload: Dictionary = {}
+var _recent_route_history: Array[String] = []
+var _recent_route_history_player_id: int = -1
+var _recent_route_history_round_number: int = -1
+var _recent_route_history_decision_seed: int = -1
 
 func _init() -> void:
 	profile = StrategyProfileClass.new()
@@ -61,6 +66,7 @@ func configure_profile(profile_source: String) -> Result:
 	if not fallback_read.ok:
 		return fallback_read
 	_clear_plan_cache()
+	_clear_route_history()
 	return Result.success()
 
 func configure_search_options(options: Dictionary) -> Result:
@@ -97,16 +103,19 @@ func choose_command_with_engine(
 	var start_ms := Time.get_ticks_msec()
 	if engine == null:
 		return choose_command(observation, context, legal_action_ids, validate_command, budget)
+	if _should_reset_route_history(context):
+		_clear_route_history()
 	var options := _effective_options()
 	var search_mode := str(options.get("strategic_search", "beam")).strip_edges()
 	var budget_profile := str(options.get("strategic_budget_profile", DEFAULT_BUDGET_PROFILE)).strip_edges()
+	var route_history := _route_history_for_search()
 	if search_mode == "none":
 		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, budget, "disabled")
 	if not _has_strategic_action(legal_action_ids):
 		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, budget, "no_strategic_legal_actions")
 	if budget != null and budget.expired():
 		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, null, "budget_expired")
-	var cached_plan = _cached_plan_for_current_window(observation, context, legal_action_ids)
+	var cached_plan = _cached_plan_for_current_window(observation, context, legal_action_ids, route_history)
 	if cached_plan != null:
 		return _choose_with_plan(
 			engine,
@@ -118,6 +127,7 @@ func choose_command_with_engine(
 			cached_plan,
 			_cached_search_payload,
 			options,
+			route_history,
 			search_mode,
 			start_ms,
 			true,
@@ -132,6 +142,7 @@ func choose_command_with_engine(
 			validate_command,
 			budget,
 			options,
+			route_history,
 			start_ms
 		)
 	var search_budget := _plan_search_budget(budget, int(options.get("strategic_min_search_budget_ms", DEFAULT_MIN_PLAN_SEARCH_MS)))
@@ -150,6 +161,7 @@ func choose_command_with_engine(
 			"horizon_decisions": int(options.get("strategic_horizon_decisions", 16)),
 			"horizon_rounds": int(options.get("strategic_horizon_rounds", 2)),
 			"step_budget_ms": int(options.get("strategic_rollout_step_budget_ms", 40)),
+			"route_history": route_history.duplicate(true),
 		}
 	)
 	if not search_read.ok:
@@ -159,7 +171,7 @@ func choose_command_with_engine(
 	if plan_val == null or not plan_val.has_method("to_trace_dict"):
 		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), "selected plan is null")
 	var plan = plan_val
-	_store_plan_cache(observation, context, plan, search_payload, legal_action_ids)
+	_store_plan_cache(observation, context, plan, search_payload, legal_action_ids, route_history)
 	return _choose_with_plan(
 		engine,
 		observation,
@@ -170,6 +182,7 @@ func choose_command_with_engine(
 		plan,
 		search_payload,
 		options,
+		route_history,
 		search_mode,
 		start_ms,
 		false,
@@ -186,6 +199,7 @@ func _choose_with_plan(
 	plan,
 	search_payload: Dictionary,
 	options: Dictionary,
+	route_history: Array[String],
 	search_mode: String,
 	start_ms: int,
 	used_cached_plan: bool,
@@ -215,6 +229,7 @@ func _choose_with_plan(
 		decision.trace["strategic_budget_profile"] = budget_profile
 		decision.trace["strategic_config_id"] = str(options.get("strategic_config_id", ""))
 		decision.trace["strategic_plan_cached"] = used_cached_plan
+		decision.trace["strategic_route_history"] = Array(route_history).duplicate(true)
 		decision.trace["plan_id"] = plan.id
 		decision.trace["route_type"] = plan.route_type
 		decision.trace["plan_prior_score"] = plan.prior_score
@@ -250,6 +265,7 @@ func _choose_with_plan(
 		decision.trace["mcts_non_root_candidate_count"] = int(search_payload.get("mcts_non_root_candidate_count", 0))
 		decision.explanation["search"] = "strategic_cached" if used_cached_plan else "strategic"
 		decision.explanation["strategic_budget_profile"] = budget_profile
+		decision.explanation["strategic_route_history"] = Array(route_history).duplicate(true)
 		decision.explanation["plan_id"] = plan.id
 		decision.explanation["route_type"] = plan.route_type
 		decision.explanation["plan_eval_score"] = float(search_payload.get("score", 0.0))
@@ -281,6 +297,7 @@ func _choose_with_plan(
 		decision.explanation["mcts_non_root_populated_nodes"] = int(search_payload.get("mcts_non_root_populated_nodes", 0))
 		decision.explanation["mcts_non_root_expanded_nodes"] = int(search_payload.get("mcts_non_root_expanded_nodes", 0))
 		decision.explanation["mcts_non_root_candidate_count"] = int(search_payload.get("mcts_non_root_candidate_count", 0))
+		_record_route_type(str(plan.route_type), context)
 		return decision
 	return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), "hinted strategy failed")
 
@@ -292,17 +309,20 @@ func _choose_with_mcts(
 	validate_command: Callable,
 	budget: TimeBudget,
 	options: Dictionary,
+	route_history: Array[String],
 	start_ms: int
 ) -> BotDecision:
 	var search_budget := _plan_search_budget(budget, int(options.get("strategic_min_search_budget_ms", DEFAULT_MIN_PLAN_SEARCH_MS)))
 	if budget != null and search_budget == null:
 		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, budget, "insufficient_plan_search_budget")
+	var mcts_options := options.duplicate(true)
+	mcts_options["route_history"] = route_history.duplicate(true)
 	var search_read := StrategicSearchClass.choose_plan_mcts(
 		engine,
 		observation,
 		profile,
 		search_budget,
-		options
+		mcts_options
 	)
 	if not search_read.ok:
 		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), search_read.error)
@@ -312,7 +332,7 @@ func _choose_with_mcts(
 	if plan_val == null or not plan_val.has_method("to_trace_dict"):
 		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), "selected plan is null")
 	var plan = plan_val
-	_store_plan_cache(observation, context, plan, search_payload, legal_action_ids)
+	_store_plan_cache(observation, context, plan, search_payload, legal_action_ids, route_history)
 	return _choose_with_plan(
 		engine,
 		observation,
@@ -322,7 +342,8 @@ func _choose_with_mcts(
 		budget,
 		plan,
 		search_payload,
-		options,
+		mcts_options,
+		route_history,
 		"mcts",
 		start_ms,
 		false,
@@ -438,21 +459,66 @@ static func _strategic_budget_profile_options(profile_name: String) -> Dictionar
 				"max_plans": 8,
 			}
 
-func _cached_plan_for_current_window(observation: ObservationState, context: AiDecisionContext, legal_action_ids: Array[String]):
+func _clear_route_history() -> void:
+	_recent_route_history.clear()
+	_recent_route_history_player_id = -1
+	_recent_route_history_round_number = -1
+	_recent_route_history_decision_seed = -1
+
+func _should_reset_route_history(context: AiDecisionContext) -> bool:
+	if _recent_route_history.is_empty():
+		return false
+	if context == null:
+		return true
+	var player_id := int(context.player_id)
+	if _recent_route_history_player_id >= 0 and player_id != _recent_route_history_player_id:
+		return true
+	var decision_seed := int(context.decision_seed)
+	if _recent_route_history_decision_seed >= 0 and decision_seed < _recent_route_history_decision_seed:
+		return true
+	var round_number := int(context.round_number)
+	if _recent_route_history_round_number >= 0 and round_number < _recent_route_history_round_number:
+		return true
+	return false
+
+func _route_history_for_search() -> Array[String]:
+	var out: Array[String] = []
+	var start := maxi(0, _recent_route_history.size() - MAX_ROUTE_HISTORY)
+	for i in range(start, _recent_route_history.size()):
+		var route_type := str(_recent_route_history[i]).strip_edges()
+		if not route_type.is_empty():
+			out.append(route_type)
+	return out
+
+func _record_route_type(route_type: String, context: AiDecisionContext = null) -> void:
+	var normalized := str(route_type).strip_edges()
+	if normalized.is_empty():
+		return
+	if context != null and _should_reset_route_history(context):
+		_clear_route_history()
+	if context != null:
+		_recent_route_history_player_id = int(context.player_id)
+		_recent_route_history_round_number = int(context.round_number)
+		_recent_route_history_decision_seed = int(context.decision_seed)
+	_recent_route_history.append(normalized)
+	while _recent_route_history.size() > MAX_ROUTE_HISTORY:
+		_recent_route_history.remove_at(0)
+
+func _cached_plan_for_current_window(observation: ObservationState, context: AiDecisionContext, legal_action_ids: Array[String], route_history = null):
 	if _cached_plan == null:
 		return null
 	if observation == null or context == null:
 		return null
-	var key := _plan_cache_key(observation, context, legal_action_ids)
+	var key := _plan_cache_key(observation, context, legal_action_ids, route_history)
 	if key.is_empty() or key != _cached_plan_key:
 		return null
 	return _cached_plan
 
-func _store_plan_cache(observation: ObservationState, context: AiDecisionContext, plan, search_payload: Dictionary, legal_action_ids: Array[String]) -> void:
+func _store_plan_cache(observation: ObservationState, context: AiDecisionContext, plan, search_payload: Dictionary, legal_action_ids: Array[String], route_history = null) -> void:
 	if plan == null or not plan.has_method("is_valid") or observation == null or context == null:
 		_clear_plan_cache()
 		return
-	var key := _plan_cache_key(observation, context, legal_action_ids)
+	var key := _plan_cache_key(observation, context, legal_action_ids, route_history)
 	if key.is_empty():
 		_clear_plan_cache()
 		return
@@ -465,16 +531,49 @@ func _clear_plan_cache() -> void:
 	_cached_plan_key = ""
 	_cached_search_payload = {}
 
-func _plan_cache_key(observation: ObservationState, context: AiDecisionContext, legal_action_ids: Array[String]) -> String:
+func _plan_cache_key(observation: ObservationState, context: AiDecisionContext, legal_action_ids: Array[String], route_history = null) -> String:
 	if observation == null or context == null:
 		return ""
-	return "%d:%d:%s:%s:%s" % [
+	var history := _route_history_for_cache_key(route_history)
+	return "%d:%d:%s:%s:%s:%s" % [
 		int(context.player_id),
 		int(observation.round_number),
 		str(observation.phase).strip_edges(),
 		str(observation.sub_phase).strip_edges(),
 		_strategic_legal_action_signature(legal_action_ids),
+		_route_history_signature(history),
 	]
+
+func _route_history_for_cache_key(route_history) -> Array[String]:
+	if route_history == null:
+		return _route_history_for_search()
+	return _route_history_array(route_history)
+
+static func _route_history_array(value) -> Array[String]:
+	var out: Array[String] = []
+	if value is Array:
+		for item in Array(value):
+			var text := ""
+			if item is Dictionary:
+				text = str(Dictionary(item).get("route_type", ""))
+			else:
+				text = str(item)
+			text = text.strip_edges()
+			if not text.is_empty():
+				out.append(text)
+	if out.size() <= MAX_ROUTE_HISTORY:
+		return out
+	return out.slice(out.size() - MAX_ROUTE_HISTORY, out.size())
+
+static func _route_history_signature(route_history: Array[String]) -> String:
+	if route_history.is_empty():
+		return ""
+	var normalized: Array[String] = []
+	for route_val in route_history:
+		var route := str(route_val).strip_edges()
+		if not route.is_empty():
+			normalized.append(route)
+	return "|".join(normalized)
 
 static func _plan_search_budget(budget: TimeBudget, min_search_ms: int = MIN_PLAN_SEARCH_MS) -> TimeBudget:
 	if budget == null:

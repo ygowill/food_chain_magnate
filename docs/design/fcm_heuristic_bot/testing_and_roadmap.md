@@ -138,7 +138,7 @@ tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
 - `core/tests/ai/marketing_preview_golden_test.gd`：从同一前置状态分别跑真实 engine 与 `MarketingPreview`，校验 Marketing report、最终状态、`DemandMarked` 里程碑、source 不变性和 registry 恢复。
 - `core/tests/ai/payday_preview_golden_test.gd`：从同一前置状态分别跑真实 engine 与 `PaydayPreview`，校验 Payday report、最终状态、Payday 中先裁员再结算、source 不变性和 registry 恢复。
 - `core/tests/ai/cleanup_preview_golden_test.gd`：从同一前置状态分别跑真实 engine 与 `CleanupPreview`，校验 Cleanup report、最终状态、Cleanup pending 中先选择冰箱保留再读取 report、source 不变性和 registry 恢复。
-- `core/tests/ai/strategic_plan_test.gd`：现在额外覆盖 plan generator 的 route-history bias、runner 对 route history 的 rollout payload 透传，以及 evaluator 的 `route_transition_bonus`，保证非根路线展开会轻微偏向 `supply_capacity` / `price_recovery` 等补位路线，而不是继续重复同类 `marketing_income` 路线。
+- `core/tests/ai/strategic_plan_test.gd`：现在额外覆盖 plan generator 的 route-history bias、runner 对 route history 的 rollout payload 透传，以及 evaluator 的 `route_transition_bonus`；同时补了 `StrategicBot` 的 route-history 写回 / cache invalidation 回归，以及 MCTS rollout 对外部 route history 的 trace 透传，保证非根路线展开会轻微偏向 `supply_capacity` / `price_recovery` 等补位路线，而不是继续重复同类 `marketing_income` 路线。
 
 
 ## 15. 开发路线图

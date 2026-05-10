@@ -62,7 +62,7 @@
 
 最近快照：
 
-- 日期：2026-05-10
+- 日期：2026-05-11
 - 提交：`pending`
 - 当前状态：`StrategicBot` 已默认使用面向真实对局的 `play` 预算 profile；`tools/run_bot_tuning_matrix.gd` 在未显式传 `--strategic-budget-profile` 时会注入 `tuning` profile，用低预算窗口做 profile / 参数筛选。selfplay、matrix、tuning matrix 都已能透传 `strategic` 参数，并把 `bot_config` 按 `play/tuning` 与显式 config id 分桶，避免实战配置和调参配置混在同一个 summary bucket。
 - 当前状态：`StrategicPlan` / `StrategicSearch` / `StrategicBot` 的 plan-level Beam/MCTS 入口已接通，结构仍是“`StrategyBot` 负责短期命令执行，`StrategicPlan` 负责 2-4 回合路线选择”。`StrategicPlanEvaluator` 的 `search_cost_penalty` 只作为 trace / breakdown 诊断保留，不再进入 objective score；`route_transition_bonus` 会根据 rollout 的 `route_history` 进入 objective score，让重复同类路线与切到价格恢复 / 供给补位在 leaf value 上可区分。MCTS/Strategic 的强度比较只看给定预算内的现金底线、收入形成、路线覆盖和行动分布。
@@ -70,6 +70,7 @@
 - 当前状态：Plan MCTS 的 backprop 现在会为每个节点保留见过的 best leaf continuation path，最终 payload / `StrategicBot` trace 暴露 `mcts_selected_path`、`mcts_selected_leaf_depth`、`mcts_selected_leaf_value_score`，`evaluated_plans` 也包含 `best_path`，用于解释根 plan 被选中时实际依赖的后续路线，而不是只看到第一步 plan。
 - 当前状态：Plan MCTS 的 plan-state identity 已显式进入 trace：最终 payload / `StrategicBot` trace 暴露 `mcts_selected_state_key`，`evaluated_plans` 暴露每个 plan 节点的 `state_key`；回归覆盖同一 engine state 下不同 `active_plan` 不会被 transposition 当成同一节点剪掉。
 - 当前状态：Plan MCTS 继续往解释性补强：最终 payload / `StrategicBot` trace 现在还会暴露 `mcts_selected_route_types`、`mcts_route_switch_count` 以及 `mcts_non_root_populated_nodes` / `mcts_non_root_expanded_nodes` / `mcts_non_root_candidate_count`，`evaluated_plans` 也同步记录 `route_types` / `best_route_types`，方便区分“根节点选了什么”和“后续 plan 路线到底有没有真的展开”。
+- 当前状态：`StrategicBot` 现在会保留短路由历史并跨决策传递给 plan cache / Beam / MCTS 输入；历史会在玩家切换、回合倒退或上下文 seed 回退时重置，避免缓存计划继续沿用过期路线上下文。对应回归会检查首个决策后的历史写回、同窗口缓存失效，以及 MCTS rollout trace 是否保留外部 route history。
 - 当前状态：selfplay / matrix summary 已能聚合 Plan MCTS 的路线级诊断：`search_metrics` 记录 selected route type counts、route switch 总数和非根展开/候选计数，`BotSelfplaySummary` 会输出独立 `MCTS_ROUTE` 行，后续可以直接从矩阵 summary 看路线偏向，而不用人工翻每条 decision trace。
 - 当前状态：`StrategicBot` 的 MCTS 分支已同步 `strategic_horizon_decisions`、`strategic_horizon_rounds`、`strategic_max_plans`、`strategic_rollout_step_budget_ms`、`strategic_min_plans_for_rollout` 到 plan search 使用的无前缀选项，避免 beam 可调而 MCTS 忽略战略层预算/宽度配置。
 - 当前状态：旧命令层 MCTS 已从 active code、测试套件和 selfplay CLI 中移除；Plan MCTS 的公开调参入口统一为 `--strategic-mcts-*`，并只作用于 `StrategicBot` 的 plan search。

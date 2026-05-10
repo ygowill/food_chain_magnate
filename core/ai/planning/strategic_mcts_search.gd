@@ -32,6 +32,8 @@ static func choose_plan_mcts(
 	var root_player_id := int(observation.viewer_player_id)
 	var generator_options := options.duplicate()
 	generator_options["source_state"] = engine.get_state()
+	var base_route_history := _route_history_array(options.get("route_history", []))
+	generator_options["route_history"] = base_route_history.duplicate(true)
 	var plans_read := StrategicPlanGeneratorClass.generate(observation, profile, generator_options)
 	if not plans_read.ok:
 		return plans_read
@@ -60,6 +62,7 @@ static func choose_plan_mcts(
 	root["candidate_count"] = plans.size()
 	root["candidate_deduped_count"] = plans.size()
 	root["root_player_id"] = root_player_id
+	root["route_history"] = base_route_history.duplicate(true)
 	root["non_root_populated_nodes"] = 0
 	root["non_root_expanded_nodes"] = 0
 	root["non_root_candidate_count"] = 0
@@ -100,6 +103,7 @@ static func choose_plan_mcts(
 			horizon_decisions,
 			horizon_rounds,
 			budget_guarded,
+			base_route_history,
 			best_state_scores
 		)
 		if not selection_read.ok:
@@ -265,6 +269,7 @@ static func _select_leaf(
 	horizon_decisions: int,
 	horizon_rounds: int,
 	budget_guarded: bool,
+	base_route_history: Array[String],
 	best_state_scores: Dictionary
 ) -> Result:
 	var path: Array[Dictionary] = []
@@ -317,7 +322,8 @@ static func _select_leaf(
 				profile,
 				options,
 				top_k_per_node,
-				budget
+				budget,
+				base_route_history
 			)
 			if not populate_read.ok:
 				return populate_read
@@ -367,6 +373,7 @@ static func _select_leaf(
 				prior_weight,
 				horizon_decisions,
 				horizon_rounds,
+				base_route_history,
 				best_state_scores
 			)
 			if not expand_read.ok:
@@ -489,7 +496,8 @@ static func _populate_node_candidates(
 	profile,
 	options: Dictionary,
 	top_k_per_node: int,
-	budget: TimeBudget
+	budget: TimeBudget,
+	base_route_history: Array[String]
 ) -> Result:
 	if budget != null and budget.expired():
 		return Result.success({
@@ -521,7 +529,7 @@ static func _populate_node_candidates(
 	var generator_options := options.duplicate()
 	generator_options["source_state"] = engine.get_state()
 	generator_options["max_plans"] = maxi(top_k_per_node, int(options.get("max_plans", top_k_per_node)))
-	generator_options["route_history"] = _route_types_for_path(Array(node.get("path", [])))
+	generator_options["route_history"] = _combined_route_history(base_route_history, _route_types_for_path(Array(node.get("path", []))))
 	var plans_read := StrategicPlanGeneratorClass.generate(observation, profile, generator_options)
 	if not plans_read.ok:
 		node["terminal"] = true
@@ -561,6 +569,7 @@ static func _expand_next_child(
 	prior_weight: float,
 	horizon_decisions: int,
 	horizon_rounds: int,
+	base_route_history: Array[String],
 	best_state_scores: Dictionary
 ) -> Result:
 	if budget != null and int(budget.remaining_ms()) < maxi(1, step_budget_ms):
@@ -624,7 +633,7 @@ static func _expand_next_child(
 		attempted += 1
 		var plan_horizon_decisions := mini(maxi(1, horizon_decisions), maxi(1, int(plan.horizon_decisions)))
 		var plan_horizon_rounds := mini(maxi(1, horizon_rounds), maxi(1, int(plan.horizon_rounds)))
-		var route_history := _route_types_for_path(Array(node.get("path", [])))
+		var route_history := _combined_route_history(base_route_history, _route_types_for_path(Array(node.get("path", []))))
 		var rollout_start_ms := Time.get_ticks_msec()
 		var rollout_read := StrategicPlanRunnerClass.rollout(
 			node.get("engine", null),
@@ -958,6 +967,32 @@ static func _path_item(plan, depth: int, path_contribution: float) -> Dictionary
 		"depth": int(depth),
 		"path_contribution": float(path_contribution),
 	}
+
+static func _route_history_array(value) -> Array[String]:
+	var out: Array[String] = []
+	if value is Array:
+		for item in Array(value):
+			var route_type := ""
+			if item is Dictionary:
+				route_type = str(Dictionary(item).get("route_type", ""))
+			else:
+				route_type = str(item)
+			route_type = route_type.strip_edges()
+			if not route_type.is_empty():
+				out.append(route_type)
+	return out
+
+static func _combined_route_history(base_route_history: Array[String], path_route_types: Array[String]) -> Array[String]:
+	var out: Array[String] = []
+	for base_route_val in base_route_history:
+		var base_route := str(base_route_val).strip_edges()
+		if not base_route.is_empty():
+			out.append(base_route)
+	for path_route_val in path_route_types:
+		var path_route := str(path_route_val).strip_edges()
+		if not path_route.is_empty():
+			out.append(path_route)
+	return out
 
 static func _route_types_for_path(path: Array) -> Array[String]:
 	var route_types: Array[String] = []

@@ -53,6 +53,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var cache_scope := _test_strategic_bot_plan_cache_scopes_decision_window()
 	if not cache_scope.ok:
 		return cache_scope
+	var route_memory := _test_strategic_bot_route_history_memory(seed_val)
+	if not route_memory.ok:
+		return route_memory
 	var default_beam := _test_strategic_bot_default_beam_search(seed_val)
 	if not default_beam.ok:
 		return default_beam
@@ -95,7 +98,7 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var mcts_mode := _test_strategic_bot_mcts_mode(seed_val)
 	if not mcts_mode.ok:
 		return mcts_mode
-	return Result.success({"cases": 24})
+	return Result.success({"cases": 25})
 
 static func _test_plan_and_hints_roundtrip() -> Result:
 	var plan = StrategicPlanClass.create(
@@ -589,6 +592,7 @@ static func _test_strategic_bot_plan_cache_reuse(seed_val: int) -> Result:
 	var first_plan_id := str(first_trace.get("plan_id", ""))
 	if first_plan_id.is_empty():
 		return Result.failure("StrategicBot first decision should expose plan id: %s" % str(first_trace))
+	bot._clear_route_history()
 	var second := bot.choose_command_with_engine(
 		data["engine"],
 		data["observation"],
@@ -657,6 +661,122 @@ static func _test_strategic_bot_plan_cache_scopes_decision_window() -> Result:
 	var changed_action_plan = bot._cached_plan_for_current_window(observation, context, ["skip_sub_phase", "train"])
 	if changed_action_plan != null:
 		return Result.failure("StrategicBot cache should not cross strategic legal action signatures")
+	return Result.success()
+
+static func _test_strategic_bot_route_history_memory(seed_val: int) -> Result:
+	var inputs_read := _build_income_route_inputs(seed_val)
+	if not inputs_read.ok:
+		return inputs_read
+	var data: Dictionary = inputs_read.value
+	var bot := StrategicBotClass.new()
+	var profile_read := bot.configure_profile("base_revenue_growth_v1")
+	if not profile_read.ok:
+		return profile_read
+	var search_read := bot.configure_search_options({
+		"strategic_min_search_budget_ms": 16,
+		"strategic_min_plans_for_rollout": 1,
+		"strategic_max_plans": 2,
+		"strategic_horizon_decisions": 4,
+		"strategic_horizon_rounds": 1,
+		"strategic_rollout_step_budget_ms": 20,
+		"strategic_config_id": "route_history_memory_test",
+	})
+	if not search_read.ok:
+		return search_read
+	var first := bot.choose_command_with_engine(
+		data["engine"],
+		data["observation"],
+		data["context"],
+		data["legal_action_ids"],
+		data["validate_fn"],
+		TimeBudget.start(600)
+	)
+	if first == null or first.is_failure() or first.command == null:
+		return Result.failure("StrategicBot should produce a plan-backed decision before recording route history: %s" % str(first))
+	var first_trace: Dictionary = Dictionary(first.trace)
+	var first_route_type := str(first_trace.get("route_type", "")).strip_edges()
+	if first_route_type.is_empty():
+		return Result.failure("StrategicBot should expose selected route type before recording history: %s" % str(first_trace))
+	if not Array(first_trace.get("strategic_route_history", [])).is_empty():
+		return Result.failure("StrategicBot should trace empty route history before the first record: %s" % str(first_trace))
+	var recorded_history := bot._route_history_for_search()
+	if recorded_history.size() != 1 or str(recorded_history[0]) != first_route_type:
+		return Result.failure("StrategicBot should record the selected route type: history=%s trace=%s" % [str(recorded_history), str(first_trace)])
+
+	var second := bot.choose_command_with_engine(
+		data["engine"],
+		data["observation"],
+		data["context"],
+		data["legal_action_ids"],
+		data["validate_fn"],
+		TimeBudget.start(220)
+	)
+	if second == null or second.is_failure() or second.command == null:
+		return Result.failure("StrategicBot should keep planning after route history changes: %s" % str(second))
+	var second_trace: Dictionary = Dictionary(second.trace)
+	if str(second_trace.get("search", "")) != "strategic":
+		return Result.failure("StrategicBot should invalidate cached plan when route history changes: %s" % str(second_trace))
+	if bool(second_trace.get("strategic_plan_cached", true)):
+		return Result.failure("StrategicBot should mark route-history cache miss as uncached: %s" % str(second_trace))
+	var second_history := Array(second_trace.get("strategic_route_history", []))
+	if second_history.is_empty() or str(second_history[0]) != first_route_type:
+		return Result.failure("StrategicBot second trace should carry forward prior route history: %s" % str(second_trace))
+
+	var same_player_context := AiDecisionContext.create(
+		data["context"].player_id,
+		data["context"].phase,
+		data["context"].sub_phase,
+		int(data["context"].round_number) + 1,
+		int(data["context"].decision_seed) + 1,
+		[]
+	)
+	if bot._should_reset_route_history(same_player_context):
+		return Result.failure("StrategicBot should keep route history for the same player in later rounds")
+	var other_player_context := AiDecisionContext.create(
+		int(data["context"].player_id) + 1,
+		data["context"].phase,
+		data["context"].sub_phase,
+		data["context"].round_number,
+		data["context"].decision_seed,
+		[]
+	)
+	if not bot._should_reset_route_history(other_player_context):
+		return Result.failure("StrategicBot should reset route history when the player changes")
+
+	var profile := StrategyProfileClass.new()
+	var profile_check := profile.configure("base_revenue_growth_v1")
+	if not profile_check.ok:
+		return profile_check
+	var mcts_read := StrategicSearchClass.choose_plan_mcts(
+		data["engine"],
+		data["observation"],
+		profile,
+		TimeBudget.start(600),
+		{
+			"route_history": ["marketing_income"],
+			"max_plans": 2,
+			"min_plans_for_rollout": 1,
+			"horizon_decisions": 4,
+			"horizon_rounds": 1,
+			"step_budget_ms": 20,
+			"mcts_iterations": 2,
+			"mcts_max_depth": 2,
+			"mcts_top_k_per_node": 2,
+		}
+	)
+	if not mcts_read.ok:
+		return mcts_read
+	var mcts_payload: Dictionary = Dictionary(mcts_read.value)
+	var mcts_evaluated_plans: Array = Array(mcts_payload.get("evaluated_plans", []))
+	if mcts_evaluated_plans.is_empty():
+		return Result.failure("Strategic plan MCTS should expose evaluated plan nodes for route history tracing: %s" % str(mcts_payload))
+	var first_eval_val = mcts_evaluated_plans[0]
+	if not (first_eval_val is Dictionary):
+		return Result.failure("Strategic plan MCTS should return evaluated nodes as dictionaries: %s" % str(mcts_payload))
+	var first_eval: Dictionary = first_eval_val
+	var rollout_history := Array(first_eval.get("route_history", []))
+	if rollout_history.is_empty() or str(rollout_history[0]) != "marketing_income":
+		return Result.failure("Strategic plan MCTS should preserve incoming route history in rollout trace: %s" % str(first_eval))
 	return Result.success()
 
 static func _test_strategic_bot_default_beam_search(seed_val: int) -> Result:
@@ -1431,6 +1551,7 @@ static func _test_strategic_bot_mcts_mode(seed_val: int) -> Result:
 		return Result.failure("StrategicBot mcts mode should expose evaluated plan best continuation path: %s" % str(trace))
 	if Array(first_eval.get("best_route_types", [])).is_empty():
 		return Result.failure("StrategicBot mcts mode should expose evaluated plan best route types: %s" % str(trace))
+	bot._clear_route_history()
 	var cached := bot.choose_command_with_engine(
 		data["engine"],
 		data["observation"],
