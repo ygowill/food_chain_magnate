@@ -803,7 +803,7 @@ static func _select_final_root_child(nodes: Array, min_visits_per_child: int, bu
 	for node_val in sorted_nodes:
 		if node_val is Dictionary:
 			total_visits += int(Dictionary(node_val).get("visits", 0))
-	var use_prior_guard := budget_limited or (min_required_visits > 0 and total_visits < min_required_visits)
+	var use_prior_guard := min_required_visits > 0 and total_visits < min_required_visits
 	if use_prior_guard:
 		_sort_nodes_by_prior_guard(sorted_nodes)
 		return {
@@ -812,6 +812,7 @@ static func _select_final_root_child(nodes: Array, min_visits_per_child: int, bu
 			"prior_guarded": true,
 			"min_required_visits": min_required_visits,
 			"total_visits": total_visits,
+			"budget_limited": budget_limited,
 		}
 	_sort_nodes(sorted_nodes)
 	return {
@@ -820,6 +821,7 @@ static func _select_final_root_child(nodes: Array, min_visits_per_child: int, bu
 		"prior_guarded": false,
 		"min_required_visits": min_required_visits,
 		"total_visits": total_visits,
+		"budget_limited": budget_limited,
 	}
 
 static func _actionable_nodes(nodes: Array) -> Array:

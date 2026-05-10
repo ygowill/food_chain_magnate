@@ -92,6 +92,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var mcts_backprop_path := _test_strategic_mcts_backpropagates_best_leaf_path()
 	if not mcts_backprop_path.ok:
 		return mcts_backprop_path
+	var mcts_root_selection := _test_strategic_mcts_root_selection_respects_visit_floor()
+	if not mcts_root_selection.ok:
+		return mcts_root_selection
 	var mcts_search := _test_strategic_mcts_search_returns_plan_level_trace(seed_val)
 	if not mcts_search.ok:
 		return mcts_search
@@ -101,7 +104,7 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var mcts_mode := _test_strategic_bot_mcts_mode(seed_val)
 	if not mcts_mode.ok:
 		return mcts_mode
-	return Result.success({"cases": 26})
+	return Result.success({"cases": 27})
 
 static func _test_plan_and_hints_roundtrip() -> Result:
 	var plan = StrategicPlanClass.create(
@@ -1418,6 +1421,50 @@ static func _test_strategic_mcts_backpropagates_best_leaf_path() -> Result:
 		return Result.failure("higher value leaf should replace best path: %s" % str(root))
 	if int(root.get("best_leaf_depth", 0)) != 1:
 		return Result.failure("best leaf depth should track selected best path depth: %s" % str(root))
+	return Result.success()
+
+static func _test_strategic_mcts_root_selection_respects_visit_floor() -> Result:
+	var prior_guard_nodes: Array = [
+		{
+			"plan_id": "searched",
+			"visits": 1,
+			"q": 20.0,
+			"prior_score": 1.0,
+		},
+		{
+			"plan_id": "prior",
+			"visits": 0,
+			"q": 0.0,
+			"prior_score": 100.0,
+		},
+	]
+	var prior_guard := StrategicMCTSSearchClass._select_final_root_child(prior_guard_nodes, 2, true)
+	if str(prior_guard.get("selection_mode", "")) != "prior_guard" or not bool(prior_guard.get("prior_guarded", false)):
+		return Result.failure("MCTS root selection should stay prior-guarded before the visit floor: %s" % str(prior_guard))
+	if str(Dictionary(Array(prior_guard.get("nodes", []))[0]).get("plan_id", "")) != "prior":
+		return Result.failure("MCTS root selection should prefer prior when the visit floor is not met: %s" % str(prior_guard))
+	if not bool(prior_guard.get("budget_limited", false)):
+		return Result.failure("MCTS root selection should preserve budget_limited telemetry: %s" % str(prior_guard))
+
+	var visit_nodes: Array = [
+		{
+			"plan_id": "searched",
+			"visits": 2,
+			"q": 20.0,
+			"prior_score": 1.0,
+		},
+		{
+			"plan_id": "prior",
+			"visits": 2,
+			"q": 1.0,
+			"prior_score": 100.0,
+		},
+	]
+	var visit_selection := StrategicMCTSSearchClass._select_final_root_child(visit_nodes, 2, true)
+	if str(visit_selection.get("selection_mode", "")) != "visits" or bool(visit_selection.get("prior_guarded", true)):
+		return Result.failure("MCTS root selection should use visits once the floor is satisfied, even under budget pressure: %s" % str(visit_selection))
+	if str(Dictionary(Array(visit_selection.get("nodes", []))[0]).get("plan_id", "")) != "searched":
+		return Result.failure("MCTS root selection should prefer the stronger searched root once the visit floor is met: %s" % str(visit_selection))
 	return Result.success()
 
 static func _test_strategic_mcts_search_returns_plan_level_trace(seed_val: int) -> Result:
