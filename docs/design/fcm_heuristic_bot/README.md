@@ -82,6 +82,7 @@
 - 诊断补充：本轮按相同的 `mcts-d4-r1-p4-s20-b16-m1-mi6-md2-mk2` 结构复跑 2 matches / `r8` / `play` profile，`MCTS_ROUTE` 为 `route_switch_avg=0.000`、`non_root_populated_avg=0.000`、`non_root_expanded_avg=0.000`、`non_root_candidate_avg=0.000`，selected route types 为 `marketing_income=79`、`price_recovery=20`、`product_switch_attack=4`、`supply_capacity=8`。这表示 route transition 评分已经接入，但在这个很窄的 smoke 里还没有显著抬高路线切换率；后续需要拉宽样本或预算再判断是 search 宽度不足还是分数项力度不够。
 - 进展：`StrategicPlanHints` 现在只会在目标产品真的包含饮料时才注入 `procure_drink` / `procure_drinks`，而 `StrategicPlanEvaluator` 的 `route_transition_bonus` 也会先等到现金站稳后再奖励从 `marketing_income` 切到 `price_recovery` / `supply_capacity`。
 - 进展：Plan MCTS 的 root final selection 不再因为最后触发 `budget_expired` / `budget_guarded` 就无条件退回 prior 排序；只有 root visit floor 还没达到时才启用 `prior_guard`。这样预算刚好耗尽时，已经完成足够 root 展开的 visits/q 不会被丢弃。
+- 验证：修正 hints/evaluator 与 root selection 后，使用 Godot console 跑 `strategy` 与 `strategic-play-mcts` 的 1-match `r8` / seed 12345 / `base_revenue_growth_v1` / 2s smoke，二者均 success `1.0`、failures `0`、`cash_min_after_first_positive=[10,10]`。`strategic-play-mcts` 的 `MCTS_ROUTE` 为 `route_switch_avg=0.025`、`non_root_populated_avg=1.292`、`non_root_expanded_avg=1.767`、`non_root_candidate_avg=2.592`，route types 为 `marketing_income=56`、`price_recovery=5`、`supply_capacity=13`；相对 Strategy `tuning_score_delta=+56.500`，但 `cash_max_seen_delta=[-11.0,0.0]` 且 `budget_expired_rate=0.225`、`time_ms_avg=815.200`，下一步应优先调低 search cost / expired rate，再做更大样本强度判断。
 
 - 日期：2026-05-09
 - 提交：`6a937463 feat(ai): implement strategy bot planning`
