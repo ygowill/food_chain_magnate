@@ -66,19 +66,22 @@
 - 提交：`pending`
 - 当前状态：`StrategicBot` 已默认使用面向真实对局的 `play` 预算 profile；`tools/run_bot_tuning_matrix.gd` 在未显式传 `--strategic-budget-profile` 时会注入 `tuning` profile，用低预算窗口做 profile / 参数筛选。selfplay、matrix、tuning matrix 都已能透传 `strategic` 参数，并把 `bot_config` 按 `play/tuning` 与显式 config id 分桶，避免实战配置和调参配置混在同一个 summary bucket。
 - 当前状态：`StrategicPlan` / `StrategicSearch` / `StrategicBot` 的 plan-level Beam/MCTS 入口已接通，结构仍是“`StrategyBot` 负责短期命令执行，`StrategicPlan` 负责 2-4 回合路线选择”。`StrategicPlanEvaluator` 的 `search_cost_penalty` 只作为 trace / breakdown 诊断保留，不再进入 objective score；MCTS/Strategic 的强度比较只看给定预算内的现金底线、收入形成、路线覆盖和行动分布。
-- 当前限制：本工作区当前未找到可直接调用的 `godot` CLI，Windows `bash.exe` 也无法启动 `/bin/bash`，因此本轮只能完成静态检查、文档更新和提交；正式 headless 回归需要在具备 Godot CLI 的环境里补跑。
-- 后续计划：第一优先级不是继续扩大 action-level MCTS，而是诊断 `strategic` 早期收入覆盖缺口，按候选缺失、hints 偏置、rollout 边界、evaluator 分项四类拆开定位，并为能复现的结构问题补 deterministic test。第二优先级是用 `tuning` profile 做低预算小矩阵筛方向，再用 `play` profile 和 2s/5s/10s 预算做少量真实对局 smoke，确认收益来自更深路线而不是偶然超时。
+- 当前状态：`StrategicMCTSSearch` 已推进到 plan-level MCTS：节点/路径都记录 `plan_id`、`route_type`、depth、visits/q，`evaluated_plans` 暴露 plan path，不直接选择 raw command；plan-state transposition 会按 `state_hash|phase|sub_phase|current_player_id|plan_id` 去重/剪枝，并通过 `mcts_plan_state_deduped_nodes` / `mcts_plan_transposition_pruned_nodes` 进入 trace / explanation。
+- 当前状态：Plan MCTS 的 backprop 现在会为每个节点保留见过的 best leaf continuation path，最终 payload / `StrategicBot` trace 暴露 `mcts_selected_path`、`mcts_selected_leaf_depth`、`mcts_selected_leaf_value_score`，`evaluated_plans` 也包含 `best_path`，用于解释根 plan 被选中时实际依赖的后续路线，而不是只看到第一步 plan。
+- 当前状态：Plan MCTS 的 plan-state identity 已显式进入 trace：最终 payload / `StrategicBot` trace 暴露 `mcts_selected_state_key`，`evaluated_plans` 暴露每个 plan 节点的 `state_key`；回归覆盖同一 engine state 下不同 `active_plan` 不会被 transposition 当成同一节点剪掉。
+- 当前状态：`StrategicBot` 的 MCTS 分支已同步 `strategic_horizon_decisions`、`strategic_horizon_rounds`、`strategic_max_plans`、`strategic_rollout_step_budget_ms`、`strategic_min_plans_for_rollout` 到 plan search 使用的无前缀选项，避免 beam 可调而 MCTS 忽略战略层预算/宽度配置。
+- 当前状态：旧命令层 MCTS 已从 active code、测试套件和 selfplay CLI 中移除；Plan MCTS 的公开调参入口统一为 `--strategic-mcts-*`，并只作用于 `StrategicBot` 的 plan search。
+- 验证：使用 `D:\tools\Godot_v4.6-stable_win64.exe\Godot_v4.6-stable_win64_console.exe` 运行 `res://tools/check_compile.gd` 得到 `PASS files=1234`；运行 `res://ui/scenes/tests/all_tests.tscn -- --autorun` 得到 `425/425 PASS`、`StrategicPlanTest PASS (1580ms)`、`BotSelfplayToolTest PASS (917ms)`、`BotSelfplayMatrixTest PASS (1449ms)`、`total_ms=92740`。Godot headless 退出时仍会输出既有 RID/resource leak warning；以 AllTests summary 为准。
+- 后续计划：第一优先级是诊断 `strategic` 早期收入覆盖缺口，按候选缺失、hints 偏置、rollout 边界、evaluator 分项四类拆开定位，并为能复现的结构问题补 deterministic test。第二优先级是用 `tuning` profile 做低预算小矩阵筛方向，再用 `play` profile 和 2s/5s/10s 预算做少量真实对局 smoke，确认收益来自更深路线而不是偶然超时。
 
 - 日期：2026-05-09
 - 提交：`6a937463 feat(ai): implement strategy bot planning`
 - 远端分支：`origin/bot`
 - 工作区进展：`StrategyBotScenarioBenchmarkTest` 已补三类结构性恢复 deterministic scenario：换客户/房屋、降价恢复需求、换产品卡对手产能缺口；开局餐厅选择新增 route-dominance 结构过滤，避免在存在更宽营销路线时保留单一薄弱开局。
-- 工作区进展：已接入首版启发式 `MCTS` 搜索骨架，`MCTSSearch` 通过 `CandidateGenerator` / `StrategyCandidateFilter` / `StrategyScorer` / `ForwardSimulator` / `Evaluator` 做宏动作树搜索，`MCTSBot` 在搜索失败或无 engine 时回退到 `BeamBot`。
 - 验证：
   - `HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd`
   - `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 240`
-  - 结果：compile PASS（1228 files），`AllTests` 425/425 PASS，`total_ms=158187`（约 158s）。Godot headless 退出时仍会输出既有 RID/resource leak warning；以测试脚本 summary 为准。
-  - MCTS selfplay smoke：`mcts@base_revenue_growth_v1` / 2p / seed 12345 / target round 4 / 1 match：PASS，failures `0`，steps `42`，search types `mcts=28` / `beam=14`，但 avg decision time `453.81ms`、budget expired rate `0.667`，说明首版可运行但下一步需要优先做预算/成本剖析。
+  - 结果：compile PASS（1237 files），`AllTests` 426/426 PASS，`StrategicPlanTest` PASS（1489ms），`total_ms=88110`（约 88s）。Godot headless 退出时仍会输出既有 RID/resource leak warning；以测试脚本 summary 为准。
   - selfplay：`base_revenue_growth_v1` / 2p / target round 12 / 60 seeds：success `1.0`，failures `0`，avg round `11.55`，avg steps `201.717`，opening players without positive cash avg `0.033`，cash_min_after_first_positive avg `[9.933, 9.661]`。
   - selfplay：`base_revenue_growth_v1` / 2p / target round 14 / 30 seeds：success `1.0`，failures `0`，avg round `12.333`，avg steps `226.433`，opening players without positive cash avg `0.033`，cash_min_after_first_positive avg `[9.933, 9.667]`。
   - tuning R1：6 个 profile 变体在 `r12` / 6 seeds 下完成 sweep，`sample_005` 以 `score=1152.596` 排第 1，baseline 为 `1118.072`；随后用同一组候选做 `r12` / 30 seeds 与 `r14` / 30 seeds 复核，`sample_005` 仍保持第 1，且两轮均为 `success=1.0`、`failures=0`。
@@ -91,12 +94,8 @@
 - search R6：BeamSearch 现在会按 actor 切分分支预算：己方节点继续用 root `top_k_per_node` / `max_valid_per_action`，对手节点改用 `opponent_max_candidates` / `opponent_max_valid_per_action`；trace 同步暴露 `beam_root_max_valid_per_action`、`beam_opponent_max_valid_per_action`、`beam_opponent_top_k_per_node`，`AllTests` 424/424 PASS。
 - search R7：OSLASearch 增加 `opponent_response_horizon` 与多步 response chain；`order_of_business_tempo` 先启用 2-step horizon，并用 3p OrderOfBusiness smoke 确认 trace 中能看到两步对手响应链。trace / explanation 现在暴露 `osla_opponent_response_chain_length`、`osla_opponent_response_chain`、`osla_opponent_response_chain_stop_reason`，`AllTests` 424/424 PASS。
 - search R8：OSLA / Beam 增加 scored candidate command-signature dedupe：同一命令签名只保留最高 `strategy_score` 候选，平分按 `macro_action_id` 稳定 tie-break；trace / explanation 暴露 `candidate_deduped_count`，OSLA 额外暴露 root / opponent response 去重计数，Beam 汇总 root + expansion 的候选去重计数。`AllTests` 424/424 PASS。
-- search R9：首版启发式 `MCTS` 已接入，默认仍保留 `BeamBot` 作为 fallback；`MCTSSearchTest` 现在覆盖 source isolation、deterministic macro 选择和 budget-expired fallback，`AllTests` 425/425 PASS。
-- search R10：MCTS 增加 simulation 级成本诊断和低剩余预算扩展保护：trace / explanation 暴露 `mcts_simulation_ms`、`mcts_max_simulation_ms`、`mcts_simulation_budget_skips`、`mcts_min_simulation_budget_ms` 与 `mcts_budget_guarded`；`ForwardSimulator` 接受共享 `TimeBudget`，可在多命令宏动作的命令边界停止继续模拟。这个改动只处理结构性预算边界，不做单 seed 权重修补。
-- search R11：已用同一 profile、同一 seed 窗口做三 bot 对照矩阵（`strategy` / `beam` / `mcts`，`base_revenue_growth_v1`）。历史结果是：在 r8/12 seeds 上旧版 objective `strategy=1038.466`、`mcts=-768.455`、`beam=-3203.407`，在 r12/6 seeds 上旧版 objective `strategy=1232.346`、`mcts=-3701.037`、`beam=-6607.731`。这组分数包含搜索成本罚分，不能继续作为 MCTS 强度低于 Strategy 的依据；它只说明 action-level MCTS/Beam 的预算成本需要诊断。后续 MCTS 强度判断必须在给定预算内比较现金底线、收入形成、路线覆盖和行动分布。
-- search R12：MCTS 调参前先做了单次成本结构优化：`MCTSBot` 现在只在显式启用的 phase strategy 上运行 MCTS，其余阶段走 `StrategyBot` fallback，避免在 `Restructuring` / 结算 / 低价值阶段反复 fork；默认启用范围已收窄为 `working_place_houses_growth` 与 `working_place_restaurants_growth`。`MCTSSearch` 额外保留候选尝试缓冲（默认 `mcts_candidate_attempt_multiplier=3`），避免 root/topK 中前几个候选 simulation 失败后直接无子节点失败。selfplay / matrix / tuning matrix CLI 已支持 `--mcts-iterations`、`--mcts-max-depth`、`--mcts-top-k-per-node`、`--mcts-exploration`、`--mcts-min-simulation-budget-ms`、`--mcts-candidate-attempt-multiplier`、`--mcts-enabled-strategies` 和 `--mcts-config-id`。
-- search R13：完成首轮 MCTS 参数小扫（`base_revenue_growth_v1`，r8/6 seeds，budget `160ms`，同 seed 对照 `strategy`）。旧版 objective 结果：`strategy=1027.821`；`mcts-growth_only=769.871`，行动分布与 Strategy 完全一致但每局搜索时间约多 `2409ms`；`mcts-supply_growth=445.710`；`mcts-default(all-working gate)=316.984`；`mcts-fast12d2k3=135.984`；`mcts-i32d3k4f12=65.773`。去掉搜索成本罚分后，growth-only 与 Strategy 行动等价时不应因耗时被判弱；真正保留的结论是：MCTS 一旦介入 Recruit/Train/Marketing/Supply 会破坏价格/训练等核心收入路线，因此默认仍应限制在 growth-only，或上移到 plan-level。
-- search R14：继续排查后确认，单步 action-level MCTS 不应作为主要强度方向。`MCTSSearch` 的 root selection 已补低样本 Strategy prior guard（trace 暴露 `mcts_root_selection_mode` / `mcts_root_prior_guarded`），默认 growth-only 在 r8/6 seeds 上基本与 Strategy 行动分布等价；但显式 `--mcts-enabled-strategies=all` 仍会降低招聘、训练、营销与价格路线覆盖。结论：短期命令选择由 `StrategyBot` 足够胜任，MCTS 的正确使用位置应上移到“长程战略路线 / plan”层，而不是继续扩大单步 action tree。
+- search R9-R15：历史命令层 MCTS 实验证明，短期命令选择继续由 `StrategyBot` 负责更稳定；MCTS 应上移到 `StrategicPlan` 路线层。相关旧 bot/search/test/CLI 已从 active code 中清理，后续不再维护命令层 MCTS 分支。
+- strategic SP-008 R1：plan-level MCTS 已在 `StrategicMCTSSearch` 中落地首轮结构化版本。搜索对象是 `StrategicPlan`，root/final selection 暴露 visits/q、prior guard、path score、selected path 和 best continuation path；`StrategicBot` mcts 模式继续把选中 plan 转成 hints 交给 `StrategyBot` 产出当前合法命令。新增回归覆盖 plan-level trace、`strategic_*` 参数别名同步、plan-state transposition、best leaf path backprop 以及 cached mcts plan reuse。
 - strategic SP-001..SP-006：已落地首版 data-only `StrategicPlan` / `StrategicPlanHints`、路线候选生成、hints 接入、fork rollout runner、plan evaluator 与 `StrategicBot` Plan Beam wrapper。`StrategicBot` 只在当前合法动作包含 recruit/train/restructuring/marketing/supply/price/growth placement 等可被战略路线影响的动作时运行 plan search；Payday、skip-only 等非战略决策直接回退 `StrategyBot`，避免把预算浪费在无法改变路线的阶段。
 - strategic 验证快照：使用本机 Godot 4.6 console binary 运行 `tools/check_compile.gd` 得到 `PASS files=1236`；`AllTests` 得到 `426/426 PASS`、`StrategicPlanTest PASS (402ms)`。低预算 smoke：`strategy` vs `strategic`、`target-round=3`、`budget-ms=160`、`strategic-search=beam`、`horizon-decisions=4`、`max-plans=2`、`rollout-step-budget-ms=20`，结果 `success=1.0`、failures `0`、strategic search type count `strategic=5` / `strategy=21`、budget expired rate `0.115`、max decision time `973ms`。
 - strategic 小矩阵：`strategy` vs `strategic`、`target-round=4`、3 seeds、`budget-ms=200`、`horizon-decisions=6`、`max-plans=3`、`rollout-step-budget-ms=20`，结果 `PASS configs=2 matches=6 failures=0`。这组旧版 objective 分数为 `strategy=920.647`、`strategic=737.364`，但该口径包含搜索成本罚分，不能作为 Plan Beam 低于 Strategy 的公平结论；仍然有效的问题是 `strategic` 正现金玩家均值 `1.333`、无正现金玩家均值 `0.667`，说明早期收入覆盖下降。首版 Plan Beam 只能称为“可运行的路线搜索入口”，还不能作为强度提升结论。
@@ -129,9 +128,9 @@
 - 大规模自对弈仍是 smoke 和诊断工具，不应直接当作强度指标。当前 60 局 target round 12 与 30 局 target round 14 均稳定通过，但仍有约 `0.033` players/match 的开局无正现金现象；这类问题后续按聚合异常与确定结构缺口处理，不围绕单个 seed 调权重。
 - 目前 profile 权重仍是人工构造的基线。单参数 sweep 不足以说明问题，因为一个合理参数可能被其他不合理权重拖累；后续调参必须使用多参数候选、至少 3 个以上 seed，并结合对局日志人工检查异常。
 - 自对弈指标不能使用“双方动作分化”这类只对 bot-vs-bot 有意义、对真实对局无直接价值的指标。优先看收入形成速度、收入形成后现金底线、可销售需求兑现率、关键路线覆盖、异常对局存档。
-- OSLA/Beam/MCTS 当前主要用于验证 fork simulation、trace、预算和多步接口；MCTS 已进入试验性接入，但仍不是默认强度路线，后续先做结构性搜索增强与小规模 selfplay 复核。
-- 最新矩阵结果表明，MCTS 相比 Beam 已经有明显改进；旧版 tuning 分数低于 StrategyBot 的部分主要混入了搜索成本罚分，因此不能单独作为强度结论。它现在仍应作为实验分支而不是替代基线，原因是 action-level MCTS 在 Recruit/Train/Marketing/Supply 等阶段会破坏核心收入路线，而不是因为它在给定预算内搜索得更久。
-- MCTS 仍存在单次 `GameEngine.execute_command()` 不可抢占的长尾风险；当前预算保护能避免低剩余预算下继续启动新模拟，并能定位耗时集中在单次 simulation 还是候选生成/leaf eval，但不能中断已经进入 engine 的单条命令执行。已确认单纯加大预算、iteration、topK 或把 MCTS 打开到所有阶段都不会自然超过 StrategyBot；后续要把搜索层级上移到长程路线规划，而不是继续让 MCTS 和 StrategyBot 竞争单步命令排序。
+- OSLA/Beam 当前主要用于验证 fork simulation、trace、预算和多步接口；默认强度路线仍由 `StrategyBot` 承担。
+- Plan MCTS 已进入 `StrategicBot` 的路线搜索入口，但它还没有通过强度验收。后续只比较给定预算内的现金底线、收入形成、路线覆盖和行动分布，不把搜索耗时混入 objective score。
+- MCTS 的搜索层级已上移到长程路线规划；后续不再让 MCTS 和 StrategyBot 竞争单步命令排序。
 - 长程规划的核心假设：`StrategyBot` 继续负责短期战术动作；新的 planner 负责选择 2-4 回合尺度的收入路线、产能路线、价格/恢复路线、营销目标和扩张目标，并把这些路线作为 hints 约束 StrategyBot 执行。MCTS/Beam 应搜索这些 plan，而不是搜索每个 `Command`。
 - Plan Beam 当前的聚合弱点是早期收入覆盖下降：小矩阵中 `strategic` 少做营销和生产、少招 0.667 名员工/局，导致 3 seed 中平均 0.667 个玩家到 r4 仍未形成正现金。下一步只在 trace 证明有路线级原因时改代码，例如 plan 候选过早偏向 growth、hints 抑制 marketing/supply，或 evaluator 给未完成路线过高分。
 - 真实对局预算与调参预算必须分离：`StrategicBot` 面向玩家默认使用 `play` 预算 profile，可以把单回合思考预算提高到最高 `10s`，用于更长 horizon 和更多 plan rollout；profile tuning matrix 默认注入 `tuning` 预算 profile，常规 selfplay/matrix/profile tuning 应继续使用 `160-300ms` 级 `--budget-ms` 与 `20-40ms` 级 `--strategic-rollout-step-budget-ms`，通过低预算窗口筛选结构方向，再用少量高预算 smoke 检查实战质量，不能把 10s 预算作为常规调参成本。预算达标由配置和 smoke 验证负责，不通过 tuning objective 给搜索型 bot 加额外罚分。
@@ -141,7 +140,7 @@
 
 下一步计划：
 
-1. **停止扩大 action-level MCTS**：默认仍只允许 growth-only；`--mcts-enabled-strategies=all` 只作为诊断，不作为强度路线。
+1. **不恢复命令层 MCTS**：短期命令继续由 StrategyBot 决策；MCTS 只用于 `StrategicPlan` 路线搜索。
 2. **诊断 StrategicPlan 早期收入缺口**：优先检查小矩阵中 strategic 未形成正现金的 seed/player trace，确认是候选缺失、hints 偏置、rollout 边界还是 evaluator 分项错误。
 3. **修结构，不修单局**：只有当问题能归因为路线候选、hints 或 evaluator 的通用缺口时才改代码，并补 deterministic test；不为 seed 12347 这类单例直接调权重。
 4. **保留 StrategyBot 作为战术执行器**：Recruit/Train/Restructuring/Payday/单候选 pass 等短期动作继续由 StrategyBot 决策；planner 只通过 hints 改变目标产品、目标员工、营销优先级、价格/扩张优先级。
@@ -167,7 +166,7 @@
 - [架构与接口契约](architecture.md)：代码基线、目录结构、Bot 接口、隐藏信息与状态模型。
 - [模拟、地图与晚餐预览](simulation_board_dinner.md)：forward simulation、BoardAnalyzer、DinnerPreview。
 - [候选生成与评价函数](candidates_and_evaluation.md)：候选生成规则、评价函数边界。
-- [Bot 与搜索策略](bots_and_search.md)：Bot/search 专题入口，含 StrategyBot、自对弈工具、OSLA/Beam/MCTS。
+- [Bot 与搜索策略](bots_and_search.md)：Bot/search 专题入口，含 StrategyBot、自对弈工具、OSLA/Beam 与 Plan MCTS。
 - [长程战略规划层](strategic_plan.md)：StrategicPlan、plan hints、Plan Beam / Plan MCTS 实施拆解。
 - [测试、路线图与验收](testing_and_roadmap.md)：扩展契约、日志、测试计划、开发路线、失败模式与验收表。
 - [Phase 0/1 任务拆解](phase0_phase1_breakdown.md)：早期接口、观察层、fork simulation 与 DinnerPreview 的执行拆解。

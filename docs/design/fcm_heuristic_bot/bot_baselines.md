@@ -1,6 +1,6 @@
 # 启发式人机对手：Bot 基线与实现顺序
 
-本文聚焦搜索策略的实现顺序，以及 RandomLegalBot / GreedyBot 的定位。StrategyBot 与搜索增强分别见 [StrategyBot](strategy_bot.md) 和 [OSLA / Beam / MCTS](search_osla_beam_mcts.md)。
+本文聚焦搜索策略的实现顺序，以及 RandomLegalBot / GreedyBot 的定位。StrategyBot、命令层搜索和长程 plan 搜索分别见 [StrategyBot](strategy_bot.md)、[OSLA / Beam](search_osla_beam.md) 和 [长程战略规划层](strategic_plan.md)。
 
 ## 11. 搜索策略
 
@@ -12,9 +12,9 @@
 4. `StrategyBot`
 5. `OSLABot`
 6. `BeamBot`
-7. `MCTSBot`
+7. `StrategicBot`
 
-首版没有直接上纯随机 rollout 的 MCTS；当前已接入的是启发式引导、以候选和 forward simulation 为核心的树搜索骨架。
+首版没有把纯随机 rollout 接到命令层。当前默认强基线仍是 `StrategyBot`；`StrategicBot` 在 plan 层用 Beam / MCTS 选择路线，再把路线 hints 交给 `StrategyBot` 生成当前合法命令。
 
 ### 11.2 RandomLegalBot
 

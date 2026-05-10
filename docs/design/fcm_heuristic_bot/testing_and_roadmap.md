@@ -207,14 +207,14 @@ Phase -1 到 Phase 1 的可执行任务拆解与现有代码复用总表见：[p
 
 - `tools/run_bot_selfplay.gd` / `tools/run_bot_selfplay.sh`
 - `tools/run_bot_selfplay_matrix.gd` / `tools/run_bot_selfplay_matrix.sh`
-- `tools/run_bot_tuning_matrix.gd` / `tools/run_bot_tuning_matrix.sh`：重复 `--profile=`、`--profile-dir=` 或 `--profile-list=` profile sweep，输出 bot/profile 行级 `RANK` 与 profile 聚合 `PROFILE_RANK`；同样会透传 MCTS 参数选项，便于在固定 profile sweep 里复用某个 MCTS 配置。
+- `tools/run_bot_tuning_matrix.gd` / `tools/run_bot_tuning_matrix.sh`：重复 `--profile=`、`--profile-dir=` 或 `--profile-list=` profile sweep，输出 bot/profile 行级 `RANK` 与 profile 聚合 `PROFILE_RANK`；同样会透传 `StrategicBot` 的 plan-level MCTS 参数选项，便于在固定 profile sweep 里复用某个 `StrategicMCTSSearch` 配置。
 - `tools/generate_bot_profile_variants.gd` / `tools/generate_bot_profile_variants.sh`：按 `--scale=` 生成候选 profile，可写 `--manifest=` 供 tuning matrix 复用。
 - 输出 JSONL match logs。
 - `tools/summarize_bot_selfplay.gd` / `tools/summarize_bot_selfplay.sh`
 - 汇总固定 seed 矩阵的成功率、行动分布、回合/步数/命令数和每玩家资源趋势。
 - 支持固定 bot config 对战：`--bot=` 用同一 bot 填满所有玩家，`--bots=` 按玩家指定 matchup。
 - 支持 `--profile=<id|path>` 固定 profile 对照；当前已有 `base_revenue_v1` 与 `base_revenue_growth_v1` 两个数据配置。
-- selfplay JSONL 已包含每位玩家的 `player_milestone_ids`；summary 会输出 `MILESTONES` 覆盖频次，可用于后续分析 StrategyBot、OSLA、Beam 和 MCTS 在关键里程碑规划上的差异。JSONL 也会区分 bot 主动命令 `action_counts` 与自动强制动作 completion 统计，避免 `pricing_manager` 已经触发自动 `set_price` 但行动分布里看不到 `set_price` 时误判价格路线没有闭环。OSLA/Beam/MCTS 调参还应同时查看 `search_metrics` / `SEARCH` / comparison `search_delta`，并结合 `TUNING` / `tuning_score_delta` 判断新增搜索是否带来行动或路线质量变化，而不是只增加 attempted simulations、expanded nodes、耗时或 budget expired。
+- selfplay JSONL 已包含每位玩家的 `player_milestone_ids`；summary 会输出 `MILESTONES` 覆盖频次，可用于后续分析 StrategyBot、OSLA、Beam 和 `StrategicBot` 在关键里程碑规划上的差异。JSONL 也会区分 bot 主动命令 `action_counts` 与自动强制动作 completion 统计，避免 `pricing_manager` 已经触发自动 `set_price` 但行动分布里看不到 `set_price` 时误判价格路线没有闭环。OSLA/Beam/Strategic 调参还应同时查看 `search_metrics` / `SEARCH` / comparison `search_delta`，并结合 `TUNING` / `tuning_score_delta` 判断新增搜索是否带来行动或路线质量变化，而不是只增加 attempted simulations、expanded nodes、耗时或 budget expired。
 - `BotSelfplayMatrixTest` 现包含一个搜索 bot 流程 smoke：`strategy/osla/beam` 使用同一 `base_revenue_growth_v1` profile、seed 12345、target round 4、1 局，断言三类 bot 都能到达第 4 回合并完成放餐厅、招聘和发起营销等基础动作，同时验证 summary bucket 成功率为 1.0。这条测试只作为 OSLA/Beam wrapper 与 matrix 汇总的流程 gate，不把三者早期行动分布相同视为强度通过。
 - `BotSelfplayMatrixTest` 现包含一个 Strategy-only `base_revenue_growth_v1` 轻量质量门：seed 12345、target round 8、1 局，断言到达第 8 回合、两名玩家现金形成后不跌破 10、现金峰值至少 20，并在真实自对弈中覆盖 `initiate_marketing`、`produce_food`、`procure_drinks`、`recruit`、真实 `set_price` mandatory completion，以及 `first_billboard`、`first_burger_marketed`、`first_burger_produced`、`first_errand_boy`、`first_lower_prices`。这条测试只作为核心收入与关键路线监控，不把 `first_throw_away` 当作主动策略目标。
 - 先用 scenario benchmark 固定策略行为闸门，再做简单网格/随机搜索；若权重空间和指标稳定，再考虑 SPSA。

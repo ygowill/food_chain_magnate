@@ -7,7 +7,6 @@ const GreedyBotClass = preload("res://core/ai/bot/greedy_bot.gd")
 const StrategyBotClass = preload("res://core/ai/bot/strategy_bot.gd")
 const OSLABotClass = preload("res://core/ai/bot/osla_bot.gd")
 const BeamBotClass = preload("res://core/ai/bot/beam_bot.gd")
-const MCTSBotClass = preload("res://core/ai/bot/mcts_bot.gd")
 const StrategicBotClass = preload("res://core/ai/bot/strategic_bot.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const StrategyProfileClass = preload("res://core/ai/strategy/strategy_profile.gd")
@@ -22,7 +21,7 @@ const DEFAULT_BUDGET_MS := 80
 const DEFAULT_TRACE_TAIL := 8
 const DEFAULT_TRACE_DETAIL := "compact"
 const DEFAULT_BOT_ID := "strategy"
-const SUPPORTED_BOT_IDS := ["random", "greedy", "strategy", "osla", "beam", "mcts", "strategic"]
+const SUPPORTED_BOT_IDS := ["random", "greedy", "strategy", "osla", "beam", "strategic"]
 const SUPPORTED_TRACE_DETAILS := ["compact", "decision"]
 const FOOD_PRODUCER_EMPLOYEE_IDS := [
 	"kitchen_trainee",
@@ -75,13 +74,12 @@ static func run(options: Dictionary) -> Result:
 	var bot_id := str(options.get("bot_id", DEFAULT_BOT_ID)).strip_edges()
 	var output_jsonl := str(options.get("output_jsonl", "")).strip_edges()
 	var output_archive := str(options.get("output_archive", "")).strip_edges()
-	var mcts_options: Dictionary = Dictionary(options.get("mcts_options", {})).duplicate(true)
 	var strategic_options: Dictionary = Dictionary(options.get("strategic_options", {})).duplicate(true)
 	var bot_ids_read := _resolve_bot_ids(options, player_count)
 	if not bot_ids_read.ok:
 		return bot_ids_read
 	var bot_ids: Array[String] = bot_ids_read.value
-	var bot_config := _bot_config_id(_bot_config_ids_for_display(bot_ids, mcts_options, strategic_options))
+	var bot_config := _bot_config_id(_bot_config_ids_for_display(bot_ids, strategic_options))
 	var profile_source := str(options.get("profile", "")).strip_edges()
 	var profile_config := _profile_config_id(profile_source)
 	if not profile_config.is_empty():
@@ -132,7 +130,7 @@ static func run(options: Dictionary) -> Result:
 	var failures := 0
 	for match_index in range(matches):
 		var seed := start_seed + match_index
-		var row := _run_match(match_index, player_count, seed, target_round, max_steps, budget_ms, trace_tail, trace_detail, bot_ids, bot_config, profile_source, profile_config, mcts_options, strategic_options, output_archive)
+		var row := _run_match(match_index, player_count, seed, target_round, max_steps, budget_ms, trace_tail, trace_detail, bot_ids, bot_config, profile_source, profile_config, strategic_options, output_archive)
 		rows.append(row)
 		if not bool(row.get("ok", false)):
 			failures += 1
@@ -169,7 +167,6 @@ static func _run_match(
 	bot_config: String,
 	profile_source: String,
 	profile_config: String,
-	mcts_options: Dictionary = {},
 	strategic_options: Dictionary = {},
 	output_archive: String = ""
 ) -> Dictionary:
@@ -190,7 +187,7 @@ static func _run_match(
 	var bots := {}
 	for player_id in range(player_count):
 		var bot_id := bot_ids[player_id]
-		var bot_options := strategic_options if bot_id == "strategic" else mcts_options
+		var bot_options := strategic_options if bot_id == "strategic" else {}
 		var bot_read := _create_bot(bot_id, profile_source, bot_options)
 		if not bot_read.ok:
 			return {
@@ -224,8 +221,6 @@ static func _run_match(
 	if not profile_config.is_empty():
 		row["bot_profile"] = profile_config
 		row["profile_source"] = profile_source
-	if not mcts_options.is_empty() and bot_ids.has("mcts"):
-		row["mcts_options"] = mcts_options.duplicate(true)
 	if not strategic_options.is_empty() and bot_ids.has("strategic"):
 		row["strategic_options"] = strategic_options.duplicate(true)
 	row["ok"] = run_read.ok
@@ -260,8 +255,6 @@ static func _create_bot(bot_id: String, profile_source: String = "", bot_options
 			bot = OSLABotClass.new()
 		"beam":
 			bot = BeamBotClass.new()
-		"mcts":
-			bot = MCTSBotClass.new()
 		"strategic":
 			bot = StrategicBotClass.new()
 		_:
@@ -271,7 +264,7 @@ static func _create_bot(bot_id: String, profile_source: String = "", bot_options
 		var profile_read: Result = bot.configure_profile(profile)
 		if not profile_read.ok:
 			return profile_read
-	if (bot_id == "mcts" or bot_id == "strategic") and not bot_options.is_empty() and bot != null and bot.has_method("configure_search_options"):
+	if bot_id == "strategic" and not bot_options.is_empty() and bot != null and bot.has_method("configure_search_options"):
 		var options_read: Result = bot.configure_search_options(bot_options)
 		if not options_read.ok:
 			return options_read
@@ -313,50 +306,15 @@ static func _bot_config_id(bot_ids: Array[String]) -> String:
 		return first
 	return "_vs_".join(bot_ids)
 
-static func _bot_config_ids_for_display(bot_ids: Array[String], mcts_options: Dictionary, strategic_options: Dictionary = {}) -> Array[String]:
-	var mcts_config := _mcts_config_id(mcts_options)
+static func _bot_config_ids_for_display(bot_ids: Array[String], strategic_options: Dictionary = {}) -> Array[String]:
 	var strategic_config := _strategic_config_id(strategic_options)
 	var out: Array[String] = []
 	for bot_id in bot_ids:
 		var display_id := str(bot_id)
-		if display_id == "mcts" and not mcts_config.is_empty():
-			display_id = "mcts-%s" % mcts_config
 		if display_id == "strategic" and not strategic_config.is_empty():
 			display_id = "strategic-%s" % strategic_config
 		out.append(display_id)
 	return out
-
-static func _mcts_config_id(mcts_options: Dictionary) -> String:
-	if mcts_options.is_empty():
-		return ""
-	var explicit_id := str(mcts_options.get("mcts_config_id", "")).strip_edges()
-	if not explicit_id.is_empty():
-		return _safe_config_fragment(explicit_id)
-	var parts: Array[String] = []
-	if mcts_options.has("mcts_iterations"):
-		parts.append("i%d" % int(mcts_options.get("mcts_iterations", 0)))
-	if mcts_options.has("mcts_max_depth"):
-		parts.append("d%d" % int(mcts_options.get("mcts_max_depth", 0)))
-	if mcts_options.has("mcts_top_k_per_node"):
-		parts.append("k%d" % int(mcts_options.get("mcts_top_k_per_node", 0)))
-	if mcts_options.has("mcts_exploration"):
-		parts.append("e%d" % int(round(float(mcts_options.get("mcts_exploration", 0.0)) * 100.0)))
-	if mcts_options.has("mcts_min_simulation_budget_ms"):
-		parts.append("f%d" % int(mcts_options.get("mcts_min_simulation_budget_ms", 0)))
-	if mcts_options.has("mcts_candidate_attempt_multiplier"):
-		parts.append("a%d" % int(mcts_options.get("mcts_candidate_attempt_multiplier", 0)))
-	if mcts_options.has("mcts_root_prior_min_visits_per_child"):
-		parts.append("p%d" % int(mcts_options.get("mcts_root_prior_min_visits_per_child", 0)))
-	if mcts_options.has("mcts_enabled_strategy_ids"):
-		var enabled_ids := _string_array(mcts_options.get("mcts_enabled_strategy_ids", []))
-		enabled_ids.sort()
-		var strategy_fragment := _safe_config_fragment("_".join(enabled_ids))
-		if strategy_fragment.length() > 36:
-			strategy_fragment = strategy_fragment.substr(0, 36)
-		parts.append("g%s" % strategy_fragment)
-	if parts.is_empty():
-		return ""
-	return "-".join(parts)
 
 static func _strategic_config_id(strategic_options: Dictionary) -> String:
 	var budget_profile := str(strategic_options.get("strategic_budget_profile", StrategicBotClass.DEFAULT_BUDGET_PROFILE)).strip_edges()
@@ -384,6 +342,18 @@ static func _strategic_config_id(strategic_options: Dictionary) -> String:
 		parts.append("b%d" % int(strategic_options.get("strategic_min_search_budget_ms", 0)))
 	if strategic_options.has("strategic_min_plans_for_rollout"):
 		parts.append("m%d" % int(strategic_options.get("strategic_min_plans_for_rollout", 0)))
+	if strategic_options.has("mcts_iterations"):
+		parts.append("mi%d" % int(strategic_options.get("mcts_iterations", 0)))
+	if strategic_options.has("mcts_max_depth"):
+		parts.append("md%d" % int(strategic_options.get("mcts_max_depth", 0)))
+	if strategic_options.has("mcts_top_k_per_node"):
+		parts.append("mk%d" % int(strategic_options.get("mcts_top_k_per_node", 0)))
+	if strategic_options.has("mcts_exploration"):
+		parts.append("me%d" % int(round(float(strategic_options.get("mcts_exploration", 0.0)) * 100.0)))
+	if strategic_options.has("mcts_prior_weight"):
+		parts.append("mw%d" % int(round(float(strategic_options.get("mcts_prior_weight", 0.0)) * 100.0)))
+	if strategic_options.has("mcts_root_prior_min_visits_per_child"):
+		parts.append("mv%d" % int(strategic_options.get("mcts_root_prior_min_visits_per_child", 0)))
 	return "-".join(parts)
 
 static func _safe_config_fragment(raw_value: String) -> String:
@@ -981,7 +951,6 @@ static func _parse_args(args: Array[String]) -> Result:
 		"profile": "",
 		"output_jsonl": "",
 		"output_archive": "",
-		"mcts_options": {},
 		"strategic_options": {},
 	}
 	for raw_arg in args:
@@ -1058,10 +1027,6 @@ static func _parse_args(args: Array[String]) -> Result:
 			options["output_jsonl"] = arg.trim_prefix("--output-jsonl=").strip_edges()
 		elif arg.begins_with("--output-archive="):
 			options["output_archive"] = arg.trim_prefix("--output-archive=").strip_edges()
-		elif _is_mcts_option_arg(arg):
-			var mcts_read := _parse_mcts_option_arg(options, arg)
-			if not mcts_read.ok:
-				return mcts_read
 		elif _is_strategic_option_arg(arg):
 			var strategic_read := _parse_strategic_option_arg(options, arg)
 			if not strategic_read.ok:
@@ -1069,67 +1034,6 @@ static func _parse_args(args: Array[String]) -> Result:
 		else:
 			return Result.failure("unknown argument: %s" % arg)
 	return Result.success(options)
-
-static func _is_mcts_option_arg(arg: String) -> bool:
-	return arg.begins_with("--mcts-")
-
-static func _parse_mcts_option_arg(options: Dictionary, arg: String) -> Result:
-	var mcts_options: Dictionary = Dictionary(options.get("mcts_options", {}))
-	if arg.begins_with("--mcts-iterations="):
-		var value := arg.trim_prefix("--mcts-iterations=").strip_edges()
-		if not value.is_valid_int() or int(value) < 1:
-			return Result.failure("--mcts-iterations must be a positive integer")
-		mcts_options["mcts_iterations"] = int(value)
-	elif arg.begins_with("--mcts-max-depth="):
-		var value := arg.trim_prefix("--mcts-max-depth=").strip_edges()
-		if not value.is_valid_int() or int(value) < 1:
-			return Result.failure("--mcts-max-depth must be a positive integer")
-		mcts_options["mcts_max_depth"] = int(value)
-	elif arg.begins_with("--mcts-top-k-per-node="):
-		var value := arg.trim_prefix("--mcts-top-k-per-node=").strip_edges()
-		if not value.is_valid_int() or int(value) < 1:
-			return Result.failure("--mcts-top-k-per-node must be a positive integer")
-		mcts_options["mcts_top_k_per_node"] = int(value)
-	elif arg.begins_with("--mcts-exploration="):
-		var value := arg.trim_prefix("--mcts-exploration=").strip_edges()
-		if not value.is_valid_float() or float(value) < 0.0:
-			return Result.failure("--mcts-exploration must be a non-negative number")
-		mcts_options["mcts_exploration"] = float(value)
-	elif arg.begins_with("--mcts-min-simulation-budget-ms="):
-		var value := arg.trim_prefix("--mcts-min-simulation-budget-ms=").strip_edges()
-		if not value.is_valid_int() or int(value) < 0:
-			return Result.failure("--mcts-min-simulation-budget-ms must be a non-negative integer")
-		mcts_options["mcts_min_simulation_budget_ms"] = int(value)
-	elif arg.begins_with("--mcts-candidate-attempt-multiplier="):
-		var value := arg.trim_prefix("--mcts-candidate-attempt-multiplier=").strip_edges()
-		if not value.is_valid_int() or int(value) < 1:
-			return Result.failure("--mcts-candidate-attempt-multiplier must be a positive integer")
-		mcts_options["mcts_candidate_attempt_multiplier"] = int(value)
-	elif arg.begins_with("--mcts-root-prior-min-visits-per-child="):
-		var value := arg.trim_prefix("--mcts-root-prior-min-visits-per-child=").strip_edges()
-		if not value.is_valid_int() or int(value) < 0:
-			return Result.failure("--mcts-root-prior-min-visits-per-child must be a non-negative integer")
-		mcts_options["mcts_root_prior_min_visits_per_child"] = int(value)
-	elif arg.begins_with("--mcts-enabled-strategies="):
-		var value := arg.trim_prefix("--mcts-enabled-strategies=").strip_edges()
-		if value.is_empty():
-			return Result.failure("--mcts-enabled-strategies cannot be empty")
-		var enabled: Array[String] = []
-		for part in value.split(",", false):
-			var strategy_id := str(part).strip_edges()
-			if strategy_id.is_empty():
-				return Result.failure("--mcts-enabled-strategies cannot contain empty ids")
-			enabled.append(strategy_id)
-		mcts_options["mcts_enabled_strategy_ids"] = enabled
-	elif arg.begins_with("--mcts-config-id="):
-		var value := arg.trim_prefix("--mcts-config-id=").strip_edges()
-		if value.is_empty():
-			return Result.failure("--mcts-config-id cannot be empty")
-		mcts_options["mcts_config_id"] = value
-	else:
-		return Result.failure("unknown MCTS option: %s" % arg)
-	options["mcts_options"] = mcts_options
-	return Result.success()
 
 static func _is_strategic_option_arg(arg: String) -> bool:
 	return arg.begins_with("--strategic-")
@@ -1181,10 +1085,40 @@ static func _parse_strategic_option_arg(options: Dictionary, arg: String) -> Res
 		if value.is_empty():
 			return Result.failure("--strategic-config-id cannot be empty")
 		strategic_options["strategic_config_id"] = value
+	elif arg.begins_with("--strategic-mcts-iterations="):
+		var value := arg.trim_prefix("--strategic-mcts-iterations=").strip_edges()
+		if not value.is_valid_int() or int(value) < 1:
+			return Result.failure("--strategic-mcts-iterations must be a positive integer")
+		strategic_options["mcts_iterations"] = int(value)
+	elif arg.begins_with("--strategic-mcts-max-depth="):
+		var value := arg.trim_prefix("--strategic-mcts-max-depth=").strip_edges()
+		if not value.is_valid_int() or int(value) < 1:
+			return Result.failure("--strategic-mcts-max-depth must be a positive integer")
+		strategic_options["mcts_max_depth"] = int(value)
+	elif arg.begins_with("--strategic-mcts-top-k-per-node="):
+		var value := arg.trim_prefix("--strategic-mcts-top-k-per-node=").strip_edges()
+		if not value.is_valid_int() or int(value) < 1:
+			return Result.failure("--strategic-mcts-top-k-per-node must be a positive integer")
+		strategic_options["mcts_top_k_per_node"] = int(value)
+	elif arg.begins_with("--strategic-mcts-exploration="):
+		var value := arg.trim_prefix("--strategic-mcts-exploration=").strip_edges()
+		if not value.is_valid_float() or float(value) < 0.0:
+			return Result.failure("--strategic-mcts-exploration must be a non-negative number")
+		strategic_options["mcts_exploration"] = float(value)
+	elif arg.begins_with("--strategic-mcts-prior-weight="):
+		var value := arg.trim_prefix("--strategic-mcts-prior-weight=").strip_edges()
+		if not value.is_valid_float() or float(value) < 0.0:
+			return Result.failure("--strategic-mcts-prior-weight must be a non-negative number")
+		strategic_options["mcts_prior_weight"] = float(value)
+	elif arg.begins_with("--strategic-mcts-root-prior-min-visits-per-child="):
+		var value := arg.trim_prefix("--strategic-mcts-root-prior-min-visits-per-child=").strip_edges()
+		if not value.is_valid_int() or int(value) < 0:
+			return Result.failure("--strategic-mcts-root-prior-min-visits-per-child must be a non-negative integer")
+		strategic_options["mcts_root_prior_min_visits_per_child"] = int(value)
 	else:
 		return Result.failure("unknown strategic option: %s" % arg)
 	options["strategic_options"] = strategic_options
 	return Result.success()
 
 static func _print_usage() -> void:
-	print("Usage: tools/run_bot_selfplay.sh [--bot=random|greedy|strategy|osla|beam|mcts|strategic] [--bots=strategy,strategic] [--profile=base_revenue_v1] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--trace-detail=compact|decision] [--mcts-iterations=24] [--mcts-max-depth=3] [--mcts-top-k-per-node=4] [--mcts-exploration=1.25] [--mcts-min-simulation-budget-ms=24] [--mcts-candidate-attempt-multiplier=3] [--mcts-root-prior-min-visits-per-child=2] [--mcts-enabled-strategies=working_recruit_income_route,...] [--mcts-config-id=id] [--strategic-search=none|beam|mcts] [--strategic-budget-profile=tuning|play] [--strategic-horizon-decisions=16] [--strategic-horizon-rounds=2] [--strategic-max-plans=6] [--strategic-rollout-step-budget-ms=40] [--strategic-min-search-budget-ms=240] [--strategic-min-plans-for-rollout=2] [--strategic-config-id=id] [--output-jsonl=res://.godot/bot_selfplay.jsonl] [--output-archive=res://.godot/bot_selfplay_archive.json]")
+	print("Usage: tools/run_bot_selfplay.sh [--bot=random|greedy|strategy|osla|beam|strategic] [--bots=strategy,strategic] [--profile=base_revenue_v1] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--trace-detail=compact|decision] [--strategic-search=none|beam|mcts] [--strategic-budget-profile=tuning|play] [--strategic-horizon-decisions=16] [--strategic-horizon-rounds=2] [--strategic-max-plans=6] [--strategic-rollout-step-budget-ms=40] [--strategic-min-search-budget-ms=240] [--strategic-min-plans-for-rollout=2] [--strategic-mcts-iterations=24] [--strategic-mcts-max-depth=3] [--strategic-mcts-top-k-per-node=4] [--strategic-mcts-exploration=1.25] [--strategic-mcts-prior-weight=0.25] [--strategic-mcts-root-prior-min-visits-per-child=2] [--strategic-config-id=id] [--output-jsonl=res://.godot/bot_selfplay.jsonl] [--output-archive=res://.godot/bot_selfplay_archive.json]")

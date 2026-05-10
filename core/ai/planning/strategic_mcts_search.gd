@@ -40,6 +40,9 @@ static func choose_plan_mcts(
 		return Result.failure("StrategicMCTSSearch.choose_plan_mcts: no plans generated")
 
 	var max_plans := maxi(1, int(options.get("max_plans", plans.size())))
+	var min_plans_for_rollout := mini(max_plans, maxi(1, int(options.get("min_plans_for_rollout", 1))))
+	if plans.size() < min_plans_for_rollout:
+		return Result.failure("StrategicMCTSSearch.choose_plan_mcts: insufficient route alternatives (%d < %d)" % [plans.size(), min_plans_for_rollout])
 	var top_k_per_node := maxi(1, int(options.get("mcts_top_k_per_node", DEFAULT_MCTS_TOP_K_PER_NODE)))
 	var iterations := maxi(1, int(options.get("mcts_iterations", DEFAULT_MCTS_ITERATIONS)))
 	var max_depth := maxi(1, int(options.get("mcts_max_depth", DEFAULT_MCTS_MAX_DEPTH)))
@@ -68,6 +71,9 @@ static func choose_plan_mcts(
 	var eval_ms_sum := 0
 	var backprop_ms := 0
 	var executed_iterations := 0
+	var plan_state_deduped_nodes := 0
+	var plan_transposition_pruned_nodes := 0
+	var best_state_scores: Dictionary = {}
 
 	for _iteration in range(iterations):
 		if budget != null and budget.expired():
@@ -87,13 +93,16 @@ static func choose_plan_mcts(
 			exploration,
 			horizon_decisions,
 			horizon_rounds,
-			budget_guarded
+			budget_guarded,
+			best_state_scores
 		)
 		if not selection_read.ok:
 			return selection_read
 		var selection: Dictionary = Dictionary(selection_read.value)
 		attempted_rollouts += int(selection.get("attempted_rollouts", 0))
 		expanded_nodes += int(selection.get("expanded_nodes", 0))
+		plan_state_deduped_nodes += int(selection.get("plan_state_deduped_nodes", 0))
+		plan_transposition_pruned_nodes += int(selection.get("plan_transposition_pruned_nodes", 0))
 		deepest_depth = maxi(deepest_depth, int(selection.get("deepest_depth", 0)))
 		rollout_ms_sum += int(selection.get("rollout_ms", 0))
 		rollout_ms_max = maxi(rollout_ms_max, int(selection.get("rollout_ms_max", 0)))
@@ -140,6 +149,10 @@ static func choose_plan_mcts(
 	var best_eval_score := float(best_child.get("leaf_eval_score", 0.0))
 	var best_value_score := float(best_child.get("leaf_value_score", best_q))
 	var best_path_score := float(best_child.get("path_score", 0.0))
+	var selected_path := Array(best_child.get("best_leaf_path", best_child.get("path", []))).duplicate(true)
+	var selected_leaf_depth := int(best_child.get("best_leaf_depth", best_child.get("depth", 0)))
+	var selected_leaf_value_score := float(best_child.get("best_leaf_value_score", best_value_score))
+	var selected_state_key := str(best_child.get("state_key", ""))
 	var root_selection_mode := str(root_selection_payload.get("selection_mode", "visits"))
 	var root_prior_guarded := bool(root_selection_payload.get("prior_guarded", false))
 	var root_min_required_visits := int(root_selection_payload.get("min_required_visits", 0))
@@ -158,6 +171,10 @@ static func choose_plan_mcts(
 	features["mcts_eval_score"] = best_eval_score
 	features["mcts_value_score"] = best_value_score
 	features["mcts_path_score"] = best_path_score
+	features["mcts_selected_path"] = selected_path.duplicate(true)
+	features["mcts_selected_leaf_depth"] = selected_leaf_depth
+	features["mcts_selected_leaf_value_score"] = selected_leaf_value_score
+	features["mcts_selected_state_key"] = selected_state_key
 	features["mcts_root_child_count"] = root_children.size()
 	features["mcts_root_raw_child_count"] = root_raw_child_count
 	features["mcts_max_depth"] = max_depth
@@ -177,12 +194,15 @@ static func choose_plan_mcts(
 	features["mcts_rollout_ms_max"] = rollout_ms_max
 	features["mcts_eval_ms_sum"] = eval_ms_sum
 	features["mcts_backprop_ms"] = backprop_ms
+	features["mcts_plan_state_deduped_nodes"] = plan_state_deduped_nodes
+	features["mcts_plan_transposition_pruned_nodes"] = plan_transposition_pruned_nodes
 
 	var top_plans := _trace_evaluated(root_children, 5)
 	return Result.success({
 		"plan": best_plan,
 		"score": best_value_score,
 		"eval_score": best_eval_score,
+		"features": features,
 		"candidate_count": int(root.get("candidate_count", 0)),
 		"evaluated_count": root_children.size(),
 		"evaluated_plans": top_plans,
@@ -200,6 +220,12 @@ static func choose_plan_mcts(
 		"mcts_root_prior_guarded": root_prior_guarded,
 		"mcts_root_selection_mode": root_selection_mode,
 		"mcts_root_min_required_visits": root_min_required_visits,
+		"mcts_selected_path": selected_path,
+		"mcts_selected_leaf_depth": selected_leaf_depth,
+		"mcts_selected_leaf_value_score": selected_leaf_value_score,
+		"mcts_selected_state_key": selected_state_key,
+		"mcts_plan_state_deduped_nodes": plan_state_deduped_nodes,
+		"mcts_plan_transposition_pruned_nodes": plan_transposition_pruned_nodes,
 		"plan_eval_breakdown": Dictionary(best_child.get("leaf_breakdown", {})).duplicate(true),
 	})
 
@@ -216,12 +242,15 @@ static func _select_leaf(
 	exploration: float,
 	horizon_decisions: int,
 	horizon_rounds: int,
-	budget_guarded: bool
+	budget_guarded: bool,
+	best_state_scores: Dictionary
 ) -> Result:
 	var path: Array[Dictionary] = []
 	var current: Dictionary = node
 	var attempted_rollouts := 0
 	var expanded_nodes := 0
+	var plan_state_deduped_nodes := 0
+	var plan_transposition_pruned_nodes := 0
 	var rollout_ms := 0
 	var rollout_ms_max := 0
 	var eval_ms := 0
@@ -235,6 +264,8 @@ static func _select_leaf(
 				"path": path,
 				"attempted_rollouts": attempted_rollouts,
 				"expanded_nodes": expanded_nodes,
+				"plan_state_deduped_nodes": plan_state_deduped_nodes,
+				"plan_transposition_pruned_nodes": plan_transposition_pruned_nodes,
 				"deepest_depth": deepest_depth,
 				"budget_expired": false,
 				"budget_guarded": budget_guarded,
@@ -248,6 +279,8 @@ static func _select_leaf(
 				"path": path,
 				"attempted_rollouts": attempted_rollouts,
 				"expanded_nodes": expanded_nodes,
+				"plan_state_deduped_nodes": plan_state_deduped_nodes,
+				"plan_transposition_pruned_nodes": plan_transposition_pruned_nodes,
 				"deepest_depth": deepest_depth,
 				"budget_expired": false,
 				"budget_guarded": budget_guarded,
@@ -273,6 +306,8 @@ static func _select_leaf(
 					"path": path,
 					"attempted_rollouts": attempted_rollouts,
 					"expanded_nodes": expanded_nodes,
+					"plan_state_deduped_nodes": plan_state_deduped_nodes,
+					"plan_transposition_pruned_nodes": plan_transposition_pruned_nodes,
 					"deepest_depth": deepest_depth,
 					"budget_expired": true,
 					"budget_guarded": budget_guarded,
@@ -286,6 +321,8 @@ static func _select_leaf(
 					"path": path,
 					"attempted_rollouts": attempted_rollouts,
 					"expanded_nodes": expanded_nodes,
+					"plan_state_deduped_nodes": plan_state_deduped_nodes,
+					"plan_transposition_pruned_nodes": plan_transposition_pruned_nodes,
 					"deepest_depth": deepest_depth,
 					"budget_expired": false,
 					"budget_guarded": true,
@@ -304,7 +341,8 @@ static func _select_leaf(
 				budget,
 				prior_weight,
 				horizon_decisions,
-				horizon_rounds
+				horizon_rounds,
+				best_state_scores
 			)
 			if not expand_read.ok:
 				return expand_read
@@ -312,6 +350,8 @@ static func _select_leaf(
 			var expanded_now := int(expand_payload.get("expanded_nodes", 0)) > 0
 			attempted_rollouts += int(expand_payload.get("attempted_rollouts", 0))
 			expanded_nodes += int(expand_payload.get("expanded_nodes", 0))
+			plan_state_deduped_nodes += int(expand_payload.get("plan_state_deduped_nodes", 0))
+			plan_transposition_pruned_nodes += int(expand_payload.get("plan_transposition_pruned_nodes", 0))
 			rollout_ms += int(expand_payload.get("rollout_ms", 0))
 			rollout_ms_max = maxi(rollout_ms_max, int(expand_payload.get("rollout_ms_max", 0)))
 			eval_ms += int(expand_payload.get("eval_ms", 0))
@@ -321,6 +361,8 @@ static func _select_leaf(
 					"path": path,
 					"attempted_rollouts": attempted_rollouts,
 					"expanded_nodes": expanded_nodes,
+					"plan_state_deduped_nodes": plan_state_deduped_nodes,
+					"plan_transposition_pruned_nodes": plan_transposition_pruned_nodes,
 					"deepest_depth": deepest_depth,
 					"budget_expired": true,
 					"budget_guarded": budget_guarded,
@@ -334,6 +376,8 @@ static func _select_leaf(
 					"path": path,
 					"attempted_rollouts": attempted_rollouts,
 					"expanded_nodes": expanded_nodes,
+					"plan_state_deduped_nodes": plan_state_deduped_nodes,
+					"plan_transposition_pruned_nodes": plan_transposition_pruned_nodes,
 					"deepest_depth": deepest_depth,
 					"budget_expired": false,
 					"budget_guarded": true,
@@ -351,6 +395,8 @@ static func _select_leaf(
 					"path": path,
 					"attempted_rollouts": attempted_rollouts,
 					"expanded_nodes": expanded_nodes,
+					"plan_state_deduped_nodes": plan_state_deduped_nodes,
+					"plan_transposition_pruned_nodes": plan_transposition_pruned_nodes,
 					"deepest_depth": maxi(deepest_depth, int(leaf.get("depth", 0))),
 					"budget_expired": false,
 					"budget_guarded": budget_guarded,
@@ -364,6 +410,8 @@ static func _select_leaf(
 				"path": path,
 				"attempted_rollouts": attempted_rollouts,
 				"expanded_nodes": expanded_nodes,
+				"plan_state_deduped_nodes": plan_state_deduped_nodes,
+				"plan_transposition_pruned_nodes": plan_transposition_pruned_nodes,
 				"deepest_depth": deepest_depth,
 				"budget_expired": false,
 				"budget_guarded": budget_guarded,
@@ -379,6 +427,8 @@ static func _select_leaf(
 				"path": path,
 				"attempted_rollouts": attempted_rollouts,
 				"expanded_nodes": expanded_nodes,
+				"plan_state_deduped_nodes": plan_state_deduped_nodes,
+				"plan_transposition_pruned_nodes": plan_transposition_pruned_nodes,
 				"deepest_depth": deepest_depth,
 				"budget_expired": false,
 				"budget_guarded": budget_guarded,
@@ -394,6 +444,8 @@ static func _select_leaf(
 				"path": path,
 				"attempted_rollouts": attempted_rollouts,
 				"expanded_nodes": expanded_nodes,
+				"plan_state_deduped_nodes": plan_state_deduped_nodes,
+				"plan_transposition_pruned_nodes": plan_transposition_pruned_nodes,
 				"deepest_depth": deepest_depth,
 				"budget_expired": false,
 				"budget_guarded": budget_guarded,
@@ -480,13 +532,16 @@ static func _expand_next_child(
 	budget: TimeBudget,
 	prior_weight: float,
 	horizon_decisions: int,
-	horizon_rounds: int
+	horizon_rounds: int,
+	best_state_scores: Dictionary
 ) -> Result:
 	if budget != null and int(budget.remaining_ms()) < maxi(1, step_budget_ms):
 		return Result.success({
 			"leaf": node,
 			"attempted_rollouts": 0,
 			"expanded_nodes": 0,
+			"plan_state_deduped_nodes": 0,
+			"plan_transposition_pruned_nodes": 0,
 			"budget_expired": false,
 			"budget_guarded": true,
 			"rollout_ms": 0,
@@ -500,6 +555,8 @@ static func _expand_next_child(
 			"leaf": node,
 			"attempted_rollouts": 0,
 			"expanded_nodes": 0,
+			"plan_state_deduped_nodes": 0,
+			"plan_transposition_pruned_nodes": 0,
 			"budget_expired": false,
 			"budget_guarded": false,
 			"rollout_ms": 0,
@@ -508,6 +565,8 @@ static func _expand_next_child(
 		})
 	var entries: Array = entries_val
 	var attempted := 0
+	var plan_state_deduped_nodes := 0
+	var plan_transposition_pruned_nodes := 0
 	var rollout_ms := 0
 	var rollout_ms_max := 0
 	var eval_ms := 0
@@ -517,6 +576,8 @@ static func _expand_next_child(
 				"leaf": node,
 				"attempted_rollouts": attempted,
 				"expanded_nodes": 0,
+				"plan_state_deduped_nodes": plan_state_deduped_nodes,
+				"plan_transposition_pruned_nodes": plan_transposition_pruned_nodes,
 				"budget_expired": true,
 				"budget_guarded": false,
 				"rollout_ms": rollout_ms,
@@ -580,6 +641,12 @@ static func _expand_next_child(
 		child["root_player_id"] = root_player_id
 		child["rollout_stop_reason"] = str(rollout_payload.get("phase_stop_reason", ""))
 		child["rollout_commands"] = Array(rollout_payload.get("commands_executed", [])).size()
+		var transposition := _register_transposition_state(child, best_state_scores)
+		if bool(transposition.get("duplicate", false)):
+			plan_state_deduped_nodes += 1
+		if bool(transposition.get("pruned", false)):
+			plan_transposition_pruned_nodes += 1
+			continue
 		var children: Array = node.get("children", [])
 		children.append(child)
 		node["children"] = children
@@ -587,6 +654,8 @@ static func _expand_next_child(
 			"leaf": child,
 			"attempted_rollouts": attempted,
 			"expanded_nodes": 1,
+			"plan_state_deduped_nodes": plan_state_deduped_nodes,
+			"plan_transposition_pruned_nodes": plan_transposition_pruned_nodes,
 			"budget_expired": budget != null and budget.expired(),
 			"budget_guarded": false,
 			"rollout_ms": rollout_ms,
@@ -598,6 +667,8 @@ static func _expand_next_child(
 		"leaf": node,
 		"attempted_rollouts": attempted,
 		"expanded_nodes": 0,
+		"plan_state_deduped_nodes": plan_state_deduped_nodes,
+		"plan_transposition_pruned_nodes": plan_transposition_pruned_nodes,
 		"budget_expired": false,
 		"budget_guarded": false,
 		"rollout_ms": rollout_ms,
@@ -657,6 +728,12 @@ static func _select_best_child(node: Dictionary, exploration: float) -> Variant:
 	return best_child
 
 static func _backpropagate(path: Array, leaf_value: float) -> void:
+	var leaf_path: Array = []
+	var leaf_depth := 0
+	if not path.is_empty() and path[path.size() - 1] is Dictionary:
+		var leaf: Dictionary = path[path.size() - 1]
+		leaf_path = Array(leaf.get("path", [])).duplicate(true)
+		leaf_depth = int(leaf.get("depth", 0))
 	for node_val in path:
 		if not (node_val is Dictionary):
 			continue
@@ -665,6 +742,14 @@ static func _backpropagate(path: Array, leaf_value: float) -> void:
 		node["value_sum"] = float(node.get("value_sum", 0.0)) + leaf_value
 		node["q"] = _node_q(node)
 		node["leaf_value_score"] = leaf_value
+		var should_update_best := not node.has("best_leaf_value_score")
+		if not should_update_best:
+			var previous_best := float(node.get("best_leaf_value_score", -INF))
+			should_update_best = leaf_value > previous_best or (is_equal_approx(leaf_value, previous_best) and leaf_depth > int(node.get("best_leaf_depth", -1)))
+		if should_update_best:
+			node["best_leaf_value_score"] = leaf_value
+			node["best_leaf_depth"] = leaf_depth
+			node["best_leaf_path"] = leaf_path.duplicate(true)
 
 static func _node_q(node: Dictionary) -> float:
 	var visits := int(node.get("visits", 0))
@@ -766,6 +851,7 @@ static func _trace_evaluated(nodes: Array, limit: int) -> Array[Dictionary]:
 			"prior_score": float(item.get("prior_score", 0.0)),
 			"score": float(item.get("q", item.get("leaf_value_score", 0.0))),
 			"eval_score": float(item.get("leaf_eval_score", 0.0)),
+			"state_key": str(item.get("state_key", "")),
 			"breakdown": Dictionary(item.get("leaf_breakdown", item.get("leaf_features", {}))).duplicate(true),
 			"telemetry": Dictionary(item.get("leaf_telemetry", {})).duplicate(true),
 			"stop_reason": str(item.get("rollout_stop_reason", rollout.get("phase_stop_reason", ""))),
@@ -773,6 +859,10 @@ static func _trace_evaluated(nodes: Array, limit: int) -> Array[Dictionary]:
 			"visits": int(item.get("visits", 0)),
 			"q": float(item.get("q", 0.0)),
 			"depth": int(item.get("depth", 0)),
+			"path": Array(item.get("path", [])).duplicate(true),
+			"best_path": Array(item.get("best_leaf_path", item.get("path", []))).duplicate(true),
+			"best_leaf_depth": int(item.get("best_leaf_depth", item.get("depth", 0))),
+			"best_leaf_value_score": float(item.get("best_leaf_value_score", item.get("leaf_value_score", 0.0))),
 		})
 	return out
 
@@ -803,6 +893,7 @@ static func _make_node(
 		"plan_id": str(plan.id) if plan != null else "",
 		"route_type": str(plan.route_type) if plan != null else "",
 		"prior_score": float(plan.prior_score) if plan != null else 0.0,
+		"state_key": _state_key_for_engine(engine, str(plan.id) if plan != null else ""),
 		"depth": int(depth),
 		"path_score": float(path_score),
 		"visits": 0,
@@ -827,3 +918,64 @@ static func _path_item(plan, depth: int, path_contribution: float) -> Dictionary
 		"depth": int(depth),
 		"path_contribution": float(path_contribution),
 	}
+
+static func _register_transposition_state(node: Dictionary, best_state_scores: Dictionary) -> Dictionary:
+	var state_key := str(node.get("state_key", ""))
+	if state_key.is_empty():
+		var engine_val = node.get("engine", null)
+		var node_engine: GameEngine = engine_val if engine_val is GameEngine else null
+		state_key = _state_key_for_engine(node_engine, str(node.get("plan_id", "")))
+		if not state_key.is_empty():
+			node["state_key"] = state_key
+	if state_key.is_empty():
+		return {
+			"keep": true,
+			"duplicate": false,
+			"pruned": false,
+			"score": _node_transposition_score(node),
+			"best_score": -INF,
+		}
+	var score := _node_transposition_score(node)
+	if best_state_scores.has(state_key):
+		var best_score := float(best_state_scores.get(state_key, -INF))
+		if score < best_score or is_equal_approx(score, best_score):
+			return {
+				"keep": false,
+				"duplicate": true,
+				"pruned": true,
+				"score": score,
+				"best_score": best_score,
+			}
+		best_state_scores[state_key] = score
+		return {
+			"keep": true,
+			"duplicate": true,
+			"pruned": false,
+			"score": score,
+			"best_score": score,
+		}
+	best_state_scores[state_key] = score
+	return {
+		"keep": true,
+		"duplicate": false,
+		"pruned": false,
+		"score": score,
+		"best_score": score,
+	}
+
+static func _node_transposition_score(node: Dictionary) -> float:
+	return float(node.get("leaf_value_score", node.get("path_score", -INF)))
+
+static func _state_key_for_engine(engine: GameEngine, active_plan_id: String = "") -> String:
+	if engine == null:
+		return ""
+	var state := engine.get_state()
+	if state == null:
+		return ""
+	return "%s|%s|%s|%d|%s" % [
+		str(state.compute_hash()),
+		str(state.phase),
+		str(state.sub_phase),
+		int(state.get_current_player_id()),
+		active_plan_id,
+	]

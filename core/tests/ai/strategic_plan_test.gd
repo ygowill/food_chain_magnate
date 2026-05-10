@@ -77,10 +77,19 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var search_cost := _test_evaluator_search_cost_is_trace_only(seed_val)
 	if not search_cost.ok:
 		return search_cost
+	var mcts_transposition := _test_strategic_mcts_transposition_registry_prunes_lower_or_equal_paths(seed_val)
+	if not mcts_transposition.ok:
+		return mcts_transposition
+	var mcts_backprop_path := _test_strategic_mcts_backpropagates_best_leaf_path()
+	if not mcts_backprop_path.ok:
+		return mcts_backprop_path
+	var mcts_search := _test_strategic_mcts_search_returns_plan_level_trace(seed_val)
+	if not mcts_search.ok:
+		return mcts_search
 	var mcts_mode := _test_strategic_bot_mcts_mode(seed_val)
 	if not mcts_mode.ok:
 		return mcts_mode
-	return Result.success({"cases": 19})
+	return Result.success({"cases": 22})
 
 static func _test_plan_and_hints_roundtrip() -> Result:
 	var plan = StrategicPlanClass.create(
@@ -638,7 +647,7 @@ static func _test_strategic_bot_default_beam_search(seed_val: int) -> Result:
 		data["context"],
 		data["legal_action_ids"],
 		data["validate_fn"],
-		TimeBudget.start(600)
+		TimeBudget.start(1600)
 	)
 	if decision == null or decision.is_failure() or decision.command == null:
 		return Result.failure("StrategicBot should enter strategic search with default rollout gate: %s" % str(decision))
@@ -995,6 +1004,215 @@ static func _test_evaluator_search_cost_is_trace_only(seed_val: int) -> Result:
 		return Result.failure("search cost penalty trace should still reflect elapsed search time: %s vs %s" % [str(breakdown_a), str(breakdown_b)])
 	return Result.success()
 
+static func _test_strategic_mcts_transposition_registry_prunes_lower_or_equal_paths(seed_val: int) -> Result:
+	var best_state_scores := {}
+	var first := {
+		"state_key": "same_state|same_plan",
+		"leaf_value_score": 10.0,
+	}
+	var first_payload := StrategicMCTSSearchClass._register_transposition_state(first, best_state_scores)
+	if not bool(first_payload.get("keep", false)) or bool(first_payload.get("duplicate", false)) or bool(first_payload.get("pruned", false)):
+		return Result.failure("first plan-state visit should be kept without duplicate/pruned flags: %s" % str(first_payload))
+	if not is_equal_approx(float(best_state_scores.get("same_state|same_plan", 0.0)), 10.0):
+		return Result.failure("first plan-state visit should register value score: %s" % str(best_state_scores))
+
+	var equal := {
+		"state_key": "same_state|same_plan",
+		"leaf_value_score": 10.0,
+	}
+	var equal_payload := StrategicMCTSSearchClass._register_transposition_state(equal, best_state_scores)
+	if bool(equal_payload.get("keep", true)) or not bool(equal_payload.get("duplicate", false)) or not bool(equal_payload.get("pruned", false)):
+		return Result.failure("equal duplicate plan-state should be pruned: %s" % str(equal_payload))
+
+	var lower := {
+		"state_key": "same_state|same_plan",
+		"leaf_value_score": 9.0,
+	}
+	var lower_payload := StrategicMCTSSearchClass._register_transposition_state(lower, best_state_scores)
+	if bool(lower_payload.get("keep", true)) or not bool(lower_payload.get("duplicate", false)) or not bool(lower_payload.get("pruned", false)):
+		return Result.failure("lower duplicate plan-state should be pruned: %s" % str(lower_payload))
+	if not is_equal_approx(float(best_state_scores.get("same_state|same_plan", 0.0)), 10.0):
+		return Result.failure("pruned duplicate should not lower best plan-state score: %s" % str(best_state_scores))
+
+	var higher := {
+		"state_key": "same_state|same_plan",
+		"leaf_value_score": 12.0,
+	}
+	var higher_payload := StrategicMCTSSearchClass._register_transposition_state(higher, best_state_scores)
+	if not bool(higher_payload.get("keep", false)) or not bool(higher_payload.get("duplicate", false)) or bool(higher_payload.get("pruned", false)):
+		return Result.failure("higher duplicate plan-state should be kept and update best score: %s" % str(higher_payload))
+	if not is_equal_approx(float(best_state_scores.get("same_state|same_plan", 0.0)), 12.0):
+		return Result.failure("higher duplicate should update best plan-state score: %s" % str(best_state_scores))
+
+	var no_key := {
+		"leaf_value_score": -3.0,
+	}
+	var no_key_payload := StrategicMCTSSearchClass._register_transposition_state(no_key, best_state_scores)
+	if not bool(no_key_payload.get("keep", false)) or bool(no_key_payload.get("duplicate", false)) or bool(no_key_payload.get("pruned", false)):
+		return Result.failure("missing plan-state key should remain keepable without duplicate/pruned flags: %s" % str(no_key_payload))
+
+	var inputs_read := _build_income_route_inputs(seed_val)
+	if not inputs_read.ok:
+		return inputs_read
+	var data: Dictionary = inputs_read.value
+	var same_state_engine: GameEngine = data["engine"]
+	var plan_a = StrategicPlanClass.create("same_state_plan_a", 0, "marketing_income", 10.0)
+	var plan_b = StrategicPlanClass.create("same_state_plan_b", 0, "marketing_income", 10.0)
+	var plan_a_key := StrategicMCTSSearchClass._state_key_for_engine(same_state_engine, plan_a.id)
+	var plan_b_key := StrategicMCTSSearchClass._state_key_for_engine(same_state_engine, plan_b.id)
+	if plan_a_key.is_empty() or plan_b_key.is_empty():
+		return Result.failure("plan-state keys should be available for active plans: %s / %s" % [plan_a_key, plan_b_key])
+	if plan_a_key == plan_b_key:
+		return Result.failure("plan-state key should include active plan id: %s vs %s" % [plan_a_key, plan_b_key])
+
+	var plan_state_scores := {}
+	var plan_node_a := StrategicMCTSSearchClass._make_node(same_state_engine, 0, plan_a, 1, 0.0)
+	plan_node_a["leaf_value_score"] = 10.0
+	var plan_node_b := StrategicMCTSSearchClass._make_node(same_state_engine, 0, plan_b, 1, 0.0)
+	plan_node_b["leaf_value_score"] = 10.0
+	var plan_node_a_payload := StrategicMCTSSearchClass._register_transposition_state(plan_node_a, plan_state_scores)
+	var plan_node_b_payload := StrategicMCTSSearchClass._register_transposition_state(plan_node_b, plan_state_scores)
+	if not bool(plan_node_a_payload.get("keep", false)) or bool(plan_node_a_payload.get("duplicate", false)) or bool(plan_node_a_payload.get("pruned", false)):
+		return Result.failure("first active-plan node should be kept as a unique plan-state: %s" % str(plan_node_a_payload))
+	if not bool(plan_node_b_payload.get("keep", false)) or bool(plan_node_b_payload.get("duplicate", false)) or bool(plan_node_b_payload.get("pruned", false)):
+		return Result.failure("same engine state with a different active plan should stay unique: %s" % str(plan_node_b_payload))
+	if not plan_state_scores.has(plan_a_key) or not plan_state_scores.has(plan_b_key):
+		return Result.failure("active-plan transposition registry should store both plan-state keys: %s" % str(plan_state_scores))
+	return Result.success()
+
+static func _test_strategic_mcts_backpropagates_best_leaf_path() -> Result:
+	var root := {}
+	var child := {}
+	var leaf := {
+		"depth": 2,
+		"path": [
+			{"plan_id": "income", "depth": 1},
+			{"plan_id": "supply", "depth": 2},
+		],
+	}
+	StrategicMCTSSearchClass._backpropagate([root, child, leaf], 15.0)
+	if int(root.get("visits", 0)) != 1 or int(child.get("visits", 0)) != 1 or int(leaf.get("visits", 0)) != 1:
+		return Result.failure("MCTS backprop should increment visits along the plan path: root=%s child=%s leaf=%s" % [str(root), str(child), str(leaf)])
+	if not is_equal_approx(float(root.get("q", 0.0)), 15.0):
+		return Result.failure("MCTS backprop should update q from leaf value: %s" % str(root))
+	var best_path: Array = Array(root.get("best_leaf_path", []))
+	if best_path.size() != 2:
+		return Result.failure("MCTS backprop should preserve best leaf plan path: %s" % str(root))
+	if str(Dictionary(best_path[1]).get("plan_id", "")) != "supply":
+		return Result.failure("MCTS best path should keep the leaf continuation plan: %s" % str(best_path))
+	var weaker_leaf := {
+		"depth": 1,
+		"path": [
+			{"plan_id": "weaker", "depth": 1},
+		],
+	}
+	StrategicMCTSSearchClass._backpropagate([root, child, weaker_leaf], 10.0)
+	if str(Dictionary(Array(root.get("best_leaf_path", []))[0]).get("plan_id", "")) != "income":
+		return Result.failure("lower value leaf should not replace best path: %s" % str(root))
+	var stronger_leaf := {
+		"depth": 1,
+		"path": [
+			{"plan_id": "stronger", "depth": 1},
+		],
+	}
+	StrategicMCTSSearchClass._backpropagate([root, child, stronger_leaf], 16.0)
+	if str(Dictionary(Array(root.get("best_leaf_path", []))[0]).get("plan_id", "")) != "stronger":
+		return Result.failure("higher value leaf should replace best path: %s" % str(root))
+	if int(root.get("best_leaf_depth", 0)) != 1:
+		return Result.failure("best leaf depth should track selected best path depth: %s" % str(root))
+	return Result.success()
+
+static func _test_strategic_mcts_search_returns_plan_level_trace(seed_val: int) -> Result:
+	var inputs_read := _build_income_route_inputs(seed_val)
+	if not inputs_read.ok:
+		return inputs_read
+	var data: Dictionary = inputs_read.value
+	var profile := StrategyProfileClass.new()
+	var profile_read := profile.configure("base_revenue_growth_v1")
+	if not profile_read.ok:
+		return profile_read
+	var bot := StrategicBotClass.new()
+	var options_read := bot.configure_search_options({
+		"strategic_search": "mcts",
+		"strategic_min_search_budget_ms": 16,
+		"strategic_min_plans_for_rollout": 1,
+		"strategic_max_plans": 3,
+		"strategic_horizon_decisions": 4,
+		"strategic_horizon_rounds": 1,
+		"strategic_rollout_step_budget_ms": 20,
+		"mcts_iterations": 4,
+		"mcts_max_depth": 2,
+		"mcts_top_k_per_node": 3,
+	})
+	if not options_read.ok:
+		return options_read
+	var effective_options: Dictionary = bot._effective_options()
+	if int(effective_options.get("max_plans", 0)) != 3:
+		return Result.failure("StrategicBot mcts options should map strategic_max_plans to max_plans: %s" % str(effective_options))
+	if int(effective_options.get("horizon_decisions", 0)) != 4:
+		return Result.failure("StrategicBot mcts options should map strategic_horizon_decisions: %s" % str(effective_options))
+	if int(effective_options.get("horizon_rounds", 0)) != 1:
+		return Result.failure("StrategicBot mcts options should map strategic_horizon_rounds: %s" % str(effective_options))
+	if int(effective_options.get("step_budget_ms", 0)) != 20:
+		return Result.failure("StrategicBot mcts options should map strategic_rollout_step_budget_ms: %s" % str(effective_options))
+	if int(effective_options.get("min_plans_for_rollout", 0)) != 1:
+		return Result.failure("StrategicBot mcts options should map strategic_min_plans_for_rollout: %s" % str(effective_options))
+	var search_read := StrategicSearchClass.choose_plan_mcts(
+		data["engine"],
+		data["observation"],
+		profile,
+		TimeBudget.start(600),
+		effective_options
+	)
+	if not search_read.ok:
+		return search_read
+	var payload: Dictionary = Dictionary(search_read.value)
+	if payload.has("command"):
+		return Result.failure("Strategic plan MCTS should return a plan payload, not a raw command: %s" % str(payload))
+	var plan_val = payload.get("plan", null)
+	if plan_val == null or not plan_val.has_method("to_trace_dict"):
+		return Result.failure("Strategic plan MCTS should return the selected plan: %s" % str(payload))
+	if int(payload.get("mcts_iterations", 0)) <= 0:
+		return Result.failure("Strategic plan MCTS should execute plan-level iterations: %s" % str(payload))
+	if int(payload.get("mcts_root_visits", 0)) <= 0:
+		return Result.failure("Strategic plan MCTS should backpropagate root visits: %s" % str(payload))
+	if not payload.has("mcts_selected_q"):
+		return Result.failure("Strategic plan MCTS should expose selected plan q: %s" % str(payload))
+	if Array(payload.get("mcts_selected_path", [])).is_empty():
+		return Result.failure("Strategic plan MCTS should expose selected plan continuation path: %s" % str(payload))
+	if str(payload.get("mcts_selected_state_key", "")).is_empty():
+		return Result.failure("Strategic plan MCTS should expose selected plan-state key: %s" % str(payload))
+	if not payload.has("mcts_plan_state_deduped_nodes") or not payload.has("mcts_plan_transposition_pruned_nodes"):
+		return Result.failure("Strategic plan MCTS should expose plan transposition metrics: %s" % str(payload))
+	var evaluated_plans: Array = Array(payload.get("evaluated_plans", []))
+	if evaluated_plans.is_empty():
+		return Result.failure("Strategic plan MCTS should expose evaluated plan nodes: %s" % str(payload))
+	var first_eval_val = evaluated_plans[0]
+	if not (first_eval_val is Dictionary):
+		return Result.failure("Strategic plan MCTS evaluated node should be a dictionary: %s" % str(payload))
+	var first_eval: Dictionary = first_eval_val
+	if not first_eval.has("visits") or not first_eval.has("q"):
+		return Result.failure("Strategic plan MCTS evaluated node should expose visits/q: %s" % str(first_eval))
+	if str(first_eval.get("state_key", "")).is_empty():
+		return Result.failure("Strategic plan MCTS evaluated node should expose its plan-state key: %s" % str(first_eval))
+	if int(first_eval.get("depth", 0)) <= 0:
+		return Result.failure("Strategic plan MCTS evaluated node should be below root: %s" % str(first_eval))
+	var path: Array = Array(first_eval.get("path", []))
+	if path.is_empty():
+		return Result.failure("Strategic plan MCTS evaluated node should expose a plan path: %s" % str(first_eval))
+	var best_path: Array = Array(first_eval.get("best_path", []))
+	if best_path.is_empty():
+		return Result.failure("Strategic plan MCTS evaluated node should expose its best continuation path: %s" % str(first_eval))
+	for path_item_val in path:
+		if not (path_item_val is Dictionary):
+			return Result.failure("Strategic plan MCTS path entries should be dictionaries: %s" % str(path))
+		var path_item: Dictionary = path_item_val
+		if str(path_item.get("plan_id", "")).is_empty():
+			return Result.failure("Strategic plan MCTS path entries should identify plans: %s" % str(path))
+		if path_item.has("command") or path_item.has("commands_executed"):
+			return Result.failure("Strategic plan MCTS path should stay at plan level: %s" % str(path))
+	return Result.success()
+
 static func _test_strategic_bot_mcts_mode(seed_val: int) -> Result:
 	var inputs_read := _build_income_route_inputs(seed_val)
 	if not inputs_read.ok:
@@ -1035,6 +1253,20 @@ static func _test_strategic_bot_mcts_mode(seed_val: int) -> Result:
 		return Result.failure("StrategicBot mcts mode should still be a strategic decision: %s" % str(trace))
 	if str(trace.get("plan_id", "")).is_empty():
 		return Result.failure("StrategicBot mcts mode should expose selected plan: %s" % str(trace))
+	if Array(trace.get("mcts_selected_path", [])).is_empty():
+		return Result.failure("StrategicBot mcts mode should expose selected plan continuation path: %s" % str(trace))
+	if str(trace.get("mcts_selected_state_key", "")).is_empty():
+		return Result.failure("StrategicBot mcts mode should expose selected plan-state key: %s" % str(trace))
+	if not trace.has("mcts_plan_state_deduped_nodes"):
+		return Result.failure("StrategicBot mcts mode should expose plan-state dedupe count: %s" % str(trace))
+	if not trace.has("mcts_plan_transposition_pruned_nodes"):
+		return Result.failure("StrategicBot mcts mode should expose plan transposition prune count: %s" % str(trace))
+	if not decision.explanation.has("mcts_plan_state_deduped_nodes"):
+		return Result.failure("StrategicBot mcts explanation should expose plan-state dedupe count: %s" % str(decision.explanation))
+	if not decision.explanation.has("mcts_plan_transposition_pruned_nodes"):
+		return Result.failure("StrategicBot mcts explanation should expose plan transposition prune count: %s" % str(decision.explanation))
+	if str(decision.explanation.get("mcts_selected_state_key", "")).is_empty():
+		return Result.failure("StrategicBot mcts explanation should expose selected plan-state key: %s" % str(decision.explanation))
 	var valid := LegalActionServiceClass.validate_command(data["engine"], decision.command, data["context"])
 	if not valid.ok:
 		return Result.failure("StrategicBot mcts mode returned invalid command: %s" % valid.error)
@@ -1053,6 +1285,12 @@ static func _test_strategic_bot_mcts_mode(seed_val: int) -> Result:
 	var first_eval: Dictionary = first_eval_val
 	if Dictionary(first_eval.get("telemetry", {})).is_empty():
 		return Result.failure("StrategicBot mcts mode should expose evaluated plan telemetry: %s" % str(trace))
+	if str(first_eval.get("state_key", "")).is_empty():
+		return Result.failure("StrategicBot mcts mode should expose evaluated plan-state key: %s" % str(trace))
+	if Array(first_eval.get("path", [])).is_empty():
+		return Result.failure("StrategicBot mcts mode should expose evaluated plan path: %s" % str(trace))
+	if Array(first_eval.get("best_path", [])).is_empty():
+		return Result.failure("StrategicBot mcts mode should expose evaluated plan best continuation path: %s" % str(trace))
 	var cached := bot.choose_command_with_engine(
 		data["engine"],
 		data["observation"],

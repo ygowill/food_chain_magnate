@@ -46,7 +46,6 @@ static func run(options: Dictionary) -> Result:
 	var output_json := str(options.get("output_json", "")).strip_edges()
 	var profile_source := str(options.get("profile", "")).strip_edges()
 	var profile_config := SelfplayToolClass._profile_config_id(profile_source)
-	var mcts_options: Dictionary = Dictionary(options.get("mcts_options", {})).duplicate(true)
 	var strategic_options: Dictionary = Dictionary(options.get("strategic_options", {})).duplicate(true)
 
 	var all_rows: Array[Dictionary] = []
@@ -64,7 +63,7 @@ static func run(options: Dictionary) -> Result:
 	])
 	for config_index in range(configs.size()):
 		var config := _string_config(configs[config_index])
-		var run_options_read := _build_selfplay_options(config, config_index, player_count, start_seed, matches, target_round, max_steps, budget_ms, trace_tail, profile_source, mcts_options, strategic_options)
+		var run_options_read := _build_selfplay_options(config, config_index, player_count, start_seed, matches, target_round, max_steps, budget_ms, trace_tail, profile_source, strategic_options)
 		if not run_options_read.ok:
 			return run_options_read
 		var run_options: Dictionary = run_options_read.value
@@ -123,7 +122,6 @@ static func _build_selfplay_options(
 	budget_ms: int,
 	trace_tail: int,
 	profile_source: String,
-	mcts_options: Dictionary = {},
 	strategic_options: Dictionary = {}
 ) -> Result:
 	if config.is_empty():
@@ -149,8 +147,6 @@ static func _build_selfplay_options(
 		options["bot_ids"] = _string_config(config)
 	if not profile_source.strip_edges().is_empty():
 		options["profile"] = profile_source.strip_edges()
-	if not mcts_options.is_empty():
-		options["mcts_options"] = mcts_options.duplicate(true)
 	if not strategic_options.is_empty():
 		options["strategic_options"] = strategic_options.duplicate(true)
 	return Result.success(options)
@@ -204,7 +200,6 @@ static func _parse_args(args: Array[String]) -> Result:
 		"profile": "",
 		"output_jsonl": "",
 		"output_json": "",
-		"mcts_options": {},
 		"strategic_options": {},
 	}
 	for raw_arg in args:
@@ -260,10 +255,6 @@ static func _parse_args(args: Array[String]) -> Result:
 			options["output_jsonl"] = arg.trim_prefix("--output-jsonl=").strip_edges()
 		elif arg.begins_with("--output-json="):
 			options["output_json"] = arg.trim_prefix("--output-json=").strip_edges()
-		elif SelfplayToolClass._is_mcts_option_arg(arg):
-			var mcts_read := SelfplayToolClass._parse_mcts_option_arg(options, arg)
-			if not mcts_read.ok:
-				return mcts_read
 		elif SelfplayToolClass._is_strategic_option_arg(arg):
 			var strategic_read := SelfplayToolClass._parse_strategic_option_arg(options, arg)
 			if not strategic_read.ok:
@@ -314,4 +305,4 @@ static func _string_config(config: Array) -> Array[String]:
 	return out
 
 static func _print_usage() -> void:
-	print("Usage: tools/run_bot_selfplay_matrix.sh [--config=strategy] [--config=strategic] [--config=random,strategy] [--profile=base_revenue_v1] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--mcts-iterations=24] [--mcts-max-depth=3] [--mcts-top-k-per-node=4] [--mcts-exploration=1.25] [--mcts-min-simulation-budget-ms=24] [--mcts-candidate-attempt-multiplier=3] [--mcts-root-prior-min-visits-per-child=2] [--mcts-enabled-strategies=working_recruit_income_route,...] [--mcts-config-id=id] [--strategic-search=none|beam|mcts] [--strategic-budget-profile=tuning|play] [--strategic-horizon-decisions=16] [--strategic-horizon-rounds=2] [--strategic-max-plans=6] [--strategic-rollout-step-budget-ms=40] [--strategic-min-search-budget-ms=240] [--strategic-min-plans-for-rollout=2] [--strategic-config-id=id] [--output-jsonl=res://.godot/bot_selfplay_matrix.jsonl] [--output-json=res://.godot/bot_selfplay_matrix_summary.json]")
+	print("Usage: tools/run_bot_selfplay_matrix.sh [--config=strategy] [--config=strategic] [--config=random,strategy] [--profile=base_revenue_v1] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--strategic-search=none|beam|mcts] [--strategic-budget-profile=tuning|play] [--strategic-horizon-decisions=16] [--strategic-horizon-rounds=2] [--strategic-max-plans=6] [--strategic-rollout-step-budget-ms=40] [--strategic-min-search-budget-ms=240] [--strategic-min-plans-for-rollout=2] [--strategic-mcts-iterations=24] [--strategic-mcts-max-depth=3] [--strategic-mcts-top-k-per-node=4] [--strategic-mcts-exploration=1.25] [--strategic-mcts-prior-weight=0.25] [--strategic-mcts-root-prior-min-visits-per-child=2] [--strategic-config-id=id] [--output-jsonl=res://.godot/bot_selfplay_matrix.jsonl] [--output-json=res://.godot/bot_selfplay_matrix_summary.json]")

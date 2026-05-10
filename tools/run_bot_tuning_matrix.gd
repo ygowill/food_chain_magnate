@@ -82,7 +82,6 @@ static func run(options: Dictionary) -> Result:
 	var output_jsonl := str(options.get("output_jsonl", "")).strip_edges()
 	var output_json := str(options.get("output_json", "")).strip_edges()
 	var parallel_jobs := int(options.get("parallel_jobs", 1))
-	var mcts_options: Dictionary = Dictionary(options.get("mcts_options", {})).duplicate(true)
 	var strategic_options: Dictionary = Dictionary(options.get("strategic_options", {})).duplicate(true)
 	strategic_options = _effective_strategic_options(strategic_options)
 	if parallel_jobs < 1:
@@ -112,7 +111,6 @@ static func run(options: Dictionary) -> Result:
 			max_steps,
 			budget_ms,
 			trace_tail,
-			mcts_options,
 			strategic_options,
 			parallel_jobs
 		)
@@ -146,8 +144,6 @@ static func run(options: Dictionary) -> Result:
 			"output_jsonl": "",
 			"output_json": "",
 		}
-		if not mcts_options.is_empty():
-			matrix_options["mcts_options"] = mcts_options.duplicate(true)
 		if not strategic_options.is_empty():
 			matrix_options["strategic_options"] = strategic_options.duplicate(true)
 		print("[%s] PROFILE index=%d id=%s source=%s" % [NAME, profile_index, profile_config, profile_source])
@@ -274,7 +270,6 @@ static func _run_profiles_parallel(
 	max_steps: int,
 	budget_ms: int,
 	trace_tail: int,
-	mcts_options: Dictionary,
 	strategic_options: Dictionary,
 	parallel_jobs: int
 ) -> Result:
@@ -305,7 +300,6 @@ static func _run_profiles_parallel(
 			budget_ms,
 			trace_tail,
 			profile_source,
-			mcts_options,
 			strategic_options,
 			jsonl_path,
 			summary_path,
@@ -391,7 +385,6 @@ static func _build_child_matrix_arguments(
 	budget_ms: int,
 	trace_tail: int,
 	profile_source: String,
-	mcts_options: Dictionary,
 	strategic_options: Dictionary,
 	output_jsonl: String,
 	output_json: String,
@@ -417,7 +410,6 @@ static func _build_child_matrix_arguments(
 	args.append("--budget-ms=%d" % budget_ms)
 	args.append("--trace-tail=%d" % trace_tail)
 	args.append("--profile=%s" % profile_source)
-	args.append_array(_mcts_arguments(mcts_options))
 	args.append_array(_strategic_arguments(strategic_options))
 	args.append("--output-jsonl=%s" % output_jsonl)
 	args.append("--output-json=%s" % output_json)
@@ -425,30 +417,6 @@ static func _build_child_matrix_arguments(
 
 static func _config_arg(config: Array) -> String:
 	return ",".join(MatrixToolClass._string_config(config))
-
-static func _mcts_arguments(mcts_options: Dictionary) -> Array[String]:
-	var args: Array[String] = []
-	if mcts_options.is_empty():
-		return args
-	if mcts_options.has("mcts_iterations"):
-		args.append("--mcts-iterations=%d" % int(mcts_options.get("mcts_iterations", 0)))
-	if mcts_options.has("mcts_max_depth"):
-		args.append("--mcts-max-depth=%d" % int(mcts_options.get("mcts_max_depth", 0)))
-	if mcts_options.has("mcts_top_k_per_node"):
-		args.append("--mcts-top-k-per-node=%d" % int(mcts_options.get("mcts_top_k_per_node", 0)))
-	if mcts_options.has("mcts_exploration"):
-		args.append("--mcts-exploration=%s" % str(float(mcts_options.get("mcts_exploration", 0.0))))
-	if mcts_options.has("mcts_min_simulation_budget_ms"):
-		args.append("--mcts-min-simulation-budget-ms=%d" % int(mcts_options.get("mcts_min_simulation_budget_ms", 0)))
-	if mcts_options.has("mcts_candidate_attempt_multiplier"):
-		args.append("--mcts-candidate-attempt-multiplier=%d" % int(mcts_options.get("mcts_candidate_attempt_multiplier", 0)))
-	if mcts_options.has("mcts_root_prior_min_visits_per_child"):
-		args.append("--mcts-root-prior-min-visits-per-child=%d" % int(mcts_options.get("mcts_root_prior_min_visits_per_child", 0)))
-	if mcts_options.has("mcts_enabled_strategy_ids"):
-		args.append("--mcts-enabled-strategies=%s" % ",".join(SelfplayToolClass._string_array(mcts_options.get("mcts_enabled_strategy_ids", []))))
-	if mcts_options.has("mcts_config_id"):
-		args.append("--mcts-config-id=%s" % str(mcts_options.get("mcts_config_id", "")))
-	return args
 
 static func _strategic_arguments(strategic_options: Dictionary) -> Array[String]:
 	var args: Array[String] = []
@@ -470,6 +438,18 @@ static func _strategic_arguments(strategic_options: Dictionary) -> Array[String]
 		args.append("--strategic-min-search-budget-ms=%d" % int(strategic_options.get("strategic_min_search_budget_ms", 0)))
 	if strategic_options.has("strategic_min_plans_for_rollout"):
 		args.append("--strategic-min-plans-for-rollout=%d" % int(strategic_options.get("strategic_min_plans_for_rollout", 0)))
+	if strategic_options.has("mcts_iterations"):
+		args.append("--strategic-mcts-iterations=%d" % int(strategic_options.get("mcts_iterations", 0)))
+	if strategic_options.has("mcts_max_depth"):
+		args.append("--strategic-mcts-max-depth=%d" % int(strategic_options.get("mcts_max_depth", 0)))
+	if strategic_options.has("mcts_top_k_per_node"):
+		args.append("--strategic-mcts-top-k-per-node=%d" % int(strategic_options.get("mcts_top_k_per_node", 0)))
+	if strategic_options.has("mcts_exploration"):
+		args.append("--strategic-mcts-exploration=%s" % str(float(strategic_options.get("mcts_exploration", 0.0))))
+	if strategic_options.has("mcts_prior_weight"):
+		args.append("--strategic-mcts-prior-weight=%s" % str(float(strategic_options.get("mcts_prior_weight", 0.0))))
+	if strategic_options.has("mcts_root_prior_min_visits_per_child"):
+		args.append("--strategic-mcts-root-prior-min-visits-per-child=%d" % int(strategic_options.get("mcts_root_prior_min_visits_per_child", 0)))
 	if strategic_options.has("strategic_config_id"):
 		args.append("--strategic-config-id=%s" % str(strategic_options.get("strategic_config_id", "")))
 	return args
@@ -882,4 +862,4 @@ static func _write_json(path: String, json: String) -> Result:
 	return Result.success()
 
 static func _print_usage() -> void:
-	print("Usage: tools/run_bot_tuning_matrix.sh [--profile=base_revenue_v1] [--profile-dir=res://data/bots] [--profile-list=res://.godot/bot_profile_variants/manifest.json] [--config=strategy] [--jobs=2] [--players=2] [--seed=12345] [--matches=3] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--mcts-iterations=24] [--mcts-max-depth=3] [--mcts-top-k-per-node=4] [--mcts-exploration=1.25] [--mcts-min-simulation-budget-ms=24] [--mcts-candidate-attempt-multiplier=3] [--mcts-root-prior-min-visits-per-child=2] [--mcts-enabled-strategies=working_recruit_income_route,...] [--mcts-config-id=id] [--strategic-search=beam] [--strategic-budget-profile=tuning|play] [--strategic-horizon-decisions=16] [--strategic-horizon-rounds=2] [--strategic-max-plans=6] [--strategic-rollout-step-budget-ms=40] [--strategic-min-search-budget-ms=240] [--strategic-min-plans-for-rollout=2] [--strategic-config-id=id] [--output-jsonl=res://.godot/bot_tuning_matrix.jsonl] [--output-json=res://.godot/bot_tuning_matrix_summary.json]")
+	print("Usage: tools/run_bot_tuning_matrix.sh [--profile=base_revenue_v1] [--profile-dir=res://data/bots] [--profile-list=res://.godot/bot_profile_variants/manifest.json] [--config=strategy] [--jobs=2] [--players=2] [--seed=12345] [--matches=3] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--strategic-search=beam|mcts] [--strategic-budget-profile=tuning|play] [--strategic-horizon-decisions=16] [--strategic-horizon-rounds=2] [--strategic-max-plans=6] [--strategic-rollout-step-budget-ms=40] [--strategic-min-search-budget-ms=240] [--strategic-min-plans-for-rollout=2] [--strategic-mcts-iterations=24] [--strategic-mcts-max-depth=3] [--strategic-mcts-top-k-per-node=4] [--strategic-mcts-exploration=1.25] [--strategic-mcts-prior-weight=0.25] [--strategic-mcts-root-prior-min-visits-per-child=2] [--strategic-config-id=id] [--output-jsonl=res://.godot/bot_tuning_matrix.jsonl] [--output-json=res://.godot/bot_tuning_matrix_summary.json]")

@@ -190,14 +190,14 @@ rollout 输出：
 
 ## 不做的事
 
-- 不继续扩大 `MCTSSearch` 到 Recruit/Train/Restructuring/Payday 的 action-level 决策。
+- 不在命令层恢复 MCTS；Recruit/Train/Restructuring/Payday 等短期动作继续由 `StrategyBot` 处理。
 - 不把 StrategyBot 的 preview/rescore 整体复制进 MCTS 来制造“搜索版 StrategyBot”。
 - 不为单个 seed 调整 profile 权重。
 - 不实现纯随机 rollout；FCM 的有效路线太稀疏，随机 rollout 预算会被浪费。
 
 ## 实施任务拆解
 
-这部分是下一阶段的直接执行计划。每个任务都应先补小测试，再接入 selfplay；如果任一阶段证明没有聚合收益，只回到该阶段的结构假设，不回退到 action-level 权重修补。
+这部分是下一阶段的直接执行计划。每个任务都应先补小测试，再接入 selfplay；如果任一阶段证明没有聚合收益，只回到该阶段的结构假设，不回退到短期动作权重修补。
 
 | 任务 | 目标 | 主要文件 | 测试 | 验收 |
 | --- | --- | --- | --- | --- |
@@ -208,7 +208,7 @@ rollout 输出：
 | SP-005 | 实现 plan evaluator 与 trace | `strategic_plan_evaluator.gd` | `StrategicPlanEvaluatorTest` | trace 暴露现金、需求、里程碑、薪资风险和搜索成本分项 |
 | SP-006 | 接入 Plan Beam bot | `strategic_search.gd`、`strategic_bot.gd`、selfplay CLI | `StrategicSearchTest`、selfplay smoke | `--bot=strategic` 可跑通；预算耗尽回退 StrategyBot |
 | SP-007 | 做小规模同 seed 对照 | selfplay matrix / summary | 现有 matrix smoke | r8/6 seeds 上 success `1.0`，现金底线不低于 Strategy，至少一个路线指标改善 |
-| SP-008 | 只有在 Beam 有信号后接 Plan MCTS | `strategic_search.gd` 或新 `strategic_mcts_search.gd` | `StrategicMCTSSearchTest` | plan-level visits/q 可解释；不直接选择 raw command |
+| SP-008 | 只有在 Beam 有信号后接 Plan MCTS | `strategic_search.gd`、`strategic_mcts_search.gd` | `StrategicPlanTest` | plan-level visits/q 可解释；不直接选择 raw command |
 
 阶段顺序：
 
@@ -231,7 +231,7 @@ rollout 输出：
 - `StrategicPlan` 只描述路线，不持有 `Command`；命令必须由 StrategyBot 当前状态生成。
 - `StrategyPlanHints` 默认是软约束；只有明显非法或会破坏计划的动作才进入 `avoid_actions`。
 - rollout 对手首版固定使用 StrategyBot，避免战略搜索和自身策略递归耦合。
-- `StrategicBot` 的 fallback 顺序应是 `StrategyBot`，不是 `BeamBot` / `MCTSBot`，因为当前强基线是 Strategy。
+- `StrategicBot` 的 fallback 顺序应是 `StrategyBot`，不是其他搜索 bot，因为当前强基线是 Strategy。
 - trace 必须记录 `plan_id`、`route_type`、`plan_prior_score`、`plan_eval_score`、`plan_eval_breakdown`、`plan_rollout_stop_reason`、`plan_search_time_ms`。
 
 最小 CLI 接入：
@@ -242,6 +242,15 @@ rollout 输出：
 - `--strategic-horizon-decisions=<n>`
 - `--strategic-horizon-rounds=<n>`
 - `--strategic-max-plans=<n>`
+- `--strategic-rollout-step-budget-ms=<n>`
+- `--strategic-min-search-budget-ms=<n>`
+- `--strategic-min-plans-for-rollout=<n>`
+- `--strategic-mcts-iterations=<n>`
+- `--strategic-mcts-max-depth=<n>`
+- `--strategic-mcts-top-k-per-node=<n>`
+- `--strategic-mcts-exploration=<n>`
+- `--strategic-mcts-prior-weight=<n>`
+- `--strategic-mcts-root-prior-min-visits-per-child=<n>`
 - `--strategic-config-id=<id>`
 
 首轮推荐参数：

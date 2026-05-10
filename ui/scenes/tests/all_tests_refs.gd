@@ -126,7 +126,6 @@ const CandidateGeneratorTestClass = preload("res://core/tests/ai/candidate_gener
 const GreedySearchTestClass = preload("res://core/tests/ai/greedy_search_test.gd")
 const OSLASearchTestClass = preload("res://core/tests/ai/osla_search_test.gd")
 const BeamSearchTestClass = preload("res://core/tests/ai/beam_search_test.gd")
-const MCTSSearchTestClass = preload("res://core/tests/ai/mcts_search_test.gd")
 const StrategicPlanTestClass = preload("res://core/tests/ai/strategic_plan_test.gd")
 const BotSelfplaySummaryTestClass = preload("res://core/tests/ai/bot_selfplay_summary_test.gd")
 const BotSelfplayToolTestClass = preload("res://core/tests/ai/bot_selfplay_tool_test.gd")

@@ -237,6 +237,12 @@ func _choose_with_plan(
 		decision.trace["mcts_root_child_count"] = int(search_payload.get("mcts_root_child_count", 0))
 		decision.trace["mcts_root_raw_child_count"] = int(search_payload.get("mcts_root_raw_child_count", decision.trace.get("mcts_root_child_count", 0)))
 		decision.trace["mcts_root_selection_mode"] = str(search_payload.get("mcts_root_selection_mode", ""))
+		decision.trace["mcts_selected_path"] = Array(search_payload.get("mcts_selected_path", [])).duplicate(true)
+		decision.trace["mcts_selected_leaf_depth"] = int(search_payload.get("mcts_selected_leaf_depth", 0))
+		decision.trace["mcts_selected_leaf_value_score"] = float(search_payload.get("mcts_selected_leaf_value_score", search_payload.get("score", 0.0)))
+		decision.trace["mcts_selected_state_key"] = str(search_payload.get("mcts_selected_state_key", ""))
+		decision.trace["mcts_plan_state_deduped_nodes"] = int(search_payload.get("mcts_plan_state_deduped_nodes", 0))
+		decision.trace["mcts_plan_transposition_pruned_nodes"] = int(search_payload.get("mcts_plan_transposition_pruned_nodes", 0))
 		decision.explanation["search"] = "strategic_cached" if used_cached_plan else "strategic"
 		decision.explanation["strategic_budget_profile"] = budget_profile
 		decision.explanation["plan_id"] = plan.id
@@ -259,6 +265,12 @@ func _choose_with_plan(
 		decision.explanation["mcts_root_child_count"] = int(search_payload.get("mcts_root_child_count", 0))
 		decision.explanation["mcts_root_raw_child_count"] = int(search_payload.get("mcts_root_raw_child_count", decision.explanation.get("mcts_root_child_count", 0)))
 		decision.explanation["mcts_root_selection_mode"] = str(search_payload.get("mcts_root_selection_mode", ""))
+		decision.explanation["mcts_selected_path"] = Array(search_payload.get("mcts_selected_path", [])).duplicate(true)
+		decision.explanation["mcts_selected_leaf_depth"] = int(search_payload.get("mcts_selected_leaf_depth", 0))
+		decision.explanation["mcts_selected_leaf_value_score"] = float(search_payload.get("mcts_selected_leaf_value_score", search_payload.get("score", 0.0)))
+		decision.explanation["mcts_selected_state_key"] = str(search_payload.get("mcts_selected_state_key", ""))
+		decision.explanation["mcts_plan_state_deduped_nodes"] = int(search_payload.get("mcts_plan_state_deduped_nodes", 0))
+		decision.explanation["mcts_plan_transposition_pruned_nodes"] = int(search_payload.get("mcts_plan_transposition_pruned_nodes", 0))
 		return decision
 	return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), "hinted strategy failed")
 
@@ -333,7 +345,20 @@ func _effective_options() -> Dictionary:
 	for key in explicit_search_options.keys():
 		out[str(key)] = explicit_search_options.get(key, null)
 	out["strategic_budget_profile"] = budget_profile
+	_apply_plan_search_aliases(out)
 	return out
+
+static func _apply_plan_search_aliases(options: Dictionary) -> void:
+	if options.has("strategic_horizon_decisions"):
+		options["horizon_decisions"] = int(options.get("strategic_horizon_decisions", options.get("horizon_decisions", 16)))
+	if options.has("strategic_horizon_rounds"):
+		options["horizon_rounds"] = int(options.get("strategic_horizon_rounds", options.get("horizon_rounds", 2)))
+	if options.has("strategic_max_plans"):
+		options["max_plans"] = int(options.get("strategic_max_plans", options.get("max_plans", 6)))
+	if options.has("strategic_rollout_step_budget_ms"):
+		options["step_budget_ms"] = int(options.get("strategic_rollout_step_budget_ms", options.get("step_budget_ms", 40)))
+	if options.has("strategic_min_plans_for_rollout"):
+		options["min_plans_for_rollout"] = int(options.get("strategic_min_plans_for_rollout", options.get("min_plans_for_rollout", 1)))
 
 static func _strategic_budget_profile_name(raw_profile: String) -> String:
 	var profile := raw_profile.strip_edges()

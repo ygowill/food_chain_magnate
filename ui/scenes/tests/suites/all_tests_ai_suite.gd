@@ -30,10 +30,6 @@ static func build_tests(_host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.BeamSearchTestClass.run(2, 12345),
 		},
 		{
-			"name": "MCTSSearchTest",
-			"fn": func() -> Result: return TestRefs.MCTSSearchTestClass.run(2, 12345),
-		},
-		{
 			"name": "StrategicPlanTest",
 			"fn": func() -> Result: return TestRefs.StrategicPlanTestClass.run(2, 12345),
 		},
