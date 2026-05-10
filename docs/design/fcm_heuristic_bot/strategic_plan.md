@@ -165,6 +165,7 @@ rollout 输出：
 - `StrategicPlanRunner` 会把 route history 原样带回 rollout payload，`StrategicPlanEvaluator` 则通过 `route_transition_bonus` 把“切换路线”或“重复同类路线”的差异计入 plan value，避免 route bias 只停留在候选排序层。
 - 这些指标用于区分根 plan 选择和后续 plan 展开，不再回到 raw command 级 visits/q 比较。
 - `StrategicBot` 现在会保留短 route history，并把它写进 plan cache identity、Beam / MCTS search 输入和 trace；历史会在玩家切换、回合倒退或 decision seed 回退时清掉，确保缓存计划不会跨过期路线上下文复用。
+- 2026-05-11 的 2s `play` 预算 smoke 证明更宽 MCTS 可以产生非根展开，但当前路线价值还会减少早期 `initiate_marketing` / `produce_food` / `recruit`，导致现金峰值弱于 `StrategyBot` baseline；下一步不继续盲目加宽搜索，而是回到 evaluator / hints 的早期收入权重。
 
 ## 测试与验收
 
