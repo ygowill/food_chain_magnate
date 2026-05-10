@@ -2,6 +2,7 @@ class_name BotSelfplayToolTest
 extends RefCounted
 
 const SelfplayToolClass = preload("res://tools/run_bot_selfplay.gd")
+const BotSelfplaySummaryClass = preload("res://tools/bot_selfplay_summary.gd")
 
 static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var parse := _test_parse_mixed_bot_args()
@@ -255,6 +256,91 @@ static func _test_mandatory_completion_summary_counts_untraced_auto_actions() ->
 	var type_counts: Dictionary = Dictionary(search_metrics.get("search_type_counts", {}))
 	if int(type_counts.get("osla", 0)) != 1 or int(type_counts.get("beam", 0)) != 1:
 		return Result.failure("search metrics should count search types: %s" % str(search_metrics))
+	var strategic_search_trace: Array[Dictionary] = [
+		{
+			"explanation": {
+				"attempted_simulations": 5,
+				"expanded_nodes": 3,
+				"budget_expired": false,
+				"mcts_route_switch_count": 2,
+				"mcts_non_root_populated_nodes": 4,
+				"mcts_non_root_expanded_nodes": 1,
+				"mcts_non_root_candidate_count": 6,
+			},
+			"decision_trace": {
+				"search": "strategic",
+				"time_ms": 13,
+				"mcts_selected_route_types": ["marketing_income", "price_recovery", "supply_capacity"],
+			},
+		},
+		{
+			"explanation": {
+				"attempted_simulations": 4,
+				"expanded_nodes": 2,
+				"budget_expired": true,
+				"mcts_route_switch_count": 1,
+				"mcts_non_root_populated_nodes": 2,
+				"mcts_non_root_expanded_nodes": 1,
+				"mcts_non_root_candidate_count": 5,
+			},
+			"decision_trace": {
+				"search": "strategic_cached",
+				"time_ms": 17,
+				"mcts_selected_route_types": ["price_recovery", "price_recovery", "growth"],
+			},
+		},
+	]
+	var strategic_search_metrics := SelfplayToolClass._trace_search_metrics(strategic_search_trace)
+	if int(strategic_search_metrics.get("decision_count", 0)) != 2:
+		return Result.failure("strategic search metrics should count strategic decisions: %s" % str(strategic_search_metrics))
+	if int(strategic_search_metrics.get("mcts_route_switch_count", 0)) != 3:
+		return Result.failure("strategic search metrics should sum route switches: %s" % str(strategic_search_metrics))
+	if int(strategic_search_metrics.get("mcts_non_root_populated_nodes", 0)) != 6:
+		return Result.failure("strategic search metrics should sum non-root populated nodes: %s" % str(strategic_search_metrics))
+	if int(strategic_search_metrics.get("mcts_non_root_expanded_nodes", 0)) != 2:
+		return Result.failure("strategic search metrics should sum non-root expanded nodes: %s" % str(strategic_search_metrics))
+	if int(strategic_search_metrics.get("mcts_non_root_candidate_count", 0)) != 11:
+		return Result.failure("strategic search metrics should sum non-root candidate counts: %s" % str(strategic_search_metrics))
+	var strategic_route_counts: Dictionary = Dictionary(strategic_search_metrics.get("mcts_selected_route_type_counts", {}))
+	if int(strategic_route_counts.get("marketing_income", 0)) != 1 or int(strategic_route_counts.get("price_recovery", 0)) != 3 or int(strategic_route_counts.get("supply_capacity", 0)) != 1 or int(strategic_route_counts.get("growth", 0)) != 1:
+		return Result.failure("strategic search metrics should count selected route types: %s" % str(strategic_search_metrics))
+	var strategic_summary_read := BotSelfplaySummaryClass.summarize_rows([
+		{
+			"bot": "strategic-plan@base_revenue_growth_v1",
+			"bot_config": "strategic-plan@base_revenue_growth_v1",
+			"ok": true,
+			"round": 8,
+			"steps": 120,
+			"command_count": 120,
+			"search_metrics": strategic_search_metrics,
+		},
+	])
+	if not strategic_summary_read.ok:
+		return strategic_summary_read
+	var strategic_summary: Dictionary = strategic_summary_read.value
+	var strategic_bots: Dictionary = Dictionary(strategic_summary.get("bots", {}))
+	var strategic_bot_summary: Dictionary = Dictionary(strategic_bots.get("strategic-plan@base_revenue_growth_v1", {}))
+	var strategic_search_summary: Dictionary = Dictionary(strategic_bot_summary.get("search", {}))
+	if int(strategic_search_summary.get("mcts_route_switch_count_total", 0)) != 3:
+		return Result.failure("summary should preserve mcts route switch totals: %s" % str(strategic_search_summary))
+	if int(strategic_search_summary.get("mcts_non_root_populated_nodes_total", 0)) != 6:
+		return Result.failure("summary should preserve non-root populated totals: %s" % str(strategic_search_summary))
+	if int(strategic_search_summary.get("mcts_non_root_expanded_nodes_total", 0)) != 2:
+		return Result.failure("summary should preserve non-root expanded totals: %s" % str(strategic_search_summary))
+	if int(strategic_search_summary.get("mcts_non_root_candidate_count_total", 0)) != 11:
+		return Result.failure("summary should preserve non-root candidate totals: %s" % str(strategic_search_summary))
+	if int(Dictionary(strategic_search_summary.get("mcts_selected_route_type_counts", {})).get("price_recovery", 0)) != 3:
+		return Result.failure("summary should preserve selected route type counts: %s" % str(strategic_search_summary))
+	var strategic_lines: Array[String] = BotSelfplaySummaryClass.format_summary(strategic_summary)
+	var strategic_search_line := ""
+	for line in strategic_lines:
+		if str(line).begins_with("[BotSelfplaySummary] MCTS_ROUTE strategic-plan@base_revenue_growth_v1 "):
+			strategic_search_line = str(line)
+			break
+	if strategic_search_line.is_empty():
+		return Result.failure("summary should emit MCTS route line: %s" % str(strategic_lines))
+	if not strategic_search_line.contains("route_switch_avg=") or not strategic_search_line.contains("route_types="):
+		return Result.failure("summary should expose route switch and route type aggregates: %s" % strategic_search_line)
 	var opening_trace: Array[Dictionary] = [
 		{
 			"player_id": 0,

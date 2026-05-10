@@ -505,6 +505,11 @@ static func _trace_search_metrics(trace: Array[Dictionary]) -> Dictionary:
 		"time_ms_sum": 0,
 		"time_ms_max": 0,
 		"search_type_counts": {},
+		"mcts_route_switch_count": 0,
+		"mcts_non_root_populated_nodes": 0,
+		"mcts_non_root_expanded_nodes": 0,
+		"mcts_non_root_candidate_count": 0,
+		"mcts_selected_route_type_counts": {},
 	}
 	for item in trace:
 		var explanation: Dictionary = Dictionary(item.get("explanation", {}))
@@ -525,6 +530,22 @@ static func _trace_search_metrics(trace: Array[Dictionary]) -> Dictionary:
 		if not search_id.is_empty():
 			var counts: Dictionary = out["search_type_counts"]
 			counts[search_id] = int(counts.get(search_id, 0)) + 1
+		var route_types_val = decision_trace.get("mcts_selected_route_types", explanation.get("mcts_selected_route_types", []))
+		if route_types_val is Array:
+			var route_counts: Dictionary = out["mcts_selected_route_type_counts"]
+			for route_type_val in Array(route_types_val):
+				var route_type := str(route_type_val).strip_edges()
+				if route_type.is_empty():
+					continue
+				route_counts[route_type] = int(route_counts.get(route_type, 0)) + 1
+		var route_switch_count := int(decision_trace.get("mcts_route_switch_count", explanation.get("mcts_route_switch_count", 0)))
+		out["mcts_route_switch_count"] = int(out.get("mcts_route_switch_count", 0)) + maxi(0, route_switch_count)
+		var non_root_populated := int(decision_trace.get("mcts_non_root_populated_nodes", explanation.get("mcts_non_root_populated_nodes", 0)))
+		var non_root_expanded := int(decision_trace.get("mcts_non_root_expanded_nodes", explanation.get("mcts_non_root_expanded_nodes", 0)))
+		var non_root_candidates := int(decision_trace.get("mcts_non_root_candidate_count", explanation.get("mcts_non_root_candidate_count", 0)))
+		out["mcts_non_root_populated_nodes"] = int(out.get("mcts_non_root_populated_nodes", 0)) + maxi(0, non_root_populated)
+		out["mcts_non_root_expanded_nodes"] = int(out.get("mcts_non_root_expanded_nodes", 0)) + maxi(0, non_root_expanded)
+		out["mcts_non_root_candidate_count"] = int(out.get("mcts_non_root_candidate_count", 0)) + maxi(0, non_root_candidates)
 	var decisions := int(out.get("decision_count", 0))
 	out["time_ms_avg_per_decision"] = _avg_float(float(out.get("time_ms_sum", 0)), decisions)
 	out["attempted_simulations_avg_per_decision"] = _avg_float(float(out.get("attempted_simulations", 0)), decisions)

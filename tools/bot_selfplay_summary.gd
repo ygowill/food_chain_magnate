@@ -185,6 +185,15 @@ static func format_summary(summary: Dictionary) -> Array[String]:
 				float(search.get("expanded_nodes_avg_per_decision", 0.0)),
 				_format_actions(Dictionary(search.get("search_type_counts", {}))),
 			])
+			if _has_strategic_search_metrics(search):
+				lines.append("[BotSelfplaySummary] MCTS_ROUTE %s route_switch_avg=%.3f non_root_populated_avg=%.3f non_root_expanded_avg=%.3f non_root_candidate_avg=%.3f route_types=%s" % [
+					str(bot_name),
+					float(search.get("mcts_route_switch_count_avg_per_decision", 0.0)),
+					float(search.get("mcts_non_root_populated_nodes_avg_per_decision", 0.0)),
+					float(search.get("mcts_non_root_expanded_nodes_avg_per_decision", 0.0)),
+					float(search.get("mcts_non_root_candidate_count_avg_per_decision", 0.0)),
+					_format_actions(Dictionary(search.get("mcts_selected_route_type_counts", {}))),
+				])
 		var tuning_val = bot.get("tuning_objective", {})
 		var tuning: Dictionary = tuning_val if tuning_val is Dictionary else {}
 		if not tuning.is_empty():
@@ -321,6 +330,11 @@ static func _new_search_metric() -> Dictionary:
 		"time_ms_sum": 0,
 		"time_ms_max": 0,
 		"search_type_counts": {},
+		"mcts_route_switch_count": 0,
+		"mcts_non_root_populated_nodes": 0,
+		"mcts_non_root_expanded_nodes": 0,
+		"mcts_non_root_candidate_count": 0,
+		"mcts_selected_route_type_counts": {},
 	}
 
 static func _new_opening_metric() -> Dictionary:
@@ -376,6 +390,11 @@ static func _add_search_metric(metric: Dictionary, value) -> void:
 	metric["time_ms_sum"] = int(metric.get("time_ms_sum", 0)) + int(row.get("time_ms_sum", 0))
 	metric["time_ms_max"] = maxi(int(metric.get("time_ms_max", 0)), int(row.get("time_ms_max", 0)))
 	_add_action_count_dict(metric["search_type_counts"], row.get("search_type_counts", {}))
+	metric["mcts_route_switch_count"] = int(metric.get("mcts_route_switch_count", 0)) + int(row.get("mcts_route_switch_count", 0))
+	metric["mcts_non_root_populated_nodes"] = int(metric.get("mcts_non_root_populated_nodes", 0)) + int(row.get("mcts_non_root_populated_nodes", 0))
+	metric["mcts_non_root_expanded_nodes"] = int(metric.get("mcts_non_root_expanded_nodes", 0)) + int(row.get("mcts_non_root_expanded_nodes", 0))
+	metric["mcts_non_root_candidate_count"] = int(metric.get("mcts_non_root_candidate_count", 0)) + int(row.get("mcts_non_root_candidate_count", 0))
+	_add_action_count_dict(metric["mcts_selected_route_type_counts"], row.get("mcts_selected_route_type_counts", {}))
 
 static func _add_opening_metric(metric: Dictionary, value) -> void:
 	if not (value is Dictionary):
@@ -482,6 +501,10 @@ static func _finalize_search_metric(metric_val, matches: int) -> Dictionary:
 	var attempted := int(metric.get("attempted_simulations", 0))
 	var expanded := int(metric.get("expanded_nodes", 0))
 	var time_ms_sum := int(metric.get("time_ms_sum", 0))
+	var route_switch_count := int(metric.get("mcts_route_switch_count", 0))
+	var non_root_populated := int(metric.get("mcts_non_root_populated_nodes", 0))
+	var non_root_expanded := int(metric.get("mcts_non_root_expanded_nodes", 0))
+	var non_root_candidates := int(metric.get("mcts_non_root_candidate_count", 0))
 	return {
 		"decision_count_total": decisions,
 		"decision_count_avg_per_match": _avg(float(decisions), matches),
@@ -499,6 +522,19 @@ static func _finalize_search_metric(metric_val, matches: int) -> Dictionary:
 		"time_ms_avg_per_decision": _avg(float(time_ms_sum), decisions),
 		"time_ms_max": int(metric.get("time_ms_max", 0)),
 		"search_type_counts": _sorted_dict(metric.get("search_type_counts", {})),
+		"mcts_route_switch_count_total": route_switch_count,
+		"mcts_route_switch_count_avg_per_match": _avg(float(route_switch_count), matches),
+		"mcts_route_switch_count_avg_per_decision": _avg(float(route_switch_count), decisions),
+		"mcts_non_root_populated_nodes_total": non_root_populated,
+		"mcts_non_root_populated_nodes_avg_per_match": _avg(float(non_root_populated), matches),
+		"mcts_non_root_populated_nodes_avg_per_decision": _avg(float(non_root_populated), decisions),
+		"mcts_non_root_expanded_nodes_total": non_root_expanded,
+		"mcts_non_root_expanded_nodes_avg_per_match": _avg(float(non_root_expanded), matches),
+		"mcts_non_root_expanded_nodes_avg_per_decision": _avg(float(non_root_expanded), decisions),
+		"mcts_non_root_candidate_count_total": non_root_candidates,
+		"mcts_non_root_candidate_count_avg_per_match": _avg(float(non_root_candidates), matches),
+		"mcts_non_root_candidate_count_avg_per_decision": _avg(float(non_root_candidates), decisions),
+		"mcts_selected_route_type_counts": _sorted_dict(metric.get("mcts_selected_route_type_counts", {})),
 	}
 
 static func _finalize_opening_metric(metric_val) -> Dictionary:
@@ -692,11 +728,22 @@ static func _search_delta(left_val, right_val) -> Dictionary:
 		"time_ms_avg_per_match",
 		"time_ms_avg_per_decision",
 		"time_ms_max",
+		"mcts_route_switch_count_avg_per_decision",
+		"mcts_non_root_populated_nodes_avg_per_decision",
+		"mcts_non_root_expanded_nodes_avg_per_decision",
+		"mcts_non_root_candidate_count_avg_per_decision",
 	]
 	var out := {}
 	for key in keys:
 		out[key] = _round3(float(left.get(key, 0.0)) - float(right.get(key, 0.0)))
 	return out
+
+static func _has_strategic_search_metrics(search: Dictionary) -> bool:
+	var counts: Dictionary = Dictionary(search.get("search_type_counts", {}))
+	for search_key_val in counts.keys():
+		if str(search_key_val).begins_with("strategic"):
+			return true
+	return not Dictionary(search.get("mcts_selected_route_type_counts", {})).is_empty()
 
 static func _array_delta(left_val, right_val) -> Array[float]:
 	var left: Array = left_val if left_val is Array else []
