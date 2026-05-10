@@ -10,6 +10,7 @@
 - `docs/design/ui_visual_upgrade_design.md`
 - `docs/design/game_setup_page_redesign.md`
 - `docs/design/marketing_board_refactor.md`
+- `docs/design/fcm_heuristic_bot/README.md`
 
 ## 历史方案 / 已实施方案归档
 

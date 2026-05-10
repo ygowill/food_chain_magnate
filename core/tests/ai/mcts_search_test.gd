@@ -12,6 +12,24 @@ const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
+	var selection := _test_selection_uses_current_actor_perspective()
+	if not selection.ok:
+		return selection
+	var value_score := _test_value_score_combines_strategy_path_and_evaluator()
+	if not value_score.ok:
+		return value_score
+	var root_prior_guard := _test_final_root_selection_preserves_prior_when_under_sampled()
+	if not root_prior_guard.ok:
+		return root_prior_guard
+	var short_circuit := _test_single_candidate_short_circuits_search()
+	if not short_circuit.ok:
+		return short_circuit
+	var pass_only := _test_pass_only_candidates_short_circuit()
+	if not pass_only.ok:
+		return pass_only
+	var legal_gate := _test_mcts_bot_skips_when_no_constructive_legal_action()
+	if not legal_gate.ok:
+		return legal_gate
 	var direct := _test_choose_command_without_mutating_source(seed_val)
 	if not direct.ok:
 		return direct
@@ -21,7 +39,201 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var wrapper := _test_mcts_bot_budget_expired_uses_beam_fallback(seed_val)
 	if not wrapper.ok:
 		return wrapper
-	return Result.success({"cases": 3})
+	return Result.success({"cases": 9})
+
+static func _test_selection_uses_current_actor_perspective() -> Result:
+	var root_child_high := _make_test_node(1, "high", 2.0, 4, 0.1)
+	var root_child_low := _make_test_node(1, "low", -1.0, 4, 0.1)
+	var root_node := {
+		"actor_id": 0,
+		"visits": 8,
+		"children": [root_child_high, root_child_low],
+	}
+	var root_selected = MCTSSearchClass._select_best_child(root_node, 0, 0.0)
+	if not (root_selected is Dictionary):
+		return Result.failure("root selection should return a child")
+	if str(Dictionary(root_selected).get("macro_action_id", "")) != "high":
+		return Result.failure("root actor should maximize root-perspective q: %s" % str(root_selected))
+
+	var opponent_child_high := _make_test_node(0, "opp_high", 2.0, 4, 0.1)
+	var opponent_child_low := _make_test_node(0, "opp_low", -1.0, 4, 0.1)
+	var opponent_node := {
+		"actor_id": 1,
+		"visits": 8,
+		"children": [opponent_child_high, opponent_child_low],
+	}
+	var opponent_selected = MCTSSearchClass._select_best_child(opponent_node, 0, 0.0)
+	if not (opponent_selected is Dictionary):
+		return Result.failure("opponent selection should return a child")
+	if str(Dictionary(opponent_selected).get("macro_action_id", "")) != "opp_low":
+		return Result.failure("opponent actor should minimize root-perspective q: %s" % str(opponent_selected))
+	return Result.success()
+
+static func _make_test_node(actor_id: int, macro_action_id: String, q: float, visits: int, prior: float) -> Dictionary:
+	return {
+		"actor_id": actor_id,
+		"macro_action_id": macro_action_id,
+		"visits": visits,
+		"value_sum": q * float(visits),
+		"prior": prior,
+	}
+
+static func _test_value_score_combines_strategy_path_and_evaluator() -> Result:
+	var own_factor := MCTSSearchClass._path_contribution_factor(0, 0, 0.55, 0.92, 1)
+	if not is_equal_approx(own_factor, 1.0):
+		return Result.failure("root actor path contribution should be positive: %f" % own_factor)
+	var opponent_factor := MCTSSearchClass._path_contribution_factor(1, 0, 0.55, 0.92, 2)
+	if not is_equal_approx(opponent_factor, -0.506):
+		return Result.failure("opponent path contribution should be negative and discounted: %f" % opponent_factor)
+	var node := {
+		"path_score": 10.0,
+	}
+	var value_score := MCTSSearchClass._node_value_score(node, 20.0, 0.35)
+	if not is_equal_approx(value_score, 17.0):
+		return Result.failure("MCTS value should combine path_score and weighted eval: %f" % value_score)
+	return Result.success()
+
+static func _test_final_root_selection_preserves_prior_when_under_sampled() -> Result:
+	var high_prior := _make_test_node(1, "strategy_best", 5.0, 1, 0.7)
+	high_prior["path_score"] = 70.0
+	var shallow_q := _make_test_node(1, "shallow_q", 20.0, 2, 0.2)
+	shallow_q["path_score"] = 20.0
+	var low_prior := _make_test_node(1, "low_prior", 30.0, 1, 0.1)
+	low_prior["path_score"] = 10.0
+	var under_sampled := MCTSSearchClass._select_final_root_child([shallow_q, low_prior, high_prior], 2, false)
+	if not bool(under_sampled.get("prior_guarded", false)):
+		return Result.failure("under-sampled root should use prior guard: %s" % str(under_sampled))
+	var under_nodes: Array = under_sampled.get("nodes", [])
+	if under_nodes.is_empty() or str(Dictionary(under_nodes[0]).get("macro_action_id", "")) != "strategy_best":
+		return Result.failure("under-sampled prior guard should preserve strategy prior: %s" % str(under_nodes))
+
+	var enough_samples := MCTSSearchClass._select_final_root_child([shallow_q, low_prior, high_prior], 1, false)
+	if bool(enough_samples.get("prior_guarded", false)):
+		return Result.failure("sufficient root visits should use visit selection: %s" % str(enough_samples))
+	var enough_nodes: Array = enough_samples.get("nodes", [])
+	if enough_nodes.is_empty() or str(Dictionary(enough_nodes[0]).get("macro_action_id", "")) != "shallow_q":
+		return Result.failure("sufficient root visits should choose by visits/q: %s" % str(enough_nodes))
+
+	var budget_limited := MCTSSearchClass._select_final_root_child([shallow_q, low_prior, high_prior], 0, true)
+	if not bool(budget_limited.get("prior_guarded", false)):
+		return Result.failure("budget-limited root should use prior guard: %s" % str(budget_limited))
+	var budget_nodes: Array = budget_limited.get("nodes", [])
+	if budget_nodes.is_empty() or str(Dictionary(budget_nodes[0]).get("macro_action_id", "")) != "strategy_best":
+		return Result.failure("budget-limited prior guard should preserve strategy prior: %s" % str(budget_nodes))
+	return Result.success()
+
+static func _test_single_candidate_short_circuits_search() -> Result:
+	var command := Command.create("skip", 0, {})
+	var macro := MacroAction.create("phase_skip", [command], 0.0)
+	var payload := {
+		"candidate_count": 1,
+		"candidate_deduped_count": 0,
+		"filter_stats": {},
+	}
+	var decision_read := MCTSSearchClass._strategy_short_circuit_decision(
+		[{
+			"macro": macro,
+			"macro_action_id": macro.id,
+			"action_id": "skip",
+			"strategy_score": 12.5,
+			"strategy_features": {"skip_penalty": 0.0},
+		}],
+		payload,
+		null,
+		AiDecisionContext.create(0, "", "", 1, 0, []),
+		StrategyProfileClass.new(),
+		{},
+		[],
+		Time.get_ticks_msec(),
+		"single_root_candidate",
+		0.35,
+		0.55,
+		0.92
+	)
+	if not decision_read.ok:
+		return decision_read
+	var decision: BotDecision = decision_read.value
+	if decision.command != command:
+		return Result.failure("single candidate short circuit should return best command")
+	if str(decision.trace.get("mcts_short_circuit", "")) != "single_root_candidate":
+		return Result.failure("single candidate short circuit should be traced: %s" % str(decision.trace))
+	if int(decision.explanation.get("attempted_simulations", -1)) != 0:
+		return Result.failure("single candidate short circuit should not simulate: %s" % str(decision.explanation))
+	if not is_equal_approx(float(decision.score), 12.5):
+		return Result.failure("single candidate short circuit should preserve strategy score: %f" % decision.score)
+	return Result.success()
+
+static func _test_pass_only_candidates_short_circuit() -> Result:
+	var skip_sub := MacroAction.create("working_skip_sub_phase", [Command.create("skip_sub_phase", 0, {})], -0.1)
+	var skip_phase := MacroAction.create("working_skip", [Command.create("skip", 0, {})], -0.1)
+	var constructive := MacroAction.create("working_restaurant_0", [Command.create("place_restaurant", 0, {"anchor_pos": Vector2i(0, 0)})], 0.0)
+	var pass_scored := [
+		{
+			"macro": skip_sub,
+			"macro_action_id": skip_sub.id,
+			"action_id": "skip_sub_phase",
+			"strategy_score": -2.0,
+		},
+		{
+			"macro": skip_phase,
+			"macro_action_id": skip_phase.id,
+			"action_id": "skip",
+			"strategy_score": -8.0,
+		},
+	]
+	var reason := MCTSSearchClass._root_short_circuit_reason(pass_scored)
+	if reason != "pass_only_root_candidates":
+		return Result.failure("pass-only root should short circuit: %s" % reason)
+	var constructive_reason := MCTSSearchClass._root_short_circuit_reason(pass_scored + [{
+		"macro": constructive,
+		"macro_action_id": constructive.id,
+		"action_id": "place_restaurant",
+		"strategy_score": 5.0,
+	}])
+	if not constructive_reason.is_empty():
+		return Result.failure("constructive root candidate should keep MCTS enabled: %s" % constructive_reason)
+	var decision_read := MCTSSearchClass._strategy_short_circuit_decision(
+		pass_scored,
+		{
+			"candidate_count": 2,
+			"candidate_deduped_count": 0,
+			"filter_stats": {},
+		},
+		null,
+		AiDecisionContext.create(0, "", "", 1, 0, []),
+		StrategyProfileClass.new(),
+		{},
+		[],
+		Time.get_ticks_msec(),
+		reason,
+		0.35,
+		0.55,
+		0.92
+	)
+	if not decision_read.ok:
+		return decision_read
+	var decision: BotDecision = decision_read.value
+	if decision.command == null or str(decision.command.action_id) != "skip_sub_phase":
+		return Result.failure("pass-only short circuit should return best pass command: %s" % str(decision.command.to_dict() if decision.command != null else {}))
+	if str(decision.trace.get("mcts_short_circuit", "")) != "pass_only_root_candidates":
+		return Result.failure("pass-only short circuit should be traced: %s" % str(decision.trace))
+	if int(decision.explanation.get("attempted_simulations", -1)) != 0:
+		return Result.failure("pass-only short circuit should not simulate: %s" % str(decision.explanation))
+	return Result.success()
+
+static func _test_mcts_bot_skips_when_no_constructive_legal_action() -> Result:
+	var bot := MCTSBotClass.new()
+	if bot._has_constructive_mcts_action("working_place_restaurants_growth", ["skip", "skip_sub_phase"]):
+		return Result.failure("MCTSBot should skip restaurant MCTS when only pass actions are legal")
+	if not bot._has_constructive_mcts_action("working_place_restaurants_growth", ["skip_sub_phase", "place_restaurant"]):
+		return Result.failure("MCTSBot should allow restaurant MCTS when placement is legal")
+	if bot._has_constructive_mcts_action("working_place_houses_growth", ["skip_sub_phase"]):
+		return Result.failure("MCTSBot should skip house MCTS when only pass actions are legal")
+	if not bot._has_constructive_mcts_action("working_place_houses_growth", ["add_garden"]):
+		return Result.failure("MCTSBot should allow house MCTS when garden placement is legal")
+	if not bot._has_constructive_mcts_action("working_recruit_income_route", ["skip_sub_phase"]):
+		return Result.failure("MCTSBot should not gate unknown explicitly-enabled strategy ids")
+	return Result.success()
 
 static func _test_choose_command_without_mutating_source(seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -94,6 +306,10 @@ static func _test_choose_command_without_mutating_source(seed_val: int) -> Resul
 		return Result.failure("MCTSSearch should expose selected prior: %s" % str(features))
 	if not features.has("mcts_eval_score"):
 		return Result.failure("MCTSSearch should expose eval score: %s" % str(features))
+	if not features.has("mcts_value_score"):
+		return Result.failure("MCTSSearch should expose value score: %s" % str(features))
+	if not features.has("mcts_path_score"):
+		return Result.failure("MCTSSearch should expose path score: %s" % str(features))
 	if not features.has("mcts_candidate_deduped_count"):
 		return Result.failure("MCTSSearch should expose candidate dedupe count: %s" % str(features))
 	if not features.has("mcts_simulation_ms"):

@@ -52,6 +52,23 @@ func choose_command_with_engine(
 		options["source_state"] = engine.get_state()
 	return _choose_command_with_options(observation, context, legal_action_ids, validate_command, budget, options)
 
+func choose_command_with_engine_and_plan_hints(
+	engine: GameEngine,
+	observation: ObservationState,
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	plan_hints,
+	validate_command: Callable = Callable(),
+	budget: TimeBudget = null
+) -> BotDecision:
+	var options := {}
+	if engine != null:
+		options["source_engine"] = engine
+		options["source_state"] = engine.get_state()
+	if plan_hints != null:
+		options["plan_hints"] = plan_hints
+	return _choose_command_with_options(observation, context, legal_action_ids, validate_command, budget, options)
+
 func _choose_command_with_options(
 	observation: ObservationState,
 	context: AiDecisionContext,
@@ -94,6 +111,8 @@ func _choose_command_with_options(
 		"source_analysis": source_analysis,
 		"income_analysis": income_analysis,
 	}
+	if generator_options.has("plan_hints"):
+		filter_options["plan_hints"] = generator_options.get("plan_hints", null)
 	var filter_payload: Dictionary = StrategyCandidateFilterClass.filter_candidates(observation, candidates, profile, filter_options)
 	var filtered_candidates_val = filter_payload.get("candidates", [])
 	if not (filtered_candidates_val is Array):
@@ -110,6 +129,8 @@ func _choose_command_with_options(
 		"source_analysis": source_analysis,
 		"income_analysis": income_analysis,
 	}
+	if generator_options.has("plan_hints"):
+		base_score_options["plan_hints"] = generator_options.get("plan_hints", null)
 	var base_ranked := _score_candidates(observation, candidates, profile, base_score_options, "base")
 	if base_ranked.is_empty():
 		return _fallback(observation, context, legal_action_ids, validate_command, budget, "StrategyBot found no scored candidate")
@@ -152,50 +173,53 @@ func _choose_command_with_options(
 	var chosen_command: Command = best_macro.commands[0]
 	var elapsed_ms := maxi(0, Time.get_ticks_msec() - start_ms)
 	var budget_expired := budget != null and budget.expired()
-	return BotDecision.create(
-		chosen_command,
-		best_macro.id,
-		best_score,
-		{
-			"search": "strategy",
-			"strategy_profile": profile.id,
-			"phase_strategy": str(phase_plan.get("id", "")),
-			"phase_strategy_goal": str(phase_plan.get("goal", "")),
-			"phase_strategy_version": str(phase_plan.get("version", "")),
-			"features": best_features,
-			"candidate_count": ranked.size(),
-			"generated_candidate_count": generated_candidate_count,
-			"filter_stats": filter_stats,
-			"preview_enabled": preview_enabled,
-			"preview_rescore_count": preview_rescore_count,
-			"attempted_simulations": preview_rescore_count,
-			"expanded_nodes": ranked.size(),
-			"budget_expired": budget_expired,
-			"time_ms": elapsed_ms,
-		},
-		{
-			"search": "strategy",
-			"bot": "StrategyBot",
-			"strategy_profile": profile.id,
-			"phase_strategy": str(phase_plan.get("id", "")),
-			"phase_strategy_goal": str(phase_plan.get("goal", "")),
-			"phase_strategy_version": str(phase_plan.get("version", "")),
-			"phase": str(observation.phase),
-			"sub_phase": str(observation.sub_phase),
-			"player_id": context.player_id,
-			"candidate_count": ranked.size(),
-			"generated_candidate_count": generated_candidate_count,
-			"filter_stats": filter_stats,
-			"preview_enabled": preview_enabled,
-			"preview_rescore_count": preview_rescore_count,
-			"attempted_simulations": preview_rescore_count,
-			"expanded_nodes": ranked.size(),
-			"budget_expired": budget_expired,
-			"time_ms": elapsed_ms,
-			"top_candidates": trace_top_candidates,
-			"discarded_reasons": discarded_reasons.slice(0, 20),
-		}
-	)
+	var explanation := {
+		"search": "strategy",
+		"strategy_profile": profile.id,
+		"phase_strategy": str(phase_plan.get("id", "")),
+		"phase_strategy_goal": str(phase_plan.get("goal", "")),
+		"phase_strategy_version": str(phase_plan.get("version", "")),
+		"features": best_features,
+		"candidate_count": ranked.size(),
+		"generated_candidate_count": generated_candidate_count,
+		"filter_stats": filter_stats,
+		"preview_enabled": preview_enabled,
+		"preview_rescore_count": preview_rescore_count,
+		"attempted_simulations": preview_rescore_count,
+		"expanded_nodes": ranked.size(),
+		"budget_expired": budget_expired,
+		"time_ms": elapsed_ms,
+	}
+	var trace := {
+		"search": "strategy",
+		"bot": "StrategyBot",
+		"strategy_profile": profile.id,
+		"phase_strategy": str(phase_plan.get("id", "")),
+		"phase_strategy_goal": str(phase_plan.get("goal", "")),
+		"phase_strategy_version": str(phase_plan.get("version", "")),
+		"phase": str(observation.phase),
+		"sub_phase": str(observation.sub_phase),
+		"player_id": context.player_id,
+		"candidate_count": ranked.size(),
+		"generated_candidate_count": generated_candidate_count,
+		"filter_stats": filter_stats,
+		"preview_enabled": preview_enabled,
+		"preview_rescore_count": preview_rescore_count,
+		"attempted_simulations": preview_rescore_count,
+		"expanded_nodes": ranked.size(),
+		"budget_expired": budget_expired,
+		"time_ms": elapsed_ms,
+		"top_candidates": trace_top_candidates,
+		"discarded_reasons": discarded_reasons.slice(0, 20),
+	}
+	var plan_hints_val = generator_options.get("plan_hints", null)
+	if plan_hints_val != null:
+		var plan_hints_dict := _plan_hints_to_dict(plan_hints_val)
+		if not plan_hints_dict.is_empty():
+			explanation["plan_hints"] = plan_hints_dict.duplicate(true)
+			trace["plan_hints"] = plan_hints_dict.duplicate(true)
+			trace["plan_id"] = str(plan_hints_dict.get("plan_id", ""))
+	return BotDecision.create(chosen_command, best_macro.id, best_score, explanation, trace)
 
 func _fallback(
 	observation: ObservationState,
@@ -218,6 +242,15 @@ static func _copy_string_array(value) -> Array[String]:
 		for item in Array(value):
 			out.append(str(item))
 	return out
+
+static func _plan_hints_to_dict(value) -> Dictionary:
+	if value is Dictionary:
+		return Dictionary(value).duplicate(true)
+	if value != null and value.has_method("to_dict"):
+		var dict_val = value.to_dict()
+		if dict_val is Dictionary:
+			return Dictionary(dict_val).duplicate(true)
+	return {}
 
 static func _score_candidates(
 	observation: ObservationState,

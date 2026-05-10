@@ -12,6 +12,8 @@ const StrategyStructurePlannerClass = preload("res://core/ai/strategy/strategy_s
 const StrategySupportPlannerClass = preload("res://core/ai/strategy/strategy_support_planner.gd")
 const StrategySupplyPlannerClass = preload("res://core/ai/strategy/strategy_supply_planner.gd")
 const StrategyTrainPlannerClass = preload("res://core/ai/strategy/strategy_train_planner.gd")
+const StrategyPlanHintsClass = preload("res://core/ai/planning/strategic_plan_hints.gd")
+const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 
 static func score_macro(observation: ObservationState, macro: MacroAction, profile, options: Dictionary = {}) -> Dictionary:
 	if observation == null or macro == null or profile == null or macro.commands.is_empty():
@@ -128,6 +130,13 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 		features["milestone_race_ids"] = Array(milestone_payload.get("milestone_ids", [])).duplicate()
 		features["milestone_race_candidates"] = Array(milestone_payload.get("milestones", [])).duplicate(true)
 		score += milestone_score
+	var hints_bonus := _plan_hints_bonus(observation, macro, options, features)
+	if not is_equal_approx(hints_bonus, 0.0):
+		features["plan_hints_bonus"] = hints_bonus
+		score += hints_bonus
+	var plan_id := _plan_hints_plan_id(options)
+	if not plan_id.is_empty():
+		features["plan_id"] = plan_id
 	if strategy_precondition_failed:
 		score = -INF
 
@@ -167,3 +176,150 @@ static func _should_suppress_deferred_supply_milestone(action_id: String, featur
 	if int(features.get("product_effective_planning_inventory_gap", 0)) > 0:
 		return false
 	return true
+
+static func _plan_hints_bonus(
+	_observation: ObservationState,
+	macro: MacroAction,
+	options: Dictionary,
+	features: Dictionary
+) -> float:
+	var hints := _plan_hints_dict(options)
+	if hints.is_empty() or macro == null or macro.commands.is_empty():
+		return 0.0
+	var command: Command = macro.commands[0]
+	if command == null:
+		return 0.0
+	var action_id := str(command.action_id)
+	var avoid_actions := _string_array(hints.get("avoid_actions", []))
+	if avoid_actions.has(action_id):
+		return -24.0
+	var bonus := 0.0
+	var preferred_products := _string_array(hints.get("preferred_products", []))
+	var preferred_employee_ids := _string_array(hints.get("preferred_employee_ids", []))
+	var preferred_roles := _string_array(hints.get("preferred_employee_roles", []))
+	var preferred_price_actions := _string_array(hints.get("preferred_price_actions", []))
+	var preferred_actions := _string_array(hints.get("preferred_actions", []))
+	var execution_sequence := _ordered_string_array(hints.get("execution_sequence", []))
+	var preferred_houses := _string_array(hints.get("preferred_marketing_house_ids", []))
+	var preferred_boards := _int_array(hints.get("preferred_marketing_board_numbers", []))
+	var sequence_index := execution_sequence.find(action_id)
+	if sequence_index >= 0:
+		var sequence_bonus := maxf(0.0, 14.0 - float(sequence_index) * 2.0)
+		bonus += sequence_bonus
+		features["plan_hints_sequence_match"] = action_id
+		features["plan_hints_sequence_index"] = sequence_index
+	if preferred_actions.has(action_id):
+		bonus += 8.0
+		features["plan_hints_action_match"] = action_id
+	var command_products := _command_products(command, features)
+	for product_id in command_products:
+		if preferred_products.has(product_id):
+			bonus += 22.0
+	var employee_id := _command_employee_id(command)
+	if not employee_id.is_empty() and preferred_employee_ids.has(employee_id):
+		bonus += 18.0
+	var role := _command_employee_role(command, features)
+	if not role.is_empty() and preferred_roles.has(role):
+		bonus += 12.0
+	if preferred_price_actions.has(action_id):
+		bonus += 24.0
+	if action_id == "initiate_marketing":
+		var board_number := int(command.params.get("board_number", -1))
+		if preferred_boards.has(board_number):
+			bonus += 8.0
+		if not preferred_houses.is_empty():
+			var affected := _affected_house_ids(macro)
+			for house_id in affected:
+				if preferred_houses.has(house_id):
+					bonus += 6.0
+	if action_id == "place_house" or action_id == "add_garden" or action_id == "place_restaurant" or action_id == "move_restaurant":
+		bonus += maxf(0.0, float(hints.get("growth_bias", 0.0))) * 12.0
+	if int(hints.get("cash_floor", 0)) > 0 and action_id == "fire":
+		bonus += 4.0
+	return bonus
+
+static func _plan_hints_dict(options: Dictionary) -> Dictionary:
+	var value = options.get("plan_hints", null)
+	if value != null and value.has_method("to_dict"):
+		var dict_val = value.to_dict()
+		if dict_val is Dictionary:
+			return Dictionary(dict_val)
+	if value is Dictionary:
+		return Dictionary(value)
+	return {}
+
+static func _plan_hints_plan_id(options: Dictionary) -> String:
+	var hints := _plan_hints_dict(options)
+	return str(hints.get("plan_id", "")).strip_edges()
+
+static func _command_products(command: Command, features: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	if command == null:
+		return out
+	for key in ["product", "food_type", "drink_type"]:
+		var value := str(command.params.get(key, "")).strip_edges()
+		if not value.is_empty() and not out.has(value):
+			out.append(value)
+	var product_id := str(features.get("product_id", "")).strip_edges()
+	if not product_id.is_empty() and not out.has(product_id):
+		out.append(product_id)
+	return out
+
+static func _command_employee_id(command: Command) -> String:
+	if command == null:
+		return ""
+	for key in ["employee_type", "employee_id", "from_employee", "to_employee"]:
+		var value := str(command.params.get(key, "")).strip_edges()
+		if not value.is_empty():
+			return value
+	return ""
+
+static func _command_employee_role(command: Command, features: Dictionary) -> String:
+	for key in ["employee_role", "recruit_role", "target_employee_role", "structure_employee_role"]:
+		var value := str(features.get(key, "")).strip_edges()
+		if not value.is_empty():
+			return value
+	if command != null:
+		match str(command.action_id):
+			"initiate_marketing":
+				return "marketing"
+			"produce_food":
+				return "produce_food"
+			"procure_drinks":
+				return "procure_drink"
+		var employee_id := _command_employee_id(command)
+		if not employee_id.is_empty() and EmployeeRegistryClass.is_loaded() and EmployeeRegistryClass.has(employee_id):
+			var def_val = EmployeeRegistryClass.get_def(employee_id)
+			if def_val is EmployeeDef:
+				return str((def_val as EmployeeDef).role)
+	return ""
+
+static func _string_array(value) -> Array[String]:
+	var out: Array[String] = []
+	if value is Array:
+		for item in Array(value):
+			var text := str(item).strip_edges()
+			if not text.is_empty() and not out.has(text):
+				out.append(text)
+	out.sort()
+	return out
+
+static func _int_array(value) -> Array[int]:
+	var out: Array[int] = []
+	if value is Array:
+		for item in Array(value):
+			if item is int or item is float:
+				var n := int(item)
+				if not out.has(n):
+					out.append(n)
+	out.sort()
+	return out
+
+static func _ordered_string_array(value) -> Array[String]:
+	var out: Array[String] = []
+	if value is Array:
+		for item in Array(value):
+			var text := str(item).strip_edges()
+			if not text.is_empty() and not out.has(text):
+				out.append(text)
+	return out

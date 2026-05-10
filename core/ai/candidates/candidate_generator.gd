@@ -56,7 +56,7 @@ static func generate(
 
 	match str(observation.phase):
 		DefsClass.PHASE_SETUP:
-			_generate_setup(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action)
+			_generate_setup(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action, options)
 		DefsClass.PHASE_RESTRUCTURING:
 			_generate_restructuring(out, discarded, observation, context, legal_action_ids, validate_command, max_valid_per_action, options)
 		DefsClass.PHASE_ORDER_OF_BUSINESS:
@@ -85,7 +85,8 @@ static func _generate_setup(
 	context: AiDecisionContext,
 	legal_action_ids: Array[String],
 	validate_command: Callable,
-	max_valid_per_action: int
+	max_valid_per_action: int,
+	options: Dictionary
 ) -> void:
 	if str(observation.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS:
 		if legal_action_ids.has("select_reserve_card"):
@@ -252,7 +253,7 @@ static func _generate_direct_structure_assignments(
 	var assigned_counts := _count_assigned_employees(structure)
 	var owned_counts := _count_owned_employees(observation.own_player)
 	var employee_ids := _sorted_string_keys(owned_counts)
-	_sort_structure_employee_ids(employee_ids, observation)
+	_sort_structure_employee_ids(employee_ids, observation, options)
 	var empty_slots := _empty_direct_slots(structure, ceo_slots)
 	for employee_id in employee_ids:
 		if employee_id == "ceo":
@@ -309,7 +310,7 @@ static func _generate_report_structure_assignments(
 	var assigned_counts := _count_assigned_employees(structure)
 	var owned_counts := _count_owned_employees(observation.own_player)
 	var employee_ids := _sorted_string_keys(owned_counts)
-	_sort_structure_employee_ids(employee_ids, observation)
+	_sort_structure_employee_ids(employee_ids, observation, options)
 	for slot_index in range(mini(ceo_slots, structure.size())):
 		var entry_val = structure[slot_index]
 		if not (entry_val is Dictionary):
@@ -411,11 +412,11 @@ static func _generate_working(
 				_generate_marketing(out, discarded, observation, context, validate_command, max_valid_per_action, options)
 		DefsClass.SUB_PHASE_GET_FOOD:
 			if legal_action_ids.has("produce_food"):
-				_generate_produce_food(out, discarded, observation, context, validate_command, max_valid_per_action)
+				_generate_produce_food(out, discarded, observation, context, validate_command, max_valid_per_action, options)
 		DefsClass.SUB_PHASE_GET_DRINKS:
 			if legal_action_ids.has("procure_drinks"):
-				_generate_errand_boy_drinks(out, discarded, observation, context, validate_command, max_valid_per_action)
-				_generate_route_drinks(out, discarded, observation, context, validate_command, max_valid_per_action)
+				_generate_errand_boy_drinks(out, discarded, observation, context, validate_command, max_valid_per_action, options)
+				_generate_route_drinks(out, discarded, observation, context, validate_command, max_valid_per_action, options)
 		DefsClass.SUB_PHASE_PLACE_HOUSES:
 			if legal_action_ids.has("place_house"):
 				_generate_house_placements(out, discarded, observation, context, validate_command, max_valid_per_action)
@@ -474,7 +475,8 @@ static func _generate_marketing(
 	if not ProductRegistryClass.is_loaded():
 		discarded.append("marketing: ProductRegistry is not loaded")
 		return
-	var products := _sorted_marketable_product_ids_for_observation(observation)
+	var plan_hints := _plan_hints_dict(options)
+	var products := _sorted_marketable_product_ids_for_observation(observation, plan_hints)
 	if products.is_empty():
 		discarded.append("marketing: no marketable products")
 		return
@@ -485,12 +487,13 @@ static func _generate_marketing(
 	var source_state := _source_state_from_options(options)
 	var source_analysis := _source_board_analysis(source_state, options)
 	if source_state != null:
-		_sort_marketing_products_for_source_state(products, observation, source_state, source_analysis)
-	for employee_id in _sorted_unique_strings(observation.own_player.get("employees", [])):
+		_sort_marketing_products_for_source_state(products, observation, source_state, source_analysis, plan_hints)
+	for employee_id in _sorted_employee_ids_for_plan_hints(_sorted_unique_strings(observation.own_player.get("employees", [])), observation, options, "initiate_marketing"):
 		var marketing_types := _marketing_types_for_employee(employee_id)
 		if marketing_types.is_empty():
 			continue
 		var board_numbers := _available_marketing_board_numbers(marketing_types, observation, discarded)
+		_sort_marketing_board_numbers_for_hints(board_numbers, plan_hints)
 		var board_quota := _marketing_board_candidate_quota(max_valid_per_action, board_numbers.size(), options)
 		for board_number in board_numbers:
 			var board_def = MarketingRegistryClass.get_def(int(board_number))
@@ -529,7 +532,8 @@ static func _generate_marketing(
 						board_def as MarketingDef,
 						marketing_type,
 						int(rotation),
-						discarded
+						discarded,
+						plan_hints
 					)
 					if candidate_positions.is_empty():
 						continue
@@ -569,7 +573,7 @@ static func _generate_marketing(
 							validate_command,
 							macro_id,
 							["working", "marketing"],
-							_marketing_product_prior(product_id, observation),
+							_marketing_product_prior(product_id, observation, plan_hints),
 							max_valid_per_action,
 							source_state,
 							source_analysis,
@@ -765,7 +769,8 @@ static func _generate_train(
 		if not (def_val is EmployeeDef):
 			continue
 		var def: EmployeeDef = def_val
-		for to_employee in def.train_to:
+		var train_targets := _sorted_train_targets(def.train_to, from_employee, observation, context, validate_command, options)
+		for to_employee in train_targets:
 			var target := str(to_employee)
 			if target.is_empty():
 				continue
@@ -796,20 +801,21 @@ static func _generate_produce_food(
 	observation: ObservationState,
 	context: AiDecisionContext,
 	validate_command: Callable,
-	max_valid_per_action: int
+	max_valid_per_action: int,
+	options: Dictionary = {}
 ) -> void:
 	if not EmployeeRegistryClass.is_loaded():
 		discarded.append("produce_food: EmployeeRegistry is not loaded")
 		return
-	for employee_id in _sorted_unique_strings(observation.own_player.get("employees", [])):
+	for employee_id in _sorted_employee_ids_for_plan_hints(_sorted_unique_strings(observation.own_player.get("employees", [])), observation, options, "produce_food"):
 		var def_val = EmployeeRegistryClass.get_def(employee_id)
 		if not (def_val is EmployeeDef):
 			continue
 		var def: EmployeeDef = def_val
 		if not def.can_produce():
 			continue
-		var options := def.get_production_food_options()
-		for food_type in options:
+		var food_options := _sorted_products_for_plan_hints(def.get_production_food_options(), observation, options)
+		for food_type in food_options:
 			_append_valid_command(
 				out,
 				discarded,
@@ -822,7 +828,7 @@ static func _generate_produce_food(
 				validate_command,
 				"produce_%s_%s" % [employee_id, food_type],
 				["working", "produce_food"],
-				_product_pipeline_prior(str(food_type), observation),
+				_product_pipeline_prior(str(food_type), observation, options),
 				max_valid_per_action
 			)
 
@@ -832,17 +838,22 @@ static func _generate_errand_boy_drinks(
 	observation: ObservationState,
 	context: AiDecisionContext,
 	validate_command: Callable,
-	max_valid_per_action: int
+	max_valid_per_action: int,
+	options: Dictionary = {}
 ) -> void:
-	var active := _sorted_unique_strings(observation.own_player.get("employees", []))
+	var active := _sorted_employee_ids_for_plan_hints(_sorted_unique_strings(observation.own_player.get("employees", [])), observation, options, "procure_drinks")
 	if not active.has("errand_boy"):
 		return
 	if not ProductRegistryClass.is_loaded():
 		discarded.append("procure_drinks: ProductRegistry is not loaded")
 		return
-	for product_id in ProductRegistryClass.get_all_ids():
-		if not ProductRegistryClass.is_drink(product_id):
-			continue
+	var product_ids: Array[String] = []
+	for product_id_val in ProductRegistryClass.get_all_ids():
+		var product_id := str(product_id_val)
+		if ProductRegistryClass.is_drink(product_id):
+			product_ids.append(product_id)
+	product_ids = _sorted_products_for_plan_hints(product_ids, observation, options)
+	for product_id in product_ids:
 		_append_valid_command(
 			out,
 			discarded,
@@ -855,7 +866,7 @@ static func _generate_errand_boy_drinks(
 			validate_command,
 			"errand_boy_%s" % product_id,
 			["working", "procure_drinks", "errand_boy"],
-			_product_pipeline_prior(product_id, observation),
+			_product_pipeline_prior(product_id, observation, options),
 			max_valid_per_action
 		)
 
@@ -865,12 +876,13 @@ static func _generate_route_drinks(
 	observation: ObservationState,
 	context: AiDecisionContext,
 	validate_command: Callable,
-	max_valid_per_action: int
+	max_valid_per_action: int,
+	options: Dictionary = {}
 ) -> void:
 	if not EmployeeRegistryClass.is_loaded():
 		discarded.append("procure_drinks: EmployeeRegistry is not loaded")
 		return
-	var active := _sorted_unique_strings(observation.own_player.get("employees", []))
+	var active := _sorted_employee_ids_for_plan_hints(_sorted_unique_strings(observation.own_player.get("employees", [])), observation, options, "procure_drinks")
 	for employee_id in active:
 		if _count_action(out, "procure_drinks") >= max_valid_per_action:
 			return
@@ -891,7 +903,7 @@ static func _generate_route_drinks(
 		if routes.is_empty():
 			discarded.append("procure_drinks:%s: no route candidates" % employee_id)
 			continue
-		_sort_route_drinks_for_observation(routes, observation)
+		_sort_route_drinks_for_observation(routes, observation, options)
 		for route_val in routes:
 			if _count_action(out, "procure_drinks") >= max_valid_per_action:
 				return
@@ -905,7 +917,7 @@ static func _generate_route_drinks(
 			var range_type := str(route.get("range_type", "route"))
 			var source_count := int(route.get("source_count", 0))
 			var route_index := _count_action(out, "procure_drinks")
-			var route_prior := _route_drink_prior(route, observation)
+			var route_prior := _route_drink_prior(route, observation, options)
 			_append_valid_command(
 				out,
 				discarded,
@@ -1286,12 +1298,161 @@ static func _string_array(value) -> Array[String]:
 			out.append(id)
 	return out
 
-static func _sort_route_drinks_for_observation(routes: Array, observation: ObservationState) -> void:
+static func _plan_hints_dict(options: Dictionary) -> Dictionary:
+	var value = options.get("plan_hints", null)
+	if value != null and value.has_method("to_dict"):
+		var dict_val = value.to_dict()
+		if dict_val is Dictionary:
+			return Dictionary(dict_val)
+	if value is Dictionary:
+		return Dictionary(value)
+	if options.has("preferred_products") or options.has("preferred_actions") or options.has("execution_sequence"):
+		return options
+	return {}
+
+static func _plan_hints_action_bonus(plan_hints: Dictionary, action_id: String) -> float:
+	if action_id.is_empty() or plan_hints.is_empty():
+		return 0.0
+	var sequence := _string_array(plan_hints.get("execution_sequence", []))
+	var sequence_index := sequence.find(action_id)
+	if sequence_index >= 0:
+		return maxf(0.0, 1.4 - float(sequence_index) * 0.15)
+	var preferred_actions := _string_array(plan_hints.get("preferred_actions", []))
+	if preferred_actions.has(action_id):
+		return 0.6
+	return 0.0
+
+static func _plan_hints_product_bonus(plan_hints: Dictionary, product_id: String) -> float:
+	if product_id.is_empty() or plan_hints.is_empty():
+		return 0.0
+	var preferred_products := _string_array(plan_hints.get("preferred_products", []))
+	return 4.0 if preferred_products.has(product_id) else 0.0
+
+static func _plan_hints_employee_bonus(plan_hints: Dictionary, employee_id: String, role: String = "", action_id: String = "") -> float:
+	if plan_hints.is_empty():
+		return 0.0
+	var bonus := _plan_hints_action_bonus(plan_hints, action_id)
+	var preferred_employee_ids := _string_array(plan_hints.get("preferred_employee_ids", []))
+	if not employee_id.is_empty() and preferred_employee_ids.has(employee_id):
+		bonus += 3.5
+	var preferred_roles := _string_array(plan_hints.get("preferred_employee_roles", []))
+	if not role.is_empty() and preferred_roles.has(role):
+		bonus += 2.0
+	return bonus
+
+static func _route_plan_employee_hint_bonus(route_plan: Dictionary, employee_id: String, role: String, action_id: String) -> float:
+	if route_plan.is_empty():
+		return 0.0
+	return _plan_hints_employee_bonus({
+		"preferred_employee_ids": _string_array(route_plan.get("preferred_employee_ids", [])),
+		"preferred_employee_roles": _string_array(route_plan.get("preferred_employee_roles", [])),
+		"preferred_actions": _string_array(route_plan.get("preferred_actions", [])),
+		"execution_sequence": _string_array(route_plan.get("execution_sequence", [])),
+	}, employee_id, role, action_id)
+
+static func _plan_hints_house_bonus(plan_hints: Dictionary, affected_house_ids: Array) -> float:
+	if plan_hints.is_empty() or affected_house_ids.is_empty():
+		return 0.0
+	var preferred_houses := _string_array(plan_hints.get("preferred_marketing_house_ids", []))
+	if preferred_houses.is_empty():
+		return 0.0
+	var hits := 0
+	for house_id_val in affected_house_ids:
+		if preferred_houses.has(str(house_id_val)):
+			hits += 1
+	return float(hits) * 600.0
+
+static func _sort_marketing_board_numbers_for_hints(board_numbers: Array[int], plan_hints: Dictionary) -> void:
+	if board_numbers.size() <= 1 or plan_hints.is_empty():
+		return
+	var preferred_boards: Array[int] = []
+	var preferred_val = plan_hints.get("preferred_marketing_board_numbers", [])
+	if preferred_val is Array:
+		for item in Array(preferred_val):
+			var board_number := int(item)
+			if board_number > 0 and not preferred_boards.has(board_number):
+				preferred_boards.append(board_number)
+	board_numbers.sort_custom(func(a: int, b: int) -> bool:
+		var a_pref := preferred_boards.has(int(a))
+		var b_pref := preferred_boards.has(int(b))
+		if a_pref != b_pref:
+			return a_pref
+		return int(a) < int(b)
+	)
+
+static func _sorted_products_for_plan_hints(value, observation: ObservationState, options: Dictionary = {}) -> Array[String]:
+	var out: Array[String] = []
+	if value is Array:
+		for item in Array(value):
+			var product_id := str(item).strip_edges()
+			if not product_id.is_empty() and not out.has(product_id):
+				out.append(product_id)
+	out.sort_custom(func(a: String, b: String) -> bool:
+		var prior_a := _product_pipeline_prior(a, observation, options)
+		var prior_b := _product_pipeline_prior(b, observation, options)
+		if not is_equal_approx(prior_a, prior_b):
+			return prior_a > prior_b
+		return a < b
+	)
+	return out
+
+static func _sorted_train_targets(value, from_employee: String, observation: ObservationState, context: AiDecisionContext, validate_command: Callable, options: Dictionary = {}) -> Array[String]:
+	var out: Array[String] = []
+	if value is Array:
+		for item in Array(value):
+			var employee_id := str(item).strip_edges()
+			if not employee_id.is_empty() and not out.has(employee_id):
+				out.append(employee_id)
+	out.sort_custom(func(a: String, b: String) -> bool:
+		var prior_a := _train_prior(from_employee, a, observation, context, validate_command, options)
+		var prior_b := _train_prior(from_employee, b, observation, context, validate_command, options)
+		if not is_equal_approx(prior_a, prior_b):
+			return prior_a > prior_b
+		return a < b
+		)
+	return out
+
+static func _sorted_employee_ids_for_plan_hints(employee_ids: Array[String], observation: ObservationState, options: Dictionary = {}, action_id: String = "") -> Array[String]:
+	if employee_ids.size() <= 1:
+		return employee_ids
+	var plan_hints := _plan_hints_dict(options)
+	var priorities := {}
+	for employee_id in employee_ids:
+		var role := _employee_role(employee_id)
+		var prior := _plan_hints_employee_bonus(plan_hints, employee_id, role, action_id)
+		if action_id == "produce_food":
+			prior += _employee_production_hint_bonus(employee_id, observation, options)
+		priorities[employee_id] = prior
+	var out := employee_ids.duplicate()
+	out.sort_custom(func(a: String, b: String) -> bool:
+		var prior_a := float(priorities.get(a, 0.0))
+		var prior_b := float(priorities.get(b, 0.0))
+		if not is_equal_approx(prior_a, prior_b):
+			return prior_a > prior_b
+		return a < b
+	)
+	return out
+
+static func _employee_production_hint_bonus(employee_id: String, observation: ObservationState, options: Dictionary = {}) -> float:
+	if employee_id.is_empty() or not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(employee_id):
+		return 0.0
+	var def_val = EmployeeRegistryClass.get_def(employee_id)
+	if not (def_val is EmployeeDef):
+		return 0.0
+	var def: EmployeeDef = def_val
+	if not def.can_produce():
+		return 0.0
+	var best := 0.0
+	for product_id in def.get_production_food_options():
+		best = maxf(best, _product_pipeline_prior(str(product_id), observation, options))
+	return best
+
+static func _sort_route_drinks_for_observation(routes: Array, observation: ObservationState, options: Dictionary = {}) -> void:
 	routes.sort_custom(func(a, b) -> bool:
 		var route_a: Dictionary = a if a is Dictionary else {}
 		var route_b: Dictionary = b if b is Dictionary else {}
-		var prior_a := _route_drink_prior(route_a, observation)
-		var prior_b := _route_drink_prior(route_b, observation)
+		var prior_a := _route_drink_prior(route_a, observation, options)
+		var prior_b := _route_drink_prior(route_b, observation, options)
 		if not is_equal_approx(prior_a, prior_b):
 			return prior_a > prior_b
 		var source_a := int(route_a.get("source_count", 0))
@@ -1313,12 +1474,12 @@ static func _sort_route_drinks_for_observation(routes: Array, observation: Obser
 		return str(route_a.get("range_type", "")) < str(route_b.get("range_type", ""))
 	)
 
-static func _route_drink_prior(route: Dictionary, observation: ObservationState) -> float:
+static func _route_drink_prior(route: Dictionary, observation: ObservationState, options: Dictionary = {}) -> float:
 	if route.is_empty():
 		return 0.0
 	var prior := float(maxi(0, int(route.get("source_count", 0)))) * 0.05
 	for product_id in _route_drink_source_types(route):
-		prior += _product_pipeline_prior(product_id, observation)
+		prior += _product_pipeline_prior(product_id, observation, options)
 	return prior
 
 static func _route_drink_source_types(route: Dictionary) -> Array[String]:
@@ -1338,10 +1499,10 @@ static func _route_drink_source_types(route: Dictionary) -> Array[String]:
 	out.sort()
 	return out
 
-static func _sort_structure_employee_ids(employee_ids: Array[String], observation: ObservationState) -> void:
+static func _sort_structure_employee_ids(employee_ids: Array[String], observation: ObservationState, options: Dictionary = {}) -> void:
 	employee_ids.sort_custom(func(a: String, b: String) -> bool:
-		var priority_a := _structure_assignment_prior(a, observation)
-		var priority_b := _structure_assignment_prior(b, observation)
+		var priority_a := _structure_assignment_prior(a, observation, null, Callable(), options)
+		var priority_b := _structure_assignment_prior(b, observation, null, Callable(), options)
 		if not is_equal_approx(priority_a, priority_b):
 			return priority_a > priority_b
 		return a < b
@@ -1360,18 +1521,18 @@ static func _sorted_marketable_product_ids() -> Array[String]:
 	out.sort()
 	return out
 
-static func _sorted_marketable_product_ids_for_observation(observation: ObservationState) -> Array[String]:
+static func _sorted_marketable_product_ids_for_observation(observation: ObservationState, plan_hints: Dictionary = {}) -> Array[String]:
 	var out := _sorted_marketable_product_ids()
 	out.sort_custom(func(a: String, b: String) -> bool:
-		var prior_a := _marketing_product_prior(a, observation)
-		var prior_b := _marketing_product_prior(b, observation)
+		var prior_a := _marketing_product_prior(a, observation, plan_hints)
+		var prior_b := _marketing_product_prior(b, observation, plan_hints)
 		if not is_equal_approx(prior_a, prior_b):
 			return prior_a > prior_b
 		return a < b
 	)
 	return out
 
-static func _sort_marketing_products_for_source_state(products: Array[String], observation: ObservationState, source_state: GameState, source_analysis: Dictionary = {}) -> void:
+static func _sort_marketing_products_for_source_state(products: Array[String], observation: ObservationState, source_state: GameState, source_analysis: Dictionary = {}, plan_hints: Dictionary = {}) -> void:
 	if products.is_empty() or observation == null or source_state == null:
 		return
 	var pressure_by_product := {}
@@ -1389,8 +1550,8 @@ static func _sort_marketing_products_for_source_state(products: Array[String], o
 		var gap_b := int(pressure_by_product.get(b, 0))
 		if gap_a != gap_b:
 			return gap_a > gap_b
-		var prior_a := _marketing_product_prior(a, observation)
-		var prior_b := _marketing_product_prior(b, observation)
+		var prior_a := _marketing_product_prior(a, observation, plan_hints)
+		var prior_b := _marketing_product_prior(b, observation, plan_hints)
 		if not is_equal_approx(prior_a, prior_b):
 			return prior_a > prior_b
 		return a < b
@@ -1589,7 +1750,8 @@ static func _rank_marketing_candidate_positions(
 	board_def: MarketingDef,
 	marketing_type: String,
 	rotation: int,
-	discarded: Array[String] = []
+	discarded: Array[String] = [],
+	plan_hints: Dictionary = {}
 ) -> Array:
 	if observation == null or context == null or source_state == null or board_def == null or product_id.is_empty() or positions.size() <= 1:
 		return positions.duplicate()
@@ -1617,6 +1779,7 @@ static func _rank_marketing_candidate_positions(
 			if not affected_ids.is_empty():
 				var service_features := MarketingPressureAnalyzerClass.analyze_candidate(observation, affected_ids, product_id, source_state, source_analysis)
 				score = _marketing_position_service_score(service_features)
+				score += _plan_hints_house_bonus(plan_hints, affected_ids)
 				if score <= MARKETING_POSITION_LOST_SCORE:
 					discard_reason = MarketingPressureAnalyzerClass.discard_reason(service_features)
 			else:
@@ -2053,43 +2216,57 @@ static func _recruit_prior_with_route_plan(employee_id: String, observation: Obs
 	var price_route_ready := bool(route_plan.get("price_route_ready", false))
 	var owns_price := bool(route_plan.get("owns_price", false))
 	var waitress_ready := bool(route_plan.get("waitress_support_ready", false))
+	var base := 0.0
 	match employee_id:
 		"kitchen_trainee":
-			return 3.0 if int(owned.get("kitchen_trainee", 0)) <= 0 and not _owns_employee_role(observation.own_player, "produce_food") else 0.25
+			base = 3.0 if int(owned.get("kitchen_trainee", 0)) <= 0 and not _owns_employee_role(observation.own_player, "produce_food") else 0.25
 		"marketing_trainee":
-			return 2.8 if int(owned.get("marketing_trainee", 0)) <= 0 and not _owns_employee_role(observation.own_player, "marketing") else 0.25
+			base = 2.8 if int(owned.get("marketing_trainee", 0)) <= 0 and not _owns_employee_role(observation.own_player, "marketing") else 0.25
 		"management_trainee":
 			if int(owned.get("new_business_developer", 0)) <= 0 and int(owned.get("management_trainee", 0)) <= 0:
-				return 2.6 if bool(route_plan.get("house_growth_ready", false)) else 0.25
-			return 0.2
+				base = 2.6 if bool(route_plan.get("house_growth_ready", false)) else 0.25
+			else:
+				base = 0.2
 		"pricing_manager":
 			if price_route_ready and not owns_price and int(owned.get("pricing_manager", 0)) <= 0:
-				return 2.7
-			return 0.2
+				base = 2.7
+			else:
+				base = 0.2
 		"waitress":
 			if stable_income_ready and waitress_ready and int(owned.get("waitress", 0)) <= 0:
-				return 2.4
-			return 0.2
+				base = 2.4
+			else:
+				base = 0.2
 		"trainer":
 			if int(owned.get("trainer", 0)) <= 0 and _has_trainable_owned_employee(observation):
-				return 3.2
-			return 0.7 if int(owned.get("trainer", 0)) <= 0 else 0.2
+				base = 3.2
+			else:
+				base = 0.7 if int(owned.get("trainer", 0)) <= 0 else 0.2
 		"recruiting_girl":
 			if stable_income_ready and int(owned.get("recruiting_girl", 0)) <= 0:
-				return 1.4
-			return 0.2
+				base = 1.4
+			else:
+				base = 0.2
 		"errand_boy":
-			return 2.2 if not _can_supply_any_drink(observation) else 0.2
+			base = 2.2 if not _can_supply_any_drink(observation) else 0.2
 		_:
 			if role == "price":
-				return 1.5 if price_route_ready and not owns_price else 0.2
-			return 0.5
+				base = 1.5 if price_route_ready and not owns_price else 0.2
+			else:
+				base = 0.5
+	return base + _route_plan_employee_hint_bonus(route_plan, employee_id, role, "recruit")
 
 static func _recruit_route_plan(observation: ObservationState, options: Dictionary = {}) -> Dictionary:
 	if observation == null:
 		return {}
 	var income_analysis := StrategyIncomeAnalyzerClass.analyze(observation, null, _source_state_from_options(options))
-	return StrategyRoutePlannerClass.analyze(observation, income_analysis, null)
+	var route_plan := StrategyRoutePlannerClass.analyze(observation, income_analysis, null)
+	var plan_hints := _plan_hints_dict(options)
+	route_plan["preferred_employee_ids"] = _string_array(plan_hints.get("preferred_employee_ids", []))
+	route_plan["preferred_employee_roles"] = _string_array(plan_hints.get("preferred_employee_roles", []))
+	route_plan["preferred_actions"] = _string_array(plan_hints.get("preferred_actions", []))
+	route_plan["execution_sequence"] = _string_array(plan_hints.get("execution_sequence", []))
+	return route_plan
 
 static func _employee_role(employee_id: String) -> String:
 	if employee_id.is_empty() or not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(employee_id):
@@ -2108,11 +2285,12 @@ static func _structure_assignment_prior(
 ) -> float:
 	if observation == null or employee_id.is_empty():
 		return 0.0
+	var hint_bonus := _plan_hints_employee_bonus(_plan_hints_dict(options), employee_id, _employee_role(employee_id), "restructure_employee")
 	if _is_train_provider_employee(employee_id) and _has_trainable_reserve_employee(observation):
-		return 5.0
+		return 5.0 + hint_bonus
 	if _should_preserve_for_training(employee_id, observation, context, validate_command, options):
 		return -5.0
-	return 0.0
+	return hint_bonus
 
 static func _submit_restructuring_prior(observation: ObservationState) -> float:
 	if _has_active_train_provider(observation) and _has_trainable_reserve_employee(observation):
@@ -2138,33 +2316,40 @@ static func _train_prior(
 ) -> float:
 	if target_employee.is_empty():
 		return 0.0
+	var base := 0.0
 	match target_employee:
 		"new_business_developer":
-			return 3.0
+			base = 3.0
 		"burger_cook", "pizza_cook":
-			return 1.0 + _product_pipeline_prior(_food_for_cook(target_employee), observation)
+			base = 1.0 + _product_pipeline_prior(_food_for_cook(target_employee), observation, options)
 		"campaign_manager":
 			var unblock_prior := _marketing_training_unblock_prior(from_employee, target_employee, observation, context, validate_command, options)
 			if unblock_prior > 0.0:
-				return unblock_prior
-			return 0.8
-	if not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(target_employee):
-		return 0.2 if not from_employee.is_empty() else 0.0
-	var target_def_val = EmployeeRegistryClass.get_def(target_employee)
-	if not (target_def_val is EmployeeDef):
-		return 0.2 if not from_employee.is_empty() else 0.0
-	var target_def: EmployeeDef = target_def_val
-	return _generic_train_prior(from_employee, target_employee, target_def, observation)
+				base = unblock_prior
+			else:
+				base = 0.8
+		_:
+			if not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(target_employee):
+				base = 0.2 if not from_employee.is_empty() else 0.0
+			else:
+				var target_def_val = EmployeeRegistryClass.get_def(target_employee)
+				if not (target_def_val is EmployeeDef):
+					base = 0.2 if not from_employee.is_empty() else 0.0
+				else:
+					var target_def: EmployeeDef = target_def_val
+					base = _generic_train_prior(from_employee, target_employee, target_def, observation, options)
+	var plan_hints := _plan_hints_dict(options)
+	return base + _plan_hints_employee_bonus(plan_hints, target_employee, _employee_role(target_employee), "train")
 
-static func _generic_train_prior(from_employee: String, target_employee: String, target_def: EmployeeDef, observation: ObservationState) -> float:
+static func _generic_train_prior(from_employee: String, target_employee: String, target_def: EmployeeDef, observation: ObservationState, options: Dictionary = {}) -> float:
 	if target_def == null:
 		return 0.0
 	match str(target_def.role):
 		"produce_food":
-			var production_prior := _best_production_target_prior(target_def, observation)
+			var production_prior := _best_production_target_prior(target_def, observation, options)
 			return 0.9 + production_prior if production_prior >= 0.5 else 0.65
 		"procure_drink":
-			return 1.0 + _best_drink_pipeline_prior(observation) + float(maxi(0, int(target_def.range_value))) * 0.02
+			return 1.0 + _best_drink_pipeline_prior(observation, options) + float(maxi(0, int(target_def.range_value))) * 0.02
 		"manager":
 			return 1.0 + float(clampi(int(target_def.manager_slots), 0, 10)) * 0.08
 		"recruit_train":
@@ -2186,21 +2371,21 @@ static func _generic_train_prior(from_employee: String, target_employee: String,
 			return _special_train_prior(target_def, observation)
 	return 0.75 if not from_employee.is_empty() else 0.0
 
-static func _best_production_target_prior(target_def: EmployeeDef, observation: ObservationState) -> float:
+static func _best_production_target_prior(target_def: EmployeeDef, observation: ObservationState, options: Dictionary = {}) -> float:
 	if target_def == null:
 		return 0.0
 	var best := 0.0
 	for product_id in target_def.get_production_food_options():
-		best = maxf(best, _product_pipeline_prior(str(product_id), observation))
+		best = maxf(best, _product_pipeline_prior(str(product_id), observation, options))
 	return best
 
-static func _best_drink_pipeline_prior(observation: ObservationState) -> float:
+static func _best_drink_pipeline_prior(observation: ObservationState, options: Dictionary = {}) -> float:
 	if observation == null or not ProductRegistryClass.is_loaded():
 		return 0.0
 	var best := 0.0
 	for product_id in ProductRegistryClass.get_all_ids():
 		if ProductRegistryClass.is_drink(product_id):
-			best = maxf(best, _product_pipeline_prior(product_id, observation))
+			best = maxf(best, _product_pipeline_prior(product_id, observation, options))
 	return best
 
 static func _special_train_prior(target_def: EmployeeDef, observation: ObservationState) -> float:
@@ -2318,7 +2503,7 @@ static func _compute_marketing_employee_has_effective_candidate(
 	var grid_size := _read_grid_size(observation.map_public)
 	if grid_size.x <= 0 or grid_size.y <= 0:
 		return true
-	var products := _sorted_marketable_product_ids_for_observation(observation)
+	var products := _sorted_marketable_product_ids_for_observation(observation, _plan_hints_dict(options))
 	if products.is_empty():
 		return false
 	var product_id := str(products[0])
@@ -2363,7 +2548,7 @@ static func _compute_marketing_employee_has_effective_candidate(
 					return true
 	return false
 
-static func _marketing_product_prior(product_id: String, observation: ObservationState) -> float:
+static func _marketing_product_prior(product_id: String, observation: ObservationState, plan_hints: Dictionary = {}) -> float:
 	if product_id.is_empty() or observation == null:
 		return 0.0
 	var prior := 0.2
@@ -2377,6 +2562,7 @@ static func _marketing_product_prior(product_id: String, observation: Observatio
 	elif _can_supply_product(product_id, observation):
 		prior += 0.35
 	prior += float(_public_demand_count_for_product(observation, product_id)) * 0.25
+	prior += _plan_hints_product_bonus(plan_hints, product_id)
 	return prior
 
 static func _marketing_product_supply_rank(product_id: String, observation: ObservationState) -> int:
@@ -2391,7 +2577,7 @@ static func _marketing_product_supply_rank(product_id: String, observation: Obse
 		return 1
 	return 0
 
-static func _product_pipeline_prior(product_id: String, observation: ObservationState) -> float:
+static func _product_pipeline_prior(product_id: String, observation: ObservationState, options: Dictionary = {}) -> float:
 	if product_id.is_empty() or observation == null:
 		return 0.0
 	var demand := _public_demand_count_for_product(observation, product_id)
@@ -2404,6 +2590,8 @@ static func _product_pipeline_prior(product_id: String, observation: Observation
 			prior += 0.5
 		elif inventory_count <= 0:
 			prior += 0.1
+	var plan_hints := _plan_hints_dict(options)
+	prior += _plan_hints_product_bonus(plan_hints, product_id)
 	return prior
 
 static func _public_demand_count_for_product(observation: ObservationState, product_id: String) -> int:

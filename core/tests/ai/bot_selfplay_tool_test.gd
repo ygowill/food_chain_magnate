@@ -10,13 +10,16 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var mcts_support := _test_mcts_bot_support()
 	if not mcts_support.ok:
 		return mcts_support
+	var strategic_support := _test_strategic_bot_support()
+	if not strategic_support.ok:
+		return strategic_support
 	var mandatory_summary := _test_mandatory_completion_summary_counts_untraced_auto_actions()
 	if not mandatory_summary.ok:
 		return mandatory_summary
 	var smoke := _test_run_mixed_bot_config()
 	if not smoke.ok:
 		return smoke
-	return Result.success({"cases": 4})
+	return Result.success({"cases": 5})
 
 static func _test_parse_mixed_bot_args() -> Result:
 	var parsed := SelfplayToolClass._parse_args([
@@ -64,22 +67,120 @@ static func _test_mcts_bot_support() -> Result:
 	var parsed := SelfplayToolClass._parse_args([
 		"--bot=mcts",
 		"--matches=1",
+		"--mcts-iterations=8",
+		"--mcts-max-depth=2",
+		"--mcts-top-k-per-node=3",
+		"--mcts-exploration=1.1",
+		"--mcts-min-simulation-budget-ms=12",
+		"--mcts-candidate-attempt-multiplier=5",
+		"--mcts-root-prior-min-visits-per-child=3",
+		"--mcts-enabled-strategies=working_recruit_income_route,working_get_food_supply",
+		"--mcts-config-id=fast",
 	])
 	if not parsed.ok:
 		return parsed
 	if str(Dictionary(parsed.value).get("bot_id", "")) != "mcts":
 		return Result.failure("--bot should parse mcts: %s" % str(parsed.value))
+	var mcts_options: Dictionary = Dictionary(Dictionary(parsed.value).get("mcts_options", {}))
+	if int(mcts_options.get("mcts_iterations", 0)) != 8:
+		return Result.failure("--mcts-iterations parse mismatch: %s" % str(parsed.value))
+	if int(mcts_options.get("mcts_max_depth", 0)) != 2:
+		return Result.failure("--mcts-max-depth parse mismatch: %s" % str(parsed.value))
+	if int(mcts_options.get("mcts_top_k_per_node", 0)) != 3:
+		return Result.failure("--mcts-top-k-per-node parse mismatch: %s" % str(parsed.value))
+	if not is_equal_approx(float(mcts_options.get("mcts_exploration", 0.0)), 1.1):
+		return Result.failure("--mcts-exploration parse mismatch: %s" % str(parsed.value))
+	if int(mcts_options.get("mcts_min_simulation_budget_ms", 0)) != 12:
+		return Result.failure("--mcts-min-simulation-budget-ms parse mismatch: %s" % str(parsed.value))
+	if int(mcts_options.get("mcts_candidate_attempt_multiplier", 0)) != 5:
+		return Result.failure("--mcts-candidate-attempt-multiplier parse mismatch: %s" % str(parsed.value))
+	if int(mcts_options.get("mcts_root_prior_min_visits_per_child", 0)) != 3:
+		return Result.failure("--mcts-root-prior-min-visits-per-child parse mismatch: %s" % str(parsed.value))
+	if str(mcts_options.get("mcts_enabled_strategy_ids", [])) != str(["working_recruit_income_route", "working_get_food_supply"]):
+		return Result.failure("--mcts-enabled-strategies parse mismatch: %s" % str(parsed.value))
+	var display_config := SelfplayToolClass._bot_config_id(SelfplayToolClass._bot_config_ids_for_display(["mcts"], mcts_options))
+	if display_config != "mcts-fast":
+		return Result.failure("mcts display config should include config id: %s" % display_config)
 	var resolved := SelfplayToolClass._resolve_bot_ids(Dictionary(parsed.value), 1)
 	if not resolved.ok:
 		return resolved
 	if str(resolved.value) != str(["mcts"]):
 		return Result.failure("resolved mcts bot ids mismatch: %s" % str(resolved.value))
-	var bot_read := SelfplayToolClass._create_bot("mcts", "base_revenue_growth_v1")
+	var bot_read := SelfplayToolClass._create_bot("mcts", "base_revenue_growth_v1", mcts_options)
 	if not bot_read.ok:
 		return bot_read
 	var bot = bot_read.value
 	if bot == null or not bot.has_method("choose_command_with_engine"):
 		return Result.failure("mcts bot should expose choose_command_with_engine")
+	return Result.success()
+
+static func _test_strategic_bot_support() -> Result:
+	if not SelfplayToolClass.SUPPORTED_BOT_IDS.has("strategic"):
+		return Result.failure("SUPPORTED_BOT_IDS should include strategic: %s" % str(SelfplayToolClass.SUPPORTED_BOT_IDS))
+	var parsed := SelfplayToolClass._parse_args([
+		"--bot=strategic",
+		"--matches=1",
+		"--strategic-search=beam",
+		"--strategic-budget-profile=play",
+		"--strategic-horizon-decisions=8",
+		"--strategic-horizon-rounds=1",
+		"--strategic-max-plans=3",
+		"--strategic-rollout-step-budget-ms=12",
+		"--strategic-min-search-budget-ms=260",
+		"--strategic-min-plans-for-rollout=2",
+		"--strategic-config-id=fast_plan",
+	])
+	if not parsed.ok:
+		return parsed
+	if str(Dictionary(parsed.value).get("bot_id", "")) != "strategic":
+		return Result.failure("--bot should parse strategic: %s" % str(parsed.value))
+	var strategic_options: Dictionary = Dictionary(Dictionary(parsed.value).get("strategic_options", {}))
+	if str(strategic_options.get("strategic_search", "")) != "beam":
+		return Result.failure("--strategic-search parse mismatch: %s" % str(parsed.value))
+	if str(strategic_options.get("strategic_budget_profile", "")) != "play":
+		return Result.failure("--strategic-budget-profile parse mismatch: %s" % str(parsed.value))
+	if int(strategic_options.get("strategic_horizon_decisions", 0)) != 8:
+		return Result.failure("--strategic-horizon-decisions parse mismatch: %s" % str(parsed.value))
+	if int(strategic_options.get("strategic_horizon_rounds", 0)) != 1:
+		return Result.failure("--strategic-horizon-rounds parse mismatch: %s" % str(parsed.value))
+	if int(strategic_options.get("strategic_max_plans", 0)) != 3:
+		return Result.failure("--strategic-max-plans parse mismatch: %s" % str(parsed.value))
+	if int(strategic_options.get("strategic_rollout_step_budget_ms", 0)) != 12:
+		return Result.failure("--strategic-rollout-step-budget-ms parse mismatch: %s" % str(parsed.value))
+	if int(strategic_options.get("strategic_min_search_budget_ms", 0)) != 260:
+		return Result.failure("--strategic-min-search-budget-ms parse mismatch: %s" % str(parsed.value))
+	if int(strategic_options.get("strategic_min_plans_for_rollout", 0)) != 2:
+		return Result.failure("--strategic-min-plans-for-rollout parse mismatch: %s" % str(parsed.value))
+	var display_config := SelfplayToolClass._bot_config_id(SelfplayToolClass._bot_config_ids_for_display(["strategic"], {}, strategic_options))
+	if display_config != "strategic-fast_plan":
+		return Result.failure("strategic display config should include config id: %s" % display_config)
+	var default_display_config := SelfplayToolClass._bot_config_id(SelfplayToolClass._bot_config_ids_for_display(["strategic"], {}, {}))
+	if default_display_config != "strategic-play":
+		return Result.failure("strategic display config should default to play budget profile: %s" % default_display_config)
+	var tuning_display_config := SelfplayToolClass._bot_config_id(SelfplayToolClass._bot_config_ids_for_display(["strategic"], {}, {
+		"strategic_config_id": "fast_plan",
+		"strategic_budget_profile": "tuning",
+	}))
+	if tuning_display_config != "strategic-fast_plan-tuning":
+		return Result.failure("strategic display config should distinguish tuning budget profile: %s" % tuning_display_config)
+	var bot_read := SelfplayToolClass._create_bot("strategic", "base_revenue_growth_v1", strategic_options)
+	if not bot_read.ok:
+		return bot_read
+	var bot = bot_read.value
+	if bot == null or not bot.has_method("choose_command_with_engine"):
+		return Result.failure("strategic bot should expose choose_command_with_engine")
+	var bad_search := SelfplayToolClass._parse_args(["--strategic-search=random"])
+	if bad_search.ok:
+		return Result.failure("--strategic-search should reject unsupported mode")
+	var bad_step_budget := SelfplayToolClass._parse_args(["--strategic-rollout-step-budget-ms=0"])
+	if bad_step_budget.ok:
+		return Result.failure("--strategic-rollout-step-budget-ms should reject non-positive values")
+	var bad_min_search := SelfplayToolClass._parse_args(["--strategic-min-search-budget-ms=0"])
+	if bad_min_search.ok:
+		return Result.failure("--strategic-min-search-budget-ms should reject non-positive values")
+	var bad_min_plans := SelfplayToolClass._parse_args(["--strategic-min-plans-for-rollout=0"])
+	if bad_min_plans.ok:
+		return Result.failure("--strategic-min-plans-for-rollout should reject non-positive values")
 	return Result.success()
 
 static func _test_mandatory_completion_summary_counts_untraced_auto_actions() -> Result:

@@ -29,8 +29,6 @@ const TUNING_OBJECTIVE_WEIGHTS := {
 	"pre_revenue_pricing_manager_recruit_avg": -60.0,
 	"pre_revenue_procure_drinks_avg": -80.0,
 	"avg_command_count": -0.25,
-	"search_time_ms_avg_per_match": -0.05,
-	"search_budget_expired_avg_per_match": -25.0,
 }
 
 const OPENING_SCALAR_KEYS := [
@@ -583,8 +581,6 @@ static func _build_tuning_objective(bot: Dictionary) -> Dictionary:
 	var opening_val = bot.get("opening", {})
 	var opening: Dictionary = opening_val if opening_val is Dictionary else {}
 	var opening_scalars: Dictionary = Dictionary(opening.get("scalar_avg_per_match", {}))
-	var search_val = bot.get("search", {})
-	var search: Dictionary = search_val if search_val is Dictionary else {}
 	var matches := int(bot.get("matches", 0))
 	var milestone_counts_val = bot.get("milestone_counts", {})
 	var milestone_counts: Dictionary = milestone_counts_val if milestone_counts_val is Dictionary else {}
@@ -606,8 +602,6 @@ static func _build_tuning_objective(bot: Dictionary) -> Dictionary:
 		"pre_revenue_pricing_manager_recruit_avg": _weighted(float(opening_scalars.get("pre_revenue_pricing_manager_recruit_count", 0.0)), "pre_revenue_pricing_manager_recruit_avg"),
 		"pre_revenue_procure_drinks_avg": _weighted(float(opening_scalars.get("pre_revenue_procure_drinks_count", 0.0)), "pre_revenue_procure_drinks_avg"),
 		"avg_command_count": _weighted(float(bot.get("avg_command_count", 0.0)), "avg_command_count"),
-		"search_time_ms_avg_per_match": _weighted(float(search.get("time_ms_avg_per_match", 0.0)), "search_time_ms_avg_per_match"),
-		"search_budget_expired_avg_per_match": _weighted(float(search.get("budget_expired_avg_per_match", 0.0)), "search_budget_expired_avg_per_match"),
 	}
 	return {
 		"score": _round3(_sum_numeric_values(components)),

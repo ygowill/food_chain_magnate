@@ -1,6 +1,6 @@
 # 人机对手 Phase 0/1 任务拆解
 
-本文是 [fcm_heuristic_bot_implementation_plan.md](fcm_heuristic_bot_implementation_plan.md) 的执行拆解，目标是把“能开始实现”的第一批任务切到可开发、可测试、可验收的粒度。
+本文是 [当前结论与进度](README.md) 的执行拆解，目标是把“能开始实现”的第一批任务切到可开发、可测试、可验收的粒度。
 
 范围只覆盖：
 

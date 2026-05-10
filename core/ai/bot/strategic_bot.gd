@@ -1,0 +1,486 @@
+class_name StrategicBot
+extends "res://core/ai/bot/fcm_bot.gd"
+
+const StrategicSearchClass = preload("res://core/ai/planning/strategic_search.gd")
+const StrategyPlanHintsClass = preload("res://core/ai/planning/strategic_plan_hints.gd")
+const StrategyBotClass = preload("res://core/ai/bot/strategy_bot.gd")
+const StrategyProfileClass = preload("res://core/ai/strategy/strategy_profile.gd")
+
+const FINAL_DECISION_RESERVE_MS := 32
+const MIN_PLAN_SEARCH_MS := 16
+const DEFAULT_MIN_PLAN_SEARCH_MS := 240
+const DEFAULT_MIN_PLANS_FOR_ROLLOUT := 1
+const DEFAULT_BUDGET_PROFILE := "play"
+const STRATEGIC_ACTION_IDS := [
+	"recruit",
+	"train",
+	"restructure_employee",
+	"set_company_structure_direct",
+	"set_company_structure_report",
+	"initiate_marketing",
+	"produce_food",
+	"procure_drinks",
+	"set_price",
+	"set_discount",
+	"set_luxury_price",
+	"place_house",
+	"add_garden",
+	"place_restaurant",
+	"move_restaurant",
+]
+
+var search_options: Dictionary = {
+	"strategic_search": "beam",
+	"strategic_budget_profile": DEFAULT_BUDGET_PROFILE,
+	"strategic_horizon_decisions": 16,
+	"strategic_horizon_rounds": 2,
+	"strategic_max_plans": 6,
+	"strategic_rollout_step_budget_ms": 40,
+	"strategic_min_search_budget_ms": DEFAULT_MIN_PLAN_SEARCH_MS,
+	"strategic_min_plans_for_rollout": DEFAULT_MIN_PLANS_FOR_ROLLOUT,
+	"strategic_config_id": "plan_beam_v0",
+}
+var explicit_search_options: Dictionary = {}
+var profile = null
+var fallback_bot = StrategyBotClass.new()
+var _cached_plan = null
+var _cached_plan_key: String = ""
+var _cached_search_payload: Dictionary = {}
+
+func _init() -> void:
+	profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+
+func configure_profile(profile_source: String) -> Result:
+	var loaded = StrategyProfileClass.new()
+	var load_read := loaded.configure(profile_source)
+	if not load_read.ok:
+		return load_read
+	profile = loaded
+	var fallback_read := fallback_bot.configure_profile(profile_source)
+	if not fallback_read.ok:
+		return fallback_read
+	_clear_plan_cache()
+	return Result.success()
+
+func configure_search_options(options: Dictionary) -> Result:
+	if options == null:
+		return Result.success()
+	for key in options.keys():
+		explicit_search_options[str(key)] = options.get(key, null)
+	_clear_plan_cache()
+	return Result.success()
+
+func choose_command(
+	observation: ObservationState,
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	validate_command: Callable = Callable(),
+	budget: TimeBudget = null
+) -> BotDecision:
+	var fallback := fallback_bot.choose_command(observation, context, legal_action_ids, validate_command, budget)
+	if fallback != null and not fallback.is_failure():
+		fallback.trace["strategic_skipped"] = "no_engine"
+		fallback.explanation["fallback"] = "strategy"
+		fallback.explanation["strategic_skipped"] = "no_engine"
+		return fallback
+	return fallback
+
+func choose_command_with_engine(
+	engine: GameEngine,
+	observation: ObservationState,
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	validate_command: Callable = Callable(),
+	budget: TimeBudget = null
+) -> BotDecision:
+	var start_ms := Time.get_ticks_msec()
+	if engine == null:
+		return choose_command(observation, context, legal_action_ids, validate_command, budget)
+	var options := _effective_options()
+	var search_mode := str(options.get("strategic_search", "beam")).strip_edges()
+	var budget_profile := str(options.get("strategic_budget_profile", DEFAULT_BUDGET_PROFILE)).strip_edges()
+	if search_mode == "none":
+		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, budget, "disabled")
+	if not _has_strategic_action(legal_action_ids):
+		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, budget, "no_strategic_legal_actions")
+	if budget != null and budget.expired():
+		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, null, "budget_expired")
+	var cached_plan = _cached_plan_for_current_window(observation, context, legal_action_ids)
+	if cached_plan != null:
+		return _choose_with_plan(
+			engine,
+			observation,
+			context,
+			legal_action_ids,
+			validate_command,
+			budget,
+			cached_plan,
+			_cached_search_payload,
+			options,
+			search_mode,
+			start_ms,
+			true,
+			budget_profile
+		)
+	if search_mode == "mcts":
+		return _choose_with_mcts(
+			engine,
+			observation,
+			context,
+			legal_action_ids,
+			validate_command,
+			budget,
+			options,
+			start_ms
+		)
+	var search_budget := _plan_search_budget(budget, int(options.get("strategic_min_search_budget_ms", DEFAULT_MIN_PLAN_SEARCH_MS)))
+	if budget != null and search_budget == null:
+		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, budget, "insufficient_plan_search_budget")
+	var max_plans := maxi(1, int(options.get("strategic_max_plans", 6)))
+	var min_plans_for_rollout := mini(max_plans, maxi(1, int(options.get("strategic_min_plans_for_rollout", DEFAULT_MIN_PLANS_FOR_ROLLOUT))))
+	var search_read := StrategicSearchClass.choose_plan_beam(
+		engine,
+		observation,
+		profile,
+		search_budget,
+		{
+			"max_plans": max_plans,
+			"min_plans_for_rollout": min_plans_for_rollout,
+			"horizon_decisions": int(options.get("strategic_horizon_decisions", 16)),
+			"horizon_rounds": int(options.get("strategic_horizon_rounds", 2)),
+			"step_budget_ms": int(options.get("strategic_rollout_step_budget_ms", 40)),
+		}
+	)
+	if not search_read.ok:
+		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), search_read.error)
+	var search_payload: Dictionary = search_read.value
+	var plan_val = search_payload.get("plan", null)
+	if plan_val == null or not plan_val.has_method("to_trace_dict"):
+		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), "selected plan is null")
+	var plan = plan_val
+	_store_plan_cache(observation, context, plan, search_payload, legal_action_ids)
+	return _choose_with_plan(
+		engine,
+		observation,
+		context,
+		legal_action_ids,
+		validate_command,
+		budget,
+		plan,
+		search_payload,
+		options,
+		search_mode,
+		start_ms,
+		false,
+		budget_profile
+	)
+
+func _choose_with_plan(
+	engine: GameEngine,
+	observation: ObservationState,
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	validate_command: Callable,
+	budget: TimeBudget,
+	plan,
+	search_payload: Dictionary,
+	options: Dictionary,
+	search_mode: String,
+	start_ms: int,
+	used_cached_plan: bool,
+	budget_profile: String
+) -> BotDecision:
+	var hints = StrategyPlanHintsClass.from_plan(plan)
+	var final_budget := _final_decision_budget(budget)
+	var decision := fallback_bot.choose_command_with_engine_and_plan_hints(
+		engine,
+		observation,
+		context,
+		legal_action_ids,
+		hints,
+		validate_command,
+		final_budget
+	)
+	if decision != null and not decision.is_failure():
+		var strategy_time_ms := int(decision.trace.get("time_ms", decision.explanation.get("time_ms", 0)))
+		var plan_search_time_ms := 0 if used_cached_plan else int(search_payload.get("time_ms", 0))
+		var elapsed_ms := maxi(strategy_time_ms + plan_search_time_ms, Time.get_ticks_msec() - start_ms)
+		var plan_budget_expired := false if used_cached_plan else bool(search_payload.get("budget_expired", false))
+		var final_budget_expired := final_budget != null and final_budget.expired()
+		var decision_budget_expired := (budget != null and budget.expired()) or final_budget_expired
+		decision.trace["search"] = "strategic_cached" if used_cached_plan else "strategic"
+		decision.trace["bot"] = "StrategicBot"
+		decision.trace["strategic_search"] = search_mode
+		decision.trace["strategic_budget_profile"] = budget_profile
+		decision.trace["strategic_config_id"] = str(options.get("strategic_config_id", ""))
+		decision.trace["strategic_plan_cached"] = used_cached_plan
+		decision.trace["plan_id"] = plan.id
+		decision.trace["route_type"] = plan.route_type
+		decision.trace["plan_prior_score"] = plan.prior_score
+		decision.trace["plan_eval_score"] = float(search_payload.get("score", 0.0))
+		decision.trace["plan_eval_breakdown"] = _best_breakdown(search_payload)
+		decision.trace["plan_eval_telemetry"] = Dictionary(search_payload.get("telemetry", {})).duplicate(true)
+		decision.trace["plan_rollout_stop_reason"] = _best_stop_reason(search_payload)
+		decision.trace["plan_search_time_ms"] = plan_search_time_ms
+		decision.trace["strategy_time_ms"] = strategy_time_ms
+		decision.trace["time_ms"] = elapsed_ms
+		decision.trace["plan_search_budget_expired"] = plan_budget_expired
+		decision.trace["final_decision_budget_expired"] = final_budget_expired
+		decision.trace["budget_expired"] = decision_budget_expired
+		decision.trace["evaluated_plans"] = Array(search_payload.get("evaluated_plans", [])).duplicate(true)
+		decision.trace["mcts_iterations"] = int(search_payload.get("mcts_iterations", 0))
+		decision.trace["mcts_root_visits"] = int(search_payload.get("mcts_root_visits", 0))
+		decision.trace["mcts_root_q"] = float(search_payload.get("mcts_root_q", 0.0))
+		decision.trace["mcts_selected_q"] = float(search_payload.get("mcts_selected_q", 0.0))
+		decision.trace["mcts_selected_value_score"] = float(search_payload.get("mcts_selected_value_score", search_payload.get("score", 0.0)))
+		decision.trace["mcts_root_child_count"] = int(search_payload.get("mcts_root_child_count", 0))
+		decision.trace["mcts_root_raw_child_count"] = int(search_payload.get("mcts_root_raw_child_count", decision.trace.get("mcts_root_child_count", 0)))
+		decision.trace["mcts_root_selection_mode"] = str(search_payload.get("mcts_root_selection_mode", ""))
+		decision.explanation["search"] = "strategic_cached" if used_cached_plan else "strategic"
+		decision.explanation["strategic_budget_profile"] = budget_profile
+		decision.explanation["plan_id"] = plan.id
+		decision.explanation["route_type"] = plan.route_type
+		decision.explanation["plan_eval_score"] = float(search_payload.get("score", 0.0))
+		decision.explanation["plan_eval_telemetry"] = Dictionary(search_payload.get("telemetry", {})).duplicate(true)
+		decision.explanation["strategic_plan_cached"] = used_cached_plan
+		decision.explanation["plan_search_time_ms"] = plan_search_time_ms
+		decision.explanation["strategy_time_ms"] = strategy_time_ms
+		decision.explanation["time_ms"] = elapsed_ms
+		decision.explanation["plan_search_budget_expired"] = plan_budget_expired
+		decision.explanation["final_decision_budget_expired"] = final_budget_expired
+		decision.explanation["budget_expired"] = decision_budget_expired
+		decision.explanation["evaluated_plans"] = Array(search_payload.get("evaluated_plans", [])).duplicate(true)
+		decision.explanation["mcts_iterations"] = int(search_payload.get("mcts_iterations", 0))
+		decision.explanation["mcts_root_visits"] = int(search_payload.get("mcts_root_visits", 0))
+		decision.explanation["mcts_root_q"] = float(search_payload.get("mcts_root_q", 0.0))
+		decision.explanation["mcts_selected_q"] = float(search_payload.get("mcts_selected_q", 0.0))
+		decision.explanation["mcts_selected_value_score"] = float(search_payload.get("mcts_selected_value_score", search_payload.get("score", 0.0)))
+		decision.explanation["mcts_root_child_count"] = int(search_payload.get("mcts_root_child_count", 0))
+		decision.explanation["mcts_root_raw_child_count"] = int(search_payload.get("mcts_root_raw_child_count", decision.explanation.get("mcts_root_child_count", 0)))
+		decision.explanation["mcts_root_selection_mode"] = str(search_payload.get("mcts_root_selection_mode", ""))
+		return decision
+	return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), "hinted strategy failed")
+
+func _choose_with_mcts(
+	engine: GameEngine,
+	observation: ObservationState,
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	validate_command: Callable,
+	budget: TimeBudget,
+	options: Dictionary,
+	start_ms: int
+) -> BotDecision:
+	var search_budget := _plan_search_budget(budget, int(options.get("strategic_min_search_budget_ms", DEFAULT_MIN_PLAN_SEARCH_MS)))
+	if budget != null and search_budget == null:
+		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, budget, "insufficient_plan_search_budget")
+	var search_read := StrategicSearchClass.choose_plan_mcts(
+		engine,
+		observation,
+		profile,
+		search_budget,
+		options
+	)
+	if not search_read.ok:
+		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), search_read.error)
+	var search_payload: Dictionary = search_read.value
+	var budget_profile := str(options.get("strategic_budget_profile", DEFAULT_BUDGET_PROFILE)).strip_edges()
+	var plan_val = search_payload.get("plan", null)
+	if plan_val == null or not plan_val.has_method("to_trace_dict"):
+		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), "selected plan is null")
+	var plan = plan_val
+	_store_plan_cache(observation, context, plan, search_payload, legal_action_ids)
+	return _choose_with_plan(
+		engine,
+		observation,
+		context,
+		legal_action_ids,
+		validate_command,
+		budget,
+		plan,
+		search_payload,
+		options,
+		"mcts",
+		start_ms,
+		false,
+		budget_profile
+	)
+
+func _fallback_with_reason(
+	engine: GameEngine,
+	observation: ObservationState,
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	validate_command: Callable,
+	budget: TimeBudget,
+	reason: String
+) -> BotDecision:
+	var fallback := fallback_bot.choose_command_with_engine(engine, observation, context, legal_action_ids, validate_command, budget)
+	if fallback != null and not fallback.is_failure():
+		fallback.trace["strategic_failure"] = reason
+		fallback.explanation["fallback"] = "strategy"
+		fallback.explanation["strategic_failure"] = reason
+		return fallback
+	return fallback
+
+func _effective_options() -> Dictionary:
+	var out := search_options.duplicate(true)
+	var budget_profile := _strategic_budget_profile_name(str(explicit_search_options.get("strategic_budget_profile", out.get("strategic_budget_profile", DEFAULT_BUDGET_PROFILE))))
+	var profile_options := _strategic_budget_profile_options(budget_profile)
+	for key in profile_options.keys():
+		out[str(key)] = profile_options.get(key, null)
+	for key in explicit_search_options.keys():
+		out[str(key)] = explicit_search_options.get(key, null)
+	out["strategic_budget_profile"] = budget_profile
+	return out
+
+static func _strategic_budget_profile_name(raw_profile: String) -> String:
+	var profile := raw_profile.strip_edges()
+	if profile == "play":
+		return "play"
+	if profile == "tuning":
+		return "tuning"
+	return DEFAULT_BUDGET_PROFILE
+
+static func _strategic_budget_profile_options(profile_name: String) -> Dictionary:
+	match _strategic_budget_profile_name(profile_name):
+		"play":
+			return {
+				"strategic_horizon_decisions": 24,
+				"strategic_horizon_rounds": 3,
+				"strategic_max_plans": 8,
+				"strategic_rollout_step_budget_ms": 80,
+				"strategic_min_search_budget_ms": 1200,
+				"strategic_min_plans_for_rollout": 2,
+				"mcts_iterations": 24,
+				"mcts_max_depth": 3,
+				"mcts_top_k_per_node": 6,
+				"mcts_exploration": 1.1,
+				"mcts_prior_weight": 0.25,
+				"mcts_root_prior_min_visits_per_child": 2,
+				"step_budget_ms": 80,
+				"horizon_decisions": 24,
+				"horizon_rounds": 3,
+				"max_plans": 8,
+			}
+		"tuning":
+			return {
+				"strategic_horizon_decisions": 16,
+				"strategic_horizon_rounds": 2,
+				"strategic_max_plans": 6,
+				"strategic_rollout_step_budget_ms": 40,
+				"strategic_min_search_budget_ms": 240,
+				"strategic_min_plans_for_rollout": 1,
+				"mcts_iterations": 16,
+				"mcts_max_depth": 2,
+				"mcts_top_k_per_node": 4,
+				"mcts_exploration": 1.15,
+				"mcts_prior_weight": 0.2,
+				"mcts_root_prior_min_visits_per_child": 2,
+				"step_budget_ms": 40,
+				"horizon_decisions": 16,
+				"horizon_rounds": 2,
+				"max_plans": 6,
+			}
+		_:
+			return {
+				"strategic_horizon_decisions": 24,
+				"strategic_horizon_rounds": 3,
+				"strategic_max_plans": 8,
+				"strategic_rollout_step_budget_ms": 80,
+				"strategic_min_search_budget_ms": 1200,
+				"strategic_min_plans_for_rollout": 2,
+				"mcts_iterations": 24,
+				"mcts_max_depth": 3,
+				"mcts_top_k_per_node": 6,
+				"mcts_exploration": 1.1,
+				"mcts_prior_weight": 0.25,
+				"mcts_root_prior_min_visits_per_child": 2,
+				"step_budget_ms": 80,
+				"horizon_decisions": 24,
+				"horizon_rounds": 3,
+				"max_plans": 8,
+			}
+
+func _cached_plan_for_current_window(observation: ObservationState, context: AiDecisionContext, legal_action_ids: Array[String]):
+	if _cached_plan == null:
+		return null
+	if observation == null or context == null:
+		return null
+	var key := _plan_cache_key(observation, context, legal_action_ids)
+	if key.is_empty() or key != _cached_plan_key:
+		return null
+	return _cached_plan
+
+func _store_plan_cache(observation: ObservationState, context: AiDecisionContext, plan, search_payload: Dictionary, legal_action_ids: Array[String]) -> void:
+	if plan == null or not plan.has_method("is_valid") or observation == null or context == null:
+		_clear_plan_cache()
+		return
+	var key := _plan_cache_key(observation, context, legal_action_ids)
+	if key.is_empty():
+		_clear_plan_cache()
+		return
+	_cached_plan_key = key
+	_cached_plan = plan.duplicate_plan() if plan.has_method("duplicate_plan") else plan
+	_cached_search_payload = search_payload.duplicate(true)
+
+func _clear_plan_cache() -> void:
+	_cached_plan = null
+	_cached_plan_key = ""
+	_cached_search_payload = {}
+
+func _plan_cache_key(observation: ObservationState, context: AiDecisionContext, legal_action_ids: Array[String]) -> String:
+	if observation == null or context == null:
+		return ""
+	return "%d:%d:%s:%s:%s" % [
+		int(context.player_id),
+		int(observation.round_number),
+		str(observation.phase).strip_edges(),
+		str(observation.sub_phase).strip_edges(),
+		_strategic_legal_action_signature(legal_action_ids),
+	]
+
+static func _plan_search_budget(budget: TimeBudget, min_search_ms: int = MIN_PLAN_SEARCH_MS) -> TimeBudget:
+	if budget == null:
+		return null
+	var remaining := int(budget.remaining_ms())
+	var search_ms := remaining - FINAL_DECISION_RESERVE_MS
+	var required_ms := maxi(MIN_PLAN_SEARCH_MS, int(min_search_ms))
+	if search_ms < required_ms:
+		return null
+	return TimeBudget.start(search_ms)
+
+static func _final_decision_budget(budget: TimeBudget) -> TimeBudget:
+	if budget == null:
+		return null
+	var remaining := int(budget.remaining_ms())
+	return TimeBudget.start(maxi(FINAL_DECISION_RESERVE_MS, remaining))
+
+static func _has_strategic_action(legal_action_ids: Array[String]) -> bool:
+	for action_id in STRATEGIC_ACTION_IDS:
+		if legal_action_ids.has(action_id):
+			return true
+	return false
+
+static func _strategic_legal_action_signature(legal_action_ids: Array[String]) -> String:
+	var ids: Array[String] = []
+	for action_id_val in legal_action_ids:
+		var action_id := str(action_id_val).strip_edges()
+		if action_id.is_empty() or not STRATEGIC_ACTION_IDS.has(action_id) or ids.has(action_id):
+			continue
+		ids.append(action_id)
+	ids.sort()
+	return ",".join(ids)
+
+static func _best_breakdown(search_payload: Dictionary) -> Dictionary:
+	var evaluated: Array = Array(search_payload.get("evaluated_plans", []))
+	if evaluated.is_empty() or not (evaluated[0] is Dictionary):
+		return {}
+	return Dictionary(Dictionary(evaluated[0]).get("breakdown", {})).duplicate(true)
+
+static func _best_stop_reason(search_payload: Dictionary) -> String:
+	var evaluated: Array = Array(search_payload.get("evaluated_plans", []))
+	if evaluated.is_empty() or not (evaluated[0] is Dictionary):
+		return ""
+	return str(Dictionary(evaluated[0]).get("stop_reason", ""))

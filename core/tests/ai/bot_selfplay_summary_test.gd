@@ -237,13 +237,17 @@ static func _test_summarize_rows() -> Result:
 		return Result.failure("osla search decision count mismatch: %s" % str(osla_search))
 	if float(osla_search.get("budget_expired_rate", 0.0)) != 0.5:
 		return Result.failure("osla search budget expired rate mismatch: %s" % str(osla_search))
+	if float(osla_search.get("budget_expired_avg_per_match", 0.0)) != 1.0:
+		return Result.failure("osla search budget expired average mismatch: %s" % str(osla_search))
+	if float(osla_search.get("time_ms_avg_per_match", 0.0)) != 28.0:
+		return Result.failure("osla search time average mismatch: %s" % str(osla_search))
 	if float(osla_search.get("attempted_simulations_avg_per_decision", 0.0)) != 3.5:
 		return Result.failure("osla search attempted avg mismatch: %s" % str(osla_search))
 	var osla_tuning: Dictionary = Dictionary(osla.get("tuning_objective", {}))
 	if float(osla_tuning.get("score", 0.0)) <= 0.0:
 		return Result.failure("osla tuning objective should expose positive score: %s" % str(osla_tuning))
 	var osla_tuning_components: Dictionary = Dictionary(osla_tuning.get("components", {}))
-	if not osla_tuning_components.has("cash_min_after_first_positive_avg") or not osla_tuning_components.has("search_time_ms_avg_per_match"):
+	if not osla_tuning_components.has("cash_min_after_first_positive_avg") or not osla_tuning_components.has("cash_max_seen_avg"):
 		return Result.failure("osla tuning objective should expose transparent components: %s" % str(osla_tuning))
 	if not osla_tuning_components.has("opening_players_without_positive_cash_avg") or not osla_tuning_components.has("pre_revenue_errand_boy_recruit_avg"):
 		return Result.failure("osla tuning objective should expose opening-quality components: %s" % str(osla_tuning))
@@ -251,8 +255,11 @@ static func _test_summarize_rows() -> Result:
 		return Result.failure("osla tuning objective should expose food tempo components: %s" % str(osla_tuning))
 	if not osla_tuning_components.has("cash_avg") or not osla_tuning_components.has("inventory_units_avg") or not osla_tuning_components.has("opening_first_positive_cash_step_avg"):
 		return Result.failure("osla tuning objective should expose tie-breaker components: %s" % str(osla_tuning))
-	if float(osla_tuning_components.get("search_budget_expired_avg_per_match", 0.0)) >= 0.0:
-		return Result.failure("osla tuning objective should penalize budget expiry: %s" % str(osla_tuning_components))
+	if osla_tuning_components.has("search_time_ms_avg_per_match") or osla_tuning_components.has("search_budget_expired_avg_per_match"):
+		return Result.failure("osla tuning objective should not include search-cost penalties: %s" % str(osla_tuning_components))
+	var osla_tuning_weights: Dictionary = Dictionary(osla_tuning.get("weights", {}))
+	if osla_tuning_weights.has("search_time_ms_avg_per_match") or osla_tuning_weights.has("search_budget_expired_avg_per_match"):
+		return Result.failure("osla tuning objective weights should not include search-cost penalties: %s" % str(osla_tuning_weights))
 	var comparison: Dictionary = Dictionary(summary.get("comparison", {}))
 	if str(comparison.get("baseline", "")) != "strategy":
 		return Result.failure("summary comparison should use strategy baseline: %s" % str(comparison))

@@ -29,6 +29,13 @@ static func _test_parse_configs() -> Result:
 		"--config=random,strategy",
 		"--players=2",
 		"--profile=base_revenue_growth_v1",
+		"--mcts-iterations=10",
+		"--mcts-config-id=parse_smoke",
+		"--strategic-search=beam",
+		"--strategic-budget-profile=play",
+		"--strategic-horizon-decisions=8",
+		"--strategic-rollout-step-budget-ms=12",
+		"--strategic-config-id=plan_smoke",
 	])
 	if not parsed.ok:
 		return parsed
@@ -39,6 +46,18 @@ static func _test_parse_configs() -> Result:
 		return Result.failure("matrix config parse mismatch: %s" % str(configs))
 	if str(Dictionary(parsed.value).get("profile", "")) != "base_revenue_growth_v1":
 		return Result.failure("matrix profile parse mismatch: %s" % str(parsed.value))
+	var mcts_options: Dictionary = Dictionary(Dictionary(parsed.value).get("mcts_options", {}))
+	if int(mcts_options.get("mcts_iterations", 0)) != 10 or str(mcts_options.get("mcts_config_id", "")) != "parse_smoke":
+		return Result.failure("matrix should parse mcts options: %s" % str(parsed.value))
+	var strategic_options: Dictionary = Dictionary(Dictionary(parsed.value).get("strategic_options", {}))
+	if str(strategic_options.get("strategic_search", "")) != "beam":
+		return Result.failure("matrix should parse strategic search option: %s" % str(parsed.value))
+	if str(strategic_options.get("strategic_budget_profile", "")) != "play":
+		return Result.failure("matrix should parse strategic budget profile option: %s" % str(parsed.value))
+	if int(strategic_options.get("strategic_horizon_decisions", 0)) != 8:
+		return Result.failure("matrix should parse strategic horizon option: %s" % str(parsed.value))
+	if int(strategic_options.get("strategic_rollout_step_budget_ms", 0)) != 12:
+		return Result.failure("matrix should parse strategic step budget option: %s" % str(parsed.value))
 	var bad := MatrixToolClass._parse_args(["--config=random,"])
 	if bad.ok:
 		return Result.failure("matrix should reject empty bot id in config")
@@ -48,6 +67,13 @@ static func _test_parse_configs() -> Result:
 		"--config=strategy",
 		"--players=2",
 		"--jobs=2",
+		"--mcts-max-depth=2",
+		"--mcts-root-prior-min-visits-per-child=3",
+		"--strategic-max-plans=2",
+		"--strategic-budget-profile=play",
+		"--strategic-rollout-step-budget-ms=10",
+		"--strategic-min-search-budget-ms=260",
+		"--strategic-min-plans-for-rollout=2",
 	])
 	if not tuning_parsed.ok:
 		return tuning_parsed
@@ -56,8 +82,62 @@ static func _test_parse_configs() -> Result:
 		return Result.failure("tuning matrix should parse repeated profiles: %s" % str(tuning_parsed.value))
 	if int(Dictionary(tuning_parsed.value).get("parallel_jobs", 0)) != 2:
 		return Result.failure("tuning matrix should parse --jobs: %s" % str(tuning_parsed.value))
+	var tuning_mcts_options: Dictionary = Dictionary(Dictionary(tuning_parsed.value).get("mcts_options", {}))
+	if int(tuning_mcts_options.get("mcts_max_depth", 0)) != 2:
+		return Result.failure("tuning matrix should pass through mcts options: %s" % str(tuning_parsed.value))
+	if int(tuning_mcts_options.get("mcts_root_prior_min_visits_per_child", 0)) != 3:
+		return Result.failure("tuning matrix should pass through root prior guard option: %s" % str(tuning_parsed.value))
+	var tuning_strategic_options: Dictionary = Dictionary(Dictionary(tuning_parsed.value).get("strategic_options", {}))
+	if int(tuning_strategic_options.get("strategic_max_plans", 0)) != 2:
+		return Result.failure("tuning matrix should pass through strategic options: %s" % str(tuning_parsed.value))
+	if str(tuning_strategic_options.get("strategic_budget_profile", "")) != "play":
+		return Result.failure("tuning matrix should pass through strategic budget profile option: %s" % str(tuning_parsed.value))
+	if int(tuning_strategic_options.get("strategic_rollout_step_budget_ms", 0)) != 10:
+		return Result.failure("tuning matrix should pass through strategic step budget option: %s" % str(tuning_parsed.value))
+	if int(tuning_strategic_options.get("strategic_min_search_budget_ms", 0)) != 260:
+		return Result.failure("tuning matrix should pass through strategic min search budget option: %s" % str(tuning_parsed.value))
+	if int(tuning_strategic_options.get("strategic_min_plans_for_rollout", 0)) != 2:
+		return Result.failure("tuning matrix should pass through strategic min plan option: %s" % str(tuning_parsed.value))
 	if int(Dictionary(tuning_parsed.value).get("matches", 0)) != TuningToolClass.MIN_TUNING_MATCHES:
 		return Result.failure("tuning matrix should default to minimum tuning seeds: %s" % str(tuning_parsed.value))
+	var child_args := TuningToolClass._build_child_matrix_arguments(
+		[["strategic"]],
+		2,
+		12345,
+		3,
+		3,
+		120,
+		80,
+		1,
+		"base_revenue_growth_v1",
+		{},
+		tuning_strategic_options,
+		"res://.godot/child.jsonl",
+		"res://.godot/child.json",
+		"child.log"
+	)
+	if not child_args.has("--strategic-max-plans=2") or not child_args.has("--strategic-rollout-step-budget-ms=10") or not child_args.has("--strategic-min-search-budget-ms=260") or not child_args.has("--strategic-min-plans-for-rollout=2"):
+		return Result.failure("tuning child args should include strategic options: %s" % str(child_args))
+	if not child_args.has("--strategic-budget-profile=play"):
+		return Result.failure("tuning child args should include strategic budget profile option: %s" % str(child_args))
+	var default_child_args := TuningToolClass._build_child_matrix_arguments(
+		[["strategic"]],
+		2,
+		12345,
+		3,
+		3,
+		120,
+		80,
+		1,
+		"base_revenue_growth_v1",
+		{},
+		{},
+		"res://.godot/child_default.jsonl",
+		"res://.godot/child_default.json",
+		"child_default.log"
+	)
+	if not default_child_args.has("--strategic-budget-profile=tuning"):
+		return Result.failure("tuning child args should default strategic budget profile to tuning: %s" % str(default_child_args))
 	var bad_jobs := TuningToolClass._parse_args(["--jobs=0"])
 	if bad_jobs.ok:
 		return Result.failure("tuning matrix should reject non-positive --jobs")

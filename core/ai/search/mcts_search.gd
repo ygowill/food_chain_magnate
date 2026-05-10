@@ -14,6 +14,7 @@ const SearchCandidateUtilsClass = preload("res://core/ai/search/search_candidate
 const AiDecisionPointClass = preload("res://core/ai/bot/ai_decision_point.gd")
 const BotControllerClass = preload("res://core/ai/bot/bot_controller.gd")
 const LegalActionServiceClass = preload("res://core/ai/bot/legal_action_service.gd")
+const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
 const DEFAULT_MCTS_ITERATIONS := 24
@@ -21,6 +22,11 @@ const DEFAULT_MCTS_MAX_DEPTH := 3
 const DEFAULT_MCTS_TOP_K_PER_NODE := 4
 const DEFAULT_MCTS_EXPLORATION := 1.25
 const DEFAULT_MCTS_MIN_SIMULATION_BUDGET_MS := 24
+const DEFAULT_MCTS_CANDIDATE_ATTEMPT_MULTIPLIER := 3
+const DEFAULT_MCTS_EVALUATOR_WEIGHT := 0.35
+const DEFAULT_MCTS_OPPONENT_WEIGHT := 0.55
+const DEFAULT_MCTS_PATH_DISCOUNT := 0.92
+const DEFAULT_MCTS_ROOT_PRIOR_MIN_VISITS_PER_CHILD := 2
 
 static func choose_command(
 	engine: GameEngine,
@@ -116,15 +122,36 @@ static func _choose_command_with_engine(
 	var top_k_per_node := maxi(1, int(search_options.get("mcts_top_k_per_node", DEFAULT_MCTS_TOP_K_PER_NODE)))
 	var exploration := maxf(0.0, float(search_options.get("mcts_exploration", DEFAULT_MCTS_EXPLORATION)))
 	var min_simulation_budget_ms := maxi(0, int(search_options.get("mcts_min_simulation_budget_ms", DEFAULT_MCTS_MIN_SIMULATION_BUDGET_MS)))
+	var candidate_attempt_multiplier := maxi(1, int(search_options.get("mcts_candidate_attempt_multiplier", DEFAULT_MCTS_CANDIDATE_ATTEMPT_MULTIPLIER)))
+	var evaluator_weight := float(search_options.get("mcts_evaluator_weight", search_options.get("evaluator_weight", DEFAULT_MCTS_EVALUATOR_WEIGHT)))
+	var opponent_weight := maxf(0.0, float(search_options.get("mcts_opponent_weight", search_options.get("opponent_weight", DEFAULT_MCTS_OPPONENT_WEIGHT))))
+	var path_discount := clampf(float(search_options.get("mcts_path_discount", search_options.get("path_discount", DEFAULT_MCTS_PATH_DISCOUNT))), 0.0, 1.0)
+	var root_prior_min_visits_per_child := maxi(0, int(search_options.get("mcts_root_prior_min_visits_per_child", DEFAULT_MCTS_ROOT_PRIOR_MIN_VISITS_PER_CHILD)))
 	var root_max_valid_per_action := maxi(1, int(search_options.get("max_valid_per_action", profile.max_valid_per_action)))
 	var opponent_max_valid_per_action := maxi(1, int(search_options.get("opponent_max_valid_per_action", root_max_valid_per_action)))
+	var short_circuit_reason := _root_short_circuit_reason(root_scored)
+	if not short_circuit_reason.is_empty():
+		return _strategy_short_circuit_decision(
+			root_scored,
+			root_payload,
+			observation,
+			context,
+			profile,
+			search_options,
+			discarded,
+			start_ms,
+			short_circuit_reason,
+			evaluator_weight,
+			opponent_weight,
+			path_discount
+		)
 
 	var root_node := _make_node(engine, context.player_id, null, null, [], 0.0, 0, 1.0)
 	root_node["expanded"] = true
 	root_node["candidate_count"] = int(root_payload.get("candidate_count", 0))
 	root_node["candidate_deduped_count"] = int(root_payload.get("candidate_deduped_count", 0))
 	root_node["filter_stats"] = Dictionary(root_payload.get("filter_stats", {})).duplicate(true)
-	root_node["unexpanded_entries"] = _prepare_candidate_entries(root_scored, top_k_per_node)
+	root_node["unexpanded_entries"] = _prepare_candidate_entries(root_scored, top_k_per_node, candidate_attempt_multiplier)
 	_assign_candidate_priors(root_node["unexpanded_entries"])
 
 	var root_eval_start_ms := Time.get_ticks_msec()
@@ -134,6 +161,7 @@ static func _choose_command_with_engine(
 		return root_eval_read
 	var root_eval_payload: Dictionary = Dictionary(root_eval_read.value)
 	root_node["leaf_eval_score"] = float(root_eval_payload.get("eval_score", 0.0))
+	root_node["leaf_value_score"] = _node_value_score(root_node, float(root_node.get("leaf_eval_score", 0.0)), evaluator_weight)
 	root_node["leaf_features"] = Dictionary(root_eval_payload.get("features", {})).duplicate(true)
 
 	var attempted_simulations := 0
@@ -160,12 +188,15 @@ static func _choose_command_with_engine(
 			profile,
 			search_options,
 			top_k_per_node,
+			candidate_attempt_multiplier,
 			root_max_valid_per_action,
 			opponent_max_valid_per_action,
 			max_depth,
 			min_simulation_budget_ms,
 			budget,
 			exploration,
+			opponent_weight,
+			path_discount,
 			discarded
 		)
 		selection_ms += Time.get_ticks_msec() - selection_start_ms
@@ -193,10 +224,12 @@ static func _choose_command_with_engine(
 			return eval_read
 		var eval_payload: Dictionary = Dictionary(eval_read.value)
 		var leaf_eval_score := float(eval_payload.get("eval_score", 0.0))
+		var leaf_value_score := _node_value_score(leaf, leaf_eval_score, evaluator_weight)
 		leaf["leaf_eval_score"] = leaf_eval_score
+		leaf["leaf_value_score"] = leaf_value_score
 		leaf["leaf_features"] = Dictionary(eval_payload.get("features", {})).duplicate(true)
 		var backprop_start_ms := Time.get_ticks_msec()
-		_backpropagate(Array(selection.get("path", [])), leaf_eval_score)
+		_backpropagate(Array(selection.get("path", [])), leaf_value_score)
 		backprop_ms += Time.get_ticks_msec() - backprop_start_ms
 		executed_iterations += 1
 		deepest_depth = maxi(deepest_depth, int(leaf.get("depth", 0)))
@@ -210,7 +243,8 @@ static func _choose_command_with_engine(
 	if root_children.is_empty():
 		return Result.failure("MCTSSearch.choose_command: no root children evaluated: %s" % "; ".join(discarded.slice(0, 8)))
 	var final_sort_start_ms := Time.get_ticks_msec()
-	_sort_nodes(root_children)
+	var root_selection_payload := _select_final_root_child(root_children, root_prior_min_visits_per_child, budget_expired or budget_guarded)
+	root_children = Array(root_selection_payload.get("nodes", root_children))
 	var final_sort_ms := Time.get_ticks_msec() - final_sort_start_ms
 	var best_child: Dictionary = Dictionary(root_children[0])
 	var best_macro: MacroAction = best_child.get("root_macro", null)
@@ -222,6 +256,11 @@ static func _choose_command_with_engine(
 	var best_visits := int(best_child.get("visits", 0))
 	var best_prior := float(best_child.get("prior", 0.0))
 	var best_eval_score := float(best_child.get("leaf_eval_score", 0.0))
+	var best_value_score := float(best_child.get("leaf_value_score", best_q))
+	var best_path_score := float(best_child.get("path_score", 0.0))
+	var root_selection_mode := str(root_selection_payload.get("selection_mode", "visits"))
+	var root_prior_guarded := bool(root_selection_payload.get("prior_guarded", false))
+	var root_min_required_visits := int(root_selection_payload.get("min_required_visits", 0))
 	var features: Dictionary = Dictionary(best_child.get("leaf_features", {})).duplicate(true)
 	features["mcts_final_features"] = Dictionary(best_child.get("leaf_features", {})).duplicate(true)
 	features["mcts_iterations"] = executed_iterations
@@ -236,10 +275,20 @@ static func _choose_command_with_engine(
 	features["mcts_selected_q"] = best_q
 	features["mcts_selected_prior"] = best_prior
 	features["mcts_eval_score"] = best_eval_score
+	features["mcts_value_score"] = best_value_score
+	features["mcts_path_score"] = best_path_score
 	features["mcts_root_child_count"] = root_children.size()
 	features["mcts_max_depth"] = max_depth
 	features["mcts_top_k_per_node"] = top_k_per_node
+	features["mcts_candidate_attempt_multiplier"] = candidate_attempt_multiplier
 	features["mcts_exploration"] = exploration
+	features["mcts_evaluator_weight"] = evaluator_weight
+	features["mcts_opponent_weight"] = opponent_weight
+	features["mcts_path_discount"] = path_discount
+	features["mcts_root_selection_mode"] = root_selection_mode
+	features["mcts_root_prior_guarded"] = root_prior_guarded
+	features["mcts_root_prior_min_visits_per_child"] = root_prior_min_visits_per_child
+	features["mcts_root_min_required_visits"] = root_min_required_visits
 	features["mcts_root_max_valid_per_action"] = root_max_valid_per_action
 	features["mcts_opponent_max_valid_per_action"] = opponent_max_valid_per_action
 	features["mcts_path"] = Array(best_child.get("path", [])).duplicate(true)
@@ -301,6 +350,12 @@ static func _choose_command_with_engine(
 			"mcts_selected_q": best_q,
 			"mcts_selected_prior": best_prior,
 			"mcts_eval_score": best_eval_score,
+			"mcts_value_score": best_value_score,
+			"mcts_path_score": best_path_score,
+			"mcts_root_selection_mode": root_selection_mode,
+			"mcts_root_prior_guarded": root_prior_guarded,
+			"mcts_root_prior_min_visits_per_child": root_prior_min_visits_per_child,
+			"mcts_root_min_required_visits": root_min_required_visits,
 			"mcts_budget_guarded": budget_guarded,
 			"mcts_root_generate_ms": root_generate_ms,
 			"mcts_root_eval_ms": root_eval_ms,
@@ -324,12 +379,15 @@ static func _select_leaf(
 	profile,
 	options: Dictionary,
 	top_k_per_node: int,
+	candidate_attempt_multiplier: int,
 	root_max_valid_per_action: int,
 	opponent_max_valid_per_action: int,
 	max_depth: int,
 	min_simulation_budget_ms: int,
 	budget: TimeBudget,
 	exploration: float,
+	opponent_weight: float,
+	path_discount: float,
 	discarded: Array[String]
 ) -> Result:
 	var path: Array[Dictionary] = []
@@ -369,6 +427,7 @@ static func _select_leaf(
 				profile,
 				options,
 				top_k_per_node,
+				candidate_attempt_multiplier,
 				root_max_valid_per_action,
 				opponent_max_valid_per_action,
 				budget,
@@ -390,7 +449,7 @@ static func _select_leaf(
 				})
 		var unexpanded_val = current.get("unexpanded_entries", [])
 		if unexpanded_val is Array and not Array(unexpanded_val).is_empty():
-			var expand_read := _expand_next_child(current, budget, min_simulation_budget_ms, discarded)
+			var expand_read := _expand_next_child(current, root_player_id, opponent_weight, path_discount, budget, min_simulation_budget_ms, discarded)
 			if not expand_read.ok:
 				return expand_read
 			var expand_payload: Dictionary = Dictionary(expand_read.value)
@@ -465,6 +524,7 @@ static func _populate_node_candidates(
 	profile,
 	options: Dictionary,
 	top_k_per_node: int,
+	candidate_attempt_multiplier: int,
 	root_max_valid_per_action: int,
 	opponent_max_valid_per_action: int,
 	budget: TimeBudget,
@@ -586,7 +646,7 @@ static func _populate_node_candidates(
 	var gen_payload: Dictionary = Dictionary(gen_read.value)
 	var scored: Array = gen_payload.get("scored", [])
 	var candidate_deduped_count := int(gen_payload.get("candidate_deduped_count", 0))
-	var limit := mini(top_k_per_node, scored.size())
+	var limit := mini(maxi(top_k_per_node, top_k_per_node * candidate_attempt_multiplier), scored.size())
 	var entries: Array[Dictionary] = SearchCandidateUtilsClass.copy_scored_candidates(scored.slice(0, limit))
 	_assign_candidate_priors(entries)
 	node["unexpanded_entries"] = entries
@@ -603,7 +663,15 @@ static func _populate_node_candidates(
 		"budget_expired": false,
 	})
 
-static func _expand_next_child(node: Dictionary, budget: TimeBudget, min_simulation_budget_ms: int, discarded: Array[String]) -> Result:
+static func _expand_next_child(
+	node: Dictionary,
+	root_player_id: int,
+	opponent_weight: float,
+	path_discount: float,
+	budget: TimeBudget,
+	min_simulation_budget_ms: int,
+	discarded: Array[String]
+) -> Result:
 	var entries_val = node.get("unexpanded_entries", [])
 	if not (entries_val is Array):
 		node["terminal"] = true
@@ -691,18 +759,22 @@ static func _expand_next_child(node: Dictionary, budget: TimeBudget, min_simulat
 		if root_macro == null:
 			root_macro = macro
 		var path: Array = Array(node.get("path", [])).duplicate(true)
-		path.append(_path_item(macro, int(node.get("actor_id", -1)), float(entry.get("strategy_score", 0.0)), float(entry.get("prior", 0.0))))
+		var move_actor_id := int(node.get("actor_id", -1))
+		var depth := int(node.get("depth", 0)) + 1
+		var contribution_factor := _path_contribution_factor(move_actor_id, root_player_id, opponent_weight, path_discount, depth)
+		path.append(_path_item(macro, move_actor_id, float(entry.get("strategy_score", 0.0)), float(entry.get("prior", 0.0)), contribution_factor))
 		var child := _make_node(
 			sim_engine,
 			child_actor,
 			root_macro,
 			macro,
 			path,
-			float(node.get("path_score", 0.0)) + float(entry.get("strategy_score", 0.0)),
-			int(node.get("depth", 0)) + 1,
+			float(node.get("path_score", 0.0)) + float(entry.get("strategy_score", 0.0)) * contribution_factor,
+			depth,
 			float(entry.get("prior", 0.0))
 		)
 		child["strategy_score"] = float(entry.get("strategy_score", 0.0))
+		child["move_actor_id"] = move_actor_id
 		child["action_id"] = str(entry.get("action_id", ""))
 		child["macro_action_id"] = str(entry.get("macro_action_id", ""))
 		child["leaf_features"] = {}
@@ -737,6 +809,114 @@ static func _should_skip_simulation_for_budget(budget: TimeBudget, min_simulatio
 	if min_simulation_budget_ms <= 0:
 		return false
 	return budget.remaining_ms() < min_simulation_budget_ms
+
+static func _root_short_circuit_reason(root_scored: Array) -> String:
+	if root_scored.is_empty():
+		return ""
+	if root_scored.size() <= 1:
+		return "single_root_candidate"
+	if _all_candidates_are_pass_actions(root_scored):
+		return "pass_only_root_candidates"
+	return ""
+
+static func _all_candidates_are_pass_actions(scored: Array) -> bool:
+	if scored.is_empty():
+		return false
+	for entry_val in scored:
+		if not (entry_val is Dictionary):
+			return false
+		if not _candidate_is_pass_action(Dictionary(entry_val)):
+			return false
+	return true
+
+static func _candidate_is_pass_action(entry: Dictionary) -> bool:
+	var macro: MacroAction = entry.get("macro", null)
+	if macro == null or macro.commands.is_empty():
+		return false
+	if macro.commands.size() != 1:
+		return false
+	var command: Command = macro.commands[0]
+	if command == null:
+		return false
+	var action_id := str(command.action_id)
+	return action_id == ActionIdsClass.SKIP or action_id == ActionIdsClass.SKIP_SUB_PHASE
+
+static func _strategy_short_circuit_decision(
+	root_scored: Array,
+	root_payload: Dictionary,
+	observation: ObservationState,
+	context: AiDecisionContext,
+	profile,
+	search_options: Dictionary,
+	discarded: Array[String],
+	start_ms: int,
+	reason: String,
+	evaluator_weight: float,
+	opponent_weight: float,
+	path_discount: float
+) -> Result:
+	if root_scored.is_empty():
+		return Result.failure("MCTSSearch short-circuit: no scored candidates")
+	var entry: Dictionary = Dictionary(root_scored[0])
+	var macro: MacroAction = entry.get("macro", null)
+	if macro == null or macro.commands.is_empty():
+		return Result.failure("MCTSSearch short-circuit: best candidate missing macro")
+	var command: Command = macro.commands[0]
+	var score := float(entry.get("strategy_score", 0.0))
+	var features: Dictionary = Dictionary(entry.get("strategy_features", {})).duplicate(true)
+	features["mcts_short_circuit"] = reason
+	features["mcts_strategy_score"] = score
+	features["mcts_value_score"] = score
+	features["mcts_path_score"] = score
+	features["mcts_eval_score"] = 0.0
+	features["mcts_iterations"] = 0
+	features["mcts_root_visits"] = 0
+	features["mcts_root_child_count"] = 0
+	features["mcts_evaluator_weight"] = evaluator_weight
+	features["mcts_opponent_weight"] = opponent_weight
+	features["mcts_path_discount"] = path_discount
+	features["mcts_phase_strategy"] = str(search_options.get("mcts_phase_strategy", ""))
+	var elapsed_ms := Time.get_ticks_msec() - start_ms
+	return Result.success(BotDecision.create(
+		command,
+		macro.id,
+		score,
+		{
+			"features": features,
+			"candidate_count": int(root_payload.get("candidate_count", 0)),
+			"valid_candidate_count": root_scored.size(),
+			"attempted_simulations": 0,
+			"expanded_nodes": 0,
+			"candidate_deduped_count": int(root_payload.get("candidate_deduped_count", 0)),
+			"budget_expired": false,
+			"budget_guarded": false,
+			"filter_stats": Dictionary(root_payload.get("filter_stats", {})).duplicate(true),
+			"time_ms": elapsed_ms,
+		},
+		{
+			"bot": "MCTSSearch",
+			"search": "mcts",
+			"mcts_short_circuit": reason,
+			"strategy_profile": str(profile.id) if profile != null else "",
+			"phase": str(observation.phase) if observation != null else "",
+			"sub_phase": str(observation.sub_phase) if observation != null else "",
+			"player_id": context.player_id if context != null else -1,
+			"candidate_count": int(root_payload.get("candidate_count", 0)),
+			"valid_candidate_count": root_scored.size(),
+			"attempted_simulations": 0,
+			"expanded_nodes": 0,
+			"candidate_deduped_count": int(root_payload.get("candidate_deduped_count", 0)),
+			"budget_expired": false,
+			"mcts_iterations": 0,
+			"mcts_root_visits": 0,
+			"mcts_root_child_count": 0,
+			"mcts_selected_q": score,
+			"mcts_value_score": score,
+			"mcts_path_score": score,
+			"discarded_reasons": discarded.slice(0, 20),
+			"time_ms": elapsed_ms,
+		}
+	))
 
 static func _generate_scored_candidates(
 	engine: GameEngine,
@@ -857,6 +1037,7 @@ static func _make_node(
 	return {
 		"engine": engine,
 		"actor_id": actor_id,
+		"move_actor_id": -1,
 		"root_macro": root_macro,
 		"root_macro_id": str(root_macro.id) if root_macro != null else "",
 		"macro": macro,
@@ -871,6 +1052,7 @@ static func _make_node(
 		"value_sum": 0.0,
 		"q": 0.0,
 		"leaf_eval_score": 0.0,
+		"leaf_value_score": 0.0,
 		"leaf_features": {},
 		"children": [],
 		"unexpanded_entries": [],
@@ -882,7 +1064,7 @@ static func _make_node(
 		"strategy_score": 0.0,
 	}
 
-static func _path_item(macro: MacroAction, actor: int, strategy_score: float, prior: float) -> Dictionary:
+static func _path_item(macro: MacroAction, actor: int, strategy_score: float, prior: float, contribution_factor: float = 1.0) -> Dictionary:
 	var command: Command = macro.commands[0] if macro != null and not macro.commands.is_empty() else null
 	return {
 		"actor": actor,
@@ -891,8 +1073,17 @@ static func _path_item(macro: MacroAction, actor: int, strategy_score: float, pr
 		"params": command.params.duplicate(true) if command != null else {},
 		"strategy_score": float(strategy_score),
 		"prior": float(prior),
-		"score_contribution": float(strategy_score),
+		"contribution_factor": float(contribution_factor),
+		"score_contribution": float(strategy_score) * float(contribution_factor),
 	}
+
+static func _path_contribution_factor(actor_id: int, root_player_id: int, opponent_weight: float, path_discount: float, depth: int) -> float:
+	var actor_factor := 1.0 if actor_id == root_player_id else -maxf(0.0, opponent_weight)
+	var discount := pow(clampf(path_discount, 0.0, 1.0), float(maxi(0, depth - 1)))
+	return actor_factor * discount
+
+static func _node_value_score(node: Dictionary, eval_score: float, evaluator_weight: float) -> float:
+	return float(node.get("path_score", 0.0)) + float(eval_score) * float(evaluator_weight)
 
 static func _backpropagate(path: Array, leaf_value: float) -> void:
 	for node_val in path:
@@ -902,7 +1093,7 @@ static func _backpropagate(path: Array, leaf_value: float) -> void:
 		node["visits"] = int(node.get("visits", 0)) + 1
 		node["value_sum"] = float(node.get("value_sum", 0.0)) + leaf_value
 		node["q"] = _node_q(node)
-		node["leaf_eval_score"] = leaf_value
+		node["leaf_value_score"] = leaf_value
 
 static func _node_q(node: Dictionary) -> float:
 	var visits := int(node.get("visits", 0))
@@ -923,15 +1114,15 @@ static func _select_best_child(node: Dictionary, root_player_id: int, exploratio
 	var best_visits := -1
 	var best_prior := -INF
 	var best_macro_id := ""
+	var actor_sign := _selection_actor_sign(node, root_player_id)
 	for child_val in children:
 		if not (child_val is Dictionary):
 			continue
 		var child: Dictionary = child_val
-		var sign := 1.0 if int(child.get("actor_id", -1)) == root_player_id else -1.0
 		var prior := maxf(0.0, float(child.get("prior", 0.0)))
 		var q := _node_q(child)
 		var child_visits := int(child.get("visits", 0))
-		var score := sign * q + exploration * prior * sqrt(float(parent_visits)) / float(child_visits + 1)
+		var score := actor_sign * q + exploration * prior * sqrt(float(parent_visits)) / float(child_visits + 1)
 		var macro_id := str(child.get("macro_action_id", ""))
 		if best_child == null or score > best_score or (is_equal_approx(score, best_score) and (child_visits > best_visits or (child_visits == best_visits and (prior > best_prior or (is_equal_approx(prior, best_prior) and macro_id < best_macro_id))))) :
 			best_child = child
@@ -940,6 +1131,12 @@ static func _select_best_child(node: Dictionary, root_player_id: int, exploratio
 			best_prior = prior
 			best_macro_id = macro_id
 	return best_child
+
+static func _selection_actor_sign(node: Dictionary, root_player_id: int) -> float:
+	var actor_id := int(node.get("actor_id", root_player_id))
+	if actor_id >= 0 and actor_id != root_player_id:
+		return -1.0
+	return 1.0
 
 static func _assign_candidate_priors(entries: Array[Dictionary]) -> void:
 	if entries.is_empty():
@@ -961,8 +1158,9 @@ static func _assign_candidate_priors(entries: Array[Dictionary]) -> void:
 	for i in range(entries.size()):
 		entries[i]["prior"] = weights[i] / total_weight
 
-static func _prepare_candidate_entries(scored: Array, top_k_per_node: int) -> Array[Dictionary]:
-	var limit := mini(maxi(1, top_k_per_node), scored.size())
+static func _prepare_candidate_entries(scored: Array, top_k_per_node: int, candidate_attempt_multiplier: int = DEFAULT_MCTS_CANDIDATE_ATTEMPT_MULTIPLIER) -> Array[Dictionary]:
+	var candidate_limit := maxi(1, top_k_per_node) * maxi(1, candidate_attempt_multiplier)
+	var limit := mini(candidate_limit, scored.size())
 	return SearchCandidateUtilsClass.copy_scored_candidates(scored.slice(0, limit))
 
 static func _dedupe_scored_candidates(scored: Array[Dictionary]) -> Dictionary:
@@ -1004,6 +1202,59 @@ static func _sort_nodes(nodes: Array) -> void:
 		return str(ad.get("macro_action_id", "")) < str(bd.get("macro_action_id", ""))
 	)
 
+static func _select_final_root_child(nodes: Array, min_visits_per_child: int, budget_limited: bool) -> Dictionary:
+	var sorted_nodes := nodes.duplicate()
+	var min_required_visits := maxi(0, min_visits_per_child) * sorted_nodes.size()
+	var total_visits := 0
+	for node_val in sorted_nodes:
+		if node_val is Dictionary:
+			total_visits += int(Dictionary(node_val).get("visits", 0))
+	var use_prior_guard := budget_limited or (min_required_visits > 0 and total_visits < min_required_visits)
+	if use_prior_guard:
+		_sort_nodes_by_prior_guard(sorted_nodes)
+		return {
+			"nodes": sorted_nodes,
+			"selection_mode": "prior_guard",
+			"prior_guarded": true,
+			"min_required_visits": min_required_visits,
+			"total_visits": total_visits,
+		}
+	_sort_nodes(sorted_nodes)
+	return {
+		"nodes": sorted_nodes,
+		"selection_mode": "visits",
+		"prior_guarded": false,
+		"min_required_visits": min_required_visits,
+		"total_visits": total_visits,
+	}
+
+static func _sort_nodes_by_prior_guard(nodes: Array) -> void:
+	nodes.sort_custom(func(a, b) -> bool:
+		if not (a is Dictionary):
+			return false
+		if not (b is Dictionary):
+			return true
+		var ad: Dictionary = a
+		var bd: Dictionary = b
+		var aprior := float(ad.get("prior", 0.0))
+		var bprior := float(bd.get("prior", 0.0))
+		if not is_equal_approx(aprior, bprior):
+			return aprior > bprior
+		var apath := float(ad.get("path_score", 0.0))
+		var bpath := float(bd.get("path_score", 0.0))
+		if not is_equal_approx(apath, bpath):
+			return apath > bpath
+		var avisits := int(ad.get("visits", 0))
+		var bvisits := int(bd.get("visits", 0))
+		if avisits != bvisits:
+			return avisits > bvisits
+		var aq := _node_q(ad)
+		var bq := _node_q(bd)
+		if not is_equal_approx(aq, bq):
+			return aq > bq
+		return str(ad.get("macro_action_id", "")) < str(bd.get("macro_action_id", ""))
+	)
+
 static func _top_node_trace(nodes: Array, count: int) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var limit := mini(maxi(0, count), nodes.size())
@@ -1012,6 +1263,8 @@ static func _top_node_trace(nodes: Array, count: int) -> Array[Dictionary]:
 		out.append({
 			"root_macro_id": str(node.get("root_macro_id", "")),
 			"macro_action_id": str(node.get("macro_action_id", "")),
+			"actor_id": int(node.get("actor_id", -1)),
+			"move_actor_id": int(node.get("move_actor_id", -1)),
 			"visits": int(node.get("visits", 0)),
 			"q": _node_q(node),
 			"prior": float(node.get("prior", 0.0)),
