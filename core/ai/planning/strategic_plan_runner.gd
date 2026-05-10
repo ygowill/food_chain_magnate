@@ -151,6 +151,7 @@ static func rollout(
 		"demand_sold": int(rollout_metrics.get("demand_sold", 0)),
 		"lost_to_competitor": int(rollout_metrics.get("lost_to_competitor", 0)),
 		"salary_due_estimate": int(rollout_metrics.get("salary_due_estimate", 0)),
+		"route_history": _route_history_array(options.get("route_history", [])),
 		"search_time_ms": Time.get_ticks_msec() - start_ms,
 		"fork_ms": fork_ms,
 	})
@@ -258,6 +259,20 @@ static func _dinnertime_demand_sold(dinnertime_state: GameState) -> int:
 			continue
 		total += maxi(0, int(Dictionary(sale_val).get("quantity", 0)))
 	return total
+
+static func _route_history_array(value) -> Array[String]:
+	var out: Array[String] = []
+	if value is Array:
+		for item in Array(value):
+			var text := ""
+			if item is Dictionary:
+				text = str(Dictionary(item).get("route_type", ""))
+			else:
+				text = str(item)
+			text = text.strip_edges()
+			if not text.is_empty():
+				out.append(text)
+	return out
 
 static func _marketing_processed_snapshot(state: GameState) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []

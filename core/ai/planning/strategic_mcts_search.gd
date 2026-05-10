@@ -624,6 +624,7 @@ static func _expand_next_child(
 		attempted += 1
 		var plan_horizon_decisions := mini(maxi(1, horizon_decisions), maxi(1, int(plan.horizon_decisions)))
 		var plan_horizon_rounds := mini(maxi(1, horizon_rounds), maxi(1, int(plan.horizon_rounds)))
+		var route_history := _route_types_for_path(Array(node.get("path", [])))
 		var rollout_start_ms := Time.get_ticks_msec()
 		var rollout_read := StrategicPlanRunnerClass.rollout(
 			node.get("engine", null),
@@ -634,6 +635,7 @@ static func _expand_next_child(
 				"horizon_rounds": plan_horizon_rounds,
 				"step_budget_ms": step_budget_ms,
 				"budget": budget,
+				"route_history": route_history,
 			}
 		)
 		var rollout_elapsed_ms := Time.get_ticks_msec() - rollout_start_ms
@@ -877,6 +879,7 @@ static func _trace_evaluated(nodes: Array, limit: int) -> Array[Dictionary]:
 		var best_path: Array = Array(item.get("best_leaf_path", item.get("path", []))).duplicate(true)
 		var route_types := _route_types_for_path(path)
 		var best_route_types := _route_types_for_path(best_path)
+		var route_history := Array(rollout.get("route_history", [])).duplicate(true)
 		out.append({
 			"plan_id": str(item.get("plan_id", "")),
 			"route_type": str(item.get("route_type", "")),
@@ -895,6 +898,7 @@ static func _trace_evaluated(nodes: Array, limit: int) -> Array[Dictionary]:
 			"best_path": best_path,
 			"route_types": route_types,
 			"best_route_types": best_route_types,
+			"route_history": route_history,
 			"route_switch_count": _route_switch_count(best_route_types),
 			"best_leaf_depth": int(item.get("best_leaf_depth", item.get("depth", 0))),
 			"best_leaf_value_score": float(item.get("best_leaf_value_score", item.get("leaf_value_score", 0.0))),
@@ -904,6 +908,7 @@ static func _trace_evaluated(nodes: Array, limit: int) -> Array[Dictionary]:
 static func _rollout_trace_payload(rollout: Dictionary) -> Dictionary:
 	return {
 		"commands_executed": Array(rollout.get("commands_executed", [])).duplicate(true),
+		"route_history": Array(rollout.get("route_history", [])).duplicate(true),
 		"round_delta": int(rollout.get("round_delta", 0)),
 		"phase_stop_reason": str(rollout.get("phase_stop_reason", "")),
 		"cash_before": int(rollout.get("cash_before", 0)),

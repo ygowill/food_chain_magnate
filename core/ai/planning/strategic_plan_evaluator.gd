@@ -30,6 +30,7 @@ static func evaluate_rollout(
 	var eval_features: Dictionary = Dictionary(eval_payload.get("features", {})).duplicate(true)
 	var route_progress_bonus := _route_progress_bonus(plan, final_observation, income, rollout)
 	var route_completion_bonus := _route_completion_bonus(plan, final_observation, income, rollout)
+	var route_transition_bonus := _route_transition_bonus(plan, rollout)
 	var route_action_count := _route_action_count(plan, rollout)
 	var route_stalled := _route_is_stalled(plan, rollout, route_action_count, route_progress_bonus, route_completion_bonus)
 	var route_stall_penalty := _route_stall_penalty(route_stalled)
@@ -46,6 +47,7 @@ static func evaluate_rollout(
 		"employee_capability_delta": float(eval_features.get("employee_capability_value", 0.0)),
 		"route_progress_bonus": route_progress_bonus,
 		"route_completion_bonus": route_completion_bonus,
+		"route_transition_bonus": route_transition_bonus,
 		"route_stall_penalty": route_stall_penalty,
 		"opponent_denial_value": float(income.get("total_own_sourced_opponent_blocking_demand", 0)) * 4.0,
 		"search_cost_penalty": -float(rollout.get("search_time_ms", 0)) * 0.01,
@@ -137,6 +139,85 @@ static func _route_progress_bonus(
 			if _owner_executed_any(rollout, plan.owner_player_id, ["place_house", "add_garden", "place_restaurant", "move_restaurant"]):
 				bonus += 8.0
 	return bonus
+
+static func _route_transition_bonus(
+	plan,
+	rollout: Dictionary = {}
+) -> float:
+	if plan == null or not plan.has_method("is_valid"):
+		return 0.0
+	var route_history := _route_history_array(rollout.get("route_history", []))
+	if route_history.is_empty():
+		return 0.0
+	var tail := _route_history_tail(route_history)
+	var previous_route_type := str(tail.get("route_type", "")).strip_edges()
+	if previous_route_type.is_empty():
+		return 0.0
+	var current_route_type := str(plan.route_type).strip_edges()
+	if current_route_type.is_empty():
+		return 0.0
+	var streak := maxf(1.0, float(int(tail.get("streak", 1))))
+	if current_route_type == previous_route_type:
+		match current_route_type:
+			"marketing_income":
+				return -3.0 * streak
+			"price_recovery", "supply_capacity":
+				return -1.5 * streak
+			"product_switch_attack":
+				return -2.0 * streak
+			"growth":
+				return -2.5 * streak
+		return -1.5 * streak
+	match previous_route_type:
+		"marketing_income":
+			match current_route_type:
+				"price_recovery", "supply_capacity":
+					return 5.5 + streak * 1.25
+				"product_switch_attack":
+					return 3.0 + streak * 0.75
+				"growth":
+					return -1.0
+				_:
+					return 1.0
+		"price_recovery":
+			match current_route_type:
+				"marketing_income", "supply_capacity":
+					return 3.5 + streak * 0.75
+				"product_switch_attack":
+					return 2.0 + streak * 0.5
+				"growth":
+					return -1.0
+				_:
+					return 0.75
+		"supply_capacity":
+			match current_route_type:
+				"marketing_income", "price_recovery":
+					return 3.5 + streak * 0.75
+				"product_switch_attack":
+					return 2.0 + streak * 0.5
+				"growth":
+					return -1.0
+				_:
+					return 0.75
+		"product_switch_attack":
+			match current_route_type:
+				"marketing_income", "supply_capacity":
+					return 2.5 + streak * 0.5
+				"price_recovery":
+					return 1.5 + streak * 0.25
+				"growth":
+					return -1.0
+				_:
+					return 0.5
+		"growth":
+			match current_route_type:
+				"marketing_income", "price_recovery", "supply_capacity":
+					return 2.0 + streak * 0.5
+				"product_switch_attack":
+					return 1.0 + streak * 0.25
+				_:
+					return -0.5
+	return 0.0
 
 static func _sequence_progress_bonus(plan, rollout: Dictionary = {}) -> float:
 	if plan == null or not plan.has_method("is_valid"):
@@ -328,4 +409,42 @@ static func _string_array(value) -> Array[String]:
 			var text := str(item).strip_edges()
 			if not text.is_empty() and not out.has(text):
 				out.append(text)
+	return out
+
+static func _route_history_array(value) -> Array[String]:
+	var out: Array[String] = []
+	if value is Array:
+		for item in Array(value):
+			var text := ""
+			if item is Dictionary:
+				text = str(Dictionary(item).get("route_type", ""))
+			else:
+				text = str(item)
+			text = text.strip_edges()
+			if not text.is_empty():
+				out.append(text)
+	return out
+
+static func _route_history_tail(route_history: Array[String]) -> Dictionary:
+	var out := {
+		"route_type": "",
+		"streak": 0,
+	}
+	if route_history.is_empty():
+		return out
+	var last_route := ""
+	var streak := 0
+	for i in range(route_history.size() - 1, -1, -1):
+		var route := str(route_history[i]).strip_edges()
+		if route.is_empty():
+			continue
+		if last_route.is_empty():
+			last_route = route
+			streak = 1
+		elif route == last_route:
+			streak += 1
+		else:
+			break
+	out["route_type"] = last_route
+	out["streak"] = streak
 	return out

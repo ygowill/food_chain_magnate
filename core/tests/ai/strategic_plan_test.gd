@@ -727,10 +727,12 @@ static func _test_rollout_search_and_evaluator(seed_val: int) -> Result:
 			"horizon_rounds": 1,
 			"step_budget_ms": 20,
 			"budget": TimeBudget.start(160),
+			"route_history": ["marketing_income"],
 		}
 	)
 	if not first_rollout.ok:
 		return first_rollout
+	var first_rollout_payload: Dictionary = Dictionary(first_rollout.value)
 	if str(engine.get_state().compute_hash()) != source_hash:
 		return Result.failure("StrategicPlanRunner should not mutate source engine")
 	var second_rollout := StrategicPlanRunnerClass.rollout(
@@ -742,24 +744,58 @@ static func _test_rollout_search_and_evaluator(seed_val: int) -> Result:
 			"horizon_rounds": 1,
 			"step_budget_ms": 20,
 			"budget": TimeBudget.start(160),
+			"route_history": ["marketing_income"],
 		}
 	)
 	if not second_rollout.ok:
 		return second_rollout
-	if str(_rollout_actions(first_rollout.value)) != str(_rollout_actions(second_rollout.value)):
+	if str(_rollout_actions(first_rollout_payload)) != str(_rollout_actions(second_rollout.value)):
 		return Result.failure("StrategicPlanRunner should be deterministic for same state/plan")
-	var eval_read := StrategicPlanEvaluatorClass.evaluate_rollout(plan, first_rollout.value, profile)
+	var route_history := Array(first_rollout_payload.get("route_history", []))
+	if str(route_history) != str(["marketing_income"]):
+		return Result.failure("StrategicPlanRunner should preserve route_history in rollout payload: %s" % str(first_rollout_payload))
+	var eval_read := StrategicPlanEvaluatorClass.evaluate_rollout(plan, first_rollout_payload, profile)
 	if not eval_read.ok:
 		return eval_read
 	var eval_payload: Dictionary = Dictionary(eval_read.value)
 	var breakdown: Dictionary = Dictionary(eval_payload.get("breakdown", {}))
-	for key in ["cash_delta", "cash_min_after_first_positive", "milestone_value", "salary_shortfall_penalty", "route_completion_bonus", "route_stall_penalty", "search_cost_penalty"]:
+	for key in ["cash_delta", "cash_min_after_first_positive", "milestone_value", "salary_shortfall_penalty", "route_completion_bonus", "route_transition_bonus", "route_stall_penalty", "search_cost_penalty"]:
 		if not breakdown.has(key):
 			return Result.failure("StrategicPlanEvaluator should expose breakdown key %s: %s" % [key, str(breakdown)])
 	var telemetry: Dictionary = Dictionary(eval_payload.get("telemetry", {}))
 	for key in ["milestones_gained", "demand_created", "demand_sold", "lost_to_competitor", "salary_due_estimate"]:
 		if not telemetry.has(key):
 			return Result.failure("StrategicPlanEvaluator should expose telemetry key %s: %s" % [key, str(telemetry)])
+	var transition_plan = StrategicPlanClass.create(
+		"supply_transition_bonus",
+		plan.owner_player_id,
+		"supply_capacity",
+		0.0,
+		["burger"],
+		["house_near"],
+		["burger_cook"],
+		{},
+		["supply"],
+		2,
+		16,
+		["train", "produce_food"]
+	)
+	var repeat_route_rollout: Dictionary = first_rollout_payload.duplicate(true)
+	repeat_route_rollout["route_history"] = ["supply_capacity", "supply_capacity"]
+	var switch_route_rollout: Dictionary = first_rollout_payload.duplicate(true)
+	switch_route_rollout["route_history"] = ["marketing_income", "marketing_income"]
+	var repeat_route_eval := StrategicPlanEvaluatorClass.evaluate_rollout(transition_plan, repeat_route_rollout, profile)
+	if not repeat_route_eval.ok:
+		return repeat_route_eval
+	var switch_route_eval := StrategicPlanEvaluatorClass.evaluate_rollout(transition_plan, switch_route_rollout, profile)
+	if not switch_route_eval.ok:
+		return switch_route_eval
+	var repeat_breakdown: Dictionary = Dictionary(Dictionary(repeat_route_eval.value).get("breakdown", {}))
+	var switch_breakdown: Dictionary = Dictionary(Dictionary(switch_route_eval.value).get("breakdown", {}))
+	if float(switch_breakdown.get("route_transition_bonus", 0.0)) <= float(repeat_breakdown.get("route_transition_bonus", 0.0)):
+		return Result.failure("route transition bonus should prefer marketing-to-supply switch over repeated supply: %s vs %s" % [str(switch_breakdown), str(repeat_breakdown)])
+	if float(Dictionary(switch_route_eval.value).get("score", 0.0)) <= float(Dictionary(repeat_route_eval.value).get("score", 0.0)):
+		return Result.failure("route transition bonus should affect evaluator score: %s vs %s" % [str(switch_route_eval.value), str(repeat_route_eval.value)])
 	var search_read := StrategicSearchClass.choose_plan_beam(
 		engine,
 		data["observation"],

@@ -14,4 +14,4 @@
 - 短期命令层继续以 StrategyBot 为强基线。
 - OSLA / Beam 仍用于命令层搜索诊断和 fixed-seed 对照，不作为默认强度路线。
 - MCTS 只保留在长程 plan 层，由 `StrategicBot` 通过 `StrategicMCTSSearch` 搜索 `StrategicPlan`，不直接选择 raw command。
-- 当前 plan-level MCTS trace 已开始补 route sequence 和非根展开统计，非根展开还会把 route history 传回 `StrategicPlanGenerator`，便于把“根 plan 选对了”与“后续路线真的展开了”拆开看。
+- 当前 plan-level MCTS trace 已开始补 route sequence 和非根展开统计，非根展开还会把 route history 传回 `StrategicPlanGenerator`，并在 `StrategicPlanRunner` / `StrategicPlanEvaluator` 中继续保留和计分，便于把“根 plan 选对了”与“后续路线真的展开了”拆开看。
