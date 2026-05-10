@@ -65,6 +65,7 @@ static func _append_marketing_income_plans(
 			prior += 5.0
 		if planning_gap > 0:
 			prior += float(planning_gap) * 4.0
+		prior += _route_context_bonus("marketing_income", options)
 		var target_employees := _target_employees_for_product(product_id, true)
 		plans.append(_make_plan(
 			"marketing_income_%s" % product_id,
@@ -98,6 +99,7 @@ static func _append_price_recovery_plans(
 		if recoverable <= 0:
 			continue
 		var prior := float(recoverable) * 18.0 + _profile_product_priority(profile, product_id)
+		prior += _route_context_bonus("price_recovery", options)
 		var target_houses := _houses_with_product_demand(observation, product_id, true)
 		plans.append(_make_plan(
 			"price_recovery_%s" % product_id,
@@ -139,6 +141,7 @@ static func _append_supply_capacity_plans(
 			prior += 5.0
 		if _has_trainable_for_targets(observation, target_employees):
 			prior += 4.0
+		prior += _route_context_bonus("supply_capacity", options)
 		var target_houses := _houses_with_product_demand(observation, product_id, true)
 		plans.append(_make_plan(
 			"train_supply_%s" % product_id,
@@ -175,6 +178,7 @@ static func _append_product_switch_attack_plans(
 		if not can_supply:
 			continue
 		var prior := float(pressure) * 16.0 + _profile_product_priority(profile, product_id)
+		prior += _route_context_bonus("product_switch_attack", options)
 		plans.append(_make_plan(
 			"product_switch_attack_%s" % product_id,
 			observation,
@@ -207,6 +211,7 @@ static func _append_growth_plan(
 	if not _growth_route_is_grounded(observation, route_plan, unserviceable, house_supply):
 		return
 	var prior := float(unserviceable) * 10.0 + float(house_supply) * 2.0 + _profile_employee_priority(profile, "new_business_developer")
+	prior += _route_context_bonus("growth", options)
 	plans.append(_make_plan(
 		"opening_growth_restaurant",
 		observation,
@@ -335,6 +340,113 @@ static func _cash_floor(observation: ObservationState, options: Dictionary) -> i
 		return maxi(0, int(options.get("cash_floor", 0)))
 	var cash := int(observation.own_player.get("cash", 0)) if observation != null else 0
 	return mini(10, maxi(0, cash))
+
+static func _route_context_bonus(route_type: String, options: Dictionary) -> float:
+	var route_history := _route_history(options)
+	if route_history.is_empty():
+		return 0.0
+	var tail := _route_history_tail(route_history)
+	var last_route_type := str(tail.get("route_type", "")).strip_edges()
+	if last_route_type.is_empty():
+		return 0.0
+	var streak := maxi(1, int(tail.get("streak", 1)))
+	var current_route_type := str(route_type).strip_edges()
+	if current_route_type.is_empty():
+		return 0.0
+	var repeat_penalty := float(streak) * 3.5
+	var switch_bonus := float(streak) * 4.5
+	match last_route_type:
+		"marketing_income":
+			match current_route_type:
+				"price_recovery", "supply_capacity":
+					return switch_bonus + 2.0
+				"product_switch_attack":
+					return switch_bonus * 0.5
+				"growth":
+					return -1.0
+				_:
+					return -repeat_penalty
+		"price_recovery":
+			match current_route_type:
+				"marketing_income", "supply_capacity":
+					return switch_bonus
+				"product_switch_attack":
+					return switch_bonus * 0.4
+				"growth":
+					return -1.0
+				_:
+					return -repeat_penalty
+		"supply_capacity":
+			match current_route_type:
+				"marketing_income", "price_recovery":
+					return switch_bonus
+				"product_switch_attack":
+					return switch_bonus * 0.4
+				"growth":
+					return -1.0
+				_:
+					return -repeat_penalty
+		"product_switch_attack":
+			match current_route_type:
+				"marketing_income", "supply_capacity":
+					return switch_bonus * 0.8
+				"price_recovery":
+					return switch_bonus * 0.5
+				"growth":
+					return -1.0
+				_:
+					return -repeat_penalty
+		"growth":
+			match current_route_type:
+				"marketing_income", "price_recovery", "supply_capacity":
+					return switch_bonus * 0.8
+				"product_switch_attack":
+					return switch_bonus * 0.4
+				_:
+					return -repeat_penalty
+	return 0.0
+
+static func _route_history(options: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	if options == null:
+		return out
+	var history_val = options.get("route_history", [])
+	if not (history_val is Array):
+		return out
+	for item in Array(history_val):
+		var route_type := ""
+		if item is Dictionary:
+			route_type = str(Dictionary(item).get("route_type", ""))
+		else:
+			route_type = str(item)
+		route_type = route_type.strip_edges()
+		if not route_type.is_empty():
+			out.append(route_type)
+	return out
+
+static func _route_history_tail(route_history: Array[String]) -> Dictionary:
+	var out := {
+		"route_type": "",
+		"streak": 0,
+	}
+	if route_history.is_empty():
+		return out
+	var last_route := ""
+	var streak := 0
+	for i in range(route_history.size() - 1, -1, -1):
+		var route := str(route_history[i]).strip_edges()
+		if route.is_empty():
+			continue
+		if last_route.is_empty():
+			last_route = route
+			streak = 1
+		elif route == last_route:
+			streak += 1
+		else:
+			break
+	out["route_type"] = last_route
+	out["streak"] = streak
+	return out
 
 static func _known_product_ids(observation: ObservationState, profile, income_analysis: Dictionary) -> Array[String]:
 	var out: Array[String] = []

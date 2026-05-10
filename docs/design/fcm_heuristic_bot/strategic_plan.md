@@ -161,6 +161,7 @@ rollout 输出：
 
 - `evaluated_plans` 记录 `path`、`best_path`、`route_types`、`best_route_types` 和 `route_switch_count`。
 - 最终 payload / `StrategicBot` trace 记录 `mcts_selected_route_types`、`mcts_route_switch_count`、`mcts_non_root_populated_nodes`、`mcts_non_root_expanded_nodes`、`mcts_non_root_candidate_count`。
+- 非根节点展开会把当前 route history 传回 `StrategicPlanGenerator`，让后续候选轻微偏向价格恢复 / 供给补位 / 路线切换，并抑制连续重复同类路线。
 - 这些指标用于区分根 plan 选择和后续 plan 展开，不再回到 raw command 级 visits/q 比较。
 
 ## 测试与验收
@@ -171,6 +172,7 @@ rollout 输出：
   - 有公开 burger demand 时生成 burger marketing/supply plan。
   - 有 price-recoverable demand 时生成 price recovery plan。
   - 对手有产能缺口时生成 product switch attack plan。
+  - 非根 route history 会把后续计划轻微推向 supply / price recovery 等补位路线，而不是无限重复同类 marketing plan。
 
 - `StrategicPlanHintsTest`
   - plan hints 能影响 StrategyBot 的目标员工/产品选择。

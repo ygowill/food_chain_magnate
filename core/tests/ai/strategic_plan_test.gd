@@ -29,6 +29,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var generator := _test_generator_creates_income_and_supply_plans()
 	if not generator.ok:
 		return generator
+	var generator_history := _test_generator_route_history_bias()
+	if not generator_history.ok:
+		return generator_history
 	var hints := _test_hints_bias_strategy_scorer()
 	if not hints.ok:
 		return hints
@@ -92,7 +95,7 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var mcts_mode := _test_strategic_bot_mcts_mode(seed_val)
 	if not mcts_mode.ok:
 		return mcts_mode
-	return Result.success({"cases": 23})
+	return Result.success({"cases": 24})
 
 static func _test_plan_and_hints_roundtrip() -> Result:
 	var plan = StrategicPlanClass.create(
@@ -167,6 +170,27 @@ static func _test_generator_creates_income_and_supply_plans() -> Result:
 		return empty
 	if not Array(empty.value).is_empty():
 		return Result.failure("StrategicPlanGenerator should return empty plans when no route exists: %s" % str(_plan_debug(empty.value)))
+	return Result.success()
+
+static func _test_generator_route_history_bias() -> Result:
+	var profile := StrategyProfileClass.new()
+	profile.configure_base_revenue()
+	var observation := _synthetic_income_observation()
+	var read := StrategicPlanGeneratorClass.generate(observation, profile, {
+		"max_plans": 4,
+		"route_history": ["marketing_income"],
+	})
+	if not read.ok:
+		return read
+	var plans: Array = read.value
+	if plans.is_empty():
+		return Result.failure("StrategicPlanGenerator should create follow-up plans after route history: %s" % str(_plan_debug(plans)))
+	var first_plan_val = plans[0]
+	if first_plan_val == null or not first_plan_val.has_method("to_trace_dict"):
+		return Result.failure("StrategicPlanGenerator should return plans: %s" % str(_plan_debug(plans)))
+	var first_plan = first_plan_val
+	if str(first_plan.route_type) != "supply_capacity":
+		return Result.failure("StrategicPlanGenerator should prefer supply follow-up after marketing history: %s" % str(_plan_debug(plans)))
 	return Result.success()
 
 static func _test_hints_bias_strategy_scorer() -> Result:

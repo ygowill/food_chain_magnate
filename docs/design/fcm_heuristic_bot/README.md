@@ -73,8 +73,10 @@
 - 当前状态：selfplay / matrix summary 已能聚合 Plan MCTS 的路线级诊断：`search_metrics` 记录 selected route type counts、route switch 总数和非根展开/候选计数，`BotSelfplaySummary` 会输出独立 `MCTS_ROUTE` 行，后续可以直接从矩阵 summary 看路线偏向，而不用人工翻每条 decision trace。
 - 当前状态：`StrategicBot` 的 MCTS 分支已同步 `strategic_horizon_decisions`、`strategic_horizon_rounds`、`strategic_max_plans`、`strategic_rollout_step_budget_ms`、`strategic_min_plans_for_rollout` 到 plan search 使用的无前缀选项，避免 beam 可调而 MCTS 忽略战略层预算/宽度配置。
 - 当前状态：旧命令层 MCTS 已从 active code、测试套件和 selfplay CLI 中移除；Plan MCTS 的公开调参入口统一为 `--strategic-mcts-*`，并只作用于 `StrategicBot` 的 plan search。
-- 验证：使用 `D:\tools\Godot_v4.6-stable_win64.exe\Godot_v4.6-stable_win64_console.exe` 运行 `res://tools/check_compile.gd` 得到 `PASS files=1234`；运行 `res://ui/scenes/tests/all_tests.tscn -- --autorun` 得到 `425/425 PASS`、`StrategicPlanTest PASS (1728ms)`、`BotSelfplayToolTest PASS (973ms)`、`BotSelfplayMatrixTest PASS (1429ms)`、`total_ms=93213`。Godot headless 退出时仍会输出既有 RID/resource leak warning；以 AllTests summary 为准。
-- 后续计划：先用新增的 route-switch 和非根展开指标定位 `strategic` 早期收入覆盖缺口，按候选缺失、hints 偏置、rollout 边界、evaluator 分项四类拆开定位，并为能复现的结构问题补 deterministic test。第二优先级是用 `tuning` profile 做低预算小矩阵筛方向，再用 `play` profile 和 2s/5s/10s 预算做少量真实对局 smoke，确认收益来自更深路线而不是偶然超时。
+- 当前状态：Plan MCTS 的非根 plan 展开会携带 route history，`StrategicPlanGenerator` 会对连续重复的同类路线做轻微抑制，并对价格恢复 / 供给补位 / 路线切换给出小幅偏置，避免搜索长期卡在同一类 `marketing_income` 计划上；对应的 generator 回归已补。
+- 验证：使用 `D:\tools\Godot_v4.6-stable_win64.exe\Godot_v4.6-stable_win64_console.exe` 运行 `res://tools/check_compile.gd` 得到 `PASS files=1234`；运行 `res://ui/scenes/tests/all_tests.tscn -- --autorun` 得到 `425/425 PASS`、`StrategicPlanTest PASS (1784ms)`、`BotSelfplayToolTest PASS (925ms)`、`BotSelfplayMatrixTest PASS (1465ms)`、`total_ms=94525`。Godot headless 退出时仍会输出既有 RID/resource leak warning；以 AllTests summary 为准。
+- 诊断：同一低样本 r8 / 2 matches / `play` profile / `mcts-d4-r1-p4-s20-b16-m1-mi6-md2-mk2` smoke 中，`MCTS_ROUTE` 为 `route_switch_avg=0.038`、`non_root_populated_avg=0.621`、`non_root_expanded_avg=0.858`、`non_root_candidate_avg=1.525`，selected route types 为 `marketing_income=109`、`price_recovery=19`、`product_switch_attack=8`、`supply_capacity=12`。这说明 route-history bias 已经产生少量路线切换，但 `marketing_income` 仍是主导路线。
+- 后续计划：继续用 route-switch 和非根展开指标定位 `strategic` 早期收入覆盖缺口；下一步优先检查 hints / evaluator 是否仍高估重复营销收入、低估价格恢复和早期现金保全。第二优先级是用 `tuning` profile 做低预算小矩阵筛方向，再用 `play` profile 和 2s/5s/10s 预算做少量真实对局 smoke，确认收益来自更深路线而不是偶然超时。
 
 - 日期：2026-05-09
 - 提交：`6a937463 feat(ai): implement strategy bot planning`

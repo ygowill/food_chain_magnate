@@ -521,6 +521,7 @@ static func _populate_node_candidates(
 	var generator_options := options.duplicate()
 	generator_options["source_state"] = engine.get_state()
 	generator_options["max_plans"] = maxi(top_k_per_node, int(options.get("max_plans", top_k_per_node)))
+	generator_options["route_history"] = _route_types_for_path(Array(node.get("path", [])))
 	var plans_read := StrategicPlanGeneratorClass.generate(observation, profile, generator_options)
 	if not plans_read.ok:
 		node["terminal"] = true
