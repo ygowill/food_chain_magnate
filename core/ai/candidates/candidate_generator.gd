@@ -1310,6 +1310,25 @@ static func _plan_hints_dict(options: Dictionary) -> Dictionary:
 		return options
 	return {}
 
+static func _options_without_plan_hints(options: Dictionary) -> Dictionary:
+	if options.is_empty():
+		return {}
+	var stripped := options.duplicate(true)
+	stripped.erase("plan_hints")
+	stripped.erase("preferred_products")
+	stripped.erase("preferred_actions")
+	stripped.erase("execution_sequence")
+	stripped.erase("preferred_employee_ids")
+	stripped.erase("preferred_employee_roles")
+	stripped.erase("preferred_marketing_house_ids")
+	stripped.erase("preferred_marketing_board_numbers")
+	stripped.erase("preferred_price_actions")
+	stripped.erase("avoid_actions")
+	stripped.erase("cash_floor")
+	stripped.erase("growth_bias")
+	stripped.erase("plan_id")
+	return stripped
+
 static func _plan_hints_action_bonus(plan_hints: Dictionary, action_id: String) -> float:
 	if action_id.is_empty() or plan_hints.is_empty():
 		return 0.0
@@ -2304,7 +2323,7 @@ static func _training_reserve_move_prior(
 	validate_command: Callable = Callable(),
 	options: Dictionary = {}
 ) -> float:
-	return 6.5 + _best_train_target_prior(employee_id, observation, context, validate_command, options)
+	return 6.5 + _best_train_target_prior(employee_id, observation, context, validate_command, _options_without_plan_hints(options))
 
 static func _train_prior(
 	from_employee: String,
@@ -2683,7 +2702,7 @@ static func _should_preserve_for_training(
 		return false
 	if _should_activate_for_supply(employee_id, observation):
 		return false
-	return _best_train_target_prior(employee_id, observation, context, validate_command, options) >= TRAINING_PRESERVE_MIN_PRIOR
+	return _best_train_target_prior(employee_id, observation, context, validate_command, _options_without_plan_hints(options)) >= TRAINING_PRESERVE_MIN_PRIOR
 
 static func _should_activate_for_supply(employee_id: String, observation: ObservationState) -> bool:
 	if observation == null or employee_id.is_empty() or not EmployeeRegistryClass.is_loaded() or not EmployeeRegistryClass.has(employee_id):

@@ -92,10 +92,13 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var optional_training := _test_optional_training_does_not_block_revenue_staff(seed_val)
 	if not optional_training.ok:
 		return optional_training
+	var plan_hint_training := _test_plan_hints_do_not_reserve_campaign_manager_for_optional_training(seed_val)
+	if not plan_hint_training.ok:
+		return plan_hint_training
 	var advanced_training := _test_training_candidates_cover_advanced_routes(seed_val)
 	if not advanced_training.ok:
 		return advanced_training
-	return Result.success({"cases": 26})
+	return Result.success({"cases": 27})
 
 static func _test_reserve_candidates_are_valid(seed_val: int) -> Result:
 	var engine_read := _build_engine(seed_val)
@@ -1281,6 +1284,66 @@ static func _test_optional_training_does_not_block_revenue_staff(seed_val: int) 
 	var optional_train := _first_command_with_param(train_candidates, "train", "from_employee", "campaign_manager")
 	if optional_train != null:
 		return Result.failure("Working/Train should not generate low-priority campaign_manager -> brand_manager training before revenue use: %s" % str(_macro_debug(train_candidates)))
+	return Result.success()
+
+static func _test_plan_hints_do_not_reserve_campaign_manager_for_optional_training(seed_val: int) -> Result:
+	var engine_read := _build_engine(seed_val)
+	if not engine_read.ok:
+		return engine_read
+	var engine: GameEngine = engine_read.value
+	var state := engine.get_state()
+	if state == null:
+		return Result.failure("engine state is null")
+	state.phase = DefsClass.PHASE_RESTRUCTURING
+	state.sub_phase = ""
+	state.turn_order = [0, 1]
+	state.selection_order = [0, 1]
+	state.current_player_index = 0
+	state.round_state["restructuring"] = {
+		"finalized": false,
+		"submitted": {
+			0: false,
+			1: false,
+		},
+	}
+	state.players[0]["company_structure"]["ceo_slots"] = 2
+	state.players[0]["company_structure"]["structure"] = [
+		{"employee_id": "trainer", "reports": []},
+		{"employee_id": "", "reports": []},
+	]
+	state.players[0]["employees"] = ["ceo"]
+	state.players[0]["reserve_employees"] = []
+	state.players[0]["busy_marketers"] = []
+	var add_trainer := _add_employee_for_test(state, 0, "employees", "trainer")
+	if not add_trainer.ok:
+		return add_trainer
+	var add_campaign_manager := _add_employee_for_test(state, 0, "employees", "campaign_manager")
+	if not add_campaign_manager.ok:
+		return add_campaign_manager
+	state.employee_pool["brand_manager"] = maxi(1, int(state.employee_pool.get("brand_manager", 0)))
+
+	var plan_hints := {
+		"plan_id": "product_switch_attack_pizza",
+		"execution_sequence": ["initiate_marketing", "produce_food"],
+		"preferred_actions": ["initiate_marketing", "produce_food", "recruit", "train"],
+		"preferred_employee_ids": ["campaign_manager"],
+		"preferred_employee_roles": ["marketing"],
+	}
+	var payload_read := _generate_for_current_player(engine, seed_val, {
+		"max_valid_per_action": 8,
+		"plan_hints": plan_hints,
+	})
+	if not payload_read.ok:
+		return payload_read
+	var candidates := _read_candidates(payload_read.value)
+	var campaign_direct := _first_command_with_param(candidates, "set_company_structure_direct", "employee_id", "campaign_manager")
+	if campaign_direct == null:
+		return Result.failure("plan hints should still allow campaign_manager to be activated directly: %s" % str(_macro_debug(candidates)))
+	var campaign_reserve := _first_command_with_param(candidates, "restructure_employee", "employee_id", "campaign_manager")
+	if campaign_reserve != null:
+		return Result.failure("plan hints should not convert optional campaign_manager training into a reserve move: %s" % str(_macro_debug(candidates)))
+	if not _has_action(candidates, "submit_restructuring"):
+		return Result.failure("plan hints should keep submit_restructuring available after direct activation: %s" % str(_macro_debug(candidates)))
 	return Result.success()
 
 static func _test_training_candidates_cover_advanced_routes(seed_val: int) -> Result:

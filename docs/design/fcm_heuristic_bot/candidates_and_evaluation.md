@@ -113,6 +113,8 @@ Bot 不能依赖“非法结构会原样失败”。候选生成必须先用当�
 
 当前结构评价已经把泛员工本体分单独降权，避免 `recruiting_girl` 这类边际直改长期压过 `submit_restructuring`；但像 `kitchen_trainee`、`pricing_manager` 这类能打开食品供给、价格恢复或 waitress 路线的结构动作，仍然保留完整的路线增益分。
 
+`restructure_employee` 的训练保留候选只应由真实训练/供给理由触发，不能只因为 `StrategicPlan` 的 `plan_hints` 偏好某个员工或角色就把 active employee 移回 reserve。Plan hints 仍可影响直装、训练和营销等后续候选排序，但 optional training 不能单独压过 `submit_restructuring`，否则会形成 reserve/direct 结构编辑循环。
+
 ### 9.5 Order of Business
 
 当前选择顺序由 `WorkingFlow.start_order_of_business()` 计算：

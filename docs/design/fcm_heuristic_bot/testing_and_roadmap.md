@@ -148,6 +148,7 @@ tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
 - 诊断补充：`BotSelfplaySummary` 现在会在 `SEARCH` 行里单独暴露 `strategic_total`、`strategic_cached`、`strategic_cached_rate` 和 `strategic_cached_share`。同一轮 1-match `r8` smoke 中，summary 里能看到 `strategic=48`、`strategic_cached=12`、`strategy=59`，说明 plan cache 的命中已经可见，但还不够高到只靠缓存就解释 `time_ms_avg=512.361` 级别的成本，后续如果要继续压耗时，需要把缓存命中率和展开策略一起看。
 - 20 局 `strategy` vs `strategic` 对照（seed 12345-12354、双向座位互换）显示：16 局正常结束、3 局 600s timeout、1 局 `max_steps=1000`，正常结束局胜负为 8:8，平均 `round=14.125`、`steps=276.375`、`time_ms_avg_per_decision=277.635`、`budget_expired_rate=0.163`。4 个未完成局都停在 `Restructuring`，并且 `set_company_structure_direct` / `restructure_employee` 数量异常高；后续强度评估前必须先补 restructuring anti-cycle / submit 收口回归，否则长局结果会被结构编辑循环污染。
 - 追踪补充：`StrategyBot` 的 Restructuring decision trace 现在会记录候选数量分桶、edit/submit best score 和 `restructuring_score_gap_to_submit`。结构评分第一轮已经落地：`StrategyStructurePlanner` 把泛员工分降权为 `structure_employee_weight=0.35`，并保留激活、价格路线、waitress 路线和扩张 readiness 的完整分值；下一轮复跑 timeout seeds 时，先看 `score_gap_to_submit` 是否明显回落，再判断是否还需要调 `plan_hints` 或候选生成。
+- 进展：`CandidateGenerator` 的 restructuring 保留判定现在会忽略 `plan_hints`，避免 `campaign_manager` 这类只靠长期路线偏置支撑的 optional training 把 active employee 拉回 `restructure_employee` / reserve 循环。`12352/12353/12354` 已用 1s/decision 与 180s 单局上限复跑：3 局全部 `GameOver`，`timeouts=0`，平均 `round=10.333`、`steps=189.0`、`time_ms_avg_per_decision=329.578`，`ACTIONS` 中不再出现 `restructure_employee` 主动动作；后续可以把重点从结构编辑循环转回 MCTS 路线质量和早期现金覆盖。
 
 
 ## 15. 开发路线图
