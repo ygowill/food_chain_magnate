@@ -92,7 +92,7 @@
 - 进展：MCTS 预算 profile 第一轮已下调，以先保证 `play` 档能在 2s selfplay smoke 中稳定完成。`play` 现在使用 `horizon_decisions=16`、`horizon_rounds=2`、`max_plans=6`、`rollout_step_budget_ms=48`、`min_search_budget_ms=640`、`mcts_iterations=12`、`mcts_max_depth=2`、`mcts_top_k_per_node=4`、`mcts_root_prior_min_visits_per_child=1`；`tuning` 使用 `horizon_decisions=12`、`max_plans=4`、`rollout_step_budget_ms=24`、`min_search_budget_ms=160`、`mcts_iterations=8`、`mcts_top_k_per_node=3`。默认分支与 `play` 保持一致，避免未显式 profile 时回到过宽配置。
 - 验证：预算 profile 调整后使用 Godot 4.6 console 得到 `CheckCompile PASS files=1234`，`AllTests PASS 425/425`。`strategy,strategy` vs `strategy,strategic` 的 1-match `r8` / seed 12345 / `base_revenue_growth_v1` / 2s `play` MCTS smoke 已完成，`strategic-play_mcts_budget_r1` success `1.0`、`budget_expired_rate=0.078`、`time_ms_avg=643.797`，`MCTS_ROUTE` 为 `route_switch_avg=0.047`、`non_root_populated_avg=1.055`、`non_root_expanded_avg=1.453`、`non_root_candidate_avg=2.117`，route types 为 `marketing_income=50`、`price_recovery=12`、`supply_capacity=12`；相对 Strategy `tuning_score_delta=+47.375`、`cash_min_after_positive_delta=[0.0,0.0]`、`cash_max_seen_delta=[-11.0,10.0]`。结论：成本已从上一轮 `budget_expired_rate=0.225`、`time_ms_avg=815.200` 明显下降，下一轮再看是否继续压低重复搜索成本或优化展开触发。
 - 进展：`BotSelfplaySummary` 的 `SEARCH` 行现在会把 `strategic` 与 `strategic_cached` 分开统计，并显式输出 `strategic_total`、`strategic_cached`、`strategic_cached_rate`、`strategic_cached_share`，方便在不改搜索语义的前提下判断 plan cache 的实际命中率。当前这台机器的 1-match `r8` smoke 已能看到 `strategic=48`、`strategic_cached=12`、`strategy=59`，说明缓存有命中但仍不足以单独解释总耗时，需要继续结合路线展开一起看。
-- 追加诊断：2026-05-11 的 20 局 `strategy` vs `strategic` 对照（seed 12345-12354、双向座位互换）里，16 局正常结束、3 局 600s timeout、1 局 `max_steps=1000` 失败；正常结束局胜负 8:8，平均 `round=14.125`、`steps=276.375`、`time_ms_avg_per_decision=277.635`、`budget_expired_rate=0.163`。未完成局全部停在 `Restructuring`，`set_company_structure_direct` / `restructure_employee` 占比异常高，说明当前首要问题是结构编辑收口，而不是单纯扩大 plan search 宽度。
+- 追加诊断：在修复 restructuring 收口后，用同样的 1s/decision、`base_revenue_growth_v1`、seed 12345-12354 重新跑 20 局 `strategy` vs `strategic`，现在全部 `ok=20/20`、`timeouts=0`。按 seat swap 统计，`strategy->strategic` 的 10 局里 `strategic` 2:8 失利，`strategic->strategy` 的 10 局里 `strategic` 6:4 领先，合并胜率 8:12（40%）；整体平均 `round=12.75`、`steps=240.5`、`time_ms_avg_per_decision=310.863`、`budget_expired_rate=0.202`、`cash_min_after_first_positive=[9.7,8.25]`、`MCTS_ROUTE route_switch_avg=0.008`。route mix 仍以 `marketing_income=1091` 为主，辅以 `price_recovery=284` 与 `supply_capacity=130`，说明结构死循环已解，但 strategic 还没有稳定超过 Strategy，下一步应继续盯 route 质量和现金峰值。
 
 - 日期：2026-05-09
 - 提交：`6a937463 feat(ai): implement strategy bot planning`
@@ -162,8 +162,8 @@
 下一步计划：
 
 1. **不恢复命令层 MCTS**：短期命令继续由 StrategyBot 决策；MCTS 只用于 `StrategicPlan` 路线搜索。
-2. **先修 restructuring 收口**：已补 `StrategyBot` restructuring trace 摘要，并完成第一轮结构评分收口（边际 direct edit 降权、收入路线激活保留）。下一轮直接复跑 `12352/12353/12354` 的 restructuring 循环，确认 edit/submit gap 是否已经下降；若仍循环，再看是重复 edit、hints bonus 过强，还是候选生成没有识别“结构已足够好”。
-3. **再诊断 StrategicPlan 早期收入缺口**：等 restructuring 不再拖死长局后，再回头检查小矩阵里 strategic 未形成正现金的 seed/player trace，确认是候选缺失、hints 偏置、rollout 边界还是 evaluator 分项错误。
+2. **先修 restructuring 收口**：已补 `StrategyBot` restructuring trace 摘要，并完成第一轮结构评分收口（边际 direct edit 降权、收入路线激活保留）。随后复跑 `12352/12353/12354`，三局都已在 `GameOver` 结束，证明结构死循环已经压下去；当前不再把 restructuring 当作主瓶颈。
+3. **再诊断 StrategicPlan 早期收入缺口**：结构收口确认后，继续检查 20 局 seat-swap 对照里 strategic 的 route mix、现金峰值和 win rate，确认是候选缺失、hints 偏置、rollout 边界还是 evaluator 分项错误。
 4. **保留 StrategyBot 作为战术执行器**：Recruit/Train/Restructuring/Payday/单候选 pass 等短期动作继续由 StrategyBot 决策；planner 只通过 hints 改变目标产品、目标员工、营销优先级、价格/扩张优先级。
 5. **Plan Beam 先过现金底线，再考虑 Plan MCTS**：只有 deterministic beam 已能在聚合指标上不低于 Strategy 的早期收入底线，并至少改善一个路线指标，才进入 plan-level MCTS。
 6. **分层预算验证**：调参与自对弈常用低预算筛方向；面向真实玩家的候选配置再用 2s/5s/10s 三档预算做少量 smoke，观察收益是否来自更深路线而非偶然超时。

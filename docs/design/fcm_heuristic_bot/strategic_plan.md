@@ -172,7 +172,7 @@ rollout 输出：
 - 2026-05-11 的 2s `play` 预算 smoke 证明更宽 MCTS 可以产生非根展开，但当前路线价值还会减少早期 `initiate_marketing` / `produce_food` / `recruit`，导致现金峰值弱于 `StrategyBot` baseline。早期收入权重已完成第一轮收紧；后续不再继续盲目加宽搜索，而是优先压低 `play/tuning` profile 的 MCTS 成本，再观察是否需要恢复更深的非根展开。
 - MCTS 预算 profile 第一轮已把 `play` 从 24 iter / depth 3 / topK 6 / 1200ms min search 降到 12 iter / depth 2 / topK 4 / 640ms min search，`tuning` 从 16 iter / topK 4 / 240ms min search 降到 8 iter / topK 3 / 160ms min search；root prior visit floor 降为 1。对应 1-match r8 2s smoke 中 `budget_expired_rate` 从 `0.225` 降到 `0.078`，`time_ms_avg` 从 `815.200` 降到 `643.797`，且仍保留非根 plan 展开。
 - `BotSelfplaySummary` 现在会把 `strategic` 与 `strategic_cached` 单独汇总到 `SEARCH` 行，输出 `strategic_total` / `strategic_cached` / `strategic_cached_rate` / `strategic_cached_share`。这只是诊断增强，不改变 route-history cache 语义；下一步如果继续压低耗时，应先根据这个命中率判断是缓存契约还是展开策略在拖成本。
-- 2026-05-11 的 20 局 `strategy` vs `strategic` 对照显示，完成局强度仍是 8:8，但 4 个未完成局全部停在 `Restructuring`，而且 `set_company_structure_direct` / `restructure_employee` 的累计量远高于其他动作。这个结果把下一轮优先级钉死在 restructuring 收口上：先让结构阶段稳定提交，再继续看 plan-level MCTS 的预算与展开宽度。
+- 2026-05-11 的 20 局 `strategy` vs `strategic` 复跑（1s/decision、`base_revenue_growth_v1`、seed 12345-12354、双向座位互换）已经不再出现 Restructuring timeout：20 局全部 `GameOver`、`timeouts=0`，合并胜率 8:12（40%），平均 `round=12.75`、`steps=240.5`、`time_ms_avg_per_decision=310.863`。`strategic` 的 cash 底线没有退化，但 route mix 仍以 `marketing_income` 为主，`route_switch_avg=0.008`，说明下一轮优先级应从结构收口切到 route 质量 / 现金峰值。
 
 ## 测试与验收
 
