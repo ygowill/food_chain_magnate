@@ -161,6 +161,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var trainable_supply_generation := _test_candidate_generation_keeps_trainable_food_supply_available(seed_val)
 	if not trainable_supply_generation.ok:
 		return trainable_supply_generation
+	var restructuring_trace := _test_strategy_restructuring_trace_summary(seed_val)
+	if not restructuring_trace.ok:
+		return restructuring_trace
 	var fridge_keep := _test_fridge_keep_prioritizes_serviceable_demand(seed_val)
 	if not fridge_keep.ok:
 		return fridge_keep
@@ -2839,6 +2842,63 @@ static func _test_candidate_generation_keeps_trainable_food_supply_available(see
 		if str(candidate.id).find("burger_cook") >= 0:
 			return Result.success()
 	return Result.failure("CandidateGenerator should not hide trainable burger cook when current food demand needs active supply: %s" % str(candidate_ids))
+
+static func _test_strategy_restructuring_trace_summary(seed_val: int) -> Result:
+	var bot := StrategyBotClass.new()
+	var observation := _synthetic_income_observation()
+	observation.phase = DefsClass.PHASE_RESTRUCTURING
+	observation.sub_phase = ""
+	observation.own_player["cash"] = 20
+	observation.own_player["employees"] = ["marketing_trainee"]
+	observation.own_player["reserve_employees"] = ["trainer", "campaign_manager", "burger_cook"]
+	observation.own_player["company_structure"] = {
+		"ceo_slots": 3,
+		"structure": [{}, {}, {}],
+	}
+	observation.employee_pool_public = {
+		"campaign_manager": 1,
+	}
+	var context := AiDecisionContext.create(
+		0,
+		DefsClass.PHASE_RESTRUCTURING,
+		"",
+		1,
+		seed_val,
+		[]
+	)
+	var decision := bot.choose_command(
+		observation,
+		context,
+		["restructure_employee", "set_company_structure_direct", "set_company_structure_report", "submit_restructuring"],
+		Callable(),
+		null
+	)
+	if decision == null or decision.is_failure():
+		return Result.failure("StrategyBot should produce a restructuring decision with trace metadata: %s" % str(decision.failure_reason if decision != null else "null decision"))
+	var trace: Dictionary = Dictionary(decision.trace)
+	if str(trace.get("bot", "")) != "StrategyBot":
+		return Result.failure("StrategyBot restructuring trace should identify the bot: %s" % str(trace))
+	var candidate_count := int(trace.get("restructuring_candidate_count", -1))
+	var restructure_employee_count := int(trace.get("restructuring_restructure_employee_candidate_count", -1))
+	var direct_count := int(trace.get("restructuring_direct_candidate_count", -1))
+	var report_count := int(trace.get("restructuring_report_candidate_count", -1))
+	var submit_count := int(trace.get("restructuring_submit_candidate_count", -1))
+	if candidate_count <= 0 or direct_count <= 0 or submit_count <= 0:
+		return Result.failure("StrategyBot restructuring trace should expose candidate counts: %s" % str(trace))
+	if restructure_employee_count < 0 or report_count < 0:
+		return Result.failure("StrategyBot restructuring trace should expose non-negative candidate buckets: %s" % str(trace))
+	if candidate_count != restructure_employee_count + direct_count + report_count + submit_count:
+		return Result.failure("StrategyBot restructuring trace counts should add up: %s" % str(trace))
+	if str(trace.get("restructuring_best_submit_macro_action_id", "")) != "submit_restructuring":
+		return Result.failure("StrategyBot restructuring trace should identify submit_restructuring as the best submit candidate: %s" % str(trace))
+	var best_edit_score_val = trace.get("restructuring_best_edit_score", null)
+	var best_submit_score_val = trace.get("restructuring_best_submit_score", null)
+	var score_gap_val = trace.get("restructuring_score_gap_to_submit", null)
+	if best_edit_score_val == null or best_submit_score_val == null or score_gap_val == null:
+		return Result.failure("StrategyBot restructuring trace should expose best edit/submit scores: %s" % str(trace))
+	if not is_equal_approx(float(best_edit_score_val) - float(best_submit_score_val), float(score_gap_val)):
+		return Result.failure("StrategyBot restructuring trace score gap should match best edit minus best submit: %s" % str(trace))
+	return Result.success()
 
 static func _test_fridge_keep_prioritizes_serviceable_demand(seed_val: int) -> Result:
 	var engine := GameEngine.new()

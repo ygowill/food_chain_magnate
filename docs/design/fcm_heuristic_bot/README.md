@@ -72,6 +72,7 @@
 - 当前状态：Plan MCTS 继续往解释性补强：最终 payload / `StrategicBot` trace 现在还会暴露 `mcts_selected_route_types`、`mcts_route_switch_count` 以及 `mcts_non_root_populated_nodes` / `mcts_non_root_expanded_nodes` / `mcts_non_root_candidate_count`，`evaluated_plans` 也同步记录 `route_types` / `best_route_types`，方便区分“根节点选了什么”和“后续 plan 路线到底有没有真的展开”。
 - 当前状态：`StrategicBot` 现在会保留短路由历史并跨决策传递给 plan cache / Beam / MCTS 输入；历史会在玩家切换、回合倒退或上下文 seed 回退时重置，避免缓存计划继续沿用过期路线上下文。对应回归会检查首个决策后的历史写回、同窗口缓存失效，以及 MCTS rollout trace 是否保留外部 route history。
 - 当前状态：selfplay / matrix summary 已能聚合 Plan MCTS 的路线级诊断：`search_metrics` 记录 selected route type counts、route switch 总数和非根展开/候选计数，`BotSelfplaySummary` 会输出独立 `MCTS_ROUTE` 行，后续可以直接从矩阵 summary 看路线偏向，而不用人工翻每条 decision trace。
+- 当前状态：`StrategyBot` 的 Restructuring trace 已补专用摘要字段，能直接看到 `restructuring_*` 候选数量、`restructure_employee` / `set_company_structure_direct` / `submit_restructuring` 的 best score，以及 `score_gap_to_submit`；这轮只做观测，不改重构选择逻辑。
 - 当前状态：`StrategicBot` 的 MCTS 分支已同步 `strategic_horizon_decisions`、`strategic_horizon_rounds`、`strategic_max_plans`、`strategic_rollout_step_budget_ms`、`strategic_min_plans_for_rollout` 到 plan search 使用的无前缀选项，避免 beam 可调而 MCTS 忽略战略层预算/宽度配置。
 - 当前状态：旧命令层 MCTS 已从 active code、测试套件和 selfplay CLI 中移除；Plan MCTS 的公开调参入口统一为 `--strategic-mcts-*`，并只作用于 `StrategicBot` 的 plan search。
 - 当前状态：Plan MCTS 的非根 plan 展开会携带 route history，`StrategicPlanGenerator` 会对连续重复的同类路线做轻微抑制，并对价格恢复 / 供给补位 / 路线切换给出小幅偏置；`StrategicPlanRunner` 会把 route history 保序带回 rollout payload，`StrategicPlanEvaluator` 再用 `route_transition_bonus` 把该偏置计入 plan-level value，避免搜索长期卡在同一类 `marketing_income` 计划上。对应的 generator / evaluator 回归已补。
@@ -160,7 +161,7 @@
 下一步计划：
 
 1. **不恢复命令层 MCTS**：短期命令继续由 StrategyBot 决策；MCTS 只用于 `StrategicPlan` 路线搜索。
-2. **先修 restructuring 收口**：复现 `12352/12353/12354` 的 restructuring 循环，确认是重复 edit、submit 优先级不够，还是 evaluator/hints 在持续鼓励无效结构调整；必要时先补 trace 字段和 deterministic test，让结构阶段能稳定收口。
+2. **先修 restructuring 收口**：已补 `StrategyBot` restructuring trace 摘要，下一轮直接复现 `12352/12353/12354` 的 restructuring 循环，确认是重复 edit、submit 优先级不够，还是 evaluator/hints 在持续鼓励无效结构调整；必要时再补 deterministic test，让结构阶段能稳定收口。
 3. **再诊断 StrategicPlan 早期收入缺口**：等 restructuring 不再拖死长局后，再回头检查小矩阵里 strategic 未形成正现金的 seed/player trace，确认是候选缺失、hints 偏置、rollout 边界还是 evaluator 分项错误。
 4. **保留 StrategyBot 作为战术执行器**：Recruit/Train/Restructuring/Payday/单候选 pass 等短期动作继续由 StrategyBot 决策；planner 只通过 hints 改变目标产品、目标员工、营销优先级、价格/扩张优先级。
 5. **Plan Beam 先过现金底线，再考虑 Plan MCTS**：只有 deterministic beam 已能在聚合指标上不低于 Strategy 的早期收入底线，并至少改善一个路线指标，才进入 plan-level MCTS。

@@ -169,6 +169,7 @@ func _choose_command_with_options(
 		return _fallback(observation, context, legal_action_ids, validate_command, budget, "StrategyBot found no scored candidate")
 
 	var trace_top_candidates := _trace_candidates(ranked, TRACE_TOP_CANDIDATE_LIMIT)
+	var restructuring_trace := _restructuring_trace_summary(ranked)
 
 	var chosen_command: Command = best_macro.commands[0]
 	var elapsed_ms := maxi(0, Time.get_ticks_msec() - start_ms)
@@ -190,6 +191,9 @@ func _choose_command_with_options(
 		"budget_expired": budget_expired,
 		"time_ms": elapsed_ms,
 	}
+	if not restructuring_trace.is_empty():
+		for key in restructuring_trace.keys():
+			explanation[key] = restructuring_trace[key]
 	var trace := {
 		"search": "strategy",
 		"bot": "StrategyBot",
@@ -212,6 +216,9 @@ func _choose_command_with_options(
 		"top_candidates": trace_top_candidates,
 		"discarded_reasons": discarded_reasons.slice(0, 20),
 	}
+	if not restructuring_trace.is_empty():
+		for key in restructuring_trace.keys():
+			trace[key] = restructuring_trace[key]
 	var plan_hints_val = generator_options.get("plan_hints", null)
 	if plan_hints_val != null:
 		var plan_hints_dict := _plan_hints_to_dict(plan_hints_val)
@@ -443,6 +450,106 @@ static func _trace_candidate(entry: Dictionary) -> Dictionary:
 	if entry.has("base_score"):
 		out["base_score"] = float(entry.get("base_score", -INF))
 	return out
+
+static func _restructuring_trace_summary(ranked: Array[Dictionary]) -> Dictionary:
+	var candidate_count := 0
+	var restructure_employee_candidate_count := 0
+	var direct_candidate_count := 0
+	var report_candidate_count := 0
+	var submit_candidate_count := 0
+
+	var best_edit_score := -INF
+	var best_edit_macro_action_id := ""
+	var has_best_edit := false
+
+	var best_restructure_employee_score := -INF
+	var best_restructure_employee_macro_action_id := ""
+	var has_best_restructure_employee := false
+
+	var best_direct_score := -INF
+	var best_direct_macro_action_id := ""
+	var has_best_direct := false
+
+	var best_report_score := -INF
+	var best_report_macro_action_id := ""
+	var has_best_report := false
+
+	var best_submit_score := -INF
+	var best_submit_macro_action_id := ""
+	var has_best_submit := false
+
+	for entry in ranked:
+		var action_id := str(entry.get("action_id", ""))
+		var score := float(entry.get("score", -INF))
+		var macro_action_id := str(entry.get("macro_action_id", ""))
+		match action_id:
+			"restructure_employee":
+				candidate_count += 1
+				restructure_employee_candidate_count += 1
+				if not has_best_restructure_employee or score > best_restructure_employee_score:
+					has_best_restructure_employee = true
+					best_restructure_employee_score = score
+					best_restructure_employee_macro_action_id = macro_action_id
+				if not has_best_edit or score > best_edit_score:
+					has_best_edit = true
+					best_edit_score = score
+					best_edit_macro_action_id = macro_action_id
+			"set_company_structure_direct":
+				candidate_count += 1
+				direct_candidate_count += 1
+				if not has_best_direct or score > best_direct_score:
+					has_best_direct = true
+					best_direct_score = score
+					best_direct_macro_action_id = macro_action_id
+				if not has_best_edit or score > best_edit_score:
+					has_best_edit = true
+					best_edit_score = score
+					best_edit_macro_action_id = macro_action_id
+			"set_company_structure_report":
+				candidate_count += 1
+				report_candidate_count += 1
+				if not has_best_report or score > best_report_score:
+					has_best_report = true
+					best_report_score = score
+					best_report_macro_action_id = macro_action_id
+				if not has_best_edit or score > best_edit_score:
+					has_best_edit = true
+					best_edit_score = score
+					best_edit_macro_action_id = macro_action_id
+			"submit_restructuring":
+				candidate_count += 1
+				submit_candidate_count += 1
+				if not has_best_submit or score > best_submit_score:
+					has_best_submit = true
+					best_submit_score = score
+					best_submit_macro_action_id = macro_action_id
+			_:
+				continue
+
+	if candidate_count <= 0:
+		return {}
+
+	var summary := {
+		"restructuring_candidate_count": candidate_count,
+		"restructuring_restructure_employee_candidate_count": restructure_employee_candidate_count,
+		"restructuring_direct_candidate_count": direct_candidate_count,
+		"restructuring_report_candidate_count": report_candidate_count,
+		"restructuring_submit_candidate_count": submit_candidate_count,
+		"restructuring_best_edit_score": best_edit_score if has_best_edit else null,
+		"restructuring_best_edit_macro_action_id": best_edit_macro_action_id if has_best_edit else "",
+		"restructuring_best_restructure_employee_score": best_restructure_employee_score if has_best_restructure_employee else null,
+		"restructuring_best_restructure_employee_macro_action_id": best_restructure_employee_macro_action_id if has_best_restructure_employee else "",
+		"restructuring_best_direct_score": best_direct_score if has_best_direct else null,
+		"restructuring_best_direct_macro_action_id": best_direct_macro_action_id if has_best_direct else "",
+		"restructuring_best_report_score": best_report_score if has_best_report else null,
+		"restructuring_best_report_macro_action_id": best_report_macro_action_id if has_best_report else "",
+		"restructuring_best_submit_score": best_submit_score if has_best_submit else null,
+		"restructuring_best_submit_macro_action_id": best_submit_macro_action_id if has_best_submit else "",
+		"restructuring_score_gap_to_submit": null,
+	}
+	if has_best_edit and has_best_submit:
+		summary["restructuring_score_gap_to_submit"] = best_edit_score - best_submit_score
+	return summary
 
 static func _entry_needs_preview(entry: Dictionary) -> bool:
 	var action_id := str(entry.get("action_id", ""))
