@@ -323,6 +323,12 @@ static func _test_mandatory_completion_summary_counts_untraced_auto_actions() ->
 	var strategic_search_summary: Dictionary = Dictionary(strategic_bot_summary.get("search", {}))
 	if int(strategic_search_summary.get("mcts_route_switch_count_total", 0)) != 3:
 		return Result.failure("summary should preserve mcts route switch totals: %s" % str(strategic_search_summary))
+	if int(strategic_search_summary.get("strategic_decision_count_total", 0)) != 2:
+		return Result.failure("summary should preserve strategic decision totals: %s" % str(strategic_search_summary))
+	if int(strategic_search_summary.get("strategic_cached_count_total", 0)) != 1:
+		return Result.failure("summary should preserve strategic cached totals: %s" % str(strategic_search_summary))
+	if float(strategic_search_summary.get("strategic_cached_rate", 0.0)) != 0.5:
+		return Result.failure("summary should preserve strategic cached rate: %s" % str(strategic_search_summary))
 	if int(strategic_search_summary.get("mcts_non_root_populated_nodes_total", 0)) != 6:
 		return Result.failure("summary should preserve non-root populated totals: %s" % str(strategic_search_summary))
 	if int(strategic_search_summary.get("mcts_non_root_expanded_nodes_total", 0)) != 2:
@@ -333,14 +339,20 @@ static func _test_mandatory_completion_summary_counts_untraced_auto_actions() ->
 		return Result.failure("summary should preserve selected route type counts: %s" % str(strategic_search_summary))
 	var strategic_lines: Array[String] = BotSelfplaySummaryClass.format_summary(strategic_summary)
 	var strategic_search_line := ""
+	var strategic_route_line := ""
 	for line in strategic_lines:
-		if str(line).begins_with("[BotSelfplaySummary] MCTS_ROUTE strategic-plan@base_revenue_growth_v1 "):
+		if str(line).begins_with("[BotSelfplaySummary] SEARCH strategic-plan@base_revenue_growth_v1 "):
 			strategic_search_line = str(line)
-			break
+		elif str(line).begins_with("[BotSelfplaySummary] MCTS_ROUTE strategic-plan@base_revenue_growth_v1 "):
+			strategic_route_line = str(line)
 	if strategic_search_line.is_empty():
+		return Result.failure("summary should emit strategic search line: %s" % str(strategic_lines))
+	if not strategic_search_line.contains("strategic_total=2") or not strategic_search_line.contains("strategic_cached=1") or not strategic_search_line.contains("strategic_cached_rate=0.500"):
+		return Result.failure("summary should expose strategic cache diagnostics: %s" % strategic_search_line)
+	if strategic_route_line.is_empty():
 		return Result.failure("summary should emit MCTS route line: %s" % str(strategic_lines))
-	if not strategic_search_line.contains("route_switch_avg=") or not strategic_search_line.contains("route_types="):
-		return Result.failure("summary should expose route switch and route type aggregates: %s" % strategic_search_line)
+	if not strategic_route_line.contains("route_switch_avg=") or not strategic_route_line.contains("route_types="):
+		return Result.failure("summary should expose route switch and route type aggregates: %s" % strategic_route_line)
 	var opening_trace: Array[Dictionary] = [
 		{
 			"player_id": 0,
