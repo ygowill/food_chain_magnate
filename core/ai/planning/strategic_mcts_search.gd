@@ -315,6 +315,22 @@ static func _select_leaf(
 				"rollout_ms_max": rollout_ms_max,
 				"eval_ms": eval_ms,
 			})
+		if _is_stalled_branch(current):
+			current["terminal"] = true
+			return Result.success({
+				"leaf": current,
+				"path": path,
+				"attempted_rollouts": attempted_rollouts,
+				"expanded_nodes": expanded_nodes,
+				"plan_state_deduped_nodes": plan_state_deduped_nodes,
+				"plan_transposition_pruned_nodes": plan_transposition_pruned_nodes,
+				"deepest_depth": deepest_depth,
+				"budget_expired": false,
+				"budget_guarded": budget_guarded,
+				"rollout_ms": rollout_ms,
+				"rollout_ms_max": rollout_ms_max,
+				"eval_ms": eval_ms,
+			})
 		if not bool(current.get("expanded", false)):
 			var populate_read := _populate_node_candidates(
 				current,
@@ -680,6 +696,9 @@ static func _expand_next_child(
 		child["root_player_id"] = root_player_id
 		child["rollout_stop_reason"] = str(rollout_payload.get("phase_stop_reason", ""))
 		child["rollout_commands"] = Array(rollout_payload.get("commands_executed", [])).size()
+		child["stalled_branch"] = _is_stalled_branch(child)
+		if bool(child.get("stalled_branch", false)):
+			child["terminal"] = true
 		var transposition := _register_transposition_state(child, best_state_scores)
 		if bool(transposition.get("duplicate", false)):
 			plan_state_deduped_nodes += 1
@@ -753,6 +772,8 @@ static func _select_best_child(node: Dictionary, exploration: float) -> Variant:
 		if not (child_val is Dictionary):
 			continue
 		var child: Dictionary = child_val
+		if _is_stalled_branch(child):
+			continue
 		var prior := maxf(0.0, float(child.get("prior_score", 0.0)))
 		var q := _node_q(child)
 		var child_visits := int(child.get("visits", 0))
@@ -835,6 +856,14 @@ static func _actionable_nodes(nodes: Array) -> Array:
 			continue
 		out.append(node)
 	return out
+
+static func _is_stalled_branch(node: Dictionary) -> bool:
+	if int(node.get("depth", 0)) <= 0:
+		return false
+	if bool(node.get("stalled_branch", false)):
+		return true
+	var telemetry: Dictionary = Dictionary(node.get("leaf_telemetry", {}))
+	return bool(telemetry.get("route_stalled", false))
 
 static func _sort_nodes(nodes: Array) -> void:
 	nodes.sort_custom(func(a, b) -> bool:

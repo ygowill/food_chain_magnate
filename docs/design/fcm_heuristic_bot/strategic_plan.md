@@ -165,6 +165,7 @@ rollout 输出：
 - `StrategyPlanHints` 的供给偏置按目标产品类型注入：食品路线只偏向 `produce_food`，饮料路线只偏向 `procure_drinks`，避免 burger 等早期收入路线被无关饮料动作抢走 hint bonus。
 - `StrategicPlanRunner` 会把 route history 原样带回 rollout payload，`StrategicPlanEvaluator` 则通过 `route_transition_bonus` 把“切换路线”或“重复同类路线”的差异计入 plan value，且会先等到现金站稳后再奖励从 `marketing_income` 切到 `price_recovery` / `supply_capacity`，避免 early-income 阶段被补位路线过早拉偏。
 - 早期收入权重已进一步收紧：当前现金低于 15 时，`StrategicPlanGenerator` 会把最近 `marketing_income` 历史解释为“收入线尚未站稳”，优先保留 `marketing_income` 候选并压低过早切到 `price_recovery` / `supply_capacity` 的 prior；`StrategicPlanEvaluator` 同步使用 15 作为 cash footing 门槛，并在未站稳前提高营销路线的 `demand_created` / `demand_sold` 与 `initiate_marketing` 进度权重。已补低现金 route-history 回归，防止早期收入路线再次被补位路线抢走。
+- `StrategicMCTSSearch` 现在也会把 non-root 的 `route_stalled` 分支提前止损：selection 会跳过 stalled child，stalled non-root leaf 会在 `_select_leaf` 中直接收口，不再继续 populate / expand。这让 low-value stalled branches 不再反复消耗 plan-level rollout 预算。
 - `StrategicMCTSSearch` 的 root final selection 现在只在 visit floor 未达标时启用 `prior_guard`；如果预算收尾时 root 已经累积到足够 visits，就按 visits/q 排序，不再因为 `budget_guarded` 直接回退到 prior。
 - 这些指标用于区分根 plan 选择和后续 plan 展开，不再回到 raw command 级 visits/q 比较。
 - `StrategicBot` 现在会保留短 route history，并把它写进 plan cache identity、Beam / MCTS search 输入和 trace；历史会在玩家切换、回合倒退或 decision seed 回退时清掉，确保缓存计划不会跨过期路线上下文复用。

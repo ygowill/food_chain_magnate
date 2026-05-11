@@ -1273,6 +1273,87 @@ static func _test_strategic_search_filters_stalled_routes() -> Result:
 	])
 	if not mcts_all_stalled.is_empty():
 		return Result.failure("StrategicMCTSSearch should reject all-stalled root sets: %s" % str(mcts_all_stalled))
+	var stalled_best_child: Variant = StrategicMCTSSearchClass._select_best_child({
+		"visits": 4,
+		"children": [
+			{
+				"plan_id": "stalled",
+				"prior_score": 999.0,
+				"visits": 1,
+				"q": 999.0,
+				"depth": 1,
+				"leaf_telemetry": {"route_stalled": true},
+			},
+			{
+				"plan_id": "progress",
+				"prior_score": 1.0,
+				"visits": 1,
+				"q": 1.0,
+				"depth": 1,
+				"leaf_telemetry": {"route_stalled": false},
+			},
+		]
+	}, 1.15)
+	if stalled_best_child == null or str(Dictionary(stalled_best_child).get("plan_id", "")) != "progress":
+		return Result.failure("StrategicMCTSSearch should skip stalled non-root children during selection: %s" % str(stalled_best_child))
+	var stalled_plan = StrategicPlanClass.create(
+		"stalled_leaf",
+		0,
+		"marketing_income",
+		1.0,
+		["burger"],
+		[],
+		["campaign_manager"],
+		{},
+		["marketing"],
+		1,
+		1,
+		["initiate_marketing"]
+	)
+	var stalled_leaf := {
+		"engine": null,
+		"depth": 1,
+		"terminal": false,
+		"expanded": true,
+		"children": [],
+		"plan_entries": [
+			{
+				"plan": stalled_plan,
+				"plan_id": stalled_plan.id,
+				"route_type": stalled_plan.route_type,
+				"prior_score": stalled_plan.prior_score,
+			},
+		],
+		"leaf_telemetry": {"route_stalled": true},
+	}
+	var stalled_route_read := StrategicMCTSSearchClass._select_leaf(
+		stalled_leaf,
+		0,
+		null,
+		{},
+		1,
+		2,
+		20,
+		TimeBudget.start(160),
+		0.0,
+		1.0,
+		1,
+		1,
+		false,
+		[],
+		{}
+	)
+	if not stalled_route_read.ok:
+		return stalled_route_read
+	var stalled_route: Dictionary = Dictionary(stalled_route_read.value)
+	if int(stalled_route.get("attempted_rollouts", -1)) != 0:
+		return Result.failure("StrategicMCTSSearch should not spend rollout budget on stalled non-root leaves: %s" % str(stalled_route))
+	if int(stalled_route.get("expanded_nodes", -1)) != 0:
+		return Result.failure("StrategicMCTSSearch should not expand stalled non-root leaves: %s" % str(stalled_route))
+	if Array(stalled_route.get("path", [])).size() != 1:
+		return Result.failure("StrategicMCTSSearch should return the stalled leaf without descending further: %s" % str(stalled_route))
+	if not bool(Dictionary(stalled_route.get("leaf", {})).get("terminal", false)):
+		return Result.failure("StrategicMCTSSearch should mark stalled non-root leaves terminal: %s" % str(stalled_route))
 	return Result.success()
 
 static func _test_evaluator_search_cost_is_trace_only(seed_val: int) -> Result:
