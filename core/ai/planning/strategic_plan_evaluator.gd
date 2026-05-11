@@ -102,7 +102,7 @@ static func _route_completion_bonus(
 				bonus += 8.0
 		"marketing_income", "product_switch_attack":
 			if _owner_executed_any(rollout, plan.owner_player_id, ["initiate_marketing"]):
-				bonus += 10.0
+				bonus += 12.0 if not _has_cash_footing(rollout) else 10.0
 			elif _own_marketing_count(observation) > 0:
 				bonus += 2.0
 		"growth":
@@ -124,8 +124,9 @@ static func _route_progress_bonus(
 	var gained_milestones := _string_array(rollout.get("milestones_gained", []))
 	match str(plan.route_type):
 		"marketing_income", "product_switch_attack":
-			bonus += float(rollout.get("demand_created", 0)) * 1.0
-			bonus += float(rollout.get("demand_sold", 0)) * 1.5
+			var early_income := not _has_cash_footing(rollout)
+			bonus += float(rollout.get("demand_created", 0)) * (1.5 if early_income else 1.0)
+			bonus += float(rollout.get("demand_sold", 0)) * (2.25 if early_income else 1.5)
 			bonus -= float(rollout.get("lost_to_competitor", 0)) * 1.0
 		"price_recovery":
 			if gained_milestones.has("first_lower_prices"):
@@ -161,7 +162,7 @@ static func _route_transition_bonus(
 	if current_route_type == previous_route_type:
 		match current_route_type:
 			"marketing_income":
-				return (-3.0 if has_cash_footing else -1.0) * streak
+				return (-3.0 if has_cash_footing else 1.5) * streak
 			"price_recovery", "supply_capacity":
 				return -1.5 * streak
 			"product_switch_attack":
@@ -174,10 +175,12 @@ static func _route_transition_bonus(
 			match current_route_type:
 				"price_recovery", "supply_capacity":
 					if not has_cash_footing:
-						return -1.0 * streak
-					return 5.5 + streak * 1.25
+						return -2.5 * streak
+					return 4.5 + streak * 1.0
 				"product_switch_attack":
-					return 3.0 + streak * 0.75
+					if not has_cash_footing:
+						return -1.5 * streak
+					return 2.5 + streak * 0.5
 				"growth":
 					return -1.0
 				_:
@@ -225,9 +228,9 @@ static func _route_transition_bonus(
 static func _has_cash_footing(rollout: Dictionary) -> bool:
 	if rollout.is_empty():
 		return false
-	if int(rollout.get("cash_before", 0)) >= 10:
+	if int(rollout.get("cash_before", 0)) >= 15:
 		return true
-	return int(rollout.get("cash_min_after_first_positive", 0)) >= 10
+	return int(rollout.get("cash_min_after_first_positive", 0)) >= 15
 
 static func _sequence_progress_bonus(plan, rollout: Dictionary = {}) -> float:
 	if plan == null or not plan.has_method("is_valid"):

@@ -228,6 +228,24 @@ static func _test_generator_route_history_bias() -> Result:
 	var first_plan = first_plan_val
 	if str(first_plan.route_type) != "supply_capacity":
 		return Result.failure("StrategicPlanGenerator should prefer supply follow-up after marketing history: %s" % str(_plan_debug(plans)))
+
+	var early_observation := _synthetic_income_observation()
+	early_observation.own_player["cash"] = 0
+	var early_read := StrategicPlanGeneratorClass.generate(early_observation, profile, {
+		"max_plans": 4,
+		"route_history": ["marketing_income"],
+	})
+	if not early_read.ok:
+		return early_read
+	var early_plans: Array = early_read.value
+	if early_plans.is_empty():
+		return Result.failure("StrategicPlanGenerator should keep income plans under early cash pressure: %s" % str(_plan_debug(early_plans)))
+	var early_first_plan_val = early_plans[0]
+	if early_first_plan_val == null or not early_first_plan_val.has_method("to_trace_dict"):
+		return Result.failure("StrategicPlanGenerator should return early income plans: %s" % str(_plan_debug(early_plans)))
+	var early_first_plan = early_first_plan_val
+	if str(early_first_plan.route_type) != "marketing_income":
+		return Result.failure("StrategicPlanGenerator should not switch away from marketing before cash footing: %s" % str(_plan_debug(early_plans)))
 	return Result.success()
 
 static func _test_hints_bias_strategy_scorer() -> Result:
@@ -936,8 +954,14 @@ static func _test_rollout_search_and_evaluator(seed_val: int) -> Result:
 	)
 	var repeat_route_rollout: Dictionary = first_rollout_payload.duplicate(true)
 	repeat_route_rollout["route_history"] = ["supply_capacity", "supply_capacity"]
+	repeat_route_rollout["cash_before"] = 18
+	repeat_route_rollout["cash_min_after_first_positive"] = 18
+	repeat_route_rollout["cash_max_seen"] = 24
 	var switch_route_rollout: Dictionary = first_rollout_payload.duplicate(true)
 	switch_route_rollout["route_history"] = ["marketing_income", "marketing_income"]
+	switch_route_rollout["cash_before"] = 18
+	switch_route_rollout["cash_min_after_first_positive"] = 18
+	switch_route_rollout["cash_max_seen"] = 24
 	var repeat_route_eval := StrategicPlanEvaluatorClass.evaluate_rollout(transition_plan, repeat_route_rollout, profile)
 	if not repeat_route_eval.ok:
 		return repeat_route_eval
@@ -1181,15 +1205,17 @@ static func _test_route_transition_bonus_waits_for_cash_footing(seed_val: int) -
 	var early_switch_breakdown: Dictionary = Dictionary(Dictionary(early_switch_eval.value).get("breakdown", {}))
 	var early_repeat_bonus := float(early_repeat_breakdown.get("route_transition_bonus", 0.0))
 	var early_switch_bonus := float(early_switch_breakdown.get("route_transition_bonus", 0.0))
+	if early_repeat_bonus <= 0.0:
+		return Result.failure("route transition bonus should keep early marketing route positive before cash footing: %s" % str(early_repeat_breakdown))
 	if early_switch_bonus > 0.0:
 		return Result.failure("route transition bonus should not reward early marketing-to-supply switch before cash footing: %s" % str(early_switch_breakdown))
 	if early_switch_bonus > early_repeat_bonus:
 		return Result.failure("route transition bonus should not prefer early marketing-to-supply switch before cash footing: switch=%f repeat=%f" % [early_switch_bonus, early_repeat_bonus])
 
 	var grounded_rollout := early_rollout.duplicate(true)
-	grounded_rollout["cash_before"] = 12
-	grounded_rollout["cash_min_after_first_positive"] = 12
-	grounded_rollout["cash_max_seen"] = 20
+	grounded_rollout["cash_before"] = 18
+	grounded_rollout["cash_min_after_first_positive"] = 18
+	grounded_rollout["cash_max_seen"] = 24
 	var grounded_repeat_eval := StrategicPlanEvaluatorClass.evaluate_rollout(repeat_plan, grounded_rollout, profile)
 	if not grounded_repeat_eval.ok:
 		return grounded_repeat_eval
