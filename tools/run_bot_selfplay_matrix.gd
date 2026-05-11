@@ -41,6 +41,7 @@ static func run(options: Dictionary) -> Result:
 	var target_round := int(options.get("target_round", SelfplayToolClass.DEFAULT_TARGET_ROUND))
 	var max_steps := int(options.get("max_steps", SelfplayToolClass.DEFAULT_MAX_STEPS))
 	var budget_ms := int(options.get("budget_ms", SelfplayToolClass.DEFAULT_BUDGET_MS))
+	var match_timeout_ms := int(options.get("match_timeout_ms", SelfplayToolClass.DEFAULT_MATCH_TIMEOUT_MS))
 	var trace_tail := int(options.get("trace_tail", SelfplayToolClass.DEFAULT_TRACE_TAIL))
 	var output_jsonl := str(options.get("output_jsonl", "")).strip_edges()
 	var output_json := str(options.get("output_json", "")).strip_edges()
@@ -50,7 +51,7 @@ static func run(options: Dictionary) -> Result:
 
 	var all_rows: Array[Dictionary] = []
 	var failures := 0
-	print("[%s] START configs=%d players=%d seed=%d matches=%d target_round=%d max_steps=%d budget_ms=%d profile=%s" % [
+	print("[%s] START configs=%d players=%d seed=%d matches=%d target_round=%d max_steps=%d budget_ms=%d match_timeout_ms=%d profile=%s" % [
 		NAME,
 		configs.size(),
 		player_count,
@@ -59,11 +60,12 @@ static func run(options: Dictionary) -> Result:
 		target_round,
 		max_steps,
 		budget_ms,
+		match_timeout_ms,
 		profile_config if not profile_config.is_empty() else "default",
 	])
 	for config_index in range(configs.size()):
 		var config := _string_config(configs[config_index])
-		var run_options_read := _build_selfplay_options(config, config_index, player_count, start_seed, matches, target_round, max_steps, budget_ms, trace_tail, profile_source, strategic_options)
+		var run_options_read := _build_selfplay_options(config, config_index, player_count, start_seed, matches, target_round, max_steps, budget_ms, match_timeout_ms, trace_tail, profile_source, strategic_options)
 		if not run_options_read.ok:
 			return run_options_read
 		var run_options: Dictionary = run_options_read.value
@@ -120,6 +122,7 @@ static func _build_selfplay_options(
 	target_round: int,
 	max_steps: int,
 	budget_ms: int,
+	match_timeout_ms: int,
 	trace_tail: int,
 	profile_source: String,
 	strategic_options: Dictionary = {}
@@ -139,6 +142,7 @@ static func _build_selfplay_options(
 		"target_round": target_round,
 		"max_steps": max_steps,
 		"budget_ms": budget_ms,
+		"match_timeout_ms": match_timeout_ms,
 		"trace_tail": trace_tail,
 	}
 	if config.size() == 1:
@@ -196,6 +200,7 @@ static func _parse_args(args: Array[String]) -> Result:
 		"target_round": SelfplayToolClass.DEFAULT_TARGET_ROUND,
 		"max_steps": SelfplayToolClass.DEFAULT_MAX_STEPS,
 		"budget_ms": SelfplayToolClass.DEFAULT_BUDGET_MS,
+		"match_timeout_ms": SelfplayToolClass.DEFAULT_MATCH_TIMEOUT_MS,
 		"trace_tail": SelfplayToolClass.DEFAULT_TRACE_TAIL,
 		"profile": "",
 		"output_jsonl": "",
@@ -241,6 +246,22 @@ static func _parse_args(args: Array[String]) -> Result:
 			if not value.is_valid_int():
 				return Result.failure("--budget-ms must be an integer")
 			options["budget_ms"] = int(value)
+		elif arg.begins_with("--match-timeout-ms="):
+			var value := arg.trim_prefix("--match-timeout-ms=")
+			if not value.is_valid_int():
+				return Result.failure("--match-timeout-ms must be an integer")
+			var timeout_ms := int(value)
+			if timeout_ms < 0:
+				return Result.failure("--match-timeout-ms must be >= 0")
+			options["match_timeout_ms"] = timeout_ms
+		elif arg.begins_with("--match-timeout-sec="):
+			var value := arg.trim_prefix("--match-timeout-sec=")
+			if not value.is_valid_int():
+				return Result.failure("--match-timeout-sec must be an integer")
+			var timeout_sec := int(value)
+			if timeout_sec < 0:
+				return Result.failure("--match-timeout-sec must be >= 0")
+			options["match_timeout_ms"] = timeout_sec * 1000
 		elif arg.begins_with("--trace-tail="):
 			var value := arg.trim_prefix("--trace-tail=")
 			if not value.is_valid_int():
@@ -305,4 +326,4 @@ static func _string_config(config: Array) -> Array[String]:
 	return out
 
 static func _print_usage() -> void:
-	print("Usage: tools/run_bot_selfplay_matrix.sh [--config=strategy] [--config=strategic] [--config=random,strategy] [--profile=base_revenue_v1] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--strategic-search=none|beam|mcts] [--strategic-budget-profile=tuning|play] [--strategic-horizon-decisions=16] [--strategic-horizon-rounds=2] [--strategic-max-plans=6] [--strategic-rollout-step-budget-ms=40] [--strategic-min-search-budget-ms=240] [--strategic-min-plans-for-rollout=2] [--strategic-mcts-iterations=24] [--strategic-mcts-max-depth=3] [--strategic-mcts-top-k-per-node=4] [--strategic-mcts-exploration=1.25] [--strategic-mcts-prior-weight=0.25] [--strategic-mcts-root-prior-min-visits-per-child=2] [--strategic-config-id=id] [--output-jsonl=res://.godot/bot_selfplay_matrix.jsonl] [--output-json=res://.godot/bot_selfplay_matrix_summary.json]")
+	print("Usage: tools/run_bot_selfplay_matrix.sh [--config=strategy] [--config=strategic] [--config=random,strategy] [--profile=base_revenue_v1] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--match-timeout-ms=0] [--match-timeout-sec=0] [--strategic-search=none|beam|mcts] [--strategic-budget-profile=tuning|play] [--strategic-horizon-decisions=16] [--strategic-horizon-rounds=2] [--strategic-max-plans=6] [--strategic-rollout-step-budget-ms=40] [--strategic-min-search-budget-ms=240] [--strategic-min-plans-for-rollout=2] [--strategic-mcts-iterations=24] [--strategic-mcts-max-depth=3] [--strategic-mcts-top-k-per-node=4] [--strategic-mcts-exploration=1.25] [--strategic-mcts-prior-weight=0.25] [--strategic-mcts-root-prior-min-visits-per-child=2] [--strategic-config-id=id] [--output-jsonl=res://.godot/bot_selfplay_matrix.jsonl] [--output-json=res://.godot/bot_selfplay_matrix_summary.json]")

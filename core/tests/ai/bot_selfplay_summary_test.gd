@@ -7,13 +7,16 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var aggregate := _test_summarize_rows()
 	if not aggregate.ok:
 		return aggregate
+	var timeouts := _test_timeout_summary()
+	if not timeouts.ok:
+		return timeouts
 	var formatted := _test_format_summary()
 	if not formatted.ok:
 		return formatted
 	var matchup := _test_bot_config_groups_mixed_matchups()
 	if not matchup.ok:
 		return matchup
-	return Result.success({"cases": 3})
+	return Result.success({"cases": 4})
 
 static func _test_summarize_rows() -> Result:
 	var rows: Array[Dictionary] = [
@@ -295,6 +298,49 @@ static func _test_summarize_rows() -> Result:
 		return Result.failure("osla opening food delay delta mismatch: %s" % str(opening_delta))
 	return Result.success()
 
+static func _test_timeout_summary() -> Result:
+	var read := SummaryClass.summarize_rows([
+		{
+			"bot": "strategic",
+			"ok": false,
+			"seed": 11,
+			"round": 9,
+			"steps": 300,
+			"command_count": 300,
+			"match_timed_out": true,
+			"match_timeout_ms": 600000,
+			"match_elapsed_ms": 600112,
+			"match_stop_reason": "match_timeout",
+		},
+		{
+			"bot": "strategic",
+			"ok": true,
+			"seed": 12,
+			"round": 12,
+			"steps": 240,
+			"command_count": 240,
+			"match_timed_out": false,
+		},
+	])
+	if not read.ok:
+		return read
+	var summary: Dictionary = read.value
+	if int(summary.get("total_matches", 0)) != 2 or int(summary.get("total_failures", 0)) != 1 or int(summary.get("total_timeouts", 0)) != 1:
+		return Result.failure("summary should count timeout failures separately: %s" % str(summary))
+	var bots: Dictionary = Dictionary(summary.get("bots", {}))
+	var strategic: Dictionary = Dictionary(bots.get("strategic", {}))
+	if int(strategic.get("timeout_matches", 0)) != 1 or float(strategic.get("timeout_rate", 0.0)) != 0.5:
+		return Result.failure("bot summary should expose timeout count/rate: %s" % str(strategic))
+	var timeout_seeds: Array = Array(strategic.get("timeout_seeds", []))
+	if timeout_seeds.size() != 1 or int(timeout_seeds[0]) != 11:
+		return Result.failure("bot summary should expose timeout seeds: %s" % str(strategic))
+	var lines := SummaryClass.format_summary(summary)
+	if not _has_line_containing(lines, "SUMMARY matches=2 failures=1 timeouts=1 bots=1"):
+		return Result.failure("formatted summary should expose timeout total: %s" % str(lines))
+	if not _has_line_containing(lines, "BOT strategic matches=2 ok=1 failures=1 timeouts=1"):
+		return Result.failure("formatted bot summary should expose timeout count: %s" % str(lines))
+	return Result.success()
+
 static func _test_format_summary() -> Result:
 	var read := SummaryClass.summarize_rows([
 		{
@@ -375,9 +421,9 @@ static func _test_format_summary() -> Result:
 	if not read.ok:
 		return read
 	var lines := SummaryClass.format_summary(read.value)
-	if not _has_line_containing(lines, "SUMMARY matches=2 failures=0 bots=2"):
+	if not _has_line_containing(lines, "SUMMARY matches=2 failures=0 timeouts=0 bots=2"):
 		return Result.failure("formatted summary should include totals: %s" % str(lines))
-	if not _has_line_containing(lines, "BOT beam matches=1 ok=1 failures=0"):
+	if not _has_line_containing(lines, "BOT beam matches=1 ok=1 failures=0 timeouts=0"):
 		return Result.failure("formatted summary should include beam aggregate: %s" % str(lines))
 	if not _has_line_containing(lines, "ACTIONS beam skip=2"):
 		return Result.failure("formatted summary should include action totals: %s" % str(lines))

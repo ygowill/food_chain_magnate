@@ -29,6 +29,7 @@ static func _test_parse_configs() -> Result:
 		"--config=random,strategy",
 		"--players=2",
 		"--profile=base_revenue_growth_v1",
+		"--match-timeout-ms=4500",
 		"--strategic-search=mcts",
 		"--strategic-budget-profile=play",
 		"--strategic-horizon-decisions=8",
@@ -46,6 +47,8 @@ static func _test_parse_configs() -> Result:
 		return Result.failure("matrix config parse mismatch: %s" % str(configs))
 	if str(Dictionary(parsed.value).get("profile", "")) != "base_revenue_growth_v1":
 		return Result.failure("matrix profile parse mismatch: %s" % str(parsed.value))
+	if int(Dictionary(parsed.value).get("match_timeout_ms", -1)) != 4500:
+		return Result.failure("matrix match timeout parse mismatch: %s" % str(parsed.value))
 	var strategic_options: Dictionary = Dictionary(Dictionary(parsed.value).get("strategic_options", {}))
 	if str(strategic_options.get("strategic_search", "")) != "mcts":
 		return Result.failure("matrix should parse strategic search option: %s" % str(parsed.value))
@@ -59,6 +62,24 @@ static func _test_parse_configs() -> Result:
 		return Result.failure("matrix should parse strategic mcts iteration option: %s" % str(parsed.value))
 	if int(strategic_options.get("mcts_root_prior_min_visits_per_child", 0)) != 3:
 		return Result.failure("matrix should parse strategic mcts root prior guard option: %s" % str(parsed.value))
+	var child_selfplay := MatrixToolClass._build_selfplay_options(
+		["strategic"],
+		0,
+		2,
+		12345,
+		1,
+		2,
+		180,
+		80,
+		4500,
+		1,
+		"base_revenue_growth_v1",
+		strategic_options
+	)
+	if not child_selfplay.ok:
+		return child_selfplay
+	if int(Dictionary(child_selfplay.value).get("match_timeout_ms", -1)) != 4500:
+		return Result.failure("matrix child selfplay should pass match timeout: %s" % str(child_selfplay.value))
 	var bad := MatrixToolClass._parse_args(["--config=random,"])
 	if bad.ok:
 		return Result.failure("matrix should reject empty bot id in config")

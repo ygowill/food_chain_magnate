@@ -28,6 +28,7 @@ static func _test_parse_mixed_bot_args() -> Result:
 		"--bots=random,strategy",
 		"--profile=base_revenue_growth_v1",
 		"--matches=1",
+		"--match-timeout-ms=1500",
 		"--trace-detail=decision",
 	])
 	if not parsed.ok:
@@ -40,6 +41,13 @@ static func _test_parse_mixed_bot_args() -> Result:
 		return Result.failure("--profile parse mismatch: %s" % str(options))
 	if str(options.get("trace_detail", "")) != "decision":
 		return Result.failure("--trace-detail parse mismatch: %s" % str(options))
+	if int(options.get("match_timeout_ms", -1)) != 1500:
+		return Result.failure("--match-timeout-ms parse mismatch: %s" % str(options))
+	var timeout_sec := SelfplayToolClass._parse_args(["--match-timeout-sec=3"])
+	if not timeout_sec.ok:
+		return timeout_sec
+	if int(Dictionary(timeout_sec.value).get("match_timeout_ms", -1)) != 3000:
+		return Result.failure("--match-timeout-sec parse mismatch: %s" % str(timeout_sec.value))
 	var resolved := SelfplayToolClass._resolve_bot_ids(options, 2)
 	if not resolved.ok:
 		return resolved

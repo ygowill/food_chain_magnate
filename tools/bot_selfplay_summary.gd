@@ -100,6 +100,7 @@ static func summarize_rows(rows: Array[Dictionary]) -> Result:
 	return Result.success({
 		"total_matches": int(overall_summary.get("matches", 0)),
 		"total_failures": int(overall_summary.get("failures", 0)),
+		"total_timeouts": int(overall_summary.get("timeout_matches", 0)),
 		"bots": bots,
 		"overall": overall_summary,
 		"comparison": comparison,
@@ -115,9 +116,10 @@ static func format_summary(summary: Dictionary) -> Array[String]:
 	var lines: Array[String] = []
 	var bots_val = summary.get("bots", {})
 	var bots: Dictionary = bots_val if bots_val is Dictionary else {}
-	lines.append("[BotSelfplaySummary] SUMMARY matches=%d failures=%d bots=%d" % [
+	lines.append("[BotSelfplaySummary] SUMMARY matches=%d failures=%d timeouts=%d bots=%d" % [
 		int(summary.get("total_matches", 0)),
 		int(summary.get("total_failures", 0)),
+		int(summary.get("total_timeouts", 0)),
 		bots.size(),
 	])
 	var bot_names := bots.keys()
@@ -127,11 +129,12 @@ static func format_summary(summary: Dictionary) -> Array[String]:
 		if not (bot_val is Dictionary):
 			continue
 		var bot: Dictionary = bot_val
-		lines.append("[BotSelfplaySummary] BOT %s matches=%d ok=%d failures=%d success=%.3f avg_round=%.3f avg_steps=%.3f avg_commands=%.3f seeds=%s" % [
+		lines.append("[BotSelfplaySummary] BOT %s matches=%d ok=%d failures=%d timeouts=%d success=%.3f avg_round=%.3f avg_steps=%.3f avg_commands=%.3f seeds=%s" % [
 			str(bot_name),
 			int(bot.get("matches", 0)),
 			int(bot.get("ok_matches", 0)),
 			int(bot.get("failures", 0)),
+			int(bot.get("timeout_matches", 0)),
 			float(bot.get("success_rate", 0.0)),
 			float(bot.get("avg_round", 0.0)),
 			float(bot.get("avg_steps", 0.0)),
@@ -251,7 +254,9 @@ static func _new_bucket(label: String) -> Dictionary:
 		"matches": 0,
 		"ok_matches": 0,
 		"failures": 0,
+		"timeout_matches": 0,
 		"failed_seeds": [],
+		"timeout_seeds": [],
 		"seeds": [],
 		"round_sum": 0.0,
 		"steps_sum": 0.0,
@@ -273,6 +278,10 @@ static func _add_row(bucket: Dictionary, row: Dictionary) -> void:
 		bucket["failures"] = int(bucket.get("failures", 0)) + 1
 		if row.has("seed"):
 			bucket["failed_seeds"].append(int(row.get("seed", 0)))
+	if bool(row.get("match_timed_out", false)):
+		bucket["timeout_matches"] = int(bucket.get("timeout_matches", 0)) + 1
+		if row.has("seed"):
+			bucket["timeout_seeds"].append(int(row.get("seed", 0)))
 	if row.has("seed"):
 		bucket["seeds"].append(int(row.get("seed", 0)))
 	bucket["round_sum"] = float(bucket.get("round_sum", 0.0)) + float(row.get("round", 0.0))
@@ -472,11 +481,13 @@ static func _finalize_bucket(bucket: Dictionary) -> Dictionary:
 		"matches": matches,
 		"ok_matches": int(bucket.get("ok_matches", 0)),
 		"failures": int(bucket.get("failures", 0)),
+		"timeout_matches": int(bucket.get("timeout_matches", 0)),
 		"success_rate": _ratio(float(bucket.get("ok_matches", 0)), float(matches)),
 		"avg_round": _avg(float(bucket.get("round_sum", 0.0)), matches),
 		"avg_steps": _avg(float(bucket.get("steps_sum", 0.0)), matches),
 		"avg_command_count": _avg(float(bucket.get("command_count_sum", 0.0)), matches),
 		"failed_seeds": _sorted_int_array(bucket.get("failed_seeds", [])),
+		"timeout_seeds": _sorted_int_array(bucket.get("timeout_seeds", [])),
 		"action_totals": _sorted_dict(bucket.get("action_totals", {})),
 		"action_avg_per_match": _action_averages(bucket.get("action_totals", {}), matches),
 		"mandatory_completion_totals": _sorted_dict(bucket.get("mandatory_completion_totals", {})),
@@ -492,6 +503,7 @@ static func _finalize_bucket(bucket: Dictionary) -> Dictionary:
 	if not seeds.is_empty():
 		out["seed_min"] = int(seeds.front())
 		out["seed_max"] = int(seeds.back())
+	out["timeout_rate"] = _ratio(float(bucket.get("timeout_matches", 0)), float(matches))
 	out["tuning_objective"] = _build_tuning_objective(out)
 	return out
 

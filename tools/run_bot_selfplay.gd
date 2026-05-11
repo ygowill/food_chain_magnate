@@ -18,6 +18,7 @@ const DEFAULT_MATCHES := 1
 const DEFAULT_TARGET_ROUND := 3
 const DEFAULT_MAX_STEPS := 720
 const DEFAULT_BUDGET_MS := 80
+const DEFAULT_MATCH_TIMEOUT_MS := 0
 const DEFAULT_TRACE_TAIL := 8
 const DEFAULT_TRACE_DETAIL := "compact"
 const DEFAULT_BOT_ID := "strategy"
@@ -69,6 +70,7 @@ static func run(options: Dictionary) -> Result:
 	var target_round := int(options.get("target_round", DEFAULT_TARGET_ROUND))
 	var max_steps := int(options.get("max_steps", DEFAULT_MAX_STEPS))
 	var budget_ms := int(options.get("budget_ms", DEFAULT_BUDGET_MS))
+	var match_timeout_ms := int(options.get("match_timeout_ms", DEFAULT_MATCH_TIMEOUT_MS))
 	var trace_tail := int(options.get("trace_tail", DEFAULT_TRACE_TAIL))
 	var trace_detail := str(options.get("trace_detail", DEFAULT_TRACE_DETAIL)).strip_edges()
 	var bot_id := str(options.get("bot_id", DEFAULT_BOT_ID)).strip_edges()
@@ -93,6 +95,8 @@ static func run(options: Dictionary) -> Result:
 		return Result.failure("--max-steps must be > 0")
 	if budget_ms <= 0:
 		return Result.failure("--budget-ms must be > 0")
+	if match_timeout_ms < 0:
+		return Result.failure("--match-timeout-ms must be >= 0")
 	if not SUPPORTED_BOT_IDS.has(bot_id):
 		return Result.failure("--bot must be one of: %s" % ", ".join(SUPPORTED_BOT_IDS))
 	if not SUPPORTED_TRACE_DETAILS.has(trace_detail):
@@ -113,7 +117,7 @@ static func run(options: Dictionary) -> Result:
 		if not prepare_archive_read.ok:
 			return prepare_archive_read
 
-	print("[%s] START players=%d seed=%d matches=%d target_round=%d max_steps=%d budget_ms=%d bot_config=%s bots=%s profile=%s" % [
+	print("[%s] START players=%d seed=%d matches=%d target_round=%d max_steps=%d budget_ms=%d match_timeout_ms=%d bot_config=%s bots=%s profile=%s" % [
 		NAME,
 		player_count,
 		start_seed,
@@ -121,6 +125,7 @@ static func run(options: Dictionary) -> Result:
 		target_round,
 		max_steps,
 		budget_ms,
+		match_timeout_ms,
 		bot_config,
 		str(bot_ids),
 		profile_config if not profile_config.is_empty() else StrategyProfileClass.DEFAULT_PROFILE_ID,
@@ -130,7 +135,7 @@ static func run(options: Dictionary) -> Result:
 	var failures := 0
 	for match_index in range(matches):
 		var seed := start_seed + match_index
-		var row := _run_match(match_index, player_count, seed, target_round, max_steps, budget_ms, trace_tail, trace_detail, bot_ids, bot_config, profile_source, profile_config, strategic_options, output_archive)
+		var row := _run_match(match_index, player_count, seed, target_round, max_steps, budget_ms, match_timeout_ms, trace_tail, trace_detail, bot_ids, bot_config, profile_source, profile_config, strategic_options, output_archive)
 		rows.append(row)
 		if not bool(row.get("ok", false)):
 			failures += 1
@@ -161,6 +166,7 @@ static func _run_match(
 	target_round: int,
 	max_steps: int,
 	budget_ms: int,
+	match_timeout_ms: int,
 	trace_tail: int,
 	trace_detail: String,
 	bot_ids: Array[String],
@@ -202,19 +208,37 @@ static func _run_match(
 			}
 		bots[player_id] = bot_read.value
 
+	var match_started_ms := Time.get_ticks_msec()
+	var match_deadline_ms := -1
+	if match_timeout_ms > 0:
+		match_deadline_ms = match_started_ms + match_timeout_ms
+	var match_stop := {
+		"timed_out": false,
+		"reason": "",
+	}
 	var controller := BotControllerClass.new()
 	var stop_condition := func(test_engine: GameEngine) -> bool:
 		var state := test_engine.get_state()
 		if state == null:
+			match_stop["reason"] = "null_state"
 			return true
 		if str(state.phase) == DefsClass.PHASE_GAME_OVER:
+			match_stop["reason"] = "game_over"
 			return true
 		if target_round > 0 and int(state.round_number) >= target_round:
+			match_stop["reason"] = "target_round"
+			return true
+		if match_deadline_ms >= 0 and Time.get_ticks_msec() >= match_deadline_ms:
+			match_stop["reason"] = "match_timeout"
+			match_stop["timed_out"] = true
 			return true
 		return false
 	var run_read := controller.run_until(engine, bots, stop_condition, max_steps, budget_ms)
 	var state := engine.get_state()
 	var row := _build_match_row(match_index, player_count, seed, state, controller.last_trace, trace_tail, trace_detail)
+	var match_elapsed_ms := maxi(0, Time.get_ticks_msec() - match_started_ms)
+	var match_timed_out := bool(match_stop.get("timed_out", false))
+	var match_stop_reason := str(match_stop.get("reason", ""))
 	row["bot"] = bot_config
 	row["bot_config"] = bot_config
 	row["bot_ids"] = bot_ids.duplicate()
@@ -223,9 +247,16 @@ static func _run_match(
 		row["profile_source"] = profile_source
 	if not strategic_options.is_empty() and bot_ids.has("strategic"):
 		row["strategic_options"] = strategic_options.duplicate(true)
-	row["ok"] = run_read.ok
+	row["match_timeout_ms"] = match_timeout_ms
+	row["match_elapsed_ms"] = match_elapsed_ms
+	row["match_timed_out"] = match_timed_out
+	if not match_stop_reason.is_empty():
+		row["match_stop_reason"] = match_stop_reason
+	row["ok"] = run_read.ok and not match_timed_out
 	row["steps"] = int(run_read.value.get("steps", controller.last_trace.size())) if run_read.ok and run_read.value is Dictionary else controller.last_trace.size()
-	if not run_read.ok:
+	if match_timed_out:
+		row["error"] = "match timed out after %d ms" % match_timeout_ms
+	elif not run_read.ok:
 		row["error"] = run_read.error
 	if output_archive.is_empty():
 		return row
@@ -966,6 +997,7 @@ static func _parse_args(args: Array[String]) -> Result:
 		"target_round": DEFAULT_TARGET_ROUND,
 		"max_steps": DEFAULT_MAX_STEPS,
 		"budget_ms": DEFAULT_BUDGET_MS,
+		"match_timeout_ms": DEFAULT_MATCH_TIMEOUT_MS,
 		"trace_tail": DEFAULT_TRACE_TAIL,
 		"trace_detail": DEFAULT_TRACE_DETAIL,
 		"bot_id": DEFAULT_BOT_ID,
@@ -1008,6 +1040,22 @@ static func _parse_args(args: Array[String]) -> Result:
 			if not value.is_valid_int():
 				return Result.failure("--budget-ms must be an integer")
 			options["budget_ms"] = int(value)
+		elif arg.begins_with("--match-timeout-ms="):
+			var value := arg.trim_prefix("--match-timeout-ms=")
+			if not value.is_valid_int():
+				return Result.failure("--match-timeout-ms must be an integer")
+			var timeout_ms := int(value)
+			if timeout_ms < 0:
+				return Result.failure("--match-timeout-ms must be >= 0")
+			options["match_timeout_ms"] = timeout_ms
+		elif arg.begins_with("--match-timeout-sec="):
+			var value := arg.trim_prefix("--match-timeout-sec=")
+			if not value.is_valid_int():
+				return Result.failure("--match-timeout-sec must be an integer")
+			var timeout_sec := int(value)
+			if timeout_sec < 0:
+				return Result.failure("--match-timeout-sec must be >= 0")
+			options["match_timeout_ms"] = timeout_sec * 1000
 		elif arg.begins_with("--trace-tail="):
 			var value := arg.trim_prefix("--trace-tail=")
 			if not value.is_valid_int():
@@ -1142,4 +1190,4 @@ static func _parse_strategic_option_arg(options: Dictionary, arg: String) -> Res
 	return Result.success()
 
 static func _print_usage() -> void:
-	print("Usage: tools/run_bot_selfplay.sh [--bot=random|greedy|strategy|osla|beam|strategic] [--bots=strategy,strategic] [--profile=base_revenue_v1] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--trace-detail=compact|decision] [--strategic-search=none|beam|mcts] [--strategic-budget-profile=tuning|play] [--strategic-horizon-decisions=16] [--strategic-horizon-rounds=2] [--strategic-max-plans=6] [--strategic-rollout-step-budget-ms=40] [--strategic-min-search-budget-ms=240] [--strategic-min-plans-for-rollout=2] [--strategic-mcts-iterations=24] [--strategic-mcts-max-depth=3] [--strategic-mcts-top-k-per-node=4] [--strategic-mcts-exploration=1.25] [--strategic-mcts-prior-weight=0.25] [--strategic-mcts-root-prior-min-visits-per-child=2] [--strategic-config-id=id] [--output-jsonl=res://.godot/bot_selfplay.jsonl] [--output-archive=res://.godot/bot_selfplay_archive.json]")
+	print("Usage: tools/run_bot_selfplay.sh [--bot=random|greedy|strategy|osla|beam|strategic] [--bots=strategy,strategic] [--profile=base_revenue_v1] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--match-timeout-ms=0] [--match-timeout-sec=0] [--trace-detail=compact|decision] [--strategic-search=none|beam|mcts] [--strategic-budget-profile=tuning|play] [--strategic-horizon-decisions=16] [--strategic-horizon-rounds=2] [--strategic-max-plans=6] [--strategic-rollout-step-budget-ms=40] [--strategic-min-search-budget-ms=240] [--strategic-min-plans-for-rollout=2] [--strategic-mcts-iterations=24] [--strategic-mcts-max-depth=3] [--strategic-mcts-top-k-per-node=4] [--strategic-mcts-exploration=1.25] [--strategic-mcts-prior-weight=0.25] [--strategic-mcts-root-prior-min-visits-per-child=2] [--strategic-config-id=id] [--output-jsonl=res://.godot/bot_selfplay.jsonl] [--output-archive=res://.godot/bot_selfplay_archive.json]")
