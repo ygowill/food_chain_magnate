@@ -169,6 +169,7 @@ rollout 输出：
 - 这些指标用于区分根 plan 选择和后续 plan 展开，不再回到 raw command 级 visits/q 比较。
 - `StrategicBot` 现在会保留短 route history，并把它写进 plan cache identity、Beam / MCTS search 输入和 trace；历史会在玩家切换、回合倒退或 decision seed 回退时清掉，确保缓存计划不会跨过期路线上下文复用。
 - 2026-05-11 的 2s `play` 预算 smoke 证明更宽 MCTS 可以产生非根展开，但当前路线价值还会减少早期 `initiate_marketing` / `produce_food` / `recruit`，导致现金峰值弱于 `StrategyBot` baseline。早期收入权重已完成第一轮收紧；后续不再继续盲目加宽搜索，而是优先压低 `play/tuning` profile 的 MCTS 成本，再观察是否需要恢复更深的非根展开。
+- MCTS 预算 profile 第一轮已把 `play` 从 24 iter / depth 3 / topK 6 / 1200ms min search 降到 12 iter / depth 2 / topK 4 / 640ms min search，`tuning` 从 16 iter / topK 4 / 240ms min search 降到 8 iter / topK 3 / 160ms min search；root prior visit floor 降为 1。对应 1-match r8 2s smoke 中 `budget_expired_rate` 从 `0.225` 降到 `0.078`，`time_ms_avg` 从 `815.200` 降到 `643.797`，且仍保留非根 plan 展开。
 
 ## 测试与验收
 
