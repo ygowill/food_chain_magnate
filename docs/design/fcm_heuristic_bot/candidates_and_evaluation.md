@@ -111,6 +111,8 @@ Command.create("place_restaurant", player_id, {
 
 Bot 不能依赖“非法结构会原样失败”。候选生成必须先用当前公司结构规则预校验，避免被 prune 后行为和评分不一致。
 
+当前结构评价已经把泛员工本体分单独降权，避免 `recruiting_girl` 这类边际直改长期压过 `submit_restructuring`；但像 `kitchen_trainee`、`pricing_manager` 这类能打开食品供给、价格恢复或 waitress 路线的结构动作，仍然保留完整的路线增益分。
+
 ### 9.5 Order of Business
 
 当前选择顺序由 `WorkingFlow.start_order_of_business()` 计算：

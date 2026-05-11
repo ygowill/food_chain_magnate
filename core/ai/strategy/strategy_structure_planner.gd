@@ -9,6 +9,7 @@ const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_inc
 const StrategyRecoveryPlannerClass = preload("res://core/ai/strategy/strategy_recovery_planner.gd")
 const StrategySupportPlannerClass = preload("res://core/ai/strategy/strategy_support_planner.gd")
 const StrategySupplyPlannerClass = preload("res://core/ai/strategy/strategy_supply_planner.gd")
+const STRUCTURE_EMPLOYEE_VALUE_WEIGHT := 0.35
 
 static func evaluate_action(observation: ObservationState, command: Command, profile, income_analysis: Dictionary) -> Dictionary:
 	var features := {}
@@ -26,7 +27,13 @@ static func evaluate_action(observation: ObservationState, command: Command, pro
 	var waitress_route_value := float(waitress_route_payload.get("value", 0.0))
 	var activation_payload := activation_value(observation, employee_id, profile, income_analysis) if action_id != "restructure_employee" else {}
 	var activation_value_total := float(activation_payload.get("value", 0.0))
+	var structure_route_support_value := route_readiness_adjustment + drink_route_readiness_adjustment_value + price_route_value + waitress_route_value
+	var structure_raw_value := employee_value + activation_value_total + structure_route_support_value
+	var structure_employee_weighted_value := employee_value * STRUCTURE_EMPLOYEE_VALUE_WEIGHT
+	var structure_total_weighted_value := structure_employee_weighted_value + activation_value_total + structure_route_support_value
 	features["structure_employee_value"] = employee_value
+	features["structure_employee_weight"] = STRUCTURE_EMPLOYEE_VALUE_WEIGHT
+	features["structure_employee_weighted_value"] = structure_employee_weighted_value
 	features["structure_activation_value"] = activation_value_total
 	features["structure_activation_products"] = Array(activation_payload.get("products", [])).duplicate()
 	features["structure_marketing_supply_products"] = Array(activation_payload.get("marketing_supply_products", [])).duplicate()
@@ -40,6 +47,9 @@ static func evaluate_action(observation: ObservationState, command: Command, pro
 	features["structure_drink_activation_route_source_count"] = int(activation_payload.get("drink_route_source_count", 0))
 	features["structure_drink_activation_route_distance"] = int(activation_payload.get("drink_route_distance", -1))
 	features["structure_placement_route_value"] = float(employee_payload.get("placement_route_value", 0.0))
+	features["structure_route_support_value"] = structure_route_support_value
+	features["structure_raw_value"] = structure_raw_value
+	features["structure_total_weighted_value"] = structure_total_weighted_value
 	features["structure_route_readiness_adjustment"] = route_readiness_adjustment
 	features["structure_drink_route_readiness_adjustment"] = drink_route_readiness_adjustment_value
 	_append_drink_need_features(features, income_analysis)
@@ -47,7 +57,7 @@ static func evaluate_action(observation: ObservationState, command: Command, pro
 	_append_waitress_route_features(features, waitress_route_payload)
 	_append_employee_income_features(features, employee_payload)
 	return {
-		"value": employee_value + activation_value_total + route_readiness_adjustment + drink_route_readiness_adjustment_value + price_route_value + waitress_route_value,
+		"value": structure_total_weighted_value,
 		"features": features,
 	}
 

@@ -158,6 +158,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var marketing_supply_structure := _test_structure_score_keeps_food_supply_for_marketing_pipeline(seed_val)
 	if not marketing_supply_structure.ok:
 		return marketing_supply_structure
+	var structure_weighting := _test_structure_score_downweights_marginal_edits_but_keeps_route_edits(seed_val)
+	if not structure_weighting.ok:
+		return structure_weighting
 	var trainable_supply_generation := _test_candidate_generation_keeps_trainable_food_supply_available(seed_val)
 	if not trainable_supply_generation.ok:
 		return trainable_supply_generation
@@ -2797,6 +2800,81 @@ static func _test_structure_score_keeps_food_supply_for_marketing_pipeline(seed_
 	var marketing_products: Array = Array(features.get("structure_marketing_supply_products", []))
 	if not marketing_products.has("burger"):
 		return Result.failure("food supply structure should expose burger marketing supply product: %s" % str(features))
+	return Result.success()
+
+static func _test_structure_score_downweights_marginal_edits_but_keeps_route_edits(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("engine initialize failed: %s" % init.error)
+	var profile = StrategyProfileClass.new()
+	profile.configure_base_revenue()
+
+	var submit_macro := MacroAction.create(
+		"submit_restructuring",
+		[Command.create("submit_restructuring", 0, {})],
+		0.0,
+		["restructuring"],
+		{}
+	)
+
+	var marketing_supply := _synthetic_income_observation()
+	marketing_supply.phase = DefsClass.PHASE_RESTRUCTURING
+	marketing_supply.sub_phase = ""
+	marketing_supply.own_player["employees"] = ["campaign_manager"]
+	marketing_supply.own_player["reserve_employees"] = ["kitchen_trainee", "recruiting_girl"]
+	marketing_supply.own_player["inventory"] = {}
+	_set_observation_house_demand_count(marketing_supply, "house_near", "burger", 0)
+	var marketing_analysis: Dictionary = StrategyIncomeAnalyzerClass.analyze(marketing_supply, profile)
+	var kitchen_macro := MacroAction.create(
+		"structure_kitchen_for_marketing",
+		[Command.create("set_company_structure_direct", 0, {"employee_id": "kitchen_trainee"})],
+		0.0,
+		["restructuring"],
+		{}
+	)
+	var recruiter_macro := MacroAction.create(
+		"structure_recruiting_girl_only",
+		[Command.create("set_company_structure_direct", 0, {"employee_id": "recruiting_girl"})],
+		0.0,
+		["restructuring"],
+		{}
+	)
+	var kitchen_score: Dictionary = StrategyScorerClass.score_macro(marketing_supply, kitchen_macro, profile, {"income_analysis": marketing_analysis})
+	var recruiter_score: Dictionary = StrategyScorerClass.score_macro(marketing_supply, recruiter_macro, profile, {"income_analysis": marketing_analysis})
+	var submit_score: Dictionary = StrategyScorerClass.score_macro(marketing_supply, submit_macro, profile, {"income_analysis": marketing_analysis})
+	if float(kitchen_score.get("score", 0.0)) <= float(submit_score.get("score", 0.0)):
+		return Result.failure("Structure scorer should keep food-supply activation above submit: kitchen=%s submit=%s" % [str(kitchen_score), str(submit_score)])
+	if float(recruiter_score.get("score", 0.0)) >= float(submit_score.get("score", 0.0)):
+		return Result.failure("Structure scorer should push marginal recruiting_girl direct edit below submit: recruiting_girl=%s submit=%s" % [str(recruiter_score), str(submit_score)])
+	var recruiter_features: Dictionary = Dictionary(recruiter_score.get("features", {}))
+	if float(recruiter_features.get("structure_employee_weighted_value", 0.0)) >= float(recruiter_features.get("structure_employee_value", 0.0)):
+		return Result.failure("Structure scorer should expose a reduced weighted employee value for marginal edits: %s" % str(recruiter_features))
+	if float(recruiter_features.get("structure_total_weighted_value", 0.0)) >= float(recruiter_features.get("structure_raw_value", 0.0)):
+		return Result.failure("Structure scorer should expose a reduced weighted total for marginal edits: %s" % str(recruiter_features))
+
+	var price_opportunity := _synthetic_income_observation()
+	price_opportunity.phase = DefsClass.PHASE_RESTRUCTURING
+	price_opportunity.sub_phase = ""
+	price_opportunity.own_player["employees"] = ["burger_cook", "campaign_manager"]
+	price_opportunity.own_player["reserve_employees"] = ["pricing_manager"]
+	price_opportunity.own_player["inventory"] = {"burger": 1}
+	_set_observation_house_demand_count(price_opportunity, "house_near", "burger", 1)
+	var price_analysis: Dictionary = StrategyIncomeAnalyzerClass.analyze(price_opportunity, profile)
+	var pricing_macro := MacroAction.create(
+		"structure_pricing_manager",
+		[Command.create("set_company_structure_direct", 0, {"employee_id": "pricing_manager"})],
+		0.0,
+		["restructuring"],
+		{}
+	)
+	var pricing_score: Dictionary = StrategyScorerClass.score_macro(price_opportunity, pricing_macro, profile, {"income_analysis": price_analysis})
+	var price_submit_score: Dictionary = StrategyScorerClass.score_macro(price_opportunity, submit_macro, profile, {"income_analysis": price_analysis})
+	if float(pricing_score.get("score", 0.0)) <= float(price_submit_score.get("score", 0.0)):
+		return Result.failure("Structure scorer should keep pricing route edits above submit: pricing=%s submit=%s" % [str(pricing_score), str(price_submit_score)])
+	var pricing_features: Dictionary = Dictionary(pricing_score.get("features", {}))
+	if float(pricing_features.get("structure_price_route_value", 0.0)) <= 0.0:
+		return Result.failure("Structure scorer should expose a positive price route value for pricing_manager: %s" % str(pricing_features))
 	return Result.success()
 
 static func _test_candidate_generation_keeps_trainable_food_supply_available(seed_val: int) -> Result:
