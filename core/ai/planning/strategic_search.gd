@@ -444,6 +444,9 @@ static func _comparison_summary(plan, rollout: Dictionary, eval_payload: Diction
 		"salary_due_estimate": int(telemetry.get("salary_due_estimate", 0)),
 		"unsold_demand": _unsold_demand_from_breakdown(breakdown),
 		"route_action_count": int(telemetry.get("route_action_count", 0)),
+		"route_progress_bonus": float(breakdown.get("route_progress_bonus", 0.0)),
+		"route_completion_bonus": float(breakdown.get("route_completion_bonus", 0.0)),
+		"route_transition_bonus": float(breakdown.get("route_transition_bonus", 0.0)),
 		"route_stalled": bool(telemetry.get("route_stalled", false)),
 		"command_count": commands.size(),
 		"restructuring_edit_count": _count_actions(commands, ["restructure_employee", "set_company_structure_direct", "set_company_structure_report"]),
@@ -486,12 +489,30 @@ static func _comparison_delta_score(plan, summary: Dictionary, baseline: Diction
 	if demand_created_delta > 0 and int(summary.get("unsold_demand", 0)) <= int(baseline.get("unsold_demand", 0)):
 		score += float(demand_created_delta) * 5.0
 	score += float(summary.get("milestone_value", 0.0)) - float(baseline.get("milestone_value", 0.0))
+	score += _route_progress_delta_score(plan, summary, baseline)
 	score += _route_specific_delta(plan, summary, baseline)
 	score -= float(maxi(0, int(summary.get("salary_due_estimate", 0)) - int(baseline.get("salary_due_estimate", 0)))) * 12.0
 	score -= float(maxi(0, int(summary.get("unsold_demand", 0)) - int(baseline.get("unsold_demand", 0)))) * 8.0
 	score -= float(maxi(0, int(summary.get("lost_to_competitor", 0)) - int(baseline.get("lost_to_competitor", 0)))) * 8.0
 	score -= float(maxi(0, int(summary.get("command_count", 0)) - int(baseline.get("command_count", 0)))) * 0.5
 	return score
+
+static func _route_progress_delta_score(plan, summary: Dictionary, baseline: Dictionary) -> float:
+	if plan == null:
+		return 0.0
+	var route_action_delta := maxi(0, int(summary.get("route_action_count", 0)) - int(baseline.get("route_action_count", 0)))
+	if route_action_delta <= 0:
+		return 0.0
+	var progress_delta := maxf(0.0, float(summary.get("route_progress_bonus", 0.0)) - float(baseline.get("route_progress_bonus", 0.0)))
+	var completion_delta := maxf(0.0, float(summary.get("route_completion_bonus", 0.0)) - float(baseline.get("route_completion_bonus", 0.0)))
+	var transition_delta := maxf(0.0, float(summary.get("route_transition_bonus", 0.0)) - float(baseline.get("route_transition_bonus", 0.0)))
+	if progress_delta <= 0.0 and completion_delta <= 0.0 and transition_delta <= 0.0:
+		return 0.0
+	var score := minf(6.0, float(route_action_delta) * 6.0)
+	score += minf(4.0, progress_delta * 0.5)
+	score += minf(4.0, completion_delta * 0.25)
+	score += minf(3.0, transition_delta * 0.5)
+	return minf(DEFAULT_COMPARED_MIN_DELTA_SCORE, score)
 
 static func _route_specific_delta(plan, summary: Dictionary, baseline: Dictionary) -> float:
 	var gained := _string_array(summary.get("milestones_gained", []))

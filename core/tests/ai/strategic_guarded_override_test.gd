@@ -33,13 +33,16 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var positive_override := _test_positive_plan_clears_hard_gate_and_delta()
 	if not positive_override.ok:
 		return positive_override
+	var route_progress_delta := _test_guarded_route_progress_can_clear_delta()
+	if not route_progress_delta.ok:
+		return route_progress_delta
 	var child_budget := _test_compared_rollout_budget_uses_child_budget()
 	if not child_budget.ok:
 		return child_budget
 	var scorer := _test_directive_hint_bonus_is_local_and_capped()
 	if not scorer.ok:
 		return scorer
-	return Result.success({"cases": 10})
+	return Result.success({"cases": 11})
 
 static func _test_low_cash_blocks_non_marketing_override() -> Result:
 	var plan = StrategicPlanClass.create(
@@ -258,6 +261,51 @@ static func _test_positive_plan_clears_hard_gate_and_delta() -> Result:
 		return Result.failure("positive compared plan should be selectable: %s" % str(passed))
 	return Result.success()
 
+static func _test_guarded_route_progress_can_clear_delta() -> Result:
+	var plan = StrategicPlanClass.create(
+		"marketing_income_burger",
+		0,
+		"marketing_income",
+		0.0,
+		["burger"],
+		[],
+		["campaign_manager"],
+		{},
+		[],
+		2,
+		8,
+		["initiate_marketing", "produce_food"]
+	)
+	var baseline := _summary({"cash_before": 0, "cash_after": 0, "cash_max_seen": 0, "command_count": 5})
+	var summary := _summary({
+		"cash_before": 0,
+		"cash_after": 0,
+		"cash_max_seen": 0,
+		"route_action_count": 1,
+		"route_progress_bonus": 7.2,
+		"route_completion_bonus": 12.0,
+		"command_count": 5,
+	})
+	var hard_gate: Dictionary = StrategicSearchClass._comparison_hard_gate(plan, summary, baseline, {"strategic_cash_footing": 15})
+	var delta := StrategicSearchClass._comparison_delta_score(plan, summary, baseline)
+	if not bool(hard_gate.get("passed", false)):
+		return Result.failure("guarded route progress should clear hard gates: %s" % str(hard_gate))
+	if delta < 12.0:
+		return Result.failure("guarded route progress should clear delta threshold, got %f" % delta)
+	var no_action_summary := _summary({
+		"cash_before": 0,
+		"cash_after": 0,
+		"cash_max_seen": 0,
+		"route_action_count": 0,
+		"route_progress_bonus": 7.2,
+		"route_completion_bonus": 12.0,
+		"command_count": 5,
+	})
+	var no_action_delta := StrategicSearchClass._comparison_delta_score(plan, no_action_summary, baseline)
+	if no_action_delta >= 12.0:
+		return Result.failure("route progress credit should require route action progress, got %f" % no_action_delta)
+	return Result.success()
+
 static func _test_compared_rollout_budget_uses_child_budget() -> Result:
 	var parent_budget := TimeBudget.start(360)
 	var rollout_budget_ms := StrategicSearchClass._compared_rollout_budget_ms(parent_budget, {
@@ -342,6 +390,9 @@ static func _summary(overrides: Dictionary = {}) -> Dictionary:
 		"salary_due_estimate": 0,
 		"unsold_demand": 0,
 		"route_action_count": 0,
+		"route_progress_bonus": 0.0,
+		"route_completion_bonus": 0.0,
+		"route_transition_bonus": 0.0,
 		"route_stalled": false,
 		"command_count": 0,
 		"restructuring_edit_count": 0,

@@ -155,4 +155,14 @@ score =
 - Verification: `CheckCompile PASS files=1236`; `AllTests PASS passed=426/426 failed=[] total_ms=151420`; `StrategicGuardedOverrideTest` now includes a child-budget regression case.
 - Probe: low-budget `target_round=4`, `budget_ms=360`, `strategic_min_search_budget_ms=120` still fell back safely, but compared rollouts now used about `103-104ms` child budgets. Marketing evaluated `2/2` candidates; later route points still evaluated only `1/4` candidates because the total parent budget remained tight, but those candidate rollouts executed `1-2` commands instead of starving at `0`.
 - Probe: high-budget `target_round=4`, `budget_ms=1800` evaluated all compared candidates at the strategic decision points: Marketing `2/2`, Restructuring/Recruit/GetFood `4/4`, with `compared_rollout_budget_ms=288` and `5-8` commands in the leading rollout. It still selected no strategic override (`no_plan_beat_baseline=5`), so the next point should inspect plan quality/comparison scoring with full candidate evidence rather than changing safety gates.
+- Commit: `fix(ai): give compared strategic rollouts fair budgets` (`b497733f`).
+
+### 2026-05-15 Step 9
+
+- Status: implemented, pending commit.
+- Change: let compared delta scoring recognize guarded route proof. Compared summaries now carry `route_progress_bonus`, `route_completion_bonus`, and `route_transition_bonus`; delta scoring adds a bounded route-progress credit only when route action count improves over baseline and at least one of those evaluator proof signals is positive.
+- Design check: aligned. This is not a hard-gate relaxation: cash, salary, opponent-loss, route-stall, unsupplied-demand, and restructuring-risk gates still block unsafe plans. The first test run caught an over-broad version where bare `route_action_count` could lift a weak cash plan; the final version requires both route action progress and positive route proof.
+- Verification: `CheckCompile PASS files=1236`; `AllTests PASS passed=426/426 failed=[] total_ms=152862`; `StrategicGuardedOverrideTest` now covers both sides of the scoring boundary: weak cash plus bare route action stays below threshold, while guarded route action plus positive progress/completion can clear it.
+- Probe: low-budget `target_round=4`, `budget_ms=360`, `strategic_min_search_budget_ms=120` finished without failures/timeouts and recorded `search_type_counts={"strategic":2,"strategy":38}`. Both strategic decisions were `marketing_income_burger` with hard gate passed and route proof present (`progress=7.2/completion=12` for `initiate_marketing`; `progress=12.6/completion=14` for `produce_food`).
+- Probe: high-budget `target_round=4`, `budget_ms=1800` finished without failures/timeouts and produced 4 guarded strategic decisions before the final tightening; the remaining low-budget retest after tightening confirms the credit still works without bare-action false positives.
 - Commit: pending.
