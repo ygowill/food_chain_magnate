@@ -33,10 +33,13 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var positive_override := _test_positive_plan_clears_hard_gate_and_delta()
 	if not positive_override.ok:
 		return positive_override
+	var child_budget := _test_compared_rollout_budget_uses_child_budget()
+	if not child_budget.ok:
+		return child_budget
 	var scorer := _test_directive_hint_bonus_is_local_and_capped()
 	if not scorer.ok:
 		return scorer
-	return Result.success({"cases": 9})
+	return Result.success({"cases": 10})
 
 static func _test_low_cash_blocks_non_marketing_override() -> Result:
 	var plan = StrategicPlanClass.create(
@@ -253,6 +256,25 @@ static func _test_positive_plan_clears_hard_gate_and_delta() -> Result:
 	])
 	if passed.size() != 1 or str(Dictionary(passed[0]).get("plan_id", "")) != "positive":
 		return Result.failure("positive compared plan should be selectable: %s" % str(passed))
+	return Result.success()
+
+static func _test_compared_rollout_budget_uses_child_budget() -> Result:
+	var parent_budget := TimeBudget.start(360)
+	var rollout_budget_ms := StrategicSearchClass._compared_rollout_budget_ms(parent_budget, {
+		"step_budget_ms": 48,
+		"horizon_decisions": 16,
+		"min_plans_for_rollout": 1,
+	}, 6)
+	if rollout_budget_ms <= 0 or rollout_budget_ms > 130:
+		return Result.failure("compared rollout budget should preserve room for baseline and candidates, got %d" % rollout_budget_ms)
+	var child_budget := StrategicSearchClass._compared_child_rollout_budget(parent_budget, rollout_budget_ms)
+	if child_budget == null:
+		return Result.failure("compared rollout child budget should be created")
+	if child_budget == parent_budget:
+		return Result.failure("compared rollout should not reuse the parent TimeBudget instance")
+	var child_remaining := int(child_budget.remaining_ms())
+	if child_remaining <= 0 or child_remaining > rollout_budget_ms:
+		return Result.failure("child budget remaining should be bounded by rollout budget, got %d of %d" % [child_remaining, rollout_budget_ms])
 	return Result.success()
 
 static func _test_directive_hint_bonus_is_local_and_capped() -> Result:

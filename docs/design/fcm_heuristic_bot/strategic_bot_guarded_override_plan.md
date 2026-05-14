@@ -145,4 +145,14 @@ score =
 - Verification: `AllTests PASS passed=426/426 failed=[] total_ms=161211`; `StrategicGuardedOverrideTest` now covers phase-local restructuring directives, targeted-only structure progress, and a positive compared-plan gate/delta case.
 - Benchmark: `strategy` vs `strategy,strategic`, seed `12345`, `target_round=8`, `budget_ms=360`, `strategic_min_search_budget_ms=120` finished with no failures/timeouts but still zero behavior deltas. Guarded strategic recorded `strategic_fallback=59`, with `no_plan_beat_baseline=32`, `no_plans_generated=5`, and `no_strategic_legal_actions=22`.
 - Diagnostic probe: decision-detail payloads showed compared search usually evaluated only one candidate, often with `budget_expired` and `commands=0..1`. A high-budget `target_round=4`, `budget_ms=1800` probe still produced no strategic decisions. Next implementation should fix compared-search rollout budget fairness before changing scoring thresholds.
+- Commit: `feat(ai): guard strategic restructuring directives` (`fb7ccb81`).
+
+### 2026-05-15 Step 8
+
+- Status: implemented, pending commit.
+- Change: made compared search budget-fair. Baseline and each candidate plan now receive a fresh child rollout budget capped by the remaining parent search budget, instead of sharing one absolute `TimeBudget` instance where the baseline can consume the whole deadline before candidates are evaluated. Failure/success payloads now include `compared_rollout_budget_ms`.
+- Design check: aligned. This preserves the same hard gates and delta threshold, keeps total search bounded by the parent budget, and makes the baseline comparison meaningful before any scoring changes are considered.
+- Verification: `CheckCompile PASS files=1236`; `AllTests PASS passed=426/426 failed=[] total_ms=151420`; `StrategicGuardedOverrideTest` now includes a child-budget regression case.
+- Probe: low-budget `target_round=4`, `budget_ms=360`, `strategic_min_search_budget_ms=120` still fell back safely, but compared rollouts now used about `103-104ms` child budgets. Marketing evaluated `2/2` candidates; later route points still evaluated only `1/4` candidates because the total parent budget remained tight, but those candidate rollouts executed `1-2` commands instead of starving at `0`.
+- Probe: high-budget `target_round=4`, `budget_ms=1800` evaluated all compared candidates at the strategic decision points: Marketing `2/2`, Restructuring/Recruit/GetFood `4/4`, with `compared_rollout_budget_ms=288` and `5-8` commands in the leading rollout. It still selected no strategic override (`no_plan_beat_baseline=5`), so the next point should inspect plan quality/comparison scoring with full candidate evidence rather than changing safety gates.
 - Commit: pending.

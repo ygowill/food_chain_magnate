@@ -10,6 +10,8 @@ const StrategicPlanClass = preload("res://core/ai/planning/strategic_plan.gd")
 const DEFAULT_COMPARED_MIN_DELTA_SCORE := 12.0
 const DEFAULT_CASH_FOOTING := 15
 const DEFAULT_RESTRUCTURING_EDIT_MARGIN := 2
+const DEFAULT_COMPARED_ROLLOUT_STEPS := 6
+const DEFAULT_COMPARED_MIN_EVALUATED_PLANS := 2
 
 static func choose_plan_beam(
 	engine: GameEngine,
@@ -143,11 +145,20 @@ static func choose_plan_compared(
 			"successful_evaluations": 0,
 			"evaluated_plans": [],
 			"hard_gate_failures": {},
+			"compared_rollout_budget_ms": 0,
 			"time_ms": Time.get_ticks_msec() - start_ms,
 		})
 
+	var max_plans := maxi(1, int(options.get("max_plans", plans.size())))
+	var limit := mini(max_plans, plans.size())
+	var min_delta_score := float(options.get("strategic_min_delta_score", options.get("min_delta_score", DEFAULT_COMPARED_MIN_DELTA_SCORE)))
+	var hard_gate_failures := {}
+	var compared_rollout_budget_ms := _compared_rollout_budget_ms(budget, options, limit)
 	var baseline_plan = _baseline_plan(owner_player_id, options)
-	var baseline_rollout_options := _rollout_options_for_plan(baseline_plan, budget, options)
+	var baseline_budget := _compared_child_rollout_budget(budget, compared_rollout_budget_ms)
+	if budget != null and baseline_budget == null:
+		return Result.failure("StrategicSearch.choose_plan_compared: budget expired before baseline rollout").with_value(_compared_failure_payload([], {}, plans.size(), 0, hard_gate_failures, min_delta_score, start_ms, compared_rollout_budget_ms))
+	var baseline_rollout_options := _rollout_options_for_plan(baseline_plan, baseline_budget, options)
 	var baseline_rollout_read := StrategicPlanRunnerClass.rollout(engine, baseline_plan, profile, baseline_rollout_options)
 	if not baseline_rollout_read.ok:
 		return baseline_rollout_read
@@ -158,18 +169,17 @@ static func choose_plan_compared(
 
 	var evaluated: Array[Dictionary] = []
 	var successful_evaluations := 0
-	var max_plans := maxi(1, int(options.get("max_plans", plans.size())))
-	var limit := mini(max_plans, plans.size())
-	var min_delta_score := float(options.get("strategic_min_delta_score", options.get("min_delta_score", DEFAULT_COMPARED_MIN_DELTA_SCORE)))
-	var hard_gate_failures := {}
 	for i in range(limit):
-		if budget != null and budget.expired() and not evaluated.is_empty():
+		if budget != null and budget.expired():
 			break
 		var plan_val = plans[i]
 		if plan_val == null or not plan_val.has_method("is_valid"):
 			continue
 		var plan = plan_val
-		var rollout_options := _rollout_options_for_plan(plan, budget, options)
+		var rollout_budget := _compared_child_rollout_budget(budget, compared_rollout_budget_ms)
+		if budget != null and rollout_budget == null:
+			break
+		var rollout_options := _rollout_options_for_plan(plan, rollout_budget, options)
 		var rollout_read := StrategicPlanRunnerClass.rollout(engine, plan, profile, rollout_options)
 		if not rollout_read.ok:
 			evaluated.append({
@@ -218,20 +228,21 @@ static func choose_plan_compared(
 			"hard_gate": hard_gate,
 			"comparison_passed": passed,
 			"min_delta_score": min_delta_score,
+			"compared_rollout_budget_ms": compared_rollout_budget_ms,
 		})
 	if evaluated.is_empty():
-		return Result.failure("StrategicSearch.choose_plan_compared: no plans evaluated").with_value(_compared_failure_payload(evaluated, baseline_summary, plans.size(), successful_evaluations, hard_gate_failures, min_delta_score, start_ms))
+		return Result.failure("StrategicSearch.choose_plan_compared: no plans evaluated").with_value(_compared_failure_payload(evaluated, baseline_summary, plans.size(), successful_evaluations, hard_gate_failures, min_delta_score, start_ms, compared_rollout_budget_ms))
 	if successful_evaluations <= 0:
-		return Result.failure("StrategicSearch.choose_plan_compared: no plans evaluated successfully").with_value(_compared_failure_payload(evaluated, baseline_summary, plans.size(), successful_evaluations, hard_gate_failures, min_delta_score, start_ms))
+		return Result.failure("StrategicSearch.choose_plan_compared: no plans evaluated successfully").with_value(_compared_failure_payload(evaluated, baseline_summary, plans.size(), successful_evaluations, hard_gate_failures, min_delta_score, start_ms, compared_rollout_budget_ms))
 	var passed_evaluated := _passed_compared_evaluated(evaluated)
 	if passed_evaluated.is_empty():
-		return Result.failure("StrategicSearch.choose_plan_compared: no plan beat baseline gates=%s" % str(hard_gate_failures)).with_value(_compared_failure_payload(evaluated, baseline_summary, plans.size(), successful_evaluations, hard_gate_failures, min_delta_score, start_ms))
+		return Result.failure("StrategicSearch.choose_plan_compared: no plan beat baseline gates=%s" % str(hard_gate_failures)).with_value(_compared_failure_payload(evaluated, baseline_summary, plans.size(), successful_evaluations, hard_gate_failures, min_delta_score, start_ms, compared_rollout_budget_ms))
 	evaluated = passed_evaluated
 	_sort_evaluated(evaluated)
 	var best: Dictionary = evaluated[0]
 	var best_plan_val = best.get("plan", null)
 	if best_plan_val == null or not best_plan_val.has_method("to_trace_dict") or float(best.get("score", -INF)) <= -INF:
-		return Result.failure("StrategicSearch.choose_plan_compared: no plan evaluated successfully").with_value(_compared_failure_payload(evaluated, baseline_summary, plans.size(), successful_evaluations, hard_gate_failures, min_delta_score, start_ms))
+		return Result.failure("StrategicSearch.choose_plan_compared: no plan evaluated successfully").with_value(_compared_failure_payload(evaluated, baseline_summary, plans.size(), successful_evaluations, hard_gate_failures, min_delta_score, start_ms, compared_rollout_budget_ms))
 	var best_plan = best_plan_val
 	return Result.success({
 		"plan": best_plan,
@@ -245,6 +256,7 @@ static func choose_plan_compared(
 		"comparison": Dictionary(best.get("comparison", {})).duplicate(true),
 		"hard_gate": Dictionary(best.get("hard_gate", {})).duplicate(true),
 		"min_delta_score": min_delta_score,
+		"compared_rollout_budget_ms": compared_rollout_budget_ms,
 	})
 
 static func choose_plan_mcts(
@@ -343,7 +355,8 @@ static func _compared_failure_payload(
 	successful_evaluations: int,
 	hard_gate_failures: Dictionary,
 	min_delta_score: float,
-	start_ms: int
+	start_ms: int,
+	compared_rollout_budget_ms: int = 0
 ) -> Dictionary:
 	return {
 		"candidate_count": maxi(0, int(candidate_count)),
@@ -353,6 +366,7 @@ static func _compared_failure_payload(
 		"evaluated_plans": _trace_evaluated(evaluated, 5),
 		"hard_gate_failures": hard_gate_failures.duplicate(true),
 		"min_delta_score": min_delta_score,
+		"compared_rollout_budget_ms": maxi(0, int(compared_rollout_budget_ms)),
 		"time_ms": Time.get_ticks_msec() - start_ms,
 	}
 
@@ -382,6 +396,33 @@ static func _rollout_options_for_plan(plan, budget: TimeBudget, options: Diction
 		"budget": budget,
 		"route_history": Array(options.get("route_history", [])).duplicate(true),
 	}
+
+static func _compared_rollout_budget_ms(parent_budget: TimeBudget, options: Dictionary, candidate_limit: int) -> int:
+	var step_budget_ms := maxi(1, int(options.get("step_budget_ms", 40)))
+	var configured_ms := int(options.get("strategic_compared_rollout_budget_ms", options.get("compared_rollout_budget_ms", 0)))
+	var target_ms := configured_ms
+	if target_ms <= 0:
+		var requested_horizon := maxi(1, int(options.get("horizon_decisions", 16)))
+		var rollout_steps := maxi(1, int(options.get("strategic_compared_rollout_steps", options.get("compared_rollout_steps", DEFAULT_COMPARED_ROLLOUT_STEPS))))
+		target_ms = step_budget_ms * mini(requested_horizon, rollout_steps)
+	if parent_budget == null:
+		return maxi(1, target_ms)
+	var remaining := int(parent_budget.remaining_ms())
+	if remaining <= 0:
+		return 0
+	var configured_min_plans := int(options.get("min_plans_for_rollout", DEFAULT_COMPARED_MIN_EVALUATED_PLANS))
+	var min_candidate_rollouts := maxi(DEFAULT_COMPARED_MIN_EVALUATED_PLANS, configured_min_plans)
+	var guaranteed_rollouts := 1 + mini(maxi(1, candidate_limit), min_candidate_rollouts)
+	var fair_cap := maxi(1, int(ceil(float(remaining) / float(guaranteed_rollouts))))
+	return maxi(1, mini(mini(target_ms, fair_cap), remaining))
+
+static func _compared_child_rollout_budget(parent_budget: TimeBudget, rollout_budget_ms: int) -> TimeBudget:
+	if parent_budget == null:
+		return null
+	var remaining := int(parent_budget.remaining_ms())
+	if remaining <= 0:
+		return null
+	return TimeBudget.start(mini(maxi(1, rollout_budget_ms), remaining))
 
 static func _comparison_summary(plan, rollout: Dictionary, eval_payload: Dictionary) -> Dictionary:
 	var breakdown: Dictionary = Dictionary(eval_payload.get("breakdown", {}))
