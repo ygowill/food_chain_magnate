@@ -92,3 +92,11 @@ score =
 - Design check: aligns with the main principle because no code behavior changes yet; it only freezes the implementation contract before edits.
 - Verification: document-only change; no runtime test required.
 - Commit: `docs(ai): record guarded strategic bot plan`.
+
+### 2026-05-14 Step 2
+
+- Status: ready for commit.
+- Change: added `StrategicSearch.choose_plan_compared()` plus baseline rollout, hard gates, delta scoring, and comparison trace payload.
+- Design check: aligned. This step does not enable the new path by default and does not let a plan override baseline unless it passes hard gates and the minimum delta threshold. Existing Beam and MCTS entry points remain available.
+- Verification: `CheckCompile PASS files=1235`.
+- Commit: `feat(ai): add baseline-compared strategic search`.
