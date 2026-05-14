@@ -46,7 +46,6 @@ static func rollout(
 	if profile != null:
 		root_bot.profile = profile
 		opponent_bot.profile = profile
-	var hints = StrategyPlanHintsClass.from_plan(plan)
 	var commands_executed: Array[Dictionary] = []
 	var rollout_metrics := {
 		"milestones_gained": [],
@@ -102,6 +101,7 @@ static func rollout(
 			break
 		var decision: BotDecision = null
 		if actor == plan.owner_player_id:
+			var hints = StrategyPlanHintsClass.from_plan_for_decision(plan, observation, legal_ids)
 			decision = root_bot.choose_command_with_engine_and_plan_hints(engine, observation, context, legal_ids, hints, validate_fn, step_budget)
 		else:
 			decision = opponent_bot.choose_command_with_engine(engine, observation, context, legal_ids, validate_fn, step_budget)

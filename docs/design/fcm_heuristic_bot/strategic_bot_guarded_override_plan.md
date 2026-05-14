@@ -108,3 +108,11 @@ score =
 - Design check: aligned. Compared mode skips the old broad plan cache so every override must be freshly compared against baseline. Beam/MCTS remain explicit modes, and failed compared searches still fallback to `StrategyBot`.
 - Verification: `CheckCompile PASS files=1235`.
 - Commit: `feat(ai): gate strategic bot with baseline comparison`.
+
+### 2026-05-14 Step 4
+
+- Status: ready for commit.
+- Change: added next-step directive fields to `StrategyPlanHints`, made `StrategicBot` and rollout use decision-local hints, and capped `StrategyScorer` hint bonuses.
+- Design check: aligned. The active decision path now only gives hints for the current legal next action, while route-wide targets remain trace data. Hint bonus is bounded and cannot replace existing hard validation or Strategy preconditions.
+- Verification: `CheckCompile PASS files=1235`.
+- Commit: `feat(ai): constrain strategic hints to next step`.

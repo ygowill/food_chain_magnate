@@ -15,6 +15,13 @@ var avoid_actions: Array[String] = []
 var preferred_actions: Array[String] = []
 var execution_sequence: Array[String] = []
 var plan_id: String = ""
+var next_action_ids: Array[String] = []
+var next_target_products: Array[String] = []
+var next_target_employees: Array[String] = []
+var directive_phase: String = ""
+var route_target_products: Array[String] = []
+var route_target_employees: Array[String] = []
+var route_preferred_actions: Array[String] = []
 
 static func create(
 	p_plan_id: String = "",
@@ -28,7 +35,14 @@ static func create(
 	p_cash_floor: int = 0,
 	p_avoid_actions: Array[String] = [],
 	p_preferred_actions: Array[String] = [],
-	p_execution_sequence: Array[String] = []
+	p_execution_sequence: Array[String] = [],
+	p_next_action_ids: Array[String] = [],
+	p_next_target_products: Array[String] = [],
+	p_next_target_employees: Array[String] = [],
+	p_directive_phase: String = "",
+	p_route_target_products: Array[String] = [],
+	p_route_target_employees: Array[String] = [],
+	p_route_preferred_actions: Array[String] = []
 ):
 	var script := load("res://core/ai/planning/strategic_plan_hints.gd")
 	var hints = script.new()
@@ -44,6 +58,13 @@ static func create(
 	hints.avoid_actions = _string_array(p_avoid_actions)
 	hints.preferred_actions = _string_array(p_preferred_actions)
 	hints.execution_sequence = _ordered_string_array(p_execution_sequence)
+	hints.next_action_ids = _ordered_string_array(p_next_action_ids)
+	hints.next_target_products = _string_array(p_next_target_products)
+	hints.next_target_employees = _string_array(p_next_target_employees)
+	hints.directive_phase = str(p_directive_phase).strip_edges()
+	hints.route_target_products = _string_array(p_route_target_products)
+	hints.route_target_employees = _string_array(p_route_target_employees)
+	hints.route_preferred_actions = _ordered_string_array(p_route_preferred_actions)
 	return hints
 
 static func from_plan(plan):
@@ -129,7 +150,73 @@ static func from_plan(plan):
 		cash_floor,
 		avoid,
 		actions,
-		sequence
+		sequence,
+		[],
+		[],
+		[],
+		"",
+		plan.target_products,
+		plan.target_employees,
+		actions
+	)
+
+static func from_plan_for_decision(plan, observation: ObservationState = null, legal_action_ids: Array[String] = []):
+	if plan == null:
+		return load("res://core/ai/planning/strategic_plan_hints.gd").create()
+	var route_hints = from_plan(plan)
+	var legal_ids := _string_array(legal_action_ids)
+	if legal_ids.is_empty():
+		return route_hints
+	var next_actions := _next_actions_for_legal(route_hints.execution_sequence, route_hints.preferred_actions, legal_ids)
+	if next_actions.is_empty():
+		return load("res://core/ai/planning/strategic_plan_hints.gd").create(
+			plan.id,
+			[],
+			[],
+			[],
+			[],
+			[],
+			[],
+			0.0,
+			int(route_hints.cash_floor),
+			route_hints.avoid_actions,
+			[],
+			[],
+			[],
+			[],
+			[],
+			_directive_phase(observation),
+			plan.target_products,
+			plan.target_employees,
+			route_hints.preferred_actions
+		)
+	var next_products := _next_products_for_actions(next_actions, plan.target_products)
+	var next_employees := _next_employees_for_actions(next_actions, plan.target_employees)
+	var next_roles := _next_roles_for_actions(next_actions, route_hints.preferred_employee_roles)
+	var next_houses: Array[String] = route_hints.preferred_marketing_house_ids.duplicate() if next_actions.has("initiate_marketing") else []
+	var next_boards: Array[int] = route_hints.preferred_marketing_board_numbers.duplicate() if next_actions.has("initiate_marketing") else []
+	var next_price_actions := _next_price_actions_for_actions(next_actions, route_hints.preferred_price_actions)
+	var next_growth: float = route_hints.growth_bias if _has_growth_action(next_actions) else 0.0
+	return load("res://core/ai/planning/strategic_plan_hints.gd").create(
+		plan.id,
+		next_products,
+		next_roles,
+		next_employees,
+		next_houses,
+		next_boards,
+		next_price_actions,
+		next_growth,
+		int(route_hints.cash_floor),
+		route_hints.avoid_actions,
+		next_actions,
+		next_actions,
+		next_actions,
+		next_products,
+		next_employees,
+		_directive_phase(observation),
+		plan.target_products,
+		plan.target_employees,
+		route_hints.preferred_actions
 	)
 
 static func from_dict(data: Dictionary):
@@ -145,7 +232,14 @@ static func from_dict(data: Dictionary):
 		int(data.get("cash_floor", 0)),
 		_string_array(data.get("avoid_actions", [])),
 		_string_array(data.get("preferred_actions", [])),
-		_ordered_string_array(data.get("execution_sequence", []))
+		_ordered_string_array(data.get("execution_sequence", [])),
+		_ordered_string_array(data.get("next_action_ids", [])),
+		_string_array(data.get("next_target_products", [])),
+		_string_array(data.get("next_target_employees", [])),
+		str(data.get("directive_phase", "")),
+		_string_array(data.get("route_target_products", [])),
+		_string_array(data.get("route_target_employees", [])),
+		_ordered_string_array(data.get("route_preferred_actions", []))
 	)
 
 func duplicate_hints():
@@ -165,6 +259,13 @@ func to_dict() -> Dictionary:
 		"preferred_actions": preferred_actions.duplicate(),
 		"execution_sequence": execution_sequence.duplicate(),
 		"plan_id": plan_id,
+		"next_action_ids": next_action_ids.duplicate(),
+		"next_target_products": next_target_products.duplicate(),
+		"next_target_employees": next_target_employees.duplicate(),
+		"directive_phase": directive_phase,
+		"route_target_products": route_target_products.duplicate(),
+		"route_target_employees": route_target_employees.duplicate(),
+		"route_preferred_actions": route_preferred_actions.duplicate(),
 	}
 
 func is_empty() -> bool:
@@ -179,7 +280,11 @@ func is_empty() -> bool:
 		and cash_floor <= 0 \
 		and avoid_actions.is_empty() \
 		and preferred_actions.is_empty() \
-		and execution_sequence.is_empty()
+		and execution_sequence.is_empty() \
+		and next_action_ids.is_empty() \
+		and next_target_products.is_empty() \
+		and next_target_employees.is_empty() \
+		and directive_phase.is_empty()
 
 static func _string_array(value) -> Array[String]:
 	var out: Array[String] = []
@@ -210,6 +315,77 @@ static func _ordered_string_array(value) -> Array[String]:
 			if not text.is_empty() and not out.has(text):
 				out.append(text)
 	return out
+
+static func _next_actions_for_legal(sequence: Array[String], preferred_actions: Array[String], legal_ids: Array[String]) -> Array[String]:
+	var out: Array[String] = []
+	for action_id in sequence:
+		if legal_ids.has(action_id):
+			out.append(action_id)
+			return out
+	for action_id in preferred_actions:
+		if legal_ids.has(action_id):
+			out.append(action_id)
+			return out
+	return out
+
+static func _next_products_for_actions(action_ids: Array[String], target_products: Array[String]) -> Array[String]:
+	for action_id in action_ids:
+		if action_id == "initiate_marketing" or action_id == "produce_food" or action_id == "procure_drinks" or action_id == "set_price" or action_id == "set_discount" or action_id == "set_luxury_price":
+			return target_products.duplicate()
+	return []
+
+static func _next_employees_for_actions(action_ids: Array[String], target_employees: Array[String]) -> Array[String]:
+	for action_id in action_ids:
+		if action_id == "recruit" or action_id == "train" or action_id == "restructure_employee" or action_id == "set_company_structure_direct" or action_id == "initiate_marketing":
+			return target_employees.duplicate()
+	return []
+
+static func _next_roles_for_actions(action_ids: Array[String], preferred_roles: Array[String]) -> Array[String]:
+	var out: Array[String] = []
+	for action_id in action_ids:
+		match action_id:
+			"initiate_marketing":
+				if preferred_roles.has("marketing"):
+					out.append("marketing")
+			"produce_food":
+				if preferred_roles.has("produce_food"):
+					out.append("produce_food")
+			"procure_drinks":
+				if preferred_roles.has("procure_drink"):
+					out.append("procure_drink")
+			"set_price", "set_discount", "set_luxury_price":
+				if preferred_roles.has("price"):
+					out.append("price")
+			"place_house", "add_garden", "place_restaurant", "move_restaurant":
+				if preferred_roles.has("new_shop"):
+					out.append("new_shop")
+			_:
+				for role in preferred_roles:
+					if not out.has(role):
+						out.append(role)
+	return out
+
+static func _next_price_actions_for_actions(action_ids: Array[String], preferred_price_actions: Array[String]) -> Array[String]:
+	var out: Array[String] = []
+	for action_id in action_ids:
+		if preferred_price_actions.has(action_id):
+			out.append(action_id)
+	return out
+
+static func _has_growth_action(action_ids: Array[String]) -> bool:
+	for action_id in action_ids:
+		if action_id == "place_house" or action_id == "add_garden" or action_id == "place_restaurant" or action_id == "move_restaurant":
+			return true
+	return false
+
+static func _directive_phase(observation: ObservationState) -> String:
+	if observation == null:
+		return ""
+	var phase := str(observation.phase).strip_edges()
+	var sub_phase := str(observation.sub_phase).strip_edges()
+	if sub_phase.is_empty():
+		return phase
+	return "%s/%s" % [phase, sub_phase]
 
 static func _target_products_include_food(product_ids: Array[String]) -> bool:
 	for product_id in product_ids:

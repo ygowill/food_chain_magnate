@@ -202,41 +202,54 @@ static func _plan_hints_bonus(
 	var execution_sequence := _ordered_string_array(hints.get("execution_sequence", []))
 	var preferred_houses := _string_array(hints.get("preferred_marketing_house_ids", []))
 	var preferred_boards := _int_array(hints.get("preferred_marketing_board_numbers", []))
+	var directive_actions := _ordered_string_array(hints.get("next_action_ids", []))
+	var has_directive := not directive_actions.is_empty()
+	if has_directive:
+		if not directive_actions.has(action_id):
+			return 0.0
+		preferred_products = _string_array(hints.get("next_target_products", []))
+		preferred_employee_ids = _string_array(hints.get("next_target_employees", []))
+		preferred_actions = directive_actions
+		execution_sequence = directive_actions
+		preferred_roles = _directive_roles(preferred_roles, action_id)
 	var sequence_index := execution_sequence.find(action_id)
 	if sequence_index >= 0:
-		var sequence_bonus := maxf(0.0, 14.0 - float(sequence_index) * 2.0)
+		var sequence_bonus := maxf(0.0, (4.0 if has_directive else 8.0) - float(sequence_index) * 1.0)
 		bonus += sequence_bonus
 		features["plan_hints_sequence_match"] = action_id
 		features["plan_hints_sequence_index"] = sequence_index
 	if preferred_actions.has(action_id):
-		bonus += 8.0
+		bonus += 3.0 if has_directive else 5.0
 		features["plan_hints_action_match"] = action_id
 	var command_products := _command_products(command, features)
 	for product_id in command_products:
 		if preferred_products.has(product_id):
-			bonus += 22.0
+			bonus += 4.0 if has_directive else 8.0
 	var employee_id := _command_employee_id(command)
 	if not employee_id.is_empty() and preferred_employee_ids.has(employee_id):
-		bonus += 18.0
+		bonus += 4.0 if has_directive else 7.0
 	var role := _command_employee_role(command, features)
 	if not role.is_empty() and preferred_roles.has(role):
-		bonus += 12.0
+		bonus += 3.0 if has_directive else 5.0
 	if preferred_price_actions.has(action_id):
-		bonus += 24.0
+		bonus += 4.0 if has_directive else 8.0
 	if action_id == "initiate_marketing":
 		var board_number := int(command.params.get("board_number", -1))
 		if preferred_boards.has(board_number):
-			bonus += 8.0
+			bonus += 2.0 if has_directive else 4.0
 		if not preferred_houses.is_empty():
 			var affected := _affected_house_ids(macro)
 			for house_id in affected:
 				if preferred_houses.has(house_id):
-					bonus += 6.0
+					bonus += 2.0 if has_directive else 3.0
 	if action_id == "place_house" or action_id == "add_garden" or action_id == "place_restaurant" or action_id == "move_restaurant":
-		bonus += maxf(0.0, float(hints.get("growth_bias", 0.0))) * 12.0
+		bonus += maxf(0.0, float(hints.get("growth_bias", 0.0))) * (3.0 if has_directive else 6.0)
 	if int(hints.get("cash_floor", 0)) > 0 and action_id == "fire":
-		bonus += 4.0
-	return bonus
+		bonus += 1.0 if has_directive else 2.0
+	if has_directive:
+		features["plan_hints_directive_phase"] = str(hints.get("directive_phase", ""))
+		features["plan_hints_next_actions"] = directive_actions.duplicate()
+	return minf(bonus, 12.0 if has_directive else 24.0)
 
 static func _plan_hints_dict(options: Dictionary) -> Dictionary:
 	var value = options.get("plan_hints", null)
@@ -247,6 +260,28 @@ static func _plan_hints_dict(options: Dictionary) -> Dictionary:
 	if value is Dictionary:
 		return Dictionary(value)
 	return {}
+
+static func _directive_roles(preferred_roles: Array[String], action_id: String) -> Array[String]:
+	var out: Array[String] = []
+	match action_id:
+		"initiate_marketing":
+			if preferred_roles.has("marketing"):
+				out.append("marketing")
+		"produce_food":
+			if preferred_roles.has("produce_food"):
+				out.append("produce_food")
+		"procure_drinks":
+			if preferred_roles.has("procure_drink"):
+				out.append("procure_drink")
+		"set_price", "set_discount", "set_luxury_price":
+			if preferred_roles.has("price"):
+				out.append("price")
+		"place_house", "add_garden", "place_restaurant", "move_restaurant":
+			if preferred_roles.has("new_shop"):
+				out.append("new_shop")
+		_:
+			out = preferred_roles.duplicate()
+	return out
 
 static func _plan_hints_plan_id(options: Dictionary) -> String:
 	var hints := _plan_hints_dict(options)

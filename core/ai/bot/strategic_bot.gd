@@ -218,7 +218,7 @@ func _choose_with_plan(
 	used_cached_plan: bool,
 	budget_profile: String
 ) -> BotDecision:
-	var hints = StrategyPlanHintsClass.from_plan(plan)
+	var hints = StrategyPlanHintsClass.from_plan_for_decision(plan, observation, legal_action_ids)
 	var final_budget := _final_decision_budget(budget)
 	var decision := fallback_bot.choose_command_with_engine_and_plan_hints(
 		engine,
