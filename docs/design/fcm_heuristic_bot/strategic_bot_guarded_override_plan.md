@@ -165,4 +165,4 @@ score =
 - Verification: `CheckCompile PASS files=1236`; `AllTests PASS passed=426/426 failed=[] total_ms=152862`; `StrategicGuardedOverrideTest` now covers both sides of the scoring boundary: weak cash plus bare route action stays below threshold, while guarded route action plus positive progress/completion can clear it.
 - Probe: low-budget `target_round=4`, `budget_ms=360`, `strategic_min_search_budget_ms=120` finished without failures/timeouts and recorded `search_type_counts={"strategic":2,"strategy":38}`. Both strategic decisions were `marketing_income_burger` with hard gate passed and route proof present (`progress=7.2/completion=12` for `initiate_marketing`; `progress=12.6/completion=14` for `produce_food`).
 - Probe: high-budget `target_round=4`, `budget_ms=1800` finished without failures/timeouts and produced 4 guarded strategic decisions before the final tightening; the remaining low-budget retest after tightening confirms the credit still works without bare-action false positives.
-- Commit: pending.
+- Commit: `feat(ai): score guarded strategic route progress` (`cabaff65`).
