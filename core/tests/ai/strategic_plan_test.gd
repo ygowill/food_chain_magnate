@@ -618,6 +618,7 @@ static func _test_strategic_bot_plan_cache_reuse(seed_val: int) -> Result:
 	if not profile_read.ok:
 		return profile_read
 	var search_read := bot.configure_search_options({
+		"strategic_search": "beam",
 		"strategic_min_search_budget_ms": 16,
 		"strategic_min_plans_for_rollout": 1,
 		"strategic_max_plans": 2,
@@ -725,6 +726,7 @@ static func _test_strategic_bot_route_history_memory(seed_val: int) -> Result:
 	if not profile_read.ok:
 		return profile_read
 	var search_read := bot.configure_search_options({
+		"strategic_search": "beam",
 		"strategic_min_search_budget_ms": 16,
 		"strategic_min_plans_for_rollout": 1,
 		"strategic_max_plans": 2,
@@ -851,15 +853,21 @@ static func _test_strategic_bot_default_beam_search(seed_val: int) -> Result:
 	if decision == null or decision.is_failure() or decision.command == null:
 		return Result.failure("StrategicBot should enter strategic search with default rollout gate: %s" % str(decision))
 	var trace: Dictionary = Dictionary(decision.trace)
-	if str(trace.get("search", "")) != "strategic":
-		return Result.failure("StrategicBot default rollout gate should use strategic search: %s" % str(trace))
-	if str(trace.get("strategic_search", "")) != "beam":
-		return Result.failure("StrategicBot default rollout gate should remain in beam mode: %s" % str(trace))
-	if str(trace.get("plan_id", "")).is_empty():
-		return Result.failure("StrategicBot default rollout gate should expose selected plan: %s" % str(trace))
-	var breakdown: Dictionary = Dictionary(trace.get("plan_eval_breakdown", {}))
-	if breakdown.is_empty():
-		return Result.failure("StrategicBot default rollout gate should expose plan breakdown: %s" % str(trace))
+	var search := str(trace.get("search", ""))
+	if search == "strategic":
+		if str(trace.get("strategic_search", "")) != "compared":
+			return Result.failure("StrategicBot default rollout gate should use compared mode: %s" % str(trace))
+		if str(trace.get("plan_id", "")).is_empty():
+			return Result.failure("StrategicBot default rollout gate should expose selected plan: %s" % str(trace))
+		var hard_gate: Dictionary = Dictionary(trace.get("strategic_hard_gate", {}))
+		if hard_gate.is_empty():
+			return Result.failure("StrategicBot compared override should expose hard gate trace: %s" % str(trace))
+	elif search == "strategy":
+		var failure := str(trace.get("strategic_failure", ""))
+		if failure.find("choose_plan_compared") < 0:
+			return Result.failure("StrategicBot default fallback should come from compared search: %s" % str(trace))
+	else:
+		return Result.failure("StrategicBot default rollout gate should use compared search or fallback: %s" % str(trace))
 	var valid := LegalActionServiceClass.validate_command(data["engine"], decision.command, data["context"])
 	if not valid.ok:
 		return Result.failure("StrategicBot default rollout gate returned invalid command: %s" % valid.error)

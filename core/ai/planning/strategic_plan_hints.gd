@@ -2,6 +2,8 @@ class_name StrategyPlanHints
 extends RefCounted
 
 const ProductRegistryClass = preload("res://core/data/product_registry.gd")
+const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const EmployeeDefClass = preload("res://core/data/employee_def.gd")
 
 var preferred_products: Array[String] = []
 var preferred_employee_roles: Array[String] = []
@@ -25,24 +27,24 @@ var route_preferred_actions: Array[String] = []
 
 static func create(
 	p_plan_id: String = "",
-	p_preferred_products: Array[String] = [],
-	p_preferred_employee_roles: Array[String] = [],
-	p_preferred_employee_ids: Array[String] = [],
-	p_preferred_marketing_house_ids: Array[String] = [],
-	p_preferred_marketing_board_numbers: Array[int] = [],
-	p_preferred_price_actions: Array[String] = [],
+	p_preferred_products = [],
+	p_preferred_employee_roles = [],
+	p_preferred_employee_ids = [],
+	p_preferred_marketing_house_ids = [],
+	p_preferred_marketing_board_numbers = [],
+	p_preferred_price_actions = [],
 	p_growth_bias: float = 0.0,
 	p_cash_floor: int = 0,
-	p_avoid_actions: Array[String] = [],
-	p_preferred_actions: Array[String] = [],
-	p_execution_sequence: Array[String] = [],
-	p_next_action_ids: Array[String] = [],
-	p_next_target_products: Array[String] = [],
-	p_next_target_employees: Array[String] = [],
+	p_avoid_actions = [],
+	p_preferred_actions = [],
+	p_execution_sequence = [],
+	p_next_action_ids = [],
+	p_next_target_products = [],
+	p_next_target_employees = [],
 	p_directive_phase: String = "",
-	p_route_target_products: Array[String] = [],
-	p_route_target_employees: Array[String] = [],
-	p_route_preferred_actions: Array[String] = []
+	p_route_target_products = [],
+	p_route_target_employees = [],
+	p_route_preferred_actions = []
 ):
 	var script := load("res://core/ai/planning/strategic_plan_hints.gd")
 	var hints = script.new()
@@ -190,11 +192,14 @@ static func from_plan_for_decision(plan, observation: ObservationState = null, l
 			plan.target_employees,
 			route_hints.preferred_actions
 		)
-	var next_products := _next_products_for_actions(next_actions, plan.target_products)
-	var next_employees := _next_employees_for_actions(next_actions, plan.target_employees)
 	var next_roles := _next_roles_for_actions(next_actions, route_hints.preferred_employee_roles)
-	var next_houses: Array[String] = route_hints.preferred_marketing_house_ids.duplicate() if next_actions.has("initiate_marketing") else []
-	var next_boards: Array[int] = route_hints.preferred_marketing_board_numbers.duplicate() if next_actions.has("initiate_marketing") else []
+	var next_products := _next_products_for_actions(next_actions, plan.target_products)
+	var next_employees := _next_employees_for_actions(next_actions, plan.target_employees, next_roles)
+	var next_houses: Array[String] = []
+	var next_boards: Array[int] = []
+	if next_actions.has("initiate_marketing"):
+		next_houses = route_hints.preferred_marketing_house_ids.duplicate()
+		next_boards = route_hints.preferred_marketing_board_numbers.duplicate()
 	var next_price_actions := _next_price_actions_for_actions(next_actions, route_hints.preferred_price_actions)
 	var next_growth: float = route_hints.growth_bias if _has_growth_action(next_actions) else 0.0
 	return load("res://core/ai/planning/strategic_plan_hints.gd").create(
@@ -334,11 +339,47 @@ static func _next_products_for_actions(action_ids: Array[String], target_product
 			return target_products.duplicate()
 	return []
 
-static func _next_employees_for_actions(action_ids: Array[String], target_employees: Array[String]) -> Array[String]:
+static func _next_employees_for_actions(
+	action_ids: Array[String],
+	target_employees: Array[String],
+	preferred_roles: Array[String]
+) -> Array[String]:
 	for action_id in action_ids:
 		if action_id == "recruit" or action_id == "train" or action_id == "restructure_employee" or action_id == "set_company_structure_direct" or action_id == "initiate_marketing":
-			return target_employees.duplicate()
+			return _employees_matching_roles(target_employees, preferred_roles)
+		if action_id == "produce_food" or action_id == "procure_drinks" or action_id == "set_price" or action_id == "set_discount" or action_id == "set_luxury_price" or action_id == "place_house" or action_id == "add_garden" or action_id == "place_restaurant" or action_id == "move_restaurant":
+			return _employees_matching_roles(target_employees, preferred_roles)
 	return []
+
+static func _employees_matching_roles(employee_ids: Array[String], preferred_roles: Array[String]) -> Array[String]:
+	if preferred_roles.is_empty():
+		return employee_ids.duplicate()
+	var out: Array[String] = []
+	for employee_id in employee_ids:
+		var role := _employee_role(employee_id)
+		if role.is_empty() or preferred_roles.has(role):
+			out.append(employee_id)
+	return _string_array(out)
+
+static func _employee_role(employee_id: String) -> String:
+	var id := str(employee_id).strip_edges()
+	if id.is_empty():
+		return ""
+	if EmployeeRegistryClass.is_loaded() and EmployeeRegistryClass.has(id):
+		var def_val = EmployeeRegistryClass.get_def(id)
+		if def_val is EmployeeDefClass:
+			return str((def_val as EmployeeDefClass).role)
+	if id.find("campaign") >= 0 or id.find("marketing") >= 0 or id.find("brand") >= 0:
+		return "marketing"
+	if id.find("cook") >= 0 or id.find("chef") >= 0 or id.find("kitchen") >= 0:
+		return "produce_food"
+	if id.find("errand") >= 0 or id.find("cart") >= 0 or id.find("truck") >= 0 or id.find("zeppelin") >= 0:
+		return "procure_drink"
+	if id.find("price") >= 0 or id.find("pricing") >= 0 or id.find("discount") >= 0:
+		return "price"
+	if id.find("new_business") >= 0 or id.find("developer") >= 0 or id.find("regional") >= 0:
+		return "new_shop"
+	return ""
 
 static func _next_roles_for_actions(action_ids: Array[String], preferred_roles: Array[String]) -> Array[String]:
 	var out: Array[String] = []

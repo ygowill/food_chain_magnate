@@ -116,3 +116,11 @@ score =
 - Design check: aligned. The active decision path now only gives hints for the current legal next action, while route-wide targets remain trace data. Hint bonus is bounded and cannot replace existing hard validation or Strategy preconditions.
 - Verification: `CheckCompile PASS files=1235`.
 - Commit: `feat(ai): constrain strategic hints to next step`.
+
+### 2026-05-14 Step 5
+
+- Status: ready for commit.
+- Change: added focused guarded override tests, tightened directive employee hints so the current action only receives employees matching the next action role, and updated legacy Beam cache tests to opt into Beam explicitly.
+- Design check: aligned. This closes a remaining leak where a current-action directive could still carry route-wide employee targets. It also keeps Beam/MCTS as explicit experimental paths while the default path stays baseline-compared with StrategyBot fallback.
+- Verification: `CheckCompile PASS files=1236`; `AllTests PASS passed=426/426 failed=[]`.
+- Commit: `test(ai): cover guarded strategic overrides`.
