@@ -134,4 +134,15 @@ score =
 - Benchmark: `strategy` vs `strategy,strategic` with `--strategic-search=compared`, `base_revenue_growth_v1`, seeds `12345-12347`, `target_round=8`, `budget_ms=80` finished `6/6` with no failures/timeouts. Behavior deltas were zero; guarded strategic recorded `strategic_fallback=179`, with `insufficient_plan_search_budget=113` and `no_strategic_legal_actions=66`.
 - Budget probe: same matchup with seed `12345`, `budget_ms=360`, `strategic_min_search_budget_ms=120` also finished without behavior deltas. It recorded `strategic_fallback=59`, with `no_plan_beat_baseline=32`, `no_plans_generated=5`, and `no_strategic_legal_actions=22`.
 - Conclusion: the guarded design is no longer harmful in these smoke runs, but it is still mostly equivalent to `StrategyBot`. Next implementation should add targeted positive override scenarios and improve plan generation/evaluation until at least one route can beat the baseline without relaxing safety gates.
+- Commit: `chore(ai): expose guarded strategic diagnostics` (`714e69bc`).
+
+### 2026-05-15 Step 7
+
+- Status: implemented, pending commit.
+- Change: made Restructuring usable by guarded plans without leaking route-wide hints. If no route execution action is legal yet, `StrategyPlanHints` emits a current-phase directive for route-relevant structure edits only, while preserving the full route only as trace metadata. `StrategicPlanEvaluator` counts structure edits as route progress only when the edited employee id or role matches the plan route targets.
+- Change: surfaced compared-search failure payloads through `StrategicBot` fallback trace/explanation, so a safe fallback now records candidate count, evaluated plans, hard-gate failures, baseline summary, and elapsed search time.
+- Design check: aligned. This does not weaken hard gates, lower the delta threshold, or allow `submit_restructuring` to masquerade as route execution. Preparatory structure progress must still be produced by validated commands and must match the plan's target employees/roles.
+- Verification: `AllTests PASS passed=426/426 failed=[] total_ms=161211`; `StrategicGuardedOverrideTest` now covers phase-local restructuring directives, targeted-only structure progress, and a positive compared-plan gate/delta case.
+- Benchmark: `strategy` vs `strategy,strategic`, seed `12345`, `target_round=8`, `budget_ms=360`, `strategic_min_search_budget_ms=120` finished with no failures/timeouts but still zero behavior deltas. Guarded strategic recorded `strategic_fallback=59`, with `no_plan_beat_baseline=32`, `no_plans_generated=5`, and `no_strategic_legal_actions=22`.
+- Diagnostic probe: decision-detail payloads showed compared search usually evaluated only one candidate, often with `budget_expired` and `commands=0..1`. A high-budget `target_round=4`, `budget_ms=1800` probe still produced no strategic decisions. Next implementation should fix compared-search rollout budget fairness before changing scoring thresholds.
 - Commit: pending.

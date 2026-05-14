@@ -137,7 +137,14 @@ static func choose_plan_compared(
 		return plans_read
 	var plans: Array = plans_read.value
 	if plans.is_empty():
-		return Result.failure("StrategicSearch.choose_plan_compared: no plans generated")
+		return Result.failure("StrategicSearch.choose_plan_compared: no plans generated").with_value({
+			"candidate_count": 0,
+			"evaluated_count": 0,
+			"successful_evaluations": 0,
+			"evaluated_plans": [],
+			"hard_gate_failures": {},
+			"time_ms": Time.get_ticks_msec() - start_ms,
+		})
 
 	var baseline_plan = _baseline_plan(owner_player_id, options)
 	var baseline_rollout_options := _rollout_options_for_plan(baseline_plan, budget, options)
@@ -213,18 +220,18 @@ static func choose_plan_compared(
 			"min_delta_score": min_delta_score,
 		})
 	if evaluated.is_empty():
-		return Result.failure("StrategicSearch.choose_plan_compared: no plans evaluated")
+		return Result.failure("StrategicSearch.choose_plan_compared: no plans evaluated").with_value(_compared_failure_payload(evaluated, baseline_summary, plans.size(), successful_evaluations, hard_gate_failures, min_delta_score, start_ms))
 	if successful_evaluations <= 0:
-		return Result.failure("StrategicSearch.choose_plan_compared: no plans evaluated successfully")
+		return Result.failure("StrategicSearch.choose_plan_compared: no plans evaluated successfully").with_value(_compared_failure_payload(evaluated, baseline_summary, plans.size(), successful_evaluations, hard_gate_failures, min_delta_score, start_ms))
 	var passed_evaluated := _passed_compared_evaluated(evaluated)
 	if passed_evaluated.is_empty():
-		return Result.failure("StrategicSearch.choose_plan_compared: no plan beat baseline gates=%s" % str(hard_gate_failures))
+		return Result.failure("StrategicSearch.choose_plan_compared: no plan beat baseline gates=%s" % str(hard_gate_failures)).with_value(_compared_failure_payload(evaluated, baseline_summary, plans.size(), successful_evaluations, hard_gate_failures, min_delta_score, start_ms))
 	evaluated = passed_evaluated
 	_sort_evaluated(evaluated)
 	var best: Dictionary = evaluated[0]
 	var best_plan_val = best.get("plan", null)
 	if best_plan_val == null or not best_plan_val.has_method("to_trace_dict") or float(best.get("score", -INF)) <= -INF:
-		return Result.failure("StrategicSearch.choose_plan_compared: no plan evaluated successfully")
+		return Result.failure("StrategicSearch.choose_plan_compared: no plan evaluated successfully").with_value(_compared_failure_payload(evaluated, baseline_summary, plans.size(), successful_evaluations, hard_gate_failures, min_delta_score, start_ms))
 	var best_plan = best_plan_val
 	return Result.success({
 		"plan": best_plan,
@@ -327,6 +334,26 @@ static func _rollout_trace_payload(rollout: Dictionary) -> Dictionary:
 		"cash_min_after_first_positive": int(rollout.get("cash_min_after_first_positive", 0)),
 		"search_time_ms": int(rollout.get("search_time_ms", 0)),
 		"fork_ms": int(rollout.get("fork_ms", 0)),
+	}
+
+static func _compared_failure_payload(
+	evaluated: Array[Dictionary],
+	baseline_summary: Dictionary,
+	candidate_count: int,
+	successful_evaluations: int,
+	hard_gate_failures: Dictionary,
+	min_delta_score: float,
+	start_ms: int
+) -> Dictionary:
+	return {
+		"candidate_count": maxi(0, int(candidate_count)),
+		"evaluated_count": evaluated.size(),
+		"successful_evaluations": maxi(0, int(successful_evaluations)),
+		"baseline": baseline_summary.duplicate(true),
+		"evaluated_plans": _trace_evaluated(evaluated, 5),
+		"hard_gate_failures": hard_gate_failures.duplicate(true),
+		"min_delta_score": min_delta_score,
+		"time_ms": Time.get_ticks_msec() - start_ms,
 	}
 
 static func _baseline_plan(owner_player_id: int, options: Dictionary):

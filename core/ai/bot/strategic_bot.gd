@@ -178,7 +178,8 @@ func choose_command_with_engine(
 		}
 	)
 	if not search_read.ok:
-		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), search_read.error)
+		var failure_payload: Dictionary = Dictionary(search_read.value) if search_read.value is Dictionary else {}
+		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), search_read.error, failure_payload)
 	var search_payload: Dictionary = search_read.value
 	var plan_val = search_payload.get("plan", null)
 	if plan_val == null or not plan_val.has_method("to_trace_dict"):
@@ -346,7 +347,8 @@ func _choose_with_compared(
 		compared_options
 	)
 	if not search_read.ok:
-		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), search_read.error)
+		var failure_payload: Dictionary = Dictionary(search_read.value) if search_read.value is Dictionary else {}
+		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), search_read.error, failure_payload)
 	var search_payload: Dictionary = search_read.value
 	var budget_profile := str(options.get("strategic_budget_profile", DEFAULT_BUDGET_PROFILE)).strip_edges()
 	var plan_val = search_payload.get("plan", null)
@@ -426,13 +428,17 @@ func _fallback_with_reason(
 	legal_action_ids: Array[String],
 	validate_command: Callable,
 	budget: TimeBudget,
-	reason: String
+	reason: String,
+	failure_payload: Dictionary = {}
 ) -> BotDecision:
 	var fallback := fallback_bot.choose_command_with_engine(engine, observation, context, legal_action_ids, validate_command, budget)
 	if fallback != null and not fallback.is_failure():
 		fallback.trace["strategic_failure"] = reason
 		fallback.explanation["fallback"] = "strategy"
 		fallback.explanation["strategic_failure"] = reason
+		if not failure_payload.is_empty():
+			fallback.trace["strategic_failure_payload"] = failure_payload.duplicate(true)
+			fallback.explanation["strategic_failure_payload"] = failure_payload.duplicate(true)
 		return fallback
 	return fallback
 

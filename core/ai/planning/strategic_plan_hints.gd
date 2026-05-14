@@ -5,6 +5,12 @@ const ProductRegistryClass = preload("res://core/data/product_registry.gd")
 const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const EmployeeDefClass = preload("res://core/data/employee_def.gd")
 
+const RESTRUCTURING_ROUTE_ACTIONS := [
+	"set_company_structure_direct",
+	"set_company_structure_report",
+	"restructure_employee",
+]
+
 var preferred_products: Array[String] = []
 var preferred_employee_roles: Array[String] = []
 var preferred_employee_ids: Array[String] = []
@@ -171,6 +177,32 @@ static func from_plan_for_decision(plan, observation: ObservationState = null, l
 		return route_hints
 	var next_actions := _next_actions_for_legal(route_hints.execution_sequence, route_hints.preferred_actions, legal_ids)
 	if next_actions.is_empty():
+		var restructuring_actions := _restructuring_route_actions(legal_ids)
+		if not restructuring_actions.is_empty():
+			var structure_roles: Array[String] = []
+			structure_roles.append_array(route_hints.preferred_employee_roles)
+			var structure_employees := _employees_matching_roles(plan.target_employees, structure_roles)
+			return load("res://core/ai/planning/strategic_plan_hints.gd").create(
+				plan.id,
+				[],
+				structure_roles,
+				structure_employees,
+				[],
+				[],
+				[],
+				0.0,
+				int(route_hints.cash_floor),
+				route_hints.avoid_actions,
+				restructuring_actions,
+				restructuring_actions,
+				restructuring_actions,
+				[],
+				structure_employees,
+				_directive_phase(observation),
+				plan.target_products,
+				plan.target_employees,
+				route_hints.preferred_actions
+			)
 		return load("res://core/ai/planning/strategic_plan_hints.gd").create(
 			plan.id,
 			[],
@@ -331,6 +363,13 @@ static func _next_actions_for_legal(sequence: Array[String], preferred_actions: 
 		if legal_ids.has(action_id):
 			out.append(action_id)
 			return out
+	return out
+
+static func _restructuring_route_actions(legal_ids: Array[String]) -> Array[String]:
+	var out: Array[String] = []
+	for action_id in RESTRUCTURING_ROUTE_ACTIONS:
+		if legal_ids.has(action_id):
+			out.append(action_id)
 	return out
 
 static func _next_products_for_actions(action_ids: Array[String], target_products: Array[String]) -> Array[String]:

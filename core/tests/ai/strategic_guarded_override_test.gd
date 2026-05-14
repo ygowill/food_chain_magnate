@@ -3,6 +3,7 @@ extends RefCounted
 
 const StrategicPlanClass = preload("res://core/ai/planning/strategic_plan.gd")
 const StrategicPlanHintsClass = preload("res://core/ai/planning/strategic_plan_hints.gd")
+const StrategicPlanEvaluatorClass = preload("res://core/ai/planning/strategic_plan_evaluator.gd")
 const StrategicSearchClass = preload("res://core/ai/planning/strategic_search.gd")
 const StrategyScorerClass = preload("res://core/ai/strategy/strategy_scorer.gd")
 const MacroActionClass = preload("res://core/ai/candidates/macro_action.gd")
@@ -23,10 +24,19 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var hints := _test_next_step_hints_are_phase_local()
 	if not hints.ok:
 		return hints
+	var structure_hints := _test_restructuring_hints_are_phase_local_route_directives()
+	if not structure_hints.ok:
+		return structure_hints
+	var structure_progress := _test_targeted_restructuring_counts_as_route_progress()
+	if not structure_progress.ok:
+		return structure_progress
+	var positive_override := _test_positive_plan_clears_hard_gate_and_delta()
+	if not positive_override.ok:
+		return positive_override
 	var scorer := _test_directive_hint_bonus_is_local_and_capped()
 	if not scorer.ok:
 		return scorer
-	return Result.success({"cases": 6})
+	return Result.success({"cases": 9})
 
 static func _test_low_cash_blocks_non_marketing_override() -> Result:
 	var plan = StrategicPlanClass.create(
@@ -150,6 +160,99 @@ static func _test_next_step_hints_are_phase_local() -> Result:
 		return Result.failure("directive employees should be bounded to the next action role: %s" % str(data))
 	if not route_actions.has("produce_food"):
 		return Result.failure("route-wide trace should retain later route actions: %s" % str(data))
+	return Result.success()
+
+static func _test_restructuring_hints_are_phase_local_route_directives() -> Result:
+	var plan = StrategicPlanClass.create(
+		"supply_capacity_burger",
+		0,
+		"supply_capacity",
+		0.0,
+		["burger"],
+		[],
+		["burger_cook", "kitchen_trainee"],
+		{},
+		[],
+		2,
+		8,
+		["train", "produce_food"]
+	)
+	var hints = StrategicPlanHintsClass.from_plan_for_decision(plan, null, ["set_company_structure_direct", "submit_restructuring"])
+	var data: Dictionary = hints.to_dict()
+	var next_actions := _string_array(data.get("next_action_ids", []))
+	var preferred_actions := _string_array(data.get("preferred_actions", []))
+	var next_employees := _string_array(data.get("next_target_employees", []))
+	var route_actions := _string_array(data.get("route_preferred_actions", []))
+	if next_actions != ["set_company_structure_direct"] or preferred_actions != ["set_company_structure_direct"]:
+		return Result.failure("restructuring directive should expose only legal route structure edits: %s" % str(data))
+	if next_employees != ["burger_cook", "kitchen_trainee"]:
+		return Result.failure("restructuring directive should keep route target employees: %s" % str(data))
+	if route_actions.has("set_company_structure_direct") or not route_actions.has("produce_food"):
+		return Result.failure("route-wide trace should stay separate from restructuring directive: %s" % str(data))
+	return Result.success()
+
+static func _test_targeted_restructuring_counts_as_route_progress() -> Result:
+	var plan = StrategicPlanClass.create(
+		"supply_capacity_burger",
+		0,
+		"supply_capacity",
+		0.0,
+		["burger"],
+		[],
+		["burger_cook", "kitchen_trainee"],
+		{},
+		[],
+		2,
+		8,
+		["train", "produce_food"]
+	)
+	var targeted_rollout := {
+		"commands_executed": [
+			{"actor": 0, "action_id": "set_company_structure_direct", "params": {"employee_id": "kitchen_trainee"}},
+		],
+	}
+	var targeted_count := StrategicPlanEvaluatorClass._route_action_count(plan, targeted_rollout)
+	if targeted_count != 1:
+		return Result.failure("targeted structure edit should count as route progress, got %d" % targeted_count)
+	var unrelated_rollout := {
+		"commands_executed": [
+			{"actor": 0, "action_id": "set_company_structure_direct", "params": {"employee_id": "waitress"}},
+		],
+	}
+	var unrelated_count := StrategicPlanEvaluatorClass._route_action_count(plan, unrelated_rollout)
+	if unrelated_count != 0:
+		return Result.failure("unrelated structure edit should not count as route progress, got %d" % unrelated_count)
+	return Result.success()
+
+static func _test_positive_plan_clears_hard_gate_and_delta() -> Result:
+	var plan = StrategicPlanClass.create(
+		"marketing_income_burger",
+		0,
+		"marketing_income",
+		0.0,
+		["burger"],
+		[],
+		["campaign_manager"],
+		{},
+		[],
+		2,
+		8,
+		["initiate_marketing", "produce_food"]
+	)
+	var baseline := _summary({"cash_before": 20, "cash_after": 20, "cash_max_seen": 20, "demand_sold": 1, "command_count": 4})
+	var summary := _summary({"cash_before": 20, "cash_after": 28, "cash_max_seen": 28, "demand_sold": 2, "route_action_count": 1, "command_count": 4})
+	var hard_gate: Dictionary = StrategicSearchClass._comparison_hard_gate(plan, summary, baseline, {"strategic_cash_footing": 15})
+	var delta := StrategicSearchClass._comparison_delta_score(plan, summary, baseline)
+	if not bool(hard_gate.get("passed", false)):
+		return Result.failure("positive strategic plan should clear hard gates: %s" % str(hard_gate))
+	if delta < 12.0:
+		return Result.failure("positive strategic plan should clear delta threshold, got %f" % delta)
+	var passed := StrategicSearchClass._passed_compared_evaluated([
+		{"plan_id": "positive", "score": delta, "comparison_passed": true},
+		{"plan_id": "weak", "score": 3.0, "comparison_passed": false},
+	])
+	if passed.size() != 1 or str(Dictionary(passed[0]).get("plan_id", "")) != "positive":
+		return Result.failure("positive compared plan should be selectable: %s" % str(passed))
 	return Result.success()
 
 static func _test_directive_hint_bonus_is_local_and_capped() -> Result:

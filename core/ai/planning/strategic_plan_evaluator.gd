@@ -4,6 +4,14 @@ extends RefCounted
 const ObservationAdapterClass = preload("res://core/ai/observation/observation_adapter.gd")
 const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_income_analyzer.gd")
 const EvaluatorClass = preload("res://core/ai/evaluation/evaluator.gd")
+const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
+const EmployeeDefClass = preload("res://core/data/employee_def.gd")
+
+const RESTRUCTURING_ROUTE_ACTIONS := [
+	"set_company_structure_direct",
+	"set_company_structure_report",
+	"restructure_employee",
+]
 
 static func evaluate_rollout(
 	plan,
@@ -273,6 +281,8 @@ static func _route_action_count(plan, rollout: Dictionary = {}) -> int:
 	var commands_val = rollout.get("commands_executed", [])
 	if not (commands_val is Array):
 		return 0
+	var route_employee_ids := _string_array(plan.target_employees if plan.get("target_employees") != null else [])
+	var route_employee_roles := _route_employee_roles(route_employee_ids)
 	var count := 0
 	for item_val in Array(commands_val):
 		if not (item_val is Dictionary):
@@ -281,9 +291,13 @@ static func _route_action_count(plan, rollout: Dictionary = {}) -> int:
 		if int(item.get("actor", -1)) != plan.owner_player_id:
 			continue
 		var action_id := str(item.get("action_id", "")).strip_edges()
-		if action_id.is_empty() or not command_actions.has(action_id):
+		if action_id.is_empty():
 			continue
-		count += 1
+		if command_actions.has(action_id):
+			count += 1
+			continue
+		if _route_structure_action_matches(action_id, item, route_employee_ids, route_employee_roles):
+			count += 1
 	return count
 
 static func _route_action_ids(plan) -> Array[String]:
@@ -302,6 +316,63 @@ static func _route_action_ids(plan) -> Array[String]:
 		"growth":
 			return ["recruit", "train", "place_house", "add_garden", "place_restaurant", "move_restaurant"]
 	return []
+
+static func _route_structure_action_matches(
+	action_id: String,
+	item: Dictionary,
+	route_employee_ids: Array[String],
+	route_employee_roles: Array[String]
+) -> bool:
+	if not RESTRUCTURING_ROUTE_ACTIONS.has(action_id):
+		return false
+	if route_employee_ids.is_empty() and route_employee_roles.is_empty():
+		return false
+	var params: Dictionary = Dictionary(item.get("params", {}))
+	var employee_ids := _structure_command_employee_ids(params)
+	for employee_id in employee_ids:
+		if route_employee_ids.has(employee_id):
+			return true
+		var role := _employee_role(employee_id)
+		if not role.is_empty() and route_employee_roles.has(role):
+			return true
+	return false
+
+static func _structure_command_employee_ids(params: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for key in ["employee_id", "employee_type", "from_employee", "to_employee", "source_employee", "target_employee"]:
+		var employee_id := str(params.get(key, "")).strip_edges()
+		if not employee_id.is_empty() and not out.has(employee_id):
+			out.append(employee_id)
+	return out
+
+static func _route_employee_roles(employee_ids: Array[String]) -> Array[String]:
+	var out: Array[String] = []
+	for employee_id in employee_ids:
+		var role := _employee_role(employee_id)
+		if not role.is_empty() and not out.has(role):
+			out.append(role)
+	out.sort()
+	return out
+
+static func _employee_role(employee_id: String) -> String:
+	var id := str(employee_id).strip_edges()
+	if id.is_empty():
+		return ""
+	if EmployeeRegistryClass.is_loaded() and EmployeeRegistryClass.has(id):
+		var def_val = EmployeeRegistryClass.get_def(id)
+		if def_val is EmployeeDefClass:
+			return str((def_val as EmployeeDefClass).role)
+	if id.find("campaign") >= 0 or id.find("marketing") >= 0 or id.find("brand") >= 0:
+		return "marketing"
+	if id.find("cook") >= 0 or id.find("chef") >= 0 or id.find("kitchen") >= 0:
+		return "produce_food"
+	if id.find("errand") >= 0 or id.find("cart") >= 0 or id.find("truck") >= 0 or id.find("zeppelin") >= 0:
+		return "procure_drink"
+	if id.find("price") >= 0 or id.find("pricing") >= 0 or id.find("discount") >= 0:
+		return "price"
+	if id.find("new_business") >= 0 or id.find("developer") >= 0 or id.find("regional") >= 0:
+		return "new_shop"
+	return ""
 
 static func _route_is_stalled(
 	plan,
