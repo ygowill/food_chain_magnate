@@ -100,3 +100,11 @@ score =
 - Design check: aligned. This step does not enable the new path by default and does not let a plan override baseline unless it passes hard gates and the minimum delta threshold. Existing Beam and MCTS entry points remain available.
 - Verification: `CheckCompile PASS files=1235`.
 - Commit: `feat(ai): add baseline-compared strategic search`.
+
+### 2026-05-14 Step 3
+
+- Status: ready for commit.
+- Change: wired `StrategicBot` default mode to `compared`, added compared-mode execution, and exposed baseline/comparison/hard-gate trace fields.
+- Design check: aligned. Compared mode skips the old broad plan cache so every override must be freshly compared against baseline. Beam/MCTS remain explicit modes, and failed compared searches still fallback to `StrategyBot`.
+- Verification: `CheckCompile PASS files=1235`.
+- Commit: `feat(ai): gate strategic bot with baseline comparison`.

@@ -31,7 +31,7 @@ const STRATEGIC_ACTION_IDS := [
 ]
 
 var search_options: Dictionary = {
-	"strategic_search": "beam",
+	"strategic_search": "compared",
 	"strategic_budget_profile": DEFAULT_BUDGET_PROFILE,
 	"strategic_horizon_decisions": 16,
 	"strategic_horizon_rounds": 2,
@@ -39,7 +39,8 @@ var search_options: Dictionary = {
 	"strategic_rollout_step_budget_ms": 40,
 	"strategic_min_search_budget_ms": DEFAULT_MIN_PLAN_SEARCH_MS,
 	"strategic_min_plans_for_rollout": DEFAULT_MIN_PLANS_FOR_ROLLOUT,
-	"strategic_config_id": "plan_beam_v0",
+	"strategic_min_delta_score": 12.0,
+	"strategic_config_id": "guarded_compared_v1",
 }
 var explicit_search_options: Dictionary = {}
 var profile = null
@@ -115,7 +116,7 @@ func choose_command_with_engine(
 		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, budget, "no_strategic_legal_actions")
 	if budget != null and budget.expired():
 		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, null, "budget_expired")
-	var cached_plan = _cached_plan_for_current_window(observation, context, legal_action_ids, route_history)
+	var cached_plan = null if search_mode == "compared" else _cached_plan_for_current_window(observation, context, legal_action_ids, route_history)
 	if cached_plan != null:
 		return _choose_with_plan(
 			engine,
@@ -132,6 +133,18 @@ func choose_command_with_engine(
 			start_ms,
 			true,
 			budget_profile
+		)
+	if search_mode == "compared":
+		return _choose_with_compared(
+			engine,
+			observation,
+			context,
+			legal_action_ids,
+			validate_command,
+			budget,
+			options,
+			route_history,
+			start_ms
 		)
 	if search_mode == "mcts":
 		return _choose_with_mcts(
@@ -236,6 +249,10 @@ func _choose_with_plan(
 		decision.trace["plan_eval_score"] = float(search_payload.get("score", 0.0))
 		decision.trace["plan_eval_breakdown"] = _best_breakdown(search_payload)
 		decision.trace["plan_eval_telemetry"] = Dictionary(search_payload.get("telemetry", {})).duplicate(true)
+		decision.trace["strategic_baseline"] = Dictionary(search_payload.get("baseline", {})).duplicate(true)
+		decision.trace["strategic_comparison"] = Dictionary(search_payload.get("comparison", {})).duplicate(true)
+		decision.trace["strategic_hard_gate"] = Dictionary(search_payload.get("hard_gate", {})).duplicate(true)
+		decision.trace["strategic_min_delta_score"] = float(search_payload.get("min_delta_score", 0.0))
 		decision.trace["plan_rollout_stop_reason"] = _best_stop_reason(search_payload)
 		decision.trace["plan_search_time_ms"] = plan_search_time_ms
 		decision.trace["strategy_time_ms"] = strategy_time_ms
@@ -270,6 +287,10 @@ func _choose_with_plan(
 		decision.explanation["route_type"] = plan.route_type
 		decision.explanation["plan_eval_score"] = float(search_payload.get("score", 0.0))
 		decision.explanation["plan_eval_telemetry"] = Dictionary(search_payload.get("telemetry", {})).duplicate(true)
+		decision.explanation["strategic_baseline"] = Dictionary(search_payload.get("baseline", {})).duplicate(true)
+		decision.explanation["strategic_comparison"] = Dictionary(search_payload.get("comparison", {})).duplicate(true)
+		decision.explanation["strategic_hard_gate"] = Dictionary(search_payload.get("hard_gate", {})).duplicate(true)
+		decision.explanation["strategic_min_delta_score"] = float(search_payload.get("min_delta_score", 0.0))
 		decision.explanation["strategic_plan_cached"] = used_cached_plan
 		decision.explanation["plan_search_time_ms"] = plan_search_time_ms
 		decision.explanation["strategy_time_ms"] = strategy_time_ms
@@ -300,6 +321,54 @@ func _choose_with_plan(
 		_record_route_type(str(plan.route_type), context)
 		return decision
 	return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), "hinted strategy failed")
+
+func _choose_with_compared(
+	engine: GameEngine,
+	observation: ObservationState,
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	validate_command: Callable,
+	budget: TimeBudget,
+	options: Dictionary,
+	route_history: Array[String],
+	start_ms: int
+) -> BotDecision:
+	var search_budget := _plan_search_budget(budget, int(options.get("strategic_min_search_budget_ms", DEFAULT_MIN_PLAN_SEARCH_MS)))
+	if budget != null and search_budget == null:
+		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, budget, "insufficient_plan_search_budget")
+	var compared_options := options.duplicate(true)
+	compared_options["route_history"] = route_history.duplicate(true)
+	var search_read := StrategicSearchClass.choose_plan_compared(
+		engine,
+		observation,
+		profile,
+		search_budget,
+		compared_options
+	)
+	if not search_read.ok:
+		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), search_read.error)
+	var search_payload: Dictionary = search_read.value
+	var budget_profile := str(options.get("strategic_budget_profile", DEFAULT_BUDGET_PROFILE)).strip_edges()
+	var plan_val = search_payload.get("plan", null)
+	if plan_val == null or not plan_val.has_method("to_trace_dict"):
+		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), "selected compared plan is null")
+	var plan = plan_val
+	return _choose_with_plan(
+		engine,
+		observation,
+		context,
+		legal_action_ids,
+		validate_command,
+		budget,
+		plan,
+		search_payload,
+		compared_options,
+		route_history,
+		"compared",
+		start_ms,
+		false,
+		budget_profile
+	)
 
 func _choose_with_mcts(
 	engine: GameEngine,
