@@ -124,3 +124,14 @@ score =
 - Design check: aligned. This closes a remaining leak where a current-action directive could still carry route-wide employee targets. It also keeps Beam/MCTS as explicit experimental paths while the default path stays baseline-compared with StrategyBot fallback.
 - Verification: `CheckCompile PASS files=1236`; `AllTests PASS passed=426/426 failed=[]`.
 - Commit: `test(ai): cover guarded strategic overrides`.
+
+### 2026-05-15 Step 6
+
+- Status: ready for commit.
+- Change: brought selfplay/matrix/tuning tooling up to the new default by accepting explicit `strategic_search=compared`, updated CLI docs, and added summary diagnostics for guarded `strategic_failure` fallbacks.
+- Design check: aligned. The tooling change only makes the guarded mode reproducible and observable; it does not weaken hard gates, does not make MCTS default, and does not tune around failed comparisons.
+- Verification: `CheckCompile PASS files=1236`; `AllTests PASS passed=426/426 failed=[]`.
+- Benchmark: `strategy` vs `strategy,strategic` with `--strategic-search=compared`, `base_revenue_growth_v1`, seeds `12345-12347`, `target_round=8`, `budget_ms=80` finished `6/6` with no failures/timeouts. Behavior deltas were zero; guarded strategic recorded `strategic_fallback=179`, with `insufficient_plan_search_budget=113` and `no_strategic_legal_actions=66`.
+- Budget probe: same matchup with seed `12345`, `budget_ms=360`, `strategic_min_search_budget_ms=120` also finished without behavior deltas. It recorded `strategic_fallback=59`, with `no_plan_beat_baseline=32`, `no_plans_generated=5`, and `no_strategic_legal_actions=22`.
+- Conclusion: the guarded design is no longer harmful in these smoke runs, but it is still mostly equivalent to `StrategyBot`. Next implementation should add targeted positive override scenarios and improve plan generation/evaluation until at least one route can beat the baseline without relaxing safety gates.
+- Commit: pending.

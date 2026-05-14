@@ -83,12 +83,23 @@ static func _test_parse_configs() -> Result:
 	var bad := MatrixToolClass._parse_args(["--config=random,"])
 	if bad.ok:
 		return Result.failure("matrix should reject empty bot id in config")
+	var compared_matrix := MatrixToolClass._parse_args([
+		"--config=strategic",
+		"--strategic-search=compared",
+		"--strategic-config-id=guarded_compared_probe",
+	])
+	if not compared_matrix.ok:
+		return compared_matrix
+	var compared_options: Dictionary = Dictionary(Dictionary(compared_matrix.value).get("strategic_options", {}))
+	if str(compared_options.get("strategic_search", "")) != "compared":
+		return Result.failure("matrix should parse compared strategic search option: %s" % str(compared_matrix.value))
 	var tuning_parsed := TuningToolClass._parse_args([
 		"--profile=base_revenue_v1",
 		"--profile=base_revenue_growth_v1",
 		"--config=strategy",
 		"--players=2",
 		"--jobs=2",
+		"--strategic-search=compared",
 		"--strategic-max-plans=2",
 		"--strategic-budget-profile=play",
 		"--strategic-rollout-step-budget-ms=10",
@@ -105,6 +116,8 @@ static func _test_parse_configs() -> Result:
 	if int(Dictionary(tuning_parsed.value).get("parallel_jobs", 0)) != 2:
 		return Result.failure("tuning matrix should parse --jobs: %s" % str(tuning_parsed.value))
 	var tuning_strategic_options: Dictionary = Dictionary(Dictionary(tuning_parsed.value).get("strategic_options", {}))
+	if str(tuning_strategic_options.get("strategic_search", "")) != "compared":
+		return Result.failure("tuning matrix should pass through compared strategic search option: %s" % str(tuning_parsed.value))
 	if int(tuning_strategic_options.get("strategic_max_plans", 0)) != 2:
 		return Result.failure("tuning matrix should pass through strategic options: %s" % str(tuning_parsed.value))
 	if str(tuning_strategic_options.get("strategic_budget_profile", "")) != "play":
@@ -136,7 +149,7 @@ static func _test_parse_configs() -> Result:
 		"res://.godot/child.json",
 		"child.log"
 	)
-	if not child_args.has("--strategic-max-plans=2") or not child_args.has("--strategic-rollout-step-budget-ms=10") or not child_args.has("--strategic-min-search-budget-ms=260") or not child_args.has("--strategic-min-plans-for-rollout=2"):
+	if not child_args.has("--strategic-search=compared") or not child_args.has("--strategic-max-plans=2") or not child_args.has("--strategic-rollout-step-budget-ms=10") or not child_args.has("--strategic-min-search-budget-ms=260") or not child_args.has("--strategic-min-plans-for-rollout=2"):
 		return Result.failure("tuning child args should include strategic options: %s" % str(child_args))
 	if not child_args.has("--strategic-mcts-max-depth=2") or not child_args.has("--strategic-mcts-root-prior-min-visits-per-child=3"):
 		return Result.failure("tuning child args should include strategic mcts options: %s" % str(child_args))

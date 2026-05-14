@@ -536,6 +536,8 @@ static func _trace_search_metrics(trace: Array[Dictionary]) -> Dictionary:
 		"time_ms_sum": 0,
 		"time_ms_max": 0,
 		"search_type_counts": {},
+		"strategic_fallback_count": 0,
+		"strategic_failure_counts": {},
 		"mcts_route_switch_count": 0,
 		"mcts_non_root_populated_nodes": 0,
 		"mcts_non_root_expanded_nodes": 0,
@@ -561,6 +563,12 @@ static func _trace_search_metrics(trace: Array[Dictionary]) -> Dictionary:
 		if not search_id.is_empty():
 			var counts: Dictionary = out["search_type_counts"]
 			counts[search_id] = int(counts.get(search_id, 0)) + 1
+		var strategic_failure := str(decision_trace.get("strategic_failure", explanation.get("strategic_failure", ""))).strip_edges()
+		if not strategic_failure.is_empty():
+			out["strategic_fallback_count"] = int(out.get("strategic_fallback_count", 0)) + 1
+			var failure_counts: Dictionary = out["strategic_failure_counts"]
+			var failure_bucket := _strategic_failure_bucket(strategic_failure)
+			failure_counts[failure_bucket] = int(failure_counts.get(failure_bucket, 0)) + 1
 		var route_types_val = decision_trace.get("mcts_selected_route_types", explanation.get("mcts_selected_route_types", []))
 		if route_types_val is Array:
 			var route_counts: Dictionary = out["mcts_selected_route_type_counts"]
@@ -583,6 +591,26 @@ static func _trace_search_metrics(trace: Array[Dictionary]) -> Dictionary:
 	out["expanded_nodes_avg_per_decision"] = _avg_float(float(out.get("expanded_nodes", 0)), decisions)
 	out["budget_expired_rate"] = _avg_float(float(out.get("budget_expired_count", 0)), decisions)
 	return out
+
+static func _strategic_failure_bucket(failure: String) -> String:
+	var text := str(failure).strip_edges()
+	if text.find("no plan beat baseline") >= 0:
+		return "no_plan_beat_baseline"
+	if text.find("baseline rollout failed") >= 0:
+		return "baseline_rollout_failed"
+	if text.find("no plans generated") >= 0:
+		return "no_plans_generated"
+	if text.find("no plans evaluated") >= 0:
+		return "no_plans_evaluated"
+	if text.find("insufficient route alternatives") >= 0:
+		return "insufficient_route_alternatives"
+	if text.find("selected compared plan is null") >= 0:
+		return "selected_compared_plan_null"
+	if text.find("choose_plan_compared") >= 0:
+		return "choose_plan_compared"
+	if text.length() > 80:
+		return text.substr(0, 80)
+	return text
 
 static func _trace_opening_metrics(trace: Array[Dictionary], player_count: int) -> Dictionary:
 	var first_positive_seen: Array[bool] = []
@@ -1111,8 +1139,8 @@ static func _parse_strategic_option_arg(options: Dictionary, arg: String) -> Res
 	var strategic_options: Dictionary = Dictionary(options.get("strategic_options", {}))
 	if arg.begins_with("--strategic-search="):
 		var value := arg.trim_prefix("--strategic-search=").strip_edges()
-		if not ["none", "beam", "mcts"].has(value):
-			return Result.failure("--strategic-search must be one of: none, beam, mcts")
+		if not ["none", "compared", "beam", "mcts"].has(value):
+			return Result.failure("--strategic-search must be one of: none, compared, beam, mcts")
 		strategic_options["strategic_search"] = value
 	elif arg.begins_with("--strategic-budget-profile="):
 		var value := arg.trim_prefix("--strategic-budget-profile=").strip_edges()
@@ -1190,4 +1218,4 @@ static func _parse_strategic_option_arg(options: Dictionary, arg: String) -> Res
 	return Result.success()
 
 static func _print_usage() -> void:
-	print("Usage: tools/run_bot_selfplay.sh [--bot=random|greedy|strategy|osla|beam|strategic] [--bots=strategy,strategic] [--profile=base_revenue_v1] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--match-timeout-ms=0] [--match-timeout-sec=0] [--trace-detail=compact|decision] [--strategic-search=none|beam|mcts] [--strategic-budget-profile=tuning|play] [--strategic-horizon-decisions=16] [--strategic-horizon-rounds=2] [--strategic-max-plans=6] [--strategic-rollout-step-budget-ms=40] [--strategic-min-search-budget-ms=240] [--strategic-min-plans-for-rollout=2] [--strategic-mcts-iterations=24] [--strategic-mcts-max-depth=3] [--strategic-mcts-top-k-per-node=4] [--strategic-mcts-exploration=1.25] [--strategic-mcts-prior-weight=0.25] [--strategic-mcts-root-prior-min-visits-per-child=2] [--strategic-config-id=id] [--output-jsonl=res://.godot/bot_selfplay.jsonl] [--output-archive=res://.godot/bot_selfplay_archive.json]")
+	print("Usage: tools/run_bot_selfplay.sh [--bot=random|greedy|strategy|osla|beam|strategic] [--bots=strategy,strategic] [--profile=base_revenue_v1] [--players=2] [--seed=12345] [--matches=1] [--target-round=3] [--max-steps=720] [--budget-ms=80] [--match-timeout-ms=0] [--match-timeout-sec=0] [--trace-detail=compact|decision] [--strategic-search=none|compared|beam|mcts] [--strategic-budget-profile=tuning|play] [--strategic-horizon-decisions=16] [--strategic-horizon-rounds=2] [--strategic-max-plans=6] [--strategic-rollout-step-budget-ms=40] [--strategic-min-search-budget-ms=240] [--strategic-min-plans-for-rollout=2] [--strategic-mcts-iterations=24] [--strategic-mcts-max-depth=3] [--strategic-mcts-top-k-per-node=4] [--strategic-mcts-exploration=1.25] [--strategic-mcts-prior-weight=0.25] [--strategic-mcts-root-prior-min-visits-per-child=2] [--strategic-config-id=id] [--output-jsonl=res://.godot/bot_selfplay.jsonl] [--output-archive=res://.godot/bot_selfplay_archive.json]")

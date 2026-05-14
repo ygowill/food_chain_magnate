@@ -257,7 +257,7 @@ rollout 输出：
 最小 CLI 接入：
 
 - `--bot=strategic`
-- `--strategic-search=none|beam|mcts`
+- `--strategic-search=none|compared|beam|mcts`
 - `--strategic-budget-profile=tuning|play`
 - `--strategic-horizon-decisions=<n>`
 - `--strategic-horizon-rounds=<n>`

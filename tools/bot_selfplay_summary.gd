@@ -194,6 +194,12 @@ static func format_summary(summary: Dictionary) -> Array[String]:
 					float(search.get("strategic_cached_rate", 0.0)),
 					float(search.get("strategic_cached_share", 0.0)),
 				]
+			if int(search.get("strategic_fallback_count_total", 0)) > 0:
+				search_line += " strategic_fallback=%d strategic_fallback_rate=%.3f strategic_failures=%s" % [
+					int(search.get("strategic_fallback_count_total", 0)),
+					float(search.get("strategic_fallback_rate", 0.0)),
+					_format_actions(Dictionary(search.get("strategic_failure_counts", {}))),
+				]
 			search_line += " types=%s" % _format_actions(Dictionary(search.get("search_type_counts", {})))
 			lines.append(search_line)
 			if _has_strategic_search_metrics(search):
@@ -349,6 +355,8 @@ static func _new_search_metric() -> Dictionary:
 		"search_type_counts": {},
 		"strategic_decision_count": 0,
 		"strategic_cached_count": 0,
+		"strategic_fallback_count": 0,
+		"strategic_failure_counts": {},
 		"mcts_route_switch_count": 0,
 		"mcts_non_root_populated_nodes": 0,
 		"mcts_non_root_expanded_nodes": 0,
@@ -409,6 +417,8 @@ static func _add_search_metric(metric: Dictionary, value) -> void:
 	metric["time_ms_sum"] = int(metric.get("time_ms_sum", 0)) + int(row.get("time_ms_sum", 0))
 	metric["time_ms_max"] = maxi(int(metric.get("time_ms_max", 0)), int(row.get("time_ms_max", 0)))
 	_add_action_count_dict(metric["search_type_counts"], row.get("search_type_counts", {}))
+	metric["strategic_fallback_count"] = int(metric.get("strategic_fallback_count", 0)) + int(row.get("strategic_fallback_count", 0))
+	_add_action_count_dict(metric["strategic_failure_counts"], row.get("strategic_failure_counts", {}))
 	var search_counts: Dictionary = Dictionary(row.get("search_type_counts", {}))
 	for search_key_val in search_counts.keys():
 		var search_key := str(search_key_val).strip_edges()
@@ -537,6 +547,7 @@ static func _finalize_search_metric(metric_val, matches: int) -> Dictionary:
 	var non_root_candidates := int(metric.get("mcts_non_root_candidate_count", 0))
 	var strategic_decisions := int(metric.get("strategic_decision_count", 0))
 	var strategic_cached := int(metric.get("strategic_cached_count", 0))
+	var strategic_fallback := int(metric.get("strategic_fallback_count", 0))
 	return {
 		"decision_count_total": decisions,
 		"decision_count_avg_per_match": _avg(float(decisions), matches),
@@ -560,6 +571,10 @@ static func _finalize_search_metric(metric_val, matches: int) -> Dictionary:
 		"strategic_cached_count_avg_per_match": _avg(float(strategic_cached), matches),
 		"strategic_cached_rate": _ratio(float(strategic_cached), float(strategic_decisions)),
 		"strategic_cached_share": _ratio(float(strategic_cached), float(decisions)),
+		"strategic_fallback_count_total": strategic_fallback,
+		"strategic_fallback_count_avg_per_match": _avg(float(strategic_fallback), matches),
+		"strategic_fallback_rate": _ratio(float(strategic_fallback), float(decisions)),
+		"strategic_failure_counts": _sorted_dict(metric.get("strategic_failure_counts", {})),
 		"mcts_route_switch_count_total": route_switch_count,
 		"mcts_route_switch_count_avg_per_match": _avg(float(route_switch_count), matches),
 		"mcts_route_switch_count_avg_per_decision": _avg(float(route_switch_count), decisions),
@@ -770,6 +785,8 @@ static func _search_delta(left_val, right_val) -> Dictionary:
 		"strategic_cached_count_avg_per_match",
 		"strategic_cached_rate",
 		"strategic_cached_share",
+		"strategic_fallback_count_avg_per_match",
+		"strategic_fallback_rate",
 		"mcts_route_switch_count_avg_per_decision",
 		"mcts_non_root_populated_nodes_avg_per_decision",
 		"mcts_non_root_expanded_nodes_avg_per_decision",

@@ -113,6 +113,12 @@ static func _test_strategic_bot_support() -> Result:
 	var strategic_options: Dictionary = Dictionary(Dictionary(parsed.value).get("strategic_options", {}))
 	if str(strategic_options.get("strategic_search", "")) != "mcts":
 		return Result.failure("--strategic-search parse mismatch: %s" % str(parsed.value))
+	var compared_parsed := SelfplayToolClass._parse_args(["--bot=strategic", "--strategic-search=compared"])
+	if not compared_parsed.ok:
+		return compared_parsed
+	var compared_options: Dictionary = Dictionary(Dictionary(compared_parsed.value).get("strategic_options", {}))
+	if str(compared_options.get("strategic_search", "")) != "compared":
+		return Result.failure("--strategic-search should accept compared mode: %s" % str(compared_parsed.value))
 	if str(strategic_options.get("strategic_budget_profile", "")) != "play":
 		return Result.failure("--strategic-budget-profile parse mismatch: %s" % str(parsed.value))
 	if int(strategic_options.get("strategic_horizon_decisions", 0)) != 8:
@@ -297,10 +303,22 @@ static func _test_mandatory_completion_summary_counts_untraced_auto_actions() ->
 				"mcts_selected_route_types": ["price_recovery", "price_recovery", "growth"],
 			},
 		},
+		{
+			"explanation": {},
+			"decision_trace": {
+				"search": "strategy",
+				"time_ms": 19,
+				"strategic_failure": "StrategicSearch.choose_plan_compared: no plan beat baseline gates={ \"delta_below_threshold\": 2 }",
+			},
+		},
 	]
 	var strategic_search_metrics := SelfplayToolClass._trace_search_metrics(strategic_search_trace)
-	if int(strategic_search_metrics.get("decision_count", 0)) != 2:
+	if int(strategic_search_metrics.get("decision_count", 0)) != 3:
 		return Result.failure("strategic search metrics should count strategic decisions: %s" % str(strategic_search_metrics))
+	if int(strategic_search_metrics.get("strategic_fallback_count", 0)) != 1:
+		return Result.failure("strategic search metrics should count guarded fallbacks: %s" % str(strategic_search_metrics))
+	if int(Dictionary(strategic_search_metrics.get("strategic_failure_counts", {})).get("no_plan_beat_baseline", 0)) != 1:
+		return Result.failure("strategic search metrics should bucket guarded fallback reasons: %s" % str(strategic_search_metrics))
 	if int(strategic_search_metrics.get("mcts_route_switch_count", 0)) != 3:
 		return Result.failure("strategic search metrics should sum route switches: %s" % str(strategic_search_metrics))
 	if int(strategic_search_metrics.get("mcts_non_root_populated_nodes", 0)) != 6:
@@ -337,6 +355,10 @@ static func _test_mandatory_completion_summary_counts_untraced_auto_actions() ->
 		return Result.failure("summary should preserve strategic cached totals: %s" % str(strategic_search_summary))
 	if float(strategic_search_summary.get("strategic_cached_rate", 0.0)) != 0.5:
 		return Result.failure("summary should preserve strategic cached rate: %s" % str(strategic_search_summary))
+	if int(strategic_search_summary.get("strategic_fallback_count_total", 0)) != 1:
+		return Result.failure("summary should preserve strategic fallback totals: %s" % str(strategic_search_summary))
+	if int(Dictionary(strategic_search_summary.get("strategic_failure_counts", {})).get("no_plan_beat_baseline", 0)) != 1:
+		return Result.failure("summary should preserve strategic fallback reasons: %s" % str(strategic_search_summary))
 	if int(strategic_search_summary.get("mcts_non_root_populated_nodes_total", 0)) != 6:
 		return Result.failure("summary should preserve non-root populated totals: %s" % str(strategic_search_summary))
 	if int(strategic_search_summary.get("mcts_non_root_expanded_nodes_total", 0)) != 2:
@@ -357,6 +379,8 @@ static func _test_mandatory_completion_summary_counts_untraced_auto_actions() ->
 		return Result.failure("summary should emit strategic search line: %s" % str(strategic_lines))
 	if not strategic_search_line.contains("strategic_total=2") or not strategic_search_line.contains("strategic_cached=1") or not strategic_search_line.contains("strategic_cached_rate=0.500"):
 		return Result.failure("summary should expose strategic cache diagnostics: %s" % strategic_search_line)
+	if not strategic_search_line.contains("strategic_fallback=1") or not strategic_search_line.contains("strategic_failures=no_plan_beat_baseline=1"):
+		return Result.failure("summary should expose guarded fallback diagnostics: %s" % strategic_search_line)
 	if strategic_route_line.is_empty():
 		return Result.failure("summary should emit MCTS route line: %s" % str(strategic_lines))
 	if not strategic_route_line.contains("route_switch_avg=") or not strategic_route_line.contains("route_types="):
