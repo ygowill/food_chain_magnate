@@ -217,7 +217,8 @@ func _choose_with_plan(
 	search_mode: String,
 	start_ms: int,
 	used_cached_plan: bool,
-	budget_profile: String
+	budget_profile: String,
+	precomputed_fallback: BotDecision = null
 ) -> BotDecision:
 	var hints = StrategyPlanHintsClass.from_plan_for_decision(plan, observation, legal_action_ids)
 	var final_budget := _final_decision_budget(budget)
@@ -231,6 +232,9 @@ func _choose_with_plan(
 		final_budget
 	)
 	if decision != null and not decision.is_failure():
+		var same_command_fallback := _same_command_fallback_or_null(decision, precomputed_fallback, plan, search_payload)
+		if same_command_fallback != null and not same_command_fallback.is_failure():
+			return same_command_fallback
 		var strategy_time_ms := int(decision.trace.get("time_ms", decision.explanation.get("time_ms", 0)))
 		var plan_search_time_ms := 0 if used_cached_plan else int(search_payload.get("time_ms", 0))
 		var elapsed_ms := maxi(strategy_time_ms + plan_search_time_ms, Time.get_ticks_msec() - start_ms)
@@ -370,7 +374,8 @@ func _choose_with_compared(
 		"compared",
 		start_ms,
 		false,
-		budget_profile
+		budget_profile,
+		precomputed_fallback
 	)
 
 func _fallback_from_precomputed_or_reason(
@@ -405,6 +410,51 @@ func _annotate_precomputed_fallback(
 		fallback.trace["strategic_failure_payload"] = failure_payload.duplicate(true)
 		fallback.explanation["strategic_failure_payload"] = failure_payload.duplicate(true)
 	return fallback
+
+func _same_command_fallback_or_null(
+	decision: BotDecision,
+	precomputed_fallback: BotDecision,
+	plan,
+	search_payload: Dictionary
+) -> BotDecision:
+	if decision == null or decision.is_failure() or decision.command == null:
+		return null
+	if precomputed_fallback == null or precomputed_fallback.is_failure() or precomputed_fallback.command == null:
+		return null
+	if not _commands_equivalent(decision.command, precomputed_fallback.command):
+		return null
+	var payload := _same_command_failure_payload(plan, search_payload, decision.command, precomputed_fallback.command)
+	return _annotate_precomputed_fallback(precomputed_fallback, "strategic_plan_same_command_as_baseline", payload)
+
+func _same_command_failure_payload(plan, search_payload: Dictionary, decision_command: Command, fallback_command: Command) -> Dictionary:
+	var payload := {
+		"candidate_count": int(search_payload.get("candidate_count", 0)),
+		"evaluated_count": int(search_payload.get("evaluated_count", 0)),
+		"score": float(search_payload.get("score", 0.0)),
+		"min_delta_score": float(search_payload.get("min_delta_score", 0.0)),
+		"compared_rollout_budget_ms": int(search_payload.get("compared_rollout_budget_ms", 0)),
+		"time_ms": int(search_payload.get("time_ms", 0)),
+		"baseline": Dictionary(search_payload.get("baseline", {})).duplicate(true),
+		"comparison": Dictionary(search_payload.get("comparison", {})).duplicate(true),
+		"hard_gate": Dictionary(search_payload.get("hard_gate", {})).duplicate(true),
+		"evaluated_plans": Array(search_payload.get("evaluated_plans", [])).duplicate(true),
+		"same_command_action_id": str(decision_command.action_id),
+		"same_command_params": decision_command.params.duplicate(true),
+		"baseline_command_action_id": str(fallback_command.action_id),
+		"baseline_command_params": fallback_command.params.duplicate(true),
+	}
+	if plan != null and plan.has_method("to_trace_dict"):
+		payload["selected_plan"] = plan.to_trace_dict()
+	return payload
+
+static func _commands_equivalent(left: Command, right: Command) -> bool:
+	if left == null or right == null:
+		return false
+	if str(left.action_id) != str(right.action_id):
+		return false
+	if int(left.actor) != int(right.actor):
+		return false
+	return left.params == right.params
 
 func _choose_with_mcts(
 	engine: GameEngine,

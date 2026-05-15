@@ -48,10 +48,13 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var precomputed_fallback := _test_compared_fallback_reuses_precomputed_strategy_decision()
 	if not precomputed_fallback.ok:
 		return precomputed_fallback
+	var same_command_fallback := _test_compared_same_command_keeps_precomputed_strategy_decision()
+	if not same_command_fallback.ok:
+		return same_command_fallback
 	var scorer := _test_directive_hint_bonus_is_local_and_capped()
 	if not scorer.ok:
 		return scorer
-	return Result.success({"cases": 13})
+	return Result.success({"cases": 14})
 
 static func _test_low_cash_blocks_non_marketing_override() -> Result:
 	var plan = StrategicPlanClass.create(
@@ -415,6 +418,66 @@ static func _test_compared_fallback_reuses_precomputed_strategy_decision() -> Re
 		return Result.failure("precomputed StrategyBot fallback should keep compared failure payload: %s" % str(annotated.trace))
 	if str(annotated.explanation.get("fallback", "")) != "strategy":
 		return Result.failure("precomputed StrategyBot fallback should explain fallback strategy: %s" % str(annotated.explanation))
+	return Result.success()
+
+static func _test_compared_same_command_keeps_precomputed_strategy_decision() -> Result:
+	var bot := StrategicBotClass.new()
+	var command := CommandClass.create("produce_food", 0, {"employee_type": "burger_cook", "food_type": "burger"})
+	var fallback := BotDecisionClass.create(
+		command,
+		"produce_burger",
+		42.0,
+		{"search": "strategy", "bot": "StrategyBot"},
+		{"search": "strategy"}
+	)
+	var hinted := BotDecisionClass.create(
+		command.duplicate_command(),
+		"produce_burger_hinted",
+		58.0,
+		{"search": "strategy", "bot": "StrategyBot"},
+		{"search": "strategy"}
+	)
+	var plan = StrategicPlanClass.create(
+		"marketing_income_burger",
+		0,
+		"marketing_income",
+		10.0,
+		["burger"],
+		[],
+		["campaign_manager", "burger_cook"],
+		{},
+		["marketing"],
+		2,
+		8,
+		["initiate_marketing", "produce_food"]
+	)
+	var payload := {
+		"candidate_count": 1,
+		"evaluated_count": 1,
+		"score": 16.0,
+		"min_delta_score": 12.0,
+		"compared_rollout_budget_ms": 288,
+		"time_ms": 25,
+		"baseline": _summary({"cash_after": 25, "command_action_ids": ["produce_food"]}),
+		"comparison": _summary({"cash_after": 31, "command_action_ids": ["produce_food"], "route_action_count": 1}),
+		"hard_gate": {"passed": true, "reasons": []},
+		"evaluated_plans": [{"plan_id": "marketing_income_burger", "score": 16.0}],
+	}
+	var annotated := bot._same_command_fallback_or_null(hinted, fallback, plan, payload)
+	if annotated == null or annotated.is_failure():
+		return Result.failure("same-command compared plan should return the precomputed StrategyBot fallback")
+	if annotated.command != command:
+		return Result.failure("same-command guard should preserve the original fallback command")
+	if str(annotated.trace.get("search", "")) != "strategy":
+		return Result.failure("same-command fallback should remain counted as strategy search: %s" % str(annotated.trace))
+	if str(annotated.trace.get("strategic_failure", "")) != "strategic_plan_same_command_as_baseline":
+		return Result.failure("same-command fallback should expose explicit strategic failure: %s" % str(annotated.trace))
+	var failure_payload: Dictionary = Dictionary(annotated.trace.get("strategic_failure_payload", {}))
+	if str(failure_payload.get("same_command_action_id", "")) != "produce_food":
+		return Result.failure("same-command fallback should trace the duplicate command: %s" % str(failure_payload))
+	var selected_plan: Dictionary = Dictionary(failure_payload.get("selected_plan", {}))
+	if str(selected_plan.get("id", "")) != "marketing_income_burger":
+		return Result.failure("same-command fallback should trace the selected plan that was rejected: %s" % str(failure_payload))
 	return Result.success()
 
 static func _test_directive_hint_bonus_is_local_and_capped() -> Result:
