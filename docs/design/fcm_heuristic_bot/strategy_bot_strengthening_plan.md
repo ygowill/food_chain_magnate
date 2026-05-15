@@ -108,7 +108,7 @@ Candidate evidence:
 
 ### Step 4: Growth readiness and risk control
 
-Status: pending.
+Status: complete.
 
 Target:
 
@@ -174,3 +174,15 @@ For each step:
   - Strategy-only smoke: `base_revenue_growth_v1`, 2 players, seeds `12345-12347`, target round 8, `configs=1`, `matches=3`, `failures=0`, `timeouts=0`.
   - Smoke summary: success `1.000`, avg round `8.000`, avg cash `[68.333, 63.667]`, `cash_min_after_first_positive_avg=[10.0, 10.0]`, opening positive cash avg `2.000`, no-positive-cash avg `0.000`, `produce_food=35`, `set_price` mandatory completions `8`, search types `strategy=375`.
   - Design-alignment result: Step 3 keeps StrategyBot as the mainline and adds economic context scoring only through profile-scoped, trace-visible phase adjustments; it improves midgame supply/recovery judgment without changing hard validation, cash safety gates, or StrategicBot override behavior.
+- 2026-05-15: Implemented Step 4 draft for `base_revenue_growth_v1`:
+  - Added `growth_ready` adjustments that prefer `place_house`, `add_garden`, restaurant positioning, and modest recruit/train/marketing support only after `StrategyRoutePlanner.house_growth_ready`.
+  - Added `income_recovery` expansion penalties for `place_house`, `add_garden`, `place_restaurant`, and `move_restaurant` so price/competition recovery beats new growth.
+  - Added targeted StrategyBot tests proving stable income exposes `growth_ready` and recovery demand takes priority over growth-ready expansion.
+  - Design-alignment check before verification: Step 4 reuses existing route-readiness evidence rather than adding speculative logic; the new behavior is profile-scoped, trace-visible, and ordered below cash/supply/recovery safety contexts.
+- 2026-05-15: Verified and closed Step 4:
+  - `CheckCompile PASS files=1236`.
+  - `AllTests PASS passed=426/426 failed=[] total_ms=159349`.
+  - Strategy-only smoke: `base_revenue_growth_v1`, 2 players, seeds `12345-12347`, target round 8, `configs=1`, `matches=3`, `failures=0`, `timeouts=0`.
+  - Smoke summary: success `1.000`, avg round `8.000`, avg cash `[68.333, 63.667]`, `cash_min_after_first_positive_avg=[10.0, 10.0]`, opening positive cash avg `2.000`, no-positive-cash avg `0.000`, `produce_food=35`, search types `strategy=375`.
+  - Residual watchpoint: action mix was unchanged in the small smoke and budget-expired rate rose slightly from Step 3's `0.048` to `0.059`; keep larger matrices focused on whether `growth_ready` actually converts stable income into useful expansion without search-cost drift.
+  - Design-alignment result: Step 4 stayed within the StrategyBot profile/scoring layer and preserved opening/cash/supply behavior; growth bonuses only apply after existing economic readiness evidence, while recovery penalties keep immediate revenue repair ahead of expansion.

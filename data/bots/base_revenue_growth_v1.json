@@ -160,7 +160,20 @@
       "recruit": 5.0,
       "set_company_structure_direct": 5.0,
       "set_company_structure_report": 5.0,
-      "initiate_marketing": 4.0
+      "initiate_marketing": 4.0,
+      "place_house": -8.0,
+      "add_garden": -8.0,
+      "place_restaurant": -6.0,
+      "move_restaurant": -4.0
+    },
+    "growth_ready": {
+      "place_house": 14.0,
+      "add_garden": 12.0,
+      "place_restaurant": 6.0,
+      "move_restaurant": 4.0,
+      "recruit": 4.0,
+      "train": 4.0,
+      "initiate_marketing": 3.0
     }
   }
 }

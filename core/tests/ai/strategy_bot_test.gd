@@ -56,6 +56,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var midgame_adjustments := _test_strategy_phase_adjustments_prioritize_midgame_recovery()
 	if not midgame_adjustments.ok:
 		return midgame_adjustments
+	var growth_adjustments := _test_strategy_phase_adjustments_gate_growth_readiness()
+	if not growth_adjustments.ok:
+		return growth_adjustments
 	var phase_planner := _test_phase_planner_classifies_strategy_context(seed_val)
 	if not phase_planner.ok:
 		return phase_planner
@@ -2983,6 +2986,53 @@ static func _test_strategy_phase_adjustments_prioritize_midgame_recovery() -> Re
 		return Result.failure("recovery demand should expose income_recovery context: %s" % str(recovery_features))
 	if not is_equal_approx(float(recovery_features.get("phase_action_adjustment", 0.0)), 12.0):
 		return Result.failure("recovery price action should receive configured adjustment: %s" % str(recovery_features))
+	return Result.success()
+
+static func _test_strategy_phase_adjustments_gate_growth_readiness() -> Result:
+	var growth_profile = StrategyProfileClass.new()
+	var growth_read := growth_profile.configure("base_revenue_growth_v1")
+	if not growth_read.ok:
+		return Result.failure("growth profile should load growth-ready phase adjustments: %s" % growth_read.error)
+	if not is_equal_approx(float(growth_profile.phase_action_adjustment("growth_ready", "place_house")), 14.0):
+		return Result.failure("growth profile should configure growth-ready house adjustment: %s" % str(growth_profile.phase_action_adjustments))
+	if not is_equal_approx(float(growth_profile.phase_action_adjustment("income_recovery", "place_house")), -8.0):
+		return Result.failure("growth profile should configure recovery expansion penalty: %s" % str(growth_profile.phase_action_adjustments))
+
+	var growth := _synthetic_house_growth_observation()
+	growth.own_player["cash"] = 50
+	growth.own_player["employees"] = ["burger_cook", "campaign_manager"]
+	growth.own_player["inventory"] = {"burger": 5}
+	_set_observation_house_demand_count(growth, "house_near", "burger", 5)
+	var growth_macro := MacroAction.create(
+		"place_house_when_growth_ready",
+		[Command.create("place_house", 0, {"position": [4, 3], "rotation": 0, "house_number": 2})],
+		0.0,
+		["working", "growth"],
+		{}
+	)
+	var growth_score: Dictionary = StrategyScorerClass.score_macro(growth, growth_macro, growth_profile)
+	var growth_features: Dictionary = Dictionary(growth_score.get("features", {}))
+	if str(growth_features.get("strategy_context_id", "")) != "growth_ready":
+		return Result.failure("stable income route should expose growth_ready context: %s" % str(growth_features))
+	if not is_equal_approx(float(growth_features.get("phase_action_adjustment", 0.0)), 14.0):
+		return Result.failure("growth-ready house action should receive configured adjustment: %s" % str(growth_features))
+
+	var recovery := _synthetic_house_growth_observation()
+	recovery.own_player["cash"] = 50
+	recovery.own_player["employees"] = ["burger_cook", "campaign_manager", "pricing_manager"]
+	recovery.own_player["inventory"] = {"burger": 5}
+	_set_observation_house_demand_count(recovery, "house_near", "burger", 5)
+	var recovery_analysis: Dictionary = StrategyIncomeAnalyzerClass.analyze(recovery, growth_profile)
+	recovery_analysis["total_actionable_inventory_gap"] = 0
+	recovery_analysis["total_inventory_gap"] = 0
+	recovery_analysis["total_lost_to_competitor_demand"] = 1
+	recovery_analysis["total_price_recoverable_demand"] = 1
+	var recovery_score: Dictionary = StrategyScorerClass.score_macro(recovery, growth_macro, growth_profile, {"income_analysis": recovery_analysis})
+	var recovery_features: Dictionary = Dictionary(recovery_score.get("features", {}))
+	if str(recovery_features.get("strategy_context_id", "")) != "income_recovery":
+		return Result.failure("recovery demand should take priority over growth_ready context: %s" % str(recovery_features))
+	if not is_equal_approx(float(recovery_features.get("phase_action_adjustment", 0.0)), -8.0):
+		return Result.failure("recovery expansion should receive configured penalty: %s" % str(recovery_features))
 	return Result.success()
 
 static func _test_structure_score_downweights_marginal_edits_but_keeps_route_edits(seed_val: int) -> Result:
