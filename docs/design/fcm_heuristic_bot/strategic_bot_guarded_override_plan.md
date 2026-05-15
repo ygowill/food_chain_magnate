@@ -228,12 +228,22 @@ score =
 
 ### 2026-05-15 Step 14
 
-- Status: planned.
+- Status: in progress.
 - Change target: add true positive StrategicBot strength without relaxing Step 13 guardrails. The next work must generate/evaluate plans that can show economic proof inside the compared rollout horizon, rather than relying on route milestones.
 - Implementation plan:
+  - First checkpoint: run a decision-detail probe on the guarded Step 13 baseline and classify why candidate plans fail to produce economic proof. The implementation point must be chosen from this evidence, not from threshold tuning.
   - Extend plan generation/evaluation for only one narrow opening route first: marketing plus immediate supply/sale proof, with commands that can reach `cash_after`, `cash_max_seen`, `demand_sold`, `lost_to_competitor`, or `unsold_demand` improvement before the horizon ends.
   - Add a deterministic fixture where StrategicBot beats baseline through economic proof, and a paired negative fixture where route proof without economic proof still falls back.
   - Keep `strategic_min_delta_score`, hard gates, legal command validation, phase-local hints, and precomputed fallback unchanged.
   - Rerun the same three-config r12 matrix and require StrategicBot's own seat cash to be non-negative versus same-seat pure StrategyBot before commit.
 - Design check before implementation: Step 14 may increase strategic decisions only when they produce measured economic proof. If it merely restores route-proof overrides or depends on starving the opponent through aggregate-score artifacts, it violates the design.
+- First checkpoint command: `./tools/run_bot_selfplay.sh --bots=strategic,strategy --profile=base_revenue_growth_v1 --players=2 --seed=12345 --matches=1 --target-round=8 --max-steps=1800 --budget-ms=360 --match-timeout-ms=240000 --trace-tail=1800 --trace-detail=decision --strategic-search=compared --strategic-min-search-budget-ms=120 --strategic-max-plans=6 --strategic-horizon-decisions=16 --strategic-rollout-step-budget-ms=48 --strategic-config-id=guarded_compared_step14_probe_p0_seed12345 --output-jsonl=res://.godot/guarded_compared_step14_probe_p0_seed12345.jsonl`.
+- First checkpoint result: `search_type_counts={"strategic":1,"strategy":118}`, `strategic_failure_counts={"insufficient_plan_search_budget":1,"no_plan_beat_baseline":32,"no_plans_generated":4,"no_strategic_legal_actions":22}`, final cash `[95,15]`.
+- First checkpoint finding: the only accepted strategic decision was not a true behavior improvement. It selected `produce_food`, the same immediate action as the precomputed StrategyBot baseline, while the compared candidate rollout reached `cash_after=25` only because it executed an additional `skip_sub_phase` before stopping with `budget_expired`; the baseline rollout stopped with only `produce_food` under the same constrained child budget. Most rejected candidates also stopped with `budget_expired` and no cash/sold-demand/unsold-demand improvement.
+- Point 14A target: compared search must not accept budget-expired rollout evidence. Add the rollout stop reason to compared summaries and reject candidate or baseline comparisons whose rollout stopped on `budget_expired`.
+- Design check for 14A: aligned. This narrows StrategicBot authority and prevents budget artifacts from counting as economic proof; it does not relax thresholds, hard gates, legal validation, phase-local hints, or precomputed fallback.
+- Point 14A change: compared summaries now include `phase_stop_reason`; hard gates reject `candidate_rollout_budget_expired` and `baseline_rollout_budget_expired`. Focused guarded tests cover both cases even when the candidate otherwise shows positive cash proof.
+- Point 14A verification: `CheckCompile PASS files=1236`; `AllTests PASS passed=426/426 failed=[] total_ms=153893`.
+- Point 14A post-fix probe: reran the same seed/config as `guarded_compared_step14a_postfix_p0_seed12345`. Result: `search_type_counts={"strategy":119}`, `strategic_failure_counts={"insufficient_plan_search_budget":1,"no_plan_beat_baseline":33,"no_plans_generated":4,"no_strategic_legal_actions":22}`, final cash `[95,15]`, and hard-gate failure totals included `candidate_rollout_budget_expired=33` and `baseline_rollout_budget_expired=33`. The previous budget-expired pseudo-strategic decision no longer passes.
+- Design check before 14A commit: aligned. This is a guardrail fix required before adding positive strength; it reduces false positives and keeps Step 14's true-positive work pending.
 - Commit: pending.

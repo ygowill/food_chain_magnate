@@ -42,13 +42,16 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var child_budget := _test_compared_rollout_budget_uses_child_budget()
 	if not child_budget.ok:
 		return child_budget
+	var budget_expired_rollout := _test_budget_expired_rollout_cannot_override()
+	if not budget_expired_rollout.ok:
+		return budget_expired_rollout
 	var precomputed_fallback := _test_compared_fallback_reuses_precomputed_strategy_decision()
 	if not precomputed_fallback.ok:
 		return precomputed_fallback
 	var scorer := _test_directive_hint_bonus_is_local_and_capped()
 	if not scorer.ok:
 		return scorer
-	return Result.success({"cases": 12})
+	return Result.success({"cases": 13})
 
 static func _test_low_cash_blocks_non_marketing_override() -> Result:
 	var plan = StrategicPlanClass.create(
@@ -331,6 +334,52 @@ static func _test_compared_rollout_budget_uses_child_budget() -> Result:
 	var child_remaining := int(child_budget.remaining_ms())
 	if child_remaining <= 0 or child_remaining > rollout_budget_ms:
 		return Result.failure("child budget remaining should be bounded by rollout budget, got %d of %d" % [child_remaining, rollout_budget_ms])
+	return Result.success()
+
+static func _test_budget_expired_rollout_cannot_override() -> Result:
+	var plan = StrategicPlanClass.create(
+		"marketing_income_burger",
+		0,
+		"marketing_income",
+		0.0,
+		["burger"],
+		[],
+		["campaign_manager", "burger_cook"],
+		{},
+		[],
+		2,
+		8,
+		["initiate_marketing", "produce_food"]
+	)
+	var stable_baseline := _summary({
+		"cash_before": 10,
+		"cash_after": 10,
+		"cash_max_seen": 10,
+		"command_count": 1,
+	})
+	var cash_positive := _summary({
+		"cash_before": 10,
+		"cash_after": 25,
+		"cash_max_seen": 25,
+		"route_action_count": 1,
+		"route_progress_bonus": 13.6,
+		"route_completion_bonus": 6.0,
+		"command_count": 2,
+		"phase_stop_reason": "budget_expired",
+	})
+	var candidate_gate: Dictionary = StrategicSearchClass._comparison_hard_gate(plan, cash_positive, stable_baseline, {"strategic_cash_footing": 15})
+	var candidate_reasons := _string_array(candidate_gate.get("reasons", []))
+	if bool(candidate_gate.get("passed", true)) or not candidate_reasons.has("candidate_rollout_budget_expired"):
+		return Result.failure("budget-expired candidate rollout should not override: %s" % str(candidate_gate))
+
+	var expired_baseline := stable_baseline.duplicate(true)
+	expired_baseline["phase_stop_reason"] = "budget_expired"
+	var stable_candidate := cash_positive.duplicate(true)
+	stable_candidate["phase_stop_reason"] = "phase_boundary"
+	var baseline_gate: Dictionary = StrategicSearchClass._comparison_hard_gate(plan, stable_candidate, expired_baseline, {"strategic_cash_footing": 15})
+	var baseline_reasons := _string_array(baseline_gate.get("reasons", []))
+	if bool(baseline_gate.get("passed", true)) or not baseline_reasons.has("baseline_rollout_budget_expired"):
+		return Result.failure("budget-expired baseline rollout should not be used for override proof: %s" % str(baseline_gate))
 	return Result.success()
 
 static func _test_compared_fallback_reuses_precomputed_strategy_decision() -> Result:

@@ -436,6 +436,7 @@ static func _comparison_summary(plan, rollout: Dictionary, eval_payload: Diction
 		"cash_after": int(rollout.get("cash_after", 0)),
 		"cash_max_seen": int(rollout.get("cash_max_seen", 0)),
 		"cash_min_after_first_positive": int(rollout.get("cash_min_after_first_positive", 0)),
+		"phase_stop_reason": str(rollout.get("phase_stop_reason", "")),
 		"milestone_value": float(breakdown.get("milestone_value", 0.0)),
 		"milestones_gained": Array(telemetry.get("milestones_gained", [])).duplicate(true),
 		"demand_created": int(telemetry.get("demand_created", 0)),
@@ -463,6 +464,10 @@ static func _comparison_hard_gate(plan, summary: Dictionary, baseline: Dictionar
 		reasons.append("opponent_loss_regressed")
 	if bool(summary.get("route_stalled", false)):
 		reasons.append("route_stalled")
+	if str(summary.get("phase_stop_reason", "")) == "budget_expired":
+		reasons.append("candidate_rollout_budget_expired")
+	if str(baseline.get("phase_stop_reason", "")) == "budget_expired":
+		reasons.append("baseline_rollout_budget_expired")
 	var cash_footing := maxi(1, int(options.get("strategic_cash_footing", DEFAULT_CASH_FOOTING)))
 	if int(baseline.get("cash_before", 0)) < cash_footing and str(plan.route_type) != "marketing_income":
 		reasons.append("low_cash_non_marketing_override")
