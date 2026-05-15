@@ -285,6 +285,8 @@ func sync(state: GameState) -> void:
 			var local_pid := int(NetContext.local_player_id)
 			if local_pid < 0 or view_player_id != local_pid:
 				enable_drag = false
+		if enable_drag and controller.has_method("is_local_ai_player") and bool(controller.call("is_local_ai_player", view_player_id)):
+			enable_drag = false
 
 		if scene.hand_area.has_method("set_drag_enabled"):
 			scene.hand_area.set_drag_enabled(enable_drag)

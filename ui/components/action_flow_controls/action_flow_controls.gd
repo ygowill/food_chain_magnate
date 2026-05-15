@@ -26,8 +26,11 @@ var _rollback_last_action_id: String = "rollback_last_command"
 var _rollback_proposal_action_id: String = "rollback_proposal"
 var _rewind_action_id: String = "rewind_to_turn_start"
 var _last_flow_config_signature: Dictionary = {}
+var _last_flow_config: Dictionary = {}
 var _has_applied_flow_config_signature: bool = false
 var _flow_config_apply_count: int = 0
+var _globally_disabled: bool = false
+var _globally_disabled_reason: String = ""
 
 func _ready() -> void:
 	_build_ui()
@@ -79,6 +82,7 @@ func apply_flow_config(config: Dictionary) -> void:
 	var rb: Dictionary = Dictionary(config.get("rollback_last", {}))
 	var rp: Dictionary = Dictionary(config.get("rollback_proposal", {}))
 	var rw: Dictionary = Dictionary(config.get("rewind", {}))
+	_last_flow_config = config.duplicate(true)
 	var signature := _build_flow_config_signature(ce, ss, rb, rp, rw)
 	var controls_ready := is_instance_valid(confirm_end_button) \
 		and is_instance_valid(skip_step_button) \
@@ -161,6 +165,36 @@ func apply_flow_config(config: Dictionary) -> void:
 		_last_flow_config_signature = signature
 		_has_applied_flow_config_signature = true
 		_flow_config_apply_count += 1
+	_apply_global_disabled_state()
+
+func set_globally_disabled(reason: String) -> void:
+	var r := str(reason).strip_edges()
+	var was_disabled := _globally_disabled
+	_globally_disabled = not r.is_empty()
+	_globally_disabled_reason = r
+	if was_disabled and not _globally_disabled and not _last_flow_config.is_empty():
+		_has_applied_flow_config_signature = false
+		apply_flow_config(_last_flow_config)
+		return
+	_apply_global_disabled_state()
+
+func is_globally_disabled() -> bool:
+	return _globally_disabled
+
+func _apply_global_disabled_state() -> void:
+	var controls: Array[Button] = [
+		confirm_end_button,
+		skip_step_button,
+		rollback_last_button,
+		rewind_button,
+		rollback_proposal_button,
+	]
+	for button in controls:
+		if not is_instance_valid(button):
+			continue
+		if _globally_disabled:
+			button.disabled = true
+			button.tooltip_text = _globally_disabled_reason
 
 func _build_flow_config_signature(ce: Dictionary, ss: Dictionary, rb: Dictionary, rp: Dictionary, rw: Dictionary) -> Dictionary:
 	var confirm_reason := str(ce.get("disabled_reason", "")).strip_edges()

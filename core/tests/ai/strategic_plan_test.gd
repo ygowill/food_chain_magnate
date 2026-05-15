@@ -1239,6 +1239,27 @@ static func _test_route_transition_bonus_waits_for_cash_footing(seed_val: int) -
 		return Result.failure("route transition bonus should prefer marketing-to-supply switch after cash footing: switch=%f repeat=%f" % [grounded_switch_bonus, grounded_repeat_bonus])
 	if grounded_switch_bonus <= early_switch_bonus:
 		return Result.failure("route transition bonus should increase after cash footing: early=%f grounded=%f" % [early_switch_bonus, grounded_switch_bonus])
+
+	var price_plan = StrategicPlanClass.create(
+		"price_recovery",
+		0,
+		"price_recovery",
+		0.0,
+		["burger"],
+		["house_left"],
+		["pricing_manager"],
+		{},
+		["price"],
+		2,
+		16,
+		["recruit", "set_price", "produce_food"]
+	)
+	var grounded_price_eval := StrategicPlanEvaluatorClass.evaluate_rollout(price_plan, grounded_rollout, profile)
+	if not grounded_price_eval.ok:
+		return grounded_price_eval
+	var grounded_price_bonus := float(Dictionary(Dictionary(grounded_price_eval.value).get("breakdown", {})).get("route_transition_bonus", 0.0))
+	if grounded_switch_bonus <= grounded_price_bonus:
+		return Result.failure("route transition bonus should prefer marketing-to-supply over marketing-to-price after cash footing: supply=%f price=%f" % [grounded_switch_bonus, grounded_price_bonus])
 	return Result.success()
 
 static func _test_strategic_search_filters_stalled_routes() -> Result:

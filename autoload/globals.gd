@@ -22,6 +22,7 @@ var modules_v2_base_dir: String = GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR 
 var language: String = "zh"
 var random_seed: int = 0
 var reserve_card_selected_by_player: Array[int] = []
+var local_player_control_modes: Array[String] = []
 
 # 高级游戏配置覆盖（GameConfigDialog 设置）
 var game_config_overrides: Dictionary = {}
@@ -297,6 +298,7 @@ func reset_game_config() -> void:
 	modules_v2_base_dir = GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR
 	random_seed = 0
 	reserve_card_selected_by_player = []
+	reset_local_player_control_modes()
 	is_game_active = false
 	current_game_engine = null
 	clear_tutorial_runtime_flags()
@@ -390,6 +392,42 @@ func _ensure_player_profiles() -> void:
 		var v := int(player_restaurant_logo_choices[i])
 		if v < -1 or v >= DEFAULT_RESTAURANT_LOGO_COUNT:
 			player_restaurant_logo_choices[i] = -1
+
+func reset_local_player_control_modes() -> void:
+	local_player_control_modes = []
+	for _i in range(MAX_PLAYERS):
+		local_player_control_modes.append("human")
+
+func _ensure_local_player_control_modes() -> void:
+	if local_player_control_modes.size() < MAX_PLAYERS:
+		for _i in range(local_player_control_modes.size(), MAX_PLAYERS):
+			local_player_control_modes.append("human")
+	elif local_player_control_modes.size() > MAX_PLAYERS:
+		local_player_control_modes = local_player_control_modes.slice(0, MAX_PLAYERS)
+	for i in range(local_player_control_modes.size()):
+		var mode := str(local_player_control_modes[i]).strip_edges()
+		if mode != "ai":
+			mode = "human"
+		local_player_control_modes[i] = mode
+
+func set_local_player_control_mode(player_id: int, mode: String) -> void:
+	_ensure_local_player_control_modes()
+	if player_id < 0 or player_id >= MAX_PLAYERS:
+		return
+	var normalized := str(mode).strip_edges()
+	if normalized != "ai":
+		normalized = "human"
+	local_player_control_modes[player_id] = normalized
+
+func get_local_player_control_mode(player_id: int) -> String:
+	_ensure_local_player_control_modes()
+	if player_id < 0 or player_id >= local_player_control_modes.size():
+		return "human"
+	var mode := str(local_player_control_modes[player_id]).strip_edges()
+	return "ai" if mode == "ai" else "human"
+
+func is_local_player_ai(player_id: int) -> bool:
+	return get_local_player_control_mode(player_id) == "ai"
 
 func _normalize_modules_base_dir(spec: String) -> String:
 	var s := str(spec).strip_edges()

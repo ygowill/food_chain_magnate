@@ -12,6 +12,7 @@ var _right_panel_dock_controller: Object = null
 var _right_panel_footer_row: Control = null
 var _right_panel_footer_secondary_button: Button = null
 var _right_panel_footer_primary_button: Button = null
+var _globally_disabled: bool = false
 
 func _init(
 	menu_controller: Object,
@@ -41,8 +42,14 @@ func dispose() -> void:
 	_right_panel_footer_row = null
 	_right_panel_footer_secondary_button = null
 	_right_panel_footer_primary_button = null
+	_globally_disabled = false
+
+func set_globally_disabled(disabled: bool) -> void:
+	_globally_disabled = bool(disabled)
 
 func handle_unhandled_input(event: InputEvent) -> bool:
+	if _globally_disabled:
+		return false
 	if not (event is InputEventKey):
 		return false
 

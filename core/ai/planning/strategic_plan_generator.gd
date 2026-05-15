@@ -362,7 +362,9 @@ static func _route_context_bonus(route_type: String, observation: ObservationSta
 				"price_recovery", "supply_capacity":
 					if not has_cash_footing:
 						return -3.5 * float(streak)
-					return switch_bonus + 2.0
+					if current_route_type == "supply_capacity":
+						return switch_bonus + 3.0
+					return switch_bonus + 0.5
 				"product_switch_attack":
 					if not has_cash_footing:
 						return -2.5 * float(streak)
@@ -375,8 +377,10 @@ static func _route_context_bonus(route_type: String, observation: ObservationSta
 					return -repeat_penalty
 		"price_recovery":
 			match current_route_type:
-				"marketing_income", "supply_capacity":
+				"marketing_income":
 					return switch_bonus
+				"supply_capacity":
+					return switch_bonus + 0.75
 				"product_switch_attack":
 					return switch_bonus * 0.4
 				"growth":

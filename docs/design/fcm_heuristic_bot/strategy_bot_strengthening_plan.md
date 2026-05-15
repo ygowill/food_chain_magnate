@@ -254,3 +254,7 @@ Current implementation focus:
   - Round-12 10-seed strategy-only smoke stayed stable: `matches=10`, `failures=0`, `timeouts=0`, `success=1.000`; action distribution stayed `place_house=4`, `add_garden=0`.
   - Safety metrics stayed aligned with the previous Step 5 run: avg cash `[206.6, 165.9]`, `cash_min_after_first_positive_avg=[10.3, 9.5]`, search `expired_rate=0.031`, tuning score `1593.221`.
   - Design-alignment result: normal self-captured expansion behavior was preserved, while opponent-dominated expansion now receives explicit trace-visible penalties. This is the intended safety correction before any future expansion-frequency tuning.
+- 2026-05-15: Local computer-player default:
+  - Local setup now exposes a per-seat `玩家` / `电脑` control mode.
+  - The local computer-player runtime uses `StrategyBot` as the default bot, configured with the strengthened `base_revenue_growth_v1` profile. This keeps the shipped local AI aligned with the StrategyBot mainline rather than the still-experimental StrategicBot path.
+  - Verification after wiring the default local computer player: `AllTests PASS passed=426/426 failed=[] total_ms=156338`.

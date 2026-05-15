@@ -10,6 +10,8 @@ const UiSkinCacheClass = preload("res://ui/visual/ui_skin_cache.gd")
 const EmployeeCardClass = preload("res://ui/components/employee_card/employee_card.gd")
 const StructuresPassClass = preload("res://ui/scenes/game/map/drawer/passes/structures_pass.gd")
 const TilePreviewFactoryClass = preload("res://ui/components/reserve_area/tile_preview_factory.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
 
 @onready var root_ui: Control = $Root
 @onready var output: RichTextLabel = $Root/Output
@@ -159,12 +161,20 @@ func _run_test() -> int:
 		players_section = _find_node_by_name_recursive(setup, "PlayersContainer")
 	if players_section == null:
 		return await _fail("game_setup.tscn 缺少 PlayersSection（可能是 game_setup.gd 未正确运行）")
+	if not _has_player_control_mode_option(setup):
+		return await _fail("game_setup.tscn 缺少玩家/电脑控制方式下拉")
 	var setup_modules_section_paths: PackedStringArray = [
 		"CenterContainer/ContentCenter/Card/OuterMargin/InnerBorder/Margin/VBoxContainer/MainColumns/RightColumn/ModulesSection",
 		"CenterContainer/ContentCenter/Card/Margin/VBoxContainer/MainColumns/RightColumn/ModulesSection",
 	]
 	if _find_first_existing_node(setup, setup_modules_section_paths) == null:
 		return await _fail("game_setup.tscn 缺少 ModulesSection（可能是 game_setup.gd 未正确运行）")
+
+	# 本地人机冒烟：默认 seed=0 的初始顺位从 P2 开始；AI 应自动完成开局储备卡选择后停在玩家回合。
+	Globals.player_count = 2
+	Globals.random_seed = 0
+	Globals.set_local_player_control_mode(0, "human")
+	Globals.set_local_player_control_mode(1, "ai")
 
 	var inst = GameScene.instantiate()
 	if inst == null:
@@ -184,6 +194,16 @@ func _run_test() -> int:
 		return await _fail("Globals.current_game_engine 为空（game 初始化失败或未完成）")
 	if not bool(Globals.is_game_active):
 		return await _fail("Globals.is_game_active 为 false（game 初始化失败或未完成）")
+	if not await _wait_for_command_history_size(Globals.current_game_engine, 1, 90):
+		return await _fail("本地电脑玩家未自动执行开局命令")
+	var history: Array = Globals.current_game_engine.command_history
+	var first_command = history[0] if history.size() > 0 else null
+	if not (first_command is Command):
+		return await _fail("本地电脑玩家命令历史类型错误")
+	if str((first_command as Command).action_id) != "select_reserve_card":
+		return await _fail("本地电脑玩家首个命令应为 select_reserve_card，实际为 %s" % str((first_command as Command).action_id))
+	if not await _run_local_ai_restructuring_smoke(inst, Globals.current_game_engine):
+		return await _fail("本地电脑玩家未在重组阶段自动提交")
 
 	# OnlineLobby 场景基础加载（防止联机入口脚本/节点路径漂移导致“联机模式无法启动”）
 	_append_output("检查联机大厅场景可加载...\n")
@@ -293,6 +313,70 @@ func _drain_frames(count: int) -> void:
 	for _i in range(n):
 		await get_tree().process_frame
 
+func _wait_for_command_history_size(engine: GameEngine, minimum_size: int, max_frames: int) -> bool:
+	if engine == null:
+		return false
+	for _i in range(maxi(1, max_frames)):
+		if int(engine.command_history.size()) >= int(minimum_size):
+			return true
+		await get_tree().process_frame
+	return int(engine.command_history.size()) >= int(minimum_size)
+
+func _run_local_ai_restructuring_smoke(game_scene: Node, engine: GameEngine) -> bool:
+	if engine == null:
+		return false
+	var advance := TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_RESTRUCTURING, 120)
+	if not advance.ok:
+		return false
+	var state := engine.get_state()
+	if state == null or state.players.size() < 2:
+		return false
+
+	state.current_player_index = 0
+	state.turn_order = [0, 1]
+	if not (state.round_state is Dictionary):
+		state.round_state = {}
+	state.round_state["restructuring"] = {
+		"submitted": {0: false, 1: false},
+		"finalized": false,
+	}
+	var pending_phase_actions := {}
+	var existing_pending = state.round_state.get("pending_phase_actions", null)
+	if existing_pending is Dictionary:
+		pending_phase_actions = Dictionary(existing_pending).duplicate(true)
+	pending_phase_actions[DefsClass.PHASE_RESTRUCTURING] = [0, 1]
+	state.round_state["pending_phase_actions"] = pending_phase_actions
+
+	var state_ref: GameState = state
+	if state_ref == null:
+		return false
+	var player0 := state_ref.get_player(0)
+	var player1 := state_ref.get_player(1)
+	if player0.is_empty() or player1.is_empty():
+		return false
+	state_ref.players[0] = player0
+	state_ref.players[1] = player1
+
+	# 触发本地 AI 泵；它应当跳过人类 pending，直接处理 AI 的重组提交。
+	if is_instance_valid(game_scene) and game_scene.has_method("_request_local_ai_pump"):
+		game_scene.call("_request_local_ai_pump")
+	for _i in range(20):
+		await get_tree().process_frame
+		var updated := engine.get_state()
+		if updated == null or not (updated.round_state is Dictionary):
+			continue
+		var restructuring_val = updated.round_state.get("restructuring", null)
+		if not (restructuring_val is Dictionary):
+			continue
+		var restructuring: Dictionary = restructuring_val
+		var submitted_val = restructuring.get("submitted", null)
+		if not (submitted_val is Dictionary):
+			continue
+		var submitted: Dictionary = submitted_val
+		if bool(submitted.get(1, false)) and not bool(submitted.get(0, false)):
+			return true
+	return false
+
 func _find_first_existing_node(root: Node, paths: PackedStringArray) -> Node:
 	if root == null:
 		return null
@@ -343,6 +427,29 @@ func _find_seed_line_edit_by_placeholder(node: Node) -> LineEdit:
 		if found != null:
 			return found
 	return null
+
+func _has_player_control_mode_option(root: Node) -> bool:
+	if root == null:
+		return false
+	var options: Array[OptionButton] = []
+	_collect_option_buttons(root, options)
+	for opt in options:
+		if not is_instance_valid(opt):
+			continue
+		if opt.item_count < 2:
+			continue
+		if str(opt.get_item_text(0)).strip_edges() == "玩家" and str(opt.get_item_text(1)).strip_edges() == "电脑":
+			return true
+	return false
+
+func _collect_option_buttons(node: Node, out: Array[OptionButton]) -> void:
+	if node == null:
+		return
+	if node is OptionButton:
+		out.append(node as OptionButton)
+	for child in node.get_children():
+		if child is Node:
+			_collect_option_buttons(child, out)
 
 func _find_node_by_name_recursive(node: Node, target_name: String) -> Node:
 	if node == null:

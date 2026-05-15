@@ -28,6 +28,7 @@ var _reserve_card_open_routine_running: bool = false
 var _reserve_card_modal_dismissed: bool = false
 var _reserve_card_modal_dismissed_player_id: int = -1
 var _reserve_card_modal_dismissed_interactive: bool = true
+var _local_ai_turn_provider: Callable = Callable()
 
 func _init(scene, execute_command: Callable, refresh_ui: Callable = Callable()) -> void:
 	_scene = scene
@@ -37,6 +38,7 @@ func _init(scene, execute_command: Callable, refresh_ui: Callable = Callable()) 
 func dispose() -> void:
 	_execute_command = Callable()
 	_refresh_ui = Callable()
+	_local_ai_turn_provider = Callable()
 
 	if is_instance_valid(_turn_order_modal):
 		_turn_order_modal.queue_free()
@@ -90,10 +92,21 @@ func _is_reserve_card_selection_state(state: GameState) -> bool:
 func _compute_reserve_card_interactive(state: GameState, current_player_id: int) -> bool:
 	if state == null or current_player_id < 0:
 		return false
+	if _is_local_ai_player(current_player_id):
+		return false
 	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
 		return true
 	var local_player_id := int(NetContext.local_player_id)
 	return local_player_id >= 0 and current_player_id == local_player_id
+
+func set_local_ai_turn_provider(provider: Callable) -> void:
+	_local_ai_turn_provider = provider
+
+func _is_local_ai_player(player_id: int) -> bool:
+	if not _local_ai_turn_provider.is_valid():
+		return false
+	var value = _local_ai_turn_provider.call(int(player_id))
+	return value is bool and bool(value)
 
 func has_open_modal_ui() -> bool:
 	if _reserve_card_open_routine_running or _pending_reserve_card_open_player_id >= 0:
@@ -157,7 +170,7 @@ func sync_for_state(state: GameState, covered: Rect2) -> void:
 	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
 		is_online = true
 		local_player_id = int(NetContext.local_player_id)
-	var is_local_turn := (not is_online) or (local_player_id >= 0 and current_player_id == local_player_id)
+	var is_local_turn := ((not is_online) or (local_player_id >= 0 and current_player_id == local_player_id)) and not _is_local_ai_player(current_player_id)
 
 	# 储备卡选择（Setup/ReserveCards）
 	if _is_reserve_card_selection_state(state) and current_player_id >= 0:
@@ -165,7 +178,9 @@ func sync_for_state(state: GameState, covered: Rect2) -> void:
 		if _reserve_card_modal_dismissed:
 			if _reserve_card_modal_dismissed_player_id != current_player_id or _reserve_card_modal_dismissed_interactive != interactive:
 				_clear_reserve_card_dismissed_state()
-		if _reserve_card_modal_dismissed:
+		if _is_local_ai_player(current_player_id):
+			hide_reserve_card_modal()
+		elif _reserve_card_modal_dismissed:
 			hide_reserve_card_modal()
 		else:
 			show_reserve_card_modal(state, current_player_id, covered, interactive)
@@ -200,6 +215,8 @@ func sync_for_state(state: GameState, covered: Rect2) -> void:
 	if state.phase == DefsClass.PHASE_ORDER_OF_BUSINESS and current_player_id >= 0:
 		# 联机：即使不是自己回合，也显示“顺位选择进度”，但只有当前玩家可交互。
 		should_show_turn_order = not selections.values().has(current_player_id)
+		if _is_local_ai_player(current_player_id):
+			should_show_turn_order = false
 		if is_online:
 			turn_order_interactive = is_local_turn
 

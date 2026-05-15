@@ -18,6 +18,7 @@ var _refresh_ui: Callable = Callable()
 
 var _restructuring_modal = null
 var _restructuring_modal_dismissed: bool = false
+var _local_ai_turn_provider: Callable = Callable()
 
 func _init(scene, execute_command: Callable, get_view_player_id: Callable, view_player_selected: Callable, refresh_ui: Callable = Callable()) -> void:
 	_scene = scene
@@ -31,6 +32,7 @@ func dispose() -> void:
 	_get_view_player_id = Callable()
 	_view_player_selected = Callable()
 	_refresh_ui = Callable()
+	_local_ai_turn_provider = Callable()
 
 	if is_instance_valid(_restructuring_modal):
 		_restructuring_modal.queue_free()
@@ -105,6 +107,30 @@ func _should_show_restructuring_modal_for_state(state: GameState) -> bool:
 
 	return not all_submitted
 
+func set_local_ai_turn_provider(provider: Callable) -> void:
+	_local_ai_turn_provider = provider
+
+func _is_local_ai_player(player_id: int) -> bool:
+	if not _local_ai_turn_provider.is_valid():
+		return false
+	var value = _local_ai_turn_provider.call(int(player_id))
+	return value is bool and bool(value)
+
+func _all_unsubmitted_players_are_local_ai(state: GameState) -> bool:
+	if state == null:
+		return false
+	var submitted := _get_restructuring_submitted_map(state)
+	if submitted.is_empty():
+		return false
+	var saw_unsubmitted := false
+	for pid in range(state.players.size()):
+		if _is_restructuring_player_submitted(submitted, pid):
+			continue
+		saw_unsubmitted = true
+		if not _is_local_ai_player(pid):
+			return false
+	return saw_unsubmitted
+
 func _get_view_player_id_return_value(_state: GameState, view_player_id: int, privacy_view_id: int, requested_view_player_id: int) -> int:
 	# 仅在“隐私规则强制切换”时写回 view_player_id；默认回退（例如 requested 不在范围内）不写回。
 	var is_online := (NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT)
@@ -117,6 +143,11 @@ func _get_view_player_id_return_value(_state: GameState, view_player_id: int, pr
 
 func sync_modal(state: GameState, covered: Rect2, requested_view_player_id: int) -> int:
 	var should_show_restructuring := _should_show_restructuring_modal_for_state(state)
+
+	if should_show_restructuring and _all_unsubmitted_players_are_local_ai(state):
+		_restructuring_modal_dismissed = false
+		_hide_restructuring_modal()
+		return requested_view_player_id
 
 	if not should_show_restructuring:
 		_restructuring_modal_dismissed = false

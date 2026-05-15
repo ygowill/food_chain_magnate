@@ -62,6 +62,7 @@ extends Control
 @onready var online_game_details_dialog: Control = $OnlineGameDetailsDialog
 
 const GameControllersBuilderClass = preload("res://ui/scenes/game/controllers/builder.gd")
+const GameLocalAiControllerClass = preload("res://ui/scenes/game/controllers/local_ai_controller.gd")
 const GameOnlineResyncControllerClass = preload("res://ui/scenes/game/controllers/online_resync_controller.gd")
 const GameStartupOnlineResumeControllerClass = preload("res://ui/scenes/game/controllers/startup_online_resume_controller.gd")
 const GameUiStyleApplierClass = preload("res://ui/scenes/game/controllers/ui_style_applier.gd")
@@ -106,6 +107,8 @@ var _procurement_log_preview_controller = null
 var _warmup_controller = null
 var _debug_panel_controller = null
 var _tutorials_controller = null
+var _local_ai_controller = null
+var _local_ai_input_locked: bool = false
 var _startup_profile_reported: bool = false
 var _startup_suppress_game_over_modal: bool = false
 var _startup_intro_played: bool = false
@@ -260,6 +263,15 @@ func _ready() -> void:
 	_input_controller = build.get("input_controller", null)
 	_warmup_controller = build.get("warmup_controller", null)
 	_tutorials_controller = build.get("tutorials_controller", null)
+	_local_ai_controller = GameLocalAiControllerClass.new(
+		self,
+		Callable(self, "_get_runtime_game_engine"),
+		Callable(self, "_execute_command"),
+		Callable(self, "_set_local_ai_input_locked"),
+		Callable(self, "_on_local_ai_command_executed")
+	)
+	if _panel_controller != null and _panel_controller.has_method("set_local_ai_turn_provider"):
+		_panel_controller.call("set_local_ai_turn_provider", Callable(self, "_is_local_ai_player"))
 
 	_apply_ui_layout()
 	_init_left_panel_toggle()
@@ -386,6 +398,9 @@ func _exit_tree() -> void:
 
 func _dispose_runtime() -> void:
 	_disconnect_runtime_signals()
+	if _local_ai_controller != null and _local_ai_controller.has_method("dispose"):
+		_local_ai_controller.dispose()
+	_local_ai_controller = null
 	GameRuntimeDisposerClass.dispose_runtime(self)
 
 func _disconnect_runtime_signals() -> void:
@@ -701,6 +716,7 @@ func _update_ui() -> void:
 		_run_startup_intro()
 	if _tutorials_controller != null and _tutorials_controller.has_method("on_ui_updated"):
 		_tutorials_controller.on_ui_updated()
+	_request_local_ai_pump()
 
 func _update_ui_dirty(dirty_flags: int, context: Dictionary = {}) -> void:
 	_sync_online_waiting_log_auto_switch()
@@ -715,6 +731,47 @@ func _update_ui_dirty(dirty_flags: int, context: Dictionary = {}) -> void:
 		_run_startup_intro()
 	if _tutorials_controller != null and _tutorials_controller.has_method("on_ui_updated"):
 		_tutorials_controller.on_ui_updated()
+	_request_local_ai_pump()
+
+func _request_local_ai_pump() -> void:
+	if _local_ai_controller == null:
+		return
+	if is_replay_mode_active() or is_timeline_read_only_active():
+		return
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		return
+	if _startup_intro_running:
+		return
+	if _local_ai_controller.has_method("request_pump"):
+		_local_ai_controller.request_pump()
+
+func _is_local_ai_player(player_id: int) -> bool:
+	if _local_ai_controller == null or not _local_ai_controller.has_method("is_ai_player"):
+		return false
+	return bool(_local_ai_controller.call("is_ai_player", int(player_id)))
+
+func _run_local_ai_turns() -> void:
+	if _local_ai_controller != null and _local_ai_controller.has_method("run_deferred"):
+		await _local_ai_controller.run_deferred()
+
+func _set_local_ai_input_locked(locked: bool) -> void:
+	_local_ai_input_locked = bool(locked)
+	var reason := "电脑行动中" if _local_ai_input_locked else ""
+	if is_instance_valid(action_panel) and action_panel.has_method("set_globally_disabled"):
+		action_panel.call("set_globally_disabled", reason)
+	if is_instance_valid(action_flow_controls) and action_flow_controls.has_method("set_globally_disabled"):
+		action_flow_controls.call("set_globally_disabled", reason)
+	if is_instance_valid(map_canvas) and map_canvas.has_method("set_interaction_enabled"):
+		map_canvas.call("set_interaction_enabled", not _local_ai_input_locked)
+	if _input_controller != null and _input_controller.has_method("set_globally_disabled"):
+		_input_controller.call("set_globally_disabled", _local_ai_input_locked)
+
+func _on_local_ai_command_executed(_command: Command) -> void:
+	if _timeline_controller == null or not is_instance_valid(_timeline_controller):
+		return
+	if not _timeline_controller.has_method("apply_live_log_timeline_from_engine"):
+		return
+	_timeline_controller.call("apply_live_log_timeline_from_engine")
 
 func _prepare_startup_intro_before_ui_sync() -> bool:
 	# 在 UI 同步前把地图/顺位条“隐藏到动画起点”，避免先闪现完整结果再播放动画。

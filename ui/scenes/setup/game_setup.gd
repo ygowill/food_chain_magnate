@@ -41,6 +41,7 @@ var _game_params_panel: PanelContainer = null
 var _player_count_tutorial_section: VBoxContainer = null
 
 var _player_name_edits: Array[LineEdit] = []
+var _player_control_options: Array[OptionButton] = []
 var _player_logo_options: Array[OptionButton] = []
 var _player_logo_previews: Array[TextureRect] = []
 
@@ -545,6 +546,7 @@ func _rebuild_player_rows() -> void:
 	for child in _players_container.get_children():
 		child.queue_free()
 	_player_name_edits.clear()
+	_player_control_options.clear()
 	_player_logo_options.clear()
 	_player_logo_previews.clear()
 
@@ -607,6 +609,19 @@ func _build_player_card(pid: int, logo_count: int) -> Control:
 	UiStylesClass.apply_label_dark(label)
 	content_row.add_child(label)
 
+	# 本局座位控制方式（仅用于本地游戏，不写入 settings.cfg）。
+	var control_opt := OptionButton.new()
+	control_opt.custom_minimum_size = Vector2(92, 0)
+	control_opt.add_item("玩家")
+	control_opt.add_item("电脑")
+	control_opt.select(1 if Globals.is_local_player_ai(pid) else 0)
+	control_opt.item_selected.connect(func(idx: int) -> void:
+		Globals.set_local_player_control_mode(pid, "ai" if int(idx) == 1 else "human")
+	)
+	UiStylesClass.apply_option_button_field(control_opt)
+	content_row.add_child(control_opt)
+	_player_control_options.append(control_opt)
+
 	# 名称输入
 	var name_edit := LineEdit.new()
 	name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -626,7 +641,7 @@ func _build_player_card(pid: int, logo_count: int) -> Control:
 
 	# logo 选择
 	var logo_opt := OptionButton.new()
-	logo_opt.custom_minimum_size = Vector2(200, 0)
+	logo_opt.custom_minimum_size = Vector2(160, 0)
 	logo_opt.add_item("随机")
 	for i in range(logo_count):
 		var icon_tex := _logo_icons_small[i] if i < _logo_icons_small.size() else null
@@ -769,6 +784,9 @@ func _apply_module_selection_to_globals() -> bool:
 func _apply_player_profiles_to_globals() -> void:
 	var count := _selected_player_count
 	for pid in range(count):
+		if pid < _player_control_options.size() and is_instance_valid(_player_control_options[pid]):
+			var control_sel := int(_player_control_options[pid].selected)
+			Globals.set_local_player_control_mode(pid, "ai" if control_sel == 1 else "human")
 		if pid < _player_name_edits.size() and is_instance_valid(_player_name_edits[pid]):
 			Globals.set_player_name(pid, str(_player_name_edits[pid].text))
 		if pid < _player_logo_options.size() and is_instance_valid(_player_logo_options[pid]):

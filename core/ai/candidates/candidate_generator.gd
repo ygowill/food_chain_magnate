@@ -1300,10 +1300,12 @@ static func _string_array(value) -> Array[String]:
 
 static func _plan_hints_dict(options: Dictionary) -> Dictionary:
 	var value = options.get("plan_hints", null)
-	if value != null and value.has_method("to_dict"):
-		var dict_val = value.to_dict()
-		if dict_val is Dictionary:
-			return Dictionary(dict_val)
+	if value is Object:
+		var obj: Object = value
+		if obj.has_method("to_dict"):
+			var dict_val = obj.call("to_dict")
+			if dict_val is Dictionary:
+				return Dictionary(dict_val)
 	if value is Dictionary:
 		return Dictionary(value)
 	if options.has("preferred_products") or options.has("preferred_actions") or options.has("execution_sequence"):

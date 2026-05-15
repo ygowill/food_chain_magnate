@@ -7,6 +7,56 @@ const LegalActionServiceClass = preload("res://core/ai/bot/legal_action_service.
 
 var last_trace: Array[Dictionary] = []
 
+func choose_command(engine: GameEngine, player_id: int, bot, budget: TimeBudget = null) -> Result:
+	if engine == null:
+		return Result.failure("BotController.choose_command: engine is null")
+	if bot == null:
+		return Result.failure("BotController.choose_command: bot is null")
+	if not _is_supported_bot(bot):
+		return Result.failure("BotController.choose_command: bot does not implement choose_command")
+
+	var observation_read := ObservationAdapterClass.observe_for_player(engine, player_id)
+	if not observation_read.ok:
+		return observation_read
+	var observation: ObservationState = observation_read.value
+
+	var context_read := AiDecisionContext.from_observation(
+		observation,
+		_make_decision_seed(engine, player_id),
+		_get_allowed_internal_actions(observation)
+	)
+	if not context_read.ok:
+		return context_read
+	var context: AiDecisionContext = context_read.value
+
+	var ids_read := LegalActionServiceClass.get_action_ids_for_context(engine, context)
+	if not ids_read.ok:
+		return ids_read
+	var legal_action_ids: Array[String] = ids_read.value
+
+	var validate_fn := func(command: Command) -> Result:
+		return LegalActionServiceClass.validate_command(engine, command, context)
+
+	var decision := _choose_command(engine, bot, observation, context, legal_action_ids, validate_fn, budget)
+	if decision == null:
+		return Result.failure("BotController.choose_command: bot returned null decision")
+	if decision.is_failure():
+		return Result.failure("BotController.choose_command: bot decision failed for player %d: %s" % [player_id, decision.failure_reason])
+	if decision.command == null:
+		return Result.failure("BotController.choose_command: bot returned empty command")
+
+	var validated := LegalActionServiceClass.validate_command(engine, decision.command, context)
+	if not validated.ok:
+		return Result.failure("BotController.choose_command: invalid bot command %s: %s" % [str(decision.command), validated.error])
+
+	return Result.success({
+		"decision": decision,
+		"command": decision.command,
+		"observation": observation,
+		"context": context,
+		"legal_action_ids": legal_action_ids,
+	})
+
 func step(engine: GameEngine, player_id: int, bot, budget: TimeBudget = null) -> Result:
 	if engine == null:
 		return Result.failure("BotController.step: engine is null")

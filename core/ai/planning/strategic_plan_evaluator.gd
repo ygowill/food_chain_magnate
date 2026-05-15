@@ -184,7 +184,9 @@ static func _route_transition_bonus(
 				"price_recovery", "supply_capacity":
 					if not has_cash_footing:
 						return -2.5 * streak
-					return 4.5 + streak * 1.0
+					if current_route_type == "supply_capacity":
+						return 5.5 + streak * 1.0
+					return 3.5 + streak * 0.75
 				"product_switch_attack":
 					if not has_cash_footing:
 						return -1.5 * streak

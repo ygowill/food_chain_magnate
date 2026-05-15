@@ -52,6 +52,7 @@ var _view_player_id: int = -1
 var _last_guided_action_id: String = ""
 var _action_panel_context_bound: bool = false
 var _last_action_panel_context_overlay = null
+var _local_ai_turn_provider: Callable = Callable()
 
 func _init(scene, map_controller, overlay_controller, execute_command: Callable, refresh_ui: Callable) -> void:
 	_scene = scene
@@ -109,6 +110,19 @@ func connect_signals(action_panel, action_flow_controls, turn_order_track, hand_
 	if _scene != null:
 		UiSignalHelpersClass.safe_connect(_scene.player_panel, "player_selected", _on_view_player_selected)
 		UiSignalHelpersClass.safe_connect(_scene.left_panel, "milestones_requested", show_milestone_panel)
+
+func set_local_ai_turn_provider(provider: Callable) -> void:
+	_local_ai_turn_provider = provider
+	if _modals_controller != null and _modals_controller.has_method("set_local_ai_turn_provider"):
+		_modals_controller.call("set_local_ai_turn_provider", provider)
+	if _restructuring_controller != null and _restructuring_controller.has_method("set_local_ai_turn_provider"):
+		_restructuring_controller.call("set_local_ai_turn_provider", provider)
+
+func is_local_ai_player(player_id: int) -> bool:
+	if not _local_ai_turn_provider.is_valid():
+		return false
+	var value = _local_ai_turn_provider.call(int(player_id))
+	return value is bool and bool(value)
 
 func reset_bank_break_tracking(state: GameState) -> void:
 	if _end_panels != null:
@@ -298,6 +312,7 @@ func dispose() -> void:
 	_scene = null
 	_map_controller = null
 	_overlay_controller = null
+	_local_ai_turn_provider = Callable()
 
 func has_open_modal_ui() -> bool:
 	if has_blocking_modal_ui():
