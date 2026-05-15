@@ -259,4 +259,5 @@ score =
   - Wider step-budget probe `guarded_compared_step14b_widestep_p0_seed12345`: still `search_type_counts={"strategy":81}`. Wider rollout step budget did not create a safe positive decision; economic-delta candidates were blocked by opponent-loss, cash-floor, unsupplied-demand, or budget gates.
 - Design check before 14B commit: aligned. 14B improves evidence classification without expanding StrategicBot authority. True-positive work remains open.
 - Point 14C target: create a deterministic narrow fixture that forces a real StrategyBot-vs-plan decision difference under complete non-budget-expired rollouts, then implement only the missing route generation/hinting needed for that fixture. If no such fixture exists without weakening gates, the correct next result is to document that StrategyBot already dominates this opening route and move to a different narrow route.
-- Commit: pending for 14B.
+- Point 14B commit: `fix(ai): classify completed strategic rollout boundaries` (`f150e505`).
+- Commit: pending for 14C.
