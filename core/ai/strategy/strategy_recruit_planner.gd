@@ -111,7 +111,7 @@ static func desired_recruit_count(observation: ObservationState, employee_id: St
 				return 0
 			if not bool(route_plan.get("house_growth_space", false)):
 				return 0
-			return 1 if bool(route_plan.get("house_growth_ready", false)) else 0
+			return 1 if bool(route_plan.get("stable_income_ready", false)) else 0
 		"waitress":
 			if not bool(route_plan.get("stable_income_ready", false)):
 				return 0

@@ -2610,6 +2610,18 @@ static func _test_recruit_score_values_house_placement_route(seed_val: int) -> R
 		return Result.failure("early management trainee should not expose recruit_placement_route_value: %s" % str(features))
 	if int(features.get("recruit_desired_count", -1)) != 0:
 		return Result.failure("early management trainee should expose zero desired count: %s" % str(features))
+	var setup_observation := _synthetic_house_growth_observation()
+	setup_observation.own_player["cash"] = 30
+	setup_observation.own_player["employees"] = ["burger_cook", "marketing_trainee"]
+	_set_observation_house_demand_count(setup_observation, "house_near", "burger", 3)
+	var setup_income_analysis := StrategyIncomeAnalyzerClass.analyze(setup_observation, profile)
+	var setup_management_payload: Dictionary = StrategyEmployeePlannerClass.strategy_value(setup_observation, "management_trainee", profile, setup_income_analysis)
+	if float(setup_management_payload.get("placement_route_value", 0.0)) <= 0.0:
+		return Result.failure("stable-income setup should expose management trainee prep route value: %s" % str(setup_management_payload))
+	var setup_score: Dictionary = StrategyScorerClass.score_macro(setup_observation, management_macro, profile)
+	var setup_features: Dictionary = Dictionary(setup_score.get("features", {}))
+	if int(setup_features.get("recruit_desired_count", 0)) != 1:
+		return Result.failure("stable-income setup should want one management trainee before full growth readiness: %s" % str(setup_features))
 	var ready_observation := _synthetic_house_growth_observation()
 	ready_observation.own_player["cash"] = 50
 	ready_observation.own_player["employees"] = ["burger_cook", "marketing_trainee"]
@@ -2682,12 +2694,34 @@ static func _test_train_score_values_house_placement_route(seed_val: int) -> Res
 		["working", "train"],
 		{}
 	)
+	var luxury_macro := MacroAction.create(
+		"train_management_to_luxury",
+		[Command.create("train", 0, {"from_employee": "management_trainee", "to_employee": "luxury_manager"})],
+		0.0,
+		["working", "train"],
+		{}
+	)
 	var nbd_score: Dictionary = StrategyScorerClass.score_macro(observation, nbd_macro, profile)
 	var nbd_features: Dictionary = Dictionary(nbd_score.get("features", {}))
 	if not is_equal_approx(float(nbd_features.get("train_placement_route_value", -1.0)), 0.0):
 		return Result.failure("early NBD training should not expose train_placement_route_value: %s" % str(nbd_features))
 	if float(nbd_features.get("train_route_readiness_adjustment", 0.0)) >= 0.0:
 		return Result.failure("early NBD training should carry negative route readiness adjustment: %s" % str(nbd_features))
+	var setup_observation := _synthetic_house_growth_observation()
+	setup_observation.phase = DefsClass.PHASE_WORKING
+	setup_observation.sub_phase = DefsClass.SUB_PHASE_TRAIN
+	setup_observation.own_player["cash"] = 30
+	setup_observation.own_player["employees"] = ["trainer", "burger_cook", "marketing_trainee"]
+	setup_observation.own_player["reserve_employees"] = ["management_trainee"]
+	_set_observation_house_demand_count(setup_observation, "house_near", "burger", 3)
+	var setup_luxury_score: Dictionary = StrategyScorerClass.score_macro(setup_observation, luxury_macro, profile)
+	var setup_luxury_features: Dictionary = Dictionary(setup_luxury_score.get("features", {}))
+	if float(setup_luxury_features.get("train_expansion_reserve_adjustment", 0.0)) >= 0.0:
+		return Result.failure("stable-income setup should reserve management trainee from non-NBD training: %s" % str(setup_luxury_features))
+	if str(setup_luxury_features.get("train_expansion_reserve_reason", "")) != "reserve_management_trainee_for_nbd":
+		return Result.failure("management trainee reserve adjustment should expose reason: %s" % str(setup_luxury_features))
+	if str(setup_luxury_features.get("strategy_precondition_failed", "")) != "management_trainee_reserved_for_nbd":
+		return Result.failure("reserved management trainee should make non-NBD training ineligible: %s" % str(setup_luxury_features))
 	var ready_observation := _synthetic_house_growth_observation()
 	ready_observation.phase = DefsClass.PHASE_WORKING
 	ready_observation.sub_phase = DefsClass.SUB_PHASE_TRAIN
@@ -2762,6 +2796,10 @@ static func _test_structure_score_values_reserve_new_business_developer(seed_val
 	var features: Dictionary = Dictionary(ready_nbd_score.get("features", {}))
 	if float(features.get("structure_placement_route_value", 0.0)) <= 0.0:
 		return Result.failure("reserve NBD structure should expose positive structure_placement_route_value: %s" % str(features))
+	if not is_equal_approx(float(features.get("structure_placement_route_support_value", -1.0)), float(features.get("structure_placement_route_value", 0.0))):
+		return Result.failure("reserve NBD structure should keep placement route value as full route support: %s" % str(features))
+	if float(features.get("structure_route_support_value", 0.0)) < float(features.get("structure_placement_route_value", 0.0)):
+		return Result.failure("reserve NBD structure route support should include placement route value: %s" % str(features))
 	if not is_equal_approx(float(features.get("structure_route_readiness_adjustment", -1.0)), 0.0):
 		return Result.failure("ready reserve NBD structure should not carry route readiness penalty: %s" % str(features))
 	return Result.success()
@@ -2995,6 +3033,8 @@ static func _test_strategy_phase_adjustments_gate_growth_readiness() -> Result:
 		return Result.failure("growth profile should load growth-ready phase adjustments: %s" % growth_read.error)
 	if not is_equal_approx(float(growth_profile.phase_action_adjustment("growth_ready", "place_house")), 14.0):
 		return Result.failure("growth profile should configure growth-ready house adjustment: %s" % str(growth_profile.phase_action_adjustments))
+	if not is_equal_approx(float(growth_profile.phase_action_adjustment("growth_setup", "recruit")), 7.0):
+		return Result.failure("growth profile should configure growth-setup recruit adjustment: %s" % str(growth_profile.phase_action_adjustments))
 	if not is_equal_approx(float(growth_profile.phase_action_adjustment("income_recovery", "place_house")), -8.0):
 		return Result.failure("growth profile should configure recovery expansion penalty: %s" % str(growth_profile.phase_action_adjustments))
 
@@ -3016,6 +3056,30 @@ static func _test_strategy_phase_adjustments_gate_growth_readiness() -> Result:
 		return Result.failure("stable income route should expose growth_ready context: %s" % str(growth_features))
 	if not is_equal_approx(float(growth_features.get("phase_action_adjustment", 0.0)), 14.0):
 		return Result.failure("growth-ready house action should receive configured adjustment: %s" % str(growth_features))
+
+	var setup := _synthetic_house_growth_observation()
+	setup.own_player["cash"] = 30
+	setup.own_player["employees"] = ["burger_cook", "campaign_manager"]
+	setup.own_player["inventory"] = {"burger": 3}
+	_set_observation_house_demand_count(setup, "house_near", "burger", 3)
+	var setup_score: Dictionary = StrategyScorerClass.score_macro(setup, growth_macro, growth_profile)
+	var setup_features: Dictionary = Dictionary(setup_score.get("features", {}))
+	if str(setup_features.get("strategy_context_id", "")) != "growth_setup":
+		return Result.failure("stable income before full growth readiness should expose growth_setup context: %s" % str(setup_features))
+	if not is_equal_approx(float(setup_features.get("phase_action_adjustment", 0.0)), -6.0):
+		return Result.failure("growth setup house action should receive configured delay penalty: %s" % str(setup_features))
+
+	var supply_ready_growth := _synthetic_house_growth_observation()
+	supply_ready_growth.own_player["cash"] = 50
+	supply_ready_growth.own_player["employees"] = ["burger_cook", "campaign_manager"]
+	supply_ready_growth.own_player["inventory"] = {}
+	_set_observation_house_demand_count(supply_ready_growth, "house_near", "burger", 5)
+	var supply_ready_score: Dictionary = StrategyScorerClass.score_macro(supply_ready_growth, growth_macro, growth_profile)
+	var supply_ready_features: Dictionary = Dictionary(supply_ready_score.get("features", {}))
+	if str(supply_ready_features.get("strategy_context_id", "")) != "growth_ready":
+		return Result.failure("supply-ready growth route should not be trapped in income_supply_gap context: %s" % str(supply_ready_features))
+	if not is_equal_approx(float(supply_ready_features.get("phase_action_adjustment", 0.0)), 14.0):
+		return Result.failure("supply-ready growth route should receive growth adjustment: %s" % str(supply_ready_features))
 
 	var recovery := _synthetic_house_growth_observation()
 	recovery.own_player["cash"] = 50
@@ -4281,6 +4345,32 @@ static func _test_house_placement_prefers_near_owned_restaurant(seed_val: int) -
 		return Result.failure("near house placement should expose close restaurant distance: %s" % str(features))
 	if float(features.get("house_placement_value", 0.0)) <= 0.0:
 		return Result.failure("near house placement should expose positive house_placement_value: %s" % str(features))
+	var garden_observation := _synthetic_house_growth_observation()
+	_set_observation_house_demand_count(garden_observation, "house_near", "burger", 4)
+	var garden_income_analysis := StrategyIncomeAnalyzerClass.analyze(garden_observation, profile)
+	var garden_payload: Dictionary = StrategyBoardAnalyzerClass.evaluate_garden_action(
+		garden_observation,
+		{"house_id": "house_near", "direction": "N"},
+		garden_income_analysis
+	)
+	var garden_payload_features: Dictionary = Dictionary(garden_payload.get("features", {}))
+	if float(garden_payload.get("value", 0.0)) <= 0.0:
+		return Result.failure("StrategyBoardAnalyzer garden action should expose positive value for serviceable demand: %s" % str(garden_payload))
+	if int(garden_payload_features.get("garden_revenue_delta_estimate", 0)) <= 0:
+		return Result.failure("garden action should expose positive revenue delta estimate: %s" % str(garden_payload_features))
+	if int(garden_payload_features.get("garden_cap_unlock_units", 0)) <= 0:
+		return Result.failure("garden action should expose demand-cap unlock when house exceeds normal cap: %s" % str(garden_payload_features))
+	var garden_macro := MacroAction.create(
+		"add_garden_to_demand_house",
+		[Command.create("add_garden", 0, {"house_id": "house_near", "direction": "N"})],
+		0.0,
+		["working", "add_garden"],
+		{}
+	)
+	var garden_score: Dictionary = StrategyScorerClass.score_macro(garden_observation, garden_macro, profile)
+	var garden_features: Dictionary = Dictionary(garden_score.get("features", {}))
+	if float(garden_features.get("garden_value", 0.0)) <= 0.0:
+		return Result.failure("StrategyScorer should include garden economic value: %s" % str(garden_features))
 	return Result.success()
 
 static func _test_payday_fire_prefers_low_income_employee(seed_val: int) -> Result:

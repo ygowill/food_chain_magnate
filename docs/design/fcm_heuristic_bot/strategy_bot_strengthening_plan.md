@@ -125,7 +125,7 @@ Candidate evidence:
 
 ### Step 5: Verification loop
 
-Status: pending.
+Status: implementation in progress.
 
 For each step:
 
@@ -133,6 +133,13 @@ For each step:
 - run compile and focused AI tests;
 - run small Strategy-only selfplay smoke when scoring behavior changes;
 - compare against `base_revenue_growth_v1` and do not accept changes that only improve one metric while hiding cash or failure regressions.
+
+Current implementation focus:
+
+- Treat the StrategyBot line as the product path, not a temporary bridge to StrategicBot.
+- Continue the stable-income expansion chain only when it can be explained by economic evidence.
+- Add direct economic scoring for expansion actions that currently rely too much on generic action weights, especially `add_garden`.
+- Prefer trace-visible features such as garden revenue delta, demand-cap unlock, sale-unit estimate, and owned-restaurant service distance over hidden constants.
 
 ## Current Progress
 
@@ -186,3 +193,48 @@ For each step:
   - Smoke summary: success `1.000`, avg round `8.000`, avg cash `[68.333, 63.667]`, `cash_min_after_first_positive_avg=[10.0, 10.0]`, opening positive cash avg `2.000`, no-positive-cash avg `0.000`, `produce_food=35`, search types `strategy=375`.
   - Residual watchpoint: action mix was unchanged in the small smoke and budget-expired rate rose slightly from Step 3's `0.048` to `0.059`; keep larger matrices focused on whether `growth_ready` actually converts stable income into useful expansion without search-cost drift.
   - Design-alignment result: Step 4 stayed within the StrategyBot profile/scoring layer and preserved opening/cash/supply behavior; growth bonuses only apply after existing economic readiness evidence, while recovery penalties keep immediate revenue repair ahead of expansion.
+- 2026-05-15: Step 5 longer verification found a growth-chain blocker:
+  - 10-seed round-12 strategy-only smoke passed stability (`matches=10`, `failures=0`, `timeouts=0`) and kept high average cash, but produced no `place_house` / `add_garden` actions.
+  - Root cause: `strategy_context_id` treated every actionable inventory gap as `income_supply_gap`, even when `StrategyRoutePlanner.house_growth_ready` said demand was supply-ready and cash/runway were sufficient.
+  - Implemented a correction so `income_supply_gap` means real shortage (`supply_blocked_actionable_demand > 0` or growth route not ready), while supply-ready high-cash states can enter `growth_ready`.
+  - Added a targeted StrategyBot test for supply-ready growth with current inventory gap so this does not regress.
+  - Design-alignment check before verification: the change narrows an over-broad context rather than weakening cash safety; recovery still outranks growth, and blocked demand still stays in `income_supply_gap`.
+- 2026-05-15: Step 5 follow-up found a second growth-chain blocker:
+  - After the context fix, the same 10-seed round-12 smoke still produced no `place_house` / `add_garden`, while traces showed the management/NBD chain could appear in reserve.
+  - Root cause: `StrategyStructurePlanner` intentionally damped generic employee value to avoid restructuring loops, but that also damped `placement_route_value`; this made reserve `new_business_developer` too easy to lose against ordinary structure upkeep once the bot had stable revenue.
+  - Implemented a narrower structure scoring correction: keep generic employee value damped, but move `placement_route_value` into full `structure_route_support_value` and expose `structure_placement_route_support_value`.
+  - Added a targeted StrategyBot test asserting ready reserve NBD keeps placement value as full route support.
+  - Design-alignment check before verification: this preserves the anti-cycle generic employee damping, applies only when the existing placement route already says economy/growth is ready, and keeps cash/supply/recovery gates ahead of expansion.
+- 2026-05-15: Step 5 follow-up found the structure fix alone was not enough:
+  - Repeat 10-seed round-12 smoke stayed stable (`matches=10`, `failures=0`, `timeouts=0`) but still produced no `place_house` / `add_garden`.
+  - Trace read: NBD appears only rarely and late; most games either stop at `management_trainee` in reserve or never enter the expansion employee chain before target round/game over.
+  - Root cause: the design waited until full `house_growth_ready` before valuing management trainee, but management trainee is only a preparation card and still needs a later train/structure cycle to become active NBD.
+  - Implemented `growth_setup`: when income is stable and growth space exists, StrategyBot can start the management-trainee prep chain before full expansion readiness; actual NBD training and board expansion still require the existing stronger readiness gates.
+  - Updated `base_revenue_growth_v1` with `growth_setup` stage adjustments and added targeted tests for management prep value, desired recruit count, and the new `growth_setup` context.
+  - Design-alignment check before verification: this does not raise `place_house` early; it only moves the long-lead expansion employee setup earlier after stable income, while keeping supply/recovery contexts ahead of growth.
+- 2026-05-15: Step 5 verification after `growth_setup` improved the chain but still exposed a board-scoring gap:
+  - `CheckCompile PASS files=1236`.
+  - `AllTests PASS passed=426/426 failed=[] total_ms=158420`.
+  - 10-seed round-12 strategy-only smoke stayed stable (`matches=10`, `failures=0`, `timeouts=0`) and produced `place_house=4`, but still produced `add_garden=0`.
+  - Trace read: NBD can now appear, but expansion actions are still sparse; `add_garden` has no direct StrategyBoardAnalyzer economic value, so it mostly relies on generic action weights and phase adjustment.
+  - Next implementation target: add trace-visible garden economic scoring based on current house demand, estimated sale units, unit-price revenue delta, demand-cap unlock, and owned-restaurant service distance.
+  - Design-alignment check before implementation: this keeps StrategyBot as the mainline and strengthens expansion through economic proof rather than arbitrary growth bonuses.
+- 2026-05-15: Implemented the next Step 5 draft:
+  - Added `StrategyBoardAnalyzer.evaluate_garden_action()` and wired `add_garden` into `StrategyScorer`.
+  - Garden scoring now exposes `garden_revenue_delta_estimate`, `garden_cap_unlock_units`, `garden_estimated_sale_units`, `garden_unit_price`, and `garden_nearest_restaurant_distance`.
+  - Added targeted StrategyBot coverage proving a serviceable, demand-heavy, no-garden house receives positive garden economic value.
+  - 10-seed round-12 smoke after garden scoring stayed stable but did not change action distribution (`place_house=4`, `add_garden=0`), proving the remaining bottleneck is upstream of garden action scoring.
+  - Trace/result read: management trainee is often held or trained into `luxury_manager`; actual `new_business_developer` appears too rarely before the round-12 target.
+  - Added a trace-visible management-trainee reserve adjustment in `StrategyTrainPlanner`: stable-income states with remaining house/garden space reserve management trainee for NBD instead of spending it on non-expansion training; explicit price-recovery demand can still allow price training.
+  - Design-alignment check before verification: this protects a long-lead expansion setup card after economic stability is proven, while preserving recovery-before-growth and avoiding early `place_house` / `add_garden` bonuses.
+- 2026-05-15: Follow-up on management-trainee protection:
+  - The first reserve adjustment reduced non-NBD training score but did not prevent `management_trainee -> luxury_manager`; the action still beat skipping in late-game traces.
+  - Tightened the rule into a StrategyScorer precondition: when `train_expansion_reserved_for_nbd` is true, non-NBD management-trainee training is ineligible (`strategy_precondition_failed=management_trainee_reserved_for_nbd`).
+  - Design-alignment check before verification: this is a structural route-preservation guard, not a broad score boost; price-recovery exceptions remain allowed.
+- 2026-05-15: Verified Step 5 train/garden draft:
+  - `AllTests PASS passed=426/426 failed=[] total_ms=159514`.
+  - Round-12 10-seed strategy-only smoke stayed stable: `matches=10`, `failures=0`, `timeouts=0`, `success=1.000`; action distribution remained `place_house=4`, `add_garden=0`.
+  - Trace confirmed the guard changed at least one late branch from `management_trainee -> luxury_manager` to `management_trainee -> new_business_developer`.
+  - Round-14 10-seed strategy-only smoke stayed stable: `matches=10`, `failures=0`, `timeouts=0`, `success=1.000`; `place_house` increased to `6`, while `add_garden` remained `0`.
+  - Safety metrics stayed acceptable: round-14 `cash_min_after_first_positive_avg=[10.3, 9.5]`, search `expired_rate=0.036`, avg cash `[222.0, 190.7]`.
+  - Design-alignment result: the change strengthens StrategyBot through stage-aware economic scoring and route-preservation guards, not StrategicBot rollouts; residual watchpoint is that `add_garden` now has scoring support but still needs real candidate opportunities to appear in selfplay.

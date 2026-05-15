@@ -9,8 +9,10 @@ const MarketingRegistryClass = preload("res://core/data/marketing_registry.gd")
 const MarketingRulesClass = preload("res://core/rules/marketing_rules.gd")
 const MapContextBuilderClass = preload("res://core/map/map_context_builder.gd")
 const MapUtilsClass = preload("res://core/map/map_utils.gd")
+const MilestoneEffectQueriesClass = preload("res://core/rules/milestone_effect_queries.gd")
 const NodeKeysClass = preload("res://core/map/road_graph/node_keys.gd")
 const PieceDefClass = preload("res://core/map/piece_def.gd")
+const PricingPipelineClass = preload("res://core/rules/pricing_pipeline.gd")
 const RestaurantPlacementClass = preload("res://core/map/placement_validator/restaurant_placement.gd")
 const RoadGraphCacheClass = preload("res://core/map/map_runtime/road_graph_cache.gd")
 const StructureDistanceClass = preload("res://core/map/map_runtime/structure_distance.gd")
@@ -89,6 +91,21 @@ static func evaluate_house_action(observation: ObservationState, params: Diction
 		"features": features,
 	}
 
+static func evaluate_garden_action(
+	observation: ObservationState,
+	params: Dictionary,
+	income_analysis: Dictionary = {},
+	source_state = null,
+	actor_id: int = -1
+) -> Dictionary:
+	var garden_payload := garden_value(observation, params, income_analysis, source_state, actor_id)
+	var features := {}
+	_append_garden_features(features, garden_payload)
+	return {
+		"value": float(garden_payload.get("value", 0.0)),
+		"features": features,
+	}
+
 static func house_placement_value(observation: ObservationState, params: Dictionary) -> Dictionary:
 	var anchor := _read_vector2i(params.get("position", Vector2i.ZERO))
 	var restaurant_distance := _nearest_distance_to_owned_restaurant_anchor(observation, anchor)
@@ -110,6 +127,73 @@ static func house_placement_value(observation: ObservationState, params: Diction
 		"nearest_restaurant_distance": restaurant_distance,
 		"nearest_existing_house_distance": existing_house_distance,
 	}
+
+static func garden_value(
+	observation: ObservationState,
+	params: Dictionary,
+	income_analysis: Dictionary = {},
+	source_state = null,
+	actor_id: int = -1
+) -> Dictionary:
+	var house_id := str(params.get("house_id", "")).strip_edges()
+	var out := _empty_garden_payload(house_id)
+	if observation == null or house_id.is_empty():
+		return out
+	var houses_val = observation.map_public.get("houses", {})
+	if not (houses_val is Dictionary):
+		return out
+	var houses: Dictionary = houses_val
+	var house_val = houses.get(house_id, null)
+	if not (house_val is Dictionary):
+		return out
+	var house: Dictionary = house_val
+	out["has_garden"] = bool(house.get("has_garden", false))
+	if bool(out.get("has_garden", false)):
+		return out
+
+	var demand_count := _house_demand_count(house)
+	var estimated_sale_units := _estimate_house_sale_units(house, income_analysis)
+	var normal_cap := _read_positive_int(observation.rules_public.get("demand_cap_normal", 3), 3)
+	var garden_cap := _read_positive_int(observation.rules_public.get("demand_cap_with_garden", 5), 5)
+	if garden_cap < normal_cap:
+		garden_cap = normal_cap
+	var capped_sale_units := mini(estimated_sale_units, normal_cap)
+	var cap_gain := maxi(0, garden_cap - normal_cap)
+	var cap_unlock_units := mini(cap_gain, maxi(0, demand_count - normal_cap))
+	var player_id := actor_id
+	if player_id < 0:
+		player_id = int(observation.viewer_player_id)
+	var price_payload := _current_unit_price_payload(observation, source_state, player_id)
+	var unit_price := maxi(0, int(price_payload.get("unit_price", 10)))
+	var revenue_delta := unit_price * capped_sale_units
+	var cap_value := float(cap_unlock_units * unit_price) * 0.35
+	if cap_unlock_units <= 0 and demand_count >= normal_cap and cap_gain > 0:
+		cap_value += float(cap_gain * unit_price) * 0.12
+	var service_distance := _min_house_distance_to_owned_restaurant(observation, house_id)
+	var service_value := 0.0
+	if service_distance < 0:
+		service_value = -12.0
+	elif service_distance <= IDEAL_SERVICE_DISTANCE:
+		service_value = 6.0 + float(IDEAL_SERVICE_DISTANCE - service_distance) * 1.5
+	else:
+		service_value = -minf(10.0, float(service_distance - IDEAL_SERVICE_DISTANCE) * 1.5)
+	var no_demand_penalty := -6.0 if demand_count <= 0 else 0.0
+	var value := float(revenue_delta) * 0.45 + cap_value + float(demand_count) * 1.2 + service_value + no_demand_penalty
+
+	out["value"] = value
+	out["demand_count"] = demand_count
+	out["estimated_sale_units"] = capped_sale_units
+	out["raw_estimated_sale_units"] = estimated_sale_units
+	out["unit_price"] = unit_price
+	out["unit_price_source"] = str(price_payload.get("source", "observation"))
+	out["revenue_delta_estimate"] = revenue_delta
+	out["demand_cap_normal"] = normal_cap
+	out["demand_cap_with_garden"] = garden_cap
+	out["cap_unlock_units"] = cap_unlock_units
+	out["cap_value"] = cap_value
+	out["service_distance"] = service_distance
+	out["service_value"] = service_value
+	return out
 
 static func restaurant_placement_value(
 	observation: ObservationState,
@@ -287,6 +371,23 @@ static func _append_house_features(features: Dictionary, house_payload: Dictiona
 	features["house_nearest_restaurant_distance"] = int(house_payload.get("nearest_restaurant_distance", -1))
 	features["house_nearest_existing_house_distance"] = int(house_payload.get("nearest_existing_house_distance", -1))
 	features["house_placement_value"] = float(house_payload.get("value", 0.0))
+
+static func _append_garden_features(features: Dictionary, garden_payload: Dictionary) -> void:
+	features["garden_house_id"] = str(garden_payload.get("house_id", ""))
+	features["garden_has_garden"] = bool(garden_payload.get("has_garden", false))
+	features["garden_house_demand_count"] = int(garden_payload.get("demand_count", 0))
+	features["garden_estimated_sale_units"] = int(garden_payload.get("estimated_sale_units", 0))
+	features["garden_raw_estimated_sale_units"] = int(garden_payload.get("raw_estimated_sale_units", 0))
+	features["garden_unit_price"] = int(garden_payload.get("unit_price", 0))
+	features["garden_unit_price_source"] = str(garden_payload.get("unit_price_source", "observation"))
+	features["garden_revenue_delta_estimate"] = int(garden_payload.get("revenue_delta_estimate", 0))
+	features["garden_demand_cap_normal"] = int(garden_payload.get("demand_cap_normal", 0))
+	features["garden_demand_cap_with_garden"] = int(garden_payload.get("demand_cap_with_garden", 0))
+	features["garden_cap_unlock_units"] = int(garden_payload.get("cap_unlock_units", 0))
+	features["garden_cap_value"] = float(garden_payload.get("cap_value", 0.0))
+	features["garden_nearest_restaurant_distance"] = int(garden_payload.get("service_distance", -1))
+	features["garden_service_value"] = float(garden_payload.get("service_value", 0.0))
+	features["garden_value"] = float(garden_payload.get("value", 0.0))
 
 static func _own_restaurant_count(observation: ObservationState) -> int:
 	if observation == null:
@@ -1191,11 +1292,136 @@ static func _empty_restaurant_payload(anchor: Vector2i) -> Dictionary:
 		"opening_edge_distance": -1,
 	}
 
+static func _empty_garden_payload(house_id: String) -> Dictionary:
+	return {
+		"house_id": house_id,
+		"has_garden": false,
+		"demand_count": 0,
+		"estimated_sale_units": 0,
+		"raw_estimated_sale_units": 0,
+		"unit_price": 0,
+		"unit_price_source": "observation",
+		"revenue_delta_estimate": 0,
+		"demand_cap_normal": 0,
+		"demand_cap_with_garden": 0,
+		"cap_unlock_units": 0,
+		"cap_value": 0.0,
+		"service_distance": -1,
+		"service_value": 0.0,
+		"value": 0.0,
+	}
+
 static func _house_demand_count(house: Dictionary) -> int:
 	var demands_val = house.get("demands", [])
 	if demands_val is Array:
 		return Array(demands_val).size()
 	return 0
+
+static func _house_demand_product_counts(house: Dictionary) -> Dictionary:
+	var out := {}
+	var demands_val = house.get("demands", [])
+	if not (demands_val is Array):
+		return out
+	for demand_val in Array(demands_val):
+		var product_id := _demand_product_id(demand_val)
+		if product_id.is_empty():
+			continue
+		out[product_id] = int(out.get(product_id, 0)) + 1
+	return out
+
+static func _demand_product_id(value) -> String:
+	if value is Dictionary:
+		var demand: Dictionary = value
+		var product_id := str(demand.get("product", demand.get("product_id", ""))).strip_edges()
+		return product_id
+	return str(value).strip_edges()
+
+static func _estimate_house_sale_units(house: Dictionary, income_analysis: Dictionary) -> int:
+	var demand_count := _house_demand_count(house)
+	if demand_count <= 0:
+		return 0
+	var product_counts := _house_demand_product_counts(house)
+	if product_counts.is_empty():
+		return demand_count if int(income_analysis.get("total_actionable_demand", 0)) > 0 else 0
+	var products: Dictionary = Dictionary(income_analysis.get("products", {}))
+	var estimated := 0
+	for product_id in _sorted_string_keys(product_counts):
+		var needed := int(product_counts.get(product_id, 0))
+		if needed <= 0:
+			continue
+		var product: Dictionary = Dictionary(products.get(product_id, {}))
+		if product.is_empty():
+			continue
+		var actionable := maxi(0, int(product.get("actionable_demand", product.get("serviceable_demand", 0))))
+		var inventory := maxi(0, int(product.get("inventory_units", 0)))
+		var can_supply := bool(product.get("can_supply", false))
+		var ready_units := inventory
+		if can_supply:
+			ready_units = maxi(ready_units, actionable)
+		if ready_units > 0:
+			estimated += needed
+	return mini(demand_count, estimated)
+
+static func _current_unit_price_payload(observation: ObservationState, source_state, player_id: int) -> Dictionary:
+	if source_state is GameState and player_id >= 0:
+		var pipeline_read := PricingPipelineClass.calculate_unit_price(source_state, player_id)
+		if pipeline_read.ok:
+			return {
+				"unit_price": int(pipeline_read.value),
+				"source": "pricing_pipeline",
+			}
+	return {
+		"unit_price": _fallback_current_unit_price(observation, player_id),
+		"source": "observation",
+	}
+
+static func _fallback_current_unit_price(observation: ObservationState, player_id: int) -> int:
+	if observation == null:
+		return 10
+	var unit_price := _read_positive_int(observation.rules_public.get("base_unit_price", 10), 10)
+	unit_price += _base_price_delta(observation)
+	unit_price += _price_modifier_total_from_round_state(observation.round_state_public, player_id)
+	return maxi(0, unit_price)
+
+static func _base_price_delta(observation: ObservationState) -> int:
+	if observation == null:
+		return 0
+	var milestones := _sorted_unique_strings(observation.own_player.get("milestones", []))
+	var delta_read := MilestoneEffectQueriesClass.sum_int_values(
+		milestones,
+		"base_price_delta",
+		"StrategyBoardAnalyzer: ",
+		"milestones"
+	)
+	if delta_read.ok:
+		return int(delta_read.value)
+	return 0
+
+static func _price_modifier_total_from_round_state(round_state: Dictionary, player_id: int) -> int:
+	if player_id < 0:
+		return 0
+	var modifiers_val = round_state.get("price_modifiers", {})
+	if not (modifiers_val is Dictionary):
+		return 0
+	var price_modifiers: Dictionary = modifiers_val
+	var player_modifiers_val = price_modifiers.get(player_id, price_modifiers.get(str(player_id), {}))
+	if not (player_modifiers_val is Dictionary):
+		return 0
+	var total := 0
+	for value in Dictionary(player_modifiers_val).values():
+		if value is int:
+			total += int(value)
+	return total
+
+static func _read_positive_int(value, fallback: int) -> int:
+	var out := fallback
+	if value is int:
+		out = int(value)
+	elif value is float:
+		out = int(value)
+	elif value is String and str(value).is_valid_int():
+		out = int(str(value))
+	return maxi(0, out)
 
 static func _min_house_distance_to_owned_restaurant(observation: ObservationState, house_id: String) -> int:
 	if observation == null or house_id.is_empty():

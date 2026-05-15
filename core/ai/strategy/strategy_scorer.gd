@@ -54,6 +54,9 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			var train_payload := StrategyTrainPlannerClass.evaluate_action(observation, command, profile, income_analysis)
 			_merge_features(features, Dictionary(train_payload.get("features", {})))
 			score += float(train_payload.get("value", 0.0))
+			if bool(features.get("train_expansion_reserved_for_nbd", false)):
+				strategy_precondition_failed = true
+				features["strategy_precondition_failed"] = "management_trainee_reserved_for_nbd"
 		"set_company_structure_direct", "set_company_structure_report", "restructure_employee":
 			var structure_payload := StrategyStructurePlannerClass.evaluate_action(observation, command, profile, income_analysis)
 			_merge_features(features, Dictionary(structure_payload.get("features", {})))
@@ -87,6 +90,16 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			var house_payload := StrategyBoardAnalyzerClass.evaluate_house_action(observation, command.params)
 			_merge_features(features, Dictionary(house_payload.get("features", {})))
 			score += float(house_payload.get("value", 0.0))
+		"add_garden":
+			var garden_payload := StrategyBoardAnalyzerClass.evaluate_garden_action(
+				observation,
+				command.params,
+				income_analysis,
+				options.get("source_state", null),
+				int(command.actor)
+			)
+			_merge_features(features, Dictionary(garden_payload.get("features", {})))
+			score += float(garden_payload.get("value", 0.0))
 		"place_restaurant", "move_restaurant":
 			var source_analysis := {}
 			var source_analysis_val = options.get("source_analysis", {})
@@ -179,16 +192,21 @@ static func _strategy_context_id(observation: ObservationState, income_analysis:
 		return "opening_needs_food_supply"
 	if not _owns_role(observation, "marketing"):
 		return "opening_needs_marketing"
-	if int(income_analysis.get("total_actionable_inventory_gap", income_analysis.get("total_inventory_gap", 0))) > 0:
+	var route_plan: Dictionary = StrategyRoutePlannerClass.analyze(observation, income_analysis, profile)
+	var actionable_inventory_gap := int(income_analysis.get("total_actionable_inventory_gap", income_analysis.get("total_inventory_gap", 0)))
+	var supply_blocked_demand := int(route_plan.get("supply_blocked_actionable_demand", 0))
+	var house_growth_ready := bool(route_plan.get("house_growth_ready", false))
+	if actionable_inventory_gap > 0 and (supply_blocked_demand > 0 or not house_growth_ready):
 		return "income_supply_gap"
 	var recovery_demand := int(income_analysis.get("total_lost_to_competitor_demand", 0)) \
 		+ int(income_analysis.get("total_price_recoverable_demand", 0)) \
 		+ int(income_analysis.get("total_own_sourced_opponent_blocking_demand", 0))
 	if recovery_demand > 0:
 		return "income_recovery"
-	var route_plan: Dictionary = StrategyRoutePlannerClass.analyze(observation, income_analysis, profile)
-	if bool(route_plan.get("house_growth_ready", false)):
+	if house_growth_ready:
 		return "growth_ready"
+	if bool(route_plan.get("stable_income_ready", false)) and bool(route_plan.get("house_growth_space", false)):
+		return "growth_setup"
 	return "balanced"
 
 static func _profile_phase_action_adjustment(profile, context_id: String, action_id: String) -> float:

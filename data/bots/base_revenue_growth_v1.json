@@ -166,6 +166,14 @@
       "place_restaurant": -6.0,
       "move_restaurant": -4.0
     },
+    "growth_setup": {
+      "recruit": 7.0,
+      "train": 6.0,
+      "set_company_structure_direct": 4.0,
+      "set_company_structure_report": 4.0,
+      "place_house": -6.0,
+      "add_garden": -6.0
+    },
     "growth_ready": {
       "place_house": 14.0,
       "add_garden": 12.0,

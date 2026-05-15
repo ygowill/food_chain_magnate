@@ -5,7 +5,10 @@ const EmployeeRegistryClass = preload("res://core/data/employee_registry.gd")
 const DrinkRouteAnalyzerClass = preload("res://core/ai/analysis/drink_route_analyzer.gd")
 const StrategyEmployeePlannerClass = preload("res://core/ai/strategy/strategy_employee_planner.gd")
 const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_income_analyzer.gd")
+const StrategyRoutePlannerClass = preload("res://core/ai/strategy/strategy_route_planner.gd")
 const StrategySupplyPlannerClass = preload("res://core/ai/strategy/strategy_supply_planner.gd")
+
+const MANAGEMENT_TRAINEE_EXPANSION_RESERVE_PENALTY := -32.0
 
 static func evaluate_action(observation: ObservationState, command: Command, profile, income_analysis: Dictionary) -> Dictionary:
 	var features := {}
@@ -21,17 +24,59 @@ static func evaluate_action(observation: ObservationState, command: Command, pro
 	var drink_route_upgrade_payload := drink_route_upgrade_value(observation, from_employee, to_employee, profile, income_analysis)
 	var drink_route_upgrade_value_total := float(drink_route_upgrade_payload.get("value", 0.0))
 	var drink_route_readiness_adjustment_value := drink_route_readiness_adjustment(to_employee, income_analysis)
-	var value: float = float(target_value.get("score", 0.0)) * 1.2 + maxf(0.0, float(profile.employee_priority(to_employee)) - float(profile.employee_priority(from_employee))) + placement_route_value + route_readiness_adjustment + capacity_upgrade_value_total + drink_route_upgrade_value_total + drink_route_readiness_adjustment_value
+	var expansion_reserve_payload := management_trainee_expansion_reserve_adjustment(observation, from_employee, to_employee, income_analysis)
+	var expansion_reserve_adjustment := float(expansion_reserve_payload.get("value", 0.0))
+	var value: float = float(target_value.get("score", 0.0)) * 1.2 + maxf(0.0, float(profile.employee_priority(to_employee)) - float(profile.employee_priority(from_employee))) + placement_route_value + route_readiness_adjustment + capacity_upgrade_value_total + drink_route_upgrade_value_total + drink_route_readiness_adjustment_value + expansion_reserve_adjustment
 	features["train_value"] = value
 	features["train_target_income_value"] = float(target_value.get("score", 0.0))
 	features["train_placement_route_value"] = placement_route_value
 	features["train_route_readiness_adjustment"] = route_readiness_adjustment
 	features["train_drink_route_readiness_adjustment"] = drink_route_readiness_adjustment_value
+	features["train_expansion_reserve_adjustment"] = expansion_reserve_adjustment
+	features["train_expansion_reserve_reason"] = str(expansion_reserve_payload.get("reason", ""))
+	features["train_expansion_reserved_for_nbd"] = bool(expansion_reserve_payload.get("reserved_for_nbd", false))
+	features["train_expansion_reserve_stable_income_ready"] = bool(expansion_reserve_payload.get("stable_income_ready", false))
+	features["train_expansion_reserve_house_growth_space"] = bool(expansion_reserve_payload.get("house_growth_space", false))
 	_append_drink_need_features(features, income_analysis)
 	_append_capacity_upgrade_features(features, capacity_upgrade_payload)
 	_append_drink_route_upgrade_features(features, drink_route_upgrade_payload)
 	features["train_target_products"] = Array(target_value.get("target_products", [])).duplicate()
 	return {"value": value, "features": features}
+
+static func management_trainee_expansion_reserve_adjustment(
+	observation: ObservationState,
+	from_employee: String,
+	to_employee: String,
+	income_analysis: Dictionary
+) -> Dictionary:
+	var out := {
+		"value": 0.0,
+		"reason": "",
+		"reserved_for_nbd": false,
+		"stable_income_ready": false,
+		"house_growth_space": false,
+	}
+	if observation == null or from_employee != "management_trainee" or to_employee == "new_business_developer":
+		return out
+	if _owns_any_employee(observation, ["new_business_developer"]):
+		return out
+	var route_plan: Dictionary = StrategyRoutePlannerClass.analyze(observation, income_analysis)
+	var stable_income_ready := bool(route_plan.get("stable_income_ready", false))
+	var house_growth_space := bool(route_plan.get("house_growth_space", false))
+	out["stable_income_ready"] = stable_income_ready
+	out["house_growth_space"] = house_growth_space
+	if not stable_income_ready or not house_growth_space:
+		return out
+	var recovery_demand := int(income_analysis.get("total_lost_to_competitor_demand", 0)) \
+		+ int(income_analysis.get("total_price_recoverable_demand", 0)) \
+		+ int(income_analysis.get("total_own_sourced_opponent_blocking_demand", 0))
+	if recovery_demand > 0 and _employee_role(to_employee) == "price":
+		out["reason"] = "price_recovery_allowed"
+		return out
+	out["value"] = MANAGEMENT_TRAINEE_EXPANSION_RESERVE_PENALTY
+	out["reason"] = "reserve_management_trainee_for_nbd"
+	out["reserved_for_nbd"] = true
+	return out
 
 static func capacity_upgrade_value(observation: ObservationState, from_employee: String, to_employee: String, profile, income_analysis: Dictionary) -> Dictionary:
 	var out := {
@@ -176,6 +221,22 @@ static func _employee_role(employee_id: String) -> String:
 	if def_val is EmployeeDef:
 		return str((def_val as EmployeeDef).role)
 	return ""
+
+static func _owns_any_employee(observation: ObservationState, employee_ids: Array[String]) -> bool:
+	if observation == null or employee_ids.is_empty():
+		return false
+	var wanted := {}
+	for employee_id in employee_ids:
+		if not employee_id.is_empty():
+			wanted[employee_id] = true
+	for key in ["employees", "reserve_employees", "busy_marketers"]:
+		var value = observation.own_player.get(key, [])
+		if not (value is Array):
+			continue
+		for employee_val in Array(value):
+			if wanted.has(str(employee_val)):
+				return true
+	return false
 
 static func _append_capacity_upgrade_features(features: Dictionary, payload: Dictionary) -> void:
 	features["train_capacity_upgrade_value"] = float(payload.get("value", 0.0))

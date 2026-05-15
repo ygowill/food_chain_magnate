@@ -2243,7 +2243,12 @@ static func _recruit_prior_with_route_plan(employee_id: String, observation: Obs
 			base = 2.8 if int(owned.get("marketing_trainee", 0)) <= 0 and not _owns_employee_role(observation.own_player, "marketing") else 0.25
 		"management_trainee":
 			if int(owned.get("new_business_developer", 0)) <= 0 and int(owned.get("management_trainee", 0)) <= 0:
-				base = 2.6 if bool(route_plan.get("house_growth_ready", false)) else 0.25
+				if bool(route_plan.get("house_growth_ready", false)):
+					base = 3.2
+				elif bool(route_plan.get("stable_income_ready", false)) and bool(route_plan.get("house_growth_space", false)):
+					base = 2.4
+				else:
+					base = 0.25
 			else:
 				base = 0.2
 		"pricing_manager":

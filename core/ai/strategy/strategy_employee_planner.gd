@@ -46,7 +46,9 @@ static func placement_route_value(observation: ObservationState, employee_id: St
 		if employee_id != "new_business_developer" or _has_active_placement_employee(observation):
 			return 0.0
 	var pressure := _house_growth_pressure(observation, income_analysis)
-	var economy_ready := _house_route_economy_ready(observation, income_analysis)
+	var route_plan := StrategyRoutePlannerClass.analyze(observation, income_analysis)
+	var economy_ready := bool(route_plan.get("house_growth_ready", false))
+	var setup_ready := bool(route_plan.get("stable_income_ready", false)) and bool(route_plan.get("house_growth_space", false))
 	match employee_id:
 		"new_business_developer":
 			if not economy_ready:
@@ -55,9 +57,11 @@ static func placement_route_value(observation: ObservationState, employee_id: St
 		"management_trainee":
 			if _owns_any_employee(observation, ["management_trainee", "new_business_developer"]):
 				return 0.0
-			if not economy_ready:
+			if economy_ready:
+				return 7.0 + pressure * 0.2
+			if not setup_ready:
 				return 0.0
-			return 7.0 + pressure * 0.2
+			return 4.0 + pressure * 0.15
 		"trainer":
 			if _owns_any_employee(observation, ["trainer", "new_business_developer"]):
 				return 0.0

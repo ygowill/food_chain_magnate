@@ -27,11 +27,14 @@ static func evaluate_action(observation: ObservationState, command: Command, pro
 	var waitress_route_value := float(waitress_route_payload.get("value", 0.0))
 	var activation_payload := activation_value(observation, employee_id, profile, income_analysis) if action_id != "restructure_employee" else {}
 	var activation_value_total := float(activation_payload.get("value", 0.0))
-	var structure_route_support_value := route_readiness_adjustment + drink_route_readiness_adjustment_value + price_route_value + waitress_route_value
+	var placement_route_value := float(employee_payload.get("placement_route_value", 0.0))
+	var structure_route_support_value := route_readiness_adjustment + drink_route_readiness_adjustment_value + price_route_value + waitress_route_value + placement_route_value
 	var structure_raw_value := employee_value + activation_value_total + structure_route_support_value
-	var structure_employee_weighted_value := employee_value * STRUCTURE_EMPLOYEE_VALUE_WEIGHT
+	var structure_employee_base_value := employee_value - placement_route_value
+	var structure_employee_weighted_value := structure_employee_base_value * STRUCTURE_EMPLOYEE_VALUE_WEIGHT
 	var structure_total_weighted_value := structure_employee_weighted_value + activation_value_total + structure_route_support_value
 	features["structure_employee_value"] = employee_value
+	features["structure_employee_base_value"] = structure_employee_base_value
 	features["structure_employee_weight"] = STRUCTURE_EMPLOYEE_VALUE_WEIGHT
 	features["structure_employee_weighted_value"] = structure_employee_weighted_value
 	features["structure_activation_value"] = activation_value_total
@@ -46,7 +49,8 @@ static func evaluate_action(observation: ObservationState, command: Command, pro
 	features["structure_drink_activation_action_values"] = Dictionary(activation_payload.get("drink_action_values", {})).duplicate()
 	features["structure_drink_activation_route_source_count"] = int(activation_payload.get("drink_route_source_count", 0))
 	features["structure_drink_activation_route_distance"] = int(activation_payload.get("drink_route_distance", -1))
-	features["structure_placement_route_value"] = float(employee_payload.get("placement_route_value", 0.0))
+	features["structure_placement_route_value"] = placement_route_value
+	features["structure_placement_route_support_value"] = placement_route_value
 	features["structure_route_support_value"] = structure_route_support_value
 	features["structure_raw_value"] = structure_raw_value
 	features["structure_total_weighted_value"] = structure_total_weighted_value
