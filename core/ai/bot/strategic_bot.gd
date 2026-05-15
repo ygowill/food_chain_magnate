@@ -334,9 +334,10 @@ func _choose_with_compared(
 	route_history: Array[String],
 	start_ms: int
 ) -> BotDecision:
+	var precomputed_fallback := fallback_bot.choose_command_with_engine(engine, observation, context, legal_action_ids, validate_command, budget)
 	var search_budget := _plan_search_budget(budget, int(options.get("strategic_min_search_budget_ms", DEFAULT_MIN_PLAN_SEARCH_MS)))
 	if budget != null and search_budget == null:
-		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, budget, "insufficient_plan_search_budget")
+		return _fallback_from_precomputed_or_reason(precomputed_fallback, engine, observation, context, legal_action_ids, validate_command, budget, "insufficient_plan_search_budget")
 	var compared_options := options.duplicate(true)
 	compared_options["route_history"] = route_history.duplicate(true)
 	var search_read := StrategicSearchClass.choose_plan_compared(
@@ -348,7 +349,7 @@ func _choose_with_compared(
 	)
 	if not search_read.ok:
 		var failure_payload: Dictionary = Dictionary(search_read.value) if search_read.value is Dictionary else {}
-		return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), search_read.error, failure_payload)
+		return _fallback_from_precomputed_or_reason(precomputed_fallback, engine, observation, context, legal_action_ids, validate_command, _final_decision_budget(budget), search_read.error, failure_payload)
 	var search_payload: Dictionary = search_read.value
 	var budget_profile := str(options.get("strategic_budget_profile", DEFAULT_BUDGET_PROFILE)).strip_edges()
 	var plan_val = search_payload.get("plan", null)
@@ -371,6 +372,39 @@ func _choose_with_compared(
 		false,
 		budget_profile
 	)
+
+func _fallback_from_precomputed_or_reason(
+	precomputed_fallback: BotDecision,
+	engine: GameEngine,
+	observation: ObservationState,
+	context: AiDecisionContext,
+	legal_action_ids: Array[String],
+	validate_command: Callable,
+	budget: TimeBudget,
+	reason: String,
+	failure_payload: Dictionary = {}
+) -> BotDecision:
+	var annotated := _annotate_precomputed_fallback(precomputed_fallback, reason, failure_payload)
+	if annotated != null and not annotated.is_failure():
+		return annotated
+	return _fallback_with_reason(engine, observation, context, legal_action_ids, validate_command, budget, reason, failure_payload)
+
+func _annotate_precomputed_fallback(
+	fallback: BotDecision,
+	reason: String,
+	failure_payload: Dictionary = {}
+) -> BotDecision:
+	if fallback == null or fallback.is_failure():
+		return fallback
+	fallback.trace["strategic_failure"] = reason
+	fallback.trace["strategic_fallback_source"] = "precomputed_strategy"
+	fallback.explanation["fallback"] = "strategy"
+	fallback.explanation["strategic_failure"] = reason
+	fallback.explanation["strategic_fallback_source"] = "precomputed_strategy"
+	if not failure_payload.is_empty():
+		fallback.trace["strategic_failure_payload"] = failure_payload.duplicate(true)
+		fallback.explanation["strategic_failure_payload"] = failure_payload.duplicate(true)
+	return fallback
 
 func _choose_with_mcts(
 	engine: GameEngine,

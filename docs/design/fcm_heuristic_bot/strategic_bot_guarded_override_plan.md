@@ -190,7 +190,7 @@ score =
 
 ### 2026-05-15 Step 12
 
-- Status: implemented, pending commit.
+- Status: committed.
 - Change target: analyze remaining fallback reasons after the longer matrices. Separate `no_strategic_legal_actions`, `no_plans_generated`, `no_plan_beat_baseline`, hard-gate blocks, and delta-below-threshold cases.
 - Required checks: inspect decision-detail payloads for at least one representative failing point per bucket; classify whether the root cause is missing plan generation, phase-local hinting, route proof, baseline equivalence, or genuinely unsafe strategy.
 - Diagnosis command: reran seed `12346` mixed as `./tools/run_bot_selfplay.sh --bots=strategy,strategic --profile=base_revenue_growth_v1 --players=2 --seed=12346 --matches=1 --target-round=12 --max-steps=2600 --budget-ms=360 --match-timeout-ms=300000 --trace-tail=2600 --trace-detail=decision --strategic-search=compared --strategic-min-search-budget-ms=120 --strategic-max-plans=6 --strategic-horizon-decisions=16 --strategic-rollout-step-budget-ms=48 --strategic-config-id=guarded_compared_step12_seed12346 --output-jsonl=res://.godot/guarded_compared_step12_seed12346_decision.jsonl`.
@@ -201,13 +201,39 @@ score =
 - Chosen Step 13 target: scoring/acceptance of already-validated evidence. Keep hard gates intact, but prevent route-only credit from clearing a compared strategic override for marketing once the player already has positive cash unless the compared rollout shows economic proof over baseline: cash/max-cash improvement, sold demand improvement, reduced lost-to-competitor demand, or reduced unsold demand. Opening cash-zero route setup and legal supply/restructuring progress should remain available when they still satisfy the existing guarded proof checks.
 - Design check: aligned. This targets the diagnosed over-trust in route proof; it does not broaden route hints, bypass action validation, lower `min_delta_score`, or relax hard gates.
 - Commit gate: satisfied for Step 12; diagnosis and the chosen implementation target are recorded here before code changes.
-- Commit: pending.
+- Commit: `docs(ai): diagnose guarded strategic r12 regression` (`be3b4ad7`).
 
 ### 2026-05-15 Step 13
 
-- Status: planned.
+- Status: ready for commit.
 - Change target: implement the smallest diagnosed improvement from Step 12. Candidate areas are route-specific plan generation, route proof extraction, or scoring of already-validated evidence. Hard-gate relaxation is explicitly out of scope unless a later document section proves a gate is logically wrong.
 - Required checks: add or update focused `StrategicGuardedOverrideTest` coverage for the new boundary, run `CheckCompile`, run `AllTests`, and rerun the same matrix/probe that exposed the issue.
 - Design check before implementation: every new strategic override must still be baseline-compared, phase-local, legal-command-backed, and explainable in trace payloads.
-- Commit gate: update this document with verification, matrix result, and design check before committing.
+- In-progress diagnosis: the first implementation only required economic proof for positive-cash `marketing_income` route credit. The r12 seed `12346` trace improved player 1 from the Step 12 `30` cash outcome to about `71-86`, but still lagged the pure StrategyBot baseline because a later `price_recovery` override at cash `15` cleared on route progress/training proof alone: cash, max cash, sold demand, lost-to-competitor demand, and unsold demand were all equal to baseline.
+- Adjusted implementation target: route-progress credit is available only when the compared rollout has economic proof over baseline, regardless of route type or current cash level. Cash-zero opening setup can still override only if the rollout already proves improved cash/max cash, sold demand, reduced lost demand, or reduced unsold demand.
+- Design check for adjustment: aligned. This narrows StrategicBot authority; it does not relax gates, does not lower the delta threshold, and does not let route-local proof override StrategyBot unless the rollout also shows a concrete economic advantage.
+- Additional diagnosis: even after narrowing route credit, seed `12346` still showed a large r12 gap with only one remaining strategic override. The underlying design flaw was fallback timing: compared search spent most of the parent budget before calling `StrategyBot` fallback, so a rejected plan could still degrade play by forcing the fallback decision to run with a starved final budget.
+- Fallback implementation target: precompute the current `StrategyBot` decision before compared search. If no plan proves itself, return that precomputed baseline decision with the compared failure payload attached, instead of recomputing fallback after search. This makes "fallback to StrategyBot" literal rather than just nominal.
+- Design check for fallback target: aligned. This preserves the tactical baseline, keeps plan search as an optional override only, and prevents failed strategic search from changing behavior through budget side effects.
+- Follow-up diagnosis: the `strategic,strategy` r12 seat-swap exposed seed `12347` as the remaining regression. Full trace showed cash-zero `marketing_income` overrides clearing on `first_billboard` and `first_burger_produced` route proof while cash, sold demand, lost demand, and unsold demand were unchanged. That invalidates the earlier cash-zero exception.
+- Follow-up target: remove the cash-zero exception entirely. Route proof is now a tie-break only after the compared rollout proves economic movement; opening marketing must reach concrete economic proof inside the rollout horizon before it can override `StrategyBot`.
+- Design check for follow-up: aligned. This directly enforces the design principle that the strategic layer may choose routes, but cannot spend the opening on route-shaped intent that has not yet beaten the tactical baseline.
+- Change: `StrategicBot` now precomputes the current `StrategyBot` decision before compared search and returns that decision on failed compared search, preserving the true tactical baseline. `StrategicSearch` route-progress delta credit now requires economic proof at every cash level. Compared summaries include `command_action_ids` for trace/debugging. Focused tests cover precomputed fallback preservation and the economic-proof route-credit boundary.
+- Verification: `CheckCompile PASS files=1236`; `AllTests PASS passed=426/426 failed=[] total_ms=154068`.
+- Matrix command: `./tools/run_bot_selfplay_matrix.sh --config=strategy --config=strategy,strategic --config=strategic,strategy --profile=base_revenue_growth_v1 --players=2 --seed=12345 --matches=3 --target-round=12 --max-steps=2600 --budget-ms=360 --match-timeout-ms=300000 --trace-tail=60 --strategic-search=compared --strategic-min-search-budget-ms=120 --strategic-max-plans=6 --strategic-horizon-decisions=16 --strategic-rollout-step-budget-ms=48 --strategic-config-id=guarded_compared_step13e_r12 --output-jsonl=res://.godot/guarded_compared_step13e_r12_allseats.jsonl --output-json=res://.godot/guarded_compared_step13e_r12_allseats_summary.json`.
+- Matrix result: `configs=3`, `matches=9`, `failures=0`, `timeouts=0`. Both mixed seat configurations were behavior-identical to pure `strategy`: `tuning_score_delta=0.000`, cash averages `[248.0,123.667]`, opening deltas all `0.000`, and `types=strategy=608` with `strategic_decision_count_avg_per_match=0.000`.
+- Design check before commit: aligned. Step 13 intentionally restores a no-harm baseline: failed strategic search cannot perturb the fallback, and route-shaped progress cannot override without economic proof. This is not the final strength improvement; it is the corrected guardrail required before adding positive StrategicBot-only plans.
+- Commit gate: satisfied for Step 13; verification and matrix result are recorded here before commit.
+- Commit: pending.
+
+### 2026-05-15 Step 14
+
+- Status: planned.
+- Change target: add true positive StrategicBot strength without relaxing Step 13 guardrails. The next work must generate/evaluate plans that can show economic proof inside the compared rollout horizon, rather than relying on route milestones.
+- Implementation plan:
+  - Extend plan generation/evaluation for only one narrow opening route first: marketing plus immediate supply/sale proof, with commands that can reach `cash_after`, `cash_max_seen`, `demand_sold`, `lost_to_competitor`, or `unsold_demand` improvement before the horizon ends.
+  - Add a deterministic fixture where StrategicBot beats baseline through economic proof, and a paired negative fixture where route proof without economic proof still falls back.
+  - Keep `strategic_min_delta_score`, hard gates, legal command validation, phase-local hints, and precomputed fallback unchanged.
+  - Rerun the same three-config r12 matrix and require StrategicBot's own seat cash to be non-negative versus same-seat pure StrategyBot before commit.
+- Design check before implementation: Step 14 may increase strategic decisions only when they produce measured economic proof. If it merely restores route-proof overrides or depends on starving the opponent through aggregate-score artifacts, it violates the design.
 - Commit: pending.

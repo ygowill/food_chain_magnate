@@ -449,6 +449,7 @@ static func _comparison_summary(plan, rollout: Dictionary, eval_payload: Diction
 		"route_transition_bonus": float(breakdown.get("route_transition_bonus", 0.0)),
 		"route_stalled": bool(telemetry.get("route_stalled", false)),
 		"command_count": commands.size(),
+		"command_action_ids": _command_action_ids(commands),
 		"restructuring_edit_count": _count_actions(commands, ["restructure_employee", "set_company_structure_direct", "set_company_structure_report"]),
 	}
 
@@ -508,11 +509,26 @@ static func _route_progress_delta_score(plan, summary: Dictionary, baseline: Dic
 	var transition_delta := maxf(0.0, float(summary.get("route_transition_bonus", 0.0)) - float(baseline.get("route_transition_bonus", 0.0)))
 	if progress_delta <= 0.0 and completion_delta <= 0.0 and transition_delta <= 0.0:
 		return 0.0
+	if not _has_economic_proof(summary, baseline):
+		return 0.0
 	var score := minf(6.0, float(route_action_delta) * 6.0)
 	score += minf(4.0, progress_delta * 0.5)
 	score += minf(4.0, completion_delta * 0.25)
 	score += minf(3.0, transition_delta * 0.5)
 	return minf(DEFAULT_COMPARED_MIN_DELTA_SCORE, score)
+
+static func _has_economic_proof(summary: Dictionary, baseline: Dictionary) -> bool:
+	if int(summary.get("cash_after", 0)) > int(baseline.get("cash_after", 0)):
+		return true
+	if int(summary.get("cash_max_seen", 0)) > int(baseline.get("cash_max_seen", 0)):
+		return true
+	if int(summary.get("demand_sold", 0)) > int(baseline.get("demand_sold", 0)):
+		return true
+	if int(summary.get("lost_to_competitor", 0)) < int(baseline.get("lost_to_competitor", 0)):
+		return true
+	if int(summary.get("unsold_demand", 0)) < int(baseline.get("unsold_demand", 0)):
+		return true
+	return false
 
 static func _route_specific_delta(plan, summary: Dictionary, baseline: Dictionary) -> float:
 	var gained := _string_array(summary.get("milestones_gained", []))
@@ -552,6 +568,17 @@ static func _count_actions(commands: Array, action_ids: Array[String]) -> int:
 		if action_ids.has(action_id):
 			count += 1
 	return count
+
+static func _command_action_ids(commands: Array) -> Array[String]:
+	var out: Array[String] = []
+	for item_val in commands:
+		if not (item_val is Dictionary):
+			continue
+		var action_id := str(Dictionary(item_val).get("action_id", "")).strip_edges()
+		if action_id.is_empty():
+			continue
+		out.append(action_id)
+	return out
 
 static func _string_array(value) -> Array[String]:
 	var out: Array[String] = []

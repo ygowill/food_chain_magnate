@@ -83,6 +83,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var actionable_guard := _test_strategic_search_filters_stalled_routes()
 	if not actionable_guard.ok:
 		return actionable_guard
+	var route_credit_guard := _test_compared_route_credit_requires_economic_proof()
+	if not route_credit_guard.ok:
+		return route_credit_guard
 	var search_cost := _test_evaluator_search_cost_is_trace_only(seed_val)
 	if not search_cost.ok:
 		return search_cost
@@ -104,7 +107,7 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var mcts_mode := _test_strategic_bot_mcts_mode(seed_val)
 	if not mcts_mode.ok:
 		return mcts_mode
-	return Result.success({"cases": 27})
+	return Result.success({"cases": 28})
 
 static func _test_plan_and_hints_roundtrip() -> Result:
 	var plan = StrategicPlanClass.create(
@@ -1418,6 +1421,102 @@ static func _test_evaluator_search_cost_is_trace_only(seed_val: int) -> Result:
 	var breakdown_b: Dictionary = Dictionary(Dictionary(eval_b.value).get("breakdown", {}))
 	if is_equal_approx(float(breakdown_a.get("search_cost_penalty", 0.0)), float(breakdown_b.get("search_cost_penalty", 0.0))):
 		return Result.failure("search cost penalty trace should still reflect elapsed search time: %s vs %s" % [str(breakdown_a), str(breakdown_b)])
+	return Result.success()
+
+static func _test_compared_route_credit_requires_economic_proof() -> Result:
+	var plan = StrategicPlanClass.create(
+		"marketing_income_burger",
+		0,
+		"marketing_income",
+		10.0,
+		["burger"],
+		[],
+		["marketing_trainee"],
+		{},
+		["marketing"],
+		1,
+		1,
+		["initiate_marketing", "produce_food"]
+	)
+	var baseline := {
+		"cash_before": 10,
+		"cash_after": 10,
+		"cash_max_seen": 10,
+		"demand_sold": 0,
+		"lost_to_competitor": 1,
+		"unsold_demand": 1,
+		"route_action_count": 0,
+		"route_progress_bonus": 0.0,
+		"route_completion_bonus": 0.0,
+		"route_transition_bonus": 0.0,
+		"command_action_ids": [],
+	}
+	var route_only := baseline.duplicate(true)
+	route_only["route_action_count"] = 1
+	route_only["route_progress_bonus"] = 6.2
+	route_only["route_completion_bonus"] = 12.0
+	route_only["route_transition_bonus"] = 4.5
+	route_only["command_action_ids"] = ["initiate_marketing"]
+	var route_only_score := StrategicSearchClass._route_progress_delta_score(plan, route_only, baseline)
+	if not is_zero_approx(route_only_score):
+		return Result.failure("positive-cash marketing route-only credit should require economic proof: %f" % route_only_score)
+
+	var early_baseline := baseline.duplicate(true)
+	early_baseline["cash_before"] = 0
+	early_baseline["cash_after"] = 0
+	early_baseline["cash_max_seen"] = 0
+	var early_route := route_only.duplicate(true)
+	early_route["cash_before"] = 0
+	early_route["cash_after"] = 0
+	early_route["cash_max_seen"] = 0
+	var early_score := StrategicSearchClass._route_progress_delta_score(plan, early_route, early_baseline)
+	if not is_zero_approx(early_score):
+		return Result.failure("cash-zero route-only setup should still require economic proof: %f" % early_score)
+
+	var early_cash_route := early_route.duplicate(true)
+	early_cash_route["cash_after"] = 10
+	early_cash_route["cash_max_seen"] = 10
+	var early_cash_score := StrategicSearchClass._route_progress_delta_score(plan, early_cash_route, early_baseline)
+	if early_cash_score <= 0.0:
+		return Result.failure("cash-zero route with cash proof should receive route credit: %f" % early_cash_score)
+
+	var sold_route := route_only.duplicate(true)
+	sold_route["demand_sold"] = 1
+	var sold_score := StrategicSearchClass._route_progress_delta_score(plan, sold_route, baseline)
+	if sold_score <= 0.0:
+		return Result.failure("marketing route with demand sold proof should receive route credit: %f" % sold_score)
+
+	var supply_route := route_only.duplicate(true)
+	supply_route["command_action_ids"] = ["produce_food"]
+	var supply_score := StrategicSearchClass._route_progress_delta_score(plan, supply_route, baseline)
+	if not is_zero_approx(supply_score):
+		return Result.failure("positive-cash marketing supply route-only credit should also require economic proof: %f" % supply_score)
+
+	var price_plan = StrategicPlanClass.create(
+		"price_recovery_burger",
+		0,
+		"price_recovery",
+		10.0,
+		["burger"],
+		[],
+		["pricing_manager"],
+		{},
+		["price"],
+		1,
+		1,
+		["set_price"]
+	)
+	var price_route := route_only.duplicate(true)
+	price_route["command_action_ids"] = ["set_company_structure_direct"]
+	var price_score := StrategicSearchClass._route_progress_delta_score(price_plan, price_route, baseline)
+	if not is_zero_approx(price_score):
+		return Result.failure("positive-cash price route-only credit should also require economic proof: %f" % price_score)
+
+	var price_cash_route := price_route.duplicate(true)
+	price_cash_route["cash_after"] = 20
+	var price_cash_score := StrategicSearchClass._route_progress_delta_score(price_plan, price_cash_route, baseline)
+	if price_cash_score <= 0.0:
+		return Result.failure("positive-cash price route with economic proof should receive route credit: %f" % price_cash_score)
 	return Result.success()
 
 static func _test_strategic_mcts_transposition_registry_prunes_lower_or_equal_paths(seed_val: int) -> Result:

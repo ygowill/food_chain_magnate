@@ -5,8 +5,11 @@ const StrategicPlanClass = preload("res://core/ai/planning/strategic_plan.gd")
 const StrategicPlanHintsClass = preload("res://core/ai/planning/strategic_plan_hints.gd")
 const StrategicPlanEvaluatorClass = preload("res://core/ai/planning/strategic_plan_evaluator.gd")
 const StrategicSearchClass = preload("res://core/ai/planning/strategic_search.gd")
+const StrategicBotClass = preload("res://core/ai/bot/strategic_bot.gd")
 const StrategyScorerClass = preload("res://core/ai/strategy/strategy_scorer.gd")
 const MacroActionClass = preload("res://core/ai/candidates/macro_action.gd")
+const CommandClass = preload("res://core/types/command.gd")
+const BotDecisionClass = preload("res://core/ai/bot/bot_decision.gd")
 
 static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var low_cash := _test_low_cash_blocks_non_marketing_override()
@@ -39,10 +42,13 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var child_budget := _test_compared_rollout_budget_uses_child_budget()
 	if not child_budget.ok:
 		return child_budget
+	var precomputed_fallback := _test_compared_fallback_reuses_precomputed_strategy_decision()
+	if not precomputed_fallback.ok:
+		return precomputed_fallback
 	var scorer := _test_directive_hint_bonus_is_local_and_capped()
 	if not scorer.ok:
 		return scorer
-	return Result.success({"cases": 11})
+	return Result.success({"cases": 12})
 
 static func _test_low_cash_blocks_non_marketing_override() -> Result:
 	var plan = StrategicPlanClass.create(
@@ -281,6 +287,7 @@ static func _test_guarded_route_progress_can_clear_delta() -> Result:
 		"cash_before": 0,
 		"cash_after": 0,
 		"cash_max_seen": 0,
+		"demand_sold": 1,
 		"route_action_count": 1,
 		"route_progress_bonus": 7.2,
 		"route_completion_bonus": 12.0,
@@ -296,6 +303,7 @@ static func _test_guarded_route_progress_can_clear_delta() -> Result:
 		"cash_before": 0,
 		"cash_after": 0,
 		"cash_max_seen": 0,
+		"demand_sold": 1,
 		"route_action_count": 0,
 		"route_progress_bonus": 7.2,
 		"route_completion_bonus": 12.0,
@@ -323,6 +331,41 @@ static func _test_compared_rollout_budget_uses_child_budget() -> Result:
 	var child_remaining := int(child_budget.remaining_ms())
 	if child_remaining <= 0 or child_remaining > rollout_budget_ms:
 		return Result.failure("child budget remaining should be bounded by rollout budget, got %d of %d" % [child_remaining, rollout_budget_ms])
+	return Result.success()
+
+static func _test_compared_fallback_reuses_precomputed_strategy_decision() -> Result:
+	var bot := StrategicBotClass.new()
+	var command := CommandClass.create("produce_food", 0, {"food_type": "burger"})
+	var fallback := BotDecisionClass.create(
+		command,
+		"produce_burger",
+		42.0,
+		{"search": "strategy"},
+		{"search": "strategy", "bot": "StrategyBot"}
+	)
+	var payload := {
+		"hard_gate_failures": {"delta_below_threshold": 1},
+		"time_ms": 123,
+	}
+	var annotated := bot._annotate_precomputed_fallback(
+		fallback,
+		"StrategicSearch.choose_plan_compared: no plan beat baseline gates={ \"delta_below_threshold\": 1 }",
+		payload
+	)
+	if annotated == null or annotated.is_failure():
+		return Result.failure("precomputed StrategyBot fallback should remain usable")
+	if annotated.command != command:
+		return Result.failure("precomputed StrategyBot fallback should preserve the original command")
+	if str(annotated.trace.get("search", "")) != "strategy":
+		return Result.failure("precomputed StrategyBot fallback should remain counted as strategy search: %s" % str(annotated.trace))
+	if str(annotated.trace.get("strategic_fallback_source", "")) != "precomputed_strategy":
+		return Result.failure("precomputed StrategyBot fallback should expose its source: %s" % str(annotated.trace))
+	if str(annotated.trace.get("strategic_failure", "")).find("choose_plan_compared") < 0:
+		return Result.failure("precomputed StrategyBot fallback should preserve compared failure reason: %s" % str(annotated.trace))
+	if not (annotated.trace.get("strategic_failure_payload", null) is Dictionary):
+		return Result.failure("precomputed StrategyBot fallback should keep compared failure payload: %s" % str(annotated.trace))
+	if str(annotated.explanation.get("fallback", "")) != "strategy":
+		return Result.failure("precomputed StrategyBot fallback should explain fallback strategy: %s" % str(annotated.explanation))
 	return Result.success()
 
 static func _test_directive_hint_bonus_is_local_and_capped() -> Result:
