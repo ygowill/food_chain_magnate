@@ -138,7 +138,7 @@ score =
 
 ### 2026-05-15 Step 7
 
-- Status: implemented, pending commit.
+- Status: committed.
 - Change: made Restructuring usable by guarded plans without leaking route-wide hints. If no route execution action is legal yet, `StrategyPlanHints` emits a current-phase directive for route-relevant structure edits only, while preserving the full route only as trace metadata. `StrategicPlanEvaluator` counts structure edits as route progress only when the edited employee id or role matches the plan route targets.
 - Change: surfaced compared-search failure payloads through `StrategicBot` fallback trace/explanation, so a safe fallback now records candidate count, evaluated plans, hard-gate failures, baseline summary, and elapsed search time.
 - Design check: aligned. This does not weaken hard gates, lower the delta threshold, or allow `submit_restructuring` to masquerade as route execution. Preparatory structure progress must still be produced by validated commands and must match the plan's target employees/roles.
@@ -149,7 +149,7 @@ score =
 
 ### 2026-05-15 Step 8
 
-- Status: implemented, pending commit.
+- Status: committed.
 - Change: made compared search budget-fair. Baseline and each candidate plan now receive a fresh child rollout budget capped by the remaining parent search budget, instead of sharing one absolute `TimeBudget` instance where the baseline can consume the whole deadline before candidates are evaluated. Failure/success payloads now include `compared_rollout_budget_ms`.
 - Design check: aligned. This preserves the same hard gates and delta threshold, keeps total search bounded by the parent budget, and makes the baseline comparison meaningful before any scoring changes are considered.
 - Verification: `CheckCompile PASS files=1236`; `AllTests PASS passed=426/426 failed=[] total_ms=151420`; `StrategicGuardedOverrideTest` now includes a child-budget regression case.
@@ -159,10 +159,45 @@ score =
 
 ### 2026-05-15 Step 9
 
-- Status: implemented, pending commit.
+- Status: committed.
 - Change: let compared delta scoring recognize guarded route proof. Compared summaries now carry `route_progress_bonus`, `route_completion_bonus`, and `route_transition_bonus`; delta scoring adds a bounded route-progress credit only when route action count improves over baseline and at least one of those evaluator proof signals is positive.
 - Design check: aligned. This is not a hard-gate relaxation: cash, salary, opponent-loss, route-stall, unsupplied-demand, and restructuring-risk gates still block unsafe plans. The first test run caught an over-broad version where bare `route_action_count` could lift a weak cash plan; the final version requires both route action progress and positive route proof.
 - Verification: `CheckCompile PASS files=1236`; `AllTests PASS passed=426/426 failed=[] total_ms=152862`; `StrategicGuardedOverrideTest` now covers both sides of the scoring boundary: weak cash plus bare route action stays below threshold, while guarded route action plus positive progress/completion can clear it.
 - Probe: low-budget `target_round=4`, `budget_ms=360`, `strategic_min_search_budget_ms=120` finished without failures/timeouts and recorded `search_type_counts={"strategic":2,"strategy":38}`. Both strategic decisions were `marketing_income_burger` with hard gate passed and route proof present (`progress=7.2/completion=12` for `initiate_marketing`; `progress=12.6/completion=14` for `produce_food`).
 - Probe: high-budget `target_round=4`, `budget_ms=1800` finished without failures/timeouts and produced 4 guarded strategic decisions before the final tightening; the remaining low-budget retest after tightening confirms the credit still works without bare-action false positives.
 - Commit: `feat(ai): score guarded strategic route progress` (`cabaff65`).
+
+### 2026-05-15 Step 10
+
+- Status: implemented, pending commit.
+- Change target: normalize this progress document so committed work and future plan are unambiguous. Add the next execution sequence before changing runtime behavior.
+- Design check: aligned. This is a documentation-only correction and planning step; it prevents implementation drift by making the next checks explicit.
+- Verification: document-only change; no runtime test required. Diff review confirmed only this progress document changed for Step 10.
+- Commit: pending.
+
+### 2026-05-15 Step 11
+
+- Status: planned.
+- Change target: run guarded StrategicBot against StrategyBot on longer smoke matrices after Step 9. Use the same guarded compared path, compare `strategy` vs `strategy,strategic`, and record whether strategic decisions remain safe beyond the r4 probe.
+- Required checks: target at least r8 and r12 probes with fixed seed ranges; capture `search_type_counts`, `strategic_failure_counts`, cash/first-cash/food-delay metrics, failures, timeouts, and whether guarded strategic improves or regresses the baseline.
+- Design check before implementation: do not tune thresholds from a single trace. If the matrix shows regressions, diagnose first; if it shows no strategic decisions, inspect payloads before adding features.
+- Commit gate: update this document with exact commands and results before committing.
+- Commit: pending.
+
+### 2026-05-15 Step 12
+
+- Status: planned.
+- Change target: analyze remaining fallback reasons after the longer matrices. Separate `no_strategic_legal_actions`, `no_plans_generated`, `no_plan_beat_baseline`, hard-gate blocks, and delta-below-threshold cases.
+- Required checks: inspect decision-detail payloads for at least one representative failing point per bucket; classify whether the root cause is missing plan generation, phase-local hinting, route proof, baseline equivalence, or genuinely unsafe strategy.
+- Design check before implementation: the fix must target the diagnosed bucket and must not broaden route hints, bypass validation, or reduce hard-gate protection.
+- Commit gate: save the diagnosis and chosen next implementation target here before committing any code.
+- Commit: pending.
+
+### 2026-05-15 Step 13
+
+- Status: planned.
+- Change target: implement the smallest diagnosed improvement from Step 12. Candidate areas are route-specific plan generation, route proof extraction, or scoring of already-validated evidence. Hard-gate relaxation is explicitly out of scope unless a later document section proves a gate is logically wrong.
+- Required checks: add or update focused `StrategicGuardedOverrideTest` coverage for the new boundary, run `CheckCompile`, run `AllTests`, and rerun the same matrix/probe that exposed the issue.
+- Design check before implementation: every new strategic override must still be baseline-compared, phase-local, legal-command-backed, and explainable in trace payloads.
+- Commit gate: update this document with verification, matrix result, and design check before committing.
+- Commit: pending.
