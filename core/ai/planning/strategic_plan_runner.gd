@@ -58,9 +58,6 @@ static func rollout(
 	var start_ms := Time.get_ticks_msec()
 	var step_budget_ms := maxi(1, int(options.get("step_budget_ms", 40)))
 	for decision_index in range(horizon_decisions):
-		if budget != null and budget.expired():
-			stop_reason = "budget_expired"
-			break
 		state = engine.get_state()
 		if state == null:
 			stop_reason = "state_missing"
@@ -73,6 +70,9 @@ static func rollout(
 			break
 		if decision_index > 0 and _is_payday_or_cleanup_boundary(state):
 			stop_reason = "phase_boundary"
+			break
+		if budget != null and budget.expired():
+			stop_reason = "budget_expired"
 			break
 		var actor := BotControllerClass.resolve_next_player_id(engine)
 		if actor < 0:
