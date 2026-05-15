@@ -246,4 +246,6 @@ score =
 - Point 14A verification: `CheckCompile PASS files=1236`; `AllTests PASS passed=426/426 failed=[] total_ms=153893`.
 - Point 14A post-fix probe: reran the same seed/config as `guarded_compared_step14a_postfix_p0_seed12345`. Result: `search_type_counts={"strategy":119}`, `strategic_failure_counts={"insufficient_plan_search_budget":1,"no_plan_beat_baseline":33,"no_plans_generated":4,"no_strategic_legal_actions":22}`, final cash `[95,15]`, and hard-gate failure totals included `candidate_rollout_budget_expired=33` and `baseline_rollout_budget_expired=33`. The previous budget-expired pseudo-strategic decision no longer passes.
 - Design check before 14A commit: aligned. This is a guardrail fix required before adding positive strength; it reduces false positives and keeps Step 14's true-positive work pending.
-- Commit: pending.
+- Point 14A commit: `fix(ai): reject budget-expired strategic rollouts` (`c3f81dc8`).
+- Point 14B target: add the first true-positive StrategicBot route only after the compared baseline and candidate can both complete a comparable rollout boundary. The next implementation must focus on making one narrow marketing/supply/sale proof path finish inside the rollout budget or on constructing a deterministic fixture with complete non-budget-expired rollouts; it must not restore budget-expired proof or route-only proof.
+- Commit: pending for 14B.
