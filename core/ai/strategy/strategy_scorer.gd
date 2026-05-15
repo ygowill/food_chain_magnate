@@ -7,6 +7,7 @@ const StrategyCashPlannerClass = preload("res://core/ai/strategy/strategy_cash_p
 const StrategyIncomeAnalyzerClass = preload("res://core/ai/strategy/strategy_income_analyzer.gd")
 const StrategyMarketingPlannerClass = preload("res://core/ai/strategy/strategy_marketing_planner.gd")
 const StrategyRecruitPlannerClass = preload("res://core/ai/strategy/strategy_recruit_planner.gd")
+const StrategyRoutePlannerClass = preload("res://core/ai/strategy/strategy_route_planner.gd")
 const StrategySetupPlannerClass = preload("res://core/ai/strategy/strategy_setup_planner.gd")
 const StrategyStructurePlannerClass = preload("res://core/ai/strategy/strategy_structure_planner.gd")
 const StrategySupportPlannerClass = preload("res://core/ai/strategy/strategy_support_planner.gd")
@@ -40,6 +41,9 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 	}
 	var score := float(features["action_weight"]) + float(macro.prior_score)
 	var strategy_precondition_failed := false
+	var phase_adjustment_payload := _phase_action_adjustment_payload(observation, action_id, profile, income_analysis)
+	_merge_features(features, Dictionary(phase_adjustment_payload.get("features", {})))
+	score += float(phase_adjustment_payload.get("value", 0.0))
 
 	match action_id:
 		"recruit":
@@ -148,6 +152,81 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 static func _merge_features(target: Dictionary, source: Dictionary) -> void:
 	for key in source.keys():
 		target[key] = source[key]
+
+static func _phase_action_adjustment_payload(observation: ObservationState, action_id: String, profile, income_analysis: Dictionary) -> Dictionary:
+	var context_id := _strategy_context_id(observation, income_analysis, profile)
+	var adjustment := _profile_phase_action_adjustment(profile, context_id, action_id)
+	var features := {
+		"strategy_context_id": context_id,
+	}
+	if not is_equal_approx(adjustment, 0.0):
+		features["phase_action_adjustment"] = adjustment
+	return {
+		"value": adjustment,
+		"features": features,
+	}
+
+static func _strategy_context_id(observation: ObservationState, income_analysis: Dictionary, profile) -> String:
+	if observation == null:
+		return "unknown"
+	var payday := StrategyCashPlannerClass.payday_cash_snapshot(observation)
+	if int(payday.get("shortfall", 0)) > 0:
+		return "cash_shortfall"
+	var own_restaurants := _own_restaurant_count(observation)
+	if own_restaurants <= 0:
+		return "opening_needs_restaurant"
+	if not bool(income_analysis.get("has_food_supply", false)):
+		return "opening_needs_food_supply"
+	if not _owns_role(observation, "marketing"):
+		return "opening_needs_marketing"
+	if int(income_analysis.get("total_actionable_inventory_gap", income_analysis.get("total_inventory_gap", 0))) > 0:
+		return "income_supply_gap"
+	var recovery_demand := int(income_analysis.get("total_lost_to_competitor_demand", 0)) \
+		+ int(income_analysis.get("total_price_recoverable_demand", 0)) \
+		+ int(income_analysis.get("total_own_sourced_opponent_blocking_demand", 0))
+	if recovery_demand > 0:
+		return "income_recovery"
+	var route_plan: Dictionary = StrategyRoutePlannerClass.analyze(observation, income_analysis, profile)
+	if bool(route_plan.get("house_growth_ready", false)):
+		return "growth_ready"
+	return "balanced"
+
+static func _profile_phase_action_adjustment(profile, context_id: String, action_id: String) -> float:
+	if profile == null or not profile.has_method("phase_action_adjustment"):
+		return 0.0
+	return float(profile.phase_action_adjustment(context_id, action_id, 0.0))
+
+static func _own_restaurant_count(observation: ObservationState) -> int:
+	if observation == null:
+		return 0
+	var restaurants_val = observation.own_player.get("restaurants", [])
+	if restaurants_val is Array:
+		return Array(restaurants_val).size()
+	return 0
+
+static func _owns_role(observation: ObservationState, role: String) -> bool:
+	if observation == null or role.is_empty() or not EmployeeRegistryClass.is_loaded():
+		return false
+	for employee_id in _owned_employee_ids(observation.own_player):
+		if not EmployeeRegistryClass.has(employee_id):
+			continue
+		var def_val = EmployeeRegistryClass.get_def(employee_id)
+		if def_val is EmployeeDef and str((def_val as EmployeeDef).role) == role:
+			return true
+	return false
+
+static func _owned_employee_ids(player: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for key in ["employees", "reserve_employees", "busy_marketers"]:
+		var employees_val = player.get(key, [])
+		if not (employees_val is Array):
+			continue
+		for employee_val in Array(employees_val):
+			var employee_id := str(employee_val)
+			if not employee_id.is_empty() and not out.has(employee_id):
+				out.append(employee_id)
+	out.sort()
+	return out
 
 static func _affected_house_ids(macro: MacroAction) -> Array[String]:
 	var out: Array[String] = []

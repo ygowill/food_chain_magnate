@@ -47,6 +47,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var profile_load := _test_strategy_profile_loads_data_config()
 	if not profile_load.ok:
 		return profile_load
+	var profile_weights := _test_strategy_profile_weights_and_phase_adjustments()
+	if not profile_weights.ok:
+		return profile_weights
 	var phase_planner := _test_phase_planner_classifies_strategy_context(seed_val)
 	if not phase_planner.ok:
 		return phase_planner
@@ -315,6 +318,10 @@ static func _test_strategy_profile_loads_data_config() -> Result:
 		return Result.failure("StrategyProfile loaded wrong milestone effect weight: %s" % str(loaded.milestone_effect_weights))
 	if not is_equal_approx(float(loaded.role_bonus("strategy_first_procure_drink")), 6.0):
 		return Result.failure("StrategyProfile loaded wrong role bonus: %s" % str(loaded.role_bonuses))
+	if not is_equal_approx(float(loaded.economic_weight("product_actionable_demand")), 5.5):
+		return Result.failure("StrategyProfile loaded wrong economic weight: %s" % str(loaded.economic_weights))
+	if not is_equal_approx(float(loaded.phase_action_adjustment("income_supply_gap", "produce_food")), 0.0):
+		return Result.failure("StrategyProfile default phase adjustment should be zero: %s" % str(loaded.phase_action_adjustments))
 	var configured = StrategyProfileClass.new()
 	configured.configure_base_revenue()
 	if not is_equal_approx(float(configured.action_weight("choose_fridge_keep")), 120.0):
@@ -342,6 +349,8 @@ static func _test_strategy_profile_loads_data_config() -> Result:
 		return Result.failure("StrategyProfile growth JSON should include income_no_drink_supply role bonus")
 	if not is_equal_approx(float(growth.role_bonus("income_no_drink_supply")), float(growth_json_role_bonuses.get("income_no_drink_supply", 0.0))):
 		return Result.failure("StrategyProfile loaded wrong growth role bonus: %s" % str(growth.role_bonuses))
+	if not is_equal_approx(float(growth.economic_weight("product_actionable_gap")), 5.0):
+		return Result.failure("StrategyProfile loaded wrong growth economic weight: %s" % str(growth.economic_weights))
 	var bot = StrategyBotClass.new()
 	var bot_read := bot.configure_profile("base_revenue_growth_v1")
 	if not bot_read.ok:
@@ -2800,6 +2809,67 @@ static func _test_structure_score_keeps_food_supply_for_marketing_pipeline(seed_
 	var marketing_products: Array = Array(features.get("structure_marketing_supply_products", []))
 	if not marketing_products.has("burger"):
 		return Result.failure("food supply structure should expose burger marketing supply product: %s" % str(features))
+	return Result.success()
+
+static func _test_strategy_profile_weights_and_phase_adjustments() -> Result:
+	var base_profile = StrategyProfileClass.new()
+	base_profile.configure_base_revenue()
+	var base_data_read := _read_json_dict(StrategyProfileClass.DEFAULT_BASE_REVENUE_PATH)
+	if not base_data_read.ok:
+		return base_data_read
+
+	var economic_data: Dictionary = Dictionary(base_data_read.value).duplicate(true)
+	economic_data["id"] = "test_economic_weights"
+	var economic_weights: Dictionary = Dictionary(economic_data.get("economic_weights", {})).duplicate()
+	economic_weights["product_actionable_demand"] = 9.5
+	economic_data["economic_weights"] = economic_weights
+	var economic_profile = StrategyProfileClass.new()
+	var economic_read := economic_profile.configure_from_dict(economic_data)
+	if not economic_read.ok:
+		return Result.failure("StrategyProfile should parse economic_weights: %s" % economic_read.error)
+	if not is_equal_approx(float(economic_profile.economic_weight("product_actionable_demand")), 9.5):
+		return Result.failure("StrategyProfile custom economic weight not applied: %s" % str(economic_profile.economic_weights))
+	var observation := _synthetic_income_observation()
+	var base_analysis: Dictionary = StrategyIncomeAnalyzerClass.analyze(observation, base_profile)
+	var tuned_analysis: Dictionary = StrategyIncomeAnalyzerClass.analyze(observation, economic_profile)
+	var base_product: Dictionary = StrategyIncomeAnalyzerClass.product_value("burger", base_profile, base_analysis)
+	var tuned_product: Dictionary = StrategyIncomeAnalyzerClass.product_value("burger", economic_profile, tuned_analysis)
+	if float(tuned_product.get("score", 0.0)) <= float(base_product.get("score", 0.0)):
+		return Result.failure("custom economic weight should raise burger product score: base=%s tuned=%s" % [str(base_product), str(tuned_product)])
+
+	var adjusted_data: Dictionary = Dictionary(base_data_read.value).duplicate(true)
+	adjusted_data["id"] = "test_phase_adjustments"
+	adjusted_data["phase_action_adjustments"] = {
+		"income_supply_gap": {
+			"produce_food": 33.0,
+		},
+	}
+	var adjusted_profile = StrategyProfileClass.new()
+	var adjusted_read := adjusted_profile.configure_from_dict(adjusted_data)
+	if not adjusted_read.ok:
+		return Result.failure("StrategyProfile should parse phase_action_adjustments: %s" % adjusted_read.error)
+	if not is_equal_approx(float(adjusted_profile.phase_action_adjustment("income_supply_gap", "produce_food")), 33.0):
+		return Result.failure("StrategyProfile custom phase adjustment not applied: %s" % str(adjusted_profile.phase_action_adjustments))
+	var supply_gap := _synthetic_income_observation()
+	supply_gap.own_player["employees"] = ["burger_cook", "campaign_manager"]
+	supply_gap.own_player["inventory"] = {}
+	var macro := MacroAction.create(
+		"produce_food_burger_phase_adjustment",
+		[Command.create("produce_food", 0, {"employee_type": "burger_cook", "food_type": "burger"})],
+		0.0,
+		["working", "supply"],
+		{}
+	)
+	var base_score: Dictionary = StrategyScorerClass.score_macro(supply_gap, macro, base_profile)
+	var adjusted_score: Dictionary = StrategyScorerClass.score_macro(supply_gap, macro, adjusted_profile)
+	var features: Dictionary = Dictionary(adjusted_score.get("features", {}))
+	if str(features.get("strategy_context_id", "")) != "income_supply_gap":
+		return Result.failure("StrategyScorer should expose income supply gap context: %s" % str(features))
+	if not is_equal_approx(float(features.get("phase_action_adjustment", 0.0)), 33.0):
+		return Result.failure("StrategyScorer should expose phase action adjustment: %s" % str(features))
+	var score_delta := float(adjusted_score.get("score", 0.0)) - float(base_score.get("score", 0.0))
+	if not is_equal_approx(score_delta, 33.0):
+		return Result.failure("StrategyScorer phase adjustment should change only configured score delta: base=%s adjusted=%s" % [str(base_score), str(adjusted_score)])
 	return Result.success()
 
 static func _test_structure_score_downweights_marginal_edits_but_keeps_route_edits(seed_val: int) -> Result:

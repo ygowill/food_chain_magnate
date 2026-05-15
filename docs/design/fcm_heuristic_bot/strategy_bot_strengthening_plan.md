@@ -42,7 +42,7 @@ The goal is not to pile up arbitrary rules. Every new rule must answer:
 
 ### Step 1: Profile-backed economic and phase-weight foundation
 
-Status: in progress.
+Status: complete.
 
 Intent:
 
@@ -138,3 +138,16 @@ For each step:
 
 - 2026-05-15: Pivoted main plan from StrategicBot strengthening to StrategyBot strengthening because guarded StrategicBot results are behavior-equivalent to StrategyBot, not stronger.
 - 2026-05-15: Started Step 1. First implementation target is a profile-backed economic/phase-weight foundation with trace-visible scoring adjustments.
+- 2026-05-15: Implemented Step 1 draft:
+  - `StrategyProfile` now parses `economic_weights` and nested `phase_action_adjustments`.
+  - `StrategyIncomeAnalyzer` uses profile-backed weights for shared product economic value.
+  - `StrategyScorer` records `strategy_context_id` and applies profile-backed `phase_action_adjustment` when configured.
+  - Default `base_revenue_v1` and `base_revenue_growth_v1` preserve existing economic coefficients and use empty phase adjustments.
+  - Added targeted StrategyBot tests for profile parsing, economic-weight effect, and phase-action adjustment trace/score delta.
+  - Design-alignment check before verification: this does not weaken cash safety, does not touch StrategicBot override gates, keeps defaults compatible, and makes the new mechanism profile/trace visible.
+- 2026-05-15: Verified and closed Step 1:
+  - `CheckCompile PASS files=1236`.
+  - `AllTests PASS passed=426/426 failed=[] total_ms=155482`.
+  - Strategy-only smoke: `base_revenue_growth_v1`, 2 players, seeds `12345-12347`, target round 8, `configs=1`, `matches=3`, `failures=0`, `timeouts=0`.
+  - Smoke summary: success `1.000`, avg round `8.000`, `cash_min_after_first_positive_avg=[10.0, 10.0]`, search types `strategy=358`.
+  - Design-alignment result: Step 1 stayed within the StrategyBot mainline, made scoring knobs profile-backed and trace-visible, and preserved default behavior compatibility.

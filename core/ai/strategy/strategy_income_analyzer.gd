@@ -368,16 +368,16 @@ static func _product_value_from_parts(product_id: String, demand: int, serviceab
 	var value := _profile_product_priority(profile, product_id)
 	var future_gap := maxi(0, planning_actionable_gap - actionable_gap)
 	var public_only := maxi(0, demand - actionable)
-	value += float(public_only)
-	value += float(serviceable) * 1.5
-	value += float(actionable) * 5.5
-	value += float(actionable_gap) * 5.0
-	value += float(future_gap) * 4.0
-	value += float(pending) * 2.0
+	value += float(public_only) * _profile_economic_weight(profile, "product_public_only_demand", 1.0)
+	value += float(serviceable) * _profile_economic_weight(profile, "product_serviceable_demand", 1.5)
+	value += float(actionable) * _profile_economic_weight(profile, "product_actionable_demand", 5.5)
+	value += float(actionable_gap) * _profile_economic_weight(profile, "product_actionable_gap", 5.0)
+	value += float(future_gap) * _profile_economic_weight(profile, "product_future_gap", 4.0)
+	value += float(pending) * _profile_economic_weight(profile, "product_pending_marketing_demand", 2.0)
 	if inventory > 0:
-		value += float(mini(inventory, demand + pending_inventory_credit)) * 2.0
+		value += float(mini(inventory, demand + pending_inventory_credit)) * _profile_economic_weight(profile, "product_inventory_unit", 2.0)
 	if can_supply:
-		value += 2.0
+		value += _profile_economic_weight(profile, "product_supply_available", 2.0)
 	return value
 
 static func _product_has_actionable_need(product_info: Dictionary) -> bool:
@@ -844,3 +844,8 @@ static func _profile_role_bonus(profile, key: String, fallback: float) -> float:
 	if profile == null:
 		return fallback
 	return float(profile.role_bonus(key, fallback))
+
+static func _profile_economic_weight(profile, key: String, fallback: float) -> float:
+	if profile == null or not profile.has_method("economic_weight"):
+		return fallback
+	return float(profile.economic_weight(key, fallback))

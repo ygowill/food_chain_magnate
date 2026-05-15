@@ -55,6 +55,17 @@ const DEFAULT_ROLE_BONUSES := {
 	"income_recruit_train_trainable": 4.0,
 	"income_price_serviceable": 2.0,
 }
+const DEFAULT_ECONOMIC_WEIGHTS := {
+	"product_public_only_demand": 1.0,
+	"product_serviceable_demand": 1.5,
+	"product_actionable_demand": 5.5,
+	"product_actionable_gap": 5.0,
+	"product_future_gap": 4.0,
+	"product_pending_marketing_demand": 2.0,
+	"product_inventory_unit": 2.0,
+	"product_supply_available": 2.0,
+}
+const DEFAULT_PHASE_ACTION_ADJUSTMENTS := {}
 
 var id: String = DEFAULT_PROFILE_ID
 var max_valid_per_action: int = 12
@@ -65,6 +76,8 @@ var product_priorities: Dictionary = {}
 var milestone_priorities: Dictionary = {}
 var milestone_effect_weights: Dictionary = {}
 var role_bonuses: Dictionary = {}
+var economic_weights: Dictionary = {}
+var phase_action_adjustments: Dictionary = {}
 
 func configure_base_revenue() -> void:
 	configure(DEFAULT_PROFILE_ID)
@@ -146,6 +159,20 @@ func configure_from_dict(data: Dictionary) -> Result:
 	)
 	if not role_bonus_read.ok:
 		return role_bonus_read
+	var economic_read := _parse_optional_float_dictionary(
+		data.get("economic_weights", null),
+		DEFAULT_ECONOMIC_WEIGHTS,
+		"StrategyProfile.economic_weights"
+	)
+	if not economic_read.ok:
+		return economic_read
+	var phase_adjustment_read := _parse_optional_nested_float_dictionary(
+		data.get("phase_action_adjustments", null),
+		DEFAULT_PHASE_ACTION_ADJUSTMENTS,
+		"StrategyProfile.phase_action_adjustments"
+	)
+	if not phase_adjustment_read.ok:
+		return phase_adjustment_read
 
 	id = str(id_read.value)
 	max_valid_per_action = int(max_read.value)
@@ -156,6 +183,8 @@ func configure_from_dict(data: Dictionary) -> Result:
 	milestone_priorities = Dictionary(milestone_read.value)
 	milestone_effect_weights = Dictionary(milestone_effect_read.value)
 	role_bonuses = Dictionary(role_bonus_read.value)
+	economic_weights = Dictionary(economic_read.value)
+	phase_action_adjustments = Dictionary(phase_adjustment_read.value).duplicate(true)
 	return Result.success()
 
 func _configure_base_revenue_fallback() -> void:
@@ -210,6 +239,8 @@ func _configure_base_revenue_fallback() -> void:
 	milestone_priorities = DEFAULT_MILESTONE_PRIORITIES.duplicate()
 	milestone_effect_weights = DEFAULT_MILESTONE_EFFECT_WEIGHTS.duplicate()
 	role_bonuses = DEFAULT_ROLE_BONUSES.duplicate()
+	economic_weights = DEFAULT_ECONOMIC_WEIGHTS.duplicate()
+	phase_action_adjustments = DEFAULT_PHASE_ACTION_ADJUSTMENTS.duplicate(true)
 
 func action_weight(action_id: String) -> float:
 	return float(action_weights.get(action_id, 0.0))
@@ -228,6 +259,19 @@ func milestone_effect_weight(effect_type: String) -> float:
 
 func role_bonus(key: String, fallback: float = 0.0) -> float:
 	return float(role_bonuses.get(key, fallback))
+
+func economic_weight(key: String, fallback: float = 0.0) -> float:
+	return float(economic_weights.get(key, fallback))
+
+func phase_action_adjustment(context_id: String, action_id: String, fallback: float = 0.0) -> float:
+	var context := context_id.strip_edges()
+	var action := action_id.strip_edges()
+	if context.is_empty() or action.is_empty():
+		return fallback
+	var context_val = phase_action_adjustments.get(context, null)
+	if not (context_val is Dictionary):
+		return fallback
+	return float(Dictionary(context_val).get(action, fallback))
 
 static func _parse_float_dictionary(value, path: String) -> Result:
 	if not (value is Dictionary):
@@ -248,3 +292,20 @@ static func _parse_optional_float_dictionary(value, fallback: Dictionary, path: 
 	if value == null:
 		return Result.success(fallback.duplicate())
 	return _parse_float_dictionary(value, path)
+
+static func _parse_optional_nested_float_dictionary(value, fallback: Dictionary, path: String) -> Result:
+	if value == null:
+		return Result.success(fallback.duplicate(true))
+	if not (value is Dictionary):
+		return Result.failure("%s 类型错误（期望 Dictionary）" % path)
+	var out := {}
+	for key_val in Dictionary(value).keys():
+		var key := str(key_val).strip_edges()
+		if key.is_empty():
+			return Result.failure("%s 包含空 key" % path)
+		var inner_val = Dictionary(value).get(key_val, null)
+		var inner_read := _parse_float_dictionary(inner_val, "%s.%s" % [path, key])
+		if not inner_read.ok:
+			return inner_read
+		out[key] = Dictionary(inner_read.value)
+	return Result.success(out)

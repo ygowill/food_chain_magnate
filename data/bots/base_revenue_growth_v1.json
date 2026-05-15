@@ -95,5 +95,16 @@
     "income_unserviceable_new_shop": 4.0,
     "income_recruit_train_trainable": 4.0,
     "income_price_serviceable": 2.0
-  }
+  },
+  "economic_weights": {
+    "product_public_only_demand": 1.0,
+    "product_serviceable_demand": 1.5,
+    "product_actionable_demand": 5.5,
+    "product_actionable_gap": 5.0,
+    "product_future_gap": 4.0,
+    "product_pending_marketing_demand": 2.0,
+    "product_inventory_unit": 2.0,
+    "product_supply_available": 2.0
+  },
+  "phase_action_adjustments": {}
 }
