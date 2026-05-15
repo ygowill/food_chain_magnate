@@ -286,4 +286,6 @@ score =
 - Point 14C.2 change: `StrategicSearch._comparison_hard_gate` now rejects incomplete candidate/baseline rollout stop reasons, and `StrategicGuardedOverrideTest` covers both incomplete-candidate and incomplete-baseline cases.
 - Point 14C.2 verification: `CheckCompile PASS files=1236`; `AllTests PASS passed=426/426 failed=[] total_ms=154721`.
 - Point 14C.2 design check before commit: aligned. The committed behavior is a stricter proof gate only. It blocks incomplete evidence such as `bot_failed`, keeps `budget_expired` as a distinct failure, leaves `min_delta_score=12`, precomputed fallback, same-command fallback, legal command validation, and economic-proof requirements unchanged.
-- Commit: pending for 14C.2.
+- Point 14C.2 commit: `fix(ai): reject incomplete strategic rollouts` (`711f3dc5`).
+- Point 14C.3 target: find the first non-dominated true-positive route outside the already-covered price/same-round supply windows. Start with `product_switch_attack` because it can prove value through reduced opponent blocking demand, sold demand, cash, or lower lost-to-competitor demand. If it is also StrategyBot-dominated, document that and move to `growth` only when the rollout can complete to `phase_boundary`/`round_horizon` with a different current command and existing economic proof.
+- Point 14C.3 design guard: no threshold tuning, no route-only credit, no incomplete rollout evidence, and no same-command strategic decision. The next accepted positive must pass the current hard gates exactly as they stand after `711f3dc5`.
