@@ -169,19 +169,23 @@ score =
 
 ### 2026-05-15 Step 10
 
-- Status: implemented, pending commit.
+- Status: committed.
 - Change target: normalize this progress document so committed work and future plan are unambiguous. Add the next execution sequence before changing runtime behavior.
 - Design check: aligned. This is a documentation-only correction and planning step; it prevents implementation drift by making the next checks explicit.
 - Verification: document-only change; no runtime test required. Diff review confirmed only this progress document changed for Step 10.
-- Commit: pending.
+- Commit: `docs(ai): plan strategic bot validation follow-up` (`d92bf22d`).
 
 ### 2026-05-15 Step 11
 
-- Status: planned.
+- Status: implemented, pending commit.
 - Change target: run guarded StrategicBot against StrategyBot on longer smoke matrices after Step 9. Use the same guarded compared path, compare `strategy` vs `strategy,strategic`, and record whether strategic decisions remain safe beyond the r4 probe.
 - Required checks: target at least r8 and r12 probes with fixed seed ranges; capture `search_type_counts`, `strategic_failure_counts`, cash/first-cash/food-delay metrics, failures, timeouts, and whether guarded strategic improves or regresses the baseline.
-- Design check before implementation: do not tune thresholds from a single trace. If the matrix shows regressions, diagnose first; if it shows no strategic decisions, inspect payloads before adding features.
-- Commit gate: update this document with exact commands and results before committing.
+- Command r8: `./tools/run_bot_selfplay_matrix.sh --config=strategy --config=strategy,strategic --profile=base_revenue_growth_v1 --players=2 --seed=12345 --matches=3 --target-round=8 --max-steps=1600 --budget-ms=360 --match-timeout-ms=240000 --trace-tail=60 --strategic-search=compared --strategic-min-search-budget-ms=120 --strategic-max-plans=6 --strategic-horizon-decisions=16 --strategic-rollout-step-budget-ms=48 --strategic-config-id=guarded_compared_step11_r8 --output-jsonl=res://.godot/guarded_compared_step11_r8.jsonl --output-json=res://.godot/guarded_compared_step11_r8_summary.json`.
+- Command r12: `./tools/run_bot_selfplay_matrix.sh --config=strategy --config=strategy,strategic --profile=base_revenue_growth_v1 --players=2 --seed=12345 --matches=3 --target-round=12 --max-steps=2600 --budget-ms=360 --match-timeout-ms=300000 --trace-tail=60 --strategic-search=compared --strategic-min-search-budget-ms=120 --strategic-max-plans=6 --strategic-horizon-decisions=16 --strategic-rollout-step-budget-ms=48 --strategic-config-id=guarded_compared_step11_r12 --output-jsonl=res://.godot/guarded_compared_step11_r12.jsonl --output-json=res://.godot/guarded_compared_step11_r12_summary.json`.
+- Result r8: `total_matches=6`, `failures=0`, `timeouts=0`. Baseline score `1296.669`; guarded mixed score `1298.418`; `tuning_score_delta=+1.749`. Guarded mixed search: `search_type_counts={"strategic":28,"strategy":331}`, `strategic_failure_counts={"no_plan_beat_baseline":70,"no_plans_generated":15,"no_strategic_legal_actions":66}`, `strategic_fallback_rate=0.421`. Opening metrics stayed equal: first positive cash round delta `0.0`, food recruit-to-produce round delay delta `0.0`. Cash average shifted `[+10.334,-9.333]`; cash max seen shifted `[+10.333,-7.666]`.
+- Result r12: `total_matches=6`, `failures=0`, `timeouts=0`. Baseline score `1629.470`; guarded mixed score `1612.252`; `tuning_score_delta=-17.218`. Guarded mixed search: `search_type_counts={"strategic":36,"strategy":570}`, `strategic_failure_counts={"no_plan_beat_baseline":142,"no_plans_generated":15,"no_strategic_legal_actions":102}`, `strategic_fallback_rate=0.427`. Opening metrics stayed equal: first positive cash round delta `0.0`, food recruit-to-produce round delay delta `0.0`. Cash average shifted `[+43.333,-61.334]`; cash max seen shifted `[+43.333,-59.666]`.
+- Design check: aligned. The longer probes did not justify threshold tuning or broader route hints. Guarded strategic decisions are stable enough to run without failures/timeouts, but r12 regresses the mixed configuration despite stronger player-0 cash, so the next step must diagnose fallback buckets and negative outcome distribution before any code expansion.
+- Commit gate: satisfied for Step 11; exact commands and results are recorded here before commit.
 - Commit: pending.
 
 ### 2026-05-15 Step 12
