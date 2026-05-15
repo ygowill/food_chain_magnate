@@ -4345,6 +4345,37 @@ static func _test_house_placement_prefers_near_owned_restaurant(seed_val: int) -
 		return Result.failure("near house placement should expose close restaurant distance: %s" % str(features))
 	if float(features.get("house_placement_value", 0.0)) <= 0.0:
 		return Result.failure("near house placement should expose positive house_placement_value: %s" % str(features))
+	var contested_observation := _synthetic_income_observation()
+	var contested_restaurants: Dictionary = Dictionary(contested_observation.map_public.get("restaurants", {})).duplicate(true)
+	contested_restaurants["rest_opponent"] = {
+		"restaurant_id": "rest_opponent",
+		"owner": 1,
+		"anchor_pos": Vector2i(10, 10),
+	}
+	contested_observation.map_public["restaurants"] = contested_restaurants
+	var safe_expansion_macro := MacroAction.create(
+		"place_house_self_capture",
+		[Command.create("place_house", 0, {"position": [4, 3], "rotation": 0, "house_number": 2})],
+		0.0,
+		["working", "place_house"],
+		{}
+	)
+	var opponent_expansion_macro := MacroAction.create(
+		"place_house_opponent_dominated",
+		[Command.create("place_house", 0, {"position": [10, 10], "rotation": 0, "house_number": 2})],
+		0.0,
+		["working", "place_house"],
+		{}
+	)
+	var safe_expansion_score: Dictionary = StrategyScorerClass.score_macro(contested_observation, safe_expansion_macro, profile)
+	var opponent_expansion_score: Dictionary = StrategyScorerClass.score_macro(contested_observation, opponent_expansion_macro, profile)
+	var opponent_expansion_features: Dictionary = Dictionary(opponent_expansion_score.get("features", {}))
+	if str(opponent_expansion_features.get("house_capture_state", "")) != "opponent_dominated":
+		return Result.failure("opponent-side house placement should expose dominated capture state: %s" % str(opponent_expansion_features))
+	if float(opponent_expansion_features.get("house_opponent_subsidy_penalty", 0.0)) >= 0.0:
+		return Result.failure("opponent-side house placement should carry a subsidy penalty: %s" % str(opponent_expansion_features))
+	if float(opponent_expansion_score.get("score", 0.0)) >= float(safe_expansion_score.get("score", 0.0)):
+		return Result.failure("StrategyScorer should prefer self-captured house growth over opponent-dominated growth: safe=%s opponent=%s" % [str(safe_expansion_score), str(opponent_expansion_score)])
 	var garden_observation := _synthetic_house_growth_observation()
 	_set_observation_house_demand_count(garden_observation, "house_near", "burger", 4)
 	var garden_income_analysis := StrategyIncomeAnalyzerClass.analyze(garden_observation, profile)
@@ -4371,6 +4402,28 @@ static func _test_house_placement_prefers_near_owned_restaurant(seed_val: int) -
 	var garden_features: Dictionary = Dictionary(garden_score.get("features", {}))
 	if float(garden_features.get("garden_value", 0.0)) <= 0.0:
 		return Result.failure("StrategyScorer should include garden economic value: %s" % str(garden_features))
+	var risky_garden_observation := _synthetic_house_growth_observation()
+	_set_observation_house_demand_count(risky_garden_observation, "house_near", "burger", 4)
+	var risky_restaurants: Dictionary = Dictionary(risky_garden_observation.map_public.get("restaurants", {})).duplicate(true)
+	risky_restaurants["rest_opponent"] = {
+		"restaurant_id": "rest_opponent",
+		"owner": 1,
+		"anchor_pos": Vector2i(2, 2),
+	}
+	risky_garden_observation.map_public["restaurants"] = risky_restaurants
+	var risky_garden_income_analysis := StrategyIncomeAnalyzerClass.analyze(risky_garden_observation, profile)
+	var risky_garden_payload: Dictionary = StrategyBoardAnalyzerClass.evaluate_garden_action(
+		risky_garden_observation,
+		{"house_id": "house_near", "direction": "N"},
+		risky_garden_income_analysis
+	)
+	var risky_garden_features: Dictionary = Dictionary(risky_garden_payload.get("features", {}))
+	if str(risky_garden_features.get("garden_capture_state", "")) != "opponent_dominated":
+		return Result.failure("opponent-side garden should expose dominated capture state: %s" % str(risky_garden_features))
+	if float(risky_garden_features.get("garden_raw_value", 0.0)) <= 0.0:
+		return Result.failure("risky garden test should start from positive raw garden value: %s" % str(risky_garden_features))
+	if float(risky_garden_features.get("garden_value", 0.0)) >= 0.0:
+		return Result.failure("opponent-dominated garden should turn negative after capture risk: %s" % str(risky_garden_features))
 	return Result.success()
 
 static func _test_payday_fire_prefers_low_income_employee(seed_val: int) -> Result:

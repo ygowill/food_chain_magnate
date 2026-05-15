@@ -87,7 +87,12 @@ static func score_macro(observation: ObservationState, macro: MacroAction, profi
 			_merge_features(features, Dictionary(reserve_payload.get("features", {})))
 			score += float(reserve_payload.get("value", 0.0))
 		"place_house":
-			var house_payload := StrategyBoardAnalyzerClass.evaluate_house_action(observation, command.params)
+			var house_payload := StrategyBoardAnalyzerClass.evaluate_house_action(
+				observation,
+				command.params,
+				options.get("source_state", null),
+				int(command.actor)
+			)
 			_merge_features(features, Dictionary(house_payload.get("features", {})))
 			score += float(house_payload.get("value", 0.0))
 		"add_garden":

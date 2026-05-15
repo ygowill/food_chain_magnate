@@ -26,6 +26,18 @@ const RESTAURANT_CONTESTED_HOUSE_VALUE_FACTOR := 0.5
 const RESTAURANT_DOMINATED_HOUSE_VALUE_FACTOR := 0.15
 const RESTAURANT_CONTESTED_HOUSE_PENALTY_FACTOR := 0.25
 const RESTAURANT_DOMINATED_HOUSE_PENALTY_FACTOR := 0.9
+const EXPANSION_PRESSURED_DISTANCE_MARGIN := 2
+const EXPANSION_PRESSURED_VALUE_FACTOR := 0.85
+const EXPANSION_CONTESTED_VALUE_FACTOR := 0.45
+const EXPANSION_DOMINATED_VALUE_FACTOR := 0.1
+const HOUSE_PRESSURED_MIN_PENALTY := 6.0
+const HOUSE_CONTESTED_MIN_PENALTY := 18.0
+const HOUSE_DOMINATED_MIN_PENALTY := 42.0
+const HOUSE_OPPONENT_ONLY_MIN_PENALTY := 52.0
+const GARDEN_PRESSURED_MIN_PENALTY := 8.0
+const GARDEN_CONTESTED_MIN_PENALTY := 18.0
+const GARDEN_DOMINATED_MIN_PENALTY := 42.0
+const GARDEN_OPPONENT_ONLY_MIN_PENALTY := 52.0
 const OPENING_CONTESTED_HOUSE_SAFETY_PENALTY := -12.0
 const OPENING_DOMINATED_HOUSE_SAFETY_PENALTY := -18.0
 const OPENING_LOW_INDEPENDENT_ROUTE_PENALTY := -10.0
@@ -82,8 +94,13 @@ static func evaluate_restaurant_action(
 		"features": features,
 	}
 
-static func evaluate_house_action(observation: ObservationState, params: Dictionary) -> Dictionary:
-	var house_payload := house_placement_value(observation, params)
+static func evaluate_house_action(
+	observation: ObservationState,
+	params: Dictionary,
+	source_state = null,
+	actor_id: int = -1
+) -> Dictionary:
+	var house_payload := house_placement_value(observation, params, source_state, actor_id)
 	var features := {}
 	_append_house_features(features, house_payload)
 	return {
@@ -106,9 +123,15 @@ static func evaluate_garden_action(
 		"features": features,
 	}
 
-static func house_placement_value(observation: ObservationState, params: Dictionary) -> Dictionary:
+static func house_placement_value(
+	observation: ObservationState,
+	params: Dictionary,
+	source_state = null,
+	actor_id: int = -1
+) -> Dictionary:
 	var anchor := _read_vector2i(params.get("position", Vector2i.ZERO))
 	var restaurant_distance := _nearest_distance_to_owned_restaurant_anchor(observation, anchor)
+	var competitor_distance := _nearest_distance_to_competitor_restaurant_anchor(observation, anchor)
 	var existing_house_distance := _nearest_distance_to_house_anchor(observation, anchor)
 	var value := 0.0
 	if restaurant_distance >= 0:
@@ -121,11 +144,28 @@ static func house_placement_value(observation: ObservationState, params: Diction
 		value -= 12.0
 	if existing_house_distance >= 0:
 		value += maxf(0.0, 6.0 - float(existing_house_distance)) * 2.0
+	var player_id := actor_id
+	if player_id < 0 and observation != null:
+		player_id = int(observation.viewer_player_id)
+	var price_payload := _current_unit_price_payload(observation, source_state, player_id)
+	var unit_price := maxi(1, int(price_payload.get("unit_price", 10)))
+	var raw_value := value
+	var capture_payload := _expansion_capture_risk(restaurant_distance, competitor_distance, unit_price, 1, "place_house")
+	if value > 0.0:
+		value *= float(capture_payload.get("value_factor", 1.0))
+	value += float(capture_payload.get("opponent_subsidy_penalty", 0.0))
 	return {
 		"value": value,
+		"raw_value": raw_value,
 		"anchor": [anchor.x, anchor.y],
 		"nearest_restaurant_distance": restaurant_distance,
+		"nearest_competitor_restaurant_distance": competitor_distance,
 		"nearest_existing_house_distance": existing_house_distance,
+		"capture_state": str(capture_payload.get("capture_state", "self_capture")),
+		"capture_value_factor": float(capture_payload.get("value_factor", 1.0)),
+		"opponent_capture_risk": float(capture_payload.get("opponent_capture_risk", 0.0)),
+		"opponent_subsidy_penalty": float(capture_payload.get("opponent_subsidy_penalty", 0.0)),
+		"competition_adjustment": value - raw_value,
 	}
 
 static func garden_value(
@@ -170,6 +210,7 @@ static func garden_value(
 	if cap_unlock_units <= 0 and demand_count >= normal_cap and cap_gain > 0:
 		cap_value += float(cap_gain * unit_price) * 0.12
 	var service_distance := _min_house_distance_to_owned_restaurant(observation, house_id)
+	var competitor_distance := _min_house_distance_to_competitor_restaurant(observation, house_id)
 	var service_value := 0.0
 	if service_distance < 0:
 		service_value = -12.0
@@ -178,9 +219,16 @@ static func garden_value(
 	else:
 		service_value = -minf(10.0, float(service_distance - IDEAL_SERVICE_DISTANCE) * 1.5)
 	var no_demand_penalty := -6.0 if demand_count <= 0 else 0.0
-	var value := float(revenue_delta) * 0.45 + cap_value + float(demand_count) * 1.2 + service_value + no_demand_penalty
+	var raw_value := float(revenue_delta) * 0.45 + cap_value + float(demand_count) * 1.2 + service_value + no_demand_penalty
+	var at_risk_units := maxi(1 if demand_count > 0 else 0, capped_sale_units + cap_unlock_units)
+	var capture_payload := _expansion_capture_risk(service_distance, competitor_distance, unit_price, at_risk_units, "add_garden")
+	var value := raw_value
+	if value > 0.0:
+		value *= float(capture_payload.get("value_factor", 1.0))
+	value += float(capture_payload.get("opponent_subsidy_penalty", 0.0))
 
 	out["value"] = value
+	out["raw_value"] = raw_value
 	out["demand_count"] = demand_count
 	out["estimated_sale_units"] = capped_sale_units
 	out["raw_estimated_sale_units"] = estimated_sale_units
@@ -193,6 +241,12 @@ static func garden_value(
 	out["cap_value"] = cap_value
 	out["service_distance"] = service_distance
 	out["service_value"] = service_value
+	out["competitor_service_distance"] = competitor_distance
+	out["capture_state"] = str(capture_payload.get("capture_state", "self_capture"))
+	out["capture_value_factor"] = float(capture_payload.get("value_factor", 1.0))
+	out["opponent_capture_risk"] = float(capture_payload.get("opponent_capture_risk", 0.0))
+	out["opponent_subsidy_penalty"] = float(capture_payload.get("opponent_subsidy_penalty", 0.0))
+	out["competition_adjustment"] = value - raw_value
 	return out
 
 static func restaurant_placement_value(
@@ -369,7 +423,14 @@ static func _append_restaurant_features(features: Dictionary, placement_payload:
 static func _append_house_features(features: Dictionary, house_payload: Dictionary) -> void:
 	features["house_candidate_anchor"] = Array(house_payload.get("anchor", [])).duplicate()
 	features["house_nearest_restaurant_distance"] = int(house_payload.get("nearest_restaurant_distance", -1))
+	features["house_nearest_competitor_restaurant_distance"] = int(house_payload.get("nearest_competitor_restaurant_distance", -1))
 	features["house_nearest_existing_house_distance"] = int(house_payload.get("nearest_existing_house_distance", -1))
+	features["house_raw_placement_value"] = float(house_payload.get("raw_value", house_payload.get("value", 0.0)))
+	features["house_capture_state"] = str(house_payload.get("capture_state", "self_capture"))
+	features["house_capture_value_factor"] = float(house_payload.get("capture_value_factor", 1.0))
+	features["house_opponent_capture_risk"] = float(house_payload.get("opponent_capture_risk", 0.0))
+	features["house_opponent_subsidy_penalty"] = float(house_payload.get("opponent_subsidy_penalty", 0.0))
+	features["house_competition_adjustment"] = float(house_payload.get("competition_adjustment", 0.0))
 	features["house_placement_value"] = float(house_payload.get("value", 0.0))
 
 static func _append_garden_features(features: Dictionary, garden_payload: Dictionary) -> void:
@@ -387,6 +448,13 @@ static func _append_garden_features(features: Dictionary, garden_payload: Dictio
 	features["garden_cap_value"] = float(garden_payload.get("cap_value", 0.0))
 	features["garden_nearest_restaurant_distance"] = int(garden_payload.get("service_distance", -1))
 	features["garden_service_value"] = float(garden_payload.get("service_value", 0.0))
+	features["garden_nearest_competitor_restaurant_distance"] = int(garden_payload.get("competitor_service_distance", -1))
+	features["garden_raw_value"] = float(garden_payload.get("raw_value", garden_payload.get("value", 0.0)))
+	features["garden_capture_state"] = str(garden_payload.get("capture_state", "self_capture"))
+	features["garden_capture_value_factor"] = float(garden_payload.get("capture_value_factor", 1.0))
+	features["garden_opponent_capture_risk"] = float(garden_payload.get("opponent_capture_risk", 0.0))
+	features["garden_opponent_subsidy_penalty"] = float(garden_payload.get("opponent_subsidy_penalty", 0.0))
+	features["garden_competition_adjustment"] = float(garden_payload.get("competition_adjustment", 0.0))
 	features["garden_value"] = float(garden_payload.get("value", 0.0))
 
 static func _own_restaurant_count(observation: ObservationState) -> int:
@@ -1229,6 +1297,49 @@ static func _restaurant_house_competition(distance: int, competitor_distance: in
 		"penalty": 0.0,
 	}
 
+static func _expansion_capture_risk(own_distance: int, competitor_distance: int, unit_price: int, at_risk_units: int, action_id: String) -> Dictionary:
+	var safe_units := maxi(1, at_risk_units)
+	var revenue_basis := float(maxi(1, unit_price) * safe_units)
+	var is_garden := action_id == "add_garden"
+	var pressured_floor := GARDEN_PRESSURED_MIN_PENALTY if is_garden else HOUSE_PRESSURED_MIN_PENALTY
+	var contested_floor := GARDEN_CONTESTED_MIN_PENALTY if is_garden else HOUSE_CONTESTED_MIN_PENALTY
+	var dominated_floor := GARDEN_DOMINATED_MIN_PENALTY if is_garden else HOUSE_DOMINATED_MIN_PENALTY
+	var opponent_only_floor := GARDEN_OPPONENT_ONLY_MIN_PENALTY if is_garden else HOUSE_OPPONENT_ONLY_MIN_PENALTY
+	var out := {
+		"capture_state": "self_capture",
+		"value_factor": 1.0,
+		"opponent_capture_risk": 0.0,
+		"opponent_subsidy_penalty": 0.0,
+	}
+	if own_distance < 0:
+		if competitor_distance >= 0:
+			out["capture_state"] = "opponent_only"
+			out["value_factor"] = 0.0
+			out["opponent_capture_risk"] = revenue_basis
+			out["opponent_subsidy_penalty"] = -maxf(opponent_only_floor, revenue_basis * 0.9)
+		else:
+			out["capture_state"] = "unserviceable"
+		return out
+	if competitor_distance < 0:
+		return out
+	if competitor_distance < own_distance:
+		var distance_gap := maxi(1, own_distance - competitor_distance)
+		out["capture_state"] = "opponent_dominated"
+		out["value_factor"] = EXPANSION_DOMINATED_VALUE_FACTOR
+		out["opponent_capture_risk"] = revenue_basis
+		out["opponent_subsidy_penalty"] = -maxf(dominated_floor, revenue_basis * (0.75 + minf(0.25, float(distance_gap) * 0.05)))
+	elif competitor_distance == own_distance:
+		out["capture_state"] = "contested"
+		out["value_factor"] = EXPANSION_CONTESTED_VALUE_FACTOR
+		out["opponent_capture_risk"] = revenue_basis * 0.5
+		out["opponent_subsidy_penalty"] = -maxf(contested_floor, revenue_basis * 0.35)
+	elif competitor_distance <= own_distance + EXPANSION_PRESSURED_DISTANCE_MARGIN:
+		out["capture_state"] = "pressured"
+		out["value_factor"] = EXPANSION_PRESSURED_VALUE_FACTOR
+		out["opponent_capture_risk"] = revenue_basis * 0.25
+		out["opponent_subsidy_penalty"] = -maxf(pressured_floor, revenue_basis * 0.12)
+	return out
+
 static func _opening_competition_safety_penalty(own_restaurants: int, competitive_houses: int, contested_houses: int, competitor_dominated_houses: int) -> float:
 	if own_restaurants > 0:
 		return 0.0
@@ -1308,6 +1419,13 @@ static func _empty_garden_payload(house_id: String) -> Dictionary:
 		"cap_value": 0.0,
 		"service_distance": -1,
 		"service_value": 0.0,
+		"competitor_service_distance": -1,
+		"raw_value": 0.0,
+		"capture_state": "self_capture",
+		"capture_value_factor": 1.0,
+		"opponent_capture_risk": 0.0,
+		"opponent_subsidy_penalty": 0.0,
+		"competition_adjustment": 0.0,
 		"value": 0.0,
 	}
 
@@ -1449,6 +1567,18 @@ static func _min_house_distance_to_owned_restaurant(observation: ObservationStat
 		var distance := absi(house_anchor.x - rest_anchor.x) + absi(house_anchor.y - rest_anchor.y)
 		best = mini(best, distance)
 	return best if best < 2147483647 else -1
+
+static func _min_house_distance_to_competitor_restaurant(observation: ObservationState, house_id: String) -> int:
+	if observation == null or house_id.is_empty():
+		return -1
+	var houses_val = observation.map_public.get("houses", {})
+	if not (houses_val is Dictionary):
+		return -1
+	var house_val = Dictionary(houses_val).get(house_id, null)
+	if not (house_val is Dictionary):
+		return -1
+	var house_anchor := _read_vector2i(Dictionary(house_val).get("anchor_pos", Vector2i.ZERO))
+	return _nearest_distance_to_competitor_restaurant_anchor(observation, house_anchor)
 
 static func _nearest_distance_to_owned_restaurant_anchor(observation: ObservationState, pos: Vector2i) -> int:
 	if observation == null:

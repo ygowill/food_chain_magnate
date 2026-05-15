@@ -238,3 +238,19 @@ Current implementation focus:
   - Round-14 10-seed strategy-only smoke stayed stable: `matches=10`, `failures=0`, `timeouts=0`, `success=1.000`; `place_house` increased to `6`, while `add_garden` remained `0`.
   - Safety metrics stayed acceptable: round-14 `cash_min_after_first_positive_avg=[10.3, 9.5]`, search `expired_rate=0.036`, avg cash `[222.0, 190.7]`.
   - Design-alignment result: the change strengthens StrategyBot through stage-aware economic scoring and route-preservation guards, not StrategicBot rollouts; residual watchpoint is that `add_garden` now has scoring support but still needs real candidate opportunities to appear in selfplay.
+- 2026-05-15: Step 6 design target for expansion capture safety:
+  - Problem: `place_house` and `add_garden` can create demand that an opponent is better positioned to serve. The current board scoring rewards owned-restaurant proximity but does not directly discount opponent-dominated expansion.
+  - Implementation target: add trace-visible capture-risk features to expansion board scoring, using nearest owned restaurant vs nearest opponent restaurant as the first conservative guard.
+  - `place_house` should expose competitor distance, capture state, value factor, and opponent-subsidy penalty. Opponent-dominated candidates should lose most of their placement value and carry a strong penalty.
+  - `add_garden` should apply the same capture guard to the target house before counting revenue/cap-unlock value, so garden value is reduced or turned negative when added demand is more likely to feed an opponent route.
+  - Design-alignment check before implementation: this is a safety correction, not an expansion boost. It must not weaken marketing's existing opponent-pressure logic, must not depend on StrategicBot rollouts, and must be covered by targeted scorer tests before any selfplay tuning.
+- 2026-05-15: Implemented Step 6 expansion capture safety:
+  - Added a shared capture-risk guard for `place_house` and `add_garden`, with states `self_capture`, `pressured`, `contested`, `opponent_dominated`, `opponent_only`, and `unserviceable`.
+  - `place_house` now exposes `house_nearest_competitor_restaurant_distance`, `house_capture_state`, `house_capture_value_factor`, `house_opponent_capture_risk`, `house_opponent_subsidy_penalty`, and `house_competition_adjustment`.
+  - `add_garden` now exposes equivalent garden features and discounts/penalizes raw garden value before it reaches StrategyScorer.
+  - Added targeted StrategyBot tests proving opponent-dominated house placement loses to a self-captured option, and opponent-dominated garden value turns negative even when raw garden economics are positive.
+  - Design-alignment check before verification: the change adds conservative risk penalties only to board expansion actions; it leaves marketing's existing opponent-pressure exception untouched and does not add any StrategicBot dependency.
+  - `AllTests PASS passed=426/426 failed=[] total_ms=155650`.
+  - Round-12 10-seed strategy-only smoke stayed stable: `matches=10`, `failures=0`, `timeouts=0`, `success=1.000`; action distribution stayed `place_house=4`, `add_garden=0`.
+  - Safety metrics stayed aligned with the previous Step 5 run: avg cash `[206.6, 165.9]`, `cash_min_after_first_positive_avg=[10.3, 9.5]`, search `expired_rate=0.031`, tuning score `1593.221`.
+  - Design-alignment result: normal self-captured expansion behavior was preserved, while opponent-dominated expansion now receives explicit trace-visible penalties. This is the intended safety correction before any future expansion-frequency tuning.
