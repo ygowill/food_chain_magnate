@@ -106,5 +106,42 @@
     "product_inventory_unit": 2.0,
     "product_supply_available": 2.0
   },
-  "phase_action_adjustments": {}
+  "phase_action_adjustments": {
+    "cash_shortfall": {
+      "fire": 35.0,
+      "recruit": -35.0,
+      "train": -25.0,
+      "initiate_marketing": -20.0,
+      "produce_food": -20.0,
+      "procure_drinks": -20.0,
+      "place_house": -25.0,
+      "add_garden": -25.0,
+      "place_restaurant": -15.0
+    },
+    "opening_needs_restaurant": {
+      "place_restaurant": 12.0,
+      "move_restaurant": 4.0,
+      "recruit": -4.0,
+      "train": -6.0,
+      "initiate_marketing": -8.0,
+      "produce_food": -8.0,
+      "procure_drinks": -8.0
+    },
+    "opening_needs_food_supply": {
+      "recruit": 10.0,
+      "set_company_structure_direct": 8.0,
+      "set_company_structure_report": 8.0,
+      "produce_food": 8.0,
+      "initiate_marketing": -4.0,
+      "procure_drinks": -6.0
+    },
+    "opening_needs_marketing": {
+      "recruit": 8.0,
+      "set_company_structure_direct": 8.0,
+      "set_company_structure_report": 8.0,
+      "initiate_marketing": 10.0,
+      "produce_food": -2.0,
+      "procure_drinks": -4.0
+    }
+  }
 }

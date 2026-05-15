@@ -73,7 +73,7 @@ Design-alignment check before commit:
 
 ### Step 2: Opening income-chain scenario judgment
 
-Status: pending.
+Status: complete.
 
 Target:
 
@@ -149,5 +149,16 @@ For each step:
   - `CheckCompile PASS files=1236`.
   - `AllTests PASS passed=426/426 failed=[] total_ms=155482`.
   - Strategy-only smoke: `base_revenue_growth_v1`, 2 players, seeds `12345-12347`, target round 8, `configs=1`, `matches=3`, `failures=0`, `timeouts=0`.
-  - Smoke summary: success `1.000`, avg round `8.000`, `cash_min_after_first_positive_avg=[10.0, 10.0]`, search types `strategy=358`.
-  - Design-alignment result: Step 1 stayed within the StrategyBot mainline, made scoring knobs profile-backed and trace-visible, and preserved default behavior compatibility.
+- Smoke summary: success `1.000`, avg round `8.000`, `cash_min_after_first_positive_avg=[10.0, 10.0]`, search types `strategy=358`.
+- Design-alignment result: Step 1 stayed within the StrategyBot mainline, made scoring knobs profile-backed and trace-visible, and preserved default behavior compatibility.
+- 2026-05-15: Implemented Step 2 draft for `base_revenue_growth_v1`:
+  - Added profile-backed `phase_action_adjustments` for `cash_shortfall`, `opening_needs_restaurant`, `opening_needs_food_supply`, and `opening_needs_marketing`.
+  - Kept `base_revenue_v1` phase adjustments empty as a conservative baseline profile.
+  - Added targeted StrategyBot tests that assert the growth profile exposes the configured opening-chain context and adjustment for missing food supply, missing marketing, and missing restaurant cases.
+  - Design-alignment check before verification: adjustments are modest, profile-scoped, trace-visible through `strategy_context_id` / `phase_action_adjustment`, and do not override existing cash safety or legal validation.
+- 2026-05-15: Verified and closed Step 2:
+  - `CheckCompile PASS files=1236`.
+  - `AllTests PASS passed=426/426 failed=[] total_ms=152600`.
+  - Strategy-only smoke: `base_revenue_growth_v1`, 2 players, seeds `12345-12347`, target round 8, `configs=1`, `matches=3`, `failures=0`, `timeouts=0`.
+  - Smoke summary: success `1.000`, avg round `8.000`, `cash_min_after_first_positive_avg=[10.0, 10.0]`, opening positive cash avg `2.000`, no-positive-cash avg `0.000`, search types `strategy=358`.
+  - Design-alignment result: opening-chain adjustments stayed profile-scoped and trace-visible; small smoke did not show strength movement, but it preserved safety and gives the next tuning pass a controlled stage-parameter surface.

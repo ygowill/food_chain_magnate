@@ -50,6 +50,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var profile_weights := _test_strategy_profile_weights_and_phase_adjustments()
 	if not profile_weights.ok:
 		return profile_weights
+	var opening_adjustments := _test_strategy_phase_adjustments_prioritize_opening_chain()
+	if not opening_adjustments.ok:
+		return opening_adjustments
 	var phase_planner := _test_phase_planner_classifies_strategy_context(seed_val)
 	if not phase_planner.ok:
 		return phase_planner
@@ -2870,6 +2873,63 @@ static func _test_strategy_profile_weights_and_phase_adjustments() -> Result:
 	var score_delta := float(adjusted_score.get("score", 0.0)) - float(base_score.get("score", 0.0))
 	if not is_equal_approx(score_delta, 33.0):
 		return Result.failure("StrategyScorer phase adjustment should change only configured score delta: base=%s adjusted=%s" % [str(base_score), str(adjusted_score)])
+	return Result.success()
+
+static func _test_strategy_phase_adjustments_prioritize_opening_chain() -> Result:
+	var growth_profile = StrategyProfileClass.new()
+	var growth_read := growth_profile.configure("base_revenue_growth_v1")
+	if not growth_read.ok:
+		return Result.failure("growth profile should load opening phase adjustments: %s" % growth_read.error)
+	if not is_equal_approx(float(growth_profile.phase_action_adjustment("opening_needs_food_supply", "recruit")), 10.0):
+		return Result.failure("growth profile should configure opening food supply recruit adjustment: %s" % str(growth_profile.phase_action_adjustments))
+
+	var missing_food := _synthetic_income_observation()
+	missing_food.own_player["employees"] = ["campaign_manager"]
+	var recruit_food_macro := MacroAction.create(
+		"recruit_food_for_opening_chain",
+		[Command.create("recruit", 0, {"employee_type": "kitchen_trainee"})],
+		0.0,
+		["working", "recruit"],
+		{}
+	)
+	var food_score: Dictionary = StrategyScorerClass.score_macro(missing_food, recruit_food_macro, growth_profile)
+	var food_features: Dictionary = Dictionary(food_score.get("features", {}))
+	if str(food_features.get("strategy_context_id", "")) != "opening_needs_food_supply":
+		return Result.failure("missing food supply should expose opening_needs_food_supply context: %s" % str(food_features))
+	if not is_equal_approx(float(food_features.get("phase_action_adjustment", 0.0)), 10.0):
+		return Result.failure("missing food supply recruit should receive configured adjustment: %s" % str(food_features))
+
+	var missing_marketing := _synthetic_income_observation()
+	missing_marketing.own_player["employees"] = ["burger_cook"]
+	var recruit_marketing_macro := MacroAction.create(
+		"recruit_marketing_for_opening_chain",
+		[Command.create("recruit", 0, {"employee_type": "marketing_trainee"})],
+		0.0,
+		["working", "recruit"],
+		{}
+	)
+	var marketing_score: Dictionary = StrategyScorerClass.score_macro(missing_marketing, recruit_marketing_macro, growth_profile)
+	var marketing_features: Dictionary = Dictionary(marketing_score.get("features", {}))
+	if str(marketing_features.get("strategy_context_id", "")) != "opening_needs_marketing":
+		return Result.failure("missing marketing should expose opening_needs_marketing context: %s" % str(marketing_features))
+	if not is_equal_approx(float(marketing_features.get("phase_action_adjustment", 0.0)), 8.0):
+		return Result.failure("missing marketing recruit should receive configured adjustment: %s" % str(marketing_features))
+
+	var no_restaurant := _synthetic_income_observation()
+	no_restaurant.own_player["restaurants"] = []
+	var place_restaurant_macro := MacroAction.create(
+		"place_restaurant_for_opening_chain",
+		[Command.create("place_restaurant", 0, {"position": [3, 2], "rotation": 0})],
+		0.0,
+		["working", "restaurant"],
+		{}
+	)
+	var restaurant_score: Dictionary = StrategyScorerClass.score_macro(no_restaurant, place_restaurant_macro, growth_profile)
+	var restaurant_features: Dictionary = Dictionary(restaurant_score.get("features", {}))
+	if str(restaurant_features.get("strategy_context_id", "")) != "opening_needs_restaurant":
+		return Result.failure("missing restaurant should expose opening_needs_restaurant context: %s" % str(restaurant_features))
+	if not is_equal_approx(float(restaurant_features.get("phase_action_adjustment", 0.0)), 12.0):
+		return Result.failure("missing restaurant placement should receive configured adjustment: %s" % str(restaurant_features))
 	return Result.success()
 
 static func _test_structure_score_downweights_marginal_edits_but_keeps_route_edits(seed_val: int) -> Result:
