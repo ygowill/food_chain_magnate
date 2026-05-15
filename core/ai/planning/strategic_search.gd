@@ -464,10 +464,16 @@ static func _comparison_hard_gate(plan, summary: Dictionary, baseline: Dictionar
 		reasons.append("opponent_loss_regressed")
 	if bool(summary.get("route_stalled", false)):
 		reasons.append("route_stalled")
-	if str(summary.get("phase_stop_reason", "")) == "budget_expired":
+	var candidate_stop_reason := str(summary.get("phase_stop_reason", ""))
+	var baseline_stop_reason := str(baseline.get("phase_stop_reason", ""))
+	if candidate_stop_reason == "budget_expired":
 		reasons.append("candidate_rollout_budget_expired")
-	if str(baseline.get("phase_stop_reason", "")) == "budget_expired":
+	elif not candidate_stop_reason.is_empty() and not _is_complete_rollout_stop_reason(candidate_stop_reason):
+		reasons.append("candidate_rollout_incomplete")
+	if baseline_stop_reason == "budget_expired":
 		reasons.append("baseline_rollout_budget_expired")
+	elif not baseline_stop_reason.is_empty() and not _is_complete_rollout_stop_reason(baseline_stop_reason):
+		reasons.append("baseline_rollout_incomplete")
 	var cash_footing := maxi(1, int(options.get("strategic_cash_footing", DEFAULT_CASH_FOOTING)))
 	if int(baseline.get("cash_before", 0)) < cash_footing and str(plan.route_type) != "marketing_income":
 		reasons.append("low_cash_non_marketing_override")
@@ -502,6 +508,12 @@ static func _comparison_delta_score(plan, summary: Dictionary, baseline: Diction
 	score -= float(maxi(0, int(summary.get("lost_to_competitor", 0)) - int(baseline.get("lost_to_competitor", 0)))) * 8.0
 	score -= float(maxi(0, int(summary.get("command_count", 0)) - int(baseline.get("command_count", 0)))) * 0.5
 	return score
+
+static func _is_complete_rollout_stop_reason(reason: String) -> bool:
+	match str(reason).strip_edges():
+		"phase_boundary", "round_horizon", "game_over":
+			return true
+	return false
 
 static func _route_progress_delta_score(plan, summary: Dictionary, baseline: Dictionary) -> float:
 	if plan == null:

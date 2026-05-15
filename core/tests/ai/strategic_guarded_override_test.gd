@@ -45,6 +45,9 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var budget_expired_rollout := _test_budget_expired_rollout_cannot_override()
 	if not budget_expired_rollout.ok:
 		return budget_expired_rollout
+	var incomplete_rollout := _test_incomplete_rollout_cannot_override()
+	if not incomplete_rollout.ok:
+		return incomplete_rollout
 	var precomputed_fallback := _test_compared_fallback_reuses_precomputed_strategy_decision()
 	if not precomputed_fallback.ok:
 		return precomputed_fallback
@@ -54,7 +57,7 @@ static func run(_player_count: int = 2, _seed_val: int = 12345) -> Result:
 	var scorer := _test_directive_hint_bonus_is_local_and_capped()
 	if not scorer.ok:
 		return scorer
-	return Result.success({"cases": 14})
+	return Result.success({"cases": 15})
 
 static func _test_low_cash_blocks_non_marketing_override() -> Result:
 	var plan = StrategicPlanClass.create(
@@ -383,6 +386,53 @@ static func _test_budget_expired_rollout_cannot_override() -> Result:
 	var baseline_reasons := _string_array(baseline_gate.get("reasons", []))
 	if bool(baseline_gate.get("passed", true)) or not baseline_reasons.has("baseline_rollout_budget_expired"):
 		return Result.failure("budget-expired baseline rollout should not be used for override proof: %s" % str(baseline_gate))
+	return Result.success()
+
+static func _test_incomplete_rollout_cannot_override() -> Result:
+	var plan = StrategicPlanClass.create(
+		"supply_capacity_burger",
+		0,
+		"supply_capacity",
+		0.0,
+		["burger"],
+		[],
+		["burger_cook"],
+		{},
+		[],
+		2,
+		8,
+		["produce_food"]
+	)
+	var stable_baseline := _summary({
+		"cash_before": 35,
+		"cash_after": 35,
+		"cash_max_seen": 35,
+		"phase_stop_reason": "phase_boundary",
+		"command_count": 1,
+	})
+	var cash_positive_but_failed := _summary({
+		"cash_before": 35,
+		"cash_after": 55,
+		"cash_max_seen": 55,
+		"phase_stop_reason": "bot_failed",
+		"demand_sold": 2,
+		"route_action_count": 1,
+		"route_progress_bonus": 12.0,
+		"command_count": 2,
+	})
+	var candidate_gate: Dictionary = StrategicSearchClass._comparison_hard_gate(plan, cash_positive_but_failed, stable_baseline, {"strategic_cash_footing": 15})
+	var candidate_reasons := _string_array(candidate_gate.get("reasons", []))
+	if bool(candidate_gate.get("passed", true)) or not candidate_reasons.has("candidate_rollout_incomplete"):
+		return Result.failure("incomplete candidate rollout should not override: %s" % str(candidate_gate))
+
+	var incomplete_baseline := stable_baseline.duplicate(true)
+	incomplete_baseline["phase_stop_reason"] = "bot_failed"
+	var complete_candidate := cash_positive_but_failed.duplicate(true)
+	complete_candidate["phase_stop_reason"] = "phase_boundary"
+	var baseline_gate: Dictionary = StrategicSearchClass._comparison_hard_gate(plan, complete_candidate, incomplete_baseline, {"strategic_cash_footing": 15})
+	var baseline_reasons := _string_array(baseline_gate.get("reasons", []))
+	if bool(baseline_gate.get("passed", true)) or not baseline_reasons.has("baseline_rollout_incomplete"):
+		return Result.failure("incomplete baseline rollout should not be used for override proof: %s" % str(baseline_gate))
 	return Result.success()
 
 static func _test_compared_fallback_reuses_precomputed_strategy_decision() -> Result:
