@@ -224,7 +224,7 @@ score =
 - Matrix result: `configs=3`, `matches=9`, `failures=0`, `timeouts=0`. Both mixed seat configurations were behavior-identical to pure `strategy`: `tuning_score_delta=0.000`, cash averages `[248.0,123.667]`, opening deltas all `0.000`, and `types=strategy=608` with `strategic_decision_count_avg_per_match=0.000`.
 - Design check before commit: aligned. Step 13 intentionally restores a no-harm baseline: failed strategic search cannot perturb the fallback, and route-shaped progress cannot override without economic proof. This is not the final strength improvement; it is the corrected guardrail required before adding positive StrategicBot-only plans.
 - Commit gate: satisfied for Step 13; verification and matrix result are recorded here before commit.
-- Commit: pending.
+- Commit: `fix(ai): preserve strategic baseline fallback` (`7b01b5dc`).
 
 ### 2026-05-15 Step 14
 
