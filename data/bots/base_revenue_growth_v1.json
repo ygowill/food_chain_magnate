@@ -142,6 +142,25 @@
       "initiate_marketing": 10.0,
       "produce_food": -2.0,
       "procure_drinks": -4.0
+    },
+    "income_supply_gap": {
+      "produce_food": 10.0,
+      "procure_drinks": 10.0,
+      "train": 6.0,
+      "set_company_structure_direct": 5.0,
+      "set_company_structure_report": 5.0,
+      "recruit": 4.0,
+      "initiate_marketing": -6.0,
+      "place_house": -8.0,
+      "add_garden": -8.0
+    },
+    "income_recovery": {
+      "set_price": 12.0,
+      "set_discount": 12.0,
+      "recruit": 5.0,
+      "set_company_structure_direct": 5.0,
+      "set_company_structure_report": 5.0,
+      "initiate_marketing": 4.0
     }
   }
 }

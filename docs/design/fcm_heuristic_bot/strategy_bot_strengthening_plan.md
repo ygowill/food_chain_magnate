@@ -91,7 +91,7 @@ Candidate evidence:
 
 ### Step 3: Midgame capacity and recovery scenarios
 
-Status: pending.
+Status: complete.
 
 Target:
 
@@ -162,3 +162,15 @@ For each step:
   - Strategy-only smoke: `base_revenue_growth_v1`, 2 players, seeds `12345-12347`, target round 8, `configs=1`, `matches=3`, `failures=0`, `timeouts=0`.
   - Smoke summary: success `1.000`, avg round `8.000`, `cash_min_after_first_positive_avg=[10.0, 10.0]`, opening positive cash avg `2.000`, no-positive-cash avg `0.000`, search types `strategy=358`.
   - Design-alignment result: opening-chain adjustments stayed profile-scoped and trace-visible; small smoke did not show strength movement, but it preserved safety and gives the next tuning pass a controlled stage-parameter surface.
+- 2026-05-15: Implemented Step 3 draft for `base_revenue_growth_v1`:
+  - Added `income_supply_gap` adjustments that prefer `produce_food`, `procure_drinks`, training, structure activation, and limited recruiting when actionable inventory gap exists.
+  - Added `income_recovery` adjustments that prefer price actions plus structure/recruit/marketing support when lost or price-recoverable demand is present.
+  - Added targeted StrategyBot tests for the configured `income_supply_gap` and `income_recovery` contexts and score adjustments.
+  - Design-alignment check before verification: adjustments are tied to economic context (`actionable_inventory_gap`, lost demand, price-recoverable demand), remain profile-scoped, and stay below hard planner gates and preview evidence.
+- 2026-05-15: Verified and closed Step 3:
+  - `CheckCompile PASS files=1236`.
+  - `AllTests` first run hit a `BeamSearchTest` fixed-budget edge (`beam_budget_expired=true`, 260ms budget / 267ms elapsed); immediate rerun passed.
+  - `AllTests PASS passed=426/426 failed=[] total_ms=159109`.
+  - Strategy-only smoke: `base_revenue_growth_v1`, 2 players, seeds `12345-12347`, target round 8, `configs=1`, `matches=3`, `failures=0`, `timeouts=0`.
+  - Smoke summary: success `1.000`, avg round `8.000`, avg cash `[68.333, 63.667]`, `cash_min_after_first_positive_avg=[10.0, 10.0]`, opening positive cash avg `2.000`, no-positive-cash avg `0.000`, `produce_food=35`, `set_price` mandatory completions `8`, search types `strategy=375`.
+  - Design-alignment result: Step 3 keeps StrategyBot as the mainline and adds economic context scoring only through profile-scoped, trace-visible phase adjustments; it improves midgame supply/recovery judgment without changing hard validation, cash safety gates, or StrategicBot override behavior.

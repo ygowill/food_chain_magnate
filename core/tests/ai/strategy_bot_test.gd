@@ -53,6 +53,9 @@ static func run(_player_count: int = 2, seed_val: int = 12345) -> Result:
 	var opening_adjustments := _test_strategy_phase_adjustments_prioritize_opening_chain()
 	if not opening_adjustments.ok:
 		return opening_adjustments
+	var midgame_adjustments := _test_strategy_phase_adjustments_prioritize_midgame_recovery()
+	if not midgame_adjustments.ok:
+		return midgame_adjustments
 	var phase_planner := _test_phase_planner_classifies_strategy_context(seed_val)
 	if not phase_planner.ok:
 		return phase_planner
@@ -2930,6 +2933,56 @@ static func _test_strategy_phase_adjustments_prioritize_opening_chain() -> Resul
 		return Result.failure("missing restaurant should expose opening_needs_restaurant context: %s" % str(restaurant_features))
 	if not is_equal_approx(float(restaurant_features.get("phase_action_adjustment", 0.0)), 12.0):
 		return Result.failure("missing restaurant placement should receive configured adjustment: %s" % str(restaurant_features))
+	return Result.success()
+
+static func _test_strategy_phase_adjustments_prioritize_midgame_recovery() -> Result:
+	var growth_profile = StrategyProfileClass.new()
+	var growth_read := growth_profile.configure("base_revenue_growth_v1")
+	if not growth_read.ok:
+		return Result.failure("growth profile should load midgame phase adjustments: %s" % growth_read.error)
+	if not is_equal_approx(float(growth_profile.phase_action_adjustment("income_supply_gap", "produce_food")), 10.0):
+		return Result.failure("growth profile should configure income supply gap produce adjustment: %s" % str(growth_profile.phase_action_adjustments))
+	if not is_equal_approx(float(growth_profile.phase_action_adjustment("income_recovery", "set_price")), 12.0):
+		return Result.failure("growth profile should configure income recovery price adjustment: %s" % str(growth_profile.phase_action_adjustments))
+
+	var supply_gap := _synthetic_income_observation()
+	supply_gap.own_player["employees"] = ["burger_cook", "campaign_manager"]
+	supply_gap.own_player["inventory"] = {}
+	var produce_macro := MacroAction.create(
+		"produce_food_for_supply_gap",
+		[Command.create("produce_food", 0, {"employee_type": "burger_cook", "food_type": "burger"})],
+		0.0,
+		["working", "supply"],
+		{}
+	)
+	var supply_score: Dictionary = StrategyScorerClass.score_macro(supply_gap, produce_macro, growth_profile)
+	var supply_features: Dictionary = Dictionary(supply_score.get("features", {}))
+	if str(supply_features.get("strategy_context_id", "")) != "income_supply_gap":
+		return Result.failure("supply gap should expose income_supply_gap context: %s" % str(supply_features))
+	if not is_equal_approx(float(supply_features.get("phase_action_adjustment", 0.0)), 10.0):
+		return Result.failure("supply gap produce action should receive configured adjustment: %s" % str(supply_features))
+
+	var recovery := _synthetic_income_observation()
+	recovery.own_player["employees"] = ["burger_cook", "campaign_manager", "pricing_manager"]
+	recovery.own_player["inventory"] = {"burger": 2}
+	var recovery_analysis: Dictionary = StrategyIncomeAnalyzerClass.analyze(recovery, growth_profile)
+	recovery_analysis["total_actionable_inventory_gap"] = 0
+	recovery_analysis["total_inventory_gap"] = 0
+	recovery_analysis["total_lost_to_competitor_demand"] = 1
+	recovery_analysis["total_price_recoverable_demand"] = 1
+	var price_macro := MacroAction.create(
+		"set_price_for_recovery",
+		[Command.create("set_price", 0, {})],
+		0.0,
+		["working", "price"],
+		{}
+	)
+	var recovery_score: Dictionary = StrategyScorerClass.score_macro(recovery, price_macro, growth_profile, {"income_analysis": recovery_analysis})
+	var recovery_features: Dictionary = Dictionary(recovery_score.get("features", {}))
+	if str(recovery_features.get("strategy_context_id", "")) != "income_recovery":
+		return Result.failure("recovery demand should expose income_recovery context: %s" % str(recovery_features))
+	if not is_equal_approx(float(recovery_features.get("phase_action_adjustment", 0.0)), 12.0):
+		return Result.failure("recovery price action should receive configured adjustment: %s" % str(recovery_features))
 	return Result.success()
 
 static func _test_structure_score_downweights_marginal_edits_but_keeps_route_edits(seed_val: int) -> Result:
