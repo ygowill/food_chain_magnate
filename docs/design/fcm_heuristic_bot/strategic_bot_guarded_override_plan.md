@@ -177,7 +177,7 @@ score =
 
 ### 2026-05-15 Step 11
 
-- Status: implemented, pending commit.
+- Status: committed.
 - Change target: run guarded StrategicBot against StrategyBot on longer smoke matrices after Step 9. Use the same guarded compared path, compare `strategy` vs `strategy,strategic`, and record whether strategic decisions remain safe beyond the r4 probe.
 - Required checks: target at least r8 and r12 probes with fixed seed ranges; capture `search_type_counts`, `strategic_failure_counts`, cash/first-cash/food-delay metrics, failures, timeouts, and whether guarded strategic improves or regresses the baseline.
 - Command r8: `./tools/run_bot_selfplay_matrix.sh --config=strategy --config=strategy,strategic --profile=base_revenue_growth_v1 --players=2 --seed=12345 --matches=3 --target-round=8 --max-steps=1600 --budget-ms=360 --match-timeout-ms=240000 --trace-tail=60 --strategic-search=compared --strategic-min-search-budget-ms=120 --strategic-max-plans=6 --strategic-horizon-decisions=16 --strategic-rollout-step-budget-ms=48 --strategic-config-id=guarded_compared_step11_r8 --output-jsonl=res://.godot/guarded_compared_step11_r8.jsonl --output-json=res://.godot/guarded_compared_step11_r8_summary.json`.
@@ -186,15 +186,21 @@ score =
 - Result r12: `total_matches=6`, `failures=0`, `timeouts=0`. Baseline score `1629.470`; guarded mixed score `1612.252`; `tuning_score_delta=-17.218`. Guarded mixed search: `search_type_counts={"strategic":36,"strategy":570}`, `strategic_failure_counts={"no_plan_beat_baseline":142,"no_plans_generated":15,"no_strategic_legal_actions":102}`, `strategic_fallback_rate=0.427`. Opening metrics stayed equal: first positive cash round delta `0.0`, food recruit-to-produce round delay delta `0.0`. Cash average shifted `[+43.333,-61.334]`; cash max seen shifted `[+43.333,-59.666]`.
 - Design check: aligned. The longer probes did not justify threshold tuning or broader route hints. Guarded strategic decisions are stable enough to run without failures/timeouts, but r12 regresses the mixed configuration despite stronger player-0 cash, so the next step must diagnose fallback buckets and negative outcome distribution before any code expansion.
 - Commit gate: satisfied for Step 11; exact commands and results are recorded here before commit.
-- Commit: pending.
+- Commit: `docs(ai): record strategic bot longer smoke results` (`bc7ad7eb`).
 
 ### 2026-05-15 Step 12
 
-- Status: planned.
+- Status: implemented, pending commit.
 - Change target: analyze remaining fallback reasons after the longer matrices. Separate `no_strategic_legal_actions`, `no_plans_generated`, `no_plan_beat_baseline`, hard-gate blocks, and delta-below-threshold cases.
 - Required checks: inspect decision-detail payloads for at least one representative failing point per bucket; classify whether the root cause is missing plan generation, phase-local hinting, route proof, baseline equivalence, or genuinely unsafe strategy.
-- Design check before implementation: the fix must target the diagnosed bucket and must not broaden route hints, bypass validation, or reduce hard-gate protection.
-- Commit gate: save the diagnosis and chosen next implementation target here before committing any code.
+- Diagnosis command: reran seed `12346` mixed as `./tools/run_bot_selfplay.sh --bots=strategy,strategic --profile=base_revenue_growth_v1 --players=2 --seed=12346 --matches=1 --target-round=12 --max-steps=2600 --budget-ms=360 --match-timeout-ms=300000 --trace-tail=2600 --trace-detail=decision --strategic-search=compared --strategic-min-search-budget-ms=120 --strategic-max-plans=6 --strategic-horizon-decisions=16 --strategic-rollout-step-budget-ms=48 --strategic-config-id=guarded_compared_step12_seed12346 --output-jsonl=res://.godot/guarded_compared_step12_seed12346_decision.jsonl`.
+- Baseline comparison command: reran seed `12346` pure baseline as `./tools/run_bot_selfplay.sh --bots=strategy,strategy --profile=base_revenue_growth_v1 --players=2 --seed=12346 --matches=1 --target-round=12 --max-steps=2600 --budget-ms=360 --match-timeout-ms=300000 --trace-tail=2600 --trace-detail=compact --output-jsonl=res://.godot/strategy_step12_seed12346_compact.jsonl`.
+- Bucket result: representative mixed seed `12346` ended `final_cash=[331,30]` versus pure baseline `final_cash=[201,214]`. The mixed decision trace had `no_strategic_legal_actions=34`, `no_plans_generated=5`, `no_route_progress_over_baseline=24`, `delta_below_threshold=19`, `no_route_progress_over_baseline+unsupplied_demand_regressed=1`, and `route_stalled+no_route_progress_over_baseline=1`.
+- Bucket classification: `no_strategic_legal_actions` in Setup/ReserveCards is expected fallback, not a plan bug. `no_plans_generated` in Setup restaurant placement has `candidate_count=0` and no evaluated plan, so it is not the r12 regression source. `no_route_progress_over_baseline` and `delta_below_threshold` are mostly correct guard behavior: examples had `route_action_count=0` or score `6.75 < min_delta=12`.
+- Regression source: seed `12346` diverges after StrategicBot approves route-progress marketing while the compared payload still has no economic proof. At round 4 player 1 chooses `marketing_marketing_trainee_11_burger_13_2_90` with `cash_after=10`, `demand_sold=0`, `demand_created=0`, `lost_to_competitor=1`, `unsold_demand=1`; the pass is driven by `route_completion_bonus=12` and `route_progress_bonus=6.2`. At round 7 it repeats the pattern with `marketing_campaign_manager_7_burger_13_5_0`, `cash_after=30`, `demand_sold=0`, and no actual cash improvement. After round 5 the mixed trace gives player 1 no further income while player 0 earns every dinner.
+- Chosen Step 13 target: scoring/acceptance of already-validated evidence. Keep hard gates intact, but prevent route-only credit from clearing a compared strategic override for marketing once the player already has positive cash unless the compared rollout shows economic proof over baseline: cash/max-cash improvement, sold demand improvement, reduced lost-to-competitor demand, or reduced unsold demand. Opening cash-zero route setup and legal supply/restructuring progress should remain available when they still satisfy the existing guarded proof checks.
+- Design check: aligned. This targets the diagnosed over-trust in route proof; it does not broaden route hints, bypass action validation, lower `min_delta_score`, or relax hard gates.
+- Commit gate: satisfied for Step 12; diagnosis and the chosen implementation target are recorded here before code changes.
 - Commit: pending.
 
 ### 2026-05-15 Step 13
