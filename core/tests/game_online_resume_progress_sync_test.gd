@@ -32,6 +32,23 @@ static func run() -> Result:
 	var prev_is_game_active := bool(Globals.is_game_active)
 	var prev_pending_archive := Dictionary(NetClient._pending_resync_archive).duplicate(true) if NetClient != null else {}
 
+	var log_refresh_r: Result = await _case_online_ui_refresh_applies_log_after_ui_opens_panel(tree)
+	if not log_refresh_r.ok:
+		return _restore_and_fail(
+			prev_mode,
+			prev_local_player_id,
+			prev_server_url,
+			prev_connect_token,
+			prev_room_state,
+			prev_room_list,
+			prev_player_profile,
+			prev_resume_state,
+			prev_engine,
+			prev_is_game_active,
+			log_refresh_r.error,
+			prev_pending_archive
+		)
+
 	var server_engine = GameEngineClass.new()
 	var init_server_r: Result = server_engine.initialize(2, 12345, [], GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR, [], [-1, -1])
 	if not init_server_r.ok:
@@ -561,6 +578,55 @@ static func _restore_and_fail(
 	)
 	return Result.failure(message)
 
+static func _case_online_ui_refresh_applies_log_after_ui_opens_panel(tree: SceneTree) -> Result:
+	var host := Node.new()
+	host.name = "OnlineLogRefreshHost"
+	tree.root.add_child(host)
+	var panel := Control.new()
+	panel.name = "OnlineLogPanel"
+	panel.visible = false
+	host.add_child(panel)
+	await tree.process_frame
+
+	var harness := _LogRefreshHarness.new(panel)
+	var controller = ControllerClass.new(
+		host,
+		panel,
+		Callable(),
+		Callable(harness, "apply_timeline"),
+		Callable(harness, "request_refresh"),
+		Callable(harness, "update_ui"),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable(),
+		Callable()
+	)
+	controller._schedule_online_command_ui_refresh({"action_id": "remote_action"}, 0, false)
+	for _i in range(4):
+		await tree.process_frame
+
+	var result := Result.success({})
+	if int(harness.request_refresh_calls) != 1:
+		result = Result.failure("在线 CommandApplied 应先请求一次 live log refresh，实际=%d" % int(harness.request_refresh_calls))
+	elif int(harness.update_ui_calls) != 1:
+		result = Result.failure("在线 CommandApplied 应刷新一次 UI，实际=%d" % int(harness.update_ui_calls))
+	elif not bool(panel.visible):
+		result = Result.failure("测试前置失败：UI 刷新后日志面板应可见")
+	elif int(harness.apply_timeline_calls) != 1:
+		result = Result.failure("日志面板在 UI 刷新后变为可见时应立即补刷 live timeline，实际=%d" % int(harness.apply_timeline_calls))
+	elif int(harness.force_apply_calls) != 0:
+		result = Result.failure("普通在线命令补刷不应强制重建，实际 force=%d" % int(harness.force_apply_calls))
+
+	controller.dispose()
+	host.queue_free()
+	await tree.process_frame
+	return result
+
 class _Harness:
 	extends RefCounted
 
@@ -604,3 +670,28 @@ class _Harness:
 
 	func request_resync(_force_snapshot: bool = false) -> String:
 		return ""
+
+class _LogRefreshHarness:
+	extends RefCounted
+
+	var _panel: Control = null
+	var request_refresh_calls: int = 0
+	var update_ui_calls: int = 0
+	var apply_timeline_calls: int = 0
+	var force_apply_calls: int = 0
+
+	func _init(panel: Control) -> void:
+		_panel = panel
+
+	func request_refresh() -> void:
+		request_refresh_calls += 1
+
+	func update_ui() -> void:
+		update_ui_calls += 1
+		if is_instance_valid(_panel):
+			_panel.visible = true
+
+	func apply_timeline(force_rebuild: bool = false) -> void:
+		apply_timeline_calls += 1
+		if bool(force_rebuild):
+			force_apply_calls += 1

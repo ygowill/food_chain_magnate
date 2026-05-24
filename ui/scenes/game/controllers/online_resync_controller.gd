@@ -571,8 +571,10 @@ func _flush_online_command_ui_refresh() -> void:
 	_online_ui_refresh_apply_end_mono_usec = 0
 	_online_ui_refresh_force_log_apply = false
 
-	if force_log_apply and is_instance_valid(_game_log_panel) and _game_log_panel.visible and _apply_live_log_timeline_from_engine.is_valid():
+	var log_applied_before_ui := false
+	if force_log_apply and _is_game_log_panel_visible_for_live_apply() and _apply_live_log_timeline_from_engine.is_valid():
 		_apply_live_log_timeline_from_engine.call(true)
+		log_applied_before_ui = true
 	elif _request_live_log_timeline_refresh.is_valid():
 		_request_live_log_timeline_refresh.call()
 	if _update_ui.is_valid():
@@ -599,10 +601,21 @@ func _flush_online_command_ui_refresh() -> void:
 			"deferred": true,
 			"dirty_flags": int(dirty_flags),
 		})
+	if not log_applied_before_ui and _is_game_log_panel_visible_for_live_apply() and _apply_live_log_timeline_from_engine.is_valid():
+		_apply_live_log_timeline_from_engine.call(bool(force_log_apply))
 	if apply_end_mono_usec > 0:
 		_trace_online_command_ui_settled(meta, apply_end_mono_usec)
 	if _hide_loading_after_next_online_ui_refresh:
 		_hide_sync_loading()
+
+func _is_game_log_panel_visible_for_live_apply() -> bool:
+	if not is_instance_valid(_game_log_panel):
+		return false
+	if _game_log_panel is CanvasItem:
+		return bool((_game_log_panel as CanvasItem).is_visible_in_tree())
+	if _game_log_panel.has_method("is_visible_in_tree"):
+		return bool(_game_log_panel.call("is_visible_in_tree"))
+	return bool(_game_log_panel.visible)
 
 func _build_online_command_dirty_flags(meta: Dictionary, force_log_apply: bool) -> int:
 	if bool(force_log_apply) or bool(meta.get("phase_changed", false)):
