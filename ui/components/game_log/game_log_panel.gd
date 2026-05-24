@@ -1264,6 +1264,8 @@ func ensure_display_ready() -> void:
 		return
 	if log_container == null or not is_instance_valid(log_container):
 		return
+	if not is_visible_in_tree():
+		return
 	if _descriptor_commit_active:
 		return
 

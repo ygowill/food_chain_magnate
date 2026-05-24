@@ -33,8 +33,10 @@ func set_items(items: Array[Dictionary]) -> void:
 	_info_by_key.clear()
 
 	var previous_staff_id := _selected_staff_id
+	var previous_key := _selected_employee_key
+	var preserved_key := ""
+	var preserved_key_enabled := false
 	var first_enabled_key := ""
-	var first_key := ""
 
 	for item_val in items:
 		if not (item_val is Dictionary):
@@ -63,20 +65,20 @@ func set_items(items: Array[Dictionary]) -> void:
 
 		_items.append(item)
 		_info_by_key[key] = item
-		if first_key.is_empty():
-			first_key = key
 		if enabled and first_enabled_key.is_empty():
 			first_enabled_key = key
-		if previous_staff_id > 0 and previous_staff_id == staff_id:
-			_selected_employee_key = key
+		if (previous_staff_id > 0 and previous_staff_id == staff_id) or (not previous_key.is_empty() and previous_key == key):
+			preserved_key = key
+			preserved_key_enabled = enabled
 
 	if _items.is_empty():
 		clear_selection()
-	elif _selected_employee_key.is_empty() or not _info_by_key.has(_selected_employee_key):
-		var fallback_key := first_enabled_key if not first_enabled_key.is_empty() else first_key
-		apply_selected_key(fallback_key)
+	elif not preserved_key.is_empty() and preserved_key_enabled:
+		apply_selected_key(preserved_key)
+	elif not first_enabled_key.is_empty():
+		apply_selected_key(first_enabled_key)
 	else:
-		apply_selected_key(_selected_employee_key)
+		clear_selection()
 
 func get_items() -> Array[Dictionary]:
 	return _items.duplicate(true)
@@ -100,12 +102,10 @@ func apply_selected_key(employee_key: String) -> void:
 		return
 	if not _info_by_key.has(key):
 		var fallback_key := ""
-		if not _selected_employee_key.is_empty() and _info_by_key.has(_selected_employee_key):
+		if not _selected_employee_key.is_empty() and _info_by_key.has(_selected_employee_key) and _is_key_enabled(_selected_employee_key):
 			fallback_key = _selected_employee_key
 		if fallback_key.is_empty():
 			fallback_key = _find_first_enabled_key()
-		if fallback_key.is_empty():
-			fallback_key = _find_first_key()
 		if fallback_key.is_empty():
 			clear_selection()
 			return
@@ -153,6 +153,13 @@ func _find_first_enabled_key() -> String:
 		if _info_by_key.has(key):
 			return key
 	return ""
+
+func _is_key_enabled(employee_key: String) -> bool:
+	var key := str(employee_key).strip_edges()
+	if key.is_empty() or not _info_by_key.has(key):
+		return false
+	var info: Dictionary = Dictionary(_info_by_key.get(key, {}))
+	return bool(info.get("enabled", true))
 
 func _find_first_key() -> String:
 	for item_val in _items:

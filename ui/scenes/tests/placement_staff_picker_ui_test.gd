@@ -99,13 +99,25 @@ static func run() -> Result:
 	r = _case_staff_picker_state_reselects_by_employee_type()
 	if not r.ok:
 		return r
+	r = _case_staff_picker_state_falls_back_when_selected_staff_becomes_used()
+	if not r.ok:
+		return r
 	r = _case_house_overlay_keeps_selected_staff_id()
 	if not r.ok:
 		return r
 	r = _case_house_overlay_falls_back_when_selected_staff_disappears()
 	if not r.ok:
 		return r
+	r = _case_house_overlay_mode_switch_clears_mode_selection()
+	if not r.ok:
+		return r
 	r = _case_restaurant_overlay_defaults_to_enabled_staff()
+	if not r.ok:
+		return r
+	r = _case_house_overlay_visible_sync_updates_staff_usage_without_force()
+	if not r.ok:
+		return r
+	r = _case_restaurant_overlay_visible_sync_updates_staff_usage_without_force()
 	if not r.ok:
 		return r
 	r = _case_restaurant_move_clear_can_skip_auto_restaurant_selection()
@@ -157,6 +169,29 @@ static func _case_staff_picker_state_reselects_by_employee_type() -> Result:
 		return Result.failure("StaffPickerState refresh_selected 后应保留 staff_id=202，实际: %s" % str(state.get_selected_staff_id()))
 	return Result.success()
 
+static func _case_staff_picker_state_falls_back_when_selected_staff_becomes_used() -> Result:
+	var state := StaffPickerStateClass.new(["can_place_house", "can_add_garden"])
+	state.set_items([
+		{"staff_id": 101, "employee_type": "new_business_developer", "capacity": 1, "used": 0, "remaining": 1, "can_place_house": true, "can_add_garden": true},
+		{"staff_id": 102, "employee_type": "new_business_developer", "capacity": 1, "used": 0, "remaining": 1, "can_place_house": true, "can_add_garden": true},
+	])
+	state.apply_selected_key("staff:101")
+	if int(state.get_selected_staff_id()) != 101:
+		return Result.failure("StaffPickerState 应先允许显式选择 staff_id=101，实际: %s" % str(state.get_selected_staff_id()))
+	state.set_items([
+		{"staff_id": 101, "employee_type": "new_business_developer", "capacity": 1, "used": 1, "remaining": 0, "can_place_house": true, "can_add_garden": true},
+		{"staff_id": 102, "employee_type": "new_business_developer", "capacity": 1, "used": 0, "remaining": 1, "can_place_house": true, "can_add_garden": true},
+	])
+	if int(state.get_selected_staff_id()) != 102:
+		return Result.failure("刷新后 selected staff 已用完时应切到 staff_id=102，实际: %s" % str(state.get_selected_staff_id()))
+	state.set_items([
+		{"staff_id": 101, "employee_type": "new_business_developer", "capacity": 1, "used": 1, "remaining": 0, "can_place_house": true, "can_add_garden": true},
+		{"staff_id": 102, "employee_type": "new_business_developer", "capacity": 1, "used": 1, "remaining": 0, "can_place_house": true, "can_add_garden": true},
+	])
+	if int(state.get_selected_staff_id()) != -1 or not str(state.get_selected_key()).strip_edges().is_empty():
+		return Result.failure("所有 staff 都用完时不应继续选中灰显员工，实际 staff_id=%s key=%s" % [str(state.get_selected_staff_id()), str(state.get_selected_key())])
+	return Result.success()
+
 static func _case_house_overlay_keeps_selected_staff_id() -> Result:
 	var overlay := HouseOverlayClass.new()
 	overlay.set_available_employee_items([
@@ -196,6 +231,28 @@ static func _case_house_overlay_falls_back_when_selected_staff_disappears() -> R
 	overlay.free()
 	return Result.success()
 
+static func _case_house_overlay_mode_switch_clears_mode_selection() -> Result:
+	var overlay := HouseOverlayClass.new()
+	overlay.set_mode("place_house")
+	overlay.set_selected_house_number(3)
+	overlay.set_selected_position(Vector2i(2, 2))
+	if not overlay.can_confirm():
+		overlay.free()
+		return Result.failure("测试前置失败：place_house 已选择编号和位置后应可确认")
+	overlay.set_mode("add_garden")
+	overlay.set_mode("place_house")
+	if overlay.get_selected_position() != Vector2i(-1, -1):
+		overlay.free()
+		return Result.failure("house overlay 切换模式后不应残留旧地图点，实际: %s" % str(overlay.get_selected_position()))
+	if int(overlay.get_selected_house_number()) != -1:
+		overlay.free()
+		return Result.failure("house overlay 切换模式后不应残留旧房屋编号，实际: %s" % str(overlay.get_selected_house_number()))
+	if overlay.can_confirm():
+		overlay.free()
+		return Result.failure("house overlay 切回 place_house 后未重新选择时不应可确认")
+	overlay.free()
+	return Result.success()
+
 static func _case_restaurant_overlay_defaults_to_enabled_staff() -> Result:
 	var overlay := RestaurantOverlayClass.new()
 	overlay.set_available_employee_items([
@@ -210,6 +267,144 @@ static func _case_restaurant_overlay_defaults_to_enabled_staff() -> Result:
 		overlay.free()
 		return Result.failure("restaurant overlay 切换后应保留 staff_id=201，实际: %s" % str(overlay.get_selected_staff_id()))
 	overlay.free()
+	return Result.success()
+
+static func _case_house_overlay_visible_sync_updates_staff_usage_without_force() -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, 13579)
+	if not init.ok:
+		return Result.failure("house overlay visible sync 初始化失败: %s" % init.error)
+	var state := engine.get_state()
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_PLACE_HOUSES
+	var actor := int(state.get_current_player_id())
+	var take := StateUpdaterClass.take_from_pool(state, "new_business_developer", 2)
+	if not take.ok:
+		engine.dispose()
+		return Result.failure("house overlay visible sync 取出员工失败: %s" % take.error)
+	for _i in range(2):
+		var add := StateUpdaterClass.add_employee(state, actor, "new_business_developer", false)
+		if not add.ok:
+			engine.dispose()
+			return Result.failure("house overlay visible sync 添加员工失败: %s" % add.error)
+	var ids_read := StaffStateClass.find_staff_ids_by_employee_type(state, actor, "new_business_developer", ["employees"])
+	if not ids_read.ok:
+		engine.dispose()
+		return Result.failure("house overlay visible sync 读取 staff_id 失败: %s" % ids_read.error)
+	var ids: Array = ids_read.value
+	if ids.size() < 2:
+		engine.dispose()
+		return Result.failure("house overlay visible sync 需要 2 个员工，实际: %s" % str(ids))
+	var first_staff_id := int(ids[0])
+	var second_staff_id := int(ids[1])
+
+	var overlays = PlacementOverlaysClass.new(null, _MapControllerSpy.new(), null, Callable(), Callable())
+	var overlay := HouseOverlayClass.new()
+	overlay.visible = true
+	overlay.set_mode("place_house")
+	overlays.house_placement_overlay = overlay
+	overlays.sync(state, false)
+	overlay.set_selected_employee_key("staff:%d" % first_staff_id)
+
+	var mark_used := StaffStateClass.increment_staff_track_usage(state, first_staff_id, "place_house_or_garden")
+	if not mark_used.ok:
+		overlay.free()
+		engine.dispose()
+		return Result.failure("house overlay visible sync 标记员工已用失败: %s" % mark_used.error)
+	overlays.sync(state, false)
+
+	var items: Array[Dictionary] = overlay.get_available_employee_items()
+	var first_item := _find_staff_picker_item(items, first_staff_id)
+	if first_item.is_empty():
+		overlay.free()
+		engine.dispose()
+		return Result.failure("house overlay visible sync 缺少已用员工 item")
+	if bool(first_item.get("enabled", true)):
+		overlay.free()
+		engine.dispose()
+		return Result.failure("house overlay 普通 sync 后已用员工应灰显")
+	if int(overlay.get_selected_staff_id()) != second_staff_id:
+		overlay.free()
+		engine.dispose()
+		return Result.failure("house overlay 普通 sync 后应选中第二个可用员工，实际: %s" % str(overlay.get_selected_staff_id()))
+
+	overlay.free()
+	engine.dispose()
+	return Result.success()
+
+static func _case_restaurant_overlay_visible_sync_updates_staff_usage_without_force() -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, 97531)
+	if not init.ok:
+		return Result.failure("restaurant overlay visible sync 初始化失败: %s" % init.error)
+	var state := engine.get_state()
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_PLACE_RESTAURANTS
+	var actor := int(state.get_current_player_id())
+	var take_regional := StateUpdaterClass.take_from_pool(state, "regional_manager", 1)
+	if not take_regional.ok:
+		engine.dispose()
+		return Result.failure("restaurant overlay visible sync 取出 regional_manager 失败: %s" % take_regional.error)
+	var add_regional := StateUpdaterClass.add_employee(state, actor, "regional_manager", false)
+	if not add_regional.ok:
+		engine.dispose()
+		return Result.failure("restaurant overlay visible sync 添加 regional_manager 失败: %s" % add_regional.error)
+	var take_local := StateUpdaterClass.take_from_pool(state, "local_manager", 1)
+	if not take_local.ok:
+		engine.dispose()
+		return Result.failure("restaurant overlay visible sync 取出 local_manager 失败: %s" % take_local.error)
+	var add_local := StateUpdaterClass.add_employee(state, actor, "local_manager", false)
+	if not add_local.ok:
+		engine.dispose()
+		return Result.failure("restaurant overlay visible sync 添加 local_manager 失败: %s" % add_local.error)
+	var regional_ids_read := StaffStateClass.find_staff_ids_by_employee_type(state, actor, "regional_manager", ["employees"])
+	if not regional_ids_read.ok:
+		engine.dispose()
+		return Result.failure("restaurant overlay visible sync 读取 regional_manager staff_id 失败: %s" % regional_ids_read.error)
+	var local_ids_read := StaffStateClass.find_staff_ids_by_employee_type(state, actor, "local_manager", ["employees"])
+	if not local_ids_read.ok:
+		engine.dispose()
+		return Result.failure("restaurant overlay visible sync 读取 local_manager staff_id 失败: %s" % local_ids_read.error)
+	var regional_ids: Array = regional_ids_read.value
+	var local_ids: Array = local_ids_read.value
+	if regional_ids.is_empty() or local_ids.is_empty():
+		engine.dispose()
+		return Result.failure("restaurant overlay visible sync 需要 regional_manager 和 local_manager staff_id，实际: regional=%s local=%s" % [str(regional_ids), str(local_ids)])
+	var first_staff_id := int(regional_ids[0])
+	var second_staff_id := int(local_ids[0])
+
+	var overlays = PlacementOverlaysClass.new(null, _MapControllerSpy.new(), null, Callable(), Callable())
+	var overlay := RestaurantOverlayClass.new()
+	overlay.visible = true
+	overlay.set_mode("place_restaurant")
+	overlays.restaurant_placement_overlay = overlay
+	overlays.sync(state, false)
+	overlay.set_selected_employee_key("staff:%d" % first_staff_id)
+
+	var mark_used := StaffStateClass.increment_staff_track_usage(state, first_staff_id, "place_or_move_restaurant")
+	if not mark_used.ok:
+		overlay.free()
+		engine.dispose()
+		return Result.failure("restaurant overlay visible sync 标记员工已用失败: %s" % mark_used.error)
+	overlays.sync(state, false)
+
+	var items: Array[Dictionary] = overlay.get_available_employee_items()
+	var first_item := _find_staff_picker_item(items, first_staff_id)
+	if first_item.is_empty():
+		overlay.free()
+		engine.dispose()
+		return Result.failure("restaurant overlay visible sync 缺少已用员工 item")
+	if bool(first_item.get("enabled", true)):
+		overlay.free()
+		engine.dispose()
+		return Result.failure("restaurant overlay 普通 sync 后已用员工应灰显")
+	if int(overlay.get_selected_staff_id()) != second_staff_id:
+		overlay.free()
+		engine.dispose()
+		return Result.failure("restaurant overlay 普通 sync 后应选中第二个可用员工，实际: %s" % str(overlay.get_selected_staff_id()))
+
+	overlay.free()
+	engine.dispose()
 	return Result.success()
 
 static func _case_restaurant_move_clear_can_skip_auto_restaurant_selection() -> Result:

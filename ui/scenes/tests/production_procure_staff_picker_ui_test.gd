@@ -10,6 +10,9 @@ static func run() -> Result:
 	r = await _case_drinks_panel_keeps_selected_staff_id()
 	if not r.ok:
 		return r
+	r = await _case_switching_to_drinks_clears_food_staff_cards()
+	if not r.ok:
+		return r
 	r = await _case_production_staff_badge_rules_hide_single_use_and_tags()
 	if not r.ok:
 		return r
@@ -49,6 +52,60 @@ static func _case_food_panel_renders_duplicate_staff_instances() -> Result:
 	if int(panel.get_selected_staff_id()) != 32:
 		_safe_free(panel)
 		return Result.failure("food 面板选择第二个实例后应保留 staff_id=32，实际: %s" % str(panel.get_selected_staff_id()))
+
+	_safe_free(panel)
+	return Result.success()
+
+static func _case_switching_to_drinks_clears_food_staff_cards() -> Result:
+	var tree = Engine.get_main_loop()
+	if not (tree is SceneTree):
+		return Result.failure("MainLoop 不是 SceneTree（无法运行 ProductionPanel UI 测试）")
+	var st: SceneTree = tree
+	var host := st.current_scene
+	if host == null or not is_instance_valid(host):
+		return Result.failure("current_scene 为空（无法挂载 ProductionPanel）")
+
+	var panel = ProductionPanelScene.instantiate()
+	host.add_child(panel)
+	panel.set_production_type("food")
+	await st.process_frame
+
+	panel.set_producer_items([
+		{"staff_id": 51, "employee_type": "kitchen_trainee", "capacity": 1, "used": 0, "remaining": 1},
+	])
+	await st.process_frame
+
+	var picker = panel.get("_employee_picker")
+	if picker == null or not is_instance_valid(picker):
+		_safe_free(panel)
+		return Result.failure("food->drinks 切换前未创建 employee picker")
+	if picker.get_child_count() != 1:
+		_safe_free(panel)
+		return Result.failure("food 面板应先渲染 1 个见习厨师，实际: %d" % picker.get_child_count())
+
+	panel.set_production_type("drinks")
+	await st.process_frame
+
+	picker = panel.get("_employee_picker")
+	if picker == null or not is_instance_valid(picker):
+		_safe_free(panel)
+		return Result.failure("food->drinks 切换后未创建 employee picker")
+	if picker.get_child_count() != 0:
+		_safe_free(panel)
+		return Result.failure("切到 drinks 时不应残留 food 员工卡，实际 child_count=%d" % picker.get_child_count())
+	if str(panel.get_selected_employee_type()).strip_edges() != "":
+		_safe_free(panel)
+		return Result.failure("切到 drinks 且无采购员时 selected employee 应清空，实际: %s" % str(panel.get_selected_employee_type()))
+
+	panel.set_producer_items([])
+	await st.process_frame
+	picker = panel.get("_employee_picker")
+	if picker == null or not is_instance_valid(picker):
+		_safe_free(panel)
+		return Result.failure("drinks 空 provider 刷新后未创建 employee picker")
+	if picker.get_child_count() != 0:
+		_safe_free(panel)
+		return Result.failure("drinks 空 provider 刷新后仍不应显示员工卡，实际 child_count=%d" % picker.get_child_count())
 
 	_safe_free(panel)
 	return Result.success()

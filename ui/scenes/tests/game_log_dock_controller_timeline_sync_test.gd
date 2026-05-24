@@ -8,10 +8,13 @@ const GameLogDockControllerClass = preload("res://ui/scenes/game/controllers/log
 class _TimelineSpy:
 	extends RefCounted
 	var apply_count: int = 0
+	var force_apply_count: int = 0
 	var request_count: int = 0
 	var request_deferred_count: int = 0
-	func apply_live_log_timeline_from_engine() -> void:
+	func apply_live_log_timeline_from_engine(force_rebuild: bool = false) -> void:
 		apply_count += 1
+		if bool(force_rebuild):
+			force_apply_count += 1
 	func request_live_log_timeline_refresh() -> void:
 		request_count += 1
 	func request_live_log_timeline_refresh_deferred() -> void:
@@ -62,21 +65,27 @@ static func run() -> Result:
 	)
 
 	controller.show_game_log_panel_in_right_panel()
-	if timeline.request_deferred_count != 1:
+	if timeline.apply_count != 0:
 		if controller != null and controller.has_method("dispose"):
 			controller.dispose()
 		await _cleanup_nodes([game_log_panel, right_dock_host], st)
-		return Result.failure("首次 show 应触发 1 次 deferred 时间线刷新请求，实际=%d" % timeline.request_deferred_count)
+		return Result.failure("首次 show 不应同步执行时间线刷新，实际 apply=%d" % timeline.apply_count)
+	await st.process_frame
+	if timeline.apply_count != 1 or timeline.force_apply_count != 1:
+		if controller != null and controller.has_method("dispose"):
+			controller.dispose()
+		await _cleanup_nodes([game_log_panel, right_dock_host], st)
+		return Result.failure("首次 show 后应 deferred 强制刷新时间线，实际 apply=%d force=%d" % [timeline.apply_count, timeline.force_apply_count])
+	if timeline.request_deferred_count != 0:
+		if controller != null and controller.has_method("dispose"):
+			controller.dispose()
+		await _cleanup_nodes([game_log_panel, right_dock_host], st)
+		return Result.failure("首次 show 已改为 deferred force apply，不应再请求 deferred refresh，实际=%d" % timeline.request_deferred_count)
 	if timeline.request_count != 0:
 		if controller != null and controller.has_method("dispose"):
 			controller.dispose()
 		await _cleanup_nodes([game_log_panel, right_dock_host], st)
 		return Result.failure("自动 show 不应走即时 request_live_log_timeline_refresh，实际=%d" % timeline.request_count)
-	if timeline.apply_count != 0:
-		if controller != null and controller.has_method("dispose"):
-			controller.dispose()
-		await _cleanup_nodes([game_log_panel, right_dock_host], st)
-		return Result.failure("自动 show 不应同步执行时间线刷新，实际 apply=%d" % timeline.apply_count)
 	if game_log_panel.get_parent() != right_dock_host or not game_log_panel.visible:
 		if controller != null and controller.has_method("dispose"):
 			controller.dispose()
@@ -85,11 +94,12 @@ static func run() -> Result:
 
 	# 已经显示在右侧时重复调用，不应重复触发刷新。
 	controller.show_game_log_panel_in_right_panel()
-	if timeline.request_deferred_count != 1:
+	await st.process_frame
+	if timeline.apply_count != 1:
 		if controller != null and controller.has_method("dispose"):
 			controller.dispose()
 		await _cleanup_nodes([game_log_panel, right_dock_host], st)
-		return Result.failure("重复 show 不应重复请求刷新，实际=%d" % timeline.request_deferred_count)
+		return Result.failure("重复 show 不应重复请求刷新，实际 apply=%d" % timeline.apply_count)
 
 	if controller != null and controller.has_method("dispose"):
 		controller.dispose()

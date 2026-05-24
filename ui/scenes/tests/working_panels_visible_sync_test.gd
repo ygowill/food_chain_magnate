@@ -3,8 +3,10 @@ extends RefCounted
 
 const RecruitControllerClass = preload("res://ui/scenes/game/panel/working/recruit_controller.gd")
 const TrainControllerClass = preload("res://ui/scenes/game/panel/working/train_controller.gd")
+const ProductionControllerClass = preload("res://ui/scenes/game/panel/working/production_controller.gd")
 const EndPanelsClass = preload("res://ui/scenes/game/panel/end_panels.gd")
 const StateUpdaterClass = preload("res://core/state/state_updater.gd")
+const StaffStateClass = preload("res://core/state/staff_state.gd")
 const Support = preload("res://core/tests/milestone_system/milestone_system_test_support.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 
@@ -17,11 +19,15 @@ static func run(seed_val: int = 12345) -> Result:
 	if not r2.ok:
 		return r2
 
-	var r3 := _test_payday_panel_visible_sync(seed_val)
+	var r3 := _test_production_controller_visible_sync(seed_val)
 	if not r3.ok:
 		return r3
 
-	return Result.success({"cases": 3})
+	var r4 := _test_payday_panel_visible_sync(seed_val)
+	if not r4.ok:
+		return r4
+
+	return Result.success({"cases": 4})
 
 static func _test_recruit_controller_visible_sync(seed_val: int) -> Result:
 	var engine := GameEngine.new()
@@ -189,6 +195,64 @@ static func _source_items_have_employee_type(items: Array, employee_type: String
 			return true
 	return false
 
+static func _test_production_controller_visible_sync(seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(2, seed_val)
+	if not init.ok:
+		return Result.failure("Production visible sync: 初始化失败: %s" % init.error)
+
+	var state: GameState = engine.get_state()
+	Support._force_turn_order(state)
+	state.phase = DefsClass.PHASE_WORKING
+	state.sub_phase = DefsClass.SUB_PHASE_GET_FOOD
+
+	var take_cook := StateUpdaterClass.take_from_pool(state, "burger_cook", 1)
+	if not take_cook.ok:
+		engine.dispose()
+		return Result.failure("Production visible sync: 取出 burger_cook 失败: %s" % take_cook.error)
+	var add_cook := StateUpdaterClass.add_employee(state, 0, "burger_cook", false)
+	if not add_cook.ok:
+		engine.dispose()
+		return Result.failure("Production visible sync: 添加 burger_cook 失败: %s" % add_cook.error)
+	var cook_info: Dictionary = add_cook.value
+	var staff_id := int(cook_info.get("staff_id", -1))
+	if staff_id <= 0:
+		engine.dispose()
+		return Result.failure("Production visible sync: 添加 burger_cook 未返回 staff_id")
+
+	var controller = ProductionControllerClass.new(null, null, null, Callable(), Callable(), Callable())
+	var panel := _MockProductionPanel.new()
+	controller.production_panel = panel
+
+	controller.sync(state, true)
+	var initial_refresh_calls := panel.refresh_producer_items_calls
+
+	var mark_used := StaffStateClass.increment_staff_track_usage(state, staff_id, "produce_food")
+	if not mark_used.ok:
+		engine.dispose()
+		return Result.failure("Production visible sync: 标记员工已使用失败: %s" % mark_used.error)
+
+	controller.sync(state, false)
+
+	if panel.refresh_producer_items_calls <= initial_refresh_calls:
+		engine.dispose()
+		return Result.failure("ProductionPanel 可见时，普通 sync 应刷新 producer items")
+
+	var remaining := -1
+	for item_val in panel.last_items:
+		if not (item_val is Dictionary):
+			continue
+		var item: Dictionary = item_val
+		if int(item.get("staff_id", -1)) == staff_id:
+			remaining = int(item.get("remaining", -1))
+			break
+	if remaining != 0:
+		engine.dispose()
+		return Result.failure("ProductionPanel 普通 sync 后应把已用员工置为 remaining=0，实际=%d items=%s" % [remaining, str(panel.last_items)])
+
+	engine.dispose()
+	return Result.success({})
+
 static func _test_payday_panel_visible_sync(seed_val: int) -> Result:
 	var engine := GameEngine.new()
 	var init := engine.initialize(2, seed_val)
@@ -319,6 +383,35 @@ class _MockTrainPanel:
 		set_train_count_calls += 1
 		last_train_remaining = remaining
 		last_train_total = total
+
+
+class _MockProductionPanel:
+	extends RefCounted
+
+	var visible: bool = true
+	var set_producer_items_calls: int = 0
+	var refresh_producer_items_calls: int = 0
+	var set_current_inventory_calls: int = 0
+	var last_items: Array = []
+	var last_production_type: String = ""
+	var last_usage_token: String = ""
+
+	func set_usage_token(token: String) -> void:
+		last_usage_token = str(token)
+
+	func set_production_type(production_type: String) -> void:
+		last_production_type = str(production_type)
+
+	func set_producer_items(items: Array) -> void:
+		set_producer_items_calls += 1
+		last_items = items.duplicate(true)
+
+	func refresh_producer_items(items: Array) -> void:
+		refresh_producer_items_calls += 1
+		last_items = items.duplicate(true)
+
+	func set_current_inventory(_inventory: Dictionary) -> void:
+		set_current_inventory_calls += 1
 
 
 class _MockPaydayPanel:

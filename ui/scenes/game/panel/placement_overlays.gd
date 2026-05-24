@@ -118,6 +118,26 @@ func _sync_restaurant_placement_overlay(state: GameState, force_full_refresh: bo
 			_map_controller.clear_selection()
 		return
 
+	if not force_full_refresh:
+		var current_player_id_regular := state.get_current_player_id()
+		var current_player_regular: Dictionary = state.get_current_player()
+		var action_id_regular := "place_restaurant"
+		if restaurant_placement_overlay.has_method("get_mode"):
+			action_id_regular = str(restaurant_placement_overlay.get_mode())
+		if restaurant_placement_overlay.has_method("set_map_data"):
+			restaurant_placement_overlay.set_map_data(state.map)
+		if restaurant_placement_overlay.has_method("set_available_restaurants"):
+			var ids_regular: Array[String] = []
+			for rid_regular in Array(current_player_regular.get("restaurants", [])):
+				ids_regular.append(str(rid_regular))
+			restaurant_placement_overlay.set_available_restaurants(ids_regular)
+		if restaurant_placement_overlay.has_method("set_available_employee_items"):
+			restaurant_placement_overlay.set_available_employee_items(
+				_build_restaurant_employee_items(state, current_player_id_regular, action_id_regular)
+			)
+			_select_first_enabled_restaurant_staff_if_needed()
+		return
+
 	# 时间线变化：保持覆盖层打开，但从 state 强制刷新可用员工/地图数据，避免残留旧 UI/选点缓存。
 	if force_full_refresh:
 		var current_player_id := state.get_current_player_id()
@@ -170,6 +190,20 @@ func _sync_house_placement_overlay(state: GameState, force_full_refresh: bool = 
 		house_placement_overlay.visible = false
 		if _map_controller != null:
 			_map_controller.clear_selection()
+		return
+
+	if not force_full_refresh:
+		var current_player_id_regular := state.get_current_player_id()
+		var action_id_regular := "place_house"
+		if house_placement_overlay.has_method("get_mode"):
+			action_id_regular = str(house_placement_overlay.get_mode())
+		if house_placement_overlay.has_method("set_map_data"):
+			house_placement_overlay.set_map_data(state.map)
+		if house_placement_overlay.has_method("set_available_employee_items"):
+			house_placement_overlay.set_available_employee_items(
+				_build_house_garden_employee_items(state, current_player_id_regular, action_id_regular)
+			)
+			_select_first_enabled_house_garden_staff_if_needed()
 		return
 
 	# 时间线变化：保持覆盖层打开，但从 state 强制刷新可用员工/地图数据，避免残留旧 UI/选点缓存。
@@ -428,6 +462,8 @@ func show_house_placement(action_id: String, params: Dictionary) -> void:
 
 	if house_placement_overlay.has_method("set_mode"):
 		house_placement_overlay.set_mode(action_id)
+	if house_placement_overlay.has_method("clear_selection"):
+		house_placement_overlay.clear_selection()
 	if house_placement_overlay.has_method("set_map_data"):
 		house_placement_overlay.set_map_data(state.map)
 	if house_placement_overlay.has_method("set_available_employee_items"):

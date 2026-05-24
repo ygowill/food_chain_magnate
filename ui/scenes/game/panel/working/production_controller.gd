@@ -111,6 +111,7 @@ func sync(state: GameState, force_full_refresh: bool = false) -> void:
 				production_panel.set_available_drink_types(_get_all_drink_types())
 			if production_panel.has_method("set_drinks_procurement_state"):
 				production_panel.set_drinks_procurement_state(0, false, "")
+			_sync_current_drinks_producer_selection(state)
 	elif production_panel.has_method("refresh_producer_items"):
 		production_panel.refresh_producer_items(_build_producer_items(state, production_type))
 
@@ -190,6 +191,7 @@ func show(production_type: String) -> void:
 			production_panel.set_available_drink_types(_get_all_drink_types())
 		if is_instance_valid(production_panel) and production_panel.has_method("set_drinks_procurement_state"):
 			production_panel.set_drinks_procurement_state(0, false, "")
+		_sync_current_drinks_producer_selection(state)
 
 	if _center_popup.is_valid():
 		_center_popup.call(production_panel)
@@ -279,6 +281,25 @@ func _on_production_requested(employee_type: String, product_type: String, staff
 				production_panel.set_producer_items(_build_producer_items(state, product_type))
 			if production_panel.has_method("set_current_inventory"):
 				production_panel.set_current_inventory(current_player.get("inventory", {}))
+			if product_type == "drinks" and production_panel.visible:
+				_sync_current_drinks_producer_selection(state)
+
+func _sync_current_drinks_producer_selection(state: GameState) -> void:
+	if state == null:
+		return
+	if _procure_controller == null:
+		return
+	if not is_instance_valid(production_panel):
+		return
+	var employee_type := ""
+	if production_panel.has_method("get_selected_employee_type"):
+		employee_type = str(production_panel.call("get_selected_employee_type")).strip_edges()
+	else:
+		employee_type = str(production_panel.get("_selected_employee_type")).strip_edges()
+	var staff_id := -1
+	if production_panel.has_method("get_selected_staff_id"):
+		staff_id = int(production_panel.call("get_selected_staff_id"))
+	_procure_controller.on_drinks_producer_changed(state, employee_type, staff_id)
 
 func _on_producer_changed(employee_type: String, product_type: String, staff_id: int = -1) -> void:
 	if _scene == null or _scene.game_engine == null:

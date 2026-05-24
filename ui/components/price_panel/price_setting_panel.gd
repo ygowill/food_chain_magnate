@@ -74,6 +74,9 @@ func set_current_prices(prices: Dictionary) -> void:
 	_current_prices = prices.duplicate()
 	_rebuild_content()
 
+func get_action_id() -> String:
+	return _action_id
+
 func _rebuild_content() -> void:
 	if products_container == null:
 		return

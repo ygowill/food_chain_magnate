@@ -143,8 +143,7 @@ func set_mode(action_id: String) -> void:
 		ui_state_changed.emit()
 		return
 	_mode = next
-	_validation_ok = true
-	_validation_message = ""
+	_clear_mode_selection()
 	_update_ui()
 	_emit_mode_side_effects()
 	ui_state_changed.emit()
@@ -253,20 +252,23 @@ func set_validation(valid: bool, message: String = "") -> void:
 	ui_state_changed.emit()
 
 func clear_selection() -> void:
-	_selected_position = INVALID_POS
-	_selected_rotation = 0
-	_selected_house_id = ""
-	_selected_direction = "E"
-	_selected_house_number = -1
+	_clear_mode_selection()
 	_staff_picker_state.refresh_selected()
-	_validation_ok = true
-	_validation_message = ""
-	_garden_direction_validity.clear()
 	_emit_preview()
 	garden_preview_cleared.emit()
 	_update_ui()
 	_emit_highlight_request()
 	ui_state_changed.emit()
+
+func _clear_mode_selection() -> void:
+	_selected_position = INVALID_POS
+	_selected_rotation = 0
+	_selected_house_id = ""
+	_selected_direction = "E"
+	_selected_house_number = -1
+	_validation_ok = true
+	_validation_message = ""
+	_garden_direction_validity.clear()
 
 func rotate_cw() -> void:
 	set_selected_rotation(_selected_rotation + 90)

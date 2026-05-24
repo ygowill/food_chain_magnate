@@ -102,7 +102,17 @@ func _apply_embedding(embedded: bool) -> void:
 	_apply_embedding_layout()
 
 func set_production_type(production_type: String) -> void:
-	_production_type = production_type
+	var next_type := str(production_type).strip_edges()
+	if next_type.is_empty():
+		next_type = "food"
+	if next_type != _production_type:
+		_available_producers.clear()
+		_producer_items.clear()
+		_producer_by_key.clear()
+		_selected_employee_type = ""
+		_selected_employee_key = ""
+		_selected_staff_id = -1
+	_production_type = next_type
 	_rebuild()
 
 func set_usage_token(token: String) -> void:
@@ -212,6 +222,9 @@ func get_selected_drink_type() -> String:
 
 func get_selected_food_type() -> String:
 	return _selected_food_type
+
+func get_selected_employee_type() -> String:
+	return _selected_employee_type
 
 func get_selected_staff_id() -> int:
 	return _selected_staff_id

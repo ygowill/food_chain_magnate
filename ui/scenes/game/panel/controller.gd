@@ -29,6 +29,7 @@ const _GUIDED_ACTION_DOCK_SCRIPT_PATHS := {
 	"res://ui/components/train_panel/train_panel.gd": true,
 	"res://ui/components/marketing_panel/marketing_panel.gd": true,
 	"res://ui/components/production_panel/production_panel.gd": true,
+	"res://ui/components/price_panel/price_setting_panel.gd": true,
 }
 
 var _scene = null
@@ -394,10 +395,21 @@ func sync_action_state(state: GameState, force_full_refresh: bool = false) -> vo
 	# 例如 OrderOfBusiness 中其他玩家选择顺位后，阶段未变化但 picks 已更新。
 	_sync_modals(state)
 	_sync_modal_reopen_action(state)
+	_sync_visible_phase_panels_for_action_state(state, force_full_refresh)
 	_sync_action_panel_context(force_full_refresh)
 	_sync_action_flow_controls()
 	_hide_open_guided_action_panels_if_not_initiatable(state)
 	_auto_open_guided_action_ui(state)
+
+func _sync_visible_phase_panels_for_action_state(state: GameState, force_full_refresh: bool = false) -> void:
+	if _working_panels != null:
+		_working_panels.sync(state, force_full_refresh)
+	if _marketing_panels != null:
+		_marketing_panels.sync(state, force_full_refresh)
+	if _placement_overlays != null:
+		_placement_overlays.sync(state, force_full_refresh)
+	if _end_panels != null:
+		_end_panels.sync(state, force_full_refresh)
 
 func sync_action_flow_controls() -> void:
 	_sync_action_flow_controls()
@@ -673,14 +685,33 @@ func _hide_open_guided_action_panels_if_not_initiatable(state: GameState) -> voi
 	if not _scene.action_panel.has_method("get_action_enabled"):
 		return
 
+	var hidden_any := false
+
 	# Recruit / Train / Marketing：若动作不可启动则隐藏面板（避免“无可用员工/无可选项”时仍占屏）
 	if _working_panels != null:
 		if is_instance_valid(_working_panels.recruit_panel) and _working_panels.recruit_panel.visible:
 			if not bool(_scene.action_panel.call("get_action_enabled", "recruit")):
 				_working_panels.recruit_panel.visible = false
+				hidden_any = true
+				if _last_guided_action_id == "recruit":
+					_last_guided_action_id = ""
 		if is_instance_valid(_working_panels.train_panel) and _working_panels.train_panel.visible:
 			if not bool(_scene.action_panel.call("get_action_enabled", "train")):
 				_working_panels.train_panel.visible = false
+				hidden_any = true
+				if _last_guided_action_id == "train":
+					_last_guided_action_id = ""
+		if is_instance_valid(_working_panels.price_panel) and _working_panels.price_panel.visible:
+			var price_aid := ""
+			if _working_panels.price_panel.has_method("get_action_id"):
+				price_aid = str(_working_panels.price_panel.call("get_action_id")).strip_edges()
+			else:
+				price_aid = str(_working_panels.price_panel.get("_action_id")).strip_edges()
+			if not price_aid.is_empty() and not bool(_scene.action_panel.call("get_action_enabled", price_aid)):
+				_working_panels.price_panel.visible = false
+				hidden_any = true
+				if _last_guided_action_id == price_aid:
+					_last_guided_action_id = ""
 		if is_instance_valid(_working_panels.production_panel) and _working_panels.production_panel.visible:
 			var aid := ""
 			if str(state.sub_phase) == DefsClass.SUB_PHASE_GET_FOOD:
@@ -689,11 +720,55 @@ func _hide_open_guided_action_panels_if_not_initiatable(state: GameState) -> voi
 				aid = "procure_drinks"
 			if not aid.is_empty() and not bool(_scene.action_panel.call("get_action_enabled", aid)):
 				_working_panels.production_panel.visible = false
+				hidden_any = true
+				if _last_guided_action_id == aid:
+					_last_guided_action_id = ""
 
 	if _marketing_panels != null:
 		if is_instance_valid(_marketing_panels.marketing_panel) and _marketing_panels.marketing_panel.visible:
 			if not bool(_scene.action_panel.call("get_action_enabled", "initiate_marketing")):
 				_marketing_panels.marketing_panel.visible = false
+				hidden_any = true
+				if _last_guided_action_id == "initiate_marketing":
+					_last_guided_action_id = ""
+
+	if _placement_overlays != null:
+		if is_instance_valid(_placement_overlays.restaurant_placement_overlay) and _placement_overlays.restaurant_placement_overlay.visible:
+			var restaurant_aid := "place_restaurant"
+			if _placement_overlays.restaurant_placement_overlay.has_method("get_mode"):
+				restaurant_aid = str(_placement_overlays.restaurant_placement_overlay.get_mode()).strip_edges()
+			if not restaurant_aid.is_empty() and not bool(_scene.action_panel.call("get_action_enabled", restaurant_aid)):
+				_placement_overlays.restaurant_placement_overlay.visible = false
+				hidden_any = true
+				if _last_guided_action_id == restaurant_aid:
+					_last_guided_action_id = ""
+				if _map_controller != null and _map_controller.has_method("clear_selection"):
+					_map_controller.clear_selection()
+		if is_instance_valid(_placement_overlays.house_placement_overlay) and _placement_overlays.house_placement_overlay.visible:
+			var house_aid := "place_house"
+			if _placement_overlays.house_placement_overlay.has_method("get_mode"):
+				house_aid = str(_placement_overlays.house_placement_overlay.get_mode()).strip_edges()
+			if not house_aid.is_empty() and not bool(_scene.action_panel.call("get_action_enabled", house_aid)):
+				_placement_overlays.house_placement_overlay.visible = false
+				hidden_any = true
+				if _last_guided_action_id == house_aid:
+					_last_guided_action_id = ""
+				if _map_controller != null and _map_controller.has_method("clear_selection"):
+					_map_controller.clear_selection()
+		if is_instance_valid(_placement_overlays.piece_placement_overlay) and _placement_overlays.piece_placement_overlay.visible:
+			var piece_aid := ""
+			if _placement_overlays.piece_placement_overlay.has_method("get_mode"):
+				piece_aid = str(_placement_overlays.piece_placement_overlay.get_mode()).strip_edges()
+			if not piece_aid.is_empty() and not bool(_scene.action_panel.call("get_action_enabled", piece_aid)):
+				_placement_overlays.piece_placement_overlay.visible = false
+				hidden_any = true
+				if _last_guided_action_id == piece_aid:
+					_last_guided_action_id = ""
+				if _map_controller != null and _map_controller.has_method("clear_selection"):
+					_map_controller.clear_selection()
+
+	if hidden_any and _scene != null and _scene.has_method("_sync_right_panel_docked_view"):
+		_scene.call_deferred("_sync_right_panel_docked_view")
 
 func _hide_game_over_action_surfaces() -> void:
 	_last_guided_action_id = ""
