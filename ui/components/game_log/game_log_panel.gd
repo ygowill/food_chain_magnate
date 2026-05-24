@@ -950,6 +950,7 @@ func load_step_timeline(timeline: Dictionary, entries: Array[Dictionary], reset_
 		})
 		return
 
+	_invalidate_background_timeline_jobs()
 	_apply_committed_step_timeline_state(next_timeline, next_timeline_entries, next_extra_entries)
 	_blank_display_warned = false
 	_prune_expanded_action_groups()
@@ -979,6 +980,12 @@ func append_step_timeline(timeline: Dictionary, appended_entries: Array[Dictiona
 	if not _is_step_timeline_loaded():
 		OnlinePerfTraceClass.end_span(span, {"ok": false, "reason": "timeline_not_loaded"})
 		return false
+	if not _should_build_display_now():
+		OnlinePerfTraceClass.end_span(span, {"ok": false, "reason": "display_not_ready"})
+		return false
+	if _descriptor_commit_active:
+		OnlinePerfTraceClass.end_span(span, {"ok": false, "reason": "descriptor_commit_active"})
+		return false
 	if log_container == null or not is_instance_valid(log_container):
 		OnlinePerfTraceClass.end_span(span, {"ok": false, "reason": "log_container_missing"})
 		return false
@@ -993,6 +1000,15 @@ func append_step_timeline(timeline: Dictionary, appended_entries: Array[Dictiona
 	var normalized_appended_entries := _duplicate_entry_array_with_fresh_ids(appended_entries)
 	var next_entries_count := _timeline_entries.size() + normalized_appended_entries.size() + _extra_entries.size()
 	var appended_step_count := maxi(0, _get_step_count(next_timeline) - _get_step_count(_step_timeline))
+	if appended_step_count <= 0:
+		OnlinePerfTraceClass.end_span(span, {
+			"ok": false,
+			"reason": "no_new_steps_for_append",
+			"appended_entry_count": int(normalized_appended_entries.size()),
+			"timeline_step_count": int(_get_step_count(next_timeline)),
+		})
+		return false
+	_invalidate_background_timeline_jobs()
 	if _should_use_timeline_window_for_timeline(next_timeline):
 		if _virtual_timeline_active:
 			var old_step_count := _get_step_count(_step_timeline)

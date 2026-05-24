@@ -571,9 +571,13 @@ func _flush_online_command_ui_refresh() -> void:
 	_online_ui_refresh_apply_end_mono_usec = 0
 	_online_ui_refresh_force_log_apply = false
 
+	var log_was_visible_before_ui := _is_game_log_panel_visible_for_live_apply()
 	var log_applied_before_ui := false
-	if force_log_apply and _is_game_log_panel_visible_for_live_apply() and _apply_live_log_timeline_from_engine.is_valid():
-		_apply_live_log_timeline_from_engine.call(true)
+	if log_was_visible_before_ui and _apply_live_log_timeline_from_engine.is_valid():
+		_apply_live_log_timeline_from_engine.call(bool(force_log_apply))
+		log_applied_before_ui = true
+	elif _is_game_log_step_timeline_loaded() and _apply_live_log_timeline_from_engine.is_valid():
+		_apply_live_log_timeline_from_engine.call(bool(force_log_apply))
 		log_applied_before_ui = true
 	elif _request_live_log_timeline_refresh.is_valid():
 		_request_live_log_timeline_refresh.call()
@@ -616,6 +620,13 @@ func _is_game_log_panel_visible_for_live_apply() -> bool:
 	if _game_log_panel.has_method("is_visible_in_tree"):
 		return bool(_game_log_panel.call("is_visible_in_tree"))
 	return bool(_game_log_panel.visible)
+
+func _is_game_log_step_timeline_loaded() -> bool:
+	if not is_instance_valid(_game_log_panel):
+		return false
+	if not _game_log_panel.has_method("has_step_timeline_loaded"):
+		return false
+	return bool(_game_log_panel.call("has_step_timeline_loaded"))
 
 func _build_online_command_dirty_flags(meta: Dictionary, force_log_apply: bool) -> int:
 	if bool(force_log_apply) or bool(meta.get("phase_changed", false)):

@@ -107,6 +107,25 @@ static func _run_hidden_load_step_timeline_case(st: SceneTree) -> Result:
 	if not (loaded_entries is Array) or loaded_entries.size() != entries.size():
 		return await _finish(Result.failure("隐藏态仍应提交 step timeline entries 状态"), panel, st)
 
+	var hidden_append_timeline := _build_linear_timeline(101)
+	var hidden_append_entries: Array[Dictionary] = [_build_linear_entries(101)[100]]
+	if bool(panel.call("append_step_timeline", hidden_append_timeline, hidden_append_entries)):
+		return await _finish(Result.failure("隐藏态 append_step_timeline 不应直接构建或追加 UI"), panel, st)
+	if log_container.get_child_count() != 0:
+		return await _finish(
+			Result.failure("隐藏态 append_step_timeline 不应产生 UI 子节点，实际=%d" % log_container.get_child_count()),
+			panel,
+			st
+		)
+
+	var timeline2 := _build_linear_timeline(101)
+	var entries2 := _build_linear_entries(101)
+	panel.call("load_step_timeline", timeline2, entries2)
+	await st.process_frame
+	var loaded_entries2 = panel.call("get_step_timeline_entries")
+	if not (loaded_entries2 is Array) or loaded_entries2.size() != entries2.size():
+		return await _finish(Result.failure("隐藏态 fallback load_step_timeline 应提交最新 step timeline entries 状态"), panel, st)
+
 	panel.visible = true
 	await st.process_frame
 	await st.process_frame

@@ -1,6 +1,11 @@
 extends RefCounted
 
 const GameLogPanelScene: PackedScene = preload("res://ui/components/game_log/game_log_panel.tscn")
+const GameEngineClass = preload("res://core/engine/game_engine.gd")
+const GameDefaultsClass = preload("res://core/engine/game_defaults.gd")
+const TestPhaseUtilsClass = preload("res://core/tests/test_phase_utils.gd")
+const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const StepTimelineBuildHelpersClass = preload("res://ui/scenes/game/timeline/step_timeline_build_helpers.gd")
 
 class _TimelineStateApplySpy:
 	extends Control
@@ -195,12 +200,24 @@ static func run() -> Result:
 	if bool(panel.call("_can_append_step_timeline", timeline2, bad_sequence_entries, false)):
 		_cleanup(panel)
 		return Result.failure("signature append 校验应拒绝新增 entry sequence 未增长")
+	panel.set("_timeline_background_generation", 41)
+	panel.set("_timeline_background_pending_job", {
+		"mode": "rebuild",
+		"generation": 41,
+	})
 	var append_ok := bool(panel.call("append_step_timeline", timeline2, appended_entries))
 	await tree.process_frame
 
 	if not append_ok:
 		_cleanup(panel)
 		return Result.failure("直接 append_step_timeline 应成功")
+	if int(panel.get("_timeline_background_generation")) <= 41:
+		_cleanup(panel)
+		return Result.failure("直接 append 应使旧后台日志构建结果失效，generation=%d" % int(panel.get("_timeline_background_generation")))
+	var pending_job_after_append = panel.get("_timeline_background_pending_job")
+	if pending_job_after_append is Dictionary and not Dictionary(pending_job_after_append).is_empty():
+		_cleanup(panel)
+		return Result.failure("直接 append 应清理旧后台日志 pending job，实际=%s" % str(pending_job_after_append))
 	if panel.call("get_last_step_timeline_update_mode") != "append":
 		_cleanup(panel)
 		return Result.failure("尾部追加场景应走 append")
@@ -238,6 +255,24 @@ static func run() -> Result:
 	if sync_apply_spy.apply_calls != 0:
 		_cleanup(panel)
 		return Result.failure("直接 append 后不应全量刷新已有 log item timeline state，实际 apply_calls=%d" % sync_apply_spy.apply_calls)
+
+	var same_step_timeline := timeline2.duplicate(true)
+	var same_step_meta: Dictionary = Dictionary(same_step_timeline.get("_build_meta", {})).duplicate(true)
+	same_step_meta["processed_command_count"] = 3
+	same_step_timeline["_build_meta"] = same_step_meta
+	var same_step_appended_entries: Array[Dictionary] = [
+		{
+			"type": 2,
+			"message": "玩家1: 同一步第二条",
+			"details": {"command_index": 2},
+			"step_index": 1,
+			"command_index": 2,
+			"event_seq": 3,
+		},
+	]
+	if bool(panel.call("append_step_timeline", same_step_timeline, same_step_appended_entries)):
+		_cleanup(panel)
+		return Result.failure("同一 step 新增日志不能走直接 append，否则会漏渲染新增 entry")
 	var direct_log_items_after_checks: Array = panel.get("_log_items")
 	direct_log_items_after_checks.erase(sync_apply_spy)
 	direct_log_items_after_checks.erase(stale_phase_header_spy)
@@ -314,6 +349,9 @@ static func run() -> Result:
 		return Result.failure("后期小 delta append 不应全量刷新已有 log item timeline state，实际 apply_calls=%d" % async_sync_apply_spy.apply_calls)
 
 	_cleanup(panel)
+	var real_recruit_append_result := await _run_real_engine_consecutive_recruit_append_case(tree)
+	if not real_recruit_append_result.ok:
+		return real_recruit_append_result
 	return Result.success()
 
 static func _run_load_step_timeline_append_case(tree: SceneTree) -> Result:
@@ -373,6 +411,119 @@ static func _run_load_step_timeline_append_case(tree: SceneTree) -> Result:
 		return await _finish_with_panel(Result.failure("load_step_timeline fallback rebuild 后 step entries 应为 3 条"), panel, tree)
 
 	return await _finish_with_panel(Result.success({}), panel, tree)
+
+static func _run_real_engine_consecutive_recruit_append_case(tree: SceneTree) -> Result:
+	var panel = GameLogPanelScene.instantiate()
+	if panel == null or not is_instance_valid(panel):
+		return Result.failure("真实连续招聘 append 测试实例化 GameLogPanel 失败")
+	tree.root.add_child(panel)
+	await tree.process_frame
+
+	var log_container = panel.get_node_or_null("MarginContainer/VBoxContainer/ScrollContainer/LogContainer")
+	if log_container == null or not is_instance_valid(log_container):
+		return await _finish_with_panel(Result.failure("真实连续招聘 append 测试未找到 LogContainer"), panel, tree)
+
+	var setup_r := _build_engine_at_recruit_turn_with_active_recruiter()
+	if not setup_r.ok:
+		return await _finish_with_panel(setup_r, panel, tree)
+	var setup: Dictionary = setup_r.value
+	var engine: GameEngine = setup.get("engine", null)
+	var actor := int(setup.get("actor", -1))
+	if engine == null or actor < 0:
+		return await _finish_with_panel(Result.failure("真实连续招聘 append 测试 engine/actor 无效"), panel, tree)
+
+	var first_recruit := engine.execute_command(Command.create("recruit", actor, {"employee_type": "trainer"}))
+	if not first_recruit.ok:
+		return await _finish_with_panel(Result.failure("真实连续招聘第一次 recruit 失败: %s" % first_recruit.error), panel, tree)
+	var load_first_r := StepTimelineBuildHelpersClass.build_and_load(engine, panel, false)
+	if not load_first_r.ok:
+		return await _finish_with_panel(Result.failure("真实连续招聘第一次时间线加载失败: %s" % load_first_r.error), panel, tree)
+	if not (load_first_r.value is Dictionary):
+		return await _finish_with_panel(Result.failure("真实连续招聘第一次时间线返回类型错误"), panel, tree)
+	var first_info: Dictionary = load_first_r.value
+	var previous_timeline_val = first_info.get("timeline", {})
+	if not (previous_timeline_val is Dictionary):
+		return await _finish_with_panel(Result.failure("真实连续招聘第一次时间线结构错误"), panel, tree)
+	var previous_timeline: Dictionary = Dictionary(previous_timeline_val).duplicate(false)
+	await tree.process_frame
+
+	var old_child_count := log_container.get_child_count()
+	var second_recruit := engine.execute_command(Command.create("recruit", actor, {"employee_type": "marketing_trainee"}))
+	if not second_recruit.ok:
+		return await _finish_with_panel(Result.failure("真实连续招聘第二次 recruit 失败: %s" % second_recruit.error), panel, tree)
+	var append_r := StepTimelineBuildHelpersClass.build_and_load(engine, panel, false, previous_timeline, true)
+	if not append_r.ok:
+		return await _finish_with_panel(Result.failure("真实连续招聘第二次时间线增量加载失败: %s" % append_r.error), panel, tree)
+	await tree.process_frame
+
+	var append_completed := await _wait_until(func() -> bool:
+		return not bool(panel.call("has_pending_descriptor_commit"))
+	, tree, 90)
+	if not append_completed:
+		return await _finish_with_panel(Result.failure("真实连续招聘第二次 append 未在限定帧数内完成"), panel, tree)
+
+	var trainer_entries := _count_recruit_entries_for_employee(panel, "trainer")
+	var marketing_entries := _count_recruit_entries_for_employee(panel, "marketing_trainee")
+	if trainer_entries != 1 or marketing_entries != 1:
+		return await _finish_with_panel(
+			Result.failure("真实连续招聘 step entries 应同时包含两次招聘，trainer=%d marketing_trainee=%d" % [trainer_entries, marketing_entries]),
+			panel,
+			tree
+		)
+	var trainer_headers := _count_recruit_headers_for_employee(log_container, "trainer")
+	var marketing_headers := _count_recruit_headers_for_employee(log_container, "marketing_trainee")
+	if trainer_headers != 1 or marketing_headers != 1:
+		return await _finish_with_panel(
+			Result.failure("真实连续招聘 UI header 应同时显示两次招聘，trainer=%d marketing_trainee=%d" % [trainer_headers, marketing_headers]),
+			panel,
+			tree
+		)
+	if log_container.get_child_count() <= old_child_count:
+		return await _finish_with_panel(
+			Result.failure("真实连续招聘第二次 append 后 UI 节点应增长: before=%d after=%d" % [old_child_count, log_container.get_child_count()]),
+			panel,
+			tree
+		)
+	return await _finish_with_panel(Result.success({}), panel, tree)
+
+static func _build_engine_at_recruit_turn_with_active_recruiter() -> Result:
+	var engine := GameEngineClass.new()
+	var init_r: Result = engine.initialize(2, 12345, [], GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR, [], [-1, -1])
+	if not init_r.ok:
+		return Result.failure("真实连续招聘 engine 初始化失败: %s" % init_r.error)
+	var to_working_r: Result = TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 30)
+	if not to_working_r.ok:
+		return to_working_r
+	var actor := engine.get_state().get_current_player_id()
+	var recruit_recruiter := engine.execute_command(Command.create("recruit", actor, {"employee_type": "recruiting_girl"}))
+	if not recruit_recruiter.ok:
+		return Result.failure("招聘 recruiting_girl 失败: %s" % recruit_recruiter.error)
+	var to_restructuring_r: Result = TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_RESTRUCTURING, 80)
+	if not to_restructuring_r.ok:
+		return to_restructuring_r
+	var place_recruiter := engine.execute_command(Command.create("set_company_structure_direct", actor, {
+		"slot_index": 0,
+		"employee_id": "recruiting_girl",
+	}))
+	if not place_recruiter.ok:
+		return Result.failure("放置 recruiting_girl 失败: %s" % place_recruiter.error)
+	var to_next_working_r: Result = TestPhaseUtilsClass.advance_until_phase(engine, DefsClass.PHASE_WORKING, 80)
+	if not to_next_working_r.ok:
+		return to_next_working_r
+	var safety := 0
+	while engine.get_state().get_current_player_id() != actor:
+		safety += 1
+		if safety > 20:
+			return Result.failure("轮转到连续招聘测试玩家超出安全上限")
+		var end_turn_r: Result = TestPhaseUtilsClass.end_current_player_working_turn(engine, 50)
+		if not end_turn_r.ok:
+			return end_turn_r
+		if str(engine.get_state().phase) != DefsClass.PHASE_WORKING:
+			return Result.failure("轮转到连续招聘测试玩家前不应离开 Working")
+	return Result.success({
+		"engine": engine,
+		"actor": actor,
+	})
 
 static func _build_linear_timeline(step_count: int) -> Dictionary:
 	var steps: Array[Dictionary] = []
@@ -442,6 +593,49 @@ static func _count_message_occurrences(log_container: Node, expected_message: St
 			var entry_val = child.get("entry_data")
 			if entry_val is Dictionary and str(Dictionary(entry_val).get("message", "")).strip_edges() == target:
 				count += 1
+	return count
+
+static func _count_recruit_entries_for_employee(panel: Object, employee_type: String) -> int:
+	if panel == null or not is_instance_valid(panel) or not panel.has_method("get_step_timeline_entries"):
+		return 0
+	var target := str(employee_type).strip_edges()
+	var entries_val = panel.call("get_step_timeline_entries")
+	if not (entries_val is Array):
+		return 0
+	var count := 0
+	for entry_val in entries_val:
+		if not (entry_val is Dictionary):
+			continue
+		var entry: Dictionary = entry_val
+		var details_val = entry.get("details", {})
+		var details: Dictionary = details_val if (details_val is Dictionary) else {}
+		if str(details.get("event_type", entry.get("event_type", ""))).strip_edges() != EventBus.EventType.EMPLOYEE_RECRUITED:
+			continue
+		if str(details.get("employee_type", "")).strip_edges() == target:
+			count += 1
+	return count
+
+static func _count_recruit_headers_for_employee(log_container: Node, employee_type: String) -> int:
+	if log_container == null or not is_instance_valid(log_container):
+		return 0
+	var target := str(employee_type).strip_edges()
+	var count := 0
+	for i in range(log_container.get_child_count()):
+		var child = log_container.get_child(i)
+		if child == null or not is_instance_valid(child):
+			continue
+		if str(child.get_meta("_log_pool_kind", "")).strip_edges() != "action_group_header":
+			continue
+		var primary_entry_val = child.get("primary_entry")
+		if not (primary_entry_val is Dictionary):
+			continue
+		var primary_entry: Dictionary = primary_entry_val
+		var details_val = primary_entry.get("details", {})
+		var details: Dictionary = details_val if (details_val is Dictionary) else {}
+		if str(details.get("event_type", primary_entry.get("event_type", ""))).strip_edges() != EventBus.EventType.EMPLOYEE_RECRUITED:
+			continue
+		if str(details.get("employee_type", "")).strip_edges() == target:
+			count += 1
 	return count
 
 static func _cleanup(panel: Node) -> void:
