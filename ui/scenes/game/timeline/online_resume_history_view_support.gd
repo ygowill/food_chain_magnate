@@ -121,8 +121,6 @@ static func _try_load_single_full_runtime_prebuilt_timeline(
 		return Result.failure("single_full_engine_mode_disabled")
 	if not bool(snapshot.get("full_history_step_timeline_ready", false)):
 		return Result.failure("cached_timeline_missing")
-	if not bool(snapshot.get("full_history_step_timeline_entries_ready", false)):
-		return Result.failure("cached_entries_missing")
 	var cached_timeline := OnlineResumeFullHistoryAdapterClass.get_cached_history_timeline()
 	if cached_timeline.is_empty():
 		return Result.failure("cached_timeline_empty")
@@ -130,13 +128,31 @@ static func _try_load_single_full_runtime_prebuilt_timeline(
 	var runtime_command_count := int(runtime_engine.command_history.size())
 	if cached_processed_count < runtime_command_count:
 		return Result.failure("cached_timeline_stale")
-	var cached_entries := OnlineResumeFullHistoryAdapterClass.get_cached_history_timeline_entries()
-	var load_r := StepTimelineBuildHelpersClass.load_prebuilt_timeline_with_entries(
-		cached_timeline,
-		cached_entries,
-		game_log_panel,
-		false
+	var cached_entries_processed_count := int(
+		snapshot.get("full_history_step_timeline_entries_processed_command_count", -1)
 	)
+	var cached_last_event_sequence := StepTimelineHelpersClass.read_last_event_sequence(cached_timeline)
+	var cached_entries_last_event_sequence := int(
+		snapshot.get("full_history_step_timeline_entries_last_event_sequence", -1)
+	)
+	var can_use_cached_entries := bool(snapshot.get("full_history_step_timeline_entries_ready", false)) \
+		and cached_entries_processed_count == cached_processed_count \
+		and cached_entries_last_event_sequence == cached_last_event_sequence
+	var load_r: Result
+	if can_use_cached_entries:
+		var cached_entries := OnlineResumeFullHistoryAdapterClass.get_cached_history_timeline_entries()
+		load_r = StepTimelineBuildHelpersClass.load_prebuilt_timeline_with_entries(
+			cached_timeline,
+			cached_entries,
+			game_log_panel,
+			false
+		)
+	else:
+		load_r = StepTimelineBuildHelpersClass.load_prebuilt_timeline(
+			cached_timeline,
+			game_log_panel,
+			false
+		)
 	if not load_r.ok:
 		return load_r
 	if not (load_r.value is Dictionary):
@@ -146,6 +162,10 @@ static func _try_load_single_full_runtime_prebuilt_timeline(
 	if not (timeline_val is Dictionary):
 		return Result.failure("prebuilt timeline 返回结构错误")
 	var timeline: Dictionary = Dictionary(timeline_val)
+	if not can_use_cached_entries and NetClient != null and NetClient.has_method("set_online_resume_full_history_step_timeline_entries"):
+		var entries_val = info.get("entries", [])
+		if entries_val is Array:
+			NetClient.set_online_resume_full_history_step_timeline_entries(entries_val)
 	var head_step_index := int(info.get("head_step_index", -1))
 	var head_cmd := runtime_engine.command_history.size() - 1
 	var cursor_cmd := int(runtime_engine.current_command_index)

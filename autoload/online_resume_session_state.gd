@@ -19,6 +19,7 @@ var last_full_history_error: String = ""
 var full_history_step_timeline: Dictionary = {}
 var full_history_step_timeline_entries: Array[Dictionary] = []
 var full_history_step_timeline_entries_processed_command_count: int = -1
+var full_history_step_timeline_entries_last_event_sequence: int = -1
 var _runtime_state_hash_cache_signature: Dictionary = {}
 var _runtime_state_hash_cache_value: String = ""
 var _full_history_state_hash_cache_signature: Dictionary = {}
@@ -45,10 +46,17 @@ func bind_runtime(engine: GameEngine, room_code: String, local_player_id: int) -
 	_clear_runtime_state_hash_cache()
 
 func set_full_history_step_timeline(timeline: Dictionary) -> void:
+	var previous_entries_processed_count := int(full_history_step_timeline_entries_processed_command_count)
+	var previous_entries_last_event_sequence := int(full_history_step_timeline_entries_last_event_sequence)
 	full_history_step_timeline = Dictionary(timeline).duplicate(false) if (timeline is Dictionary) else {}
-	if full_history_step_timeline.is_empty():
+	var next_processed_count := _read_step_timeline_processed_command_count(full_history_step_timeline)
+	var next_last_event_sequence := _read_step_timeline_last_event_sequence(full_history_step_timeline)
+	if full_history_step_timeline.is_empty() \
+		or next_processed_count != previous_entries_processed_count \
+		or next_last_event_sequence != previous_entries_last_event_sequence:
 		full_history_step_timeline_entries.clear()
 		full_history_step_timeline_entries_processed_command_count = -1
+		full_history_step_timeline_entries_last_event_sequence = -1
 
 func get_full_history_step_timeline() -> Dictionary:
 	return full_history_step_timeline.duplicate(false)
@@ -64,6 +72,9 @@ func set_full_history_step_timeline_entries(entries: Array, processed_command_co
 				continue
 			full_history_step_timeline_entries.append(Dictionary(entry_val).duplicate(false))
 	full_history_step_timeline_entries_processed_command_count = int(processed_command_count)
+	full_history_step_timeline_entries_last_event_sequence = _read_step_timeline_last_event_sequence(
+		full_history_step_timeline
+	) if int(processed_command_count) >= 0 else -1
 
 func get_full_history_step_timeline_entries() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -103,6 +114,9 @@ func snapshot() -> Dictionary:
 		"full_history_step_timeline_entries_processed_command_count": int(
 			full_history_step_timeline_entries_processed_command_count
 		),
+		"full_history_step_timeline_entries_last_event_sequence": int(
+			full_history_step_timeline_entries_last_event_sequence
+		),
 		"full_history_source_mode": full_history_source_mode,
 		"single_full_engine_mode": bool(single_full_engine_mode),
 		"full_archive_meta": full_archive_meta.duplicate(true),
@@ -121,7 +135,32 @@ func _reset_full_history_state() -> void:
 	full_history_step_timeline = {}
 	full_history_step_timeline_entries.clear()
 	full_history_step_timeline_entries_processed_command_count = -1
+	full_history_step_timeline_entries_last_event_sequence = -1
 	_clear_full_history_state_hash_cache()
+
+func _read_step_timeline_processed_command_count(timeline: Dictionary) -> int:
+	if timeline == null or not (timeline is Dictionary) or timeline.is_empty():
+		return -1
+	var meta_val = timeline.get("_build_meta", null)
+	if not (meta_val is Dictionary):
+		return -1
+	var meta: Dictionary = meta_val
+	var count_val = meta.get("processed_command_count", -1)
+	if count_val is int or count_val is float:
+		return int(count_val)
+	return -1
+
+func _read_step_timeline_last_event_sequence(timeline: Dictionary) -> int:
+	if timeline == null or not (timeline is Dictionary) or timeline.is_empty():
+		return -1
+	var meta_val = timeline.get("_build_meta", null)
+	if not (meta_val is Dictionary):
+		return -1
+	var meta: Dictionary = meta_val
+	var seq_val = meta.get("last_event_sequence", -1)
+	if seq_val is int or seq_val is float:
+		return int(seq_val)
+	return -1
 
 func _get_cached_engine_state_hash(engine: GameEngine, is_runtime_engine: bool) -> String:
 	if engine == null:

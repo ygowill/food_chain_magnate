@@ -117,8 +117,13 @@ static func build_history_timeline(
 		var cached_entries_processed_count := int(
 			snapshot.get("full_history_step_timeline_entries_processed_command_count", -1)
 		)
+		var cached_last_event_sequence := StepTimelineHelpersClass.read_last_event_sequence(baseline_timeline)
+		var cached_entries_last_event_sequence := int(
+			snapshot.get("full_history_step_timeline_entries_last_event_sequence", -1)
+		)
 		var can_use_cached_entries := bool(snapshot.get("full_history_step_timeline_entries_ready", false)) \
-			and cached_entries_processed_count == cached_processed_count
+			and cached_entries_processed_count == cached_processed_count \
+			and cached_entries_last_event_sequence == cached_last_event_sequence
 		if cached_processed_count >= current_count:
 			_emit_resume_cache_event("resume_cache.used_prebuilt_timeline", {
 				"cached_processed_command_count": int(cached_processed_count),
@@ -127,6 +132,8 @@ static func build_history_timeline(
 				"timeline_step_count": int(Array(baseline_timeline.get("steps", [])).size()),
 				"cached_entry_count": int(cached_entry_count),
 				"cached_entries_processed_command_count": int(cached_entries_processed_count),
+				"cached_last_event_sequence": int(cached_last_event_sequence),
+				"cached_entries_last_event_sequence": int(cached_entries_last_event_sequence),
 				"used_cached_entries": bool(can_use_cached_entries),
 			})
 		var build_r: Result
