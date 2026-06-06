@@ -3,6 +3,7 @@ extends RefCounted
 const BankStateAccessClass = preload("res://core/state/bank_state_access.gd")
 
 const MODULE_ID := "reserve_prices"
+const FIRST_BREAK_ADD_PER_PLAYER := 200
 const CARDS_PER_PLAYER := 3
 const ALLOWED_TYPES: Array[int] = [5, 10, 20]
 
@@ -59,7 +60,7 @@ func _init_state(state: GameState, _rng_manager) -> Result:
 	return Result.success()
 
 func _on_bank_first_break(state: GameState, trigger_reason: String, required_payment: int) -> Result:
-	# 规则：第一次破产按所有玩家已选储备卡金额总和注资，并用储备卡多数决定 base_unit_price（20>5>10）
+	# 规则：第一次破产固定注入 $200/玩家，并用储备卡多数决定 base_unit_price（20>5>10）
 	if state == null:
 		return Result.failure("%s: state 为空" % MODULE_ID)
 	if not (state.players is Array):
@@ -86,7 +87,7 @@ func _on_bank_first_break(state: GameState, trigger_reason: String, required_pay
 		return bankruptcy_target_check
 
 	var bank_before: int = int(total_read.value)
-	var total_added := 0
+	var total_added: int = int(state.players.size()) * FIRST_BREAK_ADD_PER_PLAYER
 
 	var counts := {5: 0, 10: 0, 20: 0}
 	var revealed: Array[Dictionary] = []
@@ -118,11 +119,6 @@ func _on_bank_first_break(state: GameState, trigger_reason: String, required_pay
 		var t: int = int(card["type"])
 		if not ALLOWED_TYPES.has(t):
 			return Result.failure("%s: reserve_card.type 非法（期望 5/10/20），实际: %d" % [MODULE_ID, t])
-
-		var amount_read := _read_selected_card_amount(card, pid, idx)
-		if not amount_read.ok:
-			return amount_read
-		total_added += int(amount_read.value)
 
 		counts[t] = int(counts[t]) + 1
 		player["reserve_card_revealed"] = true
@@ -160,23 +156,7 @@ func _on_bank_first_break(state: GameState, trigger_reason: String, required_pay
 	if not record_event.ok:
 		return record_event
 
-	return Result.success().with_warning("银行第一次破产(Reserve Prices)：按储备卡合计注入 $%d，base_unit_price=%d" % [total_added, new_base])
-
-static func _read_selected_card_amount(card: Dictionary, player_id: int, card_index: int) -> Result:
-	if card.has("cash"):
-		if not (card["cash"] is int):
-			return Result.failure("%s: player[%d].reserve_cards[%d].cash 类型错误（期望 int）" % [MODULE_ID, player_id, card_index])
-		var cash := int(card["cash"])
-		if cash < 0:
-			return Result.failure("%s: player[%d].reserve_cards[%d].cash 不能为负数: %d" % [MODULE_ID, player_id, card_index, cash])
-		return Result.success(cash)
-
-	if not card.has("type") or not (card["type"] is int):
-		return Result.failure("%s: player[%d].reserve_cards[%d].type 缺失或类型错误（期望 int）" % [MODULE_ID, player_id, card_index])
-	var amount := int(card["type"])
-	if amount < 0:
-		return Result.failure("%s: player[%d].reserve_cards[%d].type 不能为负数: %d" % [MODULE_ID, player_id, card_index, amount])
-	return Result.success(amount)
+	return Result.success().with_warning("银行第一次破产(Reserve Prices)：注入 $%d，base_unit_price=%d" % [total_added, new_base])
 
 static func _pick_base_price(counts: Dictionary) -> int:
 	var best_count := -1
