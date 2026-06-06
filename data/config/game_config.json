@@ -38,17 +38,17 @@
     "reserve_cards": [
       {
         "type": 5,
-        "cash": 50,
+        "cash": 100,
         "ceo_slots": 2
       },
       {
         "type": 10,
-        "cash": 100,
+        "cash": 200,
         "ceo_slots": 3
       },
       {
         "type": 20,
-        "cash": 150,
+        "cash": 300,
         "ceo_slots": 4
       }
     ],

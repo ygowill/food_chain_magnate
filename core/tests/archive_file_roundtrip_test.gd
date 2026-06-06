@@ -95,6 +95,10 @@ static func run(player_count: int = 2, seed_val: int = 12345) -> Result:
 	if not invalid_base_dir_r.ok:
 		return invalid_base_dir_r
 
+	var legacy_reserve_r := _test_legacy_default_reserve_card_cash_migration(player_count, seed_val + 902)
+	if not legacy_reserve_r.ok:
+		return legacy_reserve_r
+
 	return Result.success({
 		"save_path": save_path,
 		"hash": h1.substr(0, 8),
@@ -120,4 +124,78 @@ static func _test_invalid_modules_base_dir_rejected(player_count: int, seed_val:
 	if str(load_r.error).find("modules_v2_base_dir") < 0:
 		return Result.failure("错误信息应包含 modules_v2_base_dir，实际: %s" % load_r.error)
 
+	return Result.success()
+
+static func _test_legacy_default_reserve_card_cash_migration(player_count: int, seed_val: int) -> Result:
+	var engine := GameEngine.new()
+	var init := engine.initialize(player_count, seed_val)
+	if not init.ok:
+		return Result.failure("初始化旧储备卡迁移用例失败: %s" % init.error)
+
+	var archive_r := engine.create_archive()
+	if not archive_r.ok:
+		return Result.failure("创建旧储备卡迁移存档失败: %s" % archive_r.error)
+	var archive: Dictionary = archive_r.value
+	var initial: Dictionary = Dictionary(archive.get("initial_state", {})).duplicate(true)
+	var players_val = initial.get("players", null)
+	if not (players_val is Array):
+		return Result.failure("测试前提不成立：initial_state.players 类型错误")
+	var players: Array = (players_val as Array).duplicate(true)
+	for pid in range(players.size()):
+		if not (players[pid] is Dictionary):
+			return Result.failure("测试前提不成立：players[%d] 类型错误" % pid)
+		var player: Dictionary = Dictionary(players[pid]).duplicate(true)
+		var cards_val = player.get("reserve_cards", null)
+		if not (cards_val is Array):
+			return Result.failure("测试前提不成立：players[%d].reserve_cards 类型错误" % pid)
+		var cards: Array = (cards_val as Array).duplicate(true)
+		var legacy_cash: Array[int] = [50, 100, 150]
+		for i in range(legacy_cash.size()):
+			if i >= cards.size() or not (cards[i] is Dictionary):
+				return Result.failure("测试前提不成立：players[%d].reserve_cards[%d] 类型错误" % [pid, i])
+			var card: Dictionary = Dictionary(cards[i]).duplicate(true)
+			card["cash"] = legacy_cash[i]
+			cards[i] = card
+		player["reserve_cards"] = cards
+		players[pid] = player
+	initial["players"] = players
+	archive["initial_state"] = initial
+	archive["commands"] = []
+	archive["current_index"] = -1
+
+	var loaded := GameEngine.new()
+	var load_r := loaded.load_from_archive(archive)
+	if not load_r.ok:
+		return Result.failure("旧默认储备卡金额存档加载失败: %s" % load_r.error)
+	var state := loaded.get_state()
+	if state == null:
+		return Result.failure("旧默认储备卡金额存档加载后 state 为空")
+	for pid in range(state.players.size()):
+		var player: Dictionary = state.players[pid]
+		var check_r := _assert_default_reserve_card_cash(player.get("reserve_cards", null), "loaded.players[%d].reserve_cards" % pid)
+		if not check_r.ok:
+			return check_r
+	var warning_seen := false
+	for warning in load_r.warnings:
+		if str(warning).find("旧默认储备卡金额") >= 0:
+			warning_seen = true
+			break
+	if not warning_seen:
+		return Result.failure("旧默认储备卡金额迁移应返回 warning")
+
+	return Result.success()
+
+static func _assert_default_reserve_card_cash(cards_val, path: String) -> Result:
+	if not (cards_val is Array):
+		return Result.failure("%s 类型错误（期望 Array）" % path)
+	var cards: Array = cards_val
+	var expected_cash: Array[int] = [100, 200, 300]
+	if cards.size() != expected_cash.size():
+		return Result.failure("%s 张数应为 %d，实际: %d" % [path, expected_cash.size(), cards.size()])
+	for i in range(expected_cash.size()):
+		if not (cards[i] is Dictionary):
+			return Result.failure("%s[%d] 类型错误（期望 Dictionary）" % [path, i])
+		var card: Dictionary = cards[i]
+		if int(card.get("cash", -1)) != expected_cash[i]:
+			return Result.failure("%s[%d].cash 应为 %d，实际: %s" % [path, i, expected_cash[i], str(card.get("cash", null))])
 	return Result.success()

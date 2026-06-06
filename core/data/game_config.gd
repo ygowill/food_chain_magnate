@@ -44,9 +44,9 @@ var player_starting_company_structure: Dictionary = {
 	"structure": []
 }
 var player_reserve_cards: Array[Dictionary] = [
-	{"type": 5, "cash": 50, "ceo_slots": 2},
-	{"type": 10, "cash": 100, "ceo_slots": 3},
-	{"type": 20, "cash": 150, "ceo_slots": 4},
+	{"type": 5, "cash": 100, "ceo_slots": 2},
+	{"type": 10, "cash": 200, "ceo_slots": 3},
+	{"type": 20, "cash": 300, "ceo_slots": 4},
 ]
 var player_reserve_card_selected: int = 1
 

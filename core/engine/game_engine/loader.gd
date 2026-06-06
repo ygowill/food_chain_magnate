@@ -9,6 +9,11 @@ const ModuleDirSpecClass = preload("res://core/modules/v2/module_dir_spec.gd")
 const BankStateAccessClass = preload("res://core/state/bank_state_access.gd")
 const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 
+const DEFAULT_RESERVE_CARD_TYPES: Array[int] = [5, 10, 20]
+const LEGACY_DEFAULT_RESERVE_CARD_CASH: Array[int] = [50, 100, 150]
+const DEFAULT_RESERVE_CARD_CASH: Array[int] = [100, 200, 300]
+const DEFAULT_RESERVE_CARD_CEO_SLOTS: Array[int] = [2, 3, 4]
+
 static func load_from_archive(engine: GameEngine, archive: Dictionary, progress_callback: Callable = Callable()) -> Result:
 	engine.reset_modules_v2()
 
@@ -79,6 +84,10 @@ static func load_from_archive(engine: GameEngine, archive: Dictionary, progress_
 			return Result.failure("无效的 initial_state：modules 出现重复 id: %s" % mid)
 		module_seen[mid] = true
 		enabled_modules.append(mid)
+
+	var reserve_migrated := _migrate_legacy_default_reserve_card_cash(initial_data)
+	if reserve_migrated > 0:
+		all_warnings.append("已迁移旧默认储备卡金额：%d 位玩家从 50/100/150 更新为 100/200/300" % reserve_migrated)
 
 	var base_dir := GameDefaultsClass.DEFAULT_MODULES_V2_BASE_DIR
 	if archive.has("modules_v2_base_dir"):
@@ -262,6 +271,50 @@ static func load_from_archive(engine: GameEngine, archive: Dictionary, progress_
 		"current_index": int(engine.current_command_index),
 	})
 	return Result.success(engine.state).with_warnings(all_warnings)
+
+static func _migrate_legacy_default_reserve_card_cash(initial_data: Dictionary) -> int:
+	var players_val = initial_data.get("players", null)
+	if not (players_val is Array):
+		return 0
+	var players: Array = players_val
+	var migrated := 0
+	for pid in range(players.size()):
+		var player_val = players[pid]
+		if not (player_val is Dictionary):
+			continue
+		var player: Dictionary = player_val
+		var cards_val = player.get("reserve_cards", null)
+		if not _is_legacy_default_reserve_cards(cards_val):
+			continue
+		var cards: Array = (cards_val as Array).duplicate(true)
+		for i in range(cards.size()):
+			var card: Dictionary = cards[i]
+			card["cash"] = DEFAULT_RESERVE_CARD_CASH[i]
+			cards[i] = card
+		player["reserve_cards"] = cards
+		players[pid] = player
+		migrated += 1
+	initial_data["players"] = players
+	return migrated
+
+static func _is_legacy_default_reserve_cards(cards_val) -> bool:
+	if not (cards_val is Array):
+		return false
+	var cards: Array = cards_val
+	if cards.size() != DEFAULT_RESERVE_CARD_TYPES.size():
+		return false
+	for i in range(DEFAULT_RESERVE_CARD_TYPES.size()):
+		var card_val = cards[i]
+		if not (card_val is Dictionary):
+			return false
+		var card: Dictionary = card_val
+		if not (card.get("type", null) is int) or int(card.get("type", -1)) != DEFAULT_RESERVE_CARD_TYPES[i]:
+			return false
+		if not (card.get("cash", null) is int) or int(card.get("cash", -1)) != LEGACY_DEFAULT_RESERVE_CARD_CASH[i]:
+			return false
+		if not (card.get("ceo_slots", null) is int) or int(card.get("ceo_slots", -1)) != DEFAULT_RESERVE_CARD_CEO_SLOTS[i]:
+			return false
+	return true
 
 static func _emit_progress(progress_callback: Callable, payload: Dictionary) -> void:
 	if not progress_callback.is_valid():

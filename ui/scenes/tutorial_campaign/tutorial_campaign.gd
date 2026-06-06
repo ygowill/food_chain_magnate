@@ -120,9 +120,9 @@ const MILESTONE_CATEGORY_COLORS := {
 }
 
 const FALLBACK_RESERVE_CARDS := [
-	{"cash": 50, "ceo_slots": 2},
-	{"cash": 100, "ceo_slots": 3},
-	{"cash": 150, "ceo_slots": 4},
+	{"cash": 100, "ceo_slots": 2},
+	{"cash": 200, "ceo_slots": 3},
+	{"cash": 300, "ceo_slots": 4},
 ]
 
 class RealAssetMapPreview:
@@ -3377,8 +3377,8 @@ func _build_first_bankruptcy_case_card() -> Control:
 	var details := "假设银行只剩 $15，但当前晚餐需要向玩家支付 $20：\n"
 	details += "1. 银行余额不足，触发第一次破产；如果某次支付后银行刚好变成 $0，也会立刻触发破产。\n"
 	details += "2. 所有玩家翻开自己已选的储备卡。未选中的卡仍然不公开。\n"
-	details += "3. 例：甲选第 2 张，银行注资 $100、CEO 槽位候选 3；乙选第 3 张，银行注资 $150、CEO 槽位候选 4。\n"
-	details += "4. 银行先获得 $250 注资，余额从 $15 变为 $265，然后继续完成刚才那笔 $20 支付，支付后剩 $245；第一次破产不会立刻结束游戏。\n"
+	details += "3. 例：甲选第 2 张，银行注资 $200、CEO 槽位候选 3；乙选第 3 张，银行注资 $300、CEO 槽位候选 4。\n"
+	details += "4. 银行先获得 $500 注资，余额从 $15 变为 $515，然后继续完成刚才那笔 $20 支付，支付后剩 $495；第一次破产不会立刻结束游戏。\n"
 	details += "5. CEO 槽位按所有已选卡投票决定，票数相同取更大的槽位。本例 3 和 4 各一票，所以之后所有玩家的 CEO 直属槽位变为 4。"
 	vbox.add_child(_make_rich_text(details, 140))
 
