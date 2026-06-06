@@ -2,6 +2,7 @@ extends RefCounted
 
 const AutoAdvanceTryStepClass = preload("res://core/engine/game_engine/auto_advance_try_step.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const RoundStatePendingPhaseActionsClass = preload("res://core/utils/round_state_pending_phase_actions.gd")
 
 const ONLINE_DINNERTIME_CONFIRM_KEY := "online_require_dinnertime_confirm"
 const ONLINE_MARKETING_CONFIRM_KEY := "online_require_marketing_confirm"
@@ -23,6 +24,10 @@ static func prepare_engine_for_online_resume(
 	state.rules[ONLINE_DINNERTIME_CONFIRM_KEY] = 1
 	state.rules[ONLINE_MARKETING_CONFIRM_KEY] = 1
 
+	var reserve_pending_r := _ensure_online_reserve_cards_pending(state)
+	if not reserve_pending_r.ok:
+		return reserve_pending_r
+
 	if str(state.phase) == DefsClass.PHASE_DINNERTIME:
 		var guard_r: Result = AutoAdvanceTryStepClass._ensure_online_dinnertime_pending_guard(state)
 		if not guard_r.ok:
@@ -43,6 +48,70 @@ static func prepare_engine_for_online_resume(
 		"history_size": int(engine.command_history.size()),
 		"state_hash": str(state.compute_hash()),
 	})
+
+static func _ensure_online_reserve_cards_pending(state: GameState) -> Result:
+	if state == null:
+		return Result.failure("online reserve cards pending: state 为空")
+	if str(state.phase) != DefsClass.PHASE_SETUP or str(state.sub_phase) != DefsClass.SUB_PHASE_RESERVE_CARDS:
+		return Result.success()
+	if not (state.round_state is Dictionary):
+		return Result.failure("online reserve cards pending: round_state 类型错误（期望 Dictionary）")
+
+	var pending: Array[int] = []
+	var seen := {}
+	for pid_val in Array(state.turn_order):
+		var pid_read := _read_integral_player_id(pid_val)
+		if not pid_read.ok:
+			continue
+		var pid := int(pid_read.value)
+		if pid < 0 or pid >= state.players.size() or seen.has(pid):
+			continue
+		var p_val = state.players[pid]
+		if not (p_val is Dictionary):
+			return Result.failure("online reserve cards pending: players[%d] 类型错误（期望 Dictionary）" % pid)
+		if _has_player_selected_reserve_card(p_val):
+			continue
+		seen[pid] = true
+		pending.append(pid)
+
+	for pid2 in range(state.players.size()):
+		if seen.has(pid2):
+			continue
+		var p2_val = state.players[pid2]
+		if not (p2_val is Dictionary):
+			return Result.failure("online reserve cards pending: players[%d] 类型错误（期望 Dictionary）" % pid2)
+		if _has_player_selected_reserve_card(p2_val):
+			continue
+		seen[pid2] = true
+		pending.append(pid2)
+
+	var set_pending := RoundStatePendingPhaseActionsClass.set_phase_pending_players(
+		state.round_state,
+		DefsClass.PHASE_SETUP,
+		pending,
+		"online reserve cards pending"
+	)
+	if not set_pending.ok:
+		return set_pending
+	return Result.success()
+
+static func _read_integral_player_id(value) -> Result:
+	if value is int:
+		return Result.success(int(value))
+	if value is float:
+		var f: float = float(value)
+		if f == floor(f):
+			return Result.success(int(f))
+	return Result.failure("player_id 类型错误（期望 int/float）")
+
+static func _has_player_selected_reserve_card(player: Dictionary) -> bool:
+	var v = player.get("reserve_card_selected", -1)
+	if v is int:
+		return int(v) >= 0
+	if v is float:
+		var f: float = float(v)
+		return f == floor(f) and int(f) >= 0
+	return false
 
 static func _persist_online_confirm_markers_to_initial_checkpoint(engine: GameEngine) -> void:
 	if engine == null or engine.checkpoints.is_empty() or not (engine.checkpoints[0] is Dictionary):

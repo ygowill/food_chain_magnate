@@ -9,6 +9,7 @@ const ReserveCardSelectionModalScene = preload("res://ui/components/modal_panel/
 const UiSignalHelpersClass = preload("res://ui/utils/signal_helpers.gd")
 const UiZClass = preload("res://ui/utils/ui_z.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
+const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
 const ModuleUiMetadataClass = preload("res://gameplay/module_ui_metadata.gd")
 const PhaseActionUiRegistryClass = preload("res://ui/scenes/game/panel/phase_action_ui_registry.gd")
 
@@ -93,7 +94,72 @@ func _compute_reserve_card_interactive(state: GameState, current_player_id: int)
 	if NetContext == null or NetContext.mode != NetContext.Mode.ONLINE_CLIENT:
 		return true
 	var local_player_id := int(NetContext.local_player_id)
-	return local_player_id >= 0 and current_player_id == local_player_id
+	return local_player_id >= 0 \
+		and current_player_id == local_player_id \
+		and OnlinePhaseInteractionClass.can_player_act_in_online_reserve_cards(state, local_player_id)
+
+func _resolve_reserve_card_modal_player_id(state: GameState, fallback_player_id: int) -> int:
+	if state == null:
+		return -1
+	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
+		var local_player_id := int(NetContext.local_player_id)
+		if local_player_id >= 0 and OnlinePhaseInteractionClass.can_player_act_in_online_reserve_cards(state, local_player_id):
+			return local_player_id
+		var pending := _read_reserve_card_pending_players(state)
+		if not pending.is_empty():
+			return int(pending[0])
+	return fallback_player_id
+
+func _read_reserve_card_pending_players(state: GameState) -> Array[int]:
+	var out: Array[int] = []
+	if state == null or not (state.round_state is Dictionary):
+		return out
+	var rs: Dictionary = state.round_state
+	var ppa_val = rs.get("pending_phase_actions", null)
+	if ppa_val is Dictionary:
+		var list_val = Dictionary(ppa_val).get(DefsClass.PHASE_SETUP, null)
+		if list_val is Array:
+			for item_val in Array(list_val):
+				var pid := _read_integral_player_id(item_val)
+				if pid >= 0 and pid < state.players.size():
+					out.append(pid)
+			return out
+	for pid_val in Array(state.turn_order):
+		var pid2 := _read_integral_player_id(pid_val)
+		if pid2 < 0 or pid2 >= state.players.size() or out.has(pid2):
+			continue
+		if not _has_player_selected_reserve_card(state, pid2):
+			out.append(pid2)
+	for pid3 in range(state.players.size()):
+		if out.has(pid3):
+			continue
+		if not _has_player_selected_reserve_card(state, pid3):
+			out.append(pid3)
+	return out
+
+func _read_integral_player_id(value) -> int:
+	if value is int:
+		return int(value)
+	if value is float:
+		var f: float = float(value)
+		if f == floor(f):
+			return int(f)
+	return -1
+
+func _has_player_selected_reserve_card(state: GameState, player_id: int) -> bool:
+	if state == null or player_id < 0 or player_id >= state.players.size():
+		return false
+	var p_val = state.players[player_id]
+	if not (p_val is Dictionary):
+		return false
+	var player: Dictionary = p_val
+	var v = player.get("reserve_card_selected", -1)
+	if v is int:
+		return int(v) >= 0
+	if v is float:
+		var f: float = float(v)
+		return f == floor(f) and int(f) >= 0
+	return false
 
 func has_open_modal_ui() -> bool:
 	if _reserve_card_open_routine_running or _pending_reserve_card_open_player_id >= 0:
@@ -128,6 +194,7 @@ func reopen_reserve_card_modal_for_current_state() -> void:
 		return
 	_clear_reserve_card_dismissed_state()
 	var current_player_id := state.get_current_player_id()
+	current_player_id = _resolve_reserve_card_modal_player_id(state, current_player_id)
 	if current_player_id < 0:
 		return
 	var interactive := _compute_reserve_card_interactive(state, current_player_id)
@@ -161,14 +228,15 @@ func sync_for_state(state: GameState, covered: Rect2) -> void:
 
 	# 储备卡选择（Setup/ReserveCards）
 	if _is_reserve_card_selection_state(state) and current_player_id >= 0:
-		var interactive := _compute_reserve_card_interactive(state, current_player_id)
+		var reserve_player_id := _resolve_reserve_card_modal_player_id(state, current_player_id)
+		var interactive := _compute_reserve_card_interactive(state, reserve_player_id)
 		if _reserve_card_modal_dismissed:
-			if _reserve_card_modal_dismissed_player_id != current_player_id or _reserve_card_modal_dismissed_interactive != interactive:
+			if _reserve_card_modal_dismissed_player_id != reserve_player_id or _reserve_card_modal_dismissed_interactive != interactive:
 				_clear_reserve_card_dismissed_state()
 		if _reserve_card_modal_dismissed:
 			hide_reserve_card_modal()
 		else:
-			show_reserve_card_modal(state, current_player_id, covered, interactive)
+			show_reserve_card_modal(state, reserve_player_id, covered, interactive)
 	else:
 		_clear_reserve_card_dismissed_state()
 		hide_reserve_card_modal()
@@ -454,6 +522,7 @@ func _deferred_open_reserve_card_modal() -> void:
 			return
 
 		var current_player_id := state.get_current_player_id()
+		current_player_id = _resolve_reserve_card_modal_player_id(state, current_player_id)
 		if current_player_id != expected_player_id:
 			_clear_pending_reserve_card_open_state()
 			return
@@ -526,15 +595,18 @@ func _on_reserve_card_modal_completed(result: Dictionary) -> void:
 	var state: GameState = _scene.game_engine.get_state()
 	if state == null:
 		return
-	var current_player_id := state.get_current_player_id()
-	if current_player_id < 0:
-		return
+	var actor_id := state.get_current_player_id()
 	if NetContext != null and NetContext.mode == NetContext.Mode.ONLINE_CLIENT:
 		var local_pid := int(NetContext.local_player_id)
-		if local_pid < 0 or current_player_id != local_pid:
+		if local_pid < 0 or not OnlinePhaseInteractionClass.can_player_act_in_online_reserve_cards(state, local_pid):
 			return
+		actor_id = local_pid
+	else:
+		actor_id = _resolve_reserve_card_modal_player_id(state, actor_id)
+	if actor_id < 0:
+		return
 
-	_execute_command.call(Command.create("select_reserve_card", current_player_id, {"selected_index": selected_index}))
+	_execute_command.call(Command.create("select_reserve_card", actor_id, {"selected_index": selected_index}))
 
 func _on_reserve_card_modal_cancelled() -> void:
 	var state := _get_live_state()
@@ -542,6 +614,7 @@ func _on_reserve_card_modal_cancelled() -> void:
 	var interactive := true
 	if state != null:
 		current_player_id = state.get_current_player_id()
+		current_player_id = _resolve_reserve_card_modal_player_id(state, current_player_id)
 		if current_player_id >= 0:
 			interactive = _compute_reserve_card_interactive(state, current_player_id)
 	_reserve_card_modal_dismissed = true

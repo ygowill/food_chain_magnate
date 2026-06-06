@@ -2270,6 +2270,47 @@ func server_try_auto_submit_forfeited_restructuring(room) -> bool:
 		any = true
 	return any
 
+func server_try_auto_select_forfeited_reserve_cards(room) -> bool:
+	if room == null or room.game_engine == null:
+		return false
+	var state = room.game_engine.get_state()
+	if state == null:
+		return false
+	if str(state.phase) != DefsClass.PHASE_SETUP or str(state.sub_phase) != DefsClass.SUB_PHASE_RESERVE_CARDS:
+		return false
+
+	var any := false
+	for pid in range(state.players.size()):
+		if not server_is_player_forfeited(state, pid):
+			continue
+		var player_val = state.players[pid]
+		if not (player_val is Dictionary):
+			continue
+		var player: Dictionary = player_val
+		if _server_has_selected_reserve_card(player):
+			continue
+		var cmd = CommandClass.create("select_reserve_card", pid, {"selected_index": 0})
+		var exec_r = room.game_engine.execute_command(cmd)
+		if not exec_r.ok:
+			GameLog.error("NetClient", "auto select_reserve_card failed: %s" % exec_r.error)
+			return any
+		GameLog.debug("NetClient", "Auto select_reserve_card actor=%d %s" % [pid, _room_brief(room)])
+		broadcast_command_applied(room, cmd)
+		any = true
+		state = room.game_engine.get_state()
+		if state == null or str(state.phase) != DefsClass.PHASE_SETUP or str(state.sub_phase) != DefsClass.SUB_PHASE_RESERVE_CARDS:
+			return any
+	return any
+
+func _server_has_selected_reserve_card(player: Dictionary) -> bool:
+	var v = player.get("reserve_card_selected", -1)
+	if v is int:
+		return int(v) >= 0
+	if v is float:
+		var f: float = float(v)
+		return f == floor(f) and int(f) >= 0
+	return false
+
 func server_drain_forfeited_auto_steps(room) -> void:
 	if room == null or room.game_engine == null:
 		return
@@ -2286,6 +2327,9 @@ func server_drain_forfeited_auto_steps(room) -> void:
 			return
 		if str(state.phase) == DefsClass.PHASE_GAME_OVER:
 			return
+
+		if server_try_auto_select_forfeited_reserve_cards(room):
+			continue
 
 		if server_try_auto_submit_forfeited_restructuring(room):
 			continue

@@ -114,6 +114,10 @@ static func build_tests(_host) -> Array[Dictionary]:
 			"fn": func() -> Result: return TestRefs.OnlineStartGameReplayTestClass.run(),
 		},
 		{
+			"name": "OnlineReserveCardParallelSelectionTest",
+			"fn": func() -> Result: return TestRefs.OnlineReserveCardParallelSelectionTestClass.run(),
+		},
+		{
 			"name": "MatchFinalizeParticipantLogoPayloadTest",
 			"fn": func() -> Result: return TestRefs.MatchFinalizeParticipantLogoPayloadTestClass.run(),
 		},

@@ -28,7 +28,8 @@ static func is_online_parallel_phase(state: GameState) -> bool:
 	if not is_online_mode():
 		return false
 	var phase := str(state.phase)
-	return phase == DefsClass.PHASE_RESTRUCTURING \
+	return _is_reserve_cards_selection_state(state) \
+		or phase == DefsClass.PHASE_RESTRUCTURING \
 		or phase == DefsClass.PHASE_PAYDAY \
 		or phase == DefsClass.PHASE_DINNERTIME \
 		or phase == DefsClass.PHASE_MARKETING
@@ -113,6 +114,21 @@ static func can_player_act_in_online_marketing(state: GameState, player_id: int)
 	var first: Dictionary = first_val
 	return _read_integral_player_id(first.get("player_id", null)) == player_id
 
+static func can_player_act_in_online_reserve_cards(state: GameState, player_id: int) -> bool:
+	if not _is_reserve_cards_selection_state(state):
+		return false
+	if not is_valid_player_id(state, player_id):
+		return false
+	if _has_player_selected_reserve_card(state, player_id):
+		return false
+	var pending := _read_setup_pending_list(state)
+	if pending.is_empty():
+		return true
+	for pid in pending:
+		if int(pid) == int(player_id):
+			return true
+	return false
+
 static func can_local_player_act_in_online_phase(state: GameState) -> bool:
 	if not is_online_mode():
 		return false
@@ -121,6 +137,8 @@ static func can_local_player_act_in_online_phase(state: GameState) -> bool:
 	var local_pid := get_online_local_player_id(state, -1)
 	if local_pid < 0:
 		return false
+	if _is_reserve_cards_selection_state(state):
+		return can_player_act_in_online_reserve_cards(state, local_pid)
 	if str(state.phase) == DefsClass.PHASE_RESTRUCTURING:
 		return true
 	if str(state.phase) == DefsClass.PHASE_PAYDAY:
@@ -171,6 +189,44 @@ static func _read_marketing_pending_list(state: GameState) -> Array:
 	if not (list_val is Array):
 		return []
 	return Array(list_val)
+
+static func _read_setup_pending_list(state: GameState) -> Array:
+	if state == null:
+		return []
+	if not (state.round_state is Dictionary):
+		return []
+	var rs: Dictionary = state.round_state
+	var ppa_val = rs.get("pending_phase_actions", null)
+	if not (ppa_val is Dictionary):
+		return []
+	var ppa: Dictionary = ppa_val
+	var list_val = ppa.get(DefsClass.PHASE_SETUP, null)
+	if not (list_val is Array):
+		return []
+	var out: Array[int] = []
+	for item_val in Array(list_val):
+		var pid := _read_integral_player_id(item_val)
+		if pid >= 0:
+			out.append(pid)
+	return out
+
+static func _is_reserve_cards_selection_state(state: GameState) -> bool:
+	return state != null and str(state.phase) == DefsClass.PHASE_SETUP and str(state.sub_phase) == DefsClass.SUB_PHASE_RESERVE_CARDS
+
+static func _has_player_selected_reserve_card(state: GameState, player_id: int) -> bool:
+	if not is_valid_player_id(state, player_id):
+		return false
+	var p_val = state.players[player_id]
+	if not (p_val is Dictionary):
+		return false
+	var player: Dictionary = p_val
+	var v = player.get("reserve_card_selected", -1)
+	if v is int:
+		return int(v) >= 0
+	if v is float:
+		var f: float = float(v)
+		return f == floor(f) and int(f) >= 0
+	return false
 
 static func _has_online_settlement_confirm_markers(state: GameState) -> bool:
 	return _read_online_confirm_marker(state, ONLINE_DINNERTIME_CONFIRM_KEY) \

@@ -482,6 +482,9 @@ static func _prepare_restructuring_actor_scope_history(room) -> Result:
 	if state == null:
 		return Result.failure("actor scope setup state 为空")
 	state.round_number = 1
+	var clear_pending_r := _clear_setup_pending_for_direct_phase_jump(state)
+	if not clear_pending_r.ok:
+		return clear_pending_r
 	var checkpoint_r := _sync_initial_checkpoint(engine)
 	if not checkpoint_r.ok:
 		return checkpoint_r
@@ -519,6 +522,21 @@ static func _prepare_restructuring_actor_scope_history(room) -> Result:
 		"p0_submit_index": p0_submit_index,
 		"p1_direct_index": p1_direct_index,
 	})
+
+static func _clear_setup_pending_for_direct_phase_jump(state: GameState) -> Result:
+	if state == null:
+		return Result.failure("direct phase jump state 为空")
+	if not (state.round_state is Dictionary):
+		return Result.failure("direct phase jump round_state 类型错误（期望 Dictionary）")
+	var ppa_val = state.round_state.get("pending_phase_actions", null)
+	if ppa_val == null:
+		return Result.success()
+	if not (ppa_val is Dictionary):
+		return Result.failure("direct phase jump pending_phase_actions 类型错误（期望 Dictionary）")
+	var ppa: Dictionary = Dictionary(ppa_val).duplicate(true)
+	ppa.erase(DefsClass.PHASE_SETUP)
+	state.round_state["pending_phase_actions"] = ppa
+	return Result.success()
 
 static func _sync_initial_checkpoint(engine) -> Result:
 	if engine == null:
