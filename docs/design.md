@@ -1105,7 +1105,7 @@ class TerrainEffectModifier:
     ```
 
 - 储备价格（Reserve Prices）：
-  - 替换首次破产处理器，固定补充"玩家数×200"。
+  - 替换首次破产处理器，按所有玩家已选储备卡金额总和补充银行资金。
   - 在 `PricingPipeline` 注册基础单价锁定器：
 
     ```gdscript

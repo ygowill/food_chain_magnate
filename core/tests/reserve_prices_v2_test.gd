@@ -198,7 +198,7 @@ static func _make_engine(seed_val: int) -> Result:
 		return Result.failure("初始化失败: %s" % init.error)
 	return Result.success(e)
 
-static func _force_first_break(e: GameEngine) -> Result:
+static func _force_first_break(e: GameEngine, expected_added: int) -> Result:
 	var s: GameState = e.get_state()
 	# 强制破产：将银行置 0 并要求支付 1
 	s.bank["total"] = 0
@@ -209,8 +209,16 @@ static func _force_first_break(e: GameEngine) -> Result:
 	if int(s.bank.get("broke_count", -1)) != 1:
 		return Result.failure("第一次破产后 broke_count 应为 1，实际: %s" % str(s.bank.get("broke_count", null)))
 	var added := int(s.bank.get("reserve_added_total", 0)) - before
-	if added != 400:
-		return Result.failure("第一次破产注资应为 $200/人（2人=$400），实际增加: %d" % added)
+	if added != expected_added:
+		return Result.failure("第一次破产注资应为所有玩家已选储备卡金额总和 $%d，实际增加: %d" % [expected_added, added])
+
+	var bankruptcy: Dictionary = s.round_state.get("bankruptcy", {})
+	var events: Array = bankruptcy.get("events", [])
+	if events.is_empty():
+		return Result.failure("第一次破产后应记录 bankruptcy event")
+	var first_event: Dictionary = events[0] if events[0] is Dictionary else {}
+	if int(first_event.get("reserve_added", -1)) != expected_added:
+		return Result.failure("bankruptcy event.reserve_added 应为 %d，实际: %s" % [expected_added, str(first_event.get("reserve_added", null))])
 	return Result.success()
 
 static func _test_first_break_sets_base_price_tie_20_wins(seed_val: int) -> Result:
@@ -231,7 +239,7 @@ static func _test_first_break_sets_base_price_tie_20_wins(seed_val: int) -> Resu
 	var ceo0_before: int = int(s.players[0]["company_structure"]["ceo_slots"])
 	var ceo1_before: int = int(s.players[1]["company_structure"]["ceo_slots"])
 
-	var r := _force_first_break(e)
+	var r := _force_first_break(e, 25)
 	if not r.ok:
 		return r
 
@@ -264,7 +272,7 @@ static func _test_first_break_sets_base_price_tie_5_wins_over_10(seed_val: int) 
 	s.players[1]["reserve_card_selected"] = 0
 	s.players[1]["reserve_card_revealed"] = false
 
-	var r := _force_first_break(e)
+	var r := _force_first_break(e, 15)
 	if not r.ok:
 		return r
 
