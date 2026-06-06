@@ -1,6 +1,14 @@
 # MapCanvasDrawer：纹理绘制辅助方法下沉
 extends RefCounted
 
+const PREFILTER_MINIFICATION_RATIO := 1.5
+const PREFILTER_CACHE_LIMIT := 256
+
+static var _prefilter_cache: Dictionary = {}
+
+static func clear_prefilter_cache() -> void:
+	_prefilter_cache.clear()
+
 static func draw_texture_aspect_fit(
 	canvas,
 	texture: Texture2D,
@@ -23,6 +31,72 @@ static func draw_texture_aspect_fit(
 		pos.y = rect.position.y + rect.size.y - size.y
 
 	canvas.draw_texture_rect(texture, Rect2(pos, size), false, modulate)
+
+static func draw_texture_aspect_fit_prefiltered(
+	canvas,
+	texture: Texture2D,
+	rect: Rect2,
+	modulate: Color = Color(1, 1, 1, 1),
+	v_align: String = "center"
+) -> void:
+	if texture == null:
+		return
+	var ts: Vector2 = texture.get_size()
+	if ts.x <= 0.0 or ts.y <= 0.0:
+		return
+
+	var scale := minf(rect.size.x / ts.x, rect.size.y / ts.y)
+	var size := ts * scale
+	var pos := rect.position + (rect.size - size) * 0.5
+	if v_align == "top":
+		pos.y = rect.position.y
+	elif v_align == "bottom":
+		pos.y = rect.position.y + rect.size.y - size.y
+
+	var target_size := Vector2i(
+		maxi(1, int(round(size.x))),
+		maxi(1, int(round(size.y)))
+	)
+	var draw_texture := get_lanczos_prefiltered_texture(texture, target_size)
+	canvas.draw_texture_rect(draw_texture, Rect2(pos, size), false, modulate)
+
+static func get_lanczos_prefiltered_texture(texture: Texture2D, target_size: Vector2i) -> Texture2D:
+	if texture == null:
+		return null
+	var ts: Vector2 = texture.get_size()
+	var src_size := Vector2i(maxi(1, int(round(ts.x))), maxi(1, int(round(ts.y))))
+	var dst_size := Vector2i(maxi(1, int(target_size.x)), maxi(1, int(target_size.y)))
+	var minify_ratio := maxf(
+		float(src_size.x) / float(dst_size.x),
+		float(src_size.y) / float(dst_size.y)
+	)
+	if minify_ratio < PREFILTER_MINIFICATION_RATIO:
+		return texture
+	if dst_size.x >= src_size.x and dst_size.y >= src_size.y:
+		return texture
+
+	var key := "%d:%dx%d" % [int(texture.get_instance_id()), dst_size.x, dst_size.y]
+	var cached = _prefilter_cache.get(key, null)
+	if cached is Texture2D:
+		return cached
+
+	var src_img := texture.get_image()
+	if src_img == null or src_img.is_empty():
+		return texture
+	var out := src_img.get_region(Rect2i(Vector2i.ZERO, src_size))
+	if out == null or out.is_empty():
+		return texture
+	if out.get_format() != Image.FORMAT_RGBA8:
+		out.convert(Image.FORMAT_RGBA8)
+	out.resize(dst_size.x, dst_size.y, Image.INTERPOLATE_LANCZOS)
+
+	var filtered := ImageTexture.create_from_image(out)
+	if filtered == null:
+		return texture
+	if _prefilter_cache.size() >= PREFILTER_CACHE_LIMIT:
+		_prefilter_cache.clear()
+	_prefilter_cache[key] = filtered
+	return filtered
 
 static func draw_texture_aspect_fit_rotated(
 	canvas,

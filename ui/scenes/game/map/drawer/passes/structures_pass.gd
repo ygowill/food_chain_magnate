@@ -261,7 +261,7 @@ static func draw_house_id_structure(canvas, cell_size: int, info: Dictionary, st
 	var bottom_gap := maxf(2.0, float(cell_size) * 0.10)
 	var tex_rect := structure_rect.grow(-pad)
 	tex_rect.size.y = maxf(0.0, tex_rect.size.y - bottom_gap)
-	TextureUtilsClass.draw_texture_aspect_fit(canvas, tex, tex_rect, Color(1, 1, 1, 0.9 * a), "bottom")
+	TextureUtilsClass.draw_texture_aspect_fit_prefiltered(canvas, tex, tex_rect, Color(1, 1, 1, 0.9 * a), "bottom")
 	_draw_board_piece_surface_lines(canvas, structure_rect, cell_size, a)
 
 	draw_house_id(canvas, cell_size, structure_rect, _get_house_display_label(canvas, info))
@@ -585,7 +585,7 @@ static func draw_house_and_garden(canvas, cell_size: int, anchor: Vector2i, info
 	var house_pad := maxf(2.0, float(cell_size) * 0.08)
 	var house_tex_rect := house_rect.grow(-house_pad)
 	house_tex_rect.size.y = maxf(0.0, house_tex_rect.size.y - bottom_gap)
-	TextureUtilsClass.draw_texture_aspect_fit(canvas, house_tex, house_tex_rect, Color(1, 1, 1, 0.9 * alpha), "bottom")
+	TextureUtilsClass.draw_texture_aspect_fit_prefiltered(canvas, house_tex, house_tex_rect, Color(1, 1, 1, 0.9 * alpha), "bottom")
 
 	if has_garden and garden_rect.size != Vector2.ZERO:
 		var mod := Color(1, 1, 1, 0.9 * alpha)
@@ -596,10 +596,10 @@ static func draw_house_and_garden(canvas, cell_size: int, anchor: Vector2i, info
 			var center := garden_tex_rect.position + garden_tex_rect.size * 0.5
 			var draw_size := Vector2(garden_tex_rect.size.y, garden_tex_rect.size.x)
 			canvas.draw_set_transform(center, deg_to_rad(90.0), Vector2.ONE)
-			TextureUtilsClass.draw_texture_aspect_fit(canvas, garden_tex, Rect2(-draw_size * 0.5, draw_size), mod)
+			TextureUtilsClass.draw_texture_aspect_fit_prefiltered(canvas, garden_tex, Rect2(-draw_size * 0.5, draw_size), mod)
 			canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		else:
-			TextureUtilsClass.draw_texture_aspect_fit(canvas, garden_tex, garden_tex_rect, mod)
+			TextureUtilsClass.draw_texture_aspect_fit_prefiltered(canvas, garden_tex, garden_tex_rect, mod)
 
 	_draw_board_piece_surface_lines(canvas, structure_rect, cell_size, alpha)
 
