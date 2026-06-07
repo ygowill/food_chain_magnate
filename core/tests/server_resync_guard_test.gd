@@ -424,6 +424,20 @@ static func _run_rollback_proposal_case() -> Result:
 		return Result.failure("host 在投票前 self_vote 应为 false: %s" % str(proposal))
 	if int(proposal.get("proposer_player_id", -1)) != 1:
 		return Result.failure("非房主提议应记录 proposer_player_id=P2: %s" % str(proposal))
+	var rollback_summaries_val = proposal.get("rollback_summaries", null)
+	if not (rollback_summaries_val is Array) or Array(rollback_summaries_val).is_empty():
+		return Result.failure("proposal 应包含将撤销命令摘要: %s" % str(proposal))
+	var rollback_summary_val = Array(rollback_summaries_val)[0]
+	if not (rollback_summary_val is Dictionary):
+		return Result.failure("proposal rollback_summaries[0] 类型错误: %s" % str(proposal))
+	var rollback_summary: Dictionary = Dictionary(rollback_summary_val)
+	var rollback_summary_text := str(rollback_summary.get("text", "")).strip_edges()
+	if rollback_summary_text.find("选择储备卡") < 0:
+		return Result.failure("proposal 摘要应显示动作名，实际: %s" % rollback_summary_text)
+	if rollback_summary_text.find("<hidden>") < 0:
+		return Result.failure("proposal 公共摘要应脱敏隐藏参数，实际: %s" % rollback_summary_text)
+	if rollback_summary_text.find("selected_index=0") >= 0:
+		return Result.failure("proposal 公共摘要不应泄露 selected_index=0，实际: %s" % rollback_summary_text)
 
 	mock_net.sent.clear()
 	mock_net.multiplayer.remote_sender_id = host_peer_id

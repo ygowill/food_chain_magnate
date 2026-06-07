@@ -11,6 +11,7 @@ var _dialog_panel: PanelContainer = null
 var _title_label: Label = null
 var _message_label: Label = null
 var _target_list: ItemList = null
+var _details_label: Label = null
 var _error_label: Label = null
 var _confirm_button: Button = null
 var _cancel_button: Button = null
@@ -77,8 +78,16 @@ func _build_ui() -> void:
 	_target_list.custom_minimum_size = Vector2(0, 260)
 	_target_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_target_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_target_list.item_selected.connect(_on_target_item_selected)
 	_target_list.item_activated.connect(_on_target_item_activated)
 	root.add_child(_target_list)
+
+	_details_label = Label.new()
+	_details_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_details_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_details_label.custom_minimum_size = Vector2(0, 96)
+	_details_label.visible = false
+	root.add_child(_details_label)
 
 	_error_label = Label.new()
 	_error_label.autowrap_mode = TextServer.AUTOWRAP_WORD
@@ -114,6 +123,8 @@ func _apply_styles() -> void:
 		UiStylesClass.apply_label_dark(_message_label)
 	if _target_list != null:
 		UiStylesClass.apply_item_list_surface(_target_list)
+	if _details_label != null:
+		UiStylesClass.apply_label_dark(_details_label)
 	if _error_label != null:
 		UiStylesClass.apply_label_error(_error_label)
 	if _confirm_button != null:
@@ -134,9 +145,15 @@ func _rebuild_target_list() -> void:
 			continue
 		var idx := _target_list.item_count
 		_target_list.add_item(label)
-		_target_list.set_item_metadata(idx, int(opt.get("target_index", -1)))
+		_target_list.set_item_metadata(idx, {
+			"target_index": int(opt.get("target_index", -1)),
+			"details": str(opt.get("details", "")).strip_edges(),
+		})
 	if _target_list.item_count > 0:
 		_target_list.select(0)
+		_refresh_details_for_item(0)
+	else:
+		_refresh_details_for_item(-1)
 	if _confirm_button != null:
 		_confirm_button.disabled = _target_list.item_count <= 0
 
@@ -153,6 +170,25 @@ func _set_error(message: String) -> void:
 	_error_label.text = msg
 	_error_label.visible = not msg.is_empty()
 
+func _refresh_details_for_item(index: int) -> void:
+	if _details_label == null:
+		return
+	if _target_list == null or index < 0 or index >= _target_list.item_count:
+		_details_label.text = ""
+		_details_label.visible = false
+		return
+	var meta = _target_list.get_item_metadata(index)
+	var details := ""
+	if meta is Dictionary:
+		details = str(Dictionary(meta).get("details", "")).strip_edges()
+	if details.is_empty():
+		details = str(_target_list.get_item_text(index)).strip_edges()
+	_details_label.text = details
+	_details_label.visible = not details.is_empty()
+
+func _on_target_item_selected(index: int) -> void:
+	_refresh_details_for_item(int(index))
+
 func _on_target_item_activated(_index: int) -> void:
 	_on_confirm_pressed()
 
@@ -165,8 +201,13 @@ func _on_confirm_pressed() -> void:
 		return
 	var item_idx := int(selected[0])
 	var meta = _target_list.get_item_metadata(item_idx)
+	var target_index := -1
+	if meta is Dictionary:
+		target_index = int(Dictionary(meta).get("target_index", -1))
+	else:
+		target_index = int(meta)
 	close()
-	target_selected.emit(int(meta))
+	target_selected.emit(target_index)
 
 func _on_cancel_pressed() -> void:
 	close()

@@ -13,7 +13,10 @@ func create(
 	before_index: int,
 	history_size: int,
 	required_player_ids: Array[int],
-	reason: String
+	reason: String,
+	target_summary: Dictionary,
+	rollback_summaries: Array[Dictionary],
+	rollback_summaries_omitted_count: int
 ) -> Result:
 	if has_pending():
 		return Result.failure("Rollback proposal already pending")
@@ -25,6 +28,10 @@ func create(
 		rid = "rollback_%d" % int(Time.get_ticks_msec())
 	var required := required_player_ids.duplicate()
 	required.sort()
+	var summaries: Array[Dictionary] = []
+	for summary_val in rollback_summaries:
+		if summary_val is Dictionary:
+			summaries.append(Dictionary(summary_val).duplicate(true))
 	_pending = {
 		"proposal_id": rid,
 		"proposer_peer_id": int(proposer_peer_id),
@@ -33,6 +40,9 @@ func create(
 		"before_index": int(before_index),
 		"history_size_at_proposal": int(history_size),
 		"reason": str(reason).strip_edges(),
+		"target_summary": target_summary.duplicate(true),
+		"rollback_summaries": summaries,
+		"rollback_summaries_omitted_count": maxi(0, int(rollback_summaries_omitted_count)),
 		"created_at_ms": int(Time.get_ticks_msec()),
 		"required_player_ids": required,
 		"votes": votes,
@@ -91,6 +101,9 @@ func public_payload() -> Dictionary:
 		"before_index": int(_pending.get("before_index", -1)),
 		"history_size_at_proposal": int(_pending.get("history_size_at_proposal", -1)),
 		"reason": str(_pending.get("reason", "")).strip_edges(),
+		"target_summary": Dictionary(_pending.get("target_summary", {})).duplicate(true),
+		"rollback_summaries": Array(_pending.get("rollback_summaries", [])).duplicate(true),
+		"rollback_summaries_omitted_count": int(_pending.get("rollback_summaries_omitted_count", 0)),
 		"created_at_ms": int(_pending.get("created_at_ms", 0)),
 		"required_player_ids": Array(_pending.get("required_player_ids", [])).duplicate(),
 		"votes": Dictionary(_pending.get("votes", {})).duplicate(true),

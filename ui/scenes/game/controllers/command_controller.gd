@@ -7,6 +7,7 @@ const MandatoryActionsRulesClass = preload("res://core/rules/working/mandatory_a
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const ActionIdsClass = preload("res://core/actions/action_ids.gd")
 const OnlinePhaseInteractionClass = preload("res://core/utils/online_phase_interaction.gd")
+const CommandSummaryClass = preload("res://core/utils/command_summary.gd")
 const RollbackProposalDialogClass = preload("res://ui/dialogs/rollback_proposal_dialog.gd")
 
 const AUTO_MANDATORY_ACTION_IDS := {
@@ -217,9 +218,15 @@ func _build_rollback_proposal_target_options(game_engine: GameEngine, current_in
 	for target_index in range(int(current_index) - 1, -2, -1):
 		var steps := int(current_index) - int(target_index)
 		var target_label := _describe_rollback_target(game_engine, int(target_index))
+		var details := _build_rollback_target_details(game_engine, int(target_index), int(current_index), _get_command_privacy_viewer_player_id())
+		var preview := _build_rollback_preview(game_engine, int(target_index), int(current_index), _get_command_privacy_viewer_player_id())
+		var label := "撤销 %d 步，回滚到%s" % [steps, target_label]
+		if not preview.is_empty():
+			label += "｜撤销：%s" % preview
 		out.append({
 			"target_index": int(target_index),
-			"label": "撤销 %d 步，回滚到%s" % [steps, target_label],
+			"label": label,
+			"details": details,
 		})
 	return out
 
@@ -227,6 +234,70 @@ func _describe_rollback_target(game_engine: GameEngine, target_index: int) -> St
 	if target_index < 0:
 		return "对局开始前"
 	return "命令 #%d 后" % int(target_index)
+
+func _build_rollback_preview(game_engine: GameEngine, target_index: int, current_index: int, viewer_player_id: int) -> String:
+	if game_engine == null:
+		return ""
+	var state := game_engine.get_state()
+	var range_data: Dictionary = CommandSummaryClass.summarize_command_range(
+		game_engine.command_history,
+		int(target_index) + 1,
+		int(current_index),
+		game_engine.action_registry,
+		int(viewer_player_id),
+		state,
+		1
+	)
+	return CommandSummaryClass.format_summaries(
+		Array(range_data.get("summaries", [])),
+		int(range_data.get("omitted_count", 0)),
+		"；"
+	)
+
+func _build_rollback_target_details(game_engine: GameEngine, target_index: int, current_index: int, viewer_player_id: int) -> String:
+	if game_engine == null:
+		return ""
+	var state := game_engine.get_state()
+	var lines: Array[String] = []
+	lines.append("目标时间点：%s" % _describe_rollback_target(game_engine, int(target_index)))
+
+	if int(target_index) >= 0 and int(target_index) < int(game_engine.command_history.size()):
+		var target_cmd_val = game_engine.command_history[int(target_index)]
+		if target_cmd_val is Command:
+			var target_summary: Dictionary = CommandSummaryClass.summarize_command(
+				target_cmd_val,
+				game_engine.action_registry,
+				int(viewer_player_id),
+				state,
+				true
+			)
+			var target_text := str(target_summary.get("text", "")).strip_edges()
+			if not target_text.is_empty():
+				lines.append("目标点动作：%s" % target_text)
+
+	var range_data: Dictionary = CommandSummaryClass.summarize_command_range(
+		game_engine.command_history,
+		int(target_index) + 1,
+		int(current_index),
+		game_engine.action_registry,
+		int(viewer_player_id),
+		state,
+		8
+	)
+	var rollback_text := CommandSummaryClass.format_summaries(
+		Array(range_data.get("summaries", [])),
+		int(range_data.get("omitted_count", 0)),
+		"\n"
+	)
+	if not rollback_text.is_empty():
+		lines.append("将撤销：\n%s" % rollback_text)
+
+	return "\n".join(lines)
+
+func _get_command_privacy_viewer_player_id() -> int:
+	if NetContext != null:
+		return int(NetContext.get_command_privacy_viewer_player_id())
+	return -1
 
 func _on_rollback_proposal_target_selected(target_index: int) -> void:
 	var game_engine: GameEngine = _get_engine()
@@ -236,11 +307,12 @@ func _on_rollback_proposal_target_selected(target_index: int) -> void:
 	if int(target_index) >= current_index:
 		return
 	var steps := current_index - int(target_index)
-	var target_label := _describe_rollback_target(game_engine, int(target_index))
+	var details := _build_rollback_target_details(game_engine, int(target_index), current_index, _get_command_privacy_viewer_player_id())
+	var body := "确定要向其他玩家发起回滚投票吗？\n%s\n将撤销 %d 步操作。\n全部其他玩家同意后会立即执行回滚。" % [details, steps]
 	if _show_confirm.is_valid():
 		_show_confirm.call(
 			"提议回退",
-			"确定要向其他玩家发起回滚投票吗？\n目标时间点：%s\n将撤销 %d 步操作。\n全部其他玩家同意后会立即执行回滚。" % [target_label, steps],
+			body,
 			Callable(self, "_confirm_propose_rollback").bind(int(target_index)),
 			Callable(),
 			"发起投票",

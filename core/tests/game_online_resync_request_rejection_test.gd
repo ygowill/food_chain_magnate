@@ -306,6 +306,11 @@ static func run() -> Result:
 			"required_player_ids": [1],
 			"votes": {0: true},
 			"self_vote": false,
+			"target_summary": {"text": "#2 P1 招聘 {employee_type=trainer}"},
+			"rollback_summaries": [
+				{"text": "#3 P2 选择储备卡 {selected_index=<hidden>}"},
+			],
+			"rollback_summaries_omitted_count": 0,
 		},
 	})
 	if harness.show_confirm_calls != confirm_count_before_proposal + 1:
@@ -318,6 +323,11 @@ static func run() -> Result:
 		host.queue_free()
 		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
 		return Result.failure("投票确认框应明确目标时间点和撤销步数: %s" % str(harness.last_confirm_body))
+	if str(harness.last_confirm_body).find("招聘") < 0 or str(harness.last_confirm_body).find("选择储备卡") < 0 or str(harness.last_confirm_body).find("<hidden>") < 0:
+		controller.dispose()
+		host.queue_free()
+		_restore(prev_mode, prev_local_player_id, prev_room_state, prev_connected)
+		return Result.failure("投票确认框应显示目标/撤销动作摘要且保持脱敏: %s" % str(harness.last_confirm_body))
 
 	controller.dispose()
 	host.queue_free()

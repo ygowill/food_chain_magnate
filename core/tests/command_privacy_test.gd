@@ -2,6 +2,7 @@
 extends RefCounted
 
 const CommandPrivacyClass = preload("res://core/utils/command_privacy.gd")
+const CommandSummaryClass = preload("res://core/utils/command_summary.gd")
 
 static func run() -> Result:
 	var engine := GameEngine.new()
@@ -42,6 +43,21 @@ static func run() -> Result:
 	var peek_view: Dictionary = CommandPrivacyClass.sanitize_params("select_reserve_card", 0, params, 1, state)
 	if int(peek_view.get("selected_index", -1)) != 2:
 		return Result.failure("peek 能力下应看到 selected_index=2，实际: %s" % str(peek_view.get("selected_index", null)))
+
+	var cmd := Command.create("select_reserve_card", 0, params)
+	cmd.index = 7
+	var public_summary: Dictionary = CommandSummaryClass.summarize_command(
+		cmd,
+		engine.action_registry,
+		CommandSummaryClass.PUBLIC_VIEWER_PLAYER_ID,
+		state,
+		true
+	)
+	var public_text := str(public_summary.get("text", ""))
+	if public_text.find("<hidden>") < 0:
+		return Result.failure("公共命令摘要应脱敏 selected_index，实际: %s" % public_text)
+	if public_text.find("selected_index=2") >= 0:
+		return Result.failure("公共命令摘要不应泄露 selected_index=2，实际: %s" % public_text)
 
 	return Result.success({
 		"redacted": other_view,

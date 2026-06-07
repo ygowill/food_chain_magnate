@@ -9,6 +9,7 @@ const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
 const GameUiSyncControllerClass = preload("res://ui/scenes/game/controllers/ui_sync_controller.gd")
 const DefsClass = preload("res://core/engine/phase_manager/definitions.gd")
 const RecordOnlyEventSinkClass = preload("res://core/engine/game_engine/record_only_event_sink.gd")
+const CommandSummaryClass = preload("res://core/utils/command_summary.gd")
 const RECONNECT_MAX_ATTEMPTS := 6
 const RECONNECT_CONNECT_TIMEOUT_SEC := 3.0
 const RECONNECT_RESTORE_TIMEOUT_SEC := 6.0
@@ -422,14 +423,34 @@ func _maybe_show_rollback_proposal(room_state: Dictionary) -> void:
 	var target_label := "对局开始前"
 	if target_index >= 0:
 		target_label = "命令 #%d 后" % target_index
+	var target_summary_text := _extract_summary_text(proposal.get("target_summary", {}))
+	var rollback_text := CommandSummaryClass.format_summaries(
+		Array(proposal.get("rollback_summaries", [])),
+		int(proposal.get("rollback_summaries_omitted_count", 0)),
+		"\n"
+	)
+	var body_lines: Array[String] = [
+		"玩家 P%d 提议回滚到%s。" % [proposer_pid + 1, target_label],
+	]
+	if not target_summary_text.is_empty():
+		body_lines.append("目标点动作：%s" % target_summary_text)
+	body_lines.append("当前目标会撤销 %d 步操作。" % steps)
+	if not rollback_text.is_empty():
+		body_lines.append("将撤销：\n%s" % rollback_text)
+	body_lines.append("全部其他玩家同意后会立即执行回滚。")
 	_show_confirm.call(
 		"是否同意回滚",
-		"玩家 P%d 提议回滚到%s。\n当前目标会撤销 %d 步操作。\n全部其他玩家同意后会立即执行回滚。" % [proposer_pid + 1, target_label, steps],
+		"\n".join(body_lines),
 		Callable(self, "_confirm_rollback_proposal_vote").bind(proposal_id),
 		Callable(self, "_reject_rollback_proposal_vote").bind(proposal_id),
 		"同意回滚",
 		"拒绝"
 	)
+
+func _extract_summary_text(summary_val) -> String:
+	if not (summary_val is Dictionary):
+		return ""
+	return str(Dictionary(summary_val).get("text", "")).strip_edges()
 
 func _confirm_rollback_proposal_vote(proposal_id: String) -> void:
 	_submit_rollback_proposal_vote(proposal_id, true)

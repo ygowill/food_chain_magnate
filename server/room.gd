@@ -6,6 +6,7 @@ const ArchiveClass = preload("res://core/engine/game_engine/archive.gd")
 const ArchiveRecoveryClass = preload("res://core/engine/game_engine/archive_recovery.gd")
 const OnlineResumePointValidatorClass = preload("res://core/engine/game_engine/online_resume_point_validator.gd")
 const OnlinePerfTraceClass = preload("res://core/debug/online_perf_trace.gd")
+const CommandSummaryClass = preload("res://core/utils/command_summary.gd")
 const ResumeDeltaStoreClass = preload("res://server/room_resume_delta_store.gd")
 const RollbackProposalStoreClass = preload("res://server/room_rollback_proposal_store.gd")
 const StartSessionStateClass = preload("res://server/room_start_session_state.gd")
@@ -1925,6 +1926,18 @@ func create_rollback_proposal(
 			required.append(pid)
 	required.sort()
 
+	var state = game_engine.get_state()
+	var target_summary := _build_public_command_summary(target, state)
+	var rollback_range: Dictionary = CommandSummaryClass.summarize_command_range(
+		game_engine.command_history,
+		target + 1,
+		before_index,
+		game_engine.action_registry,
+		CommandSummaryClass.PUBLIC_VIEWER_PLAYER_ID,
+		state,
+		8
+	)
+
 	var create_r: Result = _rollback_proposal_store.create(
 		proposal_id,
 		proposer_peer_id,
@@ -1933,12 +1946,32 @@ func create_rollback_proposal(
 		before_index,
 		int(game_engine.command_history.size()),
 		required,
-		reason
+		reason,
+		target_summary,
+		Array(rollback_range.get("summaries", [])),
+		int(rollback_range.get("omitted_count", 0))
 	)
 	if not create_r.ok:
 		return create_r
 	_touch()
 	return create_r
+
+func _build_public_command_summary(command_index: int, state) -> Dictionary:
+	if game_engine == null:
+		return {}
+	var idx := int(command_index)
+	if idx < 0 or idx >= int(game_engine.command_history.size()):
+		return {}
+	var cmd_val = game_engine.command_history[idx]
+	if not (cmd_val is Command):
+		return {}
+	return CommandSummaryClass.summarize_command(
+		cmd_val,
+		game_engine.action_registry,
+		CommandSummaryClass.PUBLIC_VIEWER_PLAYER_ID,
+		state,
+		true
+	)
 
 func vote_rollback_proposal(proposal_id: String, voter_player_id: int, approve: bool) -> Result:
 	var vote_r: Result = _rollback_proposal_store.vote(proposal_id, voter_player_id, approve)
