@@ -169,7 +169,7 @@
 
 ### 2026-04-27：标注旧恢复房双轨文档为历史归档
 
-- 更新 `docs/online/README.md`、`online_resume_fastload_full_history_design_2026-04-14.md` 和 `online_resume_hot_path_rebuild_plan_2026-04-16.md`。
+- 更新 `docs/online/README.md`、`docs/online/archive/online_resume_fastload_full_history_design_2026-04-14.md` 和 `docs/online/archive/online_resume_hot_path_rebuild_plan_2026-04-16.md`。
 - 明确旧 `full_replay_*` / dual-engine / fast-start 文档只保留历史上下文，不再作为当前实现依据；当前实现以单 full-engine 与 `full_history_*` API 为准。
 - 验证：文档变更，无需运行 Godot 测试。
 

@@ -1,0 +1,91 @@
+name: PR Quality Gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-quality-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: "4.5.1"
+  GODOT_TAG: "4.5.1-stable"
+
+jobs:
+  strict-all-tests:
+    name: Strict AllTests and evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Godot
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/godot
+          key: ${{ runner.os }}-godot-${{ env.GODOT_TAG }}
+
+      - name: Install Godot editor
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update -y
+          sudo apt-get install -y unzip
+          mkdir -p "$HOME/.cache/godot/bin"
+
+          if [[ ! -x "$HOME/.cache/godot/bin/godot" ]]; then
+            curl -sSL -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_TAG}/Godot_v${GODOT_TAG}_linux.x86_64.zip"
+            rm -rf /tmp/godot_unzip
+            mkdir -p /tmp/godot_unzip
+            unzip -q /tmp/godot.zip -d /tmp/godot_unzip
+            mv "/tmp/godot_unzip/Godot_v${GODOT_TAG}_linux.x86_64" "$HOME/.cache/godot/bin/godot"
+            chmod +x "$HOME/.cache/godot/bin/godot"
+          fi
+
+          echo "$HOME/.cache/godot/bin" >> "$GITHUB_PATH"
+          "$HOME/.cache/godot/bin/godot" --version
+
+      - name: Run strict AllTests
+        id: all-tests
+        shell: bash
+        run: |
+          set +e
+          tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120 --strict-exit
+          exit_code=$?
+          set -e
+
+          mkdir -p .godot
+          {
+            echo "commit=${GITHUB_SHA}"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "command=tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120 --strict-exit"
+            echo "exit_code=${exit_code}"
+            grep -E '^\[AllTests\] SUMMARY' .godot/AllTests.log | tail -n 1 || true
+          } > .godot/pr-quality-gate-summary.txt
+
+          find .godot -maxdepth 1 -type f \( -name 'AllTests.log' -o -name '_preflight.log' -o -name '_import.log' \) -print0 \
+            | sort -z \
+            | xargs -0 -r sha256sum > .godot/pr-quality-gate-sha256.txt
+
+          exit "$exit_code"
+
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strict-all-tests-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}
+          path: |
+            .godot/AllTests.log
+            .godot/_preflight.log
+            .godot/_import.log
+            .godot/pr-quality-gate-summary.txt
+            .godot/pr-quality-gate-sha256.txt
+          if-no-files-found: warn
+          retention-days: 14

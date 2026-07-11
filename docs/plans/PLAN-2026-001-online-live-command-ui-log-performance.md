@@ -1,6 +1,16 @@
-# 联机 live command 日志与 UI 热路径长期优化计划（2026-05-03）
+---
+id: PLAN-2026-001
+doc_kind: plan
+status: active
+created: 2026-05-03
+updated: 2026-07-11
+owners: [online-systems, ui-performance]
+feature_ids: [F-002]
+requirement_ids: [REQ-004, NFR-002]
+review_after: 2026-10-11
+---
 
-状态：**当前问题定位与长期修复计划**。
+# 联机 live command 日志与 UI 热路径长期优化计划（2026-05-03）
 
 本文记录联机后半段出现“餐厅跳字弹出后卡住，其他 UI 无法点击 4-5 秒”的问题链路、当前已做的止血修复、以及后续长期优化顺序。
 
@@ -12,7 +22,7 @@
 - `docs/architecture/21-ui-game-scene.md`
 - `docs/architecture/70-online-multiplayer.md`
 - `docs/online/online_resume_single_full_engine_startup_2026-04-17.md`
-- `docs/online/online_resume_hot_path_rebuild_plan_2026-04-16.md`
+- `docs/online/archive/online_resume_hot_path_rebuild_plan_2026-04-16.md`
 - `docs/design/archive/replay_log_timeline_refactor_plan.md`
 
 ---

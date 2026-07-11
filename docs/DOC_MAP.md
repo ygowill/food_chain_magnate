@@ -1,133 +1,75 @@
-# 文档地图（Doc Map）
+# 文档地图
 
-本文档用于快速回答两个问题：
+本页提供按任务进入项目的阅读路线，不复制 Feature 状态或测试结果。正式文档的完整机器索引见 [document-index.json](_generated/document-index.json)。
 
-1. **某类信息应该去哪里找？**
-2. **第一次进入项目，应该按什么顺序读？**
+## 第一次接手项目
 
----
+1. [项目愿景](VISION.md)
+2. [稳定需求](REQUIREMENTS.md)
+3. [系统总览](architecture/00-system-overview.md)
+4. [Feature 索引](features/README.md)
+5. [当前开发状态](progress/current_development_progress_report.md)
+6. [测试规范](testing.md)
+7. [文档治理规范](governance/documentation-governance.md)
 
-## 1. 快速导航
+## 按能力进入
 
-### 想看当前代码结构
+| 能力 | 聚合入口 | 当前架构 | 关键决策 | 验证入口 |
+|---|---|---|---|---|
+| Modules V2 | [F-001](features/F-001-modules-v2.md) | [Modules V2](architecture/60-modules-v2.md) | [ADR-0001～0003](decisions/README.md) | [Validation](validation/README.md) |
+| Online Resume / Bootstrap | [F-002](features/F-002-online-resume-bootstrap.md) | [Online Multiplayer](architecture/70-online-multiplayer.md) | [ADR-0004](decisions/0004-online-resume-single-full-engine-startup.md) | [联机手测清单](online/online_match_bootstrap_manual_checklist.md) |
+| Tutorial Campaign | [F-003](features/F-003-tutorial-campaign.md) | [Onboarding / Tutorials](architecture/22-ui-onboarding-tutorials.md) | [ADR 索引](decisions/README.md) | [Validation](validation/README.md) |
 
-- 总入口：`docs/architecture/README.md`
-- 系统总览：`docs/architecture/00-system-overview.md`
-- 引擎：`docs/architecture/30-core-engine.md`
-- 模块系统：`docs/architecture/60-modules-v2.md`
-- 联机平台：`docs/architecture/70-online-multiplayer.md`
-- 平台后端：`docs/architecture/71-online-platform-backend-and-accounts.md`
+## 按改动类型进入
 
-### 想看当前工作状态
+### 修改 core / modules
 
-- 主进度快照：`docs/progress/current_development_progress_report.md`
-- 当前问题单：`docs/progress/issue_tracker.md`
-- 联机专题进度：`docs/refactors/multiplayer_progress.md`
+1. [Core Engine](architecture/30-core-engine.md)
+2. [State Model](architecture/33-core-state-model.md)
+3. [State Extension Contract](architecture/33a-core-state-schema-contract.md)
+4. [Modules V2](architecture/60-modules-v2.md)
+5. [Module Development Guide](architecture/62-module-development-guide.md)
+6. [F-001](features/F-001-modules-v2.md)
 
-### 想看设计方案
+### 修改 UI / 教学
 
-- 总体技术设计：`docs/design.md`
-- 教学战役：`docs/design/tutorial_campaign_design_2026-05-03.md`
-- 员工 `staff_id` / usage track / 动作面板统一：`docs/design/staff_id_usage_tracks_and_action_panel_unification_2026-04-18.md`
-- UI 重构：`docs/design/ui_redesign.md`
-- UI 视觉升级：`docs/design/ui_visual_upgrade_design.md`
-- 游戏设置页：`docs/design/game_setup_page_redesign.md`
-- 营销板件改造：`docs/design/marketing_board_refactor.md`
+1. [UI Architecture](architecture/20-ui.md)
+2. [Game Scene](architecture/21-ui-game-scene.md)
+3. [Onboarding / Tutorials](architecture/22-ui-onboarding-tutorials.md)
+4. [Overlay Guidelines](architecture/23-ui-overlay-guidelines.md)
+5. [F-003](features/F-003-tutorial-campaign.md)
+6. [UI / UX 报告](reports/ui/)
 
-### 想看当前计划
+### 修改联机 / 平台
 
-- UI 整改主计划：`docs/plans/ui_remediation_plan.md`
-- UI 开发计划：`docs/plans/ui_development_plan.md`
-- 模块 UI 解耦：`docs/plans/module_ui_decoupling_plan_2026-02-10.md`
-- 手工测试存档计划：`docs/plans/manual_test_saves_plan.md`
+1. [Online Multiplayer](architecture/70-online-multiplayer.md)
+2. [Platform Backend and Accounts](architecture/71-online-platform-backend-and-accounts.md)
+3. [F-002](features/F-002-online-resume-bootstrap.md)
+4. [ADR-0004](decisions/0004-online-resume-single-full-engine-startup.md)
+5. [联机专题导航](online/README.md)
+6. [活跃性能计划](plans/PLAN-2026-001-online-live-command-ui-log-performance.md)
 
-### 想看历史报告 / 审计
+### 修 Bug
 
-- Core / Modules：`docs/reports/core/`
-- UI / UX：`docs/reports/ui/`
-- 综合性报告：`docs/reports/general/`
+1. 从 [BACKLOG](BACKLOG.md) 或外部 Issue 获取稳定 ID；
+2. 找到所属 [Feature](features/README.md) 与 Architecture；
+3. 保存失败复现证物并增加回归测试；
+4. 运行 [测试规范](testing.md)中的目标测试与严格 AllTests；
+5. 在 PR 中把 Requirement/AC 映射到证物；需要长期结论时新增 [Validation](validation/README.md)。
 
-### 想看联机专题
+### 只改文档
 
-- 专题目录：`docs/online/`
-- 自动恢复 / 断线：`docs/online/online_session_resume_redesign_2026-04-03.md`
-- 游客账号：`docs/online/guest_account_identity_design.md`
+1. 确认文档 Owner 与信息来源；
+2. 判断是否改变 Requirement、Feature、Architecture、ADR 或流程语义；
+3. 按 [治理规范](governance/documentation-governance.md)更新相关真相源；
+4. 重建 [正式文档索引](_generated/document-index.json)并运行治理检查；
+5. 由熟悉主题的人 Review。
 
-### 想看测试与规则参考
+## 当前工作与历史
 
-- 测试规范：`docs/testing.md`
-- 规则参考：`docs/rules.md`
-- OCR / 资源清单：`docs/reference/`
+- [当前 Backlog](BACKLOG.md)只放已确认继续推进且有 Owner 的事项；
+- [待人工验收队列](progress/acceptance_queue.md)保存历史已实施但尚无独立验收的事项；
+- [当前状态页](progress/current_development_progress_report.md)只导航，不复制 Feature 或 CI 状态；
+- [历史进度](progress/archive/README.md)、[历史计划](plans/archive/README.md)和[联机历史方案](online/archive/README.md)只用于追溯。
 
----
-
-## 2. 阅读顺序（推荐）
-
-### 路线 A：第一次接手项目
-
-1. `docs/README.md`
-2. `docs/architecture/README.md`
-3. `docs/design.md`
-4. `docs/progress/current_development_progress_report.md`
-5. `docs/progress/issue_tracker.md`
-6. `docs/testing.md`
-
-### 路线 B：准备改 UI
-
-1. `docs/architecture/20-ui.md`
-2. `docs/architecture/21-ui-game-scene.md`
-3. `docs/architecture/23-ui-overlay-guidelines.md`
-4. `docs/design/staff_id_usage_tracks_and_action_panel_unification_2026-04-18.md`
-5. `docs/design/ui_redesign.md`
-6. `docs/plans/ui_remediation_plan.md`
-7. `docs/plans/ui_development_plan.md`
-8. `docs/reports/ui/`
-
-### 路线 C：准备改联机 / 平台
-
-1. `docs/architecture/70-online-multiplayer.md`
-2. `docs/architecture/71-online-platform-backend-and-accounts.md`
-3. `docs/online/README.md`
-4. `docs/refactors/multiplayer_progress.md`
-5. `docs/refactors/multiplayer_implementation_guide.md`
-6. `docs/refactors/multiplayer_public_deployment.md`
-
-### 路线 D：准备改 core / modules
-
-1. `docs/architecture/30-core-engine.md`
-2. `docs/architecture/31-core-phase-manager.md`
-3. `docs/architecture/32-core-actions-framework.md`
-4. `docs/architecture/33-core-state-model.md`
-5. `docs/design/staff_id_usage_tracks_and_action_panel_unification_2026-04-18.md`
-6. `docs/architecture/60-modules-v2.md`
-7. `docs/reports/core/`
-
----
-
-## 3. 目录职责速查
-
-- `docs/architecture/`：**当前实现事实**
-- `docs/design/`：**当前仍有参考价值的设计方案**
-- `docs/design/archive/`：**已落地/历史设计**
-- `docs/plans/`：**当前仍有执行价值的计划**
-- `docs/plans/archive/`：**历史总计划**
-- `docs/progress/`：**当前状态**
-- `docs/progress/archive/`：**旧状态快照**
-- `docs/reports/`：**审计/评估/整改复盘**
-- `docs/online/`：**联机与平台专题**
-- `docs/refactors/`：**仍有参考价值的重构专题**
-- `docs/refactors/archive/`：**历史重构方案**
-- `docs/reference/`：**参考资料与资源清单**
-
----
-
-## 4. 文件命名建议（后续新增文档）
-
-建议尽量遵守：
-
-- 当前实现说明：放 `architecture/`
-- 未来方案：放 `design/` 或 `plans/`
-- 进度快照：放 `progress/`
-- 报告：放 `reports/`
-- 若是阶段性文档，优先在文件名尾部保留日期：`_YYYY-MM-DD`
-- 文件名尽量使用英文/下划线；标题可以继续使用中文
+若历史文档与当前 Feature、ADR 或 Architecture 冲突，以当前真相源为准，并修复会误导读者的入口。

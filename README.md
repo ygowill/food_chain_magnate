@@ -10,23 +10,31 @@ Built with **Godot 4.5**, aiming to support local play and online multiplayer (D
 
 ## Contents
 
+- [Documentation](#documentation)
 - [Development](#development)
 - [Tests](#tests)
 - [Run/Deploy Dedicated Server](#rundeploy-dedicated-server)
 - [CI/CD (Automated Releases)](#cicd-automated-releases)
 - [Acknowledgements](#acknowledgements)
 
+## Documentation
+
+- [Documentation hub and governance rules](docs/README.md)
+- [Role-based document map](docs/DOC_MAP.md)
+- [Current-system architecture](docs/architecture/README.md)
+- [Testing guide](docs/testing.md)
+
 ## Development
 
 - Godot: 4.5.x (editor/CLI)
-- Read first: `docs/testing.md`
+- Read the [documentation hub](docs/README.md) before treating a design, plan, or progress snapshot as current-system truth.
 
 ## Tests
 
 Run all headless tests (with timeout + log handling):
 
 ```bash
-tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests
+tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120 --strict-exit
 ```
 
 Run a single test scene:
@@ -104,8 +112,10 @@ You can also pass the WebSocket address directly:
 Use Docker Compose directly (optional):
 
 ```bash
-FCM_TAG=v0.4.2 docker compose --profile web -f compose.yml up -d
+FCM_TAG=v0.9.12 docker compose --profile web -f compose.yml up -d
 ```
+
+Run deployment commands from a reviewed checkout pinned to the release tag or commit you intend to deploy. Do not pipe a script from a mutable branch such as `main` directly into a shell.
 
 ### HTTPS (required for Web client on the Internet)
 
@@ -135,8 +145,8 @@ This repo includes an HTTPS overlay using **Traefik + Let’s Encrypt** with **C
 ```bash
 export ACME_EMAIL="you@example.com"
 export CF_DNS_API_TOKEN="***"
-curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
-  --tag v0.4.2 --enable-web --https \
+./server/deploy.sh \
+  --tag v0.9.12 --enable-web --https \
   --web-domain game.example.com \
   --ws-domain ws.game.example.com \
   --acme-key-type EC256
@@ -161,17 +171,19 @@ Notes:
 Optional: if your server pulls Docker Hub images slowly, you can use a mirror/prefix (GHCR images are unchanged):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
-  --tag v0.4.2 --https \
+./server/deploy.sh \
+  --tag v0.9.12 --https \
   --docker-io-prefix m.daocloud.io/docker.io/
 ```
 
 Optional: if your server downloads GitHub raw files slowly, you can use a GitHub raw accelerator/prefix (for compose files):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
-  --tag v0.4.2 --github-raw-prefix https://ghfast.top/
+./server/deploy.sh \
+  --tag v0.9.12 --github-raw-prefix https://ghfast.top/
 ```
+
+Using a third-party mirror changes the software supply-chain trust boundary; avoid it for production unless that service and the downloaded files are independently verified.
 
 4) Ensure your firewall/security group allows inbound:
    - TCP 80 and 443 (or your custom `--http-port` / `--https-port`)
@@ -186,8 +198,8 @@ If you can’t (or don’t want to) use ports 80/443, you can change them:
 ```bash
 export ACME_EMAIL="you@example.com"
 export CF_DNS_API_TOKEN="***"
-curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- \
-  --tag v0.4.2 --enable-web --https \
+./server/deploy.sh \
+  --tag v0.9.12 --enable-web --https \
   --web-domain game.example.com \
   --ws-domain ws.game.example.com \
   --acme-key-type EC256 \
@@ -221,29 +233,13 @@ tools/migration/update_rooms_ws_url.sh \
   --old-url "ws://localhost:7000"
 ```
 
-One-line deploy (downloads and runs the deploy script):
+If the repository is not checked out on the server, download a script pinned to a reviewed commit, inspect it, and only then run it. The example commit below corresponds to release `v0.9.12`; choose the commit and image tag you actually intend to deploy:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- --port 7000
-```
-
-One-line deploy (server + web client):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- --port 7000 --enable-web --web-port 8080
-```
-
-One-line stop (remove containers + network):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh | bash -s -- --down
-```
-
-If you prefer not to pipe to `bash`, download it first and review:
-
-```bash
-curl -fsSL -o deploy.sh https://raw.githubusercontent.com/ygowill/food_chain_magnate/main/server/deploy.sh
-bash deploy.sh --port 7000
+DEPLOY_COMMIT="3f8c9f735085181374b1425b123d50c36cff7971"
+curl -fsSLo deploy.sh "https://raw.githubusercontent.com/ygowill/food_chain_magnate/${DEPLOY_COMMIT}/server/deploy.sh"
+less deploy.sh
+bash deploy.sh --tag v0.9.12 --port 7000
 ```
 
 More options:
@@ -251,6 +247,14 @@ More options:
 ```bash
 ./server/deploy.sh --help
 ```
+
+### Deployment safety
+
+- Keep `.env`, database passwords, API tokens, and session secrets out of Git; provide them through a restricted deployment environment and rotate anything exposed.
+- Use a least-privilege Cloudflare token limited to the required zone. Do not reuse personal or account-wide API keys.
+- Prefer release tags or image digests over `latest`, and record the source commit, image version, and migration command for each deployment.
+- Back up persistent data before upgrades or migrations. Confirm the target host and Compose project before `--down`, database cleanup, or any `docker volume rm` command.
+- Treat the room URL migration as a production data change: take a backup, run it during an approved maintenance window, and verify affected rows.
 
 ### TLS Troubleshooting (`http_status: 0` / `cant_connect`)
 
@@ -285,26 +289,23 @@ tools/export_web.sh --install-templates
 
 For public deployment (`wss://`) suggestions:
 
-- `docs/refactors/multiplayer_public_deployment.md`
+- [Public multiplayer deployment guide](docs/refactors/multiplayer_public_deployment.md)
 
 ## CI/CD (Automated Releases)
 
 This repo uses GitHub Actions:
 
-- Triggers **only** when a version tag (`v*`) on `main` is pushed.
-- Automatically runs:
-  - headless tests (`AllTests`)
-  - exports and zips Windows client (`.exe`) as GitHub Release assets
-  - builds and pushes the server Docker image (GHCR)
-  - creates a GitHub Release
+- Pull requests run documentation-governance checks and strict headless `AllTests`; the test log is uploaded as commit-bound validation evidence.
+- A pushed version tag (`v*`) starts the release pipeline only when the tagged commit is reachable from `main`.
+- The release pipeline runs strict `AllTests` and uploads its logs/hashes, exports Windows and Web archives with checksums, builds and pushes the server/backend/web multi-platform images to GHCR, and creates the GitHub Release.
 
 Release example:
 
 ```bash
 git checkout main
 git pull
-git tag v0.1.2
-git push origin v0.1.2
+git tag v0.9.13
+git push origin v0.9.13
 ```
 
 ## Acknowledgements

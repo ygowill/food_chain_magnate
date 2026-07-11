@@ -42,7 +42,7 @@
 - 客户端回放/复盘时，仍应能从游戏最开头开始，随意点击任意历史时间点查看当时状态；
 - 恢复房继续进行若干步后，下载/保存的存档必须仍是“完整起点历史”的标准 archive，与正常游戏存档在语义上没有区别。
 
-本文是对现有联机恢复链路的专项设计补充；不替代 `docs/online/online_session_resume_redesign_2026-04-03.md`，而是聚焦“恢复房起局性能 + 完整历史保真 + UI 时间线/日志双源化”。
+本文是对当时联机恢复链路的专项设计补充；背景文档现归档为 `docs/online/archive/online_session_resume_redesign_2026-04-03.md`，本文聚焦当时的“恢复房起局性能 + 完整历史保真 + UI 时间线/日志双源化”。
 
 ---
 
@@ -71,7 +71,7 @@
 
 相关落地补充请同时对照：
 
-- `docs/online/online_resume_hot_path_rebuild_plan_2026-04-16.md`
+- `docs/online/archive/online_resume_hot_path_rebuild_plan_2026-04-16.md`
 - `docs/architecture/42-gameplay-replay-timelines.md`
 - `docs/architecture/70-online-multiplayer.md`
 

@@ -618,9 +618,10 @@ func _calculate_demand_positions(demands: Array, piece_rect: Rect2, cell_size: f
 
 #### 4.1.9 需要替换的资源文件
 
-**新资源来源路径：**
+**外部资源来源：**
 
-- 房屋和花园：`/Users/qinkai/Downloads/Organiser and Accessories - Food Chain Magnate - Mk III/Assets/Houses/`
+- 在本机将 `FCM_ASSET_SOURCE` 设置为已取得并核对许可的 `Organiser and Accessories - Food Chain Magnate - Mk III/Assets` 目录；该外部目录不属于仓库。
+- 房屋和花园：`$FCM_ASSET_SOURCE/Houses/`
   - `House.svg` - 房屋图片
   - `Gate and Fence.svg` - 围栏和花园
 
@@ -653,9 +654,9 @@ func _calculate_demand_positions(demands: Array, piece_rect: Rect2, cell_size: f
 
 ### 4.2 食物/饮料图标
 
-**新资源来源路径：**
+**外部资源来源（见 4.1.9 的 `FCM_ASSET_SOURCE` 约定）：**
 
-`/Users/qinkai/Downloads/Organiser and Accessories - Food Chain Magnate - Mk III/Assets/Food & Drinks/`
+`$FCM_ASSET_SOURCE/Food & Drinks/`
 
 #### 4.2.1 图标用途
 
@@ -686,9 +687,9 @@ func _calculate_demand_positions(demands: Array, piece_rect: Rect2, cell_size: f
 
 ### 4.3 餐厅Logo
 
-**新资源来源路径：**
+**外部资源来源（见 4.1.9 的 `FCM_ASSET_SOURCE` 约定）：**
 
-`/Users/qinkai/Downloads/Organiser and Accessories - Food Chain Magnate - Mk III/Assets/Restaurant Logos/`
+`$FCM_ASSET_SOURCE/Restaurant Logos/`
 
 #### 4.3.1 分配规则（与仓库实现一致）
 
@@ -715,9 +716,9 @@ func _calculate_demand_positions(demands: Array, piece_rect: Rect2, cell_size: f
 
 ### 4.4 营销元素
 
-**新资源来源路径：**
+**外部资源来源（见 4.1.9 的 `FCM_ASSET_SOURCE` 约定）：**
 
-`/Users/qinkai/Downloads/Organiser and Accessories - Food Chain Magnate - Mk III/Assets/Marketing/`
+`$FCM_ASSET_SOURCE/Marketing/`
 
 #### 4.4.1 营销类型
 
@@ -998,7 +999,7 @@ INKSCAPE="$(command -v inkscape || true)"
 if [ -z "$INKSCAPE" ] && [ -x "/Applications/Inkscape.app/Contents/MacOS/inkscape" ]; then
   INKSCAPE="/Applications/Inkscape.app/Contents/MacOS/inkscape"
 fi
-SRC_DIR="/Users/qinkai/Downloads/Organiser and Accessories - Food Chain Magnate - Mk III/Assets"
+SRC_DIR="${FCM_ASSET_SOURCE:?Set FCM_ASSET_SOURCE to the licensed external Assets directory}"
 DST_DIR="./modules"
 
 # 依赖检查

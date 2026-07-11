@@ -14,8 +14,8 @@
 
 相关背景文档：
 
-- `docs/online/online_resume_fastload_full_history_design_2026-04-14.md`
-- `docs/online/online_session_resume_redesign_2026-04-03.md`
+- `docs/online/archive/online_resume_fastload_full_history_design_2026-04-14.md`
+- `docs/online/archive/online_session_resume_redesign_2026-04-03.md`
 - `docs/architecture/70-online-multiplayer.md`
 - `docs/architecture/42-gameplay-replay-timelines.md`
 

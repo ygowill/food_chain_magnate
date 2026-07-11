@@ -50,7 +50,7 @@
 
 代码位置：
 
-- [auth.py](/Users/qinkai/Documents/FCM_new/backend/app/auth.py)
+- [auth.py](../../backend/app/auth.py)
 
 这组字段已经足够支撑当前产品定义下的账号展示，不再依赖额外的“邮箱验证态”。
 
@@ -66,9 +66,9 @@
 
 相关实现位置：
 
-- [platform_session.gd](/Users/qinkai/Documents/FCM_new/autoload/platform_session.gd)
-- [auth.ts](/Users/qinkai/Documents/FCM_new/web/portal/src/stores/auth.ts)
-- [auth.py](/Users/qinkai/Documents/FCM_new/backend/app/auth.py)
+- [platform_session.gd](../../autoload/platform_session.gd)
+- [auth.ts](../../web/portal/src/stores/auth.ts)
+- [auth.py](../../backend/app/auth.py)
 
 ## 3. 网站与游戏共享登录态
 
@@ -116,8 +116,8 @@ Portal 账号设置页当前展示：
 
 代码位置：
 
-- [SettingsView.vue](/Users/qinkai/Documents/FCM_new/web/portal/src/views/SettingsView.vue)
-- [auth.ts](/Users/qinkai/Documents/FCM_new/web/portal/src/stores/auth.ts)
+- [SettingsView.vue](../../web/portal/src/views/SettingsView.vue)
+- [auth.ts](../../web/portal/src/stores/auth.ts)
 
 ## 5. 游戏端账号展示
 
@@ -134,7 +134,7 @@ Portal 账号设置页当前展示：
 
 代码位置：
 
-- [online_lobby.gd](/Users/qinkai/Documents/FCM_new/ui/scenes/online/online_lobby.gd)
+- [online_lobby.gd](../../ui/scenes/online/online_lobby.gd)
 
 ### 5.2 账号详情面板
 
@@ -161,8 +161,8 @@ Portal 账号设置页当前展示：
 
 代码位置：
 
-- [account_settings_dialog.gd](/Users/qinkai/Documents/FCM_new/ui/dialogs/account_settings_dialog.gd)
-- [auth_dialog.gd](/Users/qinkai/Documents/FCM_new/ui/dialogs/auth_dialog.gd)
+- [account_settings_dialog.gd](../../ui/dialogs/account_settings_dialog.gd)
+- [auth_dialog.gd](../../ui/dialogs/auth_dialog.gd)
 
 ## 6. 注册与登录能力对齐情况
 
@@ -187,8 +187,8 @@ Portal 账号设置页当前展示：
 
 相关文件：
 
-- [guest_identity_cleanup.py](/Users/qinkai/Documents/FCM_new/backend/app/guest_identity_cleanup.py)
-- [cleanup_guest_identities.py](/Users/qinkai/Documents/FCM_new/backend/scripts/cleanup_guest_identities.py)
+- [guest_identity_cleanup.py](../../backend/app/guest_identity_cleanup.py)
+- [cleanup_guest_identities.py](../../backend/scripts/cleanup_guest_identities.py)
 
 ## 8. 验证记录
 

@@ -16,7 +16,7 @@
 执行命令：
 
 ```bash
-/usr/bin/time -p env HOME=/Users/qinkai/.codex/worktrees/5e4c/FCM_new/.tmp_home godot --headless --path /Users/qinkai/.codex/worktrees/5e4c/FCM_new --script res://tools/map_balance_report.gd -- --players=2,3,4,5 --seed=12345 --samples=5000 --fast_map_only --summary_only --output_json=/tmp/fcm_map_balance_5000_by_player_2_5.json
+/usr/bin/time -p env HOME="$PWD/.tmp_home" godot --headless --path "$PWD" --script res://tools/map_balance_report.gd -- --players=2,3,4,5 --seed=12345 --samples=5000 --fast_map_only --summary_only --output_json=/tmp/fcm_map_balance_5000_by_player_2_5.json
 ```
 
 总耗时：

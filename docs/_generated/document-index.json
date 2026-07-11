@@ -1,0 +1,316 @@
+{
+  "documents": [
+    {
+      "created": "2026-07-11",
+      "doc_kind": "acceptance-queue",
+      "id": "AQ-001",
+      "owners": [
+        "product-owner",
+        "qa"
+      ],
+      "path": "docs/progress/acceptance_queue.md",
+      "review_after": "2026-07-18",
+      "status": "active",
+      "updated": "2026-07-11"
+    },
+    {
+      "created": "2026-07-11",
+      "doc_kind": "backlog",
+      "id": "BACKLOG",
+      "owners": [
+        "product-owner"
+      ],
+      "path": "docs/BACKLOG.md",
+      "review_after": "2026-07-18",
+      "status": "active",
+      "updated": "2026-07-11"
+    },
+    {
+      "created": "2025-12-30",
+      "doc_kind": "decision",
+      "feature_ids": [
+        "F-001"
+      ],
+      "id": "ADR-0001",
+      "owners": [
+        "data-architecture"
+      ],
+      "path": "docs/decisions/0001-data-format-json.md",
+      "requirement_ids": [
+        "REQ-001",
+        "REQ-002",
+        "NFR-001"
+      ],
+      "review_after": "2027-01-11",
+      "status": "accepted",
+      "superseded_by": [],
+      "supersedes": [],
+      "updated": "2026-07-11"
+    },
+    {
+      "created": "2026-01-01",
+      "doc_kind": "decision",
+      "feature_ids": [
+        "F-001"
+      ],
+      "id": "ADR-0002",
+      "owners": [
+        "gameplay-architecture"
+      ],
+      "path": "docs/decisions/0002-modules-v2-strict-mode.md",
+      "requirement_ids": [
+        "REQ-001",
+        "REQ-002",
+        "NFR-001"
+      ],
+      "review_after": "2027-01-11",
+      "status": "accepted",
+      "superseded_by": [],
+      "supersedes": [],
+      "updated": "2026-07-11"
+    },
+    {
+      "created": "2026-03-06",
+      "doc_kind": "decision",
+      "feature_ids": [
+        "F-001"
+      ],
+      "id": "ADR-0003",
+      "owners": [
+        "core-architecture"
+      ],
+      "path": "docs/decisions/0003-core-boundary-guardrails.md",
+      "requirement_ids": [
+        "NFR-001"
+      ],
+      "review_after": "2027-01-11",
+      "status": "accepted",
+      "superseded_by": [],
+      "supersedes": [],
+      "updated": "2026-07-11"
+    },
+    {
+      "created": "2026-04-17",
+      "doc_kind": "decision",
+      "feature_ids": [
+        "F-002"
+      ],
+      "id": "ADR-0004",
+      "owners": [
+        "online-systems"
+      ],
+      "path": "docs/decisions/0004-online-resume-single-full-engine-startup.md",
+      "requirement_ids": [
+        "REQ-003",
+        "REQ-004",
+        "NFR-002"
+      ],
+      "review_after": "2026-10-11",
+      "status": "accepted",
+      "superseded_by": [],
+      "supersedes": [],
+      "updated": "2026-07-11"
+    },
+    {
+      "created": "2026-01-01",
+      "decision_refs": [
+        "docs/decisions/0001-data-format-json.md",
+        "docs/decisions/0002-modules-v2-strict-mode.md",
+        "docs/decisions/0003-core-boundary-guardrails.md"
+      ],
+      "doc_kind": "feature",
+      "id": "F-001",
+      "owners": [
+        "gameplay-architecture"
+      ],
+      "path": "docs/features/F-001-modules-v2.md",
+      "requirement_ids": [
+        "REQ-001",
+        "REQ-002",
+        "NFR-001"
+      ],
+      "review_after": "2027-01-11",
+      "status": "done",
+      "updated": "2026-07-11",
+      "validation_refs": [
+        "docs/validation/VAL-2026-001-all-tests-baseline.md"
+      ]
+    },
+    {
+      "created": "2026-03-15",
+      "decision_refs": [
+        "docs/decisions/0004-online-resume-single-full-engine-startup.md"
+      ],
+      "doc_kind": "feature",
+      "id": "F-002",
+      "owners": [
+        "online-systems"
+      ],
+      "path": "docs/features/F-002-online-resume-bootstrap.md",
+      "requirement_ids": [
+        "REQ-003",
+        "REQ-004",
+        "NFR-002"
+      ],
+      "review_after": "2027-01-11",
+      "status": "validation",
+      "updated": "2026-07-11",
+      "validation_refs": [
+        "docs/validation/VAL-2026-001-all-tests-baseline.md"
+      ]
+    },
+    {
+      "created": "2026-05-03",
+      "decision_refs": [],
+      "doc_kind": "feature",
+      "id": "F-003",
+      "owners": [
+        "player-experience"
+      ],
+      "path": "docs/features/F-003-tutorial-campaign.md",
+      "requirement_ids": [
+        "REQ-005",
+        "REQ-006",
+        "REQ-007",
+        "REQ-008",
+        "NFR-005"
+      ],
+      "review_after": "2026-10-11",
+      "status": "in-progress",
+      "updated": "2026-07-11",
+      "validation_refs": [
+        "docs/validation/VAL-2026-001-all-tests-baseline.md"
+      ]
+    },
+    {
+      "created": "2026-07-11",
+      "doc_kind": "governance",
+      "id": "GOV-001",
+      "owners": [
+        "engineering-governance"
+      ],
+      "path": "docs/governance/documentation-governance.md",
+      "review_after": "2027-01-11",
+      "status": "active",
+      "updated": "2026-07-11"
+    },
+    {
+      "created": "2026-07-11",
+      "doc_kind": "governance",
+      "id": "GOV-002",
+      "owners": [
+        "engineering-governance",
+        "engineering-productivity"
+      ],
+      "path": "docs/governance/agent-assets-roadmap.md",
+      "review_after": "2026-10-11",
+      "status": "active",
+      "updated": "2026-07-11"
+    },
+    {
+      "created": "2026-05-03",
+      "doc_kind": "plan",
+      "feature_ids": [
+        "F-002"
+      ],
+      "id": "PLAN-2026-001",
+      "owners": [
+        "online-systems",
+        "ui-performance"
+      ],
+      "path": "docs/plans/PLAN-2026-001-online-live-command-ui-log-performance.md",
+      "requirement_ids": [
+        "REQ-004",
+        "NFR-002"
+      ],
+      "review_after": "2026-10-11",
+      "status": "active",
+      "updated": "2026-07-11"
+    },
+    {
+      "created": "2026-07-11",
+      "doc_kind": "progress",
+      "id": "PROGRESS-CURRENT",
+      "owners": [
+        "engineering",
+        "product-owner"
+      ],
+      "path": "docs/progress/current_development_progress_report.md",
+      "review_after": "2026-07-18",
+      "status": "current",
+      "updated": "2026-07-11"
+    },
+    {
+      "created": "2026-07-11",
+      "doc_kind": "progress",
+      "id": "PROGRESS-ISSUES",
+      "owners": [
+        "product-owner",
+        "engineering"
+      ],
+      "path": "docs/progress/issue_tracker.md",
+      "review_after": "2026-07-18",
+      "status": "current",
+      "updated": "2026-07-11"
+    },
+    {
+      "created": "2026-07-11",
+      "doc_kind": "requirement",
+      "id": "REQUIREMENTS-001",
+      "owners": [
+        "product-owner",
+        "engineering"
+      ],
+      "path": "docs/REQUIREMENTS.md",
+      "review_after": "2027-01-11",
+      "status": "accepted",
+      "updated": "2026-07-11"
+    },
+    {
+      "commit": "604e27d6",
+      "created": "2026-07-11",
+      "doc_kind": "validation",
+      "feature_ids": [
+        "F-001",
+        "F-002",
+        "F-003"
+      ],
+      "id": "VAL-2026-001",
+      "owners": [
+        "quality-engineering"
+      ],
+      "path": "docs/validation/VAL-2026-001-all-tests-baseline.md",
+      "requirement_ids": [
+        "REQ-001",
+        "REQ-002",
+        "NFR-001",
+        "REQ-003",
+        "REQ-004",
+        "NFR-002",
+        "REQ-005",
+        "REQ-006",
+        "REQ-007",
+        "REQ-008",
+        "NFR-005"
+      ],
+      "status": "completed",
+      "updated": "2026-07-11",
+      "verdict": "pass"
+    },
+    {
+      "created": "2026-07-11",
+      "doc_kind": "vision",
+      "id": "VISION-001",
+      "owners": [
+        "product-owner"
+      ],
+      "path": "docs/VISION.md",
+      "review_after": "2027-01-11",
+      "status": "active",
+      "updated": "2026-07-11"
+    }
+  ],
+  "generated_by": "python3 tools/docs_governance.py --write-index",
+  "schema_version": 1,
+  "source_frontmatter_sha256": "954c0ad380ef0b7e82985f8093569d3418abddd32b9c925776e807810fea406b"
+}

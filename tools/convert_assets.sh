@@ -4,10 +4,12 @@ set -euo pipefail
 # Convert external SVG assets into project PNGs.
 #
 # Usage:
-#   tools/convert_assets.sh
+#   FCM_ASSET_SOURCE=/path/to/assets tools/convert_assets.sh
+#   SRC_DIR=/path/to/assets tools/convert_assets.sh
+#   tools/convert_assets.sh /path/to/assets
 #
 # Optional env vars:
-#   SRC_DIR        Path to the Mk III Assets root folder
+#   FCM_ASSET_SOURCE or SRC_DIR   Path to the licensed Mk III Assets root folder
 #   INKSCAPE_BIN   Path to inkscape executable
 #
 # Notes:
@@ -17,8 +19,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-SRC_DIR_DEFAULT="/Users/qinkai/Downloads/Organiser and Accessories - Food Chain Magnate - Mk III/Assets"
-SRC_DIR="${SRC_DIR:-$SRC_DIR_DEFAULT}"
+SRC_DIR="${SRC_DIR:-${FCM_ASSET_SOURCE:-${1:-}}}"
 
 INKSCAPE="${INKSCAPE_BIN:-}"
 if [[ -z "$INKSCAPE" ]]; then
@@ -35,6 +36,7 @@ die() {
 }
 
 [[ -x "$INKSCAPE" ]] || die "inkscape not found (set INKSCAPE_BIN or install Inkscape)"
+[[ -n "$SRC_DIR" ]] || die "asset source not provided (set FCM_ASSET_SOURCE/SRC_DIR or pass the source directory as argument 1)"
 [[ -d "$SRC_DIR" ]] || die "SRC_DIR does not exist: $SRC_DIR"
 
 export_png() {

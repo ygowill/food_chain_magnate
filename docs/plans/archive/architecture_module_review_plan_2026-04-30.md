@@ -1,5 +1,7 @@
 # Architecture 模块审查计划（2026-04-30）
 
+> **已归档（2026-07-11）**：本文在 2026-05-01 已完成收尾复核，保留为审查与整改证据，不再作为活跃计划。当前架构事实以 [`docs/architecture/`](../../architecture/README.md) 为准。
+
 本文档用于规划一次按 `docs/architecture/` 模块索引展开的架构与代码审查。目标不是立即重构，而是先形成可复核的证据链，逐个模块判断是否存在设计不合理、代码冗余、职责划分不清、耦合过深、测试缺口或潜在稳定性风险。
 
 ## 审查目标
@@ -3507,5 +3509,5 @@
 
 验证：
 
-- `rg -n "^- \\[P[0-3]\\]|### Fix|状态：" docs/plans/architecture_module_review_plan_2026-04-30.md`：已复核所有问题条目与后续 Fix 记录。
+- `rg -n "^- \\[P[0-3]\\]|### Fix|状态：" docs/plans/archive/architecture_module_review_plan_2026-04-30.md`：已复核所有问题条目与后续 Fix 记录。
 - 最近一次代码验证仍为 Fix 80：`HOME="$PWD/.tmp_home" godot --headless --log-file "$PWD/.godot/CheckCompile.log" --path "$PWD" --script res://tools/check_compile.gd` PASS，`files=1123`；`tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120 --strict-exit` PASS，`392/392`。

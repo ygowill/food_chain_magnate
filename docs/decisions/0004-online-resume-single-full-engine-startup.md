@@ -1,7 +1,18 @@
-# ADR 0004：联机恢复房改为单 full-engine 启动
+---
+id: ADR-0004
+doc_kind: decision
+status: accepted
+created: 2026-04-17
+updated: 2026-07-11
+owners: [online-systems]
+feature_ids: [F-002]
+requirement_ids: [REQ-003, REQ-004, NFR-002]
+supersedes: []
+superseded_by: []
+review_after: 2026-10-11
+---
 
-- 状态：已采纳
-- 日期：2026-04-17
+# ADR 0004：联机恢复房改为单 full-engine 启动
 
 ## 背景
 
@@ -118,5 +129,5 @@
 - `docs/online/online_resume_single_full_engine_startup_2026-04-17.md`
 - `docs/architecture/70-online-multiplayer.md`
 - `docs/architecture/42-gameplay-replay-timelines.md`
-- `docs/online/online_resume_fastload_full_history_design_2026-04-14.md`
-- `docs/online/online_resume_hot_path_rebuild_plan_2026-04-16.md`
+- `docs/online/archive/online_resume_fastload_full_history_design_2026-04-14.md`
+- `docs/online/archive/online_resume_hot_path_rebuild_plan_2026-04-16.md`

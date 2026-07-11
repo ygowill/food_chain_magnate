@@ -7,6 +7,9 @@
 - `autoload/game_log.gd`：`GameLog`
 - `autoload/debug_flags.gd`：`DebugFlags`
 - `autoload/globals.gd`：`Globals`
+- `ui/audio/audio_system_initializer.tscn`：`AudioSystem`
+- `autoload/loading_coordinator.gd`：`LoadingCoordinator`
+- `autoload/online_match_bootstrap.gd`：`OnlineMatchBootstrap`
 - `autoload/scene_manager.gd`：`SceneManager`
 - `autoload/event_bus.gd`：`EventBus`
 - `autoload/net_context.gd`：`NetContext`
@@ -28,6 +31,9 @@ flowchart TB
     GL["GameLog"]
     DF["DebugFlags"]
     G["Globals"]
+    AS["AudioSystem"]
+    LC["LoadingCoordinator"]
+    OMB["OnlineMatchBootstrap"]
     SM["SceneManager"]
     EB["EventBus"]
     NX["NetContext"]
@@ -38,6 +44,9 @@ flowchart TB
   end
 
   UI --> G
+  UI --> AS
+  UI --> LC
+  UI --> OMB
   UI --> SM
   UI --> EB
   UI --> NX
@@ -57,6 +66,10 @@ flowchart TB
   OSC --> NC
   OSC --> NX
   PS --> API
+  LC --> SM
+  OMB --> LC
+  OMB --> NC
+  OMB --> NX
 ```
 
 ## GameLog：统一日志
@@ -81,6 +94,36 @@ flowchart TB
 - 高级配置：`game_config_overrides`、`confirm_actions`、音频/UI 缩放等
 - 运行时：`current_game_engine`、`is_game_active`
 - 入口状态：`pending_replay_file_path`
+
+## AudioSystem：跨场景音频初始化
+
+代码：`ui/audio/audio_system_initializer.tscn`、`ui/audio/audio_system_initializer.gd`
+
+职责：
+
+- 初始化 `Music` / `SFX` 音频总线与持久化的音乐、音效管理器
+- 同步全局音频设置，并在场景切换后维持播放状态
+- 处理 Web 平台需要用户手势解锁音频上下文的兼容流程
+
+## LoadingCoordinator：统一 Loading 会话
+
+代码：`autoload/loading_coordinator.gd`
+
+职责：
+
+- 通过 `begin_session / update_session / finish_session` 管理跨场景 Loading 生命周期
+- 按优先级和更新时间选择当前展示的会话
+- 将统一的标题、阶段、详情与进度状态交给 `SceneManager` 渲染
+
+## OnlineMatchBootstrap：联机开局编排
+
+代码：`autoload/online_match_bootstrap.gd`
+
+职责：
+
+- 协调 Lobby `Starting` 到 `InGame` 的本地准备、ready 回执与失败回滚
+- 在恢复房中等待完整历史和日志时间线准备完成后再确认本地 ready
+- 通过 `LoadingCoordinator` 维持跨 Lobby、Game 场景连续的开局进度
 
 ## SceneManager：场景切换与加载遮罩
 

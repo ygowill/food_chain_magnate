@@ -5,9 +5,10 @@
 - `core/`: engine-first, reusable gameplay logic (avoid UI/node dependencies). Key areas include `core/engine/`, `core/state/`, `core/actions/`, `core/rules/`, `core/map/`, and `core/tests/` (pure logic tests).
 - `ui/`: Godot scenes and scripts, including `ui/scenes/tests/` (runnable test scenes) and the main menu scene `ui/scenes/main_menu.tscn`.
 - `gameplay/`: gameplay validators and action wiring on top of `core/`.
-- `data/`: JSON/config-driven game data (`data/maps/`, `data/employees/`, etc.).
+- `data/`: project-level JSON configuration under `data/config/`; module-owned gameplay content lives under `modules/*/content/`.
+- `modules/`: Modules V2 packages (`module.json`, optional `content/`, `rules/`, and a nearby README).
 - `assets/`: audio/fonts/images used by the UI.
-- `docs/`: design/architecture/testing notes (start with `docs/testing.md`).
+- `docs/`: governed project knowledge; start with `docs/README.md`, then follow `docs/DOC_MAP.md` and `docs/testing.md`.
 - `tools/`: developer scripts (notably `tools/run_headless_test.sh`).
 
 ## Build, Test, and Development Commands
@@ -16,7 +17,7 @@ This is a Godot 4.5 project (`project.godot`).
 
 - Open editor: `godot --editor --path .`
 - Run game (uses project main scene): `godot --path .`
-- Run all tests headless (recommended, default timeout 120s): `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests`
+- Run all tests headless (recommended): `tools/run_headless_test.sh res://ui/scenes/tests/all_tests.tscn AllTests 120 --strict-exit`
 - Run one test scene: `tools/run_headless_test.sh res://ui/scenes/tests/replay_test.tscn ReplayTest 20`
 
 ## Coding Style & Naming Conventions
@@ -33,13 +34,29 @@ This is a Godot 4.5 project (`project.godot`).
 
 ## Commit & Pull Request Guidelines
 
-- Git history isn’t available in this workspace; use a consistent convention like `type(scope): summary` (e.g., `fix(core): validate map baking inputs`).
+- Inspect the available Git history and follow nearby commit conventions; `type(scope): summary` is the normal fallback (for example, `fix(core): validate map baking inputs`).
 - PRs: include a short problem statement, test command/output, and screenshots/GIFs for UI changes. Link relevant docs/issue IDs when applicable.
+
+## Documentation Rules
+
+- Treat `docs/architecture/` and accepted ADRs in `docs/decisions/` as current implementation contracts; plans, designs, progress reports, and archived material are not substitutes for current-system truth.
+- When behavior, architecture, commands, or operational procedures change, update the affected documentation in the same change.
+- Use repository-relative Markdown links. Do not commit personal absolute paths or cite ignored `.godot/` logs as durable evidence.
+- Keep status, ownership, validation evidence, and supersession metadata current on governed feature/validation documents.
 
 ## Security & Configuration Tips
 
 - Ensure `godot` is a real CLI on `PATH` (avoid shell aliases in scripts). See `docs/testing.md` for macOS setup notes.
 - Generated/runtime folders like `.godot/` and `.tmp_home/` are used for logs and headless runs; avoid treating them as source of truth.
+- Never commit `.env` files, credentials, access tokens, session data, or production database contents. Use least-privilege secrets supplied through the deployment environment.
+- Production deployment, data migration, credential rotation, and destructive cleanup require explicit human approval. Review and pin remote scripts before execution.
+
+## Required Workflow
+
+1. Inspect `git status`, relevant current-system docs, nearby code, and existing tests before editing.
+2. Make the smallest change that fully satisfies the requested behavior; preserve unrelated user changes.
+3. Run targeted tests first, then the required headless suites when code or runtime behavior changed.
+4. Re-check the diff, links, indentation, and generated evidence before reporting completion; never claim a test or manual check that was not run.
 
 ## Agent Behavior & Stability Requirements
 

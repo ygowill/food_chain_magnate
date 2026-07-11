@@ -11,7 +11,7 @@
 - 命令：
 
 ```bash
-/usr/bin/time -p env HOME=/Users/qinkai/.codex/worktrees/5e4c/FCM_new/.tmp_home godot --headless --path /Users/qinkai/.codex/worktrees/5e4c/FCM_new --script res://tools/map_balance_report.gd -- --players=2 --seed=12345 --samples=100
+/usr/bin/time -p env HOME="$PWD/.tmp_home" godot --headless --path "$PWD" --script res://tools/map_balance_report.gd -- --players=2 --seed=12345 --samples=100
 ```
 
 ## 总耗时

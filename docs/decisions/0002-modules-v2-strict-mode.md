@@ -1,7 +1,18 @@
-# ADR 0002：模块系统 V2（严格模式 + 结算全模块化）
+---
+id: ADR-0002
+doc_kind: decision
+status: accepted
+created: 2026-01-01
+updated: 2026-07-11
+owners: [gameplay-architecture]
+feature_ids: [F-001]
+requirement_ids: [REQ-001, REQ-002, NFR-001]
+supersedes: []
+superseded_by: []
+review_after: 2027-01-11
+---
 
-- 状态：已采纳
-- 日期：2026-01-01
+# ADR 0002：模块系统 V2（严格模式 + 结算全模块化）
 
 ## 背景
 

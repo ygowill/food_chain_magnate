@@ -1,7 +1,18 @@
-# ADR 0001：数据格式采用 JSON（而非 Godot Resource）
+---
+id: ADR-0001
+doc_kind: decision
+status: accepted
+created: 2025-12-30
+updated: 2026-07-11
+owners: [data-architecture]
+feature_ids: [F-001]
+requirement_ids: [REQ-001, REQ-002, NFR-001]
+supersedes: []
+superseded_by: []
+review_after: 2027-01-11
+---
 
-- 状态：已采纳
-- 日期：2025-12-30
+# ADR 0001：数据格式采用 JSON（而非 Godot Resource）
 
 ## 背景
 

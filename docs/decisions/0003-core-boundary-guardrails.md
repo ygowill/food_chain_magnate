@@ -1,7 +1,18 @@
-# ADR 0003：core 边界冻结与守卫测试
+---
+id: ADR-0003
+doc_kind: decision
+status: accepted
+created: 2026-03-06
+updated: 2026-07-11
+owners: [core-architecture]
+feature_ids: [F-001]
+requirement_ids: [NFR-001]
+supersedes: []
+superseded_by: []
+review_after: 2027-01-11
+---
 
-- 状态：已采纳
-- 日期：2026-03-06
+# ADR 0003：core 边界冻结与守卫测试
 
 ## 背景
 

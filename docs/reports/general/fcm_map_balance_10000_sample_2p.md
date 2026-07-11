@@ -15,7 +15,7 @@
 命令：
 
 ```bash
-/usr/bin/time -p env HOME=/Users/qinkai/.codex/worktrees/5e4c/FCM_new/.tmp_home godot --headless --path /Users/qinkai/.codex/worktrees/5e4c/FCM_new --script res://tools/map_balance_report.gd -- --players=2 --seed=12345 --samples=10000 --fast_map_only --summary_only --output_json=/tmp/fcm_map_balance_10000_2p.json
+/usr/bin/time -p env HOME="$PWD/.tmp_home" godot --headless --path "$PWD" --script res://tools/map_balance_report.gd -- --players=2 --seed=12345 --samples=10000 --fast_map_only --summary_only --output_json=/tmp/fcm_map_balance_10000_2p.json
 ```
 
 `--fast_map_only` 会先完整初始化一次项目上下文，再对每个 seed 执行：

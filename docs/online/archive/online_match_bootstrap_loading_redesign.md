@@ -1,3 +1,5 @@
+> **只读历史归档（2026-07-11）**：本文保留 Bootstrap / Loading 改造的原始范围和过程计划，不再表示待执行阶段。仓库内实现已进入 validation；当前状态、限制与证物见 [F-002](../../features/F-002-online-resume-bootstrap.md)。
+
 # 联机开局 Bootstrap / 统一 Loading 重构方案
 
 ## 背景

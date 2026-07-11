@@ -1,21 +1,20 @@
 # 进度与状态
 
-`docs/progress/` 现在只保留**当前仍应直接阅读的主文档**，避免多个状态快照并列造成混淆。
+`docs/progress/` 只保存当前状态导航和待验收队列；易变状态不得在多份文档中复制。
 
-## 当前主文档（优先阅读）
+## 当前入口
 
-- `docs/progress/current_development_progress_report.md`
-  - 当前工作区的主进度快照
-  - 适合回答“现在已经做到哪里了、还缺什么”
-- `docs/progress/issue_tracker.md`
-  - 当前问题清单与修复流水线
-  - 适合回答“还有哪些具体问题待处理”
+- [当前开发状态](current_development_progress_report.md)：只做导航，不复制测试和 Feature 状态；
+- [活跃 Backlog](../BACKLOG.md)：当前活跃工作项的唯一仓库内入口；
+- [待人工验收](acceptance_queue.md)：有实施记录、但还没有独立验收的事项；
+- [Issue 入口说明](issue_tracker.md)：解释新旧工作项的去向。
 
 ## 历史快照
 
-以下文档已归档到 `docs/progress/archive/`：
+历史材料位于 [archive/](archive/README.md)，包括：
 
-- `docs/progress/archive/development_status.md`
-- `docs/progress/archive/implementation_status_report.md`
+- 2026-01-09 原“当前进度”快照；
+- 截至 2026-07-11 冻结的原追加式 Issue Tracker；
+- 更早的 development/implementation 状态快照。
 
-它们仍有参考价值，但不再作为当前状态的首选事实来源。
+历史材料只用于追溯，不得覆盖 Feature、Backlog、Validation 或 Architecture 的当前结论。

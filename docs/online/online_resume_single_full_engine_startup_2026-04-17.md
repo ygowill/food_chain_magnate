@@ -1,3 +1,5 @@
+> 本文是 ADR-0004 的实施设计与性能补充；规范性决策、状态和复核日期只以 [ADR-0004](../decisions/0004-online-resume-single-full-engine-startup.md) 为准。
+
 # 联机恢复房：单 full-engine 启动方案（2026-04-17）
 
 ## 1. 目标

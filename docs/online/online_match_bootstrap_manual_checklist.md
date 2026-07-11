@@ -1,6 +1,6 @@
 # 联机开局统一 Loading 手测清单
 
-适用范围：`/Users/qinkai/.codex/worktrees/5bee/FCM_new` 当前这套“Lobby -> Starting -> InGame” 联机开局改造。
+适用范围：当前仓库中“Lobby -> Starting -> InGame”联机开局流程；历史设计背景见 [联机开局统一 Loading 改造](archive/online_match_bootstrap_loading_redesign.md)，当前状态以 [F-002](../features/F-002-online-resume-bootstrap.md) 和 [Online Architecture](../architecture/70-online-multiplayer.md) 为准。
 
 ## 目标
 

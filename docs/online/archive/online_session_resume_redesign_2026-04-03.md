@@ -1,13 +1,15 @@
+> **只读历史归档（2026-07-11）**：本文包含已被取代的 dual-engine 恢复设计，只用于追溯。当前规范以 [ADR-0004](../../decisions/0004-online-resume-single-full-engine-startup.md)、[F-002](../../features/F-002-online-resume-bootstrap.md) 和 [Online Architecture](../../architecture/70-online-multiplayer.md) 为准。
+
 # 联机会话与断线恢复重构设计（2026-04-03）
 
 状态：**设计文档，部分思路已被后续实现吸收，但本文本身不代表逐条已落地**。
 
 补充说明（2026-04-15 / 2026-04-17）：
 
-- 恢复房“快加载 + 完整历史双轨”已在 `docs/online/online_resume_fastload_full_history_design_2026-04-14.md` 单列设计与实现补充；
+- 恢复房“快加载 + 完整历史双轨”已在 `docs/online/archive/online_resume_fastload_full_history_design_2026-04-14.md` 归档其设计与实现补充；
 - 当前凡是涉及恢复房启动性能、完整历史回放、完整 archive 导出的问题，应优先对照该补充文档。
 - 恢复房热路径的最近实现收敛，请对照：
-  - `docs/online/online_resume_hot_path_rebuild_plan_2026-04-16.md`
+  - `docs/online/archive/online_resume_hot_path_rebuild_plan_2026-04-16.md`
   - `docs/architecture/70-online-multiplayer.md`
   - `docs/architecture/42-gameplay-replay-timelines.md`
 

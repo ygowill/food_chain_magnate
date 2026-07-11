@@ -2,6 +2,8 @@
 
 > 导航：当前系统架构请优先看 `docs/architecture/README.md`；专题设计与阶段方案请看 `docs/design/`、`docs/plans/`。
 
+> 文档性质：本文是持续演进的综合设计稿，保留了部分历史方案和未来构想。当前实现事实以 `docs/architecture/`、已接受的 `docs/decisions/` 及源码为准；标为“历史设计/草案”的段落和示例不得作为当前 API 或交付状态依据。
+
 本设计文档基于 `docs/rules.md` 的精简规则，给出可实现、可扩展的模块化架构与文件组织，尽量数据驱动，便于后续扩展与调优。若规则存在歧义，优先以 `docs/rules.md` 为准；仍无法确定时将在文末“需要确认”中列出。
 
 ---
@@ -12,7 +14,7 @@
 - 范围：
   - 基础七阶段流程与子阶段动作、公司结构、员工/里程碑/营销/库存/销售/银行破产。
   - 关键扩展模块的插件化接口与参考实现骨架（功能详解在“扩展模块”章节）。
-  - 数据驱动的资源定义（员工、里程碑、地图板块、模块清单）。
+  - 数据驱动的 JSON 内容定义（员工、里程碑、地图板块、模块清单）。
   - 事件溯源的存档/复盘。
 
 ---
@@ -1036,9 +1038,9 @@ class TerrainEffectModifier:
   - 供应池/可选集合由启用模块内容推导（不再在 `GameConfig` 写死类似 `one_x_employee_ids` 的列表）
 - 落盘目录结构：`res://modules/<module_id>/`（每个模块独立目录 + `README.md` 描述文件 + 可选 `content/` 与 `rules/`）
 
-> 本章节下方的“V1 插件机制”描述用于解释当前已实现代码路径；后续实现将按 V2 方案迁移并逐步淘汰 V1。
+> V2 已是当前唯一实现。下方 V1 内容仅保留早期设计背景，不描述当前代码路径、API 或迁移状态；实现与扩展工作必须以 V2 架构文档和 ADR 为准。
 
-### 模块系统 V1（当前实现，待迁移）
+### 历史设计：模块系统 V1（已移除）
 
 #### 插件机制
 
@@ -3093,6 +3095,8 @@ class CheatAddCashExecutor extends ActionExecutor:
 
 本架构采用**注册表模式**和**钩子系统**实现组件的最大化可插拔性，确保扩展模块无需修改核心代码即可：
 
+> 本节包含早期 V1 的概念示例。当前模块包、内容目录、清单字段和规则入口以 `docs/architecture/60-modules-v2.md` 与 `docs/architecture/62-module-development-guide.md` 为准；下方标为历史示例的 GDScript 不是当前扩展 API。
+
 ### 核心可插拔组件
 
 | 组件 | 可插拔机制 | 扩展方式 | 应用场景 |
@@ -3103,7 +3107,7 @@ class CheatAddCashExecutor extends ActionExecutor:
 | **营销范围** | MarketingRegistry + RangeCalculator | 注册范围计算器 | 自定义营销类型 |
 | **公司结构** | CompanyStructureValidator + StructureRule | 添加/替换结构规则 | 双层经理、特殊组织模式 |
 | **地形系统** | TerrainRegistry + TerrainEffectModifier | 注册地形类型 + 定价修饰器 | 公园价格倍增、特殊地形效果 |
-| **员工/里程碑** | Registry + Resource 定义 | 数据驱动注册 | 所有扩展卡牌 |
+| **员工/里程碑** | Modules V2 内容目录 + JSON 定义 | 数据驱动装配 | 所有扩展卡牌 |
 
 ### 可插拔设计原则
 
@@ -3128,11 +3132,11 @@ class CheatAddCashExecutor extends ActionExecutor:
    - 确保复盘和回放的一致性
 
 5. **数据驱动**
-   - 员工、里程碑、地图板块、营销板件全部用 Resource 定义
+   - 员工、里程碑、地图板块、营销板件以模块目录中的 JSON 定义
    - 规则参数外置（距离、卡槽、单价、范围、奖励）
    - 模块元数据包含依赖、冲突、版本信息
 
-### 扩展模块开发流程
+### 历史示例：扩展模块开发流程（V1 草案，非当前 API）
 
 ```gdscript
 # 1. 定义模块资源
