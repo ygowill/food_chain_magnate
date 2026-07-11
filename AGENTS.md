@@ -58,6 +58,18 @@ This is a Godot 4.5 project (`project.godot`).
 3. Run targeted tests first, then the required headless suites when code or runtime behavior changed.
 4. Re-check the diff, links, indentation, and generated evidence before reporting completion; never claim a test or manual check that was not run.
 
+## Project Skills
+
+Repository-local Skills live under `.agents/skills/`. Invoke them explicitly with `$skill-name` when routing is ambiguous:
+
+- `$fcm-deliver-feature`: deliver a new or materially expanded capability from intent and Requirements through implementation and validation.
+- `$fcm-safe-refactor`: preserve explicit behavior while restructuring code, data flow, modules, scenes, or boundaries.
+- `$fcm-quality-gate`: perform the read-only pre-review evidence gate; do not combine it with fixing findings.
+- `$fcm-sync-docs`: synchronize Feature, Requirements, Architecture, ADR, Validation, and generated indexes after changes.
+- `$fcm-validate-acceptance`: independently validate original intent and user paths; use manual invocation and do not self-approve implementation work.
+
+For new Feature work, establish the governed contract before implementation. If refactoring is required, keep refactor invariants separate from new behavior ACs, then run the quality gate and independent acceptance in that order. Skill lifecycle and versions are tracked in `docs/governance/skills-registry.md`.
+
 ## Agent Behavior & Stability Requirements
 
 The agent must behave as a conservative, correctness-first Godot engineer.

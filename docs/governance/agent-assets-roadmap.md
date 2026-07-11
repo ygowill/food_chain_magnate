@@ -10,7 +10,9 @@ review_after: 2026-10-11
 
 # Agent Skills、Workflows、Evals 与 Guardrails 路线图
 
-本路线图把确定性检查、可复用判断流程和高风险控制分开。当前只定义候选，不在证据不足时一次性创建大量 Skill；前三个候选应先以 `experimental` 运行至少三个真实任务，再根据 Eval 决定是否晋升。
+本路线图把确定性检查、可复用判断流程和高风险控制分开。当前五个项目 Skill 已以 `experimental` 实现；它们必须先运行至少三个真实任务并通过 Eval，再决定是否晋升 `active`，不能因文件已经存在就视为成熟能力。
+
+已实现项目 Skill 的版本、Owner 与生命周期状态见[项目 Skills 注册表](skills-registry.md)。
 
 ## 1. 载体边界
 
@@ -28,7 +30,7 @@ Prompt 或 Skill 中的“禁止”不能替代权限、分支保护或人工审
 
 ## 2. Skill 优先级
 
-### P0：`quality-gate`
+### P0：`fcm-quality-gate`
 
 | 契约 | 定义 |
 |---|---|
@@ -42,7 +44,7 @@ Prompt 或 Skill 中的“禁止”不能替代权限、分支保护或人工审
 
 它只做验证和报告，不在 Gate 中顺手改实现，避免“自检者同时移动门槛”。确定性收集应直接调用现有测试脚本和文档治理脚本。
 
-### P0：`docs-sync`
+### P0：`fcm-sync-docs`
 
 | 契约 | 定义 |
 |---|---|
@@ -56,7 +58,7 @@ Prompt 或 Skill 中的“禁止”不能替代权限、分支保护或人工审
 
 该 Skill 不重新实现链接、Schema 或索引算法，只编排 [`tools/docs_governance.py`](../../tools/docs_governance.py)。
 
-### P0：`acceptance-validation`
+### P0：`fcm-validate-acceptance`
 
 | 契约 | 定义 |
 |---|---|
@@ -70,9 +72,16 @@ Prompt 或 Skill 中的“禁止”不能替代权限、分支保护或人工审
 
 当前 [91 项人工验收队列](../progress/acceptance_queue.md)可作为该 Skill 的真实 Eval 数据，但必须分批处理，不能批量自述为通过。
 
+### 用户优先：`fcm-safe-refactor` 与 `fcm-deliver-feature`
+
+- `fcm-safe-refactor`：建立行为不变量和 characterization baseline，分阶段执行不改变产品语义的重构，并比较测试、存档/回放、边界和性能证物。
+- `fcm-deliver-feature`：从原始意图、Non-goals、稳定 Requirement 与 Feature 聚合页开始，经过设计、实现、文档同步、质量门禁和独立验收完成新能力交付。
+
+这两个 Skill 因本项目近期工作重点而提前实现，但仍以 `experimental` 发布；新行为 AC 与重构不变量必须分离，不能用“重构”夹带未声明功能。
+
 ### P1：真实使用后再创建
 
-- `feature-discovery`：中大型新能力；输出 Feature 草案、Non-goals、Requirement/AC 和开放问题。至少在前三个 P0 Skill 完成三次真实任务后创建。
+- 暂不单独创建 `feature-discovery`；先观察 `fcm-deliver-feature` 内 Discovery 阶段是否经常独立触发，再决定是否拆分。
 - `archive-completed-work`：按月识别 completed/abandoned Plan、过期快照和被替代设计，输出可审查移动清单；删除仍需人工确认。
 - `create-adr`：当三次以上 Architecture Decision Workflow 显示格式/取舍遗漏重复出现时再创建。
 - `incident-to-learning`：出现真实重复事故后再建立，不从假想事故生成 Lesson。
@@ -89,7 +98,7 @@ Prompt 或 Skill 中的“禁止”不能替代权限、分支保护或人工审
 | `WF-docs-only` | 只改文档 | 来源/Owner → 正式语义判断 → Schema/链接 → 主题 Review | 文档 diff、治理检查 |
 | `WF-acceptance-burn-down` | 历史人工验收队列 | 每项真实路径与证物；无证物不关闭 | 分批 Validation、队列更新 |
 
-`WF-feature-delivery` 推荐顺序：Intake → Discovery → Feature/AC → Design/ADR → Plan → Implementation → `quality-gate` → Independent Review → `acceptance-validation` → Merge/Close。Small Change Lane 不能绕过安全、迁移或架构 Gate。
+`WF-feature-delivery` 推荐顺序：Intake → Discovery → Feature/AC → Design/ADR → Plan → Implementation → `fcm-quality-gate` → Independent Review → `fcm-validate-acceptance` → Merge/Close。Small Change Lane 不能绕过安全、迁移或架构 Gate。
 
 ## 4. 最低 Eval 集
 
@@ -97,15 +106,15 @@ Prompt 或 Skill 中的“禁止”不能替代权限、分支保护或人工审
 
 ### Trigger-positive
 
-- “实现完成了，确认是否能发 Review。”应触发 `quality-gate`；
-- “这次行为改动涉及哪些正式文档？”应触发 `docs-sync`；
-- “请按真实用户路径独立验收 F-003。”应触发 `acceptance-validation`。
+- “实现完成了，确认是否能发 Review。”应触发 `fcm-quality-gate`；
+- “这次行为改动涉及哪些正式文档？”应触发 `fcm-sync-docs`；
+- “请按真实用户路径独立验收 F-003。”应触发 `fcm-validate-acceptance`。
 
 ### Trigger-negative
 
-- “帮我设计测试方案。”不应触发 `quality-gate`；
-- “Reviewer 提了三个问题，请修复。”不应触发 `quality-gate`；
-- “这个功能应该怎么设计？”不应触发 `docs-sync` 或验收 Skill。
+- “帮我设计测试方案。”不应触发 `fcm-quality-gate`；
+- “Reviewer 提了三个问题，请修复。”不应触发 `fcm-quality-gate`；
+- “这个功能应该怎么设计？”不应触发 `fcm-sync-docs` 或验收 Skill。
 
 ### Execution
 
@@ -142,9 +151,9 @@ Prompt 或 Skill 中的“禁止”不能替代权限、分支保护或人工审
 
 ## 6. 分阶段落地
 
-1. 现在：保持确定性检查在脚本/CI，建立 P0 三个 Skill 的草案与 Eval 数据格式；不发布为 active。
-2. 三个真实任务后：比较有/无 Skill 基线，记录误触发、漏触发、Gate 漏检和维护成本；合格者晋升 experimental。
-3. 至少三个 Feature 完整走通后：建立 `WF-feature-delivery` 和 changed-scope Eval，决定是否加入 `feature-discovery`、`create-adr`。
+1. 现在：五个项目 Skill 以 experimental 发布，确定性检查继续留在脚本/CI，不发布为 active。
+2. 三个真实任务后：比较有/无 Skill 基线，记录误触发、漏触发、Gate 漏检和维护成本；合格者晋升 active，不合格者继续迭代或退役。
+3. 至少三个 Feature 完整走通后：评估是否把 `fcm-deliver-feature` 的 Discovery / ADR 阶段拆成独立 Skill，而不是预先增加数量。
 4. 发生真实重复事故后：从 Incident → Lesson → Eval/Guardrail 晋升，不直接把聊天经验写成长期 Skill。
 
 成熟度以追溯完整率、Gate 漏检率、返工率、触发精度和维护成本衡量，不以 Skill 数量衡量。

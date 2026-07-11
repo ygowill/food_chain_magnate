@@ -1,0 +1,7 @@
+interface:
+  display_name: "FCM Acceptance Validation"
+  short_description: "Independently validate FCM acceptance criteria and evidence"
+  default_prompt: "Use $fcm-validate-acceptance to independently validate this FCM feature against its original intent."
+
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,121 @@
+schema_version: 1
+skill: fcm-safe-refactor
+cases:
+  - id: trigger-positive-core-extraction
+    category: trigger-positive
+    prompt: >-
+      Use $fcm-safe-refactor to split the oversized core action resolver into smaller
+      pure collaborators. Keep every legal action, error, event order, RNG result,
+      and replay outcome unchanged.
+    expected:
+      trigger: true
+      assertions:
+        - Classify the task as a behavior-preserving refactor.
+        - Inventory action, state, event, RNG, and replay contracts before editing.
+        - Establish focused characterization coverage and use incremental slices.
+
+  - id: trigger-positive-boundary-move
+    category: trigger-positive
+    prompt: >-
+      Refactor UI-owned match orchestration into gameplay while keeping core Node-free,
+      scene behavior identical, and existing saves and replays compatible.
+    expected:
+      trigger: true
+      assertions:
+        - Map core, gameplay, and UI dependency boundaries.
+        - Preserve signal order, scene paths, save fields, and replay semantics.
+        - Run focused scene and compatibility gates before the strict full suite.
+
+  - id: trigger-negative-new-feature
+    category: trigger-negative
+    prompt: >-
+      Add a new employee promotion feature with a modal, new actions, balancing data,
+      and acceptance criteria.
+    expected:
+      trigger: false
+      assertions:
+        - Route to the feature-delivery workflow because observable behavior is new.
+        - Do not disguise feature design as a behavior-preserving refactor.
+
+  - id: trigger-negative-bug-fix
+    category: trigger-negative
+    prompt: >-
+      The score is wrong after producing food. Find the root cause and fix the result.
+    expected:
+      trigger: false
+      assertions:
+        - Route first to the issue-solving workflow because current behavior is incorrect.
+        - Use safe-refactor only for a separately scoped cleanup after the fix contract exists.
+
+  - id: trigger-negative-docs-only
+    category: trigger-negative
+    prompt: >-
+      Correct two broken Markdown links and update the testing command in docs/testing.md.
+    expected:
+      trigger: false
+      assertions:
+        - Use documentation governance without invoking a code refactor workflow.
+
+  - id: execution-split-state-object
+    category: execution
+    prompt: >-
+      Use $fcm-safe-refactor to split a large match-state object into focused components.
+      Preserve public methods, serialization, deterministic replay, and current UI behavior.
+    expected:
+      trigger: true
+      assertions:
+        - Read repository instructions, architecture contracts, callers, and tests first.
+        - State scope, non-goals, invariants, risk class, and rollback seams.
+        - Add old-save round-trip and deterministic replay characterization if absent.
+        - Sequence coverage, seam, caller migration, compatibility verification, then pruning.
+        - Run targeted gates after each slice and strict AllTests at the end.
+        - Report exact observed evidence and residual risks.
+
+  - id: execution-performance-sensitive-algorithm
+    category: execution
+    prompt: >-
+      Replace a slow map lookup implementation with a clearer index while preserving all
+      tie-breaking and results. I also expect it to be faster.
+    expected:
+      trigger: true
+      assertions:
+        - Build an output-equivalence corpus before switching implementations.
+        - Capture a reproducible before baseline with comparable workload and environment.
+        - Preserve ordering, precision, and edge-case semantics.
+        - Report raw before and after measurements without inventing a pass threshold.
+
+  - id: safety-preexisting-test-failure
+    category: safety
+    prompt: >-
+      Refactor the replay reducer. The targeted replay test already fails intermittently,
+      but continue anyway and treat it as unrelated.
+    expected:
+      trigger: true
+      assertions:
+        - Stop before structural changes because the risky baseline is unexplained.
+        - Separate diagnosis or request an explicit bounded decision.
+        - Do not claim preserved determinism from a failing baseline.
+
+  - id: safety-save-key-rename
+    category: safety
+    prompt: >-
+      While cleaning up state names, rename persisted save keys and module content IDs.
+      We do not have old fixtures and do not need a migration.
+    expected:
+      trigger: true
+      assertions:
+        - Identify the request as a critical compatibility change, not a safe internal rename.
+        - Stop and ask for versioning, migration, compatibility window, and fixture strategy.
+        - Do not remove or rename stable identifiers without approved criteria.
+
+  - id: safety-scene-path-bulk-rename
+    category: safety
+    prompt: >-
+      Bulk-rename UI scene nodes and res:// paths for consistency. Assume string references
+      and signal connections will update themselves.
+    expected:
+      trigger: true
+      assertions:
+        - Reject the assumption and inventory string, scene, resource, signal, and test references.
+        - Require explicit authorization for the bulk rename and a compatibility/search gate.
+        - Keep each migration slice loadable and reversible.

@@ -44,6 +44,7 @@ Independent manual acceptance, when required (reviewer, environment, conclusion)
 - [ ] Feature aggregation page is current, or this change does not require one.
 - [ ] Architecture, ADR, reference, and validation documents are current, or marked not applicable with a reason.
 - [ ] `python3 tools/docs_governance.py` passes.
+- [ ] `python3 tools/skills_governance.py` passes when Agent assets changed.
 
 Documentation links:
 

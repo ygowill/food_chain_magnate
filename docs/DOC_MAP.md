@@ -11,6 +11,7 @@
 5. [当前开发状态](progress/current_development_progress_report.md)
 6. [测试规范](testing.md)
 7. [文档治理规范](governance/documentation-governance.md)
+8. [项目 Skills 注册表](governance/skills-registry.md)
 
 ## 按能力进入
 

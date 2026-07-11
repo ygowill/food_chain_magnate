@@ -1,0 +1,4 @@
+interface:
+  display_name: "FCM Quality Gate"
+  short_description: "Verify FCM changes against tests, docs, and evidence"
+  default_prompt: "Use $fcm-quality-gate to verify this FCM change is ready for review."

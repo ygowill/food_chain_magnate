@@ -1,0 +1,4 @@
+interface:
+  display_name: "FCM Docs Sync"
+  short_description: "Synchronize FCM truth-source documentation safely"
+  default_prompt: "Use $fcm-sync-docs to identify and update documentation affected by this change."

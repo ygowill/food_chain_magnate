@@ -15,8 +15,9 @@
 | 某个提交验证了什么 | [Validation 索引](validation/README.md) |
 | 当前状态导航与待人工验收 | [Progress](progress/README.md) |
 | 文档如何创建、更新与归档 | [文档治理规范](governance/documentation-governance.md) |
+| Agent 应使用哪些项目 Skill | [Skills 注册表](governance/skills-registry.md) |
 
-更细的角色/任务阅读路线见 [DOC MAP](DOC_MAP.md)。所有正式文档的机器可读清单由脚本生成在 [document-index.json](_generated/document-index.json)。
+更细的角色/任务阅读路线见 [DOC MAP](DOC_MAP.md)。正式文档与项目 Skill 的机器可读清单分别由脚本生成在 [document-index.json](_generated/document-index.json) 和 [skill-index.json](_generated/skill-index.json)。
 
 ## 真相优先级
 

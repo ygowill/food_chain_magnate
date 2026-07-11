@@ -1,0 +1,75 @@
+{
+  "generated_by": "python3 tools/skills_governance.py --write-index",
+  "schema_version": 1,
+  "skills": [
+    {
+      "allow_implicit_invocation": true,
+      "description": "Deliver medium- or high-impact FCM features end to end from original intent and stable requirements through design, implementation, testing, documentation, and validation. Use when adding a new player-visible or system capability, or materially expanding an existing Feature across modules or layers. Not for isolated low-risk fixes, behavior-preserving refactors, review-only checks, or acceptance-only validation. Output governed Feature and Requirement updates, any required ADR or Plan, a minimal tested implementation, AC-to-evidence mapping, and a ready-for-review handoff; do not commit, push, merge, release, or perform irreversible actions unless the user authorizes them.",
+      "display_name": "FCM Feature Delivery",
+      "name": "fcm-deliver-feature",
+      "owners": [
+        "product-owner",
+        "engineering"
+      ],
+      "path": ".agents/skills/fcm-deliver-feature",
+      "short_description": "Deliver new FCM features from intent through validation",
+      "status": "experimental",
+      "version": "0.1.0"
+    },
+    {
+      "allow_implicit_invocation": true,
+      "description": "Independently verify whether an FCM change is ready for review or a governed status transition by checking intent, diff scope, targeted tests, strict AllTests when runtime behavior is affected, documentation governance, and evidence coverage. Use when implementation is complete, a PR or review is being prepared, or a Feature may move to validation or done. Not for: designing or implementing a change, fixing review findings, or performing independent user acceptance. Output: a PASS or BLOCK gate report with commands, exit codes, revision/worktree identity, Requirement/AC evidence, limitations, and next actions.",
+      "display_name": "FCM Quality Gate",
+      "name": "fcm-quality-gate",
+      "owners": [
+        "quality-engineering"
+      ],
+      "path": ".agents/skills/fcm-quality-gate",
+      "short_description": "Verify FCM changes against tests, docs, and evidence",
+      "status": "experimental",
+      "version": "0.1.0"
+    },
+    {
+      "allow_implicit_invocation": true,
+      "description": "Refactor existing FCM_new Godot 4.5 code while preserving explicit observable behavior and compatibility. Use when restructuring, extracting, renaming, moving, decoupling, deduplicating, simplifying, or replacing internals in GDScript, scenes, resources, Modules V2, state, save, or replay-sensitive paths. Not for: adding features, fixing incorrect behavior, changing public contracts without migration, or documentation-only cleanup. Output: explicit invariants, baseline evidence, reversible implementation slices, compatibility results, exact validation commands, and residual risks.",
+      "display_name": "FCM Safe Refactor",
+      "name": "fcm-safe-refactor",
+      "owners": [
+        "core-architecture",
+        "engineering"
+      ],
+      "path": ".agents/skills/fcm-safe-refactor",
+      "short_description": "Plan and execute behavior-preserving FCM refactors",
+      "status": "experimental",
+      "version": "0.1.0"
+    },
+    {
+      "allow_implicit_invocation": true,
+      "description": "Synchronize FCM's governed current-truth documentation after verified changes to behavior, architecture, commands, Feature status, or operational procedures. Use when implementation or process changes require a documentation-impact assessment, current truth-source updates, relationship repair, and generated-index refresh. Not for: product discovery, inventing requirements, designing a new feature, rewriting an accepted ADR in place, or claiming unperformed validation. Output: an impact matrix, updated files or explicit no-update reasons, blockers, and documentation-governance command results.",
+      "display_name": "FCM Docs Sync",
+      "name": "fcm-sync-docs",
+      "owners": [
+        "engineering-governance"
+      ],
+      "path": ".agents/skills/fcm-sync-docs",
+      "short_description": "Synchronize FCM truth-source documentation safely",
+      "status": "experimental",
+      "version": "0.1.0"
+    },
+    {
+      "allow_implicit_invocation": false,
+      "description": "Independently validate an FCM feature or change against its original intent, canonical Requirements, acceptance criteria, Non-goals, ADRs, and required automated, manual, or platform evidence. Use when implementation is complete, a Feature may leave validation, or a claimed completion needs an audit. Not for: implementing or repairing the feature, performing a generic pre-review quality gate, or approving work produced by the same validator. Output: an evidence-bounded pass, fail, or inconclusive verdict with an AC matrix, limitations, and next actions.",
+      "display_name": "FCM Acceptance Validation",
+      "name": "fcm-validate-acceptance",
+      "owners": [
+        "quality-engineering",
+        "product-owner"
+      ],
+      "path": ".agents/skills/fcm-validate-acceptance",
+      "short_description": "Independently validate FCM acceptance criteria and evidence",
+      "status": "experimental",
+      "version": "0.1.0"
+    }
+  ],
+  "source_metadata_sha256": "7bcab30eff1ee372bd9d767381f05c24bdebd2af533b4f8395d5eaeb2ee43c43"
+}

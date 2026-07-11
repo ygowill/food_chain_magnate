@@ -1,0 +1,4 @@
+interface:
+  display_name: "FCM Safe Refactor"
+  short_description: "Plan and execute behavior-preserving FCM refactors"
+  default_prompt: "Use $fcm-safe-refactor to refactor this FCM area while preserving explicit behavior."

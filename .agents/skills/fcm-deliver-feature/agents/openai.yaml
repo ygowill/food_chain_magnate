@@ -1,0 +1,4 @@
+interface:
+  display_name: "FCM Feature Delivery"
+  short_description: "Deliver new FCM features from intent through validation"
+  default_prompt: "Use $fcm-deliver-feature to implement this new FCM feature from discovery through validation."

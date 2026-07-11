@@ -34,3 +34,9 @@ jobs:
 
       - name: Check repository documentation
         run: python3 tools/docs_governance.py
+
+      - name: Verify Skill governance checker
+        run: python3 tools/skills_governance.py --self-test
+
+      - name: Check repository Skills and Evals
+        run: python3 tools/skills_governance.py
